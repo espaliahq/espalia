@@ -634,7 +634,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_190100) do
     t.index ["tenant_id"], name: "index_framework_suggestion_comments_on_tenant_id"
   end
 
-  create_table "hris_unit_parent_proposals", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "hris_unit_parent_proposals", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "unit_id", null: false
     t.uuid "parent_id", null: false
