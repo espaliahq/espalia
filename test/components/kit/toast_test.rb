@@ -40,5 +40,11 @@ class Components::Kit::ToastTest < ActiveSupport::TestCase
       assert_includes classes, "top-16"
       assert_includes classes, "pointer-events-none"
     end
+
+    should "mark itself so a full-screen panel leaves it live" do
+      stack = Nokogiri::HTML5.fragment(Components::Kit::Toast::Stack.new.call).at_css("div")
+
+      assert stack.key?("data-toast-stack")
+    end
   end
 end

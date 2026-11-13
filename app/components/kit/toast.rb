@@ -38,12 +38,14 @@ class Components::Kit::Toast < Components::Base
 end
 
 # Where toasts stack: the top-right corner, below the navbar so it never
-# covers the user menu, and full width less the gutters on a phone.
+# covers the user menu, and full width less the gutters on a phone. A
+# full-screen panel that makes the page inert leaves `data-toast-stack` be,
+# so a toast still reaches assistive technology.
 class Components::Kit::Toast::Stack < Components::Base
   CLASSES = "pointer-events-none fixed top-16 right-4 left-4 z-50 flex flex-col items-end gap-2 " \
             "sm:left-auto sm:w-96"
 
   def view_template(&)
-    div(class: CLASSES, &)
+    div(class: CLASSES, data: { toast_stack: "" }, &)
   end
 end
