@@ -429,9 +429,10 @@ Graph could no longer say what it knew before. From it:
   date it lists what the Org Graph learned after the end of the first day, up to the end
   of the last, each read at 23:59:59 UTC as `known_on` is, whatever day it took effect. A
   change it learned before the window and no longer believes, such as one changed back on
-  its own day or a value a correction replaced, comes back `withdrawn`. Both readers pick
-  their rows through `OrgFactPeriod.known_on`. MCP clients read it through
-  `org_graph_changes_between`.
+  its own day or a value a correction replaced, comes back `withdrawn`, and the summary
+  counts it apart. A correction to an earlier value leaves a later change standing unless
+  it turns that change into another kind or into no change at all. MCP clients read it
+  through `org_graph_changes_between`.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what
 was known last Tuesday, even if a backdated correction arrived since. The correction

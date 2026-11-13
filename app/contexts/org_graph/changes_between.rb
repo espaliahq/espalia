@@ -110,7 +110,16 @@ class OrgGraph::ChangesBetween
     window = (@from + 1)..@to
     rows = facts(OrgFactPeriod.known_on(@known_on))
     rows = rows.where(effective_from: window).or(rows.where(effective_to: window))
-    changes_from(steps(rows.to_a).select { window.cover?(it.on) }, withdrawn: false)
+    changes_from(first_learned(steps(rows.to_a).select { window.cover?(it.on) }), withdrawn: false)
+  end
+
+  # A row is rewritten whenever a later change cuts its period short, so its
+  # own learned_at can be long after the change. The event that wrote the
+  # step learned it first.
+  def first_learned(steps)
+    learned = OrgFactPeriod.where(learned_by_event_id: steps.map(&:event_id).uniq)
+                           .group(:learned_by_event_id).minimum(:learned_at)
+    steps.map { it.with(learned_at: learned[it.event_id]) }
   end
 
   # ── By learned date ──
@@ -120,31 +129,37 @@ class OrgGraph::ChangesBetween
   # withdrawn.
   def learned_changes
     opened, closed = [ @from, @to ].map { it.in_time_zone("UTC").end_of_day }
-    touched = facts(OrgFactPeriod.where(learned_at: opened..closed).or(OrgFactPeriod.where(superseded_at: opened..closed)))
-              .distinct.pluck(:subject_type, :subject_id, :fact, :key)
+    inside = ->(column) { OrgFactPeriod.where("#{column} > ? AND #{column} <= ?", opened, closed) }
+    touched = facts(inside.("learned_at").or(inside.("superseded_at")))
+              .distinct.pluck(:subject_type, :subject_id, :fact, :key).to_set
     return [] if touched.empty?
 
-    before = timeline_steps(touched, OrgFactPeriod.known_on(@from)).index_by { identity(it) }
-    after = timeline_steps(touched, OrgFactPeriod.known_on(@to)).index_by { identity(it) }
-    learned = after.except(*before.keys).values
-    withdrawn = before.except(*after.keys).values.map { it.with(learned_at: superseded_at(it, closed)) }
+    rows = facts(OrgFactPeriod.where(subject_id: touched.map { it[1] }.uniq, learned_at: ..closed))
+    learned, withdrawn = rows.to_a.select { touched.include?(timeline(it)) }.group_by { timeline(it) }.values
+                             .map { learned_on(it, opened, closed) }.transpose.map(&:flatten)
     changes_from(learned, withdrawn: false) + changes_from(withdrawn, withdrawn: true)
   end
 
-  def timeline_steps(touched, knowledge)
-    timelines = touched.map { |type, id, fact, key| knowledge.where(subject_type: type, subject_id: id, fact:, key:) }
-    steps(timelines.reduce(:or).to_a)
+  # One timeline's steps learned and withdrawn in the window, each with the
+  # moment it settled into the state it ends in.
+  def learned_on(history, opened, closed)
+    moments = history.flat_map { [ it.learned_at, it.superseded_at ] }.compact.select { it > opened && it <= closed }.uniq.sort
+    known = Hash.new { |cache, time| cache[time] = steps(history.select { known_at?(it, time) }).index_by { identity(it) } }
+    settled = ->(id, present) { moments.reverse.take_while { known[it].key?(id) == present }.last }
+
+    start, finish = known[opened], known[closed]
+    [ finish.except(*start.keys).map { |id, step| step.with(learned_at: settled.(id, true)) },
+      start.except(*finish.keys).map { |id, step| step.with(learned_at: settled.(id, false)) } ]
   end
 
-  # A step is the same step at both ends however its row was rewritten since,
-  # so the time it was learned is no part of it.
-  def identity(step) = step.to_h.except(:learned_at)
+  def known_at?(row, time) = row.learned_at <= time && (row.superseded_at.nil? || row.superseded_at > time)
 
-  # When the Org Graph stopped believing a step it held at the window's start.
-  def superseded_at(step, closed)
-    OrgFactPeriod.where(subject_type: step.subject_type, subject_id: step.subject_id, fact: step.fact, key: step.key,
-                        event_id: step.event_id, effective_from: step.on, superseded_at: ..closed)
-                 .maximum(:superseded_at)
+  def timeline(row) = [ row.subject_type, row.subject_id, row.fact, row.key ]
+
+  # A step stays the same step when a correction rewrites its row or the
+  # value before it, unless that turns it into another kind of change.
+  def identity(step)
+    [ step.to_h.except(:learned_at, :before), step.before.nil?, employed?(step.before) ]
   end
 
   # ── Steps ──
@@ -158,9 +173,9 @@ class OrgGraph::ChangesBetween
   # Each row begins a step from the value of the row that ends the day it
   # starts, or from nothing.
   def steps(rows)
-    rows.group_by { [ it.subject_type, it.subject_id, it.fact, it.key ] }.flat_map do |(type, id, fact, key), timeline|
-      ending = timeline.index_by(&:effective_to)
-      timeline.filter_map do |row|
+    rows.group_by { timeline(it) }.flat_map do |(type, id, fact, key), history|
+      ending = history.index_by(&:effective_to)
+      history.filter_map do |row|
         before = ending[row.effective_from]&.value
         next if before == row.value
 
@@ -173,9 +188,7 @@ class OrgGraph::ChangesBetween
   # ── Kinds ──
 
   def changes_from(steps, withdrawn:)
-    steps = fold_moves(steps)
-    steps = fold_unit_creation(steps)
-    steps.filter_map { |step| step.is_a?(Change) ? step.with(withdrawn:) : change(step, withdrawn:) }
+    fold_unit_creation(fold_moves(steps)).filter_map { (it.is_a?(Change) ? it : change(it))&.with(withdrawn:) }
   end
 
   # A move ends one membership and starts another in one event.
@@ -194,24 +207,23 @@ class OrgGraph::ChangesBetween
 
   # Creating a unit writes its name, parent, level and status in one event.
   def fold_unit_creation(steps)
-    created = steps.select { it.is_a?(Step) && it.subject_type == UNIT && it.fact == "status" && it.before.nil? }
-    created.flat_map do |status|
-      parts = steps.select do
-        it.is_a?(Step) && it.subject_type == UNIT && it.subject_id == status.subject_id && it.event_id == status.event_id &&
-          it.before.nil? && it.on == status.on
-      end
-      after = parts.reject { it.fact == "status" }.map(&:after).compact.reduce({}, :merge)
-      steps = steps - parts + [ build(:unit_created, status, unit_id: status.subject_id, before: nil, after:) ]
+    creations = steps.select { it.is_a?(Step) && it.subject_type == UNIT && it.before.nil? }
+                     .group_by { [ it.subject_id, it.event_id, it.on ] }.values
+                     .select { |parts| parts.any? { it.fact == "status" } }
+    created = creations.map do |parts|
+      status = parts.find { it.fact == "status" }
+      after = parts.excluding(status).map(&:after).compact.reduce({}, :merge)
+      build(:unit_created, status, unit_id: status.subject_id, before: nil, after:)
     end
-    steps
+    steps - creations.flatten + created
   end
 
-  def change(step, withdrawn:)
+  def change(step)
     case step.subject_type
     when PERSON then person_change(step)
     when UNIT then unit_change(step)
     when SUCCESSION then build(:unit_succeeded, step, succession_id: step.subject_id)
-    end&.with(withdrawn:)
+    end
   end
 
   def person_change(step)
@@ -228,13 +240,14 @@ class OrgGraph::ChangesBetween
     end
   end
 
-  # Employed is on the roster; pending and left are not.
   def employment_change(step, person)
-    employed = ->(value) { value&.fetch("employment_status", nil) == "employed" }
-    if employed.(step.after) then build(:joined, step, **person)
-    elsif employed.(step.before) then build(:left, step, **person)
+    if employed?(step.after) then build(:joined, step, **person)
+    elsif employed?(step.before) then build(:left, step, **person)
     end
   end
+
+  # Employed is on the roster; pending and left are not.
+  def employed?(value) = value.is_a?(Hash) && value["employment_status"] == "employed"
 
   def unit_change(step)
     unit = { unit_id: step.subject_id }

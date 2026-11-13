@@ -139,6 +139,15 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 2, 5), known.known_on
   end
 
+  should "tell when a change was learned, though a later change rewrites its row" do
+    as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-03") }
+    travel 10.days
+    as_tenant { @handler.change_title(@ada.id, "Staff Engineer", **ESPALIA, effective_on: "2026-03-20") }
+
+    senior = changes("2026-03-01", "2026-03-31").changes.find { it.after == { "title" => "Senior Engineer" } }
+    assert_equal START, senior.learned_at
+  end
+
   should "include the changes already recorded for a later day" do
     as_tenant do
       @handler.record_person(@linus.id, **ESPALIA, effective_on: "2026-02-01", employment_status: "pending")
@@ -189,6 +198,30 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
       assert_equal [ :unit_renamed, Date.new(2026, 3, 7), { "name" => "Core" }, true ],
                    renamed.to_h.values_at(:kind, :effective_on, :after, :withdrawn)
       assert_equal Time.zone.parse("2026-04-10 09:00"), renamed.learned_at
+    end
+
+    should "leave a later change alone when a correction rewrites the value before it" do
+      as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-01") }
+      travel_to Time.zone.parse("2026-04-10 09:00")
+      as_tenant { @handler.change_title(@ada.id, "Lead Engineer", **ESPALIA, effective_on: "2026-02-01") }
+
+      result = changes("2026-04-09", "2026-04-10", by: :learned)
+      assert_equal [ [ Date.new(2026, 2, 1), { "title" => "Lead Engineer" }, false ],
+                     [ Date.new(2026, 2, 1), { "title" => "Engineer" }, true ] ],
+                   result.changes.map { it.to_h.values_at(:effective_on, :after, :withdrawn) }
+    end
+
+    should "withdraw a later change that a correction makes no change at all, as of the correction" do
+      as_tenant do
+        @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-01")
+        @handler.change_title(@ada.id, "Staff Engineer", **ESPALIA, effective_on: "2026-05-01")
+      end
+      travel_to Time.zone.parse("2026-04-10 09:00")
+      as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-02-01") }
+
+      march = changes("2026-04-09", "2026-04-10", by: :learned).changes.find { it.effective_on == Date.new(2026, 3, 1) }
+      assert_equal [ { "title" => "Senior Engineer" }, true, Time.zone.parse("2026-04-10 09:00") ],
+                   march.to_h.values_at(:after, :withdrawn, :learned_at)
     end
 
     should "refuse known_on" do
