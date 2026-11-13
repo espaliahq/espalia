@@ -1160,6 +1160,26 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal [ "inactive", "Analyst", @alice.id ], stray.reload.values_at(:status, :job_title, :manager_id)
       end
 
+      should "record nothing for a stray leaver when keeping their manager fails, and record them on the next sync" do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %w[title manager].each { handler.set_fact_provider(it, "espalia", effective_on: Date.current) }
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst", manager: @alice)
+        real_new = OrgGraph::CommandHandler.method(:new)
+        failing_new = lambda do |**kwargs|
+          real_new.call(**kwargs).tap { |h| h.define_singleton_method(:change_manager) { |*, **| raise "manager write failed" } }
+        end
+
+        result = OrgGraph::CommandHandler.stub(:new, failing_new) { build_adapter(@fixture["employees"]).sync_people }
+
+        assert_includes result[:errors], { person_id: stray.id, error: "manager write failed" }
+        assert_equal 0, Rails.configuration.event_store.read.stream(stream_of(stray)).count
+        assert_equal [ "active", "Analyst", @alice.id ], stray.reload.values_at(:status, :job_title, :manager_id)
+
+        build_adapter(@fixture["employees"]).sync_people
+
+        assert_equal [ "inactive", "Analyst", @alice.id ], stray.reload.values_at(:status, :job_title, :manager_id)
+      end
+
       should "hand the columns back to the sync once reverted" do
         @alice.update_columns(job_title: "Stale")
         OrgGraph::PeopleCutover.new(@tenant).revert!

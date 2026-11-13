@@ -436,15 +436,18 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
   # Records a person with no stream as having left, keeping the title and
   # manager on their row. Each fact is written by whoever holds it, since
-  # one command can't carry facts split between HiBob and Espalia.
+  # one command can't carry facts split between HiBob and Espalia. They
+  # commit together, or a half-written leaver would never be revisited.
   def record_as_left(handler, person)
     today = Date.current
     ours, espalias = first_record_facts(person).partition do |key, _|
       OrgFactProvider.provider_for(OrgGraph::PersonAggregate::FACT_KINDS.fetch(key)) == provider_name
     end.map(&:to_h)
-    handler.sync_person(person.id, provider: provider_name, effective_on: today, employment_status: "left", **ours)
-    espalias.compact.each do |key, value|
-      handler.public_send(ESPALIA_CHANGES.fetch(key), person.id, value, provider: OrgGraph::StructureAggregate::ESPALIA, effective_on: today)
+    Person.transaction(requires_new: true) do
+      handler.sync_person(person.id, provider: provider_name, effective_on: today, employment_status: "left", **ours)
+      espalias.compact.each do |key, value|
+        handler.public_send(ESPALIA_CHANGES.fetch(key), person.id, value, provider: OrgGraph::StructureAggregate::ESPALIA, effective_on: today)
+      end
     end
     Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(person.id)).count
   end
