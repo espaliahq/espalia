@@ -192,6 +192,14 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       end
     end
 
+    should "read a flat wrapper with no value as unreadable, and one holding nil as blank" do
+      unknown = { "/work/department" => { "unexpected" => "7" } }
+      empty = { "/work/department" => { "value" => nil } }
+
+      assert_predicate Hris::Hibob::ResponseMapper.new(unknown).field_value("work.department", kind: :list), :unreadable?
+      assert_predicate Hris::Hibob::ResponseMapper.new(empty).field_value("work.department", kind: :list), :blank?
+    end
+
     should "read a field the record leaves out as withheld" do
       assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "title" => "Engineer" } }).field_value("work.department", kind: :list), :withheld?
     end
