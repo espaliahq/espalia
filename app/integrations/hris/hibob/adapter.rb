@@ -424,14 +424,27 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       recorded = OrgGraph::Projections::PeopleColumns.recorded_person_ids(tenant).to_set
       stale_people.find_each do |person|
-        unless recorded.include?(person.id)
-          handler.sync_person(person.id, provider: provider_name, effective_on: Date.current,
-            employment_status: "left", **first_record_facts(person))
-        end
+        record_as_left(handler, person) unless recorded.include?(person.id)
         result[:deactivated] += 1 if person.reload.status == "inactive"
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end
+    end
+  end
+
+  ESPALIA_CHANGES = { title: :change_title, manager_id: :change_manager }.freeze
+
+  # Records a person with no stream as having left, keeping the title and
+  # manager on their row. Each fact is written by whoever holds it, since
+  # one command can't carry facts split between HiBob and Espalia.
+  def record_as_left(handler, person)
+    today = Date.current
+    ours, espalias = first_record_facts(person).partition do |key, _|
+      OrgFactProvider.provider_for(OrgGraph::PersonAggregate::FACT_KINDS.fetch(key)) == provider_name
+    end.map(&:to_h)
+    handler.sync_person(person.id, provider: provider_name, effective_on: today, employment_status: "left", **ours)
+    espalias.compact.each do |key, value|
+      handler.public_send(ESPALIA_CHANGES.fetch(key), person.id, value, provider: OrgGraph::StructureAggregate::ESPALIA, effective_on: today)
     end
   end
 

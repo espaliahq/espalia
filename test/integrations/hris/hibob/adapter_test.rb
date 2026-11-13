@@ -1135,6 +1135,18 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal "inactive", stray.reload.status
       end
 
+      should "record someone with no stream as having left when Espalia holds their title and manager" do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %w[title manager].each { handler.set_fact_provider(it, "espalia", effective_on: Date.current) }
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst", manager: @alice)
+
+        result = build_adapter(@fixture["employees"]).sync_people
+
+        assert_not_includes result[:errors].pluck(:person_id), stray.id
+        assert_equal 1, result[:deactivated]
+        assert_equal [ "inactive", "Analyst", @alice.id ], stray.reload.values_at(:status, :job_title, :manager_id)
+      end
+
       should "hand the columns back to the sync once reverted" do
         @alice.update_columns(job_title: "Stale")
         OrgGraph::PeopleCutover.new(@tenant).revert!
