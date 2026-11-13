@@ -306,6 +306,56 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
           Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped).org_graph_facts)
       end
 
+      should "write no cost centre for a value it cannot read, never its label" do
+        employee = { "work" => { "site" => "Sydney", "customColumns" => { "column_cc" => %w[17 18] } },
+                     "address" => { "country" => "AU" },
+                     "humanReadable" => { "work" => { "customColumns" => { "column_cc" => "Platform, Payments" } } } }
+
+        assert_equal({ site: "Sydney", country: "AU" }, Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped).org_graph_facts)
+      end
+
+      should "write neither site nor country when either one is unreadable" do
+        unreadable_country = { "work" => { "site" => "Sydney" }, "address" => { "country" => { "id" => "AU" } } }
+        unreadable_site = { "work" => { "site" => %w[1 2] }, "address" => { "country" => "AU" } }
+
+        assert_empty Hris::Hibob::ResponseMapper.new(unreadable_country, mapped_fields: @mapped).org_graph_facts
+        assert_empty Hris::Hibob::ResponseMapper.new(unreadable_site, mapped_fields: @mapped).org_graph_facts
+      end
+
+      should "skip a fact for exactly the people the preview counts as unreadable" do
+        employees = [
+          { "work" => { "customColumns" => { "column_cc" => "17" } } },
+          { "work" => { "customColumns" => { "column_cc" => "" } } },
+          { "work" => { "customColumns" => { "column_cc" => %w[17 18] } } },
+          { "work" => { "customColumns" => { "column_cc" => { "id" => "17" } } } },
+          { "/work/customColumns/column_cc" => { "unexpected" => "17" } },
+          { "work" => {} }
+        ].map { Hris::Hibob::ResponseMapper.new(it, mapped_fields: { cost_centre: "column_cc" }) }
+
+        unreadable = employees.count { it.field_value("column_cc", kind: :list).unreadable? }
+        withheld = employees.count { it.field_value("column_cc", kind: :list).withheld? }
+        skipped = employees.count { !it.org_graph_facts.key?(:cost_centre) }
+
+        assert_equal [ 3, 1 ], [ unreadable, withheld ]
+        assert_equal unreadable + withheld, skipped
+      end
+
+      should "count a country beside an unreadable site as unreadable, since the sync skips the pair" do
+        employee = { "work" => { "site" => %w[1 2] }, "address" => { "country" => "AU" } }
+        mapper = Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped)
+
+        assert_predicate mapper.field_value("address.country", kind: :text, alongside: "site"), :unreadable?
+        assert_not mapper.org_graph_facts.key?(:country)
+      end
+
+      should "count a text field in a shape it doesn't know as unreadable, as the sync skips it" do
+        employee = { "work" => { "customColumns" => { "column_cc" => { "name" => "Platform" } } } }
+        mapper = Hris::Hibob::ResponseMapper.new(employee, mapped_fields: { cost_centre: "column_cc" })
+
+        assert_predicate mapper.field_value("column_cc", kind: :text), :unreadable?
+        assert_not mapper.org_graph_facts.key?(:cost_centre)
+      end
+
       should "read a root field, which HiBob returns at the top level" do
         assert_equal({ cost_centre: "cc-17" },
           Hris::Hibob::ResponseMapper.new({ "costCentre" => "cc-17" }, mapped_fields: { cost_centre: "root.costCentre" }).org_graph_facts)
