@@ -88,7 +88,7 @@ where it came from a plan, a reference to the plan's change.
 | Event | Records |
 |---|---|
 | `TaxonomyDefined` | The tenant's names for its levels. Redefining it is a change like any other. |
-| `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. |
+| `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. Retiring a unit ends each membership in it on that date, unless a succession moves its members to the unit that carries on. |
 | `UnitSucceeded` | That one or more units carry on from one or more others: a split, a merge, a replacement. |
 | `UnitOwnerAdded`, `UnitOwnerRemoved` | Who may edit the unit. |
 
