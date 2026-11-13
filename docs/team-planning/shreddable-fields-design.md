@@ -112,8 +112,13 @@ so there is no moment when the event exists and the key still does. A crash leav
 or neither. Handlers and rebuilds run after the commit, so none can read the value once
 the event is visible.
 
-Step 3 is safe to repeat. A scrub that fails is retried until it succeeds, and running
-it twice changes nothing. Until it runs, a read model may still show the value to someone
+Step 3 does not depend on a job having been queued. A crash straight after the commit
+can lose one. Each projection records the last event it handled, and catches up from
+there when it starts and on a schedule. So a forgetting event whose handler never ran
+is found and handled, late but certainly.
+
+Step 3 is also safe to repeat. A scrub that fails is retried until it succeeds, and
+running it twice changes nothing. Until it runs, a read model may still show the value to someone
 already allowed to see it. That window is the handler's delay, and a deployment should
 alert on a scrub that keeps failing.
 

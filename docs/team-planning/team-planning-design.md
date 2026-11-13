@@ -298,8 +298,11 @@ shows a planner what is in flight.
 `ChangeRaised` alone does not make a second run safe. An agent can raise a change and
 fail before recording it, and two agents can pick up the same entry. The entry's stable
 id is the guard. The agent sends it with the upstream request, as an idempotency key or
-in the request's text, and looks for it upstream before raising. Where the other system
-offers neither, a duplicate request is possible and a person there has to catch it.
+in the request's text, and looks for it upstream before raising. Looking first
+is not atomic: two agents can both look, both find nothing, and both raise. Only an
+idempotency key the other system enforces closes that. Without one, a duplicate request
+is possible, and a person there has to catch it and withdraw one. If that proves common,
+the fix is a claim on the entry in the plan stream, where only one writer can win.
 Espalia's own state stays right either way, because done is read from the Org Graph.
 
 Done is still decided by the Org Graph. Nothing the agent reports marks a change done.
@@ -384,7 +387,7 @@ yet. Three properties of the events keep it possible, and must not be given up:
 
 **Erasure inside a live plan.** A person the Org Graph has forgotten stays in a plan as
 an anonymous id, with whatever the plan held about them, until the plan is deleted. The
-plan is private and the identity is gone, so this is accepted.
+plan is private and the Org Graph's identifiers are gone, so this is accepted.
 
 One thing can still name them: a note. A note is free text under the plan's key, so one
 that mentions the person stays readable to the plan's members until the plan is
