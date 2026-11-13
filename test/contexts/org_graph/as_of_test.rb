@@ -87,12 +87,14 @@ class OrgGraph::AsOfTest < ActiveSupport::TestCase
     assert_equal [ [ @ada.id, @platform ] ], placements(june)
   end
 
-  should "drop a leaver from the day after their leaving date, with their memberships" do
+  should "drop a leaver from the day after their leaving date, with their memberships and ownership" do
     as_tenant { @handler.leave(@ada.id, **ESPALIA, effective_on: "2026-04-30") }
 
     assert_equal [ @ada.id ], as_of("2026-04-30").people.map(&:id)
-    assert_empty as_of("2026-05-01").people
-    assert_empty as_of("2026-05-01").memberships
+    may = as_of("2026-05-01")
+    assert_empty may.people
+    assert_empty may.memberships
+    assert_empty may.units.find { it.id == @payments }.owner_ids
   end
 
   should "drop a retired unit from the day after it retires, with its memberships" do

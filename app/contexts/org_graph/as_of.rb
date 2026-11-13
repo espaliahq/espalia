@@ -11,8 +11,9 @@
 # a former member wherever they appear. A unit's name is the exception: the
 # structure events carry it.
 #
-# Memberships are kept only where both ends are in the snapshot: a person on
-# the roster, in a live unit.
+# Memberships and owners are kept only where both ends are in the snapshot:
+# a person on the roster, in a live unit. Leaving writes no ownership event,
+# so a leaver who owned a unit drops out of its owners here.
 #
 # @example
 #   snapshot = OrgGraph::AsOf.new(context:, date: Date.new(2026, 7, 1)).call
@@ -57,7 +58,7 @@ class OrgGraph::AsOf
 
     rows = periods.group_by(&:subject_type)
     people = people_from(rows.fetch(OrgGraph::Projections::History::PERSON, []))
-    units = units_from(rows.fetch(OrgGraph::Projections::History::UNIT, []))
+    units = units_from(rows.fetch(OrgGraph::Projections::History::UNIT, []), people.to_set(&:id))
     memberships = memberships_from(rows.fetch(OrgGraph::Projections::History::PERSON, []),
                                    people.to_set(&:id), units.to_set(&:id))
     Snapshot.new(date: @date, known_on: @known_on, people:, units:, memberships:)
@@ -91,12 +92,14 @@ class OrgGraph::AsOf
     end.sort_by(&:id)
   end
 
-  def units_from(rows)
+  def units_from(rows, person_ids)
     rows.group_by(&:subject_id).filter_map do |id, facts|
-      value = ->(fact, field) { facts.find { it.fact == fact }&.value&.fetch(field, nil) }
+      owners, facts = facts.partition { it.fact == "owner" }
+      by_fact = facts.index_by(&:fact)
+      value = ->(fact, field) { by_fact[fact]&.value&.fetch(field, nil) }
       next unless value.("status", "status") == "live"
 
-      owner_ids = facts.select { it.fact == "owner" && it.value }.map(&:key).sort
+      owner_ids = owners.select { it.value && person_ids.include?(it.key) }.map(&:key).sort
       Unit.new(id:, name: value.("name", "name"), parent_id: value.("parent", "parent_id"),
                level_id: value.("level", "level_id"), owner_ids:)
     end.sort_by { [ it.name.to_s, it.id ] }
