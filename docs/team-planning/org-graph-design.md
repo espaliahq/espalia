@@ -1,7 +1,10 @@
 # Org Graph — design
 
-> Status: proposal. Only the person stream and its events are built, in `app/contexts/org_graph/`
-> ([#46](https://github.com/espaliahq/espalia/issues/46)). [The index](README.md) lists the
+> Status: proposal, being built in `app/contexts/org_graph/`. Built so far: the person stream,
+> which the HiBob sync records and updates ([#46](https://github.com/espaliahq/espalia/issues/46) to
+> [#48](https://github.com/espaliahq/espalia/issues/48); rollout in
+> [the first-sync runbook](../runbooks/org-graph-first-sync.md)), and the structure stream
+> ([#52](https://github.com/espaliahq/espalia/issues/52)). [The index](README.md) lists the
 > companion designs, the mockups and the plan.
 
 The Org Graph is Espalia's best-known view of the organisation: who is in it, what they
