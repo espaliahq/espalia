@@ -35,7 +35,7 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
     from_date = parse(from, "Pick a date to compare with.")
     to_date = to.present? ? parse(to, "Pick an end date, or leave it as today.") : today
     raise InvalidWindow, "Pick dates no later than today." if to_date > today
-    raise InvalidWindow, "Pick an end date on or after the date you compare with." if to_date < from_date
+    raise InvalidWindow, "Pick an end date after the date you compare with." if to_date <= from_date
 
     mode = OrgGraph::ChangesBetween::BY.find { it.to_s == by.to_s } || :effective
     Window.new(from: from_date, to: to_date, by: mode)
@@ -43,7 +43,7 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
 
   def self.parse(value, message)
     Date.iso8601(value.to_s)
-  rescue Date::Error
+  rescue Date::Error, ArgumentError
     raise InvalidWindow, message
   end
   private_class_method :parse

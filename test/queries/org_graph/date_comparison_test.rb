@@ -58,10 +58,12 @@ class OrgGraph::DateComparisonTest < ActiveSupport::TestCase
     assert_equal :effective, window("2026-10-01", nil, "sideways").by
   end
 
-  should "refuse a date it can't read, a reversed range and a day after today, with a message" do
+  should "refuse a date it can't read, a window with no day in it and a day after today, with a message" do
     { [ "1 Oct" ] => "Pick a date to compare with.",
       [ "2026-10-01", "soon" ] => "Pick an end date, or leave it as today.",
-      [ "2026-10-05", "2026-10-01" ] => "Pick an end date on or after the date you compare with.",
+      [ "2026-10-05", "2026-10-01" ] => "Pick an end date after the date you compare with.",
+      [ "2026-10-05", "2026-10-05" ] => "Pick an end date after the date you compare with.",
+      [ "1" * 200 ] => "Pick a date to compare with.",
       [ "2026-10-01", "2026-11-14" ] => "Pick dates no later than today." }.each do |args, message|
       error = assert_raises(OrgGraph::DateComparison::InvalidWindow) { window(*args) }
       assert_equal message, error.message

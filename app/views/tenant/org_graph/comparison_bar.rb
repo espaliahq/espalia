@@ -57,7 +57,8 @@ class Views::Tenant::OrgGraph::ComparisonBar < Views::Base
   def date_field(id, name, label_text, value)
     div do
       label(for: id, class: "block text-xs font-medium text-muted") { label_text }
-      input(type: "date", id:, name:, value:, max: @today.iso8601, required: name == "from",
+      latest = name == "from" ? @today - 1 : @today
+      input(type: "date", id:, name:, value:, max: latest.iso8601, required: name == "from",
             class: [ Components::Kit::Field::INPUT, "mt-1" ])
     end
   end

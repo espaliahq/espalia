@@ -89,6 +89,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_includes page.at_css("#unit-#{org[:platform]}").text, "was Platform"
       assert_includes page.at_css("#org-graph-comparison").text, "What changed: since 1 Feb"
       assert page.css("nav[aria-labelledby='org-graph-tree-label'] a[href*='unit=']").all? { it["href"].include?("from=2026-02-01") }
+      assert_equal [ "2026-02-28", "2026-03-01" ], page.css("#comparison-from, #comparison-to").map { it["max"] }
     end
 
     should "refuse a reversed range with a message, and mark nothing" do
@@ -99,7 +100,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       page = Nokogiri::HTML5(response.body)
       assert_includes page.at_css("#org-graph-comparison [role='status'], #org-graph-comparison [role='alert']").text,
-                      "Pick an end date on or after the date you compare with."
+                      "Pick an end date after the date you compare with."
       assert_not page.css("nav[aria-labelledby='org-graph-tree-label'] a").any? { it["href"].include?("from=") }
     end
   end

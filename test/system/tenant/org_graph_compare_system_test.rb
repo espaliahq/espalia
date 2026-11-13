@@ -66,7 +66,7 @@ class Tenant::OrgGraphCompareSystemTest < ApplicationSystemTestCase
     should "refuse an end date before the date compared with, and mark nothing" do
       visit tenant_org_graph_path(from: (@today - 5).iso8601, to: (@today - 10).iso8601)
 
-      assert_text "Pick an end date on or after the date you compare with."
+      assert_text "Pick an end date after the date you compare with."
       assert_no_text "was Platform"
     end
   end
