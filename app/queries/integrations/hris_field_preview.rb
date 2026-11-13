@@ -7,8 +7,8 @@
 #
 # For a level, each distinct value is a unit, told apart as the mirror (#100)
 # tells them apart: a list item's id, else the text. For a fact, each value is
-# compared with what the person's Org Graph stream holds now. A withheld
-# person is never compared, the rule the sync follows.
+# compared with what the person's Org Graph stream holds now. A withheld or
+# unreadable person is never compared, the rule the sync follows.
 class Integrations::HrisFieldPreview
   LEVEL = "level"
   # The fact parts a field can be chosen for, as the sync names them.
@@ -20,8 +20,8 @@ class Integrations::HrisFieldPreview
   Unit = Data.define(:label, :people)
   # @!attribute [r] units
   #   @return [Array<Unit>] largest first
-  Level = Data.define(:field, :people, :units, :blank, :withheld)
-  Fact = Data.define(:field, :target, :people, :with_value, :blank, :withheld, :would_change)
+  Level = Data.define(:field, :people, :units, :blank, :withheld, :unreadable)
+  Fact = Data.define(:field, :target, :people, :with_value, :blank, :withheld, :unreadable, :would_change)
 
   # @param tenant [Tenant]
   # @param field_id [String] the field's catalogue id
@@ -83,7 +83,7 @@ class Integrations::HrisFieldPreview
   def fact(field, values)
     changing = ActsAsTenant.with_tenant(tenant) do
       values.count do |person_id, value|
-        !value.withheld? && repository.load_person(person_id).fact(target) != (value.label if value.value?)
+        (value.value? || value.blank?) && repository.load_person(person_id).fact(target) != (value.label if value.value?)
       end
     end
     Fact.new(field:, target:, people: values.size, with_value: values.count { it.last.value? }, would_change: changing,
@@ -91,6 +91,7 @@ class Integrations::HrisFieldPreview
   end
 
   def tally(values)
-    { blank: values.count { it.last.blank? }, withheld: values.count { it.last.withheld? } }
+    { blank: values.count { it.last.blank? }, withheld: values.count { it.last.withheld? },
+      unreadable: values.count { it.last.unreadable? } }
   end
 end

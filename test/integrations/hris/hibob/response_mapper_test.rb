@@ -184,6 +184,14 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "department" => nil } }).field_value("work.department", kind: :text), :blank?
     end
 
+    should "read a list value in a shape it doesn't know as unreadable, never blank" do
+      [ { "id" => "7" }, %w[7 9] ].each do |raw|
+        employee = { "work" => { "customColumns" => { "column_team" => raw } } }
+
+        assert_predicate Hris::Hibob::ResponseMapper.new(employee).field_value("column_team", kind: :list), :unreadable?
+      end
+    end
+
     should "read a field the record leaves out as withheld" do
       assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "title" => "Engineer" } }).field_value("work.department", kind: :list), :withheld?
     end

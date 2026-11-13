@@ -130,6 +130,8 @@ class Hris::Hibob::ResponseMapper
     return Hris::FieldValue.withheld if alongside && !supplied?(FACT_PATHS.fetch(alongside))
 
     if kind == :list
+      return Hris::FieldValue.unreadable if value(path).is_a?(Hash) || value(path).is_a?(Array)
+
       item = list_value(path)
       return Hris::FieldValue.blank if item.nil?
 

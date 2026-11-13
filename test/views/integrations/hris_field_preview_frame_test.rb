@@ -43,6 +43,15 @@ class Views::Integrations::HrisFieldPreviewFrameTest < ActiveSupport::TestCase
     assert_empty html.css("li")
   end
 
+  should "count unreadable values apart from blank, and only when there are any" do
+    preview = { field: FIELD, target: "country", people: 4, with_value: 1, blank: 1, withheld: 0, unreadable: 2,
+                would_change: 1 }
+
+    counts = render_frame(target: "country", preview:).css("dl > div").to_h { [ it.at_css("dt").text, it.at_css("dd").text ] }
+
+    assert_equal [ "1", "2" ], counts.values_at("Blank", "Unreadable")
+  end
+
   should "load lazily from its source, busy until it does" do
     html = render_frame(target: "level", src: "/preview")
 

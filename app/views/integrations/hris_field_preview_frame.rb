@@ -2,8 +2,8 @@
 
 # What an HRIS field would give, before an admin chooses it (#107): for a
 # level, the units it would make and how many people fall in each; for a fact,
-# how many people have a value and how many would change. Counts only, never a
-# person. The settings screen (6.9) loads it as a lazy frame.
+# how many people have a value and how many would change. It never says who is
+# in a unit. The settings screen (6.9) loads it as a lazy frame.
 class Views::Integrations::HrisFieldPreviewFrame < Views::Base
   FRAME_ID = "hris-field-preview"
   # A field holding a free-text value can give hundreds of units; the panel
@@ -72,7 +72,11 @@ class Views::Integrations::HrisFieldPreviewFrame < Views::Base
     counts("Have a value" => @preview[:with_value], "Would change" => @preview[:would_change], **gaps)
   end
 
-  def gaps = { "Blank" => @preview[:blank], "Withheld by their record" => @preview[:withheld] }
+  # Unreadable is rare, so it shows only when a record has one.
+  def gaps
+    { "Blank" => @preview[:blank], "Withheld by their record" => @preview[:withheld],
+      "Unreadable" => (@preview[:unreadable] if @preview[:unreadable].to_i.positive?) }.compact
+  end
 
   def counts(pairs)
     dl(class: "grid grid-cols-2 gap-3 sm:grid-cols-4") do

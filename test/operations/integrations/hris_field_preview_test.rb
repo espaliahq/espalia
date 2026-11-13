@@ -39,7 +39,7 @@ class Operations::Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
     result = call(field_id: TEAM.id, target: "level")
 
     assert_equal({ field: { id: TEAM.id, name: "Team", kind: "list" }, target: "level", people: 3,
-                   blank: 1, withheld: 0, units: [ { label: "Payments", people: 2 } ] }, result)
+                   blank: 1, withheld: 0, unreadable: 0, units: [ { label: "Payments", people: 2 } ] }, result)
   end
 
   should "give a fact's counts" do

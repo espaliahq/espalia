@@ -47,7 +47,7 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
                          "hb-5" => Hris::FieldValue.withheld }, target: "level")
 
       assert_equal [ [ "Payments", 2 ], [ "Growth", 1 ] ], result.units.map { [ it.label, it.people ] }
-      assert_equal [ 5, 1, 1 ], [ result.people, result.blank, result.withheld ]
+      assert_equal [ 5, 1, 1, 0 ], [ result.people, result.blank, result.withheld, result.unreadable ]
     end
 
     should "keep two list items that share a label as two units, as the mirror would" do
@@ -95,6 +95,14 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
       result = preview({ "hb-1" => Hris::FieldValue.withheld }, target: "cost_centre", field: CENTRE)
 
       assert_equal 0, result.would_change
+    end
+
+    should "count an unreadable person apart from blank, and never compare them" do
+      result = preview({ "hb-1" => Hris::FieldValue.unreadable, "hb-2" => Hris::FieldValue.blank },
+        target: "cost_centre", field: CENTRE)
+
+      assert_equal [ 1, 1, 0 ], [ result.unreadable, result.blank, result.withheld ]
+      assert_equal 1, result.would_change, "only the blank one clears a fact; the unreadable one says nothing"
     end
 
     should "ask for a country only beside the site it travels with, and a cost centre alone" do
