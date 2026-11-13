@@ -2,7 +2,7 @@
 
 # Cuts one tenant's `people.job_title`, `manager_id` and `status` over to the
 # Org Graph person streams (story 1.4), or back. Prints counts and person ids,
-# never names or emails. See docs/runbooks/org-graph-first-sync.md.
+# never names or emails. See docs/runbooks/org-graph-people-cutover.md.
 #
 # Usage:
 #   bin/rails "org_graph:people:cut_over[<tenant id>]"                   # dry run

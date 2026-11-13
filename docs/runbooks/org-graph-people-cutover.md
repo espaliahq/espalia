@@ -8,7 +8,7 @@ The other columns stay with the sync. Name, email and external id are identifier
 
 The tenant's first Org Graph sync must have run ([org-graph-first-sync.md](org-graph-first-sync.md)). The cut-over records anyone still missing from their row. If the first sync never ran, it would record everyone that way, as of the cut-over day, and lose HiBob as the source of their first facts.
 
-Don't run the cut-over while that tenant's sync is running. The sync reads the flag once, at its start.
+The sync reads the flag once, at its start, so the cut-over and its revert refuse to run while that tenant's sync is running. If one says `A sync is running`, wait for the sync to end and run it again.
 
 ## Deploy
 
