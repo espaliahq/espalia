@@ -5,7 +5,7 @@
 # Each method loads the person's stream, runs the command, and stores the
 # resulting events. Every command names its provider and effective date, and
 # is refused unless that provider supplies what it changes: a fact's provider
-# is the tenant's setting for its kind, a membership's is its unit's level's.
+# is the tenant's setting for its kind, a membership's is its unit's own.
 #
 class OrgGraph::CommandHandler
   FACT_KINDS = {
@@ -151,7 +151,7 @@ class OrgGraph::CommandHandler
   # @param unit_id [String] a live unit in the tenant's structure
   # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#set_membership}
   # @raise [RuntimeError] if the unit does not exist or is retired, or another
-  #   provider supplies its level
+  #   provider supplies it
   def set_membership(person_id, unit_id, **options)
     ensure_provides_unit!(ensure_live_unit!(unit_id), options[:provider])
     @repository.with_person(person_id) { |person| person.set_membership(unit_id, **options) }
@@ -164,7 +164,7 @@ class OrgGraph::CommandHandler
   # @param unit_id [String]
   # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#end_membership}
   def end_membership(person_id, unit_id, **options)
-    unit = OrgUnit.find_by(id: unit_id.to_s.downcase)
+    unit = find_unit(unit_id)
     ensure_provides_unit!(unit, options[:provider]) if unit
     @repository.with_person(person_id) { |person| person.end_membership(unit_id, **options) }
   end
@@ -174,7 +174,7 @@ class OrgGraph::CommandHandler
   # Reads the structure projection, which is written synchronously with the
   # structure stream, rather than replaying that stream for every person.
   def ensure_live_unit!(unit_id)
-    unit = OrgUnit.find_by(id: unit_id.to_s.downcase)
+    unit = find_unit(unit_id)
     raise "Unit not found" unless unit
     raise "Unit is retired" if unit.retired?
 
@@ -189,8 +189,13 @@ class OrgGraph::CommandHandler
     end
   end
 
+  def find_unit(unit_id)
+    OrgUnit.find_by(id: unit_id.to_s.downcase)
+  end
+
+  # A unit keeps the provider it was created with, which was its level's then,
+  # so a retired unit's members can still be ended after its level changes hands.
   def ensure_provides_unit!(unit, provider)
-    holder = unit.level&.provider || unit.provider
-    raise "#{holder} supplies this unit's level; change its members there" unless holder == provider.to_s
+    raise "#{unit.provider} supplies this unit; change its members there" unless unit.provider == provider.to_s
   end
 end

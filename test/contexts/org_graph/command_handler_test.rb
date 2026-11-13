@@ -198,21 +198,33 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal written, stream_events.size
     end
 
-    should "take a membership only from the provider of its unit's level" do
+    should "take a membership only from its unit's provider" do
       level = SecureRandom.uuid_v7
       team = SecureRandom.uuid_v7
       @structure.define_taxonomy([ { level_id: level, name: "Team" } ], effective_on: "2026-01-01")
       @structure.set_level_provider(level, "hibob", effective_on: "2026-01-01")
       @structure.create_unit(team, "Payments", level_id: level, effective_on: "2026-01-01", provider: "hibob", external_ref: "t-1")
 
-      assert_raises(RuntimeError, match: "hibob supplies this unit's level") do
+      assert_raises(RuntimeError, match: "hibob supplies this unit;") do
         @handler.set_membership(@person_id, team, **HELD_BY_ESPALIA)
       end
       @handler.set_membership(@person_id, team, **PROVENANCE)
-      assert_raises(RuntimeError, match: "hibob supplies this unit's level") do
+      assert_raises(RuntimeError, match: "hibob supplies this unit;") do
         @handler.end_membership(@person_id, team, **HELD_BY_ESPALIA)
       end
       assert_nothing_raised { @handler.end_membership(@person_id, team, **PROVENANCE) }
+    end
+
+    should "still end a retired unit's membership after its level changes hands" do
+      level = SecureRandom.uuid_v7
+      squad = SecureRandom.uuid_v7
+      @structure.define_taxonomy([ { level_id: level, name: "Squad" } ], effective_on: "2026-01-01")
+      @structure.create_unit(squad, "Payments", level_id: level, effective_on: "2026-01-01")
+      @handler.set_membership(@person_id, squad, **HELD_BY_ESPALIA)
+      @structure.retire_unit(squad, effective_on: "2026-11-01")
+      @structure.set_level_provider(level, "hibob", effective_on: "2026-11-02")
+
+      assert_nothing_raised { @handler.end_membership(@person_id, squad, **HELD_BY_ESPALIA) }
     end
   end
 end
