@@ -225,11 +225,13 @@ class OrgGraph::CommandHandler
   # @raise [RuntimeError] if another provider supplies the fact or the unit
   def confirm_fact(person_id, fact, **options)
     if fact.to_s == OrgGraph::FactConfirmation::MEMBERSHIP
+      authorize_membership!(person_id, options[:unit_id])
       ensure_provides_unit!(ensure_live_unit!(options[:unit_id]), OrgGraph::StructureAggregate::ESPALIA)
     else
+      authorize_structure!
       ensure_provides!(person_id, OrgGraph::StructureAggregate::ESPALIA, fact.to_sym)
     end
-    @repository.with_person(person_id) { |person| person.confirm_fact(fact, **options) }
+    @repository.with_person(person_id) { |person| person.confirm_fact(fact, **attributed(options, :confirmed_by_id)) }
   end
 
   private
