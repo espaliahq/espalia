@@ -80,6 +80,10 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_empty compare(matches: @matches, resolutions: { @legacy => Hris::LevelHandover::RETIRE }).unresolved
     end
 
+    should "leave two units matched to one value unresolved" do
+      assert_equal %w[Legacy Payments Search], compare(matches: { @payments => "7", @search => "7" }).unresolved.sort
+    end
+
     should "count a blank member of a retired unit once against the brake" do
       comparison = compare(matches: @matches, resolutions: { @legacy => Hris::LevelHandover::RETIRE })
 

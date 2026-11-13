@@ -289,7 +289,10 @@ class Hris::LevelHandover
 
     def unresolved
       matched = @matches.keys.to_set
-      bad_matches = @matches.reject { |unit_id, key| @units.any? { it.id == unit_id } && item_keys.include?(key) }.keys
+      shared = @matches.values.tally.select { |_, count| count > 1 }.keys.to_set
+      bad_matches = @matches.reject do |unit_id, key|
+        @units.any? { it.id == unit_id } && item_keys.include?(key) && !shared.include?(key)
+      end.keys
       unresolved = retiring.reject do |unit|
         resolution = @resolutions[unit.id]
         resolution == RETIRE || matched.include?(resolution)
