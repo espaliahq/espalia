@@ -25,13 +25,15 @@ class OrgGraph::PeopleCutover
 
   # Holds off a cut-over of the tenant while the block runs, so a sync that
   # read the flag at its start finishes before the flag can change. Any
-  # number of holders can overlap.
+  # number of holders can overlap. The tenant is reloaded once the lock is
+  # held, so the block reads the flag as the last cut-over or revert left it.
   #
   # @param tenant [Tenant]
   # @yield the work that must not straddle a cut-over
   def self.hold_off(tenant)
     connection = ActiveRecord::Base.connection
     connection.select_value(ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_lock_shared(?)", lock_key(tenant) ]))
+    tenant.reload
     yield
   ensure
     connection&.select_value(ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_unlock_shared(?)", lock_key(tenant) ]))

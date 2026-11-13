@@ -1008,6 +1008,17 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal "Software Engineer", @alice.reload.job_title
       end
     end
+
+    should "see a cut-over that commits after the job loaded its tenant" do
+      adapter = build_adapter(@fixture["employees"])
+      assert OrgGraph::PeopleCutover.new(Tenant.find(@tenant.id)).run(apply: true).applied
+      alice = @people["bob-001"]
+      alice.update_columns(job_title: "Stale")
+
+      adapter.sync_people
+
+      assert_equal "Stale", alice.reload.job_title
+    end
   end
 
   private
