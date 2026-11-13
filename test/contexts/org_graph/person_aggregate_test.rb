@@ -53,6 +53,16 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "FACT_KINDS" do
+    should "name a provider setting for every fact a command writes" do
+      record_keywords = OrgGraph::PersonAggregate.instance_method(:record).parameters.filter_map { |type, name| name if type == :key }
+      written = record_keywords - %i[provider effective_on]
+
+      assert_empty written - OrgGraph::PersonAggregate::FACT_KINDS.keys
+      assert_empty OrgGraph::PersonAggregate::FACT_KINDS.values - OrgGraph::StructureAggregate::FACTS
+    end
+  end
+
   context "#record" do
     should "record the facts as they stood" do
       record(started_on: Date.new(2024, 3, 4), title: " Engineer ", level: "L3", manager_id: @manager_id,
@@ -433,14 +443,14 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
         events.drop(1).map(&:class)
     end
 
-    should "refuse to end a membership before it began, counting from its first terms" do
+    should "refuse to end a membership before its last change, by date" do
       @aggregate.set_membership(@squad, allocation: 1, provider: "hibob", effective_on: "2026-03-01")
       @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-06-01")
 
-      assert_raises(RuntimeError, match: /end before it begins/) do
-        @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-02-28")
+      assert_raises(RuntimeError, match: /end before its last change on 2026-06-01/) do
+        @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-04-01")
       end
-      assert_nothing_raised { @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-04-01") }
+      assert_nothing_raised { @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-06-01") }
     end
 
     should "refuse an allocation outside (0, 1], a bad unit id or provider, and a person who has left" do
@@ -454,11 +464,63 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       assert_raises(RuntimeError, match: /has left/) { @aggregate.set_membership(@squad, **PROVENANCE) }
     end
 
-    should "count a membership from a backdated set, so a corrected start is honoured" do
+    should "accept a backdated change, still ending no earlier than the latest one" do
       @aggregate.set_membership(@squad, allocation: 1, provider: "hibob", effective_on: "2026-03-01")
       @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-02-01")
 
-      assert_nothing_raised { @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-02-15") }
+      assert_equal "2026-02-01", events.last.data[:effective_on]
+      assert_raises(RuntimeError, match: /last change on 2026-03-01/) do
+        @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-02-15")
+      end
+      assert_nothing_raised { @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-03-01") }
+    end
+
+    should "refuse to restart a membership before the last one ended, and allow it from that day" do
+      @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-03-01")
+      @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-06-30")
+
+      assert_raises(RuntimeError, match: /restart before the last one ended on 2026-06-30/) do
+        @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-05-01")
+      end
+      assert_nothing_raised { @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-06-30") }
+      assert_nothing_raised { @aggregate.set_membership(@guild, provider: "hibob", effective_on: "2026-05-01") }
+      assert_raises(RuntimeError, match: /restart before the last one ended/) do
+        @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-05-01")
+      end
+    end
+
+    should "date a move after the membership's last change, and after the destination's last end" do
+      @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-01-01")
+      @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-03-01")
+      @aggregate.set_membership(@guild, provider: "hibob", effective_on: "2026-01-01")
+      @aggregate.end_membership(@guild, provider: "hibob", effective_on: "2026-06-30")
+
+      assert_raises(RuntimeError, match: /move before its last change on 2026-03-01/) do
+        @aggregate.move_membership(@squad, @guild, effective_on: "2026-02-01")
+      end
+      assert_raises(RuntimeError, match: /restart before the last one ended on 2026-06-30/) do
+        @aggregate.move_membership(@squad, @guild, effective_on: "2026-05-01")
+      end
+
+      @aggregate.move_membership(@squad, @guild, effective_on: "2026-07-01")
+      assert_raises(RuntimeError, match: /end before its last change on 2026-07-01/) do
+        @aggregate.end_membership(@guild, provider: "hibob", effective_on: "2026-06-30")
+      end
+      assert_raises(RuntimeError, match: /restart before the last one ended on 2026-07-01/) do
+        @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-06-01")
+      end
+    end
+
+    should "replay the dates from the stream, so a reloaded person keeps the same rules" do
+      @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-03-01")
+      @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-06-30")
+      @aggregate.set_membership(@guild, allocation: 1, provider: "hibob", effective_on: "2026-07-01")
+
+      reloaded = OrgGraph::PersonAggregate.new
+      events.each { |event| reloaded.apply(event) }
+
+      assert_raises(RuntimeError, match: /restart/) { reloaded.set_membership(@squad, provider: "hibob", effective_on: "2026-06-01") }
+      assert_raises(RuntimeError, match: /last change/) { reloaded.end_membership(@guild, provider: "hibob", effective_on: "2026-06-01") }
     end
 
     should "place a hire before they start, and refuse a person not yet recorded" do
