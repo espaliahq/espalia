@@ -414,7 +414,9 @@ Graph could no longer say what it knew before. From it:
 - `OrgGraph::AsOf` gives the roster, the structure and the memberships in effect on a day.
   By default it reads what the Org Graph knows now, so a later day includes the changes
   already recorded for it: a hire who starts then, a move or a leaving scheduled for it.
-  With `known_on` it reads what was known at the end of that day (UTC). People come back as
+  With `known_on` it reads what was known at the end of that day in UTC. Tenants hold no
+  time zone yet, so for a tenant in Sydney the day ends at 10 or 11 in the morning local
+  time, and a fact learned that afternoon counts as known the next day. People come back as
   ids, and callers join names, so a forgotten person reads as a former member. MCP clients
   read it through `org_graph_as_of`.
 - `OrgGraph::ChangesBetween` lists what changed between two days as typed changes: joined
