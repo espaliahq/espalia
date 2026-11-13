@@ -48,6 +48,24 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
     assert_equal 3, stream_events.size
   end
 
+  context "#sync_person" do
+    should "record a new person, then write only what changed" do
+      first = @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+      repeat = @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+      changed = @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Lead")
+
+      assert_equal [ 1, 0, 1 ], [ first, repeat, changed ]
+      assert_equal [ OrgGraph::Events::PersonRecorded, OrgGraph::Events::TitleChanged ], stream_events.map(&:class)
+    end
+
+    should "record a leaver once and leave them alone after" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", title: "Engineer")
+
+      assert_equal 0, @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", title: "Lead")
+      assert_equal "left", stream_events.first.data[:employment_status]
+    end
+  end
+
   context "#apply_facts" do
     should "leave a person the Org Graph has not recorded alone" do
       assert_equal 0, @handler.apply_facts(@person_id, **PROVENANCE, title: "Engineer")

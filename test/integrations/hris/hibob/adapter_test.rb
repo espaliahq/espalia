@@ -675,13 +675,40 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       @people = ActsAsTenant.with_tenant(@tenant) { Person.all.index_by(&:external_id) }
     end
 
-    should "write nothing when nobody is in the Org Graph yet" do
-      assert_empty org_graph_events
+    should "start every person's stream with PersonRecorded on the first sync" do
+      @people.each_value do |person|
+        events = Rails.configuration.event_store.read.stream(stream_of(person)).to_a
+        assert_kind_of OrgGraph::Events::PersonRecorded, events.first, person.external_id
+        assert_equal 1, events.size, person.external_id
+      end
+    end
+
+    should "record the facts as they stood, from HiBob, today" do
+      alice = recorded(@people["bob-001"])
+
+      assert_equal "employed", alice[:employment_status]
+      assert_equal "Software Engineer", alice[:title]
+      assert_equal "5", alice[:level]
+      assert_equal @people["bob-002"].id, alice[:manager_id]
+      assert_equal "hibob", alice[:provider]
+      assert_equal Date.current.iso8601, alice[:effective_on]
+    end
+
+    should "record a person HiBob shows as inactive as having left" do
+      assert_equal "left", recorded(@people["bob-003"])[:employment_status]
+    end
+
+    should "record a person who first appears in a later sync" do
+      newcomer = @fixture["employees"].first.deep_dup.merge("id" => "bob-004", "email" => "dana@example.com", "displayName" => "Dana Ng")
+
+      result = build_adapter(@fixture["employees"] + [ newcomer ]).sync_people
+
+      assert_equal 1, result[:org_graph_events]
+      assert_kind_of OrgGraph::Events::PersonRecorded, org_graph_events.last
     end
 
     context "for people the Org Graph has recorded" do
       setup do
-        record_as_in_fixture
         @recorded = org_graph_events.size
       end
 
@@ -793,18 +820,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     Rails.configuration.event_store.read.to_a.count { it.class.name.start_with?("PersonDevelopment::") }
   end
 
-  # Records each synced person as the fixture describes them, so a second
-  # sync over the same fixture finds nothing to write.
-  def record_as_in_fixture
-    ActsAsTenant.with_tenant(@tenant) do
-      handler = OrgGraph::CommandHandler.new
-      @fixture["employees"].each do |employee|
-        person = @people.fetch(employee["id"])
-        handler.record_person(person.id, provider: "hibob", effective_on: Date.current, employment_status: "employed",
-          title: employee.dig("work", "title"), level: employee.dig("humanReadable", "work", "customColumns", "column_test_id"),
-          manager_id: person.manager_id)
-      end
-    end
+  def stream_of(person)
+    ActsAsTenant.with_tenant(@tenant) { EventStreamNaming.person_stream(person.id) }
+  end
+
+  # @return [Hash] the data of the person's PersonRecorded
+  def recorded(person)
+    Rails.configuration.event_store.read.stream(stream_of(person)).first.data
   end
 
   # @param external_id [String]

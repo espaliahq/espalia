@@ -31,7 +31,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # The passes, in order:
   # 1. Fetch all employees, upsert Person records (without manager_id)
   # 2. Resolve manager_id via external_id → Person lookup
-  # 2b. Write an Org Graph event for each operational fact that differs
+  # 2b. Record new people in the Org Graph, then write an event per fact that differs
   # 3. Deactivate HRIS-sourced people no longer in the API response, then
   #    offboard every inactive person still participating (Pass 3b —
   #    withdraw from open cycles, remove framework assignments)
@@ -86,7 +86,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         person.update!(manager: manager) if manager && person.manager_id != manager.id
       end
 
-      # Pass 2b: Write each Org Graph fact that differs
+      # Pass 2b: Record new people in the Org Graph, then write each fact that differs
       record_org_graph_differences(org_graph_facts, managers, result)
 
       # Pass 3: Deactivate people no longer in HRIS
@@ -279,13 +279,15 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     person
   end
 
-  # Pass 2b: compares each row's operational facts with the person's Org
-  # Graph stream and writes an event for each that differs. A fact the row
+  # Pass 2b: records a person the Org Graph has not seen, with the facts as
+  # they stand (an inactive person as having left), and otherwise compares
+  # each row's operational facts with their stream and writes an event for
+  # each that differs. A fact the row
   # does not supply is left out, never cleared. A manager is read from the
   # row itself, so a lost manager is recorded even though Pass 2 never
   # clears one; a manager the sync cannot find, or the person themself, is
-  # left uncompared. Inactive people are skipped: recording their leaving is
-  # story 1.6.
+  # left uncompared. Once recorded, inactive people are skipped: their
+  # leaving is story 1.6's.
   #
   # @param rows [Hash{Person => Hash}] title, level and manager_external_id per person
   # @param managers [Hash{String => Person, nil}] each manager external id, resolved once
@@ -296,8 +298,6 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       today = Date.current
 
       rows.each do |person, row|
-        next if person.status == "inactive"
-
         facts = row.slice(:title, :level)
         if row[:manager_external_id].nil?
           facts[:manager_id] = nil
@@ -305,7 +305,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           facts[:manager_id] = manager.id
         end
 
-        result[:org_graph_events] += handler.apply_facts(person.id, provider: provider_name, effective_on: today, **facts)
+        status = person.status == "inactive" ? "left" : "employed"
+        result[:org_graph_events] += handler.sync_person(person.id, provider: provider_name, effective_on: today,
+          employment_status: status, **facts)
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end
