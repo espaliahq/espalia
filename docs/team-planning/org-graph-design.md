@@ -107,6 +107,7 @@ Dates for the status events and the start date:
 | `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. Retiring a unit ends each membership in it on that date, unless a succession moves its members to the unit that carries on. |
 | `UnitSucceeded` | That one or more units carry on from one or more others: a split, a merge, a replacement. |
 | `UnitOwnerAdded`, `UnitOwnerRemoved` | Who may edit the unit. |
+| `LevelProviderSet`, `FactProviderSet` | Who supplies a taxonomy level, or a kind of person fact. See [Providers and provenance](#providers-and-provenance-r5). |
 
 A succession can retire its predecessors in the same step. Each such `UnitRetired`
 names the succession and its successors, and its members move rather than leave:
@@ -148,8 +149,9 @@ lists the people with no membership of a live unit, for the "in no team" tray.
   rejects an edit made in Espalia and still takes the sync's rename.
 - **A parent sits at a higher level**, is live, and is never the unit itself or a unit
   beneath it. A unit with live sub-units can't be retired.
-- **Levels an HRIS supplies sit above every level Espalia holds**, for top-level units
-  as much as for a parent and its child.
+- **A unit comes from its level's provider.** Levels an HRIS supplies sit above every
+  level Espalia holds, so the same holds for top-level units as for a parent and its
+  child.
 - **A mirrored unit carries its reference, and one Espalia holds has none.** Two live
   units never mirror the same reference.
 - **A taxonomy level keeps its id through a rename.** A level that still holds a unit
@@ -270,6 +272,14 @@ Facts another provider holds cannot be changed here. They change when the sync s
 Each kind of fact names its provider, per tenant. For structure the setting is per
 taxonomy level, so an HRIS can own departments and teams while Espalia holds the squads
 beneath them.
+
+The setting lives in the structure stream as `LevelProviderSet` and `FactProviderSet`,
+so each change keeps its date and who made it. A fact or a level has exactly one
+provider, and it's Espalia until another is set. A unit comes from its level's provider,
+and the levels an HRIS provides sit above every level Espalia holds. That check on the
+setting replaces the first version's check on each unit. A level that holds live units
+keeps its provider until a handover (6.8) moves it. A new level names its provider when
+the taxonomy adds it, so a level can be added above one an HRIS provides.
 
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's

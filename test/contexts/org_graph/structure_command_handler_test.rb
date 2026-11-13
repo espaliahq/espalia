@@ -114,6 +114,7 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     end
 
     should "refuse a second live unit mirroring the same reference" do
+      provide("Department", "hibob")
       create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "dept-7")
 
       assert_raises(RuntimeError) do
@@ -128,13 +129,12 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_raises(RuntimeError) { create_unit(SecureRandom.uuid_v7, "Finance", level: "Department", parent_id: @team) }
     end
 
-    should "let a unit Espalia holds hang beneath a mirrored one, but not the reverse" do
+    should "let a unit Espalia holds hang beneath a mirrored one" do
+      provide("Department", "hibob")
       create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "dept-7")
       create_unit(@team, "Payments", level: "Team", parent_id: @department)
 
-      assert_raises(RuntimeError) do
-        create_unit(@squad, "Checkout", level: "Squad", parent_id: @team, provider: "hibob", external_ref: "sq-1")
-      end
+      assert_equal @department, structure_events.last.data[:parent_id]
     end
 
     should "refuse a unit id that isn't a UUID, or a date that isn't one" do
@@ -158,24 +158,13 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
-    should "keep the levels an HRIS supplies above every level Espalia holds, even at the top" do
-      create_unit(@team, "Payments", level: "Team")
+    should "take a unit only from its level's provider" do
+      provide("Department", "hibob")
 
-      assert_raises(RuntimeError) do
-        create_unit(@department, "Engineering", level: "Squad", provider: "hibob", external_ref: "d-1")
-      end
-      assert_raises(RuntimeError) do
-        create_unit(@squad, "Checkout", level: "Team", provider: "hibob", external_ref: "t-1")
-      end
+      error = assert_raises(RuntimeError) { create_unit(@department, "Engineering", level: "Department") }
+      assert_match "hibob supplies this level", error.message
+      assert_raises(RuntimeError) { create_unit(@team, "Payments", level: "Team", provider: "hibob", external_ref: "t-1") }
       create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "d-1")
-    end
-
-    should "keep a unit Espalia holds below every level the HRIS supplies, even at the top" do
-      create_unit(@team, "Payments", level: "Team", provider: "hibob", external_ref: "t-1")
-
-      assert_raises(RuntimeError) { create_unit(@department, "Engineering", level: "Department") }
-      assert_raises(RuntimeError) { create_unit(@squad, "Ledger", level: "Team") }
-      create_unit(@squad, "Checkout", level: "Squad")
     end
 
     should "refuse a level outside the taxonomy" do
@@ -207,6 +196,8 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
   context "a unit another provider supplies" do
     setup do
+      provide("Department", "hibob")
+      provide("Team", "hibob")
       create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "dept-7")
       create_unit(SecureRandom.uuid_v7.tap { |id| @product = id }, "Product", level: "Department",
                   provider: "hibob", external_ref: "dept-8")
@@ -230,6 +221,138 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
       assert_raises(RuntimeError) do
         as_tenant { @handler.move_unit(@team, @product, effective_on: @today) }
+      end
+    end
+  end
+
+  context "#set_level_provider" do
+    should "record the provider, the one it replaced, the date and who set it" do
+      provide("Department", "hibob", set_by_id: @actor)
+      event = structure_events.last
+
+      assert_kind_of OrgGraph::Events::LevelProviderSet, event
+      assert_equal level_id("Department"), event.data[:level_id]
+      assert_equal "hibob", event.data[:provider]
+      assert_equal "espalia", event.data[:previous_provider]
+      assert_equal "2026-11-01", event.data[:effective_on]
+      assert_equal @actor, event.data[:set_by_id]
+    end
+
+    should "write nothing for an unchanged provider, Espalia included" do
+      provide("Department", "hibob")
+
+      assert_no_difference -> { structure_events.size } do
+        provide("Department", "hibob")
+        provide("Team", "espalia")
+      end
+    end
+
+    should "keep the levels an HRIS provides above every level Espalia holds" do
+      error = assert_raises(RuntimeError) { provide("Team", "hibob") }
+      assert_match "must sit above", error.message
+
+      provide("Department", "hibob")
+      provide("Team", "hibob")
+      assert_raises(RuntimeError) { provide("Department", "espalia") }
+      provide("Team", "espalia")
+    end
+
+    should "refuse a level that still holds live units, which would be a handover" do
+      create_unit(@department, "Engineering", level: "Department")
+
+      error = assert_raises(RuntimeError) { provide("Department", "hibob") }
+      assert_match "hand it over", error.message
+    end
+
+    should "allow it once the level's units are retired" do
+      create_unit(@department, "Engineering", level: "Department")
+      as_tenant { @handler.retire_unit(@department, effective_on: @today) }
+
+      provide("Department", "hibob")
+      assert_equal "hibob", structure_events.last.data[:provider]
+    end
+
+    should "refuse a level outside the taxonomy or an unknown provider" do
+      assert_raises(RuntimeError) do
+        as_tenant { @handler.set_level_provider(SecureRandom.uuid_v7, "hibob", effective_on: @today) }
+      end
+      assert_raises(ArgumentError) { provide("Department", "workday") }
+    end
+
+    should "hold through a redefinition, and refuse one that puts an Espalia level on top" do
+      provide("Department", "hibob")
+      renamed = [ { level_id: level_id("Department"), name: "Division" }, *levels(%w[Team Squad]) ]
+      as_tenant { @handler.define_taxonomy(renamed, effective_on: @today) }
+
+      assert_raises(RuntimeError) { create_unit(@department, "Engineering", level: "Department") }
+      assert_raises(RuntimeError) do
+        as_tenant { @handler.define_taxonomy(levels(%w[Group]) + renamed, effective_on: @today) }
+      end
+    end
+  end
+
+  context "#define_taxonomy with a new level's provider" do
+    setup do
+      provide("Department", "hibob")
+      create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "d-1")
+    end
+
+    should "add a level above one an HRIS provides, setting its provider in the same change" do
+      division = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.define_taxonomy([ { level_id: division, name: "Division", provider: "hibob" }, *levels(%w[Department Team Squad]) ],
+                                 effective_on: @today + 1, defined_by_id: @actor)
+      end
+      taxonomy, provider = structure_events.last(2)
+
+      assert_kind_of OrgGraph::Events::TaxonomyDefined, taxonomy
+      assert_equal %w[level_id name], taxonomy.data[:levels].first.keys.map(&:to_s)
+      assert_kind_of OrgGraph::Events::LevelProviderSet, provider
+      assert_equal({ level_id: division, provider: "hibob", previous_provider: "espalia", effective_on: "2026-11-02", set_by_id: @actor },
+                   provider.data.slice(:level_id, :provider, :previous_provider, :effective_on, :set_by_id))
+    end
+
+    should "refuse a new level above it that names no provider" do
+      assert_raises(RuntimeError) do
+        as_tenant { @handler.define_taxonomy([ { level_id: SecureRandom.uuid_v7, name: "Division" }, *levels(%w[Department Team Squad]) ], effective_on: @today) }
+      end
+    end
+
+    should "refuse a different provider for a level it already holds" do
+      changed = levels(%w[Department Team Squad]).tap { |all| all[0] = all[0].merge(provider: "espalia") }
+
+      error = assert_raises(RuntimeError) { as_tenant { @handler.define_taxonomy(changed, effective_on: @today) } }
+      assert_match "set_level_provider", error.message
+    end
+  end
+
+  context "#set_fact_provider" do
+    should "record the fact's provider, the one it replaced, the date and who set it" do
+      as_tenant { @handler.set_fact_provider(:title, "hibob", effective_on: @today, set_by_id: @actor) }
+      event = structure_events.last
+
+      assert_kind_of OrgGraph::Events::FactProviderSet, event
+      assert_equal({ fact: "title", provider: "hibob", previous_provider: "espalia",
+                     effective_on: "2026-11-01", set_by_id: @actor }, event.data.slice(:fact, :provider, :previous_provider, :effective_on, :set_by_id))
+    end
+
+    should "give each fact one provider, and write nothing when it is unchanged" do
+      as_tenant do
+        @handler.set_fact_provider("title", "hibob", effective_on: @today)
+        @handler.set_fact_provider("title", "espalia", effective_on: @today + 1)
+
+        assert_equal "hibob", structure_events.last.data[:previous_provider]
+        assert_no_difference -> { structure_events.size } do
+          @handler.set_fact_provider("title", "espalia", effective_on: @today + 2)
+          @handler.set_fact_provider("manager", "espalia", effective_on: @today)
+        end
+      end
+    end
+
+    should "refuse an unknown fact or provider" do
+      as_tenant do
+        assert_raises(ArgumentError) { @handler.set_fact_provider("salary", "hibob", effective_on: @today) }
+        assert_raises(ArgumentError) { @handler.set_fact_provider("title", "workday", effective_on: @today) }
       end
     end
   end
@@ -397,6 +520,7 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
     should "retire only the predecessors whose provider states it" do
       as_tenant { [ @payments, @billing, @ledger, @department ].each { |id| @handler.retire_unit(id, effective_on: @today) } }
+      provide("Department", "hibob")
       product = create_unit(SecureRandom.uuid_v7, "Product", level: "Department", provider: "hibob", external_ref: "d-8")
       design = create_unit(SecureRandom.uuid_v7, "Design", level: "Department", provider: "hibob", external_ref: "d-9")
 
@@ -441,6 +565,10 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       @handler.record_succession(id, predecessor_ids:, successor_ids:, effective_on: @today, **options)
     end
     id
+  end
+
+  def provide(level, provider, **options)
+    as_tenant { @handler.set_level_provider(level_id(level), provider, effective_on: @today, **options) }
   end
 
   def structure_events

@@ -17,6 +17,7 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
 
     as_tenant do
       @handler.define_taxonomy(taxonomy("Department", "Team"), effective_on: "2026-01-01")
+      @handler.set_level_provider(@department_level, "hibob", effective_on: "2026-01-01")
       @handler.create_unit(@engineering, "Engineering", level_id: @department_level, effective_on: "2026-01-01",
                            provider: "hibob", external_ref: "dept-7")
       @handler.create_unit(@product, "Product", level_id: @team_level, effective_on: "2026-01-01")
@@ -39,6 +40,29 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         assert_equal "Division", OrgTaxonomyLevel.find(@department_level).name
         assert_equal Date.new(2026, 3, 1), OrgTaxonomyLevel.find(@department_level).effective_on
         assert_equal Date.new(2026, 1, 1), OrgTaxonomyLevel.find(@team_level).effective_on
+      end
+    end
+  end
+
+  context "the providers" do
+    should "give each level its provider, Espalia until one is set" do
+      as_tenant do
+        assert_equal "hibob", OrgTaxonomyLevel.find(@department_level).provider
+        assert_equal Date.new(2026, 1, 1), OrgTaxonomyLevel.find(@department_level).provider_effective_on
+        assert_equal "espalia", OrgTaxonomyLevel.find(@team_level).provider
+      end
+    end
+
+    should "keep each fact's current provider, Espalia until one is set" do
+      as_tenant do
+        @handler.set_fact_provider("title", "hibob", effective_on: "2026-02-01")
+        @handler.set_fact_provider("title", "espalia", effective_on: "2026-03-01")
+        @handler.set_fact_provider("manager", "hibob", effective_on: "2026-03-01")
+
+        assert_equal "espalia", OrgFactProvider.provider_for(:title)
+        assert_equal "hibob", OrgFactProvider.provider_for(:manager)
+        assert_equal "espalia", OrgFactProvider.provider_for(:site)
+        assert_equal 2, OrgFactProvider.count
       end
     end
   end
@@ -138,6 +162,7 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         @handler.move_unit(@payments, nil, effective_on: "2026-04-01")
         @handler.define_taxonomy(taxonomy("Division", "Team"), effective_on: "2026-05-01")
         @handler.retire_unit(@product, effective_on: "2026-06-01")
+        @handler.set_fact_provider("title", "hibob", effective_on: "2026-06-01")
         @handler.create_unit(SecureRandom.uuid_v7.tap { |id| @billing = id }, "Billing", level_id: @team_level,
                              effective_on: "2026-07-01")
         @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments, @product ], successor_ids: [ @billing ],
@@ -148,9 +173,10 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
       assert_equal 2, before[:taxonomy_levels].size
       assert_equal 4, before[:units].size
       assert_equal 2, before[:successions].size
+      assert_equal 1, before[:fact_providers].size
 
       OrgGraph::Projections::Structure.reset!(tenant: @tenant)
-      as_tenant { assert_equal 0, OrgUnit.count + OrgTaxonomyLevel.count + OrgUnitSuccession.count }
+      as_tenant { assert_equal 0, OrgUnit.count + OrgTaxonomyLevel.count + OrgUnitSuccession.count + OrgFactProvider.count }
 
       Projections::Replayer.replay(projection_class: OrgGraph::Projections::Structure, tenant: @tenant)
 

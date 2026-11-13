@@ -11,18 +11,26 @@
 # provider that supplies it, so a unit mirrored from an HRIS rejects edits
 # made in Espalia and changes when the sync says so.
 #
+# The stream also holds the tenant's provider settings: one provider per
+# taxonomy level and one per kind of person fact, Espalia until another is
+# set. A level's units come from its provider.
+#
 class OrgGraph::StructureAggregate
   include AggregateRoot
 
   ESPALIA = "espalia"
   PROVIDERS = OrgGraph::PersonAggregate::PROVIDERS
   UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+  # The kinds of person fact a provider supplies, one per family of person event.
+  FACTS = %w[employment_status title level manager cost_centre site employment].freeze
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, keyword_init: true)
 
   def initialize
     @levels = []
     @units = {}
+    @level_providers = {}
+    @fact_providers = {}
     @successions = {}
   end
 
@@ -33,13 +41,19 @@ class OrgGraph::StructureAggregate
   # levels live units hold must keep their order, or a unit would sit above
   # its own parent.
   #
-  # @param levels [Array<Hash>] each `{ level_id:, name: }`, top first
+  # A new level can name its provider, so a level can be added above one an
+  # HRIS provides. An existing level changes provider through
+  # {#set_level_provider}.
+  #
+  # @param levels [Array<Hash>] each `{ level_id:, name: }`, top first, with an
+  #   optional `provider:` for a new level
   # @param effective_on [Date, String] when the taxonomy took effect
   # @param defined_by_id [String, nil] person_id of the actor
   # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError] if the levels are empty, blank or duplicated
   # @raise [RuntimeError] if a level in use is dropped or reordered
   def define_taxonomy(levels, effective_on:, defined_by_id: nil, plan_change_id: nil)
+    new_providers = new_level_providers(levels)
     levels = normalise_levels(levels)
     return if levels == @levels
 
@@ -51,12 +65,81 @@ class OrgGraph::StructureAggregate
     kept_order = level_ids(@levels) & in_use
     raise "Levels in use must keep their order" unless level_ids(levels) & in_use == kept_order
 
+    ensure_hris_levels_on_top!(level_ids(levels), new_providers)
+
     apply(OrgGraph::Events::TaxonomyDefined.new(data: {
       levels: levels,
       previous_levels: @levels,
       effective_on: iso_date(effective_on),
       defined_by_id: defined_by_id,
       plan_change_id: plan_change_id
+    }))
+    new_providers.each do |level_id, provider|
+      apply(OrgGraph::Events::LevelProviderSet.new(data: {
+        level_id: level_id,
+        provider: provider,
+        previous_provider: ESPALIA,
+        effective_on: iso_date(effective_on),
+        set_by_id: defined_by_id
+      }))
+    end
+  end
+
+  # Sets who supplies a taxonomy level's units. An unchanged provider writes
+  # nothing.
+  #
+  # A level that still holds live units keeps its provider: switching it is a
+  # handover, which compares the two first. Levels an HRIS provides sit above
+  # every level Espalia holds.
+  #
+  # @param level_id [String] a level in the current taxonomy
+  # @param provider [String] one of {PROVIDERS}
+  # @param effective_on [Date, String]
+  # @param set_by_id [String, nil] person_id of the actor
+  # @raise [ArgumentError] if the provider is unknown
+  # @raise [RuntimeError] if the level is unknown, holds live units, or would
+  #   break the order of providers
+  def set_level_provider(level_id, provider, effective_on:, set_by_id: nil)
+    level_id = require_id(level_id, "Level id")
+    provider = require_provider(provider)
+    raise "Level is not in the taxonomy" unless level_index(level_id)
+
+    previous = level_provider(level_id)
+    return if provider == previous
+    raise "Level still holds units from #{previous}; hand it over instead" if live_units.any? { |unit| unit.level_id == level_id }
+
+    ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+
+    apply(OrgGraph::Events::LevelProviderSet.new(data: {
+      level_id: level_id,
+      provider: provider,
+      previous_provider: previous,
+      effective_on: iso_date(effective_on),
+      set_by_id: set_by_id
+    }))
+  end
+
+  # Sets who supplies a kind of person fact. An unchanged provider writes nothing.
+  #
+  # @param fact [String, Symbol] one of {FACTS}
+  # @param provider [String] one of {PROVIDERS}
+  # @param effective_on [Date, String]
+  # @param set_by_id [String, nil] person_id of the actor
+  # @raise [ArgumentError] if the fact or the provider is unknown
+  def set_fact_provider(fact, provider, effective_on:, set_by_id: nil)
+    fact = fact.to_s
+    raise ArgumentError, "Unknown fact: #{fact}" unless FACTS.include?(fact)
+
+    provider = require_provider(provider)
+    previous = @fact_providers.fetch(fact, ESPALIA)
+    return if provider == previous
+
+    apply(OrgGraph::Events::FactProviderSet.new(data: {
+      fact: fact,
+      provider: provider,
+      previous_provider: previous,
+      effective_on: iso_date(effective_on),
+      set_by_id: set_by_id
     }))
   end
 
@@ -66,7 +149,7 @@ class OrgGraph::StructureAggregate
   # @param name [String]
   # @param level_id [String] a level in the current taxonomy
   # @param parent_id [String, nil] a live unit at a higher level; nil at the top
-  # @param provider [String] one of {PROVIDERS}: "espalia", or the HRIS that supplies the unit
+  # @param provider [String] the level's provider: "espalia", or the HRIS that supplies the unit
   # @param external_ref [String, nil] the provider's own reference; required for
   #   a mirrored unit, absent for one Espalia holds
   # @param effective_on [Date, String]
@@ -90,7 +173,8 @@ class OrgGraph::StructureAggregate
       raise "A live unit already mirrors #{provider} #{external_ref}"
     end
 
-    ensure_level_sits_with_its_provider!(provider, level_id)
+    raise "#{level_provider(level_id)} supplies this level's units" unless provider == level_provider(level_id)
+
     ensure_placeable!(provider, level_id, parent_id)
 
     apply(OrgGraph::Events::UnitCreated.new(data: {
@@ -229,6 +313,15 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::TaxonomyDefined do |event|
     @levels = event.data[:levels].map { |level| level.to_h.symbolize_keys.slice(:level_id, :name) }
+    @level_providers = @level_providers.slice(*level_ids(@levels))
+  end
+
+  on OrgGraph::Events::LevelProviderSet do |event|
+    @level_providers[event.data[:level_id]] = event.data[:provider]
+  end
+
+  on OrgGraph::Events::FactProviderSet do |event|
+    @fact_providers[event.data[:fact]] = event.data[:provider]
   end
 
   on OrgGraph::Events::UnitCreated do |event|
@@ -264,6 +357,10 @@ class OrgGraph::StructureAggregate
     raise "#{unit.provider} supplies this unit; change it there" unless require_provider(provider) == unit.provider
 
     unit
+  end
+
+  def level_provider(level_id)
+    @level_providers.fetch(level_id, ESPALIA)
   end
 
   # A unit retiring with others may still hold sub-units among them; those
@@ -304,19 +401,14 @@ class OrgGraph::StructureAggregate
     seen
   end
 
-  # Levels an HRIS supplies sit above every level Espalia holds, whether or
-  # not the units share a parent.
-  def ensure_level_sits_with_its_provider!(provider, level_id)
-    index = level_index(level_id)
-    mirrored = provider != ESPALIA
-    others = live_units.select { |unit| (unit.provider != ESPALIA) != mirrored }.map { |unit| level_index(unit.level_id) }
-    return if others.empty?
+  # Levels an HRIS provides sit above every level Espalia holds, so the levels
+  # top first run from HRIS ones to Espalia's and never back.
+  def ensure_hris_levels_on_top!(ids, changes = {})
+    providers = ids.map { |id| changes.fetch(id) { level_provider(id) } }
+    first_espalia = providers.index(ESPALIA) || providers.size
+    return if providers.drop(first_espalia).all?(ESPALIA)
 
-    if mirrored && index >= others.min
-      raise "A mirrored unit must sit above every level Espalia holds"
-    elsif !mirrored && index <= others.max
-      raise "A unit Espalia holds must sit below every level the HRIS supplies"
-    end
+    raise "Levels an HRIS provides must sit above every level Espalia holds"
   end
 
   # A parent must be live and at a higher level, and a mirrored unit never
@@ -341,6 +433,22 @@ class OrgGraph::StructureAggregate
 
   def level_ids(levels)
     levels.map { |level| level[:level_id] }
+  end
+
+  # The providers named for levels the taxonomy doesn't hold yet, Espalia's left out.
+  def new_level_providers(levels)
+    Array(levels).each_with_object({}) do |level, providers|
+      level = level.to_h.symbolize_keys
+      next if level[:provider].nil?
+
+      level_id = require_id(level[:level_id], "Level id")
+      provider = require_provider(level[:provider])
+      if level_index(level_id)
+        raise "Change an existing level's provider with set_level_provider" unless provider == level_provider(level_id)
+      elsif provider != ESPALIA
+        providers[level_id] = provider
+      end
+    end
   end
 
   def normalise_levels(levels)
