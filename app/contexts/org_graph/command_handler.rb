@@ -109,7 +109,7 @@ class OrgGraph::CommandHandler
   def join(person_id, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :employment_status)
-    with_person(person_id, plan) { |person| person.join(provider:, effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.join(provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -118,7 +118,7 @@ class OrgGraph::CommandHandler
   def leave(person_id, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :employment_status)
-    with_person(person_id, plan) { |person| person.leave(provider:, effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.leave(provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -127,7 +127,7 @@ class OrgGraph::CommandHandler
   def return_to_work(person_id, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :employment_status)
-    with_person(person_id, plan) { |person| person.return_to_work(provider:, effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.return_to_work(provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -135,7 +135,7 @@ class OrgGraph::CommandHandler
   def change_title(person_id, title, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :title)
-    with_person(person_id, plan) { |person| person.change_title(title, provider:, effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_title(title, provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -143,7 +143,7 @@ class OrgGraph::CommandHandler
   def change_level(person_id, level, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :level)
-    with_person(person_id, plan) { |person| person.change_level(level, provider:, effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_level(level, provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -151,7 +151,7 @@ class OrgGraph::CommandHandler
   def change_manager(person_id, manager_id, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :manager_id)
-    with_person(person_id, plan) { |person| person.change_manager(manager_id, provider:, effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_manager(manager_id, provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -159,7 +159,7 @@ class OrgGraph::CommandHandler
   def change_cost_centre(person_id, cost_centre, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :cost_centre)
-    with_person(person_id, plan) { |person| person.change_cost_centre(cost_centre, provider:, effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_cost_centre(cost_centre, provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -168,7 +168,7 @@ class OrgGraph::CommandHandler
   def change_site(person_id, site:, country:, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :site)
-    with_person(person_id, plan) { |person| person.change_site(site:, country:, provider:, effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_site(site:, country:, provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -177,7 +177,7 @@ class OrgGraph::CommandHandler
   def change_employment(person_id, fte:, employment_type:, provider:, effective_on:, **plan)
     authorize_structure!
     ensure_provides!(person_id, provider, :fte)
-    with_person(person_id, plan) do |person|
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) do |person|
       person.change_employment(fte:, employment_type:, provider:, effective_on:)
     end
   end
@@ -252,7 +252,6 @@ class OrgGraph::CommandHandler
   private
 
   def with_person(person_id, plan, &block)
-    plan = OrgGraph::PlanReference.new(**plan) if plan.is_a?(Hash)
     @repository.with_person(person_id, plan:, cause_id: @cause_id, &block)
   end
 
