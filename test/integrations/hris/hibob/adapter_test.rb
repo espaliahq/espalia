@@ -17,6 +17,16 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
+  context "#active_external_ids" do
+    should "hold everyone HiBob doesn't mark inactive, a hire yet to start included" do
+      ids = @fixture["employees"].map { it["id"].to_s }
+      inactive = @fixture["employees"].select { it["isActive"] == false }.map { it["id"].to_s }
+
+      assert_equal ids - inactive, build_adapter(@fixture["employees"]).active_external_ids
+      assert_not_empty inactive
+    end
+  end
+
   context "#sync_people" do
     should "create new Person records for new employees" do
       adapter = build_adapter(@fixture["employees"])

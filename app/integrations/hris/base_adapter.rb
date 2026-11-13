@@ -60,6 +60,14 @@ class Hris::BaseAdapter
     raise NotImplementedError, "#{self.class}#fetch_employees must be implemented"
   end
 
+  # The ids of everyone the HRIS shows as employed or starting, so nobody
+  # it still holds is forgotten. An HRIS error raises.
+  #
+  # @return [Array<String>]
+  def active_external_ids
+    raise NotImplementedError, "#{self.class}#active_external_ids must be implemented"
+  end
+
   # The fields an admin can choose from, cached per tenant. An HRIS error
   # raises, and nothing is cached, so a failure never reads as "no fields".
   #

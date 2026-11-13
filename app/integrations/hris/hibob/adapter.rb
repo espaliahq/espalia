@@ -135,6 +135,13 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     client.search_people(show_inactive: true)
   end
 
+  # HiBob marks a leaver `isActive: false`; a hire yet to start is active.
+  #
+  # @return [Array<String>]
+  def active_external_ids
+    fetch_employees.reject { it["isActive"] == false }.filter_map { it["id"].presence&.to_s }
+  end
+
   # A bare custom-column id, the form stored before the picker, as its path.
   #
   # @param field_id [String, nil]

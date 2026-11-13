@@ -1,0 +1,182 @@
+# frozen_string_literal: true
+
+# Erases a leaver's identifiers and records `PersonForgotten`. The one step
+# in the Org Graph that cannot be undone.
+#
+# Each person is one transaction: the row's identifiers, their tenant
+# membership's link to a login, the names notifications copied, and the
+# event, with the projections that handle it. A run that dies partway
+# leaves each person either forgotten or untouched, and the next run takes
+# whoever is still due.
+#
+# The row keeps a keyed digest of its external id, so a later sync can
+# recognise the person without identifying them. Without the key nothing is
+# forgotten.
+#
+# Every result is a count and person ids, never a name or an email.
+#
+# @example
+#   forgetting = OrgGraph::Forgetting.new(tenant)
+#   forgetting.dry_run                 # => #<data Report count=2, person_ids=[...]>
+#   forgetting.forget_due              # => #<data Report count=2, person_ids=[...]>
+#   forgetting.forget(person_id, requested_by: context, before_due: true)
+class OrgGraph::Forgetting
+  # A forgetting the guards don't allow.
+  class Refused < StandardError; end
+
+  # The digest key is missing, so nobody can be forgotten, and a sync can't
+  # recognise anyone already forgotten.
+  class KeyMissing < StandardError
+    def initialize(msg = "The Org Graph forgetting key is not set: set credentials org_graph.forgetting_key " \
+                         "or ORG_GRAPH_FORGETTING_KEY")
+      super
+    end
+  end
+
+  # Who a run would forget, or did.
+  #
+  # @!attribute count [Integer]
+  # @!attribute person_ids [Array<String>]
+  Report = Data.define(:count, :person_ids) do
+    def self.of(person_ids) = new(count: person_ids.size, person_ids: person_ids)
+  end
+
+  # Notification params that copy a person's name by value.
+  NAME_PARAMS = %w[actor_name assessee_name author_name decliner_name requested_by_name requester_name
+                   responder_name started_by_name].freeze
+  NAME_LIST_PARAMS = %w[skipped_names].freeze
+
+  # @return [String, nil]
+  def self.key
+    Rails.application.credentials.dig(:org_graph, :forgetting_key).presence || ENV["ORG_GRAPH_FORGETTING_KEY"].presence
+  end
+
+  # @raise [KeyMissing]
+  def self.key! = key || raise(KeyMissing)
+
+  # @param tenant [Tenant]
+  # @param source [String] the HRIS the id comes from
+  # @param external_id [String]
+  # @return [String] what a forgotten row keeps of its external id
+  # @raise [KeyMissing]
+  def self.digest(tenant, source, external_id)
+    OpenSSL::HMAC.hexdigest("SHA256", key!, "#{tenant.id}:#{source}:#{external_id}")
+  end
+
+  # @param tenant [Tenant]
+  # @param hris [#active_external_ids, nil] the tenant's HRIS, or nil when it has none
+  def initialize(tenant, hris: default_hris(tenant))
+    @tenant = tenant
+    @hris = hris
+  end
+
+  # Who {#forget_due} would forget today, after the same HRIS check.
+  #
+  # @param on [Date]
+  # @return [Report]
+  # @raise [Hris::Hibob::Errors::Error] and the like, when the HRIS can't be reached
+  def dry_run(on: Date.current)
+    Report.of(candidates(on))
+  end
+
+  # Forgets every leaver whose retention period has ended and whom the HRIS
+  # doesn't show as employed or starting again.
+  #
+  # @param on [Date]
+  # @return [Report] who was forgotten
+  # @raise [KeyMissing] before anything is erased
+  def forget_due(on: Date.current)
+    self.class.key!
+    years = @tenant.org_graph_config.retention_years
+    Report.of(candidates(on).select { |person_id| erase(person_id, on:, reason: "retention", retention_years: years) })
+  end
+
+  # Forgets one leaver at a tenant admin's request. A leaver not yet due is
+  # refused unless the admin says so with `before_due`, and the event names
+  # them either way.
+  #
+  # @param person_id [String]
+  # @param requested_by [AuthorizationContext] the admin asking
+  # @param before_due [Boolean] whether to forget a leaver whose period hasn't ended
+  # @param on [Date]
+  # @return [Boolean] whether this call forgot them; false when they already were
+  # @raise [Pundit::NotAuthorizedError] unless the requester is a tenant admin
+  # @raise [Refused] for anyone not due without `before_due`, or whom the HRIS still employs
+  # @raise [KeyMissing]
+  def forget(person_id, requested_by:, before_due: false, on: Date.current)
+    self.class.key!
+    raise Pundit::NotAuthorizedError, "Only a tenant admin can forget a person" unless
+      TenantPolicy.new(requested_by, @tenant).forget_person?
+
+    due = within_tenant { OrgLeaver.due_to_be_forgotten(@tenant, on:) }.include?(person_id)
+    raise Refused, "This person is not due to be forgotten; say before_due to forget them now" unless due || before_due
+    raise Refused, "The HRIS still shows this person as employed or starting" unless candidate_ids([ person_id ]).any?
+
+    erase(person_id, on:, reason: due ? "retention" : "request",
+                     retention_years: @tenant.org_graph_config.retention_years,
+                     requested_by_id: requested_by.tenant_user.id)
+  end
+
+  private
+
+  def default_hris(tenant)
+    Hris::BaseAdapter.for(tenant) if tenant.hris_config.connected?(tenant)
+  end
+
+  def within_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
+
+  def candidates(on)
+    candidate_ids(within_tenant { OrgLeaver.due_to_be_forgotten(@tenant, on:) })
+  end
+
+  # A rehire whose start is still ahead has no `PersonReturned` yet, so they
+  # stay on the due list. The HRIS still holding them active keeps them.
+  def candidate_ids(person_ids)
+    held = within_tenant { Person.where(id: person_ids).where.not(external_id: nil).pluck(:id, :external_id).to_h }
+    return person_ids if held.empty? || @hris.nil?
+
+    active = @hris.active_external_ids.to_set
+    person_ids.reject { |person_id| active.include?(held[person_id]) }
+  end
+
+  def erase(person_id, on:, reason:, retention_years:, requested_by_id: nil)
+    within_tenant do
+      Person.transaction do
+        person = Person.lock.find(person_id)
+        next false if person.forgotten?
+
+        scrub_notifications(person.read_attribute(:name))
+        OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          .forget_person(person_id, effective_on: on, reason:, retention_years:, requested_by_id:)
+        erase_identifiers(person)
+        true
+      end
+    end
+  end
+
+  def erase_identifiers(person)
+    now = Time.current
+    digest = self.class.digest(@tenant, person.hris_source, person.external_id) if person.external_id.present?
+    person.update_columns(name: nil, email: nil, external_id: nil, hris_raw_data: nil,
+                          forgotten_external_id_digest: digest, forgotten_at: now, updated_at: now)
+    TenantUser.where(person_id: person.id)
+      .update_all(person_id: nil, user_id: nil, slack_user_id: nil, forgotten_at: now, updated_at: now)
+  end
+
+  # Notifications hold no person id beside each name they copied, so the
+  # match is on the name within the tenant. A colleague with the same name
+  # loses theirs from an old notification, which then reads "A colleague".
+  def scrub_notifications(name)
+    return if name.blank?
+
+    events = Noticed::Event.where("params->>'tenant_id' = ?", @tenant.id)
+    NAME_PARAMS.each do |key|
+      events.where("params->>? = ?", key, name)
+        .update_all([ "params = jsonb_set(params, ARRAY[?], 'null'::jsonb)", key ])
+    end
+    NAME_LIST_PARAMS.each do |key|
+      events.where("jsonb_exists(params->?, ?)", key, name)
+        .update_all([ "params = jsonb_set(params, ARRAY[?], (params->?) - ?)", key, key, name ])
+    end
+  end
+end
