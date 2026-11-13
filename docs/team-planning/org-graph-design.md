@@ -423,7 +423,22 @@ Graph could no longer say what it knew before. From it:
   time, and a fact learned that afternoon counts as known the next day. People come back as
   ids, and callers join names, so a forgotten person reads as a former member. MCP clients
   read it through `org_graph_as_of`.
-- `changes_between(a, b)` lists the facts that differ.
+- `OrgGraph::ChangesBetween` lists what changed between two days as typed changes: joined
+  and left; a person's fact changed; a membership started, ended or changed; a move from
+  one unit to another; a unit created, renamed, moved, retired or succeeded; an owner added
+  or removed. Each carries the day it first holds, when it was learned, its provider and its
+  event, so a headcount walk or "compare with a date" can group and count them. A joining
+  carries every fact, membership and unit ownership the person holds on their first day, as most are recorded while they
+  are pending. By effective
+  date it lists what took effect after the first day, up to and including the last: the
+  steps from `AsOf` on one day to `AsOf` on the other, with the same `known_on`. By learned
+  date it lists what the Org Graph learned after the end of the first day, up to the end
+  of the last, each read at 23:59:59 UTC as `known_on` is, whatever day it took effect. A
+  change it learned before the window and no longer believes, such as one changed back on
+  its own day or a value a correction replaced, comes back `withdrawn`, and the summary
+  counts it apart. A correction to an earlier value leaves a later change standing unless
+  it turns that change into another kind or into no change at all. MCP clients read it
+  through `org_graph_changes_between`.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what
 was known last Tuesday, even if a backdated correction arrived since. The correction

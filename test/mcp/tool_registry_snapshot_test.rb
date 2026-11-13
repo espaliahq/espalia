@@ -2695,6 +2695,44 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_changes_between",
+        "description" => "What changed in the Org Graph between two UTC dates: joiners (with every fact and " \
+          "membership and the units they own on their first day), leavers, person " \
+          "fact changes (title, level, manager, cost centre, site, employment), memberships " \
+          "started, ended or changed, moves between units, and units created, renamed, moved, " \
+          "retired, succeeded or re-owned. by \"effective\" (the default) lists what took " \
+          "effect after from, up to and including to; known_on reads what the Org Graph knew " \
+          "at 23:59:59 UTC on that date, not in the tenant's local time. by \"learned\" lists " \
+          "what the Org Graph learned after 23:59:59 UTC on from, up to 23:59:59 UTC on to, " \
+          "whatever date it took effect, so backdated corrections show, and a change it " \
+          "no longer believes comes back withdrawn. A change's effective_on is the first day " \
+          "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind, " \
+          "with withdrawn changes counted apart; mode \"full\" lists every change. People are " \
+          "named by id only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "from" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                        "description" => "UTC date, YYYY-MM-DD. The day before the window opens." },
+            "to" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                      "description" => "UTC date, YYYY-MM-DD. The window's last day." },
+            "by" => { "type" => "string", "enum" => %w[effective learned] },
+            "known_on" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                            "description" => "UTC date, YYYY-MM-DD. By effective date only; omit for what is known now." },
+            "mode" => { "type" => "string", "enum" => %w[summary full] }
+          },
+          "required" => %w[from to],
+          "additionalProperties" => false,
+          "if" => { "properties" => { "by" => { "const" => "learned" } }, "required" => %w[by] },
+          "then" => { "not" => { "required" => %w[known_on] } }
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "org_graph_merge_unit",
         "description" => "Merge a unit into another live unit from effective_on (today by default). Every membership moves to into_unit_id, keeping its role and allocation, and unit_id retires, all under one cause. A unit with live sub-units is refused, as is either unit when an HRIS supplies it. The caller must be able to change both units.",
         "inputSchema" => {
