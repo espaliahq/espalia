@@ -69,6 +69,28 @@ class Hris::Hibob::ResponseMapper
     raw.to_s.strip.presence unless raw.is_a?(Hash)
   end
 
+  # The site, employment and dates the Org Graph records, keyed as
+  # {OrgGraph::CommandHandler#sync_person} takes them. A fact appears only when
+  # the payload carries its field, so one HiBob withholds (the service user
+  # can't read it) is never compared, and FTE and type are written only when
+  # both arrive, since they travel together; a field it sends blank, or a value the
+  # Org Graph can't hold (an FTE outside 1–100, a date that isn't ISO 8601), is
+  # nil. HiBob gives a site no country, so country is always absent.
+  #
+  # @return [Hash] any of :site with :country, :fte with :employment_type,
+  #   :started_on and :terminated_on
+  def org_graph_facts
+    facts = {}
+    facts.merge!(site: label(%w[work site]), country: nil) if supplied?(%w[work site])
+    if supplied?(%w[payroll employment fte]) && supplied?(%w[payroll employment type])
+      facts.merge!(fte: fraction(value(%w[payroll employment fte])),
+        employment_type: human_readable(%w[payroll employment type]))
+    end
+    facts[:started_on] = iso_date(value(%w[work startDate])) if supplied?(%w[work startDate])
+    facts[:terminated_on] = iso_date(value(%w[internal terminationDate])) if supplied?(%w[internal terminationDate])
+    facts
+  end
+
   # The list fields' item ids beside their labels, keyed like the attributes they sit
   # beside. A blank field is left out.
   #
@@ -111,12 +133,64 @@ class Hris::Hibob::ResponseMapper
   # @param path [Array<String>]
   # @return [ListValue, nil]
   def list_value(path)
-    flat = employee["/#{path.join('/')}"]
-    id = employee.dig(*path).presence || (flat.is_a?(Hash) ? flat["value"] : flat).presence
+    id = value(path).presence
     return nil if id.nil? || id.is_a?(Hash)
 
     ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
   end
+
+  # @param path [Array<String>]
+  def supplied?(path)
+    parent = employee.dig(*path[0..-2])
+    (parent.is_a?(Hash) && parent.key?(path.last)) || employee.key?(flat_key(path))
+  end
+
+  # The machine value, from either payload shape.
+  #
+  # @param path [Array<String>]
+  def value(path)
+    parent = employee.dig(*path[0..-2])
+    return parent[path.last] if parent.is_a?(Hash) && parent.key?(path.last)
+
+    flat = employee[flat_key(path)]
+    flat.is_a?(Hash) ? flat["value"] : flat
+  end
+
+  # The label HiBob shows, falling back to the machine value.
+  #
+  # @param path [Array<String>]
+  # @return [String, nil]
+  def label(path)
+    (human_readable(path) || value(path)).to_s.strip.presence
+  end
+
+  # A list field's machine value is an item id, so its label comes only from here.
+  #
+  # @param path [Array<String>]
+  # @return [String, nil]
+  def human_readable(path)
+    employee.dig("humanReadable", *path).to_s.strip.presence
+  end
+
+  # HiBob gives FTE as a percentage.
+  #
+  # @return [Float, nil]
+  def fraction(percent)
+    number = Float(percent.to_s, exception: false)
+    return nil unless number && number <= 100
+
+    fraction = (number / 100).round(4)
+    fraction if fraction.positive?
+  end
+
+  # @return [String, nil]
+  def iso_date(raw)
+    Date.iso8601(raw.to_s).iso8601 if raw.present?
+  rescue Date::Error
+    nil
+  end
+
+  def flat_key(path) = "/#{path.join('/')}"
 
   # @return [String, nil]
   def build_name

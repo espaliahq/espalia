@@ -72,11 +72,13 @@ are shreddable from their first event.
 |---|---|
 | `PersonRecorded` | The first time the Org Graph sees a person, with the facts as they stood. History starts here. |
 | `PersonJoined`, `PersonLeft`, `PersonReturned` | Employment status, with the date. |
+| `StartDateChanged` | The start date of someone recorded and not left, when it was unknown or differs. |
 | `TitleChanged`, `LevelChanged` | The HRIS's own title and level, before any mapping to a framework. |
 | `ManagerChanged` | The new manager's id, or none. |
 | `CostCentreChanged`, `SiteChanged` | The cost centre as the HRIS names it. |
 | `EmploymentChanged` | FTE and type. |
 | `MembershipSet`, `MembershipEnded` | A unit, an allocation, and the role played there. |
+| `MembershipMoved` | That a membership moved to another unit, keeping its terms. |
 | `FactConfirmed` | That a fact Espalia holds is still true, and who said so. |
 | `PersonForgotten` | That the identifiers have been erased. |
 
@@ -87,6 +89,15 @@ Two rules hold for the status events:
 
 - **`PersonReturned` is only for the same person.** The HRIS must show the same external id, and the person must not have been forgotten. Anyone else is a new person with a new id. The sync never merges a row into a person by email when that person already holds another external id: it skips the row and reports it for an admin to resolve.
 - **Returning restores no memberships.** A returner comes back with none, like a new person.
+
+Dates for the status events and the start date:
+
+- **`PersonJoined` is the move from pending to employed, effective on the start date** when the HRIS holds one, else the sync's date. A hire the HRIS shows before their start date stays pending and joins on the first sync on or after it.
+- **`PersonLeft` is effective on the HRIS termination date** when it holds one, else the sync's date. A leaver whose termination date arrives later, or changes, gets a second `PersonLeft` on that date. A termination date before the start date contradicts it, so the sync drops it and dates the leaving by the sync.
+- **`PersonReturned` is effective on the start date when it falls after the leaving**, else the sync's date, since an HRIS may still hold a returner's first start. A leaver whose rehire has not started yet stays left, and their facts are not compared until they return.
+- **`StartDateChanged` supplies or corrects the start date of someone recorded and not left**, effective on that date. `PersonRecorded` carries the start date when the HRIS sends one.
+- **The history projection reads employment as beginning on the start date** when one is held, not on the day the sync first saw the person.
+- **Country stays absent** until the tenant's field mapping names a field for it. HiBob gives a site no country.
 
 ### One structure stream per tenant
 
@@ -111,7 +122,14 @@ names the succession and its successors, and its members move rather than leave:
   guesses.
 - **Placements are not stored on the structure events.** They are ordinary membership
   commands issued with the split, sharing its cause. The split screen (5.6) and applying
-  a plan (7.3) supply the names; the membership side lands in story 2.6.
+  a plan (7.3) supply the names.
+
+`OrgGraph::SyncHandlers::RetiredUnitMemberships` does this when a unit retires, in each
+member's own stream. Every `MembershipEnded` or `MembershipMoved` it writes has the
+retirement as its cause. A plain retirement ends every open membership in the unit on
+the retirement date, each as its own provider holds it. A membership that began after
+a backdated retirement closes on the day it began. A unit with live sub-units still
+can't be retired, so its members stay where they are.
 
 Units carry their provider too: a unit mirrored from an HRIS team is read-only in
 Espalia, and units Espalia holds can hang beneath it. A mirrored unit also carries the
@@ -128,6 +146,10 @@ doesn't. Allocations across units are not summed or capped here: an over-allocat
 is for a plan's checks to flag. The same terms from the same provider write nothing. A
 person who has left can't join a unit, and a membership can only be set in a live unit.
 `MembershipEnded` dates the last day of one membership and leaves the others.
+`MembershipMoved` carries a membership to another unit with its allocation, role and
+start, so a move is one fact and the person is never ended and added again. A person
+already in the destination keeps the membership they have there. For them, and for a
+person who has left, the membership they came from ends instead.
 
 `OrgGraph::Projections::Members` projects the current memberships into `org_memberships`.
 An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`
@@ -198,6 +220,12 @@ Ownership is always stated. It is never derived from reporting lines or from a r
 the unit, because a cross-functional team has no single line to derive it from. When a
 unit's last owner leaves, the unit is flagged and inherits its parent's owners until
 someone is named.
+
+`UnitOwnerAdded` and `UnitOwnerRemoved` live in the structure stream, and any live unit
+takes owners, one an HRIS supplies included. An owner leaves when they are removed, or
+when they leave the company and their `people` row goes inactive. That is read when the
+owners are asked for, so leaving writes no ownership event. A unit nobody up its chain
+owns is flagged too (`OrgUnit#needs_owner?`).
 
 ### Keeping a fact current
 
@@ -292,6 +320,17 @@ and the levels an HRIS provides sit above every level Espalia holds. That check 
 setting replaces the first version's check on each unit. A level that holds live units
 keeps its provider until a handover (6.8) moves it. A new level names its provider when
 the taxonomy adds it, so a level can be added above one an HRIS provides.
+
+The kinds of person fact, each naming the events it covers:
+
+| Kind | Events |
+|---|---|
+| `employment_status` | `PersonJoined`, `PersonLeft`, `PersonReturned`, `StartDateChanged` |
+| `title`, `level`, `manager`, `cost_centre` | `TitleChanged`, `LevelChanged`, `ManagerChanged`, `CostCentreChanged` |
+| `site` | `SiteChanged` (site and country) |
+| `employment` | `EmploymentChanged` (FTE and type) |
+
+The HiBob sync writes `employment_status`, `title`, `level`, `manager`, `site` and `employment`. Each must name the HRIS as its provider, or its writes are refused. `cost_centre` stays Espalia's until the field mapping (6.4) names a field.
 
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's

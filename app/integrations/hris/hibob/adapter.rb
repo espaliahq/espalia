@@ -70,7 +70,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           external_id_map[attrs[:external_id]] = person
           manager_links[person] = manager_ext_id if manager_ext_id.present?
           touched_person_ids << person.id
-          org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id }.compact
+          org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id }
+            .compact.merge(mapper.org_graph_facts)
         end
       rescue => e
         result[:errors] << {
@@ -307,10 +308,12 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # does not supply is left out, never cleared. A manager is read from the
   # row itself, so a lost manager is recorded even though Pass 2 never
   # clears one; a manager the sync cannot find, or the person themself, is
-  # left uncompared. A change in employment status is written too; a
-  # leaver's other facts are not compared.
+  # left uncompared. A change in employment status is written too, a join
+  # on the start date and a leaving on the termination date when HiBob holds
+  # them; a leaver's other facts are not compared.
   #
-  # @param rows [Hash{Person => Hash}] title, level and manager_external_id per person
+  # @param rows [Hash{Person => Hash}] title, level, manager_external_id and
+  #   the mapper's {Hris::Hibob::ResponseMapper#org_graph_facts} per person
   # @param managers [Hash{String => Person, nil}] each manager external id, resolved once
   # @param result [Hash] running tally
   def record_org_graph_differences(rows, managers, result)
@@ -319,20 +322,30 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       today = Date.current
 
       rows.each do |person, row|
-        facts = row.slice(:title, :level)
+        facts = row.slice(:title, :level, :site, :country, :fte, :employment_type)
         if row[:manager_external_id].nil?
           facts[:manager_id] = nil
         elsif (manager = managers[row[:manager_external_id]]) && manager != person
           facts[:manager_id] = manager.id
         end
 
-        status = person.status == "inactive" ? "left" : "employed"
         result[:org_graph_events] += handler.sync_person(person.id, provider: provider_name, effective_on: today,
-          employment_status: status, **facts)
+          employment_status: org_graph_status(person, row[:started_on], today),
+          started_on: row[:started_on], left_on: row[:terminated_on], **facts)
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end
     end
+  end
+
+  # HiBob marks a hire active before they start, so a start date still ahead
+  # means pending.
+  #
+  # @return [String] "left", "pending" or "employed"
+  def org_graph_status(person, started_on, today)
+    return "left" if person.status == "inactive"
+
+    started_on.present? && Date.iso8601(started_on) > today ? "pending" : "employed"
   end
 
   # Marks HRIS-sourced people as inactive if they no longer appear in the response.

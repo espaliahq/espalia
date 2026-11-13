@@ -67,6 +67,68 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
     end
   end
 
+  context "the owners" do
+    setup do
+      as_tenant do
+        @alice = create(:person, tenant: @tenant)
+        @bob = create(:person, tenant: @tenant)
+        @handler.add_unit_owner(@engineering, @alice.id, effective_on: "2026-01-01")
+        @handler.add_unit_owner(@engineering, @bob.id, effective_on: "2026-02-01")
+      end
+    end
+
+    should "list a unit's own owners, with when each began" do
+      as_tenant do
+        assert_equal [ @alice, @bob ].sort_by(&:id), OrgUnit.find(@engineering).owners.order(:id).to_a
+        assert_equal Date.new(2026, 2, 1), OrgUnitOwner.find_by(person_id: @bob.id).owner_since
+        assert_not OrgUnit.find(@engineering).needs_owner?
+      end
+    end
+
+    should "resolve a unit with no owner of its own to its nearest ancestor's, without flagging it" do
+      as_tenant do
+        payments = OrgUnit.find(@payments)
+
+        assert_empty payments.own_owners
+        assert_equal [ @alice, @bob ].sort_by(&:id), payments.owners.order(:id).to_a
+        assert_not payments.needs_owner?
+      end
+    end
+
+    should "flag a unit whose last owner is removed, and inherit until someone is named" do
+      as_tenant do
+        @handler.add_unit_owner(@payments, @alice.id, effective_on: "2026-03-01")
+        @handler.remove_unit_owner(@payments, @alice.id, effective_on: "2026-04-01")
+        payments = OrgUnit.find(@payments)
+
+        assert_equal Date.new(2026, 4, 1), payments.owners_lost_on
+        assert payments.needs_owner?
+        assert_equal [ @alice, @bob ].sort_by(&:id), payments.owners.order(:id).to_a
+
+        @handler.add_unit_owner(@payments, @bob.id, effective_on: "2026-05-01")
+        assert_not OrgUnit.find(@payments).needs_owner?
+      end
+    end
+
+    should "stop counting an owner who has left, and flag the unit when none is left" do
+      as_tenant do
+        @alice.update!(status: "inactive")
+        assert_equal [ @bob ], OrgUnit.find(@engineering).owners.to_a
+
+        @bob.update!(status: "inactive")
+        assert OrgUnit.find(@engineering).needs_owner?
+        assert OrgUnit.find(@payments).needs_owner?
+      end
+    end
+
+    should "flag a unit nobody up its chain owns" do
+      as_tenant do
+        assert_empty OrgUnit.find(@product).owners
+        assert OrgUnit.find(@product).needs_owner?
+      end
+    end
+  end
+
   context "the unit tree" do
     should "place each unit under its parent, with its provider and reference" do
       as_tenant do
@@ -167,6 +229,9 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
                              effective_on: "2026-07-01")
         @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments, @product ], successor_ids: [ @billing ],
                                                          effective_on: "2026-07-01", retire_predecessors: true)
+        @handler.add_unit_owner(@engineering, SecureRandom.uuid_v7, effective_on: "2026-06-01")
+        @handler.add_unit_owner(@billing, SecureRandom.uuid_v7.tap { |id| @former = id }, effective_on: "2026-07-01")
+        @handler.remove_unit_owner(@billing, @former, effective_on: "2026-08-01")
       end
 
       before = snapshot_read_models(OrgGraph::Projections::Structure, @tenant)
@@ -174,9 +239,11 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
       assert_equal 4, before[:units].size
       assert_equal 2, before[:successions].size
       assert_equal 1, before[:fact_providers].size
+      assert_equal 1, before[:unit_owners].size
+      assert(before[:units].any? { |unit| unit["owners_lost_on"] == Date.new(2026, 8, 1) })
 
       OrgGraph::Projections::Structure.reset!(tenant: @tenant)
-      as_tenant { assert_equal 0, OrgUnit.count + OrgTaxonomyLevel.count + OrgUnitSuccession.count + OrgFactProvider.count }
+      as_tenant { assert_equal 0, OrgUnit.count + OrgTaxonomyLevel.count + OrgUnitSuccession.count + OrgFactProvider.count + OrgUnitOwner.count }
 
       Projections::Replayer.replay(projection_class: OrgGraph::Projections::Structure, tenant: @tenant)
 

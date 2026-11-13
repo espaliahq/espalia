@@ -84,6 +84,76 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ OrgGraph::Events::PersonReturned, OrgGraph::Events::TitleChanged ], stream_events.drop(1).map(&:class)
     end
 
+    should "record the start date, and a leaver's leaving date, with the person" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15", left_on: "2026-12-01")
+      other = SecureRandom.uuid_v7
+      @handler.sync_person(other, **PROVENANCE, employment_status: "left", started_on: "2023-01-15", left_on: "2026-10-31")
+
+      assert_equal [ "2023-01-15", nil ], stream_events.first.data.values_at(:started_on, :left_on)
+      leaver = Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(other)).first
+      assert_equal "2026-10-31", leaver.data[:left_on]
+    end
+
+    should "supply a start date the stream lacks, once" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
+
+      assert_equal 1, @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15")
+      assert_equal 0, @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15")
+      assert_kind_of OrgGraph::Events::StartDateChanged, stream_events.last
+    end
+
+    should "keep a future starter pending, then join them on their start date" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-11-20")
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-11-20")
+      @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-21", employment_status: "employed", started_on: "2026-11-20")
+
+      assert_equal [ OrgGraph::Events::PersonRecorded, OrgGraph::Events::PersonJoined ], stream_events.map(&:class)
+      assert_equal "2026-11-20", stream_events.last.data[:effective_on]
+    end
+
+    should "date a leaving by the termination date the provider holds" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", left_on: "2026-10-31")
+
+      assert_equal [ OrgGraph::Events::PersonLeft, "2026-10-31" ], [ stream_events.last.class, stream_events.last.data[:effective_on] ]
+    end
+
+    should "drop a leaving date before the start date, so the person is still recorded and left" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", started_on: "2026-12-01", left_on: "2026-11-15")
+      other = SecureRandom.uuid_v7
+      @handler.sync_person(other, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15")
+      @handler.sync_person(other, **PROVENANCE, employment_status: "left", started_on: "2023-01-15", left_on: "2022-12-31")
+
+      assert_equal [ "left", nil ], stream_events.first.data.values_at(:employment_status, :left_on)
+      leaving = Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(other)).last
+      assert_equal [ OrgGraph::Events::PersonLeft, "2026-11-01" ], [ leaving.class, leaving.data[:effective_on] ]
+    end
+
+    should "not compare a leaver's facts or start date while their rehire is pending" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left")
+
+      assert_equal 0, @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending",
+        started_on: "2026-12-01", title: "Lead")
+    end
+
+    should "check a leaving against the start date the same sync corrects" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2026-11-10")
+
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", started_on: "2026-11-01", left_on: "2026-11-05")
+
+      assert_equal [ [ OrgGraph::Events::StartDateChanged, "2026-11-01" ], [ OrgGraph::Events::PersonLeft, "2026-11-05" ] ],
+        stream_events.drop(1).map { |e| [ e.class, e.data[:effective_on] ] }
+    end
+
+    should "keep a hire pending until their recorded start when the provider sends none, then join them on it" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-11-20")
+
+      assert_equal 0, @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-05", employment_status: "employed")
+      @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-21", employment_status: "employed")
+      assert_equal [ OrgGraph::Events::PersonJoined, "2026-11-20" ], [ stream_events.last.class, stream_events.last.data[:effective_on] ]
+    end
+
     should "refuse half a pair on the first sync as on every later one" do
       assert_raises(ArgumentError) do
         @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", site: "Sydney")
@@ -145,14 +215,48 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded ], stream_events.drop(1).map(&:class)
     end
 
-    should "refuse a unit that does not exist or is retired, and still end a retired unit's membership" do
+    should "move a membership to another unit as one event, keeping its terms" do
+      @handler.set_membership(@person_id, @squad, allocation: 0.5, role: "Engineer", **PROVENANCE)
+      @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-12-01", moved_by_id: @person_id)
+      moved = stream_events.last
+
+      assert_kind_of OrgGraph::Events::MembershipMoved, moved
+      assert_equal [ @squad, @retired, 0.5, "Engineer", "hibob", "2026-12-01" ],
+                   moved.data.values_at(:from_unit_id, :unit_id, :allocation, :role, :provider, :effective_on)
+      assert_raises(RuntimeError, match: /Not a member/) { @handler.end_membership(@person_id, @squad, **PROVENANCE) }
+    end
+
+    should "end the old membership instead when the person is already in the destination" do
+      @handler.set_membership(@person_id, @squad, **PROVENANCE)
+      @handler.set_membership(@person_id, @retired, allocation: 0.3, **PROVENANCE)
+      @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-12-01")
+
+      assert_kind_of OrgGraph::Events::MembershipEnded, stream_events.last
+      assert_equal @squad, stream_events.last.data[:unit_id]
+    end
+
+    should "refuse a move to a missing unit, the same unit, or before the membership began" do
+      @handler.set_membership(@person_id, @squad, **PROVENANCE)
+
+      assert_raises(RuntimeError, match: /Unit not found/) do
+        @handler.move_membership(@person_id, @squad, SecureRandom.uuid_v7, effective_on: "2026-12-01")
+      end
+      assert_raises(RuntimeError, match: /unit it is in/) do
+        @handler.move_membership(@person_id, @squad, @squad, effective_on: "2026-12-01")
+      end
+      assert_raises(RuntimeError, match: /before it begins/) do
+        @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-10-01")
+      end
+    end
+
+    should "refuse a unit that does not exist or is retired" do
       @handler.set_membership(@person_id, @retired, **PROVENANCE)
       OrgGraph::StructureCommandHandler.new.retire_unit(@retired, effective_on: "2026-06-30")
 
       assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, SecureRandom.uuid_v7, **PROVENANCE) }
       assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, "squad", **PROVENANCE) }
       assert_raises(RuntimeError, match: /retired/) { @handler.set_membership(@person_id, @retired, allocation: 0.5, **PROVENANCE) }
-      assert_nothing_raised { @handler.end_membership(@person_id, @retired, **PROVENANCE) }
+      assert_kind_of OrgGraph::Events::MembershipEnded, stream_events.last
     end
 
     should "not see another tenant's unit" do

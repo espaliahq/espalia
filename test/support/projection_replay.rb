@@ -111,6 +111,7 @@ module ProjectionReplayHelpers
           taxonomy_levels: rows(OrgTaxonomyLevel, stable_id: true),
           units:           rows(OrgUnit, stable_id: true),
           fact_providers:  rows(OrgFactProvider, stable_id: true),
+          unit_owners:     rows(OrgUnitOwner, stable_id: true),
           # A link's natural key is (succession_id, predecessor_id, successor_id).
           successions:     rows(OrgUnitSuccession)
         }
