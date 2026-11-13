@@ -83,6 +83,11 @@ are shreddable from their first event.
 Every event carries the provider that supplied the fact, the date it took effect, and,
 where it came from a plan, a reference to the plan's change.
 
+Two rules hold for the status events:
+
+- **`PersonReturned` is only for the same person.** The HRIS must show the same external id, and the person must not have been forgotten. Anyone else is a new person with a new id.
+- **Returning restores no memberships.** A returner comes back with none, like a new person.
+
 ### One structure stream per tenant
 
 `tenant-{id}/OrgStructure`
