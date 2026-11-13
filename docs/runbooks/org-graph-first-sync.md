@@ -16,7 +16,7 @@ Every later sync writes only what changed: a person HiBob now shows as inactive 
 
 **Who is not recorded.** People HiBob does not return are not recorded: someone added by hand, or deactivated by an earlier sync because they had left HiBob altogether. Their history starts if HiBob returns them again.
 
-**No deploy step.** No migration runs, and no projection needs a rebuild. Until the tenant is cut over ([org-graph-people-cutover.md](org-graph-people-cutover.md)), no projection writes `people` from these events.
+**No deploy step for the first sync.** No migration runs, and no projection needs a rebuild. Until the tenant is cut over ([org-graph-people-cutover.md](org-graph-people-cutover.md)), no projection writes `people` from these events. The release that ships `org_graph/people_columns` is the exception: deploy it with `REBUILD_ON_DEPLOY=org_graph/people_columns`, or predeploy's `verify` stops it.
 
 **The HRIS must hold the facts it writes.** Each person command is refused unless its provider holds the fact. Predeploy's `org_graph:claim_hris_facts` hands each configured HRIS its default facts (employment status, title, level, manager, site and employment) before the first sync on a release, and saving the HRIS settings does the same. If a sync's `errors` read `espalia supplies title; change it there`, someone handed that fact to Espalia on purpose, or the person carries no `hibob` external id; set it back with `OrgGraph::StructureCommandHandler#set_fact_provider` only if that was a mistake. The task is safe to run again by hand: `bin/rails org_graph:claim_hris_facts`.
 
