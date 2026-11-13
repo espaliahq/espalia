@@ -1114,6 +1114,17 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal "inactive", @alice.reload.status
       end
 
+      should "record a leaving HiBob reports while Espalia holds the title and manager" do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %w[title manager].each { handler.set_fact_provider(it, "espalia", effective_on: Date.current) }
+
+        result = build_adapter(with_employee("bob-001") { |e| e["isActive"] = false }).sync_people
+
+        assert_not_includes result[:errors].pluck(:person_id), @alice.id
+        assert_kind_of OrgGraph::Events::PersonLeft, Rails.configuration.event_store.read.stream(stream_of(@alice)).last
+        assert_equal "inactive", @alice.reload.status
+      end
+
       should "create a newcomer HiBob shows as inactive as inactive, even if recording them fails" do
         leaver = @fixture["employees"].first.deep_dup.merge("id" => "bob-004", "email" => "dana@example.com", "isActive" => false)
         failing = Object.new
