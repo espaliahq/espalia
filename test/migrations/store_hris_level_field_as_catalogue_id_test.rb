@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20261113000002_store_hris_level_field_as_catalogue_id")
+require Rails.root.join("db/migrate/20261113130001_store_hris_level_field_as_catalogue_id")
 
 class StoreHrisLevelFieldAsCatalogueIdTest < ActiveSupport::TestCase
   def stored(config)

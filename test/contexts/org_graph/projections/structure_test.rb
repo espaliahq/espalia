@@ -86,6 +86,51 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
     end
   end
 
+  context "succession" do
+    setup do
+      @billing = SecureRandom.uuid_v7
+      @ledger = SecureRandom.uuid_v7
+      as_tenant do
+        [ [ @billing, "Billing" ], [ @ledger, "Ledger" ] ].each do |id, name|
+          @handler.create_unit(id, name, level_id: @team_level, parent_id: @engineering, effective_on: "2026-07-01")
+        end
+      end
+    end
+
+    should "let a reader list a split unit's successors and each successor's predecessor" do
+      as_tenant do
+        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ @billing, @ledger ],
+                                                         effective_on: "2026-07-01", retire_predecessors: true)
+
+        assert_equal [ @billing, @ledger ].sort, OrgUnit.find(@payments).successors.pluck(:id).sort
+        assert_equal [ @payments ], OrgUnit.find(@ledger).predecessors.pluck(:id)
+        assert OrgUnit.find(@payments).retired?
+        assert_equal Date.new(2026, 7, 1), OrgUnit.find(@billing).predecessor_links.sole.effective_on
+      end
+    end
+
+    should "let a reader list a merged unit's predecessors" do
+      as_tenant do
+        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @billing, @ledger ], successor_ids: [ @payments ],
+                                                         effective_on: "2026-08-01")
+
+        assert_equal [ @billing, @ledger ].sort, OrgUnit.find(@payments).predecessors.pluck(:id).sort
+        assert_empty OrgUnit.find(@payments).successors
+      end
+    end
+
+    should "list a predecessor once when two successions link the same pair" do
+      as_tenant do
+        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @billing ], successor_ids: [ @payments ],
+                                                         effective_on: "2026-08-01")
+        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @billing, @ledger ], successor_ids: [ @payments ],
+                                                         effective_on: "2026-09-01")
+
+        assert_equal [ @billing, @ledger ].sort, OrgUnit.find(@payments).predecessors.pluck(:id).sort
+      end
+    end
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       as_tenant do
@@ -93,14 +138,19 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         @handler.move_unit(@payments, nil, effective_on: "2026-04-01")
         @handler.define_taxonomy(taxonomy("Division", "Team"), effective_on: "2026-05-01")
         @handler.retire_unit(@product, effective_on: "2026-06-01")
+        @handler.create_unit(SecureRandom.uuid_v7.tap { |id| @billing = id }, "Billing", level_id: @team_level,
+                             effective_on: "2026-07-01")
+        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments, @product ], successor_ids: [ @billing ],
+                                                         effective_on: "2026-07-01", retire_predecessors: true)
       end
 
       before = snapshot_read_models(OrgGraph::Projections::Structure, @tenant)
       assert_equal 2, before[:taxonomy_levels].size
-      assert_equal 3, before[:units].size
+      assert_equal 4, before[:units].size
+      assert_equal 2, before[:successions].size
 
       OrgGraph::Projections::Structure.reset!(tenant: @tenant)
-      as_tenant { assert_equal 0, OrgUnit.count + OrgTaxonomyLevel.count }
+      as_tenant { assert_equal 0, OrgUnit.count + OrgTaxonomyLevel.count + OrgUnitSuccession.count }
 
       Projections::Replayer.replay(projection_class: OrgGraph::Projections::Structure, tenant: @tenant)
 
