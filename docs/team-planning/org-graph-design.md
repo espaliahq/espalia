@@ -1,8 +1,10 @@
 # Org Graph — design
 
-> Status: proposal. Only the person stream and its events are built, in `app/contexts/org_graph/`
-> ([#46](https://github.com/espaliahq/espalia/issues/46)). [The index](README.md) lists the
-> companion designs, the mockups and the plan.
+> Status: proposal. Built so far, in `app/contexts/org_graph/`: the person stream
+> ([#46](https://github.com/espaliahq/espalia/issues/46)), the structure stream
+> ([#52](https://github.com/espaliahq/espalia/issues/52)) and membership
+> ([#54](https://github.com/espaliahq/espalia/issues/54)). Nothing writes to them yet. [The
+> index](README.md) lists the companion designs, the mockups and the plan.
 
 The Org Graph is Espalia's best-known view of the organisation: who is in it, what they
 do, who they report to and which teams they are in, with the history of how that
@@ -86,10 +88,23 @@ where it came from a plan, a reference to the plan's change.
 | Event | Records |
 |---|---|
 | `TaxonomyDefined` | The tenant's names for its levels. Redefining it is a change like any other. |
-| `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. |
+| `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. Retiring a unit ends each membership in it on that date, unless a succession moves its members to the unit that carries on. |
 | `UnitSucceeded` | That one or more units carry on from one or more others: a split, a merge, a replacement. |
 | `UnitOwnerAdded`, `UnitOwnerRemoved` | Who may edit the unit. |
 | `LevelProviderSet`, `FactProviderSet` | Who supplies a taxonomy level, or a kind of person fact. See [Providers and provenance](#providers-and-provenance-r5). |
+
+A succession can retire its predecessors in the same step. Each such `UnitRetired`
+names the succession and its successors, and its members move rather than leave:
+
+- **One successor (a merge or a replacement):** every open membership moves to it on
+  the succession date.
+- **Several successors (a split):** whoever issues the split may name a successor per
+  person, and those people move. Anyone not named has their membership ended on that
+  date, so they appear in the "in no team" tray for someone to place. The handler never
+  guesses.
+- **Placements are not stored on the structure events.** They are ordinary membership
+  commands issued with the split, sharing its cause. The split screen (5.6) and applying
+  a plan (7.3) supply the names; the membership side lands in story 2.6.
 
 Units carry their provider too: a unit mirrored from an HRIS team is read-only in
 Espalia, and units Espalia holds can hang beneath it. A mirrored unit also carries the
@@ -98,6 +113,18 @@ provider's own reference for it, so a rename in the HRIS is recognised as a rena
 
 Membership is a fact about a person, so it lives in the person's stream. A unit's
 members are a projection.
+
+`OrgGraph::PersonAggregate` holds one membership per unit, so a person can be in several
+units, each with its own allocation and role. An allocation is a share of the person's
+time, above 0 and at most 1, or none when the provider states none, as an HRIS field
+doesn't. Allocations across units are not summed or capped here: an over-allocated person
+is for a plan's checks to flag. The same terms from the same provider write nothing. A
+person who has left can't join a unit, and a membership can only be set in a live unit.
+`MembershipEnded` dates the last day of one membership and leaves the others.
+
+`OrgGraph::Projections::Members` projects the current memberships into `org_memberships`.
+An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`
+lists the people with no membership of a live unit, for the "in no team" tray.
 
 `OrgGraph::StructureAggregate` holds these rules:
 
@@ -115,9 +142,14 @@ members are a projection.
   can't be dropped, and the levels in use keep their order.
 - **An unchanged name, parent or taxonomy writes nothing**, so a sync that finds no
   difference adds no event.
+- **Succession links only units that exist.** Its successors are live, no unit
+  succeeds itself, and no chain of successions loops back. Restating one exactly writes
+  nothing. Retiring a predecessor through it follows the usual rules: the predecessor's
+  own provider, and no live sub-unit left behind outside the succession.
 
 `OrgGraph::Projections::Structure` projects the current tree into `org_units` and
-`org_taxonomy_levels`. The history that reads "was X" is in the stream:
+`org_taxonomy_levels`, and each succession's links into `org_unit_successions`, so a
+reader can list a unit's predecessors and successors. The history that reads "was X" is in the stream:
 `UnitRenamed` carries the previous name, and the history projection (R4) will read it.
 
 ### The shape of the organisation has a history too
@@ -225,9 +257,12 @@ Each kind of fact names its provider, per tenant. For structure the setting is p
 taxonomy level, so an HRIS can own departments and teams while Espalia holds the squads
 beneath them.
 
-The setting lives in the structure stream, so each change keeps its date and who made
-it. A fact or a level has exactly one provider, and it's Espalia until another is set.
-A level that holds live units keeps its provider until a handover moves it.
+The setting lives in the structure stream as `LevelProviderSet` and `FactProviderSet`,
+so each change keeps its date and who made it. A fact or a level has exactly one
+provider, and it's Espalia until another is set. A unit comes from its level's provider,
+and the levels an HRIS provides sit above every level Espalia holds. That check on the
+setting replaces the first version's check on each unit. A level that holds live units
+keeps its provider until a handover (6.8) moves it.
 
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's
