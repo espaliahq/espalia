@@ -11,6 +11,7 @@ class Tenant::OrgGraphSettingsController < ApplicationController
       sources: Operations::OrgGraph::Sources.call(context: pundit_user, params: {}),
       editors: Operations::OrgGraph::Editors.call(context: pundit_user, params: {}),
       editor_candidates: editor_candidates,
+      forgetting_key_set: OrgGraph::Forgetting.key.present?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a }

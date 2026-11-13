@@ -6,13 +6,15 @@ class Views::Tenant::OrgGraph::SettingsView < Views::Base
   # @param sources [Hash] as Operations::OrgGraph::Sources returns it
   # @param editors [Hash] as Operations::OrgGraph::Editors returns it
   # @param editor_candidates [Array<Person>]
+  # @param forgetting_key_set [Boolean] whether this server holds the key forgetting needs
   # @param user [User]
   # @param current_tenant [Tenant]
   # @param tenants [Array<Tenant>]
-  def initialize(sources:, editors:, editor_candidates:, user:, current_tenant:, tenants: [])
+  def initialize(sources:, editors:, editor_candidates:, forgetting_key_set:, user:, current_tenant:, tenants: [])
     @sources = sources
     @editors = editors
     @editor_candidates = editor_candidates
+    @forgetting_key_set = forgetting_key_set
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -33,6 +35,9 @@ class Views::Tenant::OrgGraph::SettingsView < Views::Base
         div(class: "space-y-6 min-w-0") do
           render Views::Tenant::OrgGraph::Settings::EditorsPanel.new(editors: @editors, candidates: @editor_candidates)
           render Views::Tenant::OrgGraph::Settings::FreshnessPanel.new(freshness: @sources[:freshness])
+          render Views::Tenant::OrgGraph::Settings::ForgettingPanel.new(
+            config: @current_tenant.org_graph_config, key_set: @forgetting_key_set
+          )
         end
       end
     end

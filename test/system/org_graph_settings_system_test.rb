@@ -64,6 +64,44 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
         screenshot("freshness_#{viewport}")
       end
+
+      should "set the retention period, count who is due, and turn the schedule on and off" do
+        ActsAsTenant.with_tenant(@tenant) do
+          leaver = FactoryBot.create(:person, tenant: @tenant, name: "Lee Leaver")
+          handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          handler.sync_person(leaver.id, provider: "espalia", effective_on: "2020-01-01", employment_status: "employed")
+          handler.sync_person(leaver.id, provider: "espalia", effective_on: "2020-01-01", employment_status: "left",
+                                         left_on: 2.years.ago.to_date)
+        end
+
+        visit tenant_org_graph_settings_path
+        within("#org-graph-forgetting") { assert_text "Nobody reaches their date today." }
+
+        select "1 year", from: "Forget leavers after"
+        click_button_with_js_fallback("org-graph-retention-save",
+                                      expect_text: "Leavers are now forgotten 1 year after they leave.")
+        assert_selector "turbo-frame#org-graph-forgetting-due[complete]", visible: :all
+        within("#org-graph-forgetting") { assert_text "1 person reaches their date today" }
+        assert_no_sideways_overflow
+        screenshot("forgetting_due_#{viewport}")
+
+        click_button_with_js_fallback("org-graph-forgetting-on", expect_text: "Scheduled forgetting is on.")
+        within("#org-graph-forgetting") { assert_text "Each leaver is forgotten once their date comes." }
+
+        click_button_with_js_fallback("org-graph-forgetting-off", expect_text: "Scheduled forgetting is off.")
+        assert_selector "turbo-frame#org-graph-forgetting-due[complete]", visible: :all
+      end
+
+      should "say plainly when forgetting has no key" do
+        OrgGraph::Forgetting.stub(:key, nil) do
+          visit tenant_org_graph_settings_path
+          within("#org-graph-forgetting") do
+            assert_text "Forgetting isn't set up"
+            assert_no_button "Turn on scheduled forgetting"
+          end
+          screenshot("forgetting_no_key_#{viewport}")
+        end
+      end
     end
   end
 end

@@ -107,6 +107,9 @@ Rails.application.routes.draw do
     scope "org_graph/settings", module: :org_graph_settings, as: :org_graph_settings do
       resources :editors, only: [ :create, :destroy ], param: :person_id
       resource :freshness, only: :update, controller: "freshness"
+      resource :retention, only: :update, controller: "retention"
+      resource :forgetting_due, only: :show
+      resource :forgetting_schedule, only: [ :create, :destroy ]
     end
 
     # Feedback export for monthly reporting (#458): `new` is the picker,
