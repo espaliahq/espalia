@@ -39,9 +39,14 @@ module OrgPersonDrawer
   # The unit open behind the drawer, kept so closing returns to it.
   def unit_param = params[:unit].presence
 
+  # "edit" when the person was opened from the unit drawer, so closing reopens it.
+  def back_param = ("edit" if params[:back] == "edit" && unit_param)
+
+  def close_path = back_param ? edit_tenant_org_unit_path(unit_param) : tenant_org_graph_path(unit: unit_param)
+
   def drawer_path
     on = effective_on unless effective_on == Date.current.iso8601
-    tenant_org_person_path(@person, on:, unit: unit_param)
+    tenant_org_person_path(@person, on:, unit: unit_param, back: back_param)
   end
 
   def with_date(params) = effective_on ? params.merge(effective_on:) : params

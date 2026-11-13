@@ -21,6 +21,8 @@ class Tenant::OrgPeopleController < ApplicationController
         rights: OrgGraphPolicy::PersonRights.new(policy(:org_graph), @person, overview, profile.memberships),
         effective_on: chosen_day || Date.current.iso8601,
         unit_id: unit_param,
+        back: back_param,
+        close_href: close_path,
         alert: flash[:drawer_alert]
       )
     )

@@ -55,6 +55,14 @@ class Tenant::OrgPeopleControllerTest < ActionDispatch::IntegrationTest
       assert_equal Date.current.iso8601, drawer.at_css("input[name='effective_on']")["value"]
     end
 
+    should "close back to the unit drawer it was opened from, after a change too" do
+      get tenant_org_person_path(@org[:brook], unit: @org[:checkout], back: "edit")
+      assert_equal edit_tenant_org_unit_path(@org[:checkout]), drawer.at_css("a[aria-label='Close']")["href"]
+
+      delete tenant_org_person_membership_path(@org[:brook], @org[:platform]), params: { unit: @org[:checkout], back: "edit" }
+      assert_redirected_to tenant_org_person_path(@org[:brook], unit: @org[:checkout], back: "edit")
+    end
+
     should "start from today when the date in the address isn't one" do
       get tenant_org_person_path(@org[:brook], on: "garbage")
 

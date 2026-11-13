@@ -14,21 +14,25 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
   # @param overview [OrgGraph::UnitsOverview] for unit depth in the choices
   # @param rights [OrgGraphPolicy::PersonRights]
   # @param effective_on [String] ISO date the forms send
+  # @param close_href [String] where closing the drawer goes
   # @param unit_id [String, nil] the unit open behind the drawer
+  # @param back [String, nil] "edit" when opened from the unit drawer
   # @param alert [String, nil] why the last change was refused
-  def initialize(profile:, overview:, rights:, effective_on:, unit_id: nil, alert: nil)
+  def initialize(profile:, overview:, rights:, effective_on:, close_href:, unit_id: nil, back: nil, alert: nil)
     @profile = profile
     @person = profile.person
     @overview = overview
     @rights = rights
     @effective_on = effective_on
+    @close_href = close_href
     @unit_id = unit_id
+    @back = back
     @alert = alert
   end
 
   def view_template
     render Views::Tenant::OrgGraph::Drawer.new(
-      title: @person.name, subtitle:, close_href: tenant_org_graph_path(unit: @unit_id)
+      title: @person.name, subtitle:, close_href: @close_href
     ) do
       div(class: "space-y-6", data: { controller: "effective-date", action: "submit->effective-date#stamp" }) do
         if @alert
@@ -231,6 +235,7 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
       input(type: "hidden", name: "_method", value: method) unless method == "post"
       input(type: "hidden", name: "effective_on", value: @effective_on)
       input(type: "hidden", name: "unit", value: @unit_id) if @unit_id
+      input(type: "hidden", name: "back", value: @back) if @back
       block.call
     end
   end
