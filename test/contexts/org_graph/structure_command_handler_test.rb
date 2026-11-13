@@ -59,7 +59,22 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       error = assert_raises(RuntimeError) do
         as_tenant { @handler.define_taxonomy(levels(%w[Department Team]), effective_on: @today) }
       end
-      assert_match "still holds units", error.message
+      assert_match "holds units", error.message
+    end
+
+    should "refuse to drop a level a retired unit held" do
+      create_unit(@squad, "Checkout", level: "Squad")
+      as_tenant { @handler.retire_unit(@squad, effective_on: @today) }
+
+      assert_raises(RuntimeError) do
+        as_tenant { @handler.define_taxonomy(levels(%w[Department Team]), effective_on: @today) }
+      end
+    end
+
+    should "refuse a level id that isn't a UUID" do
+      assert_raises(ArgumentError) do
+        as_tenant { @handler.define_taxonomy([ { level_id: "dept", name: "Department" } ], effective_on: @today) }
+      end
     end
 
     should "refuse to reorder the levels in use" do
@@ -119,6 +134,13 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
       assert_raises(RuntimeError) do
         create_unit(@squad, "Checkout", level: "Squad", parent_id: @team, provider: "hibob", external_ref: "sq-1")
+      end
+    end
+
+    should "refuse a unit id that isn't a UUID, or a date that isn't one" do
+      assert_raises(ArgumentError) { create_unit("eng-1", "Engineering", level: "Department") }
+      assert_raises(ArgumentError) do
+        as_tenant { @handler.create_unit(@team, "Payments", level_id: level_id("Team"), effective_on: 20261101) }
       end
     end
 

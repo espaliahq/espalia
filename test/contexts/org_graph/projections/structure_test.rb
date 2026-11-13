@@ -37,7 +37,8 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
 
         assert_equal %w[Division Team Squad], OrgTaxonomyLevel.top_first.pluck(:name)
         assert_equal "Division", OrgTaxonomyLevel.find(@department_level).name
-        assert_equal Date.new(2026, 3, 1), OrgTaxonomyLevel.find(@team_level).effective_on
+        assert_equal Date.new(2026, 3, 1), OrgTaxonomyLevel.find(@department_level).effective_on
+        assert_equal Date.new(2026, 1, 1), OrgTaxonomyLevel.find(@team_level).effective_on
       end
     end
   end

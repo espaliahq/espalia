@@ -15,7 +15,8 @@ class OrgGraph::StructureAggregate
   include AggregateRoot
 
   ESPALIA = "espalia"
-  PROVIDERS = (HrisConfig::PROVIDERS + [ ESPALIA ]).freeze
+  PROVIDERS = OrgGraph::PersonAggregate::PROVIDERS
+  UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, keyword_init: true)
 
@@ -26,9 +27,10 @@ class OrgGraph::StructureAggregate
 
   # Defines or redefines the tenant's taxonomy, top level first.
   #
-  # A level keeps its id through a rename. A level that still holds a live
-  # unit can't be dropped, and the levels in use must keep their order, or
-  # a unit would sit above its own parent.
+  # A level keeps its id through a rename. A level any unit has held, retired
+  # ones included, can't be dropped, so a unit's history keeps its level. The
+  # levels live units hold must keep their order, or a unit would sit above
+  # its own parent.
   #
   # @param levels [Array<Hash>] each `{ level_id:, name: }`, top first
   # @param effective_on [Date, String] when the taxonomy took effect
@@ -40,9 +42,10 @@ class OrgGraph::StructureAggregate
     levels = normalise_levels(levels)
     return if levels == @levels
 
+    dropped = @units.values.map(&:level_id).uniq - level_ids(levels)
+    raise "Can't drop a level that holds units: #{dropped.join(', ')}" if dropped.any?
+
     in_use = live_units.map(&:level_id).uniq
-    dropped = in_use - levels.map { |level| level[:level_id] }
-    raise "Can't drop a level that still holds units: #{dropped.join(', ')}" if dropped.any?
 
     kept_order = level_ids(@levels) & in_use
     raise "Levels in use must keep their order" unless level_ids(levels) & in_use == kept_order
@@ -71,6 +74,7 @@ class OrgGraph::StructureAggregate
   # @raise [ArgumentError, RuntimeError] if any invariant above fails
   def create_unit(unit_id, name, level_id:, effective_on:, parent_id: nil, provider: ESPALIA,
                   external_ref: nil, created_by_id: nil, plan_change_id: nil)
+    require_id(unit_id, "Unit id")
     raise "Unit already exists" if @units.key?(unit_id)
 
     name = require_name(name)
@@ -125,8 +129,8 @@ class OrgGraph::StructureAggregate
   # Moves a unit beneath another parent. An unchanged parent writes nothing.
   #
   # @param unit_id [String]
-  # @param parent_id [String, nil] a live unit at a higher level, never the
-  #   unit itself or one beneath it; nil to move it to the top
+  # @param parent_id [String, nil] a live unit at a higher level; nil to move it
+  #   to the top. The level rule also keeps a unit from moving beneath itself.
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param moved_by_id [String, nil]
@@ -134,8 +138,6 @@ class OrgGraph::StructureAggregate
   def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil, plan_change_id: nil)
     unit = editable_unit!(unit_id, provider)
     return if parent_id == unit.parent_id
-
-    raise "A unit can't sit beneath itself or a unit beneath it" if parent_id && lineage(parent_id).include?(unit_id)
 
     ensure_placeable!(unit.provider, unit.level_id, parent_id)
 
@@ -217,15 +219,6 @@ class OrgGraph::StructureAggregate
     raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
   end
 
-  def lineage(unit_id)
-    ids = []
-    while unit_id
-      ids << unit_id
-      unit_id = @units[unit_id]&.parent_id
-    end
-    ids
-  end
-
   def live_units
     @units.values.reject(&:retired)
   end
@@ -241,14 +234,20 @@ class OrgGraph::StructureAggregate
   def normalise_levels(levels)
     levels = Array(levels).map do |level|
       level = level.to_h.symbolize_keys
-      { level_id: level[:level_id].to_s, name: level[:name].to_s.strip }
+      { level_id: require_id(level[:level_id], "Level id"), name: level[:name].to_s.strip }
     end
     raise ArgumentError, "A taxonomy needs at least one level" if levels.empty?
-    raise ArgumentError, "Every level needs an id and a name" if levels.any? { |level| level.values.any?(&:empty?) }
+    raise ArgumentError, "Every level needs a name" if levels.any? { |level| level[:name].empty? }
     raise ArgumentError, "Level ids must be unique" unless level_ids(levels).uniq.size == levels.size
     raise ArgumentError, "Level names must be unique" unless levels.map { |level| level[:name].downcase }.uniq.size == levels.size
 
     levels
+  end
+
+  def require_id(id, label)
+    raise ArgumentError, "#{label} must be a UUID" unless UUID.match?(id.to_s)
+
+    id.to_s
   end
 
   def require_name(name)
@@ -269,5 +268,7 @@ class OrgGraph::StructureAggregate
     raise ArgumentError, "Effective date is required" if value.blank?
 
     (value.is_a?(String) ? Date.iso8601(value) : value.to_date).iso8601
+  rescue Date::Error, NoMethodError
+    raise ArgumentError, "Invalid effective date: #{value.inspect}"
   end
 end

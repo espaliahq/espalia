@@ -5,7 +5,7 @@
 #
 # Writes `org_taxonomy_levels` and `org_units`, and nothing else writes them.
 # Both primary keys are event-carried ids, so references survive a rebuild.
-# Runs in the same transaction as the event publish.
+# A level's effective_on is the date its name or place last changed.
 #
 class OrgGraph::Projections::Structure
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -62,7 +62,10 @@ class OrgGraph::Projections::Structure
 
     levels.each.with_index do |level, position|
       row = OrgTaxonomyLevel.find_or_initialize_by(id: level[:level_id])
-      row.update!(name: level[:name], position: position, effective_on: data[:effective_on])
+      unchanged = row.persisted? && row.name == level[:name] && row.position == -position - 1
+      row.assign_attributes(name: level[:name], position: position)
+      row.effective_on = data[:effective_on] unless unchanged
+      row.save!
     end
   end
 
