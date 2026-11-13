@@ -20,6 +20,7 @@ class Operations::OrgGraph::SetLevelProvider < Operations::Base
   parameter :provider, String, required: true, allowed: ::OrgGraph::StructureAggregate::PROVIDERS
   parameter :field, String
 
+  # @raise [Pundit::NotAuthorizedError] unless the caller may change the Org Graph's structure
   def policy_check
     authorize :org_graph, :edit_structure?
   end

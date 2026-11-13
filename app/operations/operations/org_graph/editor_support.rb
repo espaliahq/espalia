@@ -5,6 +5,7 @@
 module Operations::OrgGraph::EditorSupport
   private
 
+  # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin
   def policy_check
     authorize ActsAsTenant.current_tenant, :manage_org_graph_editors?, policy_class: TenantPolicy
   end

@@ -28,6 +28,7 @@ class Operations::OrgGraph::SetFactProvider < Operations::Base
   parameter :provider, String, required: true, allowed: ::OrgGraph::StructureAggregate::PROVIDERS
   parameter :fields, Hash, schema: FIELDS_SCHEMA
 
+  # @raise [Pundit::NotAuthorizedError] unless the caller may change the Org Graph's structure
   def policy_check
     authorize :org_graph, :edit_structure?
   end

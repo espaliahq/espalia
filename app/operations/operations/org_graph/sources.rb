@@ -12,6 +12,7 @@ class Operations::OrgGraph::Sources < Operations::Base
   category :read
   approval :none
 
+  # @raise [Pundit::NotAuthorizedError] unless the caller may change the Org Graph's structure
   def policy_check
     authorize :org_graph, :edit_structure?
   end
