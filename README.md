@@ -78,7 +78,8 @@ tenant brands its own instance: the product name is a tenant setting.
 ![The assessment view](docs/screenshots/assessment.png)
 
 *An assessment scores each capability against the person's level, names what
-blocks the level, and keeps the self and manager perspectives side by side.*
+blocks the level, and keeps the self and manager perspectives side by side. The
+capability radar shows the person's shape at a glance.*
 
 ![A manager's feedback thread for one report](docs/screenshots/feedback.png)
 
