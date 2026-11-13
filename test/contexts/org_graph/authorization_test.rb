@@ -159,6 +159,16 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
       assert_not OrgUnitOwner.exists?(unit_id: @payments_id)
     end
 
+    should "name themselves as the person who made the change" do
+      structure(@actor).rename_unit(@payments_id, "Pay", effective_on: "2026-02-01")
+      people(@actor).set_membership(@report.id, @payments_id, **ESPALIA)
+
+      renamed = event_store.read.of_type(OrgGraph::Events::UnitRenamed).last
+      placed = event_store.read.of_type(OrgGraph::Events::MembershipSet).last
+      assert_equal @other.id, renamed.data[:renamed_by_id]
+      assert_equal @other.id, placed.data[:set_by_id]
+    end
+
     should "let the system move the members out when they retire a unit" do
       OrgGraph::CommandHandler.new.set_membership(@lead.id, @payments_id, **ESPALIA)
 
@@ -207,6 +217,8 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
   end
 
   private
+
+  def event_store = Rails.configuration.event_store
 
   def structure(actor) = OrgGraph::StructureCommandHandler.new(actor:)
 

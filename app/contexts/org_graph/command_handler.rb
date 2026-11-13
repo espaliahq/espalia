@@ -181,7 +181,7 @@ class OrgGraph::CommandHandler
   def set_membership(person_id, unit_id, **options)
     authorize_membership!(person_id, unit_id)
     ensure_provides_unit!(ensure_live_unit!(unit_id), options[:provider])
-    @repository.with_person(person_id) { |person| person.set_membership(unit_id, **options) }
+    @repository.with_person(person_id) { |person| person.set_membership(unit_id, **attributed(options, :set_by_id)) }
   end
 
   # Ends a person's membership of one unit. A retired unit's memberships can
@@ -194,7 +194,7 @@ class OrgGraph::CommandHandler
     authorize_membership!(person_id, unit_id)
     unit = find_unit(unit_id)
     ensure_provides_unit!(unit, options[:provider]) if unit
-    @repository.with_person(person_id) { |person| person.end_membership(unit_id, **options) }
+    @repository.with_person(person_id) { |person| person.end_membership(unit_id, **attributed(options, :ended_by_id)) }
   end
 
   # Moves a person's membership to a live unit, keeping its terms.
@@ -210,7 +210,9 @@ class OrgGraph::CommandHandler
     unit = ensure_live_unit!(unit_id)
     membership = OrgMembership.find_by(person_id: person_id, unit_id: from_unit_id.to_s.downcase)
     ensure_provides_unit!(unit, membership.provider) if membership
-    @repository.with_person(person_id) { |person| person.move_membership(from_unit_id, unit_id, **options) }
+    @repository.with_person(person_id) do |person|
+      person.move_membership(from_unit_id, unit_id, **attributed(options, :moved_by_id))
+    end
   end
 
   private

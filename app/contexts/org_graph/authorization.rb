@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Checks {OrgGraphPolicy} before an Org Graph command writes.
+# Checks {OrgGraphPolicy} before an Org Graph command writes, and records the
+# actor as the person who made the change.
 #
 # A handler built with an actor checks every command against that actor. One
 # built without one is the system: the HRIS sync, a retirement moving its
@@ -68,6 +69,12 @@ module OrgGraph::Authorization
     return if policy.public_send(predicate, *records)
 
     raise Refused, yield
+  end
+
+  # Names the actor in the event, unless the caller already named someone.
+  def attributed(options, key)
+    actor_id = @actor&.person&.id
+    actor_id ? { key => actor_id }.merge(options) : options
   end
 
   def policy
