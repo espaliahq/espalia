@@ -28,6 +28,7 @@ class OrgGraph::PersonAggregate
     @facts = {}
     @fact_providers = {}
     @memberships = {}
+    @membership_ends = {}
   end
 
   # Records the person for the first time, with the facts as they stood.
@@ -139,6 +140,8 @@ class OrgGraph::PersonAggregate
   # Places the person in a unit, or changes their terms there. Each unit holds
   # one membership per person; the same terms from the same provider write
   # nothing. A hire who has not started yet can be placed ahead of their start.
+  # A change may be backdated, but a membership can't start again before the
+  # last one in the same unit ended.
   #
   # @param unit_id [String] UUID of a live unit
   # @param allocation [Numeric, nil] greater than 0 and at most 1; nil when unstated
@@ -147,7 +150,8 @@ class OrgGraph::PersonAggregate
   # @param effective_on [Date, String]
   # @param set_by_id [String, nil] person_id of the actor
   # @param plan_change_id [String, nil] the plan change it was applied from
-  # @raise [RuntimeError] if the person has left, or a value is invalid
+  # @raise [RuntimeError] if the person has left, a value is invalid, or it
+  #   would restart before the last membership ended
   def set_membership(unit_id, provider:, effective_on:, allocation: nil, role: nil, set_by_id: nil, plan_change_id: nil)
     ensure_recorded!
     raise "A person who has left can't join a unit" if @employment_status == "left"
@@ -157,6 +161,11 @@ class OrgGraph::PersonAggregate
     terms = { allocation: validated_fraction(allocation, "Allocation"), role: label(role) }
     current = @memberships[unit_id]
     return if current && current.slice(:allocation, :role, :provider) == terms.merge(provider: provider)
+
+    ended_on = @membership_ends[unit_id]
+    if current.nil? && ended_on && data[:effective_on] < ended_on
+      raise "A membership can't restart before the last one ended on #{ended_on}"
+    end
 
     apply(OrgGraph::Events::MembershipSet.new(data: data.merge(unit_id: unit_id, **terms,
       set_by_id: set_by_id, plan_change_id: plan_change_id)))
@@ -169,7 +178,8 @@ class OrgGraph::PersonAggregate
   # @param effective_on [Date, String] the last day of the membership
   # @param ended_by_id [String, nil] person_id of the actor
   # @param plan_change_id [String, nil]
-  # @raise [RuntimeError] if the person is not a member, or it would end before it began
+  # @raise [RuntimeError] if the person is not a member, or it would end
+  #   before the membership's last change
   def end_membership(unit_id, provider:, effective_on:, ended_by_id: nil, plan_change_id: nil)
     ensure_recorded!
     unit_id = validated_unit(unit_id)
@@ -177,7 +187,9 @@ class OrgGraph::PersonAggregate
     raise "Not a member of this unit" unless membership
 
     data = provenance(provider, effective_on)
-    raise "A membership can't end before it begins" if data[:effective_on] < membership[:since]
+    if data[:effective_on] < membership[:changed_on]
+      raise "A membership can't end before its last change on #{membership[:changed_on]}"
+    end
 
     apply(OrgGraph::Events::MembershipEnded.new(data: data.merge(unit_id: unit_id,
       ended_by_id: ended_by_id, plan_change_id: plan_change_id)))
@@ -369,11 +381,12 @@ class OrgGraph::PersonAggregate
 
   on OrgGraph::Events::MembershipSet do |event|
     data = event.data
-    since = [ @memberships.dig(data[:unit_id], :since), data[:effective_on] ].compact.min
-    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: since)
+    changed_on = [ @memberships.dig(data[:unit_id], :changed_on), data[:effective_on] ].compact.max
+    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(changed_on: changed_on)
   end
 
   on OrgGraph::Events::MembershipEnded do |event|
     @memberships.delete(event.data[:unit_id])
+    @membership_ends[event.data[:unit_id]] = event.data[:effective_on]
   end
 end
