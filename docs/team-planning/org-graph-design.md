@@ -244,14 +244,83 @@ The HiBob adapter is most of the way there, and the gaps are small.
   field per tenant is already supported, for the level. The requested set becomes the
   fields the tenant's mapping names.
 - The level field is set by pasting its raw id. The picker replaces that.
-- It asks for both the stored value and the display text, and keeps only the text. It
-  needs to keep the value's id beside it.
-
-One thing to confirm per adapter before relying on it: that the stored value of a list
-field is a stable id, and stays the same when the label changes.
+- It asks for both the stored value and the display text, and maps only the text. The
+  id survives only in the raw payload. It needs to keep the value's id beside the text.
 
 Open question: a unit whose people sit under two different units at the level above.
 The likely answer is to list it for someone to resolve, as a disagreement is.
+
+#### Are HiBob's list values stable ids?
+
+Yes, for items with numeric ids, which is what a company's own list items get. HiBob's
+documentation says so, and a read-only check against one live deployment confirms the
+parts it could see. One case is still open: older items whose id is their original
+name. The sandbox check in [#61](https://github.com/espaliahq/espalia/issues/61) would
+settle it. Each adapter needs the same check before a rename can be trusted to it.
+
+What the documentation confirms:
+
+- **A list field stores the item's id, not its label.** [Fields and lists
+  metadata](https://apidocs.hibob.com/docs/fields-metadata) says a list field holds "the
+  list item's string ID rather than its value", and "List items - store the backend ID".
+  The id is text for HiBob's own lists and a number for items a company added.
+- **Department is such a field.** The same page lists `work.department` as type `list`,
+  with `listId` `department`. The [read
+  contract](https://apidocs.hibob.com/docs/people-read-api-contract) shows its machine
+  value as a number: `"/work/department": { "value": "209192163" }`.
+- **A rename changes the label and keeps the id.** The fields page warns that an id
+  which looks like a label "may have been renamed, and will have a different display
+  value". Its example item keeps `"id": "Animals"` while `value` and `name` become
+  `"Pets"`. [Updating a list
+  item](https://apidocs.hibob.com/reference/put_company-named-lists-listname-itemid)
+  addresses the item by its id, and "Providing a name will rename the list item value."
+- **The adapter already receives both.** It sends `humanReadable: "APPEND"`, which per
+  [people search](https://apidocs.hibob.com/reference/post_people-search) adds a
+  `humanReadable` node beside the machine values. `ResponseMapper` reads the label from
+  that node. The raw employee, id included, is already kept in `hris_raw_data`.
+
+What one live deployment confirms, read-only:
+
+- **A person's stored department is the list item's id.** Every stored `work.department`
+  matched an item id in the department named list, and that item's name matched the
+  person's human-readable label.
+- **A picker can tell a list field from free text.** The field's metadata has type
+  `list`, and `typeData.listId` names the list to read.
+- **A list item says when it is retired.** Each item has `id`, `name`, `value`,
+  `archived` and `children`. `archived` is the signal to retire a mirrored unit.
+  `children` means a list can be a tree; the department list seen was flat.
+
+What is still open:
+
+- **Item ids are mixed.** Newer items have a numeric id that differs from their name.
+  Older items use their original name as their id, so id, name and value are the same
+  text. HiBob's `Animals` example suggests such an item keeps the old text as its id
+  through a rename, but nothing read-only can show it.
+- **A rename in HiBob's settings screen is assumed to do what the API does.** The
+  documentation describes the API. An admin is more likely to rename in the screen.
+
+Neither changes the design. A unit's external reference is the item's id, whichever
+kind it is. If a legacy item's id did change on a rename, the sync would see one unit
+emptying and another appearing, which the design already handles: someone states the
+succession. Archiving a department and adding a new one looks the same, since the new
+item has a new id.
+
+For whoever builds 6.5: the named-list response carries the same entries under both
+`items` and `values`, and each person also has a flat `/work/department` key holding
+`{"value": <stored id>}`, with no human-readable text.
+
+The check that would settle the rest, against a sandbox with two disposable departments,
+one with a numeric id and one legacy item whose id is its name:
+
+1. `POST /v1/people/search` with `fields: ["root.id", "work.department"]`,
+   `humanReadable: "APPEND"` and a filter on a test person in each department. Note
+   `work.department` and `humanReadable.work.department`.
+2. Rename both departments in HiBob's settings screen, not through the API.
+3. Repeat the search, and `GET /v1/company/named-lists/department`.
+
+A rename is stable if `work.department` is unchanged, the human-readable label shows the
+new name, and the named list shows the same item id with the new `value`. Record the
+result for each kind of id separately.
 
 ## Forgetting a person (R7)
 
