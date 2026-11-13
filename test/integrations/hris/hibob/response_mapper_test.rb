@@ -134,4 +134,62 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_nil mapper.manager_external_id
     end
   end
+
+  context "#list_values" do
+    should "pair the stored id with the label from a nested payload" do
+      employee = {
+        "id" => "1",
+        "work" => { "department" => "209192163", "title" => 4417, "customColumns" => { "column_level" => "88" } },
+        "humanReadable" => {
+          "work" => { "department" => "Platform", "title" => "Software Engineer", "customColumns" => { "column_level" => "5" } }
+        }
+      }
+      values = Hris::Hibob::ResponseMapper.new(employee, level_field_id: "column_level").list_values
+
+      assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "209192163", label: "Platform"), values[:department]
+      assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "4417", label: "Software Engineer"), values[:job_title]
+      assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "88", label: "5"), values[:level]
+    end
+
+    should "read the id from the flat payload shape" do
+      employee = {
+        "id" => "1",
+        "/work/department" => { "value" => "209192163" },
+        "/work/customColumns/column_level" => { "value" => "88" },
+        "humanReadable" => { "work" => { "department" => "Platform" } }
+      }
+      values = Hris::Hibob::ResponseMapper.new(employee, level_field_id: "column_level").list_values
+
+      assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "209192163", label: "Platform"), values[:department]
+      assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "88", label: nil), values[:level]
+    end
+
+    should "read a flat value given as a bare id" do
+      employee = { "id" => "1", "/work/department" => "209192163" }
+
+      assert_equal "209192163", Hris::Hibob::ResponseMapper.new(employee).list_values[:department].id
+    end
+
+    should "keep a legacy item whose id is its own name" do
+      employee = { "id" => "1", "work" => { "department" => "Engineering" }, "humanReadable" => { "work" => { "department" => "Engineering" } } }
+
+      assert_equal "Engineering", Hris::Hibob::ResponseMapper.new(employee).list_values[:department].id
+    end
+
+    should "leave out a blank field, and the level when no level column is configured" do
+      employee = {
+        "id" => "1",
+        "work" => { "department" => "", "title" => nil, "customColumns" => { "column_level" => "88" } }
+      }
+
+      assert_empty Hris::Hibob::ResponseMapper.new(employee).list_values
+    end
+
+    should "leave the mapped attributes unchanged" do
+      employee = @fixture["employees"][0]
+
+      assert_equal Hris::Hibob::ResponseMapper.call(employee).keys,
+        %i[external_id email name job_title department hris_source status hris_raw_data]
+    end
+  end
 end

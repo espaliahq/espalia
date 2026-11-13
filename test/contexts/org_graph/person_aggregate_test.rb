@@ -286,4 +286,103 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       assert_raises(RuntimeError) { @aggregate.match_status("retired", **PROVENANCE) }
     end
   end
+
+  context "memberships" do
+    setup do
+      @squad = SecureRandom.uuid_v7
+      @guild = SecureRandom.uuid_v7
+      record
+    end
+
+    should "let a person be in several units, each with its own allocation and role" do
+      @aggregate.set_membership(@squad, allocation: "0.6", role: " Tech lead ", **PROVENANCE)
+      @aggregate.set_membership(@guild.upcase, allocation: 0.4, **PROVENANCE)
+
+      squad, guild = events.drop(1)
+      assert_equal [ OrgGraph::Events::MembershipSet ] * 2, [ squad.class, guild.class ]
+      assert_equal({ person_id: @person_id, unit_id: @squad, allocation: 0.6, role: "Tech lead", provider: "hibob",
+                     effective_on: "2026-11-01", set_by_id: nil, plan_change_id: nil }, squad.data.symbolize_keys)
+      assert_equal @guild, guild.data[:unit_id]
+      assert_nil guild.data[:role]
+    end
+
+    should "carry the actor and the plan change" do
+      actor = SecureRandom.uuid_v7
+      @aggregate.set_membership(@squad, provider: "espalia", effective_on: "2026-11-02", set_by_id: actor, plan_change_id: "chg-1")
+      @aggregate.end_membership(@squad, provider: "espalia", effective_on: "2026-12-31", ended_by_id: actor)
+
+      set, ended = events.drop(1)
+      assert_equal [ "espalia", "2026-11-02", actor, "chg-1" ], set.data.values_at(:provider, :effective_on, :set_by_id, :plan_change_id)
+      assert_equal [ @squad, "2026-12-31", actor ], ended.data.values_at(:unit_id, :effective_on, :ended_by_id)
+    end
+
+    should "write nothing for the same terms from the same provider, whatever the date" do
+      @aggregate.set_membership(@squad, allocation: 1, role: "Engineer", **PROVENANCE)
+      @aggregate.set_membership(@squad, allocation: 1.0, role: "Engineer", provider: "hibob", effective_on: "2026-12-01")
+
+      assert_equal 1, events.count { |event| event.is_a?(OrgGraph::Events::MembershipSet) }
+    end
+
+    should "write new terms, or a handover to another provider" do
+      @aggregate.set_membership(@squad, allocation: 1, **PROVENANCE)
+      @aggregate.set_membership(@squad, allocation: 0.5, **PROVENANCE)
+      @aggregate.set_membership(@squad, allocation: 0.5, provider: "espalia", effective_on: "2026-11-01")
+
+      assert_equal [ 1.0, 0.5, 0.5 ], events.drop(1).map { |event| event.data[:allocation] }
+    end
+
+    should "end one membership and leave the others" do
+      @aggregate.set_membership(@squad, **PROVENANCE)
+      @aggregate.set_membership(@guild, **PROVENANCE)
+      @aggregate.end_membership(@squad, **PROVENANCE)
+
+      assert_raises(RuntimeError, match: /Not a member/) { @aggregate.end_membership(@squad, **PROVENANCE) }
+      assert_nothing_raised { @aggregate.end_membership(@guild, **PROVENANCE) }
+    end
+
+    should "let a person rejoin a unit they left" do
+      @aggregate.set_membership(@squad, **PROVENANCE)
+      @aggregate.end_membership(@squad, **PROVENANCE)
+      @aggregate.set_membership(@squad, **PROVENANCE)
+
+      assert_equal [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipSet ],
+        events.drop(1).map(&:class)
+    end
+
+    should "refuse to end a membership before it began, counting from its first terms" do
+      @aggregate.set_membership(@squad, allocation: 1, provider: "hibob", effective_on: "2026-03-01")
+      @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-06-01")
+
+      assert_raises(RuntimeError, match: /end before it begins/) do
+        @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-02-28")
+      end
+      assert_nothing_raised { @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-04-01") }
+    end
+
+    should "refuse an allocation outside (0, 1], a bad unit id or provider, and a person who has left" do
+      assert_raises(RuntimeError, match: /at most 1/) { @aggregate.set_membership(@squad, allocation: 1.5, **PROVENANCE) }
+      assert_raises(RuntimeError, match: /at most 1/) { @aggregate.set_membership(@squad, allocation: 0, **PROVENANCE) }
+      assert_raises(RuntimeError, match: /Invalid Allocation/) { @aggregate.set_membership(@squad, allocation: "half", **PROVENANCE) }
+      assert_raises(RuntimeError, match: /must be a UUID/) { @aggregate.set_membership("squad", **PROVENANCE) }
+      assert_raises(RuntimeError, match: /Unknown provider/) { @aggregate.set_membership(@squad, provider: "x", effective_on: "2026-11-01") }
+
+      @aggregate.leave(**PROVENANCE)
+      assert_raises(RuntimeError, match: /has left/) { @aggregate.set_membership(@squad, **PROVENANCE) }
+    end
+
+    should "count a membership from a backdated set, so a corrected start is honoured" do
+      @aggregate.set_membership(@squad, allocation: 1, provider: "hibob", effective_on: "2026-03-01")
+      @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-02-01")
+
+      assert_nothing_raised { @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-02-15") }
+    end
+
+    should "place a hire before they start, and refuse a person not yet recorded" do
+      pending = OrgGraph::PersonAggregate.new
+      assert_raises(RuntimeError, match: /not recorded/) { pending.set_membership(@squad, **PROVENANCE) }
+
+      pending.record(@person_id, **PROVENANCE, employment_status: "pending")
+      assert_nothing_raised { pending.set_membership(@squad, **PROVENANCE) }
+    end
+  end
 end

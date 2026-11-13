@@ -107,10 +107,16 @@ module ProjectionReplayHelpers
 
       when "OrgGraph::Projections::Structure"
         {
-          # Both PKs are event-carried ids — assert they survive reset! + replay.
+          # Level and unit PKs are event-carried ids — assert they survive reset! + replay.
           taxonomy_levels: rows(OrgTaxonomyLevel, stable_id: true),
-          units:           rows(OrgUnit, stable_id: true)
+          units:           rows(OrgUnit, stable_id: true),
+          # A link's natural key is (succession_id, predecessor_id, successor_id).
+          successions:     rows(OrgUnitSuccession)
         }
+
+      when "OrgGraph::Projections::Members"
+        # The PK derives from the person and the unit — assert it survives reset! + replay.
+        { memberships: rows(OrgMembership, stable_id: true) }
 
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"

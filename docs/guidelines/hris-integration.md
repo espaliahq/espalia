@@ -147,7 +147,7 @@ To pull an additional field (e.g. employment type, cost center, location) throug
 
 1. **Migration** — generate a new migration (`bin/rails generate migration AddXyzToPeople xyz:string`), run `bin/rails db:migrate`.
 2. **Client** — add the field to `BASE_FIELDS` in `Hris::Hibob::Client`. For custom columns, add a constructor parameter like `level_field_id` and include it via `default_fields`.
-3. **ResponseMapper** — extract from the raw or humanReadable hash and add to the attrs hash returned by `#call`. Use `dig_human_readable_work` for list-type fields, `dig_work` for plain strings.
+3. **ResponseMapper** — extract from the raw or humanReadable hash and add to the attrs hash returned by `#call`. Use `dig_human_readable_work` for list-type fields, `dig_work` for plain strings. A list field whose item id matters (it survives a rename, the label doesn't) also goes in `#list_values`, which pairs the id with the label from either payload shape: nested `work.<field>`, or flat `"/work/<field>" => { "value" => id }`.
 4. **Tests** — add a case to `response_mapper_test.rb` with fixture data. Update `test/fixtures/files/hibob/people_search_response.json` if needed.
 5. **Adapter** — no changes needed if you just want the field on Person. If the field affects assignment logic, add it to Pass 5.
 

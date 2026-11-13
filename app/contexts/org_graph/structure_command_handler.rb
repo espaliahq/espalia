@@ -36,4 +36,9 @@ class OrgGraph::StructureCommandHandler
   def retire_unit(unit_id, **options)
     @repository.with_structure { |structure| structure.retire_unit(unit_id, **options) }
   end
+
+  # @see OrgGraph::StructureAggregate#record_succession
+  def record_succession(succession_id, **options)
+    @repository.with_structure { |structure| structure.record_succession(succession_id, **options) }
+  end
 end

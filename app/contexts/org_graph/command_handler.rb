@@ -123,4 +123,35 @@ class OrgGraph::CommandHandler
       person.change_employment(fte:, employment_type:, provider:, effective_on:)
     end
   end
+
+  # Places a person in a live unit, or changes their terms there.
+  #
+  # @param person_id [String]
+  # @param unit_id [String] a live unit in the tenant's structure
+  # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#set_membership}
+  # @raise [RuntimeError] if the unit does not exist or is retired
+  def set_membership(person_id, unit_id, **options)
+    ensure_live_unit!(unit_id)
+    @repository.with_person(person_id) { |person| person.set_membership(unit_id, **options) }
+  end
+
+  # Ends a person's membership of one unit. A retired unit's memberships can
+  # still be ended.
+  #
+  # @param person_id [String]
+  # @param unit_id [String]
+  # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#end_membership}
+  def end_membership(person_id, unit_id, **options)
+    @repository.with_person(person_id) { |person| person.end_membership(unit_id, **options) }
+  end
+
+  private
+
+  # Reads the structure projection, which is written synchronously with the
+  # structure stream, rather than replaying that stream for every person.
+  def ensure_live_unit!(unit_id)
+    unit = OrgUnit.find_by(id: unit_id.to_s.downcase)
+    raise "Unit not found" unless unit
+    raise "Unit is retired" if unit.retired?
+  end
 end
