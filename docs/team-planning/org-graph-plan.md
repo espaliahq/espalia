@@ -113,7 +113,8 @@ flowchart LR
   s42 --> s44 & s52 & s53 & s71
   s43 --> s55
   s44 --> s54 & s72
-  s22 --> s26 & s56 & s73
+  s22 --> s26
+  s26 --> s56 & s73
   s53 --> s56
   s33 --> s57
   s60 --> s65
@@ -187,7 +188,7 @@ them.
 | 5.3 | Unit drawer: name, parent, owners, members | 4.1, 4.2 |
 | 5.4 | Activity sidebar | 4.4 |
 | 5.5 | Stale flags and confirm buttons | 4.3 |
-| 5.6 | Split, merge and retire from the unit drawer | 2.2, 5.3 |
+| 5.6 | Split, merge and retire from the unit drawer | 2.2, 2.6, 5.3 |
 | 5.7 | Compare with a date | 3.3 |
 
 ### E6 Providers and HRIS fields
@@ -211,7 +212,7 @@ them.
 |---|---|---|
 | 7.1 | Commands accept a reference to the plan change they came from | 4.2 |
 | 7.2 | Events from one approval share a cause, and the activity feed shows them as one | 7.1, 4.4 |
-| 7.3 | Applying a split or merge writes `UnitSucceeded` | 2.2, 7.1 |
+| 7.3 | Applying a split or merge writes `UnitSucceeded` | 2.2, 2.6, 7.1 |
 
 ### E8 Forgetting people
 
