@@ -30,4 +30,12 @@ class AuthorizationContext
   def tenant_admin?
     user&.global_admin? || tenant_user&.admin? || false
   end
+
+  # Whether the membership carries the Org Graph editor grant, which lets the
+  # people team edit any unit and membership without being an admin.
+  #
+  # @return [Boolean]
+  def org_graph_editor?
+    tenant_user&.org_graph_editor? || false
+  end
 end
