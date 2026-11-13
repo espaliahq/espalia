@@ -324,8 +324,20 @@ keeps it so, so each one shows its age.
   leaver's facts are never listed, nor a membership of a retired unit. Changing one half
   of a pair, such as a site, leaves the other half's age alone.
 
-The flags and confirm buttons are 5.5. Units' own facts, their names and parents, have no
-confirmation yet.
+- **A stale fact shows a quiet flag** ([#142](https://github.com/espaliahq/espalia/issues/142)):
+  "Not confirmed since" a date, and who last checked it. It shows in the Units view's member
+  rows, the unit drawer's member list and the person drawer's teams and employment.
+  `OrgGraph::StaleFacts` reads them for the people on screen, and nothing shows when
+  nothing is stale.
+- **"Still true" confirms a fact as of today.** Whoever may change a membership may confirm
+  it; a person's own facts take an admin or Org Graph editor (`OrgGraphPolicy::Confirmations`).
+  A pair, such as site and country, is confirmed together. MCP confirms through
+  `org_graph_confirm_fact`, and `org_graph_person_get` says which facts are stale.
+- **An HRIS-held fact is never flagged**, since each sync confirms it. The person drawer
+  says so.
+
+Units' own facts, their names and parents, have no confirmation yet, and the person's
+history doesn't show confirmations.
 
 ### What happens to `people`
 
