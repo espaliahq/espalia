@@ -216,6 +216,22 @@ class OrgGraph::CommandHandler
     end
   end
 
+  # Records that a fact Espalia holds about a person is still true. A
+  # membership is confirmed only in a live unit.
+  #
+  # @param person_id [String]
+  # @param fact [String, Symbol]
+  # @param options [Hash] keywords accepted by {OrgGraph::FactConfirmation#confirm_fact}
+  # @raise [RuntimeError] if another provider supplies the fact or the unit
+  def confirm_fact(person_id, fact, **options)
+    if fact.to_s == OrgGraph::FactConfirmation::MEMBERSHIP
+      ensure_provides_unit!(ensure_live_unit!(options[:unit_id]), OrgGraph::StructureAggregate::ESPALIA)
+    else
+      ensure_provides!(person_id, OrgGraph::StructureAggregate::ESPALIA, fact.to_sym)
+    end
+    @repository.with_person(person_id) { |person| person.confirm_fact(fact, **options) }
+  end
+
   private
 
   def leaves_before_start?(left_on, started_on)
