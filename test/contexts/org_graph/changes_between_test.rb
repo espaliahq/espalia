@@ -227,6 +227,16 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
                    march.to_h.values_at(:after, :withdrawn, :learned_at)
     end
 
+    should "leave a later change alone when a correction gives it its first value before" do
+      as_tenant { @handler.change_level(@ada.id, "L4", **ESPALIA, effective_on: "2026-03-01") }
+      travel_to Time.zone.parse("2026-04-10 09:00")
+      as_tenant { @handler.change_level(@ada.id, "L3", **ESPALIA, effective_on: "2026-02-15") }
+
+      learned = changes("2026-04-09", "2026-04-10", by: :learned).changes
+      assert_equal [ [ Date.new(2026, 2, 15), { "level" => "L3" }, false ] ],
+                   learned.map { it.to_h.values_at(:effective_on, :after, :withdrawn) }
+    end
+
     should "refuse known_on" do
       assert_raises(ArgumentError) { changes("2026-04-01", "2026-04-30", by: :learned, known_on: Date.new(2026, 4, 1)) }
     end

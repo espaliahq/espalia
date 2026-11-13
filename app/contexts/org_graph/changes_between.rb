@@ -161,9 +161,11 @@ class OrgGraph::ChangesBetween
   def timeline(row) = [ row.subject_type, row.subject_id, row.fact, row.key ]
 
   # A step stays the same step when a correction rewrites its row or the
-  # value before it, unless that turns it into another kind of change.
+  # value before it, unless that turns it into another kind of change. Only
+  # memberships, employment and unit facts take their kind from that value.
   def identity(step)
-    [ step.to_h.except(:learned_at, :before), step.before.nil?, employed?(step.before) ]
+    step_kind_depends_on_before = step.subject_type == UNIT || %w[membership employment_status].include?(step.fact)
+    [ step.to_h.except(:learned_at, :before), (step_kind_depends_on_before && [ step.before.nil?, employed?(step.before) ]) ]
   end
 
   # ── Steps ──
