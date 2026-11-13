@@ -45,6 +45,24 @@ class Tenant::OrgGraphSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "as a member who is not an admin" do
+    setup do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      @member_user = FactoryBot.create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        FactoryBot.create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
+      end
+    end
+
+    should "be turned away at the Org Graph's address" do
+      sign_in_as(@member_user)
+      visit tenant_org_graph_path
+      assert_text "You are not authorized to perform this action."
+      assert_no_selector "#org-graph-unit"
+      assert_no_text "Ezra Pell"
+    end
+  end
+
   context "at phone width" do
     setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
 
