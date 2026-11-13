@@ -24,7 +24,8 @@ class OrgGraph::StructureAggregate
   # The kinds of person fact a provider supplies, one per family of person event.
   FACTS = %w[employment_status title level manager cost_centre site employment].freeze
 
-  Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, keyword_init: true)
+  Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :created_on, :changed_on,
+                    keyword_init: true)
 
   def initialize
     @levels = []
@@ -175,7 +176,8 @@ class OrgGraph::StructureAggregate
 
     raise "#{level_provider(level_id)} supplies this level's units" unless provider == level_provider(level_id)
 
-    ensure_placeable!(provider, level_id, parent_id)
+    effective_on = iso_date(effective_on)
+    ensure_placeable!(provider, level_id, parent_id, on: effective_on)
 
     apply(OrgGraph::Events::UnitCreated.new(data: {
       unit_id: unit_id,
@@ -184,7 +186,7 @@ class OrgGraph::StructureAggregate
       level_id: level_id,
       provider: provider,
       external_ref: external_ref,
-      effective_on: iso_date(effective_on),
+      effective_on: effective_on,
       created_by_id: created_by_id,
       plan_change_id: plan_change_id
     }))
@@ -204,12 +206,13 @@ class OrgGraph::StructureAggregate
     name = require_name(name)
     return if name == unit.name
 
+    effective_on = dated_after_creation(unit, effective_on)
     apply(OrgGraph::Events::UnitRenamed.new(data: {
       unit_id: unit_id,
       name: name,
       previous_name: unit.name,
       provider: unit.provider,
-      effective_on: iso_date(effective_on),
+      effective_on: effective_on,
       renamed_by_id: renamed_by_id,
       plan_change_id: plan_change_id
     }))
@@ -230,14 +233,15 @@ class OrgGraph::StructureAggregate
     parent_id = require_id(parent_id, "Parent id") if parent_id
     return if parent_id == unit.parent_id
 
-    ensure_placeable!(unit.provider, unit.level_id, parent_id)
+    effective_on = dated_after_creation(unit, effective_on)
+    ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on)
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit_id,
       parent_id: parent_id,
       previous_parent_id: unit.parent_id,
       provider: unit.provider,
-      effective_on: iso_date(effective_on),
+      effective_on: effective_on,
       moved_by_id: moved_by_id,
       plan_change_id: plan_change_id
     }))
@@ -251,9 +255,10 @@ class OrgGraph::StructureAggregate
   # @param retired_by_id [String, nil]
   # @param plan_change_id [String, nil]
   def retire_unit(unit_id, effective_on:, provider: ESPALIA, retired_by_id: nil, plan_change_id: nil)
-    unit = retirable_unit!(unit_id, provider)
+    effective_on = iso_date(effective_on)
+    unit = retirable_unit!(unit_id, provider, on: effective_on)
 
-    apply(retirement(unit, effective_on: iso_date(effective_on), retired_by_id:, plan_change_id:))
+    apply(retirement(unit, effective_on:, retired_by_id:, plan_change_id:))
   end
 
   # States that the successors carry on from the predecessors: a split, a
@@ -295,7 +300,7 @@ class OrgGraph::StructureAggregate
     if (!restated || retiring.any?) && successor_ids.any? { |id| @units[id].retired }
       raise "A successor must be live"
     end
-    retiring.each { |unit| retirable_unit!(unit.unit_id, provider, retiring: retiring) }
+    retiring.each { |unit| retirable_unit!(unit.unit_id, provider, on: effective_on, retiring: retiring) }
 
     unless restated
       apply(OrgGraph::Events::UnitSucceeded.new(data: {
@@ -328,16 +333,21 @@ class OrgGraph::StructureAggregate
     data = event.data
     @units[data[:unit_id]] = Unit.new(
       unit_id: data[:unit_id], name: data[:name], parent_id: data[:parent_id], level_id: data[:level_id],
-      provider: data[:provider], external_ref: data[:external_ref], retired: false
+      provider: data[:provider], external_ref: data[:external_ref], retired: false,
+      created_on: data[:effective_on], changed_on: data[:effective_on]
     )
   end
 
   on OrgGraph::Events::UnitRenamed do |event|
-    @units.fetch(event.data[:unit_id]).name = event.data[:name]
+    unit = @units.fetch(event.data[:unit_id])
+    unit.name = event.data[:name]
+    unit.changed_on = [ unit.changed_on, event.data[:effective_on] ].max
   end
 
   on OrgGraph::Events::UnitMoved do |event|
-    @units.fetch(event.data[:unit_id]).parent_id = event.data[:parent_id]
+    unit = @units.fetch(event.data[:unit_id])
+    unit.parent_id = event.data[:parent_id]
+    unit.changed_on = [ unit.changed_on, event.data[:effective_on] ].max
   end
 
   on OrgGraph::Events::UnitRetired do |event|
@@ -365,8 +375,9 @@ class OrgGraph::StructureAggregate
 
   # A unit retiring with others may still hold sub-units among them; those
   # retire before it.
-  def retirable_unit!(unit_id, provider, retiring: [])
+  def retirable_unit!(unit_id, provider, on:, retiring: [])
     unit = editable_unit!(unit_id, provider)
+    raise "A unit can't retire before its last change on #{unit.changed_on}" if on < unit.changed_on
     others = retiring.map(&:unit_id) - [ unit.unit_id ]
     if live_units.any? { |child| child.parent_id == unit.unit_id && !others.include?(child.unit_id) }
       raise "Move or retire its sub-units first"
@@ -411,14 +422,22 @@ class OrgGraph::StructureAggregate
     raise "Levels an HRIS provides must sit above every level Espalia holds"
   end
 
+  def dated_after_creation(unit, effective_on)
+    effective_on = iso_date(effective_on)
+    raise "The unit was created on #{unit.created_on}" if effective_on < unit.created_on
+
+    effective_on
+  end
+
   # A parent must be live and at a higher level, and a mirrored unit never
   # hangs beneath one Espalia holds.
-  def ensure_placeable!(provider, level_id, parent_id)
+  def ensure_placeable!(provider, level_id, parent_id, on:)
     return if parent_id.nil?
 
     parent = @units[parent_id]
     raise "Parent unit not found" unless parent
     raise "Parent unit is retired" if parent.retired
+    raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
     raise "A parent must sit at a higher level" unless level_index(parent.level_id) < level_index(level_id)
     raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
   end
