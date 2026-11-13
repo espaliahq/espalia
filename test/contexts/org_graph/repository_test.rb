@@ -19,7 +19,17 @@ class OrgGraph::RepositoryTest < ActiveSupport::TestCase
         end
       end
     end
+
+    should "hold the stream's lock while it loads and stores" do
+      ActsAsTenant.with_tenant(create(:tenant)) do
+        before = advisory_locks
+        held = nil
+        OrgGraph::Repository.new.with_person(SecureRandom.uuid_v7) { held = advisory_locks }
+        assert_operator held, :>, before
+      end
+    end
   end
+
   context "#with_structure" do
     should "raise without a tenant context" do
       ActsAsTenant.without_tenant do
@@ -34,5 +44,20 @@ class OrgGraph::RepositoryTest < ActiveSupport::TestCase
         end
       end
     end
+
+    should "hold the stream's lock while it loads and stores" do
+      ActsAsTenant.with_tenant(create(:tenant)) do
+        before = advisory_locks
+        held = nil
+        OrgGraph::Repository.new.with_structure { held = advisory_locks }
+        assert_operator held, :>, before
+      end
+    end
+  end
+
+  def advisory_locks
+    ActiveRecord::Base.connection.select_value(<<~SQL)
+      SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()
+    SQL
   end
 end
