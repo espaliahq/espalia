@@ -47,6 +47,15 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_equal "Payouts", unit("work.department/t1").name
     end
 
+    should "rename a unit nobody holds when its list item is renamed" do
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+      mirror(@staff[0] => { division: "d1", team: "t2" })
+      @catalogue[1] = team_field(%w[t1 Payouts], %w[t2 Search])
+      mirror(@staff[0] => { division: "d1", team: "t2" })
+
+      assert_equal "Payouts", unit("work.department/t1").name
+    end
+
     should "retire a unit whose list item is archived, ending what it held" do
       mirror(@staff[0] => { division: "d1", team: "t1" })
       @catalogue[1] = team_field(%w[t2 Search])

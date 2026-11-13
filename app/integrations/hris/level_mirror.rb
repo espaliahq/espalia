@@ -119,6 +119,20 @@ class Hris::LevelMirror
     rescue => e
       @result[:errors] << { unit: ref, error: e.message }
     end
+    rename_unheld(level_plan, units) if level_plan.field.list?
+  end
+
+  # A list item can be renamed while nobody holds it; its unit stays, so it
+  # takes the new name too.
+  def rename_unheld(level_plan, units)
+    units.each_value do |unit|
+      key = unit.external_ref.delete_prefix("#{level_plan.field.id}/")
+      next if level_plan.held.key?(key) || level_plan.live_keys[key].blank?
+
+      rename(unit, level_plan.live_keys[key])
+    rescue => e
+      @result[:errors] << { unit: unit.external_ref, error: e.message }
+    end
   end
 
   # @return [String, nil, :split] the one parent the unit's people share, nil
