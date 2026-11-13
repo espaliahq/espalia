@@ -23,6 +23,7 @@ class OrgGraph::PersonAggregate
     @person_id = nil
     @employment_status = nil
     @last_status_change = nil
+    @started_on = nil
     @facts = {}
     @fact_providers = {}
   end
@@ -154,6 +155,8 @@ class OrgGraph::PersonAggregate
       return unless @last_status_change&.first == event_class && @last_status_change.last != data[:effective_on]
     elsif !from.include?(@employment_status)
       raise "Can't move from #{@employment_status} to #{to}"
+    elsif @employment_status == "employed" && to == "left" && @started_on && data[:effective_on] < @started_on
+      raise "A person can't leave before they start"
     end
 
     apply(event_class.new(data: data))
@@ -213,6 +216,7 @@ class OrgGraph::PersonAggregate
   on OrgGraph::Events::PersonRecorded do |event|
     @person_id = event.data[:person_id]
     @employment_status = event.data[:employment_status]
+    @started_on = event.data[:started_on]
     @facts = event.data.slice(*FACT_KEYS)
     @fact_providers = FACT_KEYS.index_with(event.data[:provider])
   end
@@ -225,6 +229,7 @@ class OrgGraph::PersonAggregate
     on event_class do |event|
       @employment_status = status
       @last_status_change = [ event_class, event.data[:effective_on] ]
+      @started_on = event.data[:effective_on] if event_class == OrgGraph::Events::PersonJoined
     end
   end
 
