@@ -731,6 +731,39 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_empty new_events
       end
 
+      should "leave a fact HiBob omits unchanged, never cleared" do
+        employees = with_employee("bob-001") do |e|
+          e["work"].delete("title")
+          e["humanReadable"]["work"].delete("title")
+          e["humanReadable"]["work"]["customColumns"].delete("column_test_id")
+        end
+
+        result = build_adapter(employees).sync_people
+
+        assert_empty result[:errors]
+        assert_empty new_events
+      end
+
+      should "write a self-managed person's other facts and leave the manager uncompared" do
+        employees = with_employee("bob-002") do |e|
+          e["work"]["reportsTo"] = { "id" => "bob-002" }
+          e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Director"
+        end
+
+        result = build_adapter(employees).sync_people
+
+        assert_empty result[:errors]
+        assert_equal [ OrgGraph::Events::TitleChanged ], new_events.map(&:class)
+      end
+
+      should "skip an inactive person, whose leaving is recorded elsewhere" do
+        employees = with_employee("bob-003") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Designer" }
+
+        build_adapter(employees).sync_people
+
+        assert_empty new_events
+      end
+
       should "keep writing Person Development as before" do
         pd_before = person_development_event_count
         employees = with_employee("bob-001") do |e|
