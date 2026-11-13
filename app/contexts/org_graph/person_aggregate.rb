@@ -151,10 +151,7 @@ class OrgGraph::PersonAggregate
   #   :site with :country, and :fte with :employment_type
   # @raise [ArgumentError] for a fact it does not name, or half a pair
   def apply_facts(provider:, effective_on:, **facts)
-    unknown = facts.keys - FACT_KEYS
-    raise ArgumentError, "Unknown facts: #{unknown.join(", ")}" if unknown.any?
-    pair(facts, :site, :country) if facts.key?(:site) || facts.key?(:country)
-    pair(facts, :fte, :employment_type) if facts.key?(:fte) || facts.key?(:employment_type)
+    check_facts!(facts)
     return unless recorded?
 
     when_given = { provider:, effective_on: }
@@ -164,6 +161,32 @@ class OrgGraph::PersonAggregate
     change_cost_centre(facts[:cost_centre], **when_given) if facts.key?(:cost_centre)
     change_site(**pair(facts, :site, :country), **when_given) if facts.key?(:site) || facts.key?(:country)
     change_employment(**pair(facts, :fte, :employment_type), **when_given) if facts.key?(:fte) || facts.key?(:employment_type)
+  end
+
+  # Moves a recorded person to the status a provider reports, for a provider
+  # that gives the status without its date. One that matches writes nothing,
+  # so a repeat sync never moves the date of the last change.
+  #
+  # @param employment_status [String] one of {EMPLOYMENT_STATUSES}
+  # @param provider [String] one of {PROVIDERS}
+  # @param effective_on [Date, String]
+  def match_status(employment_status, provider:, effective_on:)
+    return if employment_status == @employment_status
+
+    case employment_status
+    when "left" then leave(provider:, effective_on:)
+    when "employed" then @employment_status == "pending" ? join(provider:, effective_on:) : return_to_work(provider:, effective_on:)
+    else raise "Can't move from #{@employment_status} to #{employment_status}"
+    end
+  end
+
+  # @param facts [Hash] the keywords {#apply_facts} takes besides provenance
+  # @raise [ArgumentError] for a fact it does not name, or half a pair
+  def check_facts!(facts)
+    unknown = facts.keys - FACT_KEYS
+    raise ArgumentError, "Unknown facts: #{unknown.join(", ")}" if unknown.any?
+    pair(facts, :site, :country) if facts.key?(:site) || facts.key?(:country)
+    pair(facts, :fte, :employment_type) if facts.key?(:fte) || facts.key?(:employment_type)
   end
 
   private

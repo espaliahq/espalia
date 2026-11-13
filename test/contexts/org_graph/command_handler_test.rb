@@ -58,11 +58,37 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ OrgGraph::Events::PersonRecorded, OrgGraph::Events::TitleChanged ], stream_events.map(&:class)
     end
 
-    should "record a leaver once and leave them alone after" do
+    should "record a leaver once and leave their facts alone after" do
       @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", title: "Engineer")
 
       assert_equal 0, @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", title: "Lead")
       assert_equal "left", stream_events.first.data[:employment_status]
+    end
+
+    should "write a leaving once, however many syncs report it" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+
+      left = @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-02", employment_status: "left")
+      again = @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-03", employment_status: "left")
+
+      assert_equal [ 1, 0 ], [ left, again ]
+      assert_equal "2026-11-02", stream_events.last.data[:effective_on]
+    end
+
+    should "write a return before the facts that changed with it" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", title: "Engineer")
+
+      written = @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Lead")
+
+      assert_equal 2, written
+      assert_equal [ OrgGraph::Events::PersonReturned, OrgGraph::Events::TitleChanged ], stream_events.drop(1).map(&:class)
+    end
+
+    should "refuse half a pair on the first sync as on every later one" do
+      assert_raises(ArgumentError) do
+        @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", site: "Sydney")
+      end
+      assert_empty stream_events
     end
   end
 

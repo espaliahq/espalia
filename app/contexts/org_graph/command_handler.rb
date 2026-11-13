@@ -39,9 +39,8 @@ class OrgGraph::CommandHandler
 
   # What a provider's sync calls for each person it returns, in one load of
   # their stream: the first time, it records them with the facts as they
-  # stand; after that, it applies each fact that differs. A person who has
-  # left is only ever recorded here; what happens after they leave is
-  # story 1.6's.
+  # stand; after that, it moves their status if it differs and applies each
+  # fact that differs. A leaver's facts are not compared.
   #
   # @param person_id [String]
   # @param provider [String]
@@ -52,10 +51,12 @@ class OrgGraph::CommandHandler
   def sync_person(person_id, provider:, effective_on:, employment_status:, **facts)
     written = 0
     @repository.with_person(person_id) do |person|
-      if !person.recorded?
+      person.check_facts!(facts)
+      if person.recorded?
+        person.match_status(employment_status, provider:, effective_on:)
+        person.apply_facts(provider:, effective_on:, **facts) unless employment_status == "left"
+      else
         person.record(person_id, provider:, effective_on:, employment_status:, **facts)
-      elsif employment_status != "left"
-        person.apply_facts(provider:, effective_on:, **facts)
       end
       written = person.unpublished_events.count
     end

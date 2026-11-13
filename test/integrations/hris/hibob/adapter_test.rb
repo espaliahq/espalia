@@ -790,12 +790,32 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal [ OrgGraph::Events::TitleChanged ], new_events.map(&:class)
       end
 
-      should "skip an inactive person, whose leaving is recorded elsewhere" do
+      should "leave an inactive person's facts uncompared" do
         employees = with_employee("bob-003") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Designer" }
 
         build_adapter(employees).sync_people
 
         assert_empty new_events
+      end
+
+      should "write a PersonLeft once when HiBob shows someone inactive" do
+        employees = with_employee("bob-001") { |e| e["isActive"] = false }
+
+        build_adapter(employees).sync_people
+        build_adapter(employees).sync_people
+
+        assert_equal [ [ OrgGraph::Events::PersonLeft, @people["bob-001"].id ] ],
+          new_events.map { |e| [ e.class, e.data[:person_id] ] }
+      end
+
+      should "write a PersonReturned when a leaver is active again" do
+        employees = with_employee("bob-003") { |e| e["isActive"] = true }
+
+        result = build_adapter(employees).sync_people
+
+        assert_empty result[:errors]
+        assert_equal OrgGraph::Events::PersonReturned, new_events.first&.class
+        assert_equal @people["bob-003"].id, new_events.first.data[:person_id]
       end
 
       should "keep writing Person Development as before" do

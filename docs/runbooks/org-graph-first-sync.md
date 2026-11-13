@@ -10,7 +10,7 @@ The next HiBob sync writes `PersonRecorded` for every person HiBob returns, inac
 - employment status `employed`, or `left` for a person HiBob shows as inactive;
 - provider `hibob`, effective the day of the sync.
 
-Every later sync writes only the facts that changed. Person Development is untouched, and so is everything a user sees.
+Every later sync writes only what changed: a person HiBob now shows as inactive gets `PersonLeft`, one active again gets `PersonReturned`, and a changed title, level or manager gets its event. Person Development is untouched, and so is everything a user sees.
 
 **Who is not recorded.** People HiBob does not return are not recorded: someone added by hand, or deactivated by an earlier sync because they had left HiBob altogether. Their history starts if HiBob returns them again.
 
