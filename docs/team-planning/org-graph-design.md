@@ -259,6 +259,9 @@ The likely answer is to list it for someone to resolve, as a disagreement is.
   leaving date. "Never" is allowed.
 - At the end of the period, or on request, the identifiers are erased from the `people`
   row and `PersonForgotten` is written.
+- Only a person who has left can be forgotten. A request about someone still employed is
+  refused: the HRIS is the source of their identifiers and the next sync would write them
+  back. They are removed there first.
 - Projections act on that event. The person renders as a former member. Positions, teams and
   past plans keep their history.
 - The sync must not undo it. An HRIS often keeps returning a person long after they

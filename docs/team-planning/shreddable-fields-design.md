@@ -149,10 +149,15 @@ so each projection decides for itself.
   its real time to forget, and should be stated.
 - **A restore must not undo forgetting.** A backup from before a key was deleted brings
   the key back, and the event that recorded the forgetting is missing from it too. So
-  the id of every deleted key is also appended to a forgetting log kept apart from the
-  database backups. A restore replays that log, deleting each key it lists, before the
-  system serves anything. A deployment with no such log cannot promise that a restore
-  keeps what was forgotten, and must say so.
+  every forgetting decision is also appended to a forgetting log kept apart from the
+  database backups: what was forgotten, and the key it deleted. The entry is made
+  durable first, then the transaction that deletes the key commits. An entry with no
+  deletion behind it is harmless, because replaying it deletes the key.
+  A restore replays the log before the system serves anything, and replaying a decision
+  means carrying it out again in full: delete the key, erase the identifiers it
+  covered, and rebuild every read model and cache with the keys forgotten. A deployment
+  with no such log cannot promise that a restore keeps what was forgotten, and must say
+  so.
 - **Events already written stay in clear.** A field cannot be made shreddable after the
   fact without rewriting history. Covering existing evidence and comments is a separate
   migration with its own design.

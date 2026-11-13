@@ -260,7 +260,7 @@ yet. That gives every scenario the same four numbers, everywhere a total appears
 The draws on a budget line never add up to more than its amount. When positions together
 ask for more than a line holds, filled positions draw first, then open ones in the order
 they were created. What the line cannot cover is unfunded, and Remaining never falls
-below zero.
+below zero. A position never draws more than its cost, across all the lines it draws on.
 
 Nobody wires each position to a budget line by hand. The plan works out a default in two steps, and
 shows its reason beside the position.
