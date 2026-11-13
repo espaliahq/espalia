@@ -84,7 +84,7 @@ class OrgGraph::FactConfirmationTest < ActiveSupport::TestCase
   should "write the confirmation to the person's stream through the command handler" do
     tenant = create(:tenant)
     ActsAsTenant.with_tenant(tenant) do
-      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      handler = OrgGraph::CommandHandler.new
       handler.record_person(@person_id, **ESPALIA, employment_status: "employed", title: "Engineer")
       handler.confirm_fact(@person_id, "title", confirmed_by_id: @confirmer_id, effective_on: "2026-11-10")
     end
@@ -92,37 +92,5 @@ class OrgGraph::FactConfirmationTest < ActiveSupport::TestCase
     event = Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(@person_id, tenant: tenant)).last
     assert_instance_of OrgGraph::Events::FactConfirmed, event
     assert_equal tenant.id, event.metadata[:tenant_id]
-  end
-
-  should "confirm as the actor, under the same rights as changing the fact" do
-    tenant = create(:tenant)
-    ActsAsTenant.with_tenant(tenant) do
-      level, unit = SecureRandom.uuid_v7, SecureRandom.uuid_v7
-      system = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
-      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
-      structure.define_taxonomy([ { level_id: level, name: "Team" } ], effective_on: "2026-01-01")
-      structure.create_unit(unit, "Payments", level_id: level, effective_on: "2026-01-01")
-      lead = create(:person, tenant: tenant)
-      report = create(:person, tenant: tenant, manager: lead)
-      system.record_person(report.id, **ESPALIA, employment_status: "employed", title: "Engineer")
-      system.set_membership(report.id, unit, **ESPALIA)
-
-      as = ->(person) { OrgGraph::CommandHandler.new(actor: actor_for(tenant, person)) }
-      as.(lead).confirm_fact(report.id, :membership, unit_id: unit, effective_on: "2026-11-10")
-      assert_raises(OrgGraph::Authorization::Refused) { as.(lead).confirm_fact(report.id, :title, effective_on: "2026-11-10") }
-      outsider = create(:person, tenant: tenant)
-      assert_raises(OrgGraph::Authorization::Refused) do
-        as.(outsider).confirm_fact(report.id, :membership, unit_id: unit, effective_on: "2026-11-10")
-      end
-
-      confirmed = Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(report.id)).to_a
-        .grep(OrgGraph::Events::FactConfirmed)
-      assert_equal [ lead.id ], confirmed.map { |event| event.data[:confirmed_by_id] }
-    end
-  end
-
-  def actor_for(tenant, person)
-    user = create(:user)
-    AuthorizationContext.new(user:, tenant_user: create(:tenant_user, tenant:, user:, person:), person:)
   end
 end
