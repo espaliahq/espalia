@@ -169,6 +169,14 @@ Rails.configuration.to_prepare do
     to: OrgGraph::SyncHandlers::RetiredUnitMemberships.handled_events
   )
 
+  # LeaverMemberships ends a leaver's memberships in their own stream, the
+  # same way. Dispatches OrgGraph person commands, so it MUST NOT be
+  # registered as a projection. Subscribed AFTER Members so it reads current rows.
+  event_store.subscribe(
+    OrgGraph::SyncHandlers::LeaverMemberships.new,
+    to: OrgGraph::SyncHandlers::LeaverMemberships.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Side-effect handlers (notifications). NOT projections — never register
   # these in Projections::Registry (replaying would re-send notifications).

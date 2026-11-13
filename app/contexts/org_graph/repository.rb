@@ -12,7 +12,10 @@ class OrgGraph::Repository
     @repository = AggregateRoot::Repository.new(event_store)
   end
 
-  # Loads a person's aggregate, yields it, and stores any new events.
+  # Loads a person's aggregate, yields it, and stores any new events, in one
+  # transaction with the sync handlers they set off: RES commits the events
+  # before its subscribers run, so a leaving whose membership ends fail would
+  # otherwise stand alone.
   #
   # @param person_id [String] UUID of the person
   # @param plan [OrgGraph::PlanReference, nil] stamped on every event written
@@ -21,8 +24,10 @@ class OrgGraph::Repository
   # @raise [ArgumentError] if no tenant context is available
   def with_person(person_id, plan: nil, cause_id: nil, &block)
     with_tenant_metadata(cause_id) do
-      @repository.with_aggregate(OrgGraph::PersonAggregate.new, EventStreamNaming.person_stream(person_id)) do |person|
-        person.within_plan(plan, &block)
+      ActiveRecord::Base.transaction do
+        @repository.with_aggregate(OrgGraph::PersonAggregate.new, EventStreamNaming.person_stream(person_id)) do |person|
+          person.within_plan(plan, &block)
+        end
       end
     end
   end
