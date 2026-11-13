@@ -8,8 +8,7 @@
 # `mode: "full"` for each person's facts and every membership, and `unit_id`
 # to narrow either mode to one unit and the units under it.
 class Operations::OrgGraph::AsOf < Operations::Base
-  DATE_KEY = Operations::Reporting::CycleCohort::DATE_KEY
-  DATE_SCHEMA = { pattern: Operations::Reporting::CycleCohort::DATE_PATTERN }.freeze
+  include Operations::OrgGraph::DateParameter
 
   description "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
               "level, owners and direct member count, and the number of employed people. A future date includes changes already recorded for " \
@@ -81,15 +80,5 @@ class Operations::OrgGraph::AsOf < Operations::Base
       queue.concat(children.fetch(id, []).map(&:id))
     end
     ids
-  end
-
-  def parse_date(name)
-    value = params[name]
-    return nil if value.blank?
-    raise ParameterError, "#{name} must be a date, YYYY-MM-DD" unless DATE_KEY.match?(value)
-
-    Date.iso8601(value)
-  rescue Date::Error
-    raise ParameterError, "#{name} must be a date, YYYY-MM-DD"
   end
 end
