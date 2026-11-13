@@ -194,6 +194,11 @@ A refused command raises `OrgGraph::Authorization::Refused`, a
 generic flash; a controller that wants the reason on screen rescues it and
 shows `error.message`, as `Assessments::RatingsController` does.
 
+A view that offers the changes asks `OrgGraphPolicy::UnitRights` which controls to draw
+for one unit: rename, move and its parent choices, owners, members and each member's
+destinations. The unit drawer's controllers build it and pass it to the view, so the
+view never asks the policy itself.
+
 The system's own writes pass `OrgGraph::Authorization::SYSTEM`: the HRIS sync,
 a retirement moving its members, the HRIS fact claim, a rake task. Nobody is
 acting, so nothing is checked. A handler built with no actor, or with `nil`,

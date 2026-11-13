@@ -2600,6 +2600,71 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_add_member",
+        "description" => "Place a person in a live unit of the Org Graph, from effective_on (today by default), with " \
+                         "an optional role and allocation (greater than 0, at most 1). A person can be in several " \
+                         "units. A unit an HRIS supplies takes only people that HRIS doesn't hold; place the others " \
+                         "in the HRIS. Someone already in the unit is refused.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string"
+            },
+            "role" => {
+              "type" => "string"
+            },
+            "allocation" => {
+              "type" => "number"
+            }
+          },
+          "required" => [ "unit_id", "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_add_unit_owner",
+        "description" => "Name a person as an owner of a live unit in the Org Graph, from effective_on (today by " \
+                         "default). An owner may change the unit and every unit beneath it, so this grants " \
+                         "permissions. Units an HRIS supplies take owners too.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "unit_id", "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_as_of",
         "description" => "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
           "level, owners and direct member count, and the number of employed people. A future " \
@@ -2665,6 +2730,157 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_move_member",
+        "description" => "Move a person's membership of one unit to another live unit, keeping its role and " \
+                         "allocation, from effective_on (today by default). A membership an HRIS supplies moves in " \
+                         "the HRIS, not here.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "person_id" => {
+              "type" => "string"
+            },
+            "from_unit_id" => {
+              "type" => "string"
+            },
+            "unit_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "person_id", "from_unit_id", "unit_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_move_unit",
+        "description" => "Move a unit in the Org Graph beneath another live unit at a higher level, or to the top " \
+                         "when parent_id is omitted, from effective_on (today by default). Only a unit Espalia holds " \
+                         "can be moved here. Moving a unit changes who inherits its ownership, so the caller needs " \
+                         "rights on the unit and where it lands.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "parent_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "unit_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_remove_member",
+        "description" => "End a person's membership of a unit in the Org Graph; effective_on (today by default) is " \
+                         "their last day in it. A membership an HRIS supplies ends in the HRIS, not here.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "person_id" => {
+              "type" => "string"
+            },
+            "unit_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "person_id", "unit_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_remove_unit_owner",
+        "description" => "Remove a person from a live unit's owners in the Org Graph, from effective_on (today by " \
+                         "default). This takes away their rights over the unit and the units beneath it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "unit_id", "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_rename_unit",
+        "description" => "Rename a unit in the Org Graph, from effective_on (today by default). Only a unit Espalia " \
+                         "holds can be renamed here; one an HRIS supplies is renamed in the HRIS. Refused unless the " \
+                         "caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "name" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "unit_id", "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {

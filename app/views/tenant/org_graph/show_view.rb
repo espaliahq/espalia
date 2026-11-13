@@ -27,29 +27,33 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
       active_section: :org_graph,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      render Components::Kit::SectionHeading.new(
-        "Org Graph",
-        subtitle: "Units and who is in each, as the Org Graph knows them today. Read-only for now."
-      )
+      # From `lg` up the drawer sits over the right of the page, so the page
+      # makes room for it rather than hiding the cards beneath.
+      div(class: ("lg:pr-[30rem]" if @drawer)) do
+        render Components::Kit::SectionHeading.new(
+          "Org Graph",
+          subtitle: "Units and who is in each, as the Org Graph knows them today. Open a unit to change it."
+        )
 
-      if @overview.any_units?
-        div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
-          render Views::Tenant::OrgGraph::UnitTree.new(overview: @overview, tray_id: Views::Tenant::OrgGraph::Tray::ID)
-          div(class: "flex-1 min-w-0 space-y-6") do
-            render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview)
-            tray
-          end
-          render @sidebar if @sidebar
-        end
-      else
-        div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
-          div(class: "flex-1 min-w-0 space-y-6") do
-            render Components::Kit::EmptyState.new(title: "No units yet") do
-              "Units appear here once the Org Graph holds the organisation's structure."
+        if @overview.any_units?
+          div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
+            render Views::Tenant::OrgGraph::UnitTree.new(overview: @overview, tray_id: Views::Tenant::OrgGraph::Tray::ID)
+            div(class: "flex-1 min-w-0 space-y-6") do
+              render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview)
+              tray
             end
-            tray
+            render @sidebar if @sidebar
           end
-          render @sidebar if @sidebar
+        else
+          div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
+            div(class: "flex-1 min-w-0 space-y-6") do
+              render Components::Kit::EmptyState.new(title: "No units yet") do
+                "Units appear here once the Org Graph holds the organisation's structure."
+              end
+              tray
+            end
+            render @sidebar if @sidebar
+          end
         end
       end
 
