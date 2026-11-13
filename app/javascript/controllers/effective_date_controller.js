@@ -12,8 +12,13 @@ import BaseController from "controllers/base_controller"
 export default class extends BaseController {
   static targets = ["date"]
 
+  // The date field sits outside every form, so no form checks it on submit.
   stamp(event) {
+    if (!this.dateTarget.reportValidity()) {
+      event.preventDefault()
+      return
+    }
     const field = event.target.querySelector("input[name='effective_on']")
-    if (field && this.dateTarget.value) field.value = this.dateTarget.value
+    if (field) field.value = this.dateTarget.value
   }
 }
