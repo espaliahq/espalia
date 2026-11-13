@@ -14,6 +14,7 @@
 #   @option data [String, nil] :ended_by_id person_id of the actor
 #   @option data [String, nil] :plan_id the plan it was applied from
 #   @option data [String, nil] :plan_change_id the plan change it was applied from
+#   @option data [String, nil] :changed_back_id the event this changes back, from "change it back"
 #
 class OrgGraph::Events::MembershipEnded < RubyEventStore::Event
 end

@@ -241,6 +241,46 @@ when they leave the company and their `people` row goes inactive. That is read w
 owners are asked for, so leaving writes no ownership event. A unit nobody up its chain
 owns is flagged too (`OrgUnit#needs_owner?`).
 
+### What changed in a unit
+
+`OrgGraph::Projections::UnitActivity` writes one entry per change to a unit or to one of
+its memberships into `org_unit_activities`, and `OrgUnitActivity.for_unit(unit_id)` lists
+them newest first. Each entry says who made the change, or which provider supplied it,
+what it changed from and to, when it took effect and when the Org Graph learned it. A move
+between units is an entry in each, naming the other. A succession is an entry in every
+unit it names. Each entry keeps its event's `correlation_id`, the cause 7.2 groups by: the
+approval a plan's changes share, or the request that made one direct edit. It keeps
+`causation_id` too, though RES rewrites that inside sync handlers, so it names the event
+that triggered a handler rather than the cause.
+
+**Changing it back writes the inverse.** `OrgGraph::ChangeBackHandler` undoes an entry
+with a new event that carries `changed_back_id`, the event it reverses. Nothing is
+deleted: the feed keeps both, and marks the original with the change that undid it. Ending
+a membership puts it back on its earlier terms, a rename takes back the old name, and a
+move goes back where it came from. The inverse takes effect when the original did, so the
+fact reads as if the change never happened, unless the caller names a date. It goes through the ordinary handlers under the same actor, so it is refused
+wherever the change itself would be. It is refused, too:
+
+- for a change another provider supplied, which belongs in that provider;
+- for a change already changed back;
+- for one a later change to the same fact has overtaken, in any unit it touched, so a
+  correction never silently undoes someone else's;
+- for creating, retiring or succeeding a unit, which reshape the structure rather than
+  change one fact.
+- when the aggregate would write something else, such as ending a moved membership
+  because the person has since left.
+
+Every write to a stream holds a lock on it until its transaction ends: the person's stream
+for a membership, the tenant's structure stream for the rest. A change-back takes that lock
+before it checks anything, so no change to the fact can land between the checks and the
+inverse.
+
+The feed starts from the Org Graph's first event, so a deploy that adds it rebuilds it
+(`REBUILD_ON_DEPLOY=org_graph/unit_activity`) wherever Org Graph events exist. Without that
+history a membership's earlier terms would be missing.
+
+The sidebar that shows this is 5.4.
+
 ### Keeping a fact current
 
 An HRIS keeps its own facts fresh. A fact Espalia holds stays true only while someone
@@ -553,6 +593,19 @@ result for each kind of id separately.
 
 - A tenant sets a retention period for people who have left. The default is seven years from the
   leaving date. "Never" is allowed.
+  - The period is `Tenant#org_graph_config.retention_years`, beside the staleness threshold. Nil
+    means never. It is a setting, not an event: nothing replays it, and 8.2 records each person
+    it forgets.
+  - Only a tenant admin may change it, through `Operations::Tenants::UpdateRetentionPeriod`.
+    An Org Graph editor may not. How long to keep a leaver is the organisation's
+    data-protection decision, not a change to its structure.
+  - `OrgLeaver.due_to_be_forgotten(tenant)` returns the person ids of the leavers whose
+    period has ended, and nothing else. The leaving date is the latest `PersonLeft`'s, so a corrected date counts.
+    For a person the HRIS stopped returning, it is the day the sync noticed. Someone who
+    returns drops off the list. A leaver whose rehire has not started yet stays on it, since
+    the sync writes nothing until they start, so 8.2 checks the HRIS before it erases anyone.
+  - `org_graph/leavers` reads event types production already holds, so its first deploy sets
+    `REBUILD_ON_DEPLOY=org_graph/leavers` to fill it.
 - At the end of the period, or on request, the identifiers are erased from the `people`
   row and `PersonForgotten` is written.
 - Only a person who has left can be forgotten. A request about someone still employed is
