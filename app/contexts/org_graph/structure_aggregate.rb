@@ -314,6 +314,9 @@ class OrgGraph::StructureAggregate
       raise ArgumentError, "A unit can't succeed itself" if predecessor_ids.intersect?(successor_ids)
       raise "Unit not found" unless (predecessor_ids + successor_ids).all? { |id| @units.key?(id) }
       raise "A unit can't come to precede itself" if preceded_by(predecessor_ids).intersect?(successor_ids)
+
+      latest = (predecessor_ids + successor_ids).map { |id| @units[id] }.max_by(&:created_on)
+      raise "A succession can't predate #{latest.name}, created on #{latest.created_on}" if effective_on < latest.created_on
     end
 
     retiring = retire_predecessors ? predecessor_ids.map { |id| @units[id] }.reject(&:retired) : []
@@ -357,22 +360,24 @@ class OrgGraph::StructureAggregate
       provider: data[:provider], external_ref: data[:external_ref], retired: false,
       created_on: data[:effective_on], changed_on: data[:effective_on]
     )
+    touch(data[:parent_id], data[:effective_on])
   end
 
   on OrgGraph::Events::UnitRenamed do |event|
-    unit = @units.fetch(event.data[:unit_id])
-    unit.name = event.data[:name]
-    unit.changed_on = [ unit.changed_on, event.data[:effective_on] ].max
+    @units.fetch(event.data[:unit_id]).name = event.data[:name]
+    touch(event.data[:unit_id], event.data[:effective_on])
   end
 
   on OrgGraph::Events::UnitMoved do |event|
     unit = @units.fetch(event.data[:unit_id])
+    [ unit.unit_id, unit.parent_id, event.data[:parent_id] ].each { |id| touch(id, event.data[:effective_on]) }
     unit.parent_id = event.data[:parent_id]
-    unit.changed_on = [ unit.changed_on, event.data[:effective_on] ].max
   end
 
   on OrgGraph::Events::UnitRetired do |event|
-    @units.fetch(event.data[:unit_id]).retired = true
+    unit = @units.fetch(event.data[:unit_id])
+    unit.retired = true
+    touch(unit.parent_id, event.data[:effective_on])
   end
 
   on OrgGraph::Events::UnitSucceeded do |event|
@@ -441,6 +446,13 @@ class OrgGraph::StructureAggregate
     return if providers.drop(first_espalia).all?(ESPALIA)
 
     raise "Levels an HRIS provides must sit above every level Espalia holds"
+  end
+
+  # A unit's latest change includes a sub-unit arriving beneath it or leaving,
+  # so it can't be dated as retired while it still held one.
+  def touch(unit_id, effective_on)
+    unit = @units[unit_id]
+    unit.changed_on = [ unit.changed_on, effective_on ].max if unit
   end
 
   def dated_after_creation(unit, effective_on)

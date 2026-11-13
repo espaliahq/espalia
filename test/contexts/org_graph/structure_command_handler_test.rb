@@ -618,6 +618,43 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse to retire a unit before a sub-unit arrived beneath it or left" do
+      later = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.create_unit(@squad, "Ledger", level_id: level_id("Squad"), parent_id: @team, effective_on: "2026-12-01")
+        @handler.create_unit(later, "Treasury", level_id: level_id("Team"), parent_id: @department, effective_on: "2026-11-01")
+        @handler.move_unit(@squad, later, effective_on: "2027-01-01")
+
+        assert_raises(RuntimeError, match: /last change on 2027-01-01/) do
+          @handler.retire_unit(@team, effective_on: "2026-12-15")
+        end
+        assert_nothing_raised { @handler.retire_unit(@team, effective_on: "2027-01-01") }
+      end
+    end
+
+    should "refuse to retire a unit before its last sub-unit retired" do
+      as_tenant do
+        @handler.create_unit(@squad, "Ledger", level_id: level_id("Squad"), parent_id: @team, effective_on: "2026-11-01")
+        @handler.retire_unit(@squad, effective_on: "2027-03-01")
+
+        assert_raises(RuntimeError, match: /last change on 2027-03-01/) do
+          @handler.retire_unit(@team, effective_on: "2027-02-01")
+        end
+      end
+    end
+
+    should "refuse a succession dated before a unit it names was created" do
+      successor = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.create_unit(successor, "Ledger", level_id: level_id("Team"), parent_id: @department, effective_on: "2027-02-01")
+
+        assert_raises(RuntimeError, match: /can't predate Ledger, created on 2027-02-01/) do
+          @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @team ], successor_ids: [ successor ],
+                                     effective_on: "2026-12-01")
+        end
+      end
+    end
+
     should "refuse a succession that retires a predecessor before its last change" do
       successor = SecureRandom.uuid_v7
       create_unit(successor, "Ledger", level: "Team", parent_id: @department)
