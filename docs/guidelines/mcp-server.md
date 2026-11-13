@@ -811,6 +811,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/frameworks/collaborator_scope_rules.rb` | `declare_collaborator_scope_rules` — the role/scope pairing as declarations, shared by add + change |
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
+| `app/operations/operations/org_graph/as_of.rb` | `org_graph_as_of` (`:none`, tenant members): the Org Graph on a date through `OrgGraph::AsOf`. Summary gives units with headcounts; `full` adds people and memberships; `unit_id` narrows to a subtree; `known_on` reads what was known then. People by id only ([#123](https://github.com/espaliahq/espalia/issues/123)) |
 | `app/operations/operations/reporting/cycles_list.rb` | `reporting_cycles_list` — the cycles a caller may report on (`AssessmentCyclePolicy::Scope`, the cohort audience), where the other `reporting_*` tools' `cycle_id` comes from |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
 | `app/operations/operations/integrations/ai_model_status.rb` | `integrations_ai_model_status` (`:none`): provider (`anthropic`, `openai_compatible` or `typesafe_jev`), address host, model, effort (Anthropic only), whether suggestions are on, key present. Names are always replaced before the model, so there is no name switch to report. The settings and key are written on the web only, so no key ever crosses MCP |
