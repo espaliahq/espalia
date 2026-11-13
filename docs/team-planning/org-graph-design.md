@@ -252,9 +252,10 @@ with the Org Graph's current projection and issues a command for each difference
 that finds nothing changed writes nothing.
 
 A person who disappears from the HRIS gets `PersonLeft` once, dated by the first sync
-that misses them, or by their start date if that is still ahead, since nobody leaves
-before they start. Someone who comes back keeps their stream and gets `PersonReturned`;
-the earlier `PersonLeft` stays in history as what we believed then.
+that misses them. For someone recorded as employed whose start date is still ahead, it
+is dated by that start date, since nobody leaves before they start; a pending hire who
+disappears leaves on the date of the sync. Someone who comes back keeps their stream and
+gets `PersonReturned`; the earlier `PersonLeft` stays in history as what we believed then.
 
 A failed or partial sync leaves no one, in the Org Graph or in `Person.status`, so both
 read the same set of absent people. A sync is failed or partial when any of these holds
@@ -275,7 +276,8 @@ afresh. There is no override or per-tenant setting; a story for a manual overrid
 follow if a real mass leaving ever needs one.
 
 One gap remains. If the Org Graph write fails for one person, the sync still marks them
-inactive, so a leaver loses access on time. For a while the two disagree: the person is
+inactive, so Pass 3b still offboards them from open cycles and framework assignments on
+time. For a while the two disagree: the person is
 inactive but still employed in the Org Graph. The next sync that misses them writes the
 `PersonLeft`, dated that day.
 
