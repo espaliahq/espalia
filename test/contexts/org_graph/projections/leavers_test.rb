@@ -24,7 +24,7 @@ class OrgGraph::Projections::LeaversTest < ActiveSupport::TestCase
 
   def leave(person, on) = as_tenant { @handler.leave(person.id, **ESPALIA, effective_on: on) }
 
-  def due(on: TODAY) = as_tenant { OrgLeaver.due_to_be_forgotten(@tenant.reload, on:).pluck(:person_id) }
+  def due(on: TODAY) = as_tenant { OrgLeaver.due_to_be_forgotten(@tenant.reload, on:) }
 
   context "with the default seven years" do
     should "list a leaver once seven years have passed since they left, and nobody else" do
@@ -33,7 +33,7 @@ class OrgGraph::Projections::LeaversTest < ActiveSupport::TestCase
       leave(@linus, "2026-06-02")
 
       assert_equal [ @ada.id, @grace.id ], due
-      assert_equal 2, as_tenant { OrgLeaver.due_to_be_forgotten(@tenant, on: TODAY).count }
+      assert_equal 2, due.size
     end
 
     should "not list someone who returned" do

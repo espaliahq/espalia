@@ -15,16 +15,17 @@ class OrgLeaver < ApplicationRecord
   # Optional, so a projection never fails on a row it doesn't own.
   belongs_to :person, optional: true
 
-  # The leavers whose retention period has ended, longest gone first. None
+  # The ids of the leavers whose retention period has ended, longest gone
+  # first. Ids only, so nothing that lists them can show who they are. Empty
   # while the tenant keeps leavers for ever.
   #
   # @param tenant [Tenant]
   # @param on [Date]
-  # @return [ActiveRecord::Relation<OrgLeaver>]
+  # @return [Array<String>] person ids
   def self.due_to_be_forgotten(tenant, on: Date.current)
     cutoff = tenant.org_graph_config.forget_left_on_or_before(on)
-    return none unless cutoff
+    return [] unless cutoff
 
-    where(tenant:, left_on: ..cutoff).order(:left_on, :person_id)
+    where(tenant:, left_on: ..cutoff).order(:left_on, :person_id).pluck(:person_id)
   end
 end

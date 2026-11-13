@@ -538,8 +538,8 @@ result for each kind of id separately.
   - Only a tenant admin may change it, through `Operations::Tenants::UpdateRetentionPeriod`.
     An Org Graph editor may not. How long to keep a leaver is the organisation's
     data-protection decision, not a change to its structure.
-  - `OrgLeaver.due_to_be_forgotten(tenant)` lists the leavers whose period has ended, by
-    person id. The leaving date is the latest `PersonLeft`'s, so a corrected date counts.
+  - `OrgLeaver.due_to_be_forgotten(tenant)` returns the person ids of the leavers whose
+    period has ended, and nothing else. The leaving date is the latest `PersonLeft`'s, so a corrected date counts.
     For a person the HRIS stopped returning, it is the day the sync noticed. Someone who
     returns drops off the list. A leaver whose rehire has not started yet stays on it, since
     the sync writes nothing until they start, so 8.2 checks the HRIS before it erases anyone.
