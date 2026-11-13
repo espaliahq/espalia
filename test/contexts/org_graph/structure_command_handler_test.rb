@@ -349,6 +349,64 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep the fields an HRIS reads a fact from in the same event as its provider" do
+      as_tenant do
+        @handler.set_fact_provider(:cost_centre, "hibob", fields: { cost_centre: " work.customColumns.column_1 " },
+                                                          effective_on: @today)
+      end
+
+      assert_equal({ "cost_centre" => "work.customColumns.column_1" }, structure_events.last.data[:fields])
+    end
+
+    should "keep the fields when the same provider is restated, and write when only they change" do
+      as_tenant do
+        @handler.set_fact_provider("site", "hibob", fields: { country: "address.country" }, effective_on: @today)
+
+        assert_no_difference -> { structure_events.size } do
+          @handler.set_fact_provider("site", "hibob", effective_on: @today + 1)
+        end
+
+        @handler.set_fact_provider("site", "hibob", fields: { country: "work.customColumns.column_2" }, effective_on: @today + 1)
+        assert_equal({ "country" => "work.customColumns.column_2" }, structure_events.last.data[:fields])
+
+        @handler.set_fact_provider("site", "hibob", fields: {}, effective_on: @today + 2)
+        assert_equal({}, structure_events.last.data[:fields])
+      end
+    end
+
+    should "clear the fields when the fact moves to another provider" do
+      as_tenant do
+        @handler.set_fact_provider("site", "hibob", fields: { country: "address.country" }, effective_on: @today)
+        @handler.set_fact_provider("site", "espalia", effective_on: @today + 1)
+      end
+
+      assert_equal({}, structure_events.last.data[:fields])
+    end
+
+    should "read a setting from before fields as having none" do
+      as_tenant do
+        Rails.configuration.event_store.publish(
+          OrgGraph::Events::FactProviderSet.new(data: { fact: "site", provider: "hibob", previous_provider: "espalia",
+                                                        effective_on: "2026-01-01", set_by_id: nil },
+                                                metadata: { tenant_id: @tenant.id }),
+          stream_name: EventStreamNaming.org_structure_stream(tenant: @tenant)
+        )
+
+        assert_no_difference -> { structure_events.size } do
+          @handler.set_fact_provider("site", "hibob", fields: {}, effective_on: @today)
+        end
+      end
+    end
+
+    should "refuse a field for Espalia, for a part no field can supply, or with no path" do
+      as_tenant do
+        assert_raises(ArgumentError) { @handler.set_fact_provider("cost_centre", "espalia", fields: { cost_centre: "x" }, effective_on: @today) }
+        assert_raises(ArgumentError) { @handler.set_fact_provider("site", "hibob", fields: { site: "work.site" }, effective_on: @today) }
+        assert_raises(ArgumentError) { @handler.set_fact_provider("title", "hibob", fields: { title: "work.title" }, effective_on: @today) }
+        assert_raises(ArgumentError) { @handler.set_fact_provider("cost_centre", "hibob", fields: { cost_centre: " " }, effective_on: @today) }
+      end
+    end
+
     should "refuse an unknown fact or provider" do
       as_tenant do
         assert_raises(ArgumentError) { @handler.set_fact_provider("salary", "hibob", effective_on: @today) }

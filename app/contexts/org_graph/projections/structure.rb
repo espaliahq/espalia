@@ -112,7 +112,7 @@ class OrgGraph::Projections::Structure
 
   def handle_fact_provider_set(data)
     OrgFactProvider.find_or_initialize_by(fact: data[:fact])
-                   .update!(provider: data[:provider], effective_on: data[:effective_on])
+                   .update!(provider: data[:provider], effective_on: data[:effective_on], fields: data[:fields] || {})
   end
 
   def handle_unit_owner_added(data)

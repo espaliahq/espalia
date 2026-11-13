@@ -23,6 +23,9 @@ class OrgGraph::StructureAggregate
   UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
   # The kinds of person fact a provider supplies, one per family of person event.
   FACTS = %w[employment_status title level manager cost_centre site employment].freeze
+  # The parts of a fact an HRIS can be told to read from a field of the tenant's
+  # choosing. The rest come from the fields each adapter reads by default.
+  MAPPABLE_FIELDS = { "cost_centre" => %w[cost_centre], "site" => %w[country] }.freeze
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :owner_ids, keyword_init: true)
 
@@ -31,6 +34,7 @@ class OrgGraph::StructureAggregate
     @units = {}
     @level_providers = {}
     @fact_providers = {}
+    @fact_fields = {}
     @successions = {}
   end
 
@@ -119,25 +123,34 @@ class OrgGraph::StructureAggregate
     }))
   end
 
-  # Sets who supplies a kind of person fact. An unchanged provider writes nothing.
+  # Sets who supplies a kind of person fact and, for an HRIS, the fields it
+  # reads the fact from. A field names its provider in the same event, so no
+  # fact Espalia holds has one. Moving a fact to another provider clears its
+  # fields; restating the same provider without `fields:` keeps them. An
+  # unchanged setting writes nothing.
   #
   # @param fact [String, Symbol] one of {FACTS}
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String]
+  # @param fields [Hash{String => String}, nil] the HRIS field path for each
+  #   part of the fact named in {MAPPABLE_FIELDS}; nil keeps the current ones
   # @param set_by_id [String, nil] person_id of the actor
-  # @raise [ArgumentError] if the fact or the provider is unknown
-  def set_fact_provider(fact, provider, effective_on:, set_by_id: nil)
+  # @raise [ArgumentError] if the fact, the provider or a field is unknown, or
+  #   a field is named for Espalia
+  def set_fact_provider(fact, provider, effective_on:, fields: nil, set_by_id: nil)
     fact = fact.to_s
     raise ArgumentError, "Unknown fact: #{fact}" unless FACTS.include?(fact)
 
     provider = require_provider(provider)
     previous = @fact_providers.fetch(fact, ESPALIA)
-    return if provider == previous
+    fields = fields.nil? && provider == previous ? @fact_fields.fetch(fact, {}) : require_fields(fact, provider, fields)
+    return if provider == previous && fields == @fact_fields.fetch(fact, {})
 
     apply(OrgGraph::Events::FactProviderSet.new(data: {
       fact: fact,
       provider: provider,
       previous_provider: previous,
+      fields: fields,
       effective_on: iso_date(effective_on),
       set_by_id: set_by_id
     }))
@@ -364,6 +377,7 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::FactProviderSet do |event|
     @fact_providers[event.data[:fact]] = event.data[:provider]
+    @fact_fields[event.data[:fact]] = (event.data[:fields] || {}).transform_keys(&:to_s)
   end
 
   on OrgGraph::Events::UnitCreated do |event|
@@ -545,6 +559,20 @@ class OrgGraph::StructureAggregate
     raise ArgumentError, "Unknown provider: #{provider}" unless PROVIDERS.include?(provider)
 
     provider
+  end
+
+  # @return [Hash{String => String}]
+  def require_fields(fact, provider, fields)
+    fields = (fields || {}).to_h { |part, path| [ part.to_s, path.to_s.strip ] }
+    return fields if fields.empty?
+
+    raise ArgumentError, "A field needs an HRIS provider, not #{ESPALIA}" if provider == ESPALIA
+
+    unknown = fields.keys - MAPPABLE_FIELDS.fetch(fact, [])
+    raise ArgumentError, "No field can be chosen for #{fact} #{unknown.join(', ')}" if unknown.any?
+    raise ArgumentError, "A field needs a path" if fields.value?("")
+
+    fields
   end
 
   def iso_date(value)
