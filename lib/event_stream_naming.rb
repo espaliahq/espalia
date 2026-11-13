@@ -58,6 +58,17 @@ module EventStreamNaming
     "#{tenant_prefix(tenant)}/CalibrationSession-#{session_id}"
   end
 
+  # Returns the stream name for an Org Graph person: one stream per person,
+  # holding the operational facts the Org Graph knows about them.
+  #
+  # @param person_id [String] the person's UUID
+  # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
+  # @return [String] the tenant-namespaced stream name
+  # @raise [ArgumentError] if no tenant context is available
+  def self.person_stream(person_id, tenant: ActsAsTenant.current_tenant)
+    "#{tenant_prefix(tenant)}/Person-#{person_id}"
+  end
+
   # Extracts the tenant ID from a stream name.
   #
   # @param stream_name [String] a tenant-namespaced stream name
