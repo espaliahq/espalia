@@ -33,16 +33,22 @@ module OrgGraph::Authorization
   end
 
   def authorize_unit!(unit_id)
+    return if system?
+
     unit = unit_for(unit_id)
     authorize!(:edit_unit?, unit) { "#{only_owners_of(unit)} can change #{unit_name(unit)}" }
   end
 
   def authorize_new_unit!(parent_id)
+    return if system?
+
     parent = parent_id && unit_for(parent_id)
     authorize!(:create_unit?, parent) { cannot_place_beneath(parent_id, parent) }
   end
 
   def authorize_move_unit!(unit_id, parent_id)
+    return if system?
+
     unit = unit_for(unit_id)
     parent = parent_id && unit_for(parent_id)
     authorize!(:move_unit?, unit, parent) do
@@ -53,6 +59,8 @@ module OrgGraph::Authorization
   end
 
   def authorize_succession!(unit_ids)
+    return if system?
+
     units = unit_ids.flatten.compact.map { |unit_id| unit_for(unit_id) }
     authorize!(:record_succession?, units) do
       refused = units.find { |unit| !policy.edit_unit?(unit) }
@@ -61,6 +69,8 @@ module OrgGraph::Authorization
   end
 
   def authorize_membership!(person_id, unit_id)
+    return if system?
+
     member = Person.find_by(id: person_id)
     unit = unit_for(unit_id)
     authorize!(:edit_membership?, member, unit) do
@@ -69,6 +79,8 @@ module OrgGraph::Authorization
   end
 
   def authorize_move_membership!(person_id, from_unit_id, to_unit_id)
+    return if system?
+
     member = Person.find_by(id: person_id)
     from = unit_for(from_unit_id)
     to = unit_for(to_unit_id)
