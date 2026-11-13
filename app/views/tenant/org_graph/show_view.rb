@@ -27,37 +27,36 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
       active_section: :org_graph,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      render Components::Kit::SectionHeading.new(
-        "Org Graph",
-        subtitle: "Units and who is in each, as the Org Graph knows them today. Read-only for now."
-      )
-
-      if @overview.any_units?
-        div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
-          render Views::Tenant::OrgGraph::UnitTree.new(overview: @overview, tray_id: Views::Tenant::OrgGraph::Tray::ID)
-          div(class: "flex-1 min-w-0 space-y-6") do
-            render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview)
-            tray
-          end
-          render @sidebar if @sidebar
-        end
-      else
-        div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
-          div(class: "flex-1 min-w-0 space-y-6") do
-            render Components::Kit::EmptyState.new(title: "No units yet") do
-              "Units appear here once the Org Graph holds the organisation's structure."
-            end
-            tray
-          end
-          render @sidebar if @sidebar
-        end
-      end
-
+      div(class: ("lg:pr-[30rem]" if @drawer)) { page_content }
       render @drawer if @drawer
     end
   end
 
   private
+
+  # A drawer sits over the right of the page from `lg` up, so the page
+  # makes room for it rather than hiding the cards beneath.
+  def page_content
+    render Components::Kit::SectionHeading.new(
+      "Org Graph",
+      subtitle: "Units and who is in each, as the Org Graph knows them today. Open a unit to change it."
+    )
+
+    div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
+      render Views::Tenant::OrgGraph::UnitTree.new(overview: @overview, tray_id: Views::Tenant::OrgGraph::Tray::ID) if @overview.any_units?
+      div(class: "flex-1 min-w-0 space-y-6") do
+        if @overview.any_units?
+          render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview)
+        else
+          render Components::Kit::EmptyState.new(title: "No units yet") do
+            "Units appear here once the Org Graph holds the organisation's structure."
+          end
+        end
+        tray
+      end
+      render @sidebar if @sidebar
+    end
+  end
 
   def tray = render(Views::Tenant::OrgGraph::Tray.new(people: @overview.unplaced))
 end

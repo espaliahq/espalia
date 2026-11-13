@@ -24,10 +24,17 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
           render Components::Kit::Badge.new("From #{provider_label(@unit)}, read-only", leading_icon: :lock)
         end
         p(class: "text-sm text-muted") { unit_summary }
+        render Components::Kit::Button.new(variant: :outline, size: :sm, href: edit_tenant_org_unit_path(@unit),
+                                           class: "sm:ml-auto") do
+          icon(:pencil, class: "size-4")
+          plain "Edit unit"
+        end
       end
 
-      div(class: "mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4") do
-        @overview.cards.each { |card_unit| unit_card(card_unit) }
+      div(class: "@container mt-4") do
+        div(class: "grid grid-cols-1 @2xl:grid-cols-2 gap-4") do
+          @overview.cards.each { |card_unit| unit_card(card_unit) }
+        end
       end
     end
   end

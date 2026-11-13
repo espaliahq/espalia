@@ -101,6 +101,14 @@ Rails.application.routes.draw do
     # Org Graph screens are finished.
     resource :org_graph, only: :show, controller: "org_graphs"
 
+    # The unit drawer (#124): `edit` opens it over the Units view, and each
+    # change posts to its own small resource.
+    resources :org_units, only: [ :edit, :update ], path: "org_graph/units" do
+      get :candidates, on: :member
+      resources :owners, only: [ :create, :destroy ], controller: "org_unit_owners"
+      resources :members, only: [ :create, :update, :destroy ], controller: "org_unit_members"
+    end
+
     # Feedback export for monthly reporting (#458): `new` is the picker,
     # `index.csv` the download.
     resources :feedback_exports, only: [ :index, :new ]
