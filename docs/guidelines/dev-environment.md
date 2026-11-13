@@ -29,12 +29,12 @@ from the Claude process, not from `~/.bashrc`, and `/root/.local/bin` is already
 the image's Ruby and chromedriver. The script symlinks Ruby, Bundler, the gems' executables and
 the chromedriver there.
 
-**The environment provides three things.** Network access to the hosts the script downloads
+**The environment provides two things.** Network access to the hosts the script downloads
 from: `cache.ruby-lang.org` (Ruby), `storage.googleapis.com` (chromedriver), `rubygems.org`
 (gems), and `archive.ubuntu.com` and `security.ubuntu.com` (any missing system package). `LANG=C.UTF-8`, without which
-Ruby reads files as US-ASCII. `ESPALIA_MASTER_KEY` (or the older `GROWTHOS_MASTER_KEY`) is optional: `db:prepare` seeds the Null Island demo tenant with no
-secrets at all (synthetic people on @nullisland.example). With the key set, the credentials
-file's other entries decrypt as usual; the seed itself no longer reads it.
+Ruby reads files as US-ASCII. No secrets: the repo has no credentials file, so there is no
+master key to provide, and `db:prepare` seeds the Null Island demo tenant from synthetic
+people on @nullisland.example.
 
 **A cloud session's Chromium never settles `navigator.clipboard.writeText` without a user
 gesture**, so a system test that copies must click for real — see
@@ -74,7 +74,7 @@ immune. When you change a custom cop in a nested worktree, lint with
 
 **In the devcontainer, hundreds of `Selenium::WebDriver::Error::WebDriverError: tab crashed` errors can mean the remote Selenium Grid's Chromium nodes ran out of memory — confirm that before treating it as infrastructure.** This applies to the devcontainer path, where `SELENIUM_HOST=selenium-hub` sends tests to the four `selenium-node-*` containers (`.devcontainer/compose.yaml`, 1 GB shm each); cloud sessions run a local Chromium instead (see above) and don't share this failure mode. Those containers share the OrbStack VM with every other session's containers, and when the VM is near its limit Chromium's renderers are killed mid-run: every later test then errors in `sign_in_as` or the first `fill_in`, and the summary reads like `720 runs, 280 assertions, 0 failures, 685 errors`. Treat it as memory pressure only with evidence: `free -h` shows the VM near its limit (~13 of 15 GB used, swap full, during the 5 Nov 2026 runs), the errors start at a sign-in rather than at your change's screens, and a re-run of `bin/rails test:system` once memory recovers is clean. A Grid status check (`curl -s http://selenium-hub:4444/status`: `ready: true`, four nodes `UP`) tells you the nodes are back, not why a renderer died. Anything that still fails on the re-run is a real failure.
 
-## A checkout without `config/master.key`
+## Secrets in development
 
 **The seeded dev admin is `admin@example.com` / `password123`** — created by
 `SeedAdmin` with no credentials file involved. `SEED_ADMIN_EMAIL` /
@@ -83,8 +83,8 @@ production first deploy bootstraps its admin; `bin/rails admin:create
 EMAIL=… PASSWORD=…` does it after the fact).
 
 Development derives its ActiveRecord encryption keys from the local
-`secret_key_base` (`tmp/local_secret.txt`) when the credentials file can't be
-decrypted (`config/environments/development.rb`). Two consequences:
+`secret_key_base` (`tmp/local_secret.txt`), since the repo has no credentials
+file to supply them (`config/environments/development.rb`). Two consequences:
 
 - `bin/setup` and the app work with no secrets at all — nothing to fetch
   before a first run.
@@ -94,8 +94,7 @@ decrypted (`config/environments/development.rb`). Two consequences:
   `ActiveRecord::Encryption::Errors::Decryption` on read. Restore the old
   `tmp/local_secret.txt` if you have it — that keeps everything readable.
   Otherwise `bin/rails db:reset` re-seeds, losing whatever was created after
-  the last seed. A checkout **with** `master.key` is immune: its keys come
-  from the credentials file.
+  the last seed.
 
 ## Stopping `bin/dev` or a test run from a script
 

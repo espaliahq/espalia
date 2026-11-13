@@ -110,14 +110,7 @@ step "Tailwind CSS and the test database"
 bin/rails tailwindcss:build >/dev/null
 RAILS_ENV=test bin/rails db:create >/dev/null
 
-# config/master.key is gitignored and optional: the seed no longer needs it (the dev admin
-# comes from SeedAdmin, and development derives its own encryption keys). With the key set,
-# the seed also finds the HiBob credentials and runs a live HRIS sync (names whimsified,
-# emails real); without it, that sync is skipped.
 step "Development database"
-if [ -n "${ESPALIA_MASTER_KEY:-${GROWTHOS_MASTER_KEY:-}}" ]; then
-  (umask 077 && printf '%s' "${ESPALIA_MASTER_KEY:-$GROWTHOS_MASTER_KEY}" > config/master.key)
-fi
 bin/rails db:prepare >/dev/null
 
 step "Headless Chromium on localhost:9222 for the chrome-devtools MCP"

@@ -123,7 +123,7 @@ app with `bin/rails server -p 6600`. What `bin/cloud-setup` installs, and why, i
 
 The seeded dev admin is **`admin@example.com` / `password123`** (created by
 `SeedAdmin`, no credentials file involved; see
-[dev-environment.md](dev-environment.md#a-checkout-without-configmasterkey)).
+[dev-environment.md](dev-environment.md#secrets-in-development)).
 Fill the Devise form (`Email`, `Password`) and submit. The seeded admin is a
 global admin in the Null Island Systems demo tenant, so it can reach every
 surface; `theo@` and `marisol@nullisland.example` (same password) are member
