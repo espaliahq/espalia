@@ -244,14 +244,66 @@ The HiBob adapter is most of the way there, and the gaps are small.
   field per tenant is already supported, for the level. The requested set becomes the
   fields the tenant's mapping names.
 - The level field is set by pasting its raw id. The picker replaces that.
-- It asks for both the stored value and the display text, and keeps only the text. It
-  needs to keep the value's id beside it.
-
-One thing to confirm per adapter before relying on it: that the stored value of a list
-field is a stable id, and stays the same when the label changes.
+- It asks for both the stored value and the display text, and maps only the text. The
+  id survives only in the raw payload. It needs to keep the value's id beside the text.
 
 Open question: a unit whose people sit under two different units at the level above.
 The likely answer is to list it for someone to resolve, as a disagreement is.
+
+#### Are HiBob's list values stable ids?
+
+Yes, by HiBob's documentation, for list fields and for department in particular. Two
+links in the chain are inferred, and one sandbox read would confirm them. Each adapter
+needs the same check before a rename can be trusted to it.
+
+What the documentation confirms:
+
+- **A list field stores the item's id, not its label.** [Fields and lists
+  metadata](https://apidocs.hibob.com/docs/fields-metadata) says a list field holds "the
+  list item's string ID rather than its value", and "List items - store the backend ID".
+  The id is text for HiBob's own lists and a number for items a company added.
+- **Department is such a field.** The same page lists `work.department` as type `list`,
+  with `listId` `department`. The [read
+  contract](https://apidocs.hibob.com/docs/people-read-api-contract) shows its machine
+  value as a number: `"/work/department": { "value": "209192163" }`.
+- **A rename changes the label and keeps the id.** The fields page warns that an id
+  which looks like a label "may have been renamed, and will have a different display
+  value". Its example item keeps `"id": "Animals"` while `value` and `name` become
+  `"Pets"`. [Updating a list
+  item](https://apidocs.hibob.com/reference/put_company-named-lists-listname-itemid)
+  addresses the item by its id, and "Providing a name will rename the list item value."
+- **The adapter already receives both.** It sends `humanReadable: "APPEND"`, which per
+  [people search](https://apidocs.hibob.com/reference/post_people-search) adds a
+  `humanReadable` node beside the machine values. `ResponseMapper` reads the label from
+  that node. The raw employee, id included, is already kept in `hris_raw_data`.
+
+What is still inferred:
+
+- **That a person's stored value survives the rename.** HiBob documents that the item
+  keeps its id. It never says outright that an employee pointing at the item still
+  returns that id afterwards. It follows from "store the backend ID", but nobody has seen
+  it.
+- **That a rename in HiBob's settings screen does what the API does.** The documentation
+  describes the API. An admin is more likely to rename in the screen.
+- **That the department example is not a special case.** The `Animals` example is one of
+  HiBob's own lists, with a text id. Department items are a company's own, with numeric
+  ids. Nothing suggests they behave differently.
+
+One thing the documentation makes plain: archiving a department and adding a new one is
+not a rename. The new item has a new id, so the sync sees one unit emptying and another
+appearing, exactly as it would for free text. Someone states the succession.
+
+The read that would settle the rest, against a sandbox with a disposable department:
+
+1. `POST /v1/people/search` with `fields: ["root.id", "work.department"]`,
+   `humanReadable: "APPEND"` and a filter on one test person. Note `work.department` and
+   `humanReadable.work.department`.
+2. Rename that department in HiBob's settings screen, not through the API.
+3. Repeat the search, and `GET /v1/company/named-lists/department`.
+
+The rename is confirmed stable if `work.department` is unchanged, the human-readable
+label shows the new name, and the named list shows the same item id with the new
+`value`.
 
 ## Forgetting a person (R7)
 

@@ -228,9 +228,11 @@ them.
 
 ## Open decisions
 
-- **Stable ids (6.0).** The design assumes HiBob's stored value for a list field stays
-  the same when its label changes. Nobody has confirmed it. If it does not, 6.5 is
-  dropped and every rename in the HRIS becomes a stated succession.
+- **Stable ids (6.0).** Settled by HiBob's documentation: a list field, department
+  included, stores the item's id, and a rename keeps the id. 6.5 stands. One sandbox read
+  would confirm the two links still inferred, that a person's stored value and a rename
+  in HiBob's screen behave as documented. The design's [stable-ids
+  section](org-graph-design.md#are-hibobs-list-values-stable-ids) names the read.
 - **Split parents (6.7).** A unit whose people sit under two different units at the
   level above has no single parent to read. The likely answer is to list it for someone
   to resolve.
