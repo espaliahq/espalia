@@ -97,8 +97,9 @@ class Hris::Hibob::ResponseMapper
   # @param path [Array<String>]
   # @return [ListValue, nil]
   def list_value(path)
-    id = employee.dig(*path).presence || employee.dig("/#{path.join('/')}", "value").presence
-    return nil if id.nil?
+    flat = employee["/#{path.join('/')}"]
+    id = employee.dig(*path).presence || (flat.is_a?(Hash) ? flat["value"] : flat).presence
+    return nil if id.nil? || id.is_a?(Hash)
 
     ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
   end

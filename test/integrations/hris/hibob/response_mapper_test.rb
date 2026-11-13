@@ -151,6 +151,12 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "88", label: nil), values[:level]
     end
 
+    should "read a flat value given as a bare id" do
+      employee = { "id" => "1", "/work/department" => "209192163" }
+
+      assert_equal "209192163", Hris::Hibob::ResponseMapper.new(employee).list_values[:department].id
+    end
+
     should "keep a legacy item whose id is its own name" do
       employee = { "id" => "1", "work" => { "department" => "Engineering" }, "humanReadable" => { "work" => { "department" => "Engineering" } } }
 
