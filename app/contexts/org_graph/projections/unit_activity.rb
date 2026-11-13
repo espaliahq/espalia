@@ -15,10 +15,10 @@ class OrgGraph::Projections::UnitActivity
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 2
+  CODE_VERSION = 3
 
   ACTOR_KEYS = %i[created_by_id renamed_by_id moved_by_id retired_by_id stated_by_id added_by_id removed_by_id
-                  set_by_id ended_by_id].freeze
+                  set_by_id ended_by_id handed_over_by_id].freeze
   private_constant :ACTOR_KEYS
 
   # @return [Array<Class>]
@@ -27,7 +27,7 @@ class OrgGraph::Projections::UnitActivity
       OrgGraph::Events::UnitCreated, OrgGraph::Events::UnitRenamed, OrgGraph::Events::UnitMoved,
       OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded, OrgGraph::Events::UnitOwnerAdded,
       OrgGraph::Events::UnitOwnerRemoved, OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded,
-      OrgGraph::Events::MembershipMoved
+      OrgGraph::Events::MembershipMoved, OrgGraph::Events::UnitHandedOver
     ]
   end
 
@@ -61,6 +61,9 @@ class OrgGraph::Projections::UnitActivity
     when OrgGraph::Events::UnitRetired
       [ [ data[:unit_id], { after: data.slice(:succession_id, :successor_ids) } ] ]
     when OrgGraph::Events::UnitSucceeded then succession_entries(data)
+    when OrgGraph::Events::UnitHandedOver
+      [ [ data[:unit_id], { subject: "provider", before: source(data[:previous_provider], data[:previous_external_ref]),
+                            after: source(data[:provider], data[:external_ref]) } ] ]
     when OrgGraph::Events::UnitOwnerAdded
       [ [ data[:unit_id], owner(data, after: { owner: true }) ] ]
     when OrgGraph::Events::UnitOwnerRemoved
@@ -79,6 +82,10 @@ class OrgGraph::Projections::UnitActivity
     after = data.slice(:predecessor_ids, :successor_ids)
     (data[:predecessor_ids] + data[:successor_ids]).uniq.map { |unit_id| [ unit_id, { after: after } ] }
   end
+
+  # A unit's reference is "<field path>/<value>", and the value stays out of
+  # the feed: a field can name people.
+  def source(provider, external_ref) = { provider:, field: external_ref&.split("/", 2)&.first }
 
   def owner(data, **values)
     { subject: "owner:#{data[:person_id]}", person_id: data[:person_id], **values }

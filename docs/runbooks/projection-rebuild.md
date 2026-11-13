@@ -69,6 +69,10 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `org_graph/unit_activity` v3 (a handover in the unit's feed, [#122](https://github.com/espaliahq/espalia/issues/122))
+
+Path A: `REBUILD_ON_DEPLOY=org_graph/unit_activity`, removed once the deploy is live. The rebuild adds one entry for each `UnitHandedOver` already in the store, under its handover's cause, and changes no other row: entry ids derive from the event and the unit, so they stay put. A tenant that has never handed a level over reads exactly as before. The seeded dev database holds no Org Graph events, so there was nothing to time; the projection reads only Org Graph streams, so the window scales with each tenant's Org Graph history, not its assessments. While it runs, unit feeds read as empty.
+
 #### Recorded: `person_development/current_assessment` v8 (per-role alignment, ADR-22)
 
 Path A: `REBUILD_ON_DEPLOY=person_development/current_assessment`, removed from the shared env group once the deploy is live. What the rebuild changes:

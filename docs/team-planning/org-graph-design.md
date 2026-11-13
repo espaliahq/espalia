@@ -600,7 +600,9 @@ screen (6.9) hosts them.
   gives each matched unit its value (`UnitHandedOver`), writes each succession and
   retirement, hands the HRIS the memberships of the people it reads, and mirrors the
   field once. A failure anywhere writes nothing. A new unit has no parent until a sync
-  reads one.
+  reads one. Each unit's feed shows the handover as one entry under that cause, naming
+  the provider and the field it now comes from, never the value; handing back reads the
+  same way.
 - **A fingerprint refuses a stale comparison.** It covers the field's values, the units,
   the memberships, the matches and the resolutions. The switch is refused if any of them
   changed since the admin read it.

@@ -92,7 +92,8 @@ class OrgUnitActivity::Group
       ("moved the unit" if types["UnitMoved"]),
       owners_phrase("added", types["UnitOwnerAdded"]),
       owners_phrase("removed", types["UnitOwnerRemoved"]),
-      ("retired the unit" if types["UnitRetired"])
+      ("retired the unit" if types["UnitRetired"]),
+      handed_over_phrase
     ].compact
   end
 
@@ -101,6 +102,15 @@ class OrgUnitActivity::Group
     return if renames.empty?
 
     "renamed it from #{renames.last.before['name']} to #{renames.first.after['name']}"
+  end
+
+  def handed_over_phrase
+    handover = parts.find { |part| part.event_type == "UnitHandedOver" } or return
+    provider, field = handover.after.values_at("provider", "field")
+    label = HrisConfig.provider_label(provider)
+    return "handed it back to #{label}" if provider == OrgGraph::StructureAggregate::ESPALIA
+
+    "handed it to #{label}, read from #{field}"
   end
 
   def owners_phrase(verb, count)
