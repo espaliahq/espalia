@@ -252,10 +252,11 @@ The likely answer is to list it for someone to resolve, as a disagreement is.
 
 #### Are HiBob's list values stable ids?
 
-Yes, by HiBob's documentation, for list fields and for department in particular. Three
-links in the chain are inferred, and one sandbox read would confirm them
-([#61](https://github.com/espaliahq/espalia/issues/61)). Each adapter needs the same
-check before a rename can be trusted to it.
+Yes, for items with numeric ids, which is what a company's own list items get. HiBob's
+documentation says so, and a read-only check against one live deployment confirms the
+parts it could see. One case is still open: older items whose id is their original
+name. The sandbox check in [#61](https://github.com/espaliahq/espalia/issues/61) would
+settle it. Each adapter needs the same check before a rename can be trusted to it.
 
 What the documentation confirms:
 
@@ -278,33 +279,48 @@ What the documentation confirms:
   `humanReadable` node beside the machine values. `ResponseMapper` reads the label from
   that node. The raw employee, id included, is already kept in `hris_raw_data`.
 
-What is still inferred:
+What one live deployment confirms, read-only:
 
-- **That a person's stored value survives the rename.** HiBob documents that the item
-  keeps its id. It never says outright that an employee pointing at the item still
-  returns that id afterwards. It follows from "store the backend ID", but nobody has seen
-  it.
-- **That a rename in HiBob's settings screen does what the API does.** The documentation
-  describes the API. An admin is more likely to rename in the screen.
-- **That the department example is not a special case.** The `Animals` example is one of
-  HiBob's own lists, with a text id. Department items are a company's own, with numeric
-  ids. Nothing suggests they behave differently.
+- **A person's stored department is the list item's id.** Every stored `work.department`
+  matched an item id in the department named list, and that item's name matched the
+  person's human-readable label.
+- **A picker can tell a list field from free text.** The field's metadata has type
+  `list`, and `typeData.listId` names the list to read.
+- **A list item says when it is retired.** Each item has `id`, `name`, `value`,
+  `archived` and `children`. `archived` is the signal to retire a mirrored unit.
+  `children` means a list can be a tree; the department list seen was flat.
 
-One thing the documentation makes plain: archiving a department and adding a new one is
-not a rename. The new item has a new id, so the sync sees one unit emptying and another
-appearing, exactly as it would for free text. Someone states the succession.
+What is still open:
 
-The read that would settle the rest, against a sandbox with a disposable department:
+- **Item ids are mixed.** Newer items have a numeric id that differs from their name.
+  Older items use their original name as their id, so id, name and value are the same
+  text. HiBob's `Animals` example suggests such an item keeps the old text as its id
+  through a rename, but nothing read-only can show it.
+- **A rename in HiBob's settings screen is assumed to do what the API does.** The
+  documentation describes the API. An admin is more likely to rename in the screen.
+
+Neither changes the design. A unit's external reference is the item's id, whichever
+kind it is. If a legacy item's id did change on a rename, the sync would see one unit
+emptying and another appearing, which the design already handles: someone states the
+succession. Archiving a department and adding a new one looks the same, since the new
+item has a new id.
+
+For whoever builds 6.5: the named-list response carries the same entries under both
+`items` and `values`, and each person also has a flat `/work/department` key holding
+`{"value": <stored id>}`, with no human-readable text.
+
+The check that would settle the rest, against a sandbox with two disposable departments,
+one with a numeric id and one legacy item whose id is its name:
 
 1. `POST /v1/people/search` with `fields: ["root.id", "work.department"]`,
-   `humanReadable: "APPEND"` and a filter on one test person. Note `work.department` and
-   `humanReadable.work.department`.
-2. Rename that department in HiBob's settings screen, not through the API.
+   `humanReadable: "APPEND"` and a filter on a test person in each department. Note
+   `work.department` and `humanReadable.work.department`.
+2. Rename both departments in HiBob's settings screen, not through the API.
 3. Repeat the search, and `GET /v1/company/named-lists/department`.
 
-The rename is confirmed stable if `work.department` is unchanged, the human-readable
-label shows the new name, and the named list shows the same item id with the new
-`value`.
+A rename is stable if `work.department` is unchanged, the human-readable label shows the
+new name, and the named list shows the same item id with the new `value`. Record the
+result for each kind of id separately.
 
 ## Forgetting a person (R7)
 

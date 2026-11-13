@@ -228,11 +228,14 @@ them.
 
 ## Open decisions
 
-- **Stable ids (6.0).** Settled by HiBob's documentation: a list field, department
-  included, stores the item's id, and a rename keeps the id. 6.5 stands. One sandbox read
-  ([#61](https://github.com/espaliahq/espalia/issues/61)) would confirm the three links
-  still inferred. The design's [stable-ids
-  section](org-graph-design.md#are-hibobs-list-values-stable-ids) lists them and the read.
+- **Stable ids (6.0).** Settled for items with numeric ids: a list field, department
+  included, stores the item's id, and a rename keeps it. HiBob's documentation says so,
+  and a read-only check of one live deployment confirmed the stored value is the id. 6.5
+  stands. Still open: whether an older item whose id is its name keeps that id through a
+  rename. If not, the rename reads as a stated succession, which the design already
+  handles. A sandbox check ([#61](https://github.com/espaliahq/espalia/issues/61)) would
+  settle it. The design's [stable-ids
+  section](org-graph-design.md#are-hibobs-list-values-stable-ids) has the evidence.
 - **Split parents (6.7).** A unit whose people sit under two different units at the
   level above has no single parent to read. The likely answer is to list it for someone
   to resolve.
