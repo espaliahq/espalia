@@ -240,9 +240,9 @@ them.
   handles. A sandbox check ([#61](https://github.com/espaliahq/espalia/issues/61)) would
   settle it. The design's [stable-ids
   section](org-graph-design.md#are-hibobs-list-values-stable-ids) has the evidence.
-- **Split parents (6.7).** A unit whose people sit under two different units at the
-  level above has no single parent to read. The likely answer is to list it for someone
-  to resolve.
+- **Split parents (6.7).** Settled: a unit whose people sit under two different units
+  at the level above keeps its parent and is listed in the sync's result as split. No
+  majority is taken, and a new parent needs two syncs that agree.
 - **Structure editing (5.3, 5.6).** The design leaves a full editing screen for structure
   out of a first version, because a first plan applied whole creates the structure. 5.3
   is small enough to keep. 5.6 can wait.

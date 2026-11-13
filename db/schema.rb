@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_190200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -634,6 +634,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_190000) do
     t.index ["tenant_id"], name: "index_framework_suggestion_comments_on_tenant_id"
   end
 
+  create_table "hris_unit_parent_proposals", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "unit_id", null: false
+    t.uuid "parent_id", null: false
+    t.date "first_seen_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "unit_id"], name: "index_hris_unit_parent_proposals_on_tenant_id_and_unit_id", unique: true
+    t.index ["tenant_id"], name: "index_hris_unit_parent_proposals_on_tenant_id"
+  end
+
   create_table "manager_assessment_delegations", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "delegate_person_id", null: false
@@ -806,6 +817,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_190000) do
     t.datetime "updated_at", null: false
     t.string "provider", default: "espalia", null: false
     t.date "provider_effective_on"
+    t.string "provider_field"
     t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
   end
 
@@ -1085,6 +1097,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_190000) do
   add_foreign_key "framework_suggestion_comments", "people", column: "deleted_by_id", on_delete: :nullify
   add_foreign_key "framework_suggestion_comments", "people", column: "edited_by_id", on_delete: :nullify
   add_foreign_key "framework_suggestion_comments", "tenants"
+  add_foreign_key "hris_unit_parent_proposals", "tenants"
   add_foreign_key "manager_assessment_delegations", "tenants"
   add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"
   add_foreign_key "mcp_pending_approvals", "tenants"
