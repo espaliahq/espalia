@@ -23,6 +23,8 @@ Use this when a code change makes a projection's current read model state incons
 Every replayable projection declares `CODE_VERSION` (integer). The `projection_versions(name PK, version, applied_at)` table records the last version each projection was rebuilt at. Predeploy ([bin/render-predeploy](../../bin/render-predeploy)) runs `events:projections:verify` after migrations — if any projection's `CODE_VERSION` constant exceeds the row in `projection_versions`, predeploy exits non-zero and Render aborts the deploy.
 
 Just before `verify`, `events:projections:stamp_if_no_events` stamps any projection that is behind while none of its handled events exist in the store. A rebuild would replay nothing, so a newly registered projection over new event types needs no deploy step.
+
+**A failed predeploy stops only the service that runs it.** In the shipped `render.yaml` only the web service has a `preDeployCommand`, so the worker goes live on the new commit while web stays on the old one. Each later commit retries and fails the same way until the stamp is fixed. Migrations have run by then, so the old web release must work against the new schema, which an additive migration allows.
 The version is a human-decided signal: bump it when handler logic or `reset!` semantics change in a way that requires reprocessing past events. See [event-sourcing.md](../guidelines/event-sourcing.md) for bump rules.
 
 ## When you need a rebuild
