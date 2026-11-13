@@ -17,6 +17,10 @@ class Hris::Hibob::Client
   MAX_RETRIES = 3
   RETRY_BASE_DELAY = 2
 
+  # A level field stored before #67 is a bare custom-column id. Since then it
+  # is the catalogue id, the field's full path.
+  CUSTOM_COLUMN_PREFIX = "work.customColumns."
+
   BASE_FIELDS = %w[
     root.id root.email root.firstName root.surname root.displayName
     root.isActive
@@ -26,9 +30,9 @@ class Hris::Hibob::Client
 
   # @param service_user_id [String] HiBob service user ID
   # @param api_token [String] HiBob API token
-  # @param level_field_id [String, nil] optional HiBob custom column ID
-  #   holding the level ordinal (e.g. "column_0000000000000"). When set, the
-  #   client requests `work.customColumns.<level_field_id>` on every search.
+  # @param level_field_id [String, nil] the HiBob field holding the level
+  #   ordinal, as its path (`work.customColumns.column_0000000000000`) or as a
+  #   bare custom-column id. When set, every search requests it.
   def initialize(service_user_id:, api_token:, level_field_id: nil)
     @service_user_id = service_user_id
     @api_token = api_token
@@ -40,8 +44,20 @@ class Hris::Hibob::Client
   # @return [Array<String>]
   def default_fields
     fields = BASE_FIELDS.dup
-    fields << "work.customColumns.#{@level_field_id}" if @level_field_id.present?
+    level_field = self.class.field_path(@level_field_id)
+    fields << level_field if level_field
     fields
+  end
+
+  # The field's path as the people API takes it, from a path or a bare
+  # custom-column id.
+  #
+  # @param field_id [String, nil]
+  # @return [String, nil]
+  def self.field_path(field_id)
+    return if field_id.blank?
+
+    field_id.include?(".") ? field_id : "#{CUSTOM_COLUMN_PREFIX}#{field_id}"
   end
 
   # Fetches all employees via POST /people/search with cursor-based pagination.

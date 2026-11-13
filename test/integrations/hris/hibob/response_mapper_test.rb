@@ -74,6 +74,26 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_equal 5, result[:hris_level_ordinal]
     end
 
+    should "read the same level from a field stored as its path" do
+      employee = @fixture["employees"][0]
+
+      result = Hris::Hibob::ResponseMapper.call(employee, level_field_id: "work.customColumns.column_test_id")
+
+      assert_equal 5, result[:hris_level_ordinal]
+    end
+
+    should "read a level field outside the custom columns by its path" do
+      employee = { "id" => "bob-9", "humanReadable" => { "work" => { "level" => "4" } } }
+
+      assert_equal 4, Hris::Hibob::ResponseMapper.call(employee, level_field_id: "work.level")[:hris_level_ordinal]
+    end
+
+    should "read no level when the path runs into a value that is not an object" do
+      employee = { "id" => "bob-9", "humanReadable" => { "work" => { "level" => "4" } } }
+
+      assert_nil Hris::Hibob::ResponseMapper.call(employee, level_field_id: "work.level.ordinal")[:hris_level_ordinal]
+    end
+
     should "skip hris_level_ordinal when level_field_id is nil" do
       employee = @fixture["employees"][0]
       result = Hris::Hibob::ResponseMapper.call(employee)

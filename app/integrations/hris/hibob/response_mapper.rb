@@ -17,14 +17,14 @@ class Hris::Hibob::ResponseMapper
   # Maps a single HiBob employee hash to Person attributes.
   #
   # @param employee [Hash] raw employee data from HiBob API
-  # @param level_field_id [String, nil] HiBob custom column ID for level ordinal
+  # @param level_field_id [String, nil] the level field's path, or a bare custom-column id
   # @return [Hash] attributes compatible with Person.new
   def self.call(employee, level_field_id: nil)
     new(employee, level_field_id: level_field_id).call
   end
 
   # @param employee [Hash] raw employee data from HiBob API
-  # @param level_field_id [String, nil] HiBob custom column ID for level ordinal
+  # @param level_field_id [String, nil] the level field's path, or a bare custom-column id
   def initialize(employee, level_field_id: nil)
     @employee = employee
     @level_field_id = level_field_id
@@ -61,7 +61,7 @@ class Hris::Hibob::ResponseMapper
 
   # Extracts the level ordinal from the HiBob custom column.
   #
-  # Reads from humanReadable.work.customColumns.<level_field_id>, which
+  # Reads the level field's path under humanReadable, which
   # (with humanReadable=APPEND) contains the display value of the list item.
   # me&u's level list uses the ordinal number as the display value.
   #
@@ -69,7 +69,8 @@ class Hris::Hibob::ResponseMapper
   def extract_level_ordinal
     return nil if level_field_id.blank?
 
-    raw = employee.dig("humanReadable", "work", "customColumns", level_field_id)
+    path = Hris::Hibob::Client.field_path(level_field_id).split(".")
+    raw = path.reduce(employee["humanReadable"]) { |node, key| node[key] if node.is_a?(Hash) }
     return nil if raw.blank?
 
     Integer(raw.to_s, exception: false)
