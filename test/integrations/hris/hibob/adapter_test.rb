@@ -1155,6 +1155,8 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
 
         assert_not_includes result[:errors].pluck(:person_id), stray.id
         assert_equal 1, result[:deactivated]
+        assert_equal 3, Rails.configuration.event_store.read.stream(stream_of(stray)).count
+        assert_operator result[:org_graph_events], :>=, 3
         assert_equal [ "inactive", "Analyst", @alice.id ], stray.reload.values_at(:status, :job_title, :manager_id)
       end
 

@@ -424,7 +424,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       recorded = OrgGraph::Projections::PeopleColumns.recorded_person_ids(tenant).to_set
       stale_people.find_each do |person|
-        record_as_left(handler, person) unless recorded.include?(person.id)
+        result[:org_graph_events] += record_as_left(handler, person) unless recorded.include?(person.id)
         result[:deactivated] += 1 if person.reload.status == "inactive"
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
@@ -446,6 +446,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     espalias.compact.each do |key, value|
       handler.public_send(ESPALIA_CHANGES.fetch(key), person.id, value, provider: OrgGraph::StructureAggregate::ESPALIA, effective_on: today)
     end
+    Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(person.id)).count
   end
 
   def first_record_facts(person)
