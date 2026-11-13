@@ -8,6 +8,7 @@ class Tenant::OrgGraphSettingsController < ApplicationController
   def show
     authorize :org_graph, :edit_settings?
     render Views::Tenant::OrgGraph::SettingsView.new(
+      sources: Operations::OrgGraph::Sources.call(context: pundit_user, params: {}),
       editors: Operations::OrgGraph::Editors.call(context: pundit_user, params: {}),
       editor_candidates: editor_candidates,
       user: current_user,

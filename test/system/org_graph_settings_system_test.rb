@@ -42,6 +42,28 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         click_button_with_js_fallback("remove-editor-#{@member.id}", expect_text: "Mo Member may no longer edit the Org Graph.")
         within("#org-graph-editors") { assert_text "None yet." }
       end
+
+      should "count the stale facts and change when a fact goes stale" do
+        ActsAsTenant.with_tenant(@tenant) do
+          OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+            .record_person(@member.id, provider: "espalia", effective_on: Date.current, employment_status: "employed",
+                                       title: "Engineer")
+          OrgFactAge.where(person_id: @member.id).update_all(checked_at: 45.days.ago)
+        end
+
+        visit tenant_org_graph_settings_path
+        within("#org-graph-freshness") { assert_text "No fact is stale." }
+
+        select "30 days", from: "Stale after"
+        click_button_with_js_fallback("org-graph-freshness-save", expect_text: "A fact now counts as stale after 30 days.")
+        within("#org-graph-freshness") do
+          assert_text "1 fact is stale:"
+          assert_text "Title: 1"
+          assert_select "Stale after", selected: "30 days"
+        end
+        assert_no_sideways_overflow
+        screenshot("freshness_#{viewport}")
+      end
     end
   end
 end
