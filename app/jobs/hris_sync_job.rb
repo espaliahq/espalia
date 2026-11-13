@@ -31,7 +31,8 @@ class HrisSyncJob < ApplicationJob
     Rails.logger.info(
       "[HrisSyncJob] Sync complete for tenant #{tenant.id}: " \
       "created=#{result[:created]} updated=#{result[:updated]} " \
-      "deactivated=#{result[:deactivated]} errors=#{result[:errors].size}"
+      "deactivated=#{result[:deactivated]} org_graph_events=#{result[:org_graph_events]} " \
+      "errors=#{result[:errors].size}"
     )
     log_skipped_assignments(tenant, result)
   end
