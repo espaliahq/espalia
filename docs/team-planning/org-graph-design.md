@@ -418,6 +418,34 @@ Graph could no longer say what it knew before. From it:
 was known last Tuesday, even if a backdated correction arrived since. The correction
 shows up as drift.
 
+The projection is `org_graph/history`, and it writes one table, `org_fact_periods`. A row
+names its subject (a person, a unit or a succession, by id), the fact, a key (the unit,
+for a membership; the person, for a unit's owner; empty otherwise), the value and its
+provider. Two windows place it:
+
+- `effective_from` to `effective_to`, the days the value held. The end is exclusive, and
+  open while the value still holds.
+- `learned_at` to `superseded_at`, the time the Org Graph believed the row. An event that
+  changes a period supersedes it at the event's time and adds its replacement. Rows are
+  never edited, so `known_at(instant)` and `in_effect_on(date)` are plain range checks.
+
+The dates follow the events:
+
+- A membership's end, a unit's retirement, an owner's removal and a leaving date are each
+  the last day, so the next period starts the day after.
+- A leaving ends whatever came after it: a later status, or a return dated after it.
+- A move ends one membership and starts the other on the same date.
+- Employment starts on the held start date when there is one. A start date before the
+  latest leaving belongs to an earlier spell and changes nothing.
+- A return restores nothing: a membership ended by leaving stays ended.
+- A change-back on the same date as the change it reverses withdraws that change, as
+  though it never took effect. On a later date it is an ordinary change.
+- `PersonForgotten` changes nothing here. The rows hold ids, and the history stays.
+
+Production already holds events of every type it reads, so the deploy that ships it needs
+`REBUILD_ON_DEPLOY=org_graph/history` to fill it. Without it, predeploy's `verify` stops
+the deploy.
+
 ## Applying a change (R6)
 
 Facts Espalia holds change in two ways. Both issue the same commands.
