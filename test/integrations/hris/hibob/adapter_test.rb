@@ -889,7 +889,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
 
       should "read cost centre and country from the fields the tenant's mapping names" do
-        handler = OrgGraph::StructureCommandHandler.new
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
         handler.set_fact_provider("cost_centre", "hibob", fields: { cost_centre: "work.customColumns.column_cc" },
                                                           effective_on: Date.current)
         handler.set_fact_provider("site", "hibob", fields: { country: "address.country" }, effective_on: Date.current)
@@ -908,7 +908,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
 
       should "request the mapped fields from HiBob" do
-        OrgGraph::StructureCommandHandler.new.set_fact_provider("cost_centre", "hibob",
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("cost_centre", "hibob",
           fields: { cost_centre: "work.customColumns.column_cc" }, effective_on: Date.current)
 
         assert_includes Hris::Hibob::Adapter.new(@tenant).send(:client).default_fields, "work.customColumns.column_cc"
