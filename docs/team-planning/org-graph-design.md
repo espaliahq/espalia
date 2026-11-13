@@ -161,6 +161,9 @@ person who has left, the membership they came from ends instead.
 An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`
 lists the people with no membership of a live unit, for the "in no team" tray.
 
+`OrgGraph::Projections::PeopleColumns` projects `job_title`, `manager_id` and `status` onto
+`people` for a tenant cut over to the Org Graph, and writes nothing for any other tenant.
+
 `OrgGraph::StructureAggregate` holds these rules:
 
 - **A change comes from the unit's own provider.** A command names its provider, which
@@ -268,6 +271,13 @@ The identifier columns stay as they are: mutable, written by the sync, and the o
 a name or an email is stored. The other columns become a projection of the person's
 stream.
 
+In practice that means `job_title`, `manager_id` and `status`, one tenant at a time. A
+tenant is cut over once every person has a stream that starts with `PersonRecorded` and a
+rebuild reproduces every row ([runbook](../runbooks/org-graph-people-cutover.md)). Until
+then the sync writes those columns itself. The other non-identifier columns stay with the
+sync for now: `department` until a level is mirrored from an HRIS field (6.7), and
+`level_id`, `role_id` and `hris_level_ordinal` until E9 moves the framework mapping.
+
 The existing Person Development events (`PersonRoleChanged`, `PersonLevelChanged`,
 `ReportingManagerRecorded`) are about a person's place in a framework and stay. They
 exist only for people mapped to a framework role, which is why they cannot serve as the
@@ -311,12 +321,18 @@ exactly like a mass leaving, and a leaving stays in history. The next sync decid
 afresh. There is no override or per-tenant setting; a story for a manual override can
 follow if a real mass leaving ever needs one.
 
-One gap remains. If the Org Graph write fails for one person, the sync still marks them
-inactive, so Pass 3b still offboards them from open cycles and framework assignments on
+One gap remains. Before a tenant's people columns are cut over (story 1.4), if the Org
+Graph write fails for one person, the sync still marks them inactive, so Pass 3b still offboards them from open cycles and framework assignments on
 time. For a while the two disagree: the person is
 inactive but still employed in the Org Graph. The next sync that misses them writes the
 `PersonLeft`, dated that day, unless that sync is empty, trips the brake or fails the write
 again; then the one after tries.
+
+After cut-over the stream is the only writer of `status`, so Pass 3 does not mark that
+person inactive around it, and nothing retries within the run. A failed absence write
+delays offboarding by one sync and is reported in the result's errors. The next sync
+decides absence afresh and writes the `PersonLeft`, which marks them inactive, and Pass 3b
+offboards them.
 
 A leaver's memberships are to be ended by a
 handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
