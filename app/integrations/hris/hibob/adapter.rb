@@ -18,6 +18,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # conclusion.
   OFFBOARD_REASON = "left_company"
 
+  # HiBob field types whose values come from a named list, each with an id.
+  LIST_TYPES = %w[list multi-list hierarchy-list].freeze
+
   # @return [String]
   def provider_name
     "hibob"
@@ -106,7 +109,67 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     client.search_people(show_inactive: true)
   end
 
+  # Reads HiBob's field metadata and named lists into the catalogue.
+  #
+  # @return [Array<Hris::Field>]
+  # @raise [Hris::Hibob::Errors::Error] when either call fails or answers
+  #   with a body of the wrong shape
+  def fetch_field_catalogue
+    fields = client.get_fields
+    unless fields.is_a?(Array)
+      raise Hris::Hibob::Errors::UnexpectedResponseError, "HiBob fields response is not a list"
+    end
+
+    lists = named_lists_by_id(client.get_named_lists)
+    fields.filter_map { |field| catalogue_field(field, lists) }
+  end
+
   private
+
+  # @param field [Hash] one entry of GET /company/people/fields
+  # @param lists [Hash{String => Array<Hris::Field::Value>}]
+  # @return [Hris::Field, nil] nil for an entry with no path
+  def catalogue_field(field, lists)
+    id = field["jsonPath"].presence || field["id"].presence
+    return if id.nil?
+
+    name = field["name"].presence || id
+    if LIST_TYPES.include?(field["type"])
+      Hris::Field.new(id:, name:, kind: :list, values: lists.fetch(field.dig("typeData", "listId").to_s, []))
+    else
+      Hris::Field.new(id:, name:, kind: :text)
+    end
+  end
+
+  # HiBob documents the named lists as an array of `{ name, items }`. An
+  # object keyed by list name is read too, as no live response has yet
+  # confirmed which shape a tenant's account answers with.
+  #
+  # @param response [Array<Hash>, Hash]
+  # @return [Hash{String => Array<Hris::Field::Value>}]
+  def named_lists_by_id(response)
+    lists = case response
+    when Array then response
+    when Hash then response.map { |key, list| { "name" => key }.merge(list.is_a?(Hash) ? list : {}) }
+    else raise Hris::Hibob::Errors::UnexpectedResponseError, "HiBob named lists response is not a list"
+    end
+
+    lists.to_h { |list| [ list["name"].to_s, list_values(list["items"]) ] }
+  end
+
+  # Flattens a hierarchy list, so a value at any depth can be chosen. An
+  # archived value takes its children with it.
+  #
+  # @param items [Array<Hash>, nil]
+  # @return [Array<Hris::Field::Value>]
+  def list_values(items)
+    Array(items).flat_map do |item|
+      next [] if item["archived"]
+
+      [ Hris::Field::Value.new(id: item["id"].to_s, name: item["name"].presence || item["value"].to_s),
+        *list_values(item["children"]) ]
+    end
+  end
 
   # `config` was read when the sync started; saving it would write back the
   # role mappings as they stood then, reverting any an admin changed while

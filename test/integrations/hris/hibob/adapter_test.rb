@@ -520,6 +520,87 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "#fetch_field_catalogue" do
+    setup do
+      @fields = hibob_fixture("people_fields_response.json")
+      @named_lists = hibob_fixture("named_lists_response.json")
+    end
+
+    should "give each field its path, name and kind" do
+      catalogue = catalogue_adapter.fetch_field_catalogue.index_by(&:id)
+
+      assert_equal "Employee ID", catalogue["root.id"].name
+      assert_predicate catalogue["root.id"], :text?
+      assert_predicate catalogue["work.department"], :list?
+      assert_predicate catalogue["work.customColumns.column_1700000000002"], :text?
+      assert_equal "Squad", catalogue["work.customColumns.column_1700000000001"].name
+    end
+
+    should "read a field that is neither list nor text as text, since its values have no ids" do
+      catalogue = catalogue_adapter.fetch_field_catalogue.index_by(&:id)
+
+      assert_predicate catalogue["work.reportsTo"], :text?
+      assert_empty catalogue["work.reportsTo"].values
+    end
+
+    should "attach each list field's values from its named list, leaving out archived ones" do
+      department = catalogue_adapter.fetch_field_catalogue.find { it.id == "work.department" }
+
+      assert_equal [ Hris::Field::Value.new(id: "201", name: "Engineering") ], department.values
+    end
+
+    should "flatten a hierarchy list, dropping an archived value with its children" do
+      squad = catalogue_adapter.fetch_field_catalogue.find { it.name == "Squad" }
+
+      assert_equal %w[Payments Checkout Refunds], squad.values.map(&:name)
+      assert_equal %w[301 302 303], squad.values.map(&:id)
+    end
+
+    should "keep a list field whose named list HiBob did not return, with no values" do
+      site = catalogue_adapter.fetch_field_catalogue.find { it.id == "work.site" }
+
+      assert_predicate site, :list?
+      assert_empty site.values
+    end
+
+    should "leave out an entry with no path" do
+      names = catalogue_adapter.fetch_field_catalogue.map(&:name)
+
+      assert_not_includes names, "Field with no path"
+      assert_equal 7, names.size
+    end
+
+    should "read named lists served as an object keyed by list name" do
+      keyed = @named_lists.to_h { |list| [ list["name"], { "items" => list["items"] } ] }
+
+      title = catalogue_adapter(named_lists: keyed).fetch_field_catalogue.find { it.id == "work.title" }
+
+      assert_equal [ "Software Engineer", "Engineering Manager" ], title.values.map(&:name)
+    end
+
+    should "raise when HiBob fails, rather than return no fields" do
+      failing = Object.new
+      failing.define_singleton_method(:get_fields) { raise Hris::Hibob::Errors::ApiError.new(status: 503, body: "down") }
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      adapter.instance_variable_set(:@client, failing)
+
+      assert_raises(Hris::Hibob::Errors::ApiError) { adapter.fetch_field_catalogue }
+    end
+
+    should "raise when the fields response is not a list" do
+      error = assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) do
+        catalogue_adapter(fields: { "error" => "unexpected" }).fetch_field_catalogue
+      end
+      assert_match "fields", error.message
+    end
+
+    should "raise when the named lists response is neither a list nor an object" do
+      assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) do
+        catalogue_adapter(named_lists: "oops").fetch_field_catalogue
+      end
+    end
+  end
+
   private
 
   # Builds an adapter with a stubbed client that returns the given employees.
@@ -532,5 +613,23 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     mock_client.expect(:search_people, employees, show_inactive: true)
     adapter.instance_variable_set(:@client, mock_client)
     adapter
+  end
+
+  # @param fields [Object] what the stubbed client's get_fields returns
+  # @param named_lists [Object] what its get_named_lists returns
+  # @return [Hris::Hibob::Adapter]
+  def catalogue_adapter(fields: @fields, named_lists: @named_lists)
+    adapter = Hris::Hibob::Adapter.new(@tenant)
+    client = Minitest::Mock.new
+    client.expect(:get_fields, fields)
+    client.expect(:get_named_lists, named_lists)
+    adapter.instance_variable_set(:@client, client)
+    adapter
+  end
+
+  # @param name [String] a file under test/fixtures/files/hibob/
+  # @return [Object] the parsed JSON
+  def hibob_fixture(name)
+    JSON.parse(File.read(Rails.root.join("test/fixtures/files/hibob", name)))
   end
 end

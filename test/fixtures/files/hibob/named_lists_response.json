@@ -1,0 +1,32 @@
+[
+  {
+    "name": "title",
+    "items": [
+      { "id": 101, "value": "Software Engineer", "name": "Software Engineer", "archived": false, "children": [] },
+      { "id": 102, "value": "Engineering Manager", "name": "Engineering Manager", "archived": false, "children": [] }
+    ]
+  },
+  {
+    "name": "department",
+    "items": [
+      { "id": 201, "value": "Engineering", "name": "Engineering", "archived": false, "children": [] },
+      { "id": 202, "value": "Old Department", "name": "Old Department", "archived": true, "children": [] }
+    ]
+  },
+  {
+    "name": "squads",
+    "items": [
+      {
+        "id": 301, "value": "Payments", "name": "Payments", "archived": false,
+        "children": [
+          { "id": 302, "value": "Checkout", "name": "Checkout", "archived": false },
+          { "id": 303, "value": "Refunds", "name": "Refunds", "archived": false }
+        ]
+      },
+      {
+        "id": 304, "value": "Retired tribe", "name": "Retired tribe", "archived": true,
+        "children": [ { "id": 305, "value": "Retired squad", "name": "Retired squad", "archived": false } ]
+      }
+    ]
+  }
+]

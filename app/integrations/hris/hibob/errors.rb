@@ -23,6 +23,9 @@ module Hris::Hibob::Errors
     end
   end
 
+  # Raised when HiBob answers 2xx with a body of the wrong shape.
+  class UnexpectedResponseError < Error; end
+
   # Raised on HTTP 4xx/5xx after retries exhausted.
   class ApiError < Error
     # @return [Integer, nil] HTTP status code
