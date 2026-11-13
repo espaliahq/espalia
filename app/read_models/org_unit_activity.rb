@@ -26,12 +26,39 @@ class OrgUnitActivity < ApplicationRecord
   belongs_to :person, optional: true
   belongs_to :actor, class_name: "Person", optional: true
 
+  # Every event carries a correlation id; the event's own id stands in for one
+  # recorded without.
+  CAUSE = Arel.sql("COALESCE(org_unit_activities.correlation_id, org_unit_activities.event_id::text)")
+  private_constant :CAUSE
+
   # A unit's activity, newest first by when the Org Graph learned of it.
   #
   # @param unit_id [String]
   # @return [ActiveRecord::Relation<OrgUnitActivity>]
   def self.for_unit(unit_id)
     where(unit_id: unit_id.to_s.downcase).order(position: :desc)
+  end
+
+  # A unit's activity with the entries of one cause folded into one group,
+  # newest first by each group's latest entry. A page never splits a group.
+  #
+  # @param unit_id [String]
+  # @param page [Integer] from 1
+  # @param per_page [Integer] groups per page
+  # @return [Array<OrgUnitActivity::Group>]
+  def self.feed(unit_id, page: 1, per_page: 25)
+    causes = for_unit(unit_id).reorder(Arel.sql("MAX(position) DESC")).group(CAUSE)
+                              .offset((page - 1) * per_page).limit(per_page).pluck(CAUSE)
+    parts = for_unit(unit_id).where("#{CAUSE} IN (?)", causes).group_by(&:cause_id)
+    causes.map { |cause| OrgUnitActivity::Group.new(parts.fetch(cause)) }
+  end
+
+  # Every entry, in any unit, written under one cause.
+  #
+  # @param cause_id [String]
+  # @return [ActiveRecord::Relation<OrgUnitActivity>]
+  def self.caused_by(cause_id)
+    where("#{CAUSE} = ?", cause_id.to_s).order(position: :desc)
   end
 
   # @return [Boolean]
@@ -42,4 +69,7 @@ class OrgUnitActivity < ApplicationRecord
 
   # @return [Boolean]
   def changed_back? = changed_back_by_id.present?
+
+  # @return [String] the correlation id this entry's event was written under
+  def cause_id = correlation_id || event_id
 end
