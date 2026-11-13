@@ -108,7 +108,7 @@ Any new user-facing read or write surface must consider MCP coverage during plan
 
 ## Architecture
 
-Four domain aggregates — two event-sourced via RES, two standard ActiveRecord:
+Six domain aggregates — four event-sourced via RES, two standard ActiveRecord:
 
 **Event-sourced (RailsEventStore + AggregateRoot):**
 
@@ -117,6 +117,8 @@ Four domain aggregates — two event-sourced via RES, two standard ActiveRecord:
 - **Person Development** — One RES stream per person per framework (`tenant-{id}/PersonDev-{person_id}-{framework_id}`). The unified development journey — evidence, self-ratings, manager ratings, alignment conversations, growth plans, focus areas, check-ins, the recorded reporting manager, and manager-rating delegations in one stream. An "assessment" is a projection. An "alignment agreement" is a formalising event. The reporting manager is recorded as a first-class fact (authoritative for manager-rating authority); a manager can delegate manager *rating* (not alignment) for a seconded report.
 
 - **Assessment Cycles** — One RES stream per cycle (`tenant-{id}/AssessmentCycle-{cycle_id}`). Orchestrates cohort assessment: cycle defined / closed, plus per-person enrollment events that the explicit `PersonEnrollmentSync` handler translates into PD-side events on each participant's PersonDevelopment stream: `JoinedAssessmentCycle` on enroll, `LeftAssessmentCycle` on unenroll (person-scoped removal), and `AssessmentCycleConcluded` on cycle close (the participation stands as part of the cycle's historical cohort — enrollment status `concluded`, never `withdrawn`).
+
+- **Org Graph** — One RES stream per person (`tenant-{id}/Person-{person_id}`): the operational facts the HRIS (or Espalia) supplies, each with its provider and effective date. Identity by reference only; names and emails stay on the `people` row. No projection or writer yet. See [org-graph-design.md](docs/team-planning/org-graph-design.md).
 
 **Read-model ownership invariant:** every table in `app/read_models/` has exactly one projection writer. Overlapping data across contexts is modelled as two tables joined at read time (e.g. enrollment + progress for a cycle participant, joined via `AssessmentCycleParticipation`) — never as a shared row. See [docs/guidelines/event-sourcing.md](docs/guidelines/event-sourcing.md).
 
@@ -163,7 +165,7 @@ end
 ```text
 app/
 ├── contexts/        # Event-sourced bounded contexts (RES): frameworks, person_development,
-│                    #   assessment_cycles — events, commands, aggregate, command handler, projections
+│                    #   assessment_cycles, org_graph — events, commands, aggregate, command handler, projections
 ├── read_models/     # ActiveRecord models the projections write (framework_state/, assessments, evidence…)
 ├── models/          # State-based ActiveRecord (Tenant, Person, User, TenantUser) + concerns
 ├── operations/      # Operations::* — the one write/read surface shared by web and MCP
