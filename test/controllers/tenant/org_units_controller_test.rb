@@ -150,6 +150,14 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_in_delta 0.4, added.allocation
     end
 
+    should "say how many were added when one of several is refused" do
+      post tenant_org_unit_members_path(@org[:platform]), params: { person_ids: [ @org[:ezra].id, @org[:ada].id ] }
+
+      assert membership(:ezra, :platform)
+      follow_redirect!
+      assert_equal "Saved 1 of 2. Ada Quill is already in Platform", drawer.at_css("#org-unit-alert").text.strip
+    end
+
     should "refuse an allocation that isn't a number without placing anyone" do
       post tenant_org_unit_members_path(@org[:payments]), params: { person_ids: [ @org[:ezra].id ], allocation: "lots" }
 

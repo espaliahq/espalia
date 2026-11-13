@@ -10,10 +10,8 @@ class Tenant::OrgUnitOwnersController < ApplicationController
     person_ids = Array(params[:person_ids]).compact_blank
     return redirect_to(drawer_path, flash: { drawer_alert: "Choose someone to own #{@unit.name}." }) if person_ids.empty?
 
-    write(notice: person_ids.one? ? "Owner added." : "Owners added.") do
-      person_ids.each do |person_id|
-        Operations::OrgGraph::AddUnitOwner.call(context: pundit_user, params: with_date(unit_id: @unit.id, person_id:))
-      end
+    write_each(person_ids, notice: person_ids.one? ? "Owner added." : "Owners added.") do |person_id|
+      Operations::OrgGraph::AddUnitOwner.call(context: pundit_user, params: with_date(unit_id: @unit.id, person_id:))
     end
   end
 

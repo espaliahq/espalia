@@ -34,6 +34,22 @@ module OrgUnitDrawer
     redirect_to drawer_path, status:, flash: { drawer_alert: readable(e.message) }
   end
 
+  # Runs one write per person. A refusal partway says how many were saved
+  # before it, since those stay saved.
+  #
+  # @param person_ids [Array<String>]
+  # @yieldparam person_id [String]
+  def write_each(person_ids, notice:)
+    saved = 0
+    write(notice:) do
+      person_ids.each { |person_id| yield person_id; saved += 1 }
+    rescue *FAILURES => e
+      raise if saved.zero?
+
+      raise e.class, "Saved #{saved} of #{person_ids.size}. #{readable(e.message)}"
+    end
+  end
+
   # A provider guard names the provider by its key ("hibob supplies this unit").
   def readable(message)
     message.sub(/\A(\w+) supplies/) { "#{HrisConfig.provider_label(Regexp.last_match(1))} supplies" }.upcase_first

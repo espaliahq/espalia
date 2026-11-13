@@ -11,11 +11,10 @@ class Tenant::OrgUnitMembersController < ApplicationController
     person_ids = Array(params[:person_ids]).compact_blank
     return redirect_to(drawer_path, flash: { drawer_alert: "Choose someone to add to #{@unit.name}." }) if person_ids.empty?
 
-    write(notice: person_ids.one? ? "Added to #{@unit.name}." : "#{person_ids.size} people added to #{@unit.name}.") do
-      terms = { role: params[:role].presence, allocation: }.compact
-      person_ids.each do |person_id|
-        Operations::OrgGraph::AddMember.call(context: pundit_user, params: with_date(unit_id: @unit.id, person_id:, **terms))
-      end
+    terms = nil
+    write_each(person_ids, notice: person_ids.one? ? "Added to #{@unit.name}." : "#{person_ids.size} people added to #{@unit.name}.") do |person_id|
+      terms ||= { role: params[:role].presence, allocation: }.compact
+      Operations::OrgGraph::AddMember.call(context: pundit_user, params: with_date(unit_id: @unit.id, person_id:, **terms))
     end
   end
 
