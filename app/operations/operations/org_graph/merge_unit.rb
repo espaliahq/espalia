@@ -7,8 +7,8 @@ class Operations::OrgGraph::MergeUnit < Operations::Base
 
   description "Merge a unit into another live unit from effective_on (today by default). Every membership " \
               "moves to into_unit_id, keeping its role and allocation, and unit_id retires, all under one " \
-              "cause. A unit with live sub-units, or one an HRIS supplies, is refused. The caller must be " \
-              "able to change both units."
+              "cause. A unit with live sub-units is refused, as is either unit when an HRIS supplies it. The " \
+              "caller must be able to change both units."
   approval :in_app
 
   parameter :unit_id, String, required: true
@@ -20,6 +20,7 @@ class Operations::OrgGraph::MergeUnit < Operations::Base
     into = live_unit!(:into_unit_id)
     raise Operations::Base::ParameterError, "A unit can't merge into itself" if unit == into
     held_by_espalia!(unit)
+    held_by_espalia!(into)
     without_live_children!(unit)
     moved = unit.memberships.count
 

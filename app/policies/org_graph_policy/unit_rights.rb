@@ -72,13 +72,15 @@ class OrgGraphPolicy::UnitRights
   def merge? = reshape? && merge_targets.any?
 
   # The units it may merge into: any other live unit outside its subtree
-  # that the viewer may edit.
+  # that Espalia holds and the viewer may edit.
   #
   # @return [Array<OrgUnit>] in tree order
   def merge_targets
     @merge_targets ||= begin
       subtree = [ @unit, *@overview.descendants_of(@unit) ]
-      @overview.in_tree_order.select { |unit| subtree.exclude?(unit) && @policy.edit_unit?(unit) }
+      @overview.in_tree_order.select do |unit|
+        subtree.exclude?(unit) && unit.held_by_espalia? && @policy.edit_unit?(unit)
+      end
     end
   end
 

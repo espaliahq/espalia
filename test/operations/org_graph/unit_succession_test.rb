@@ -98,6 +98,14 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
       assert_match(/sub-units first: Payments/, error.message)
     end
 
+    should "refuse merging into a unit the HRIS supplies" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::MergeUnit, unit_id: @org[:payments], into_unit_id: @org[:engineering])
+      end
+      assert_equal "HiBob supplies Engineering; change it there", error.message
+      assert_not ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:payments]).retired? }
+    end
+
     should "refuse an owner merging into a unit they can't change" do
       assert_raises(OrgGraph::Authorization::Refused) do
         call(Operations::OrgGraph::MergeUnit, as: @owner, unit_id: @org[:payments], into_unit_id: @org[:platform])

@@ -79,6 +79,7 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
       targets = labels("select#org-unit-merge-into option").drop(1).map { it.delete("\u2003") }
       assert_includes targets, "Platform"
       assert_not_includes targets, "Payments"
+      assert_not_includes targets, "Engineering", "HiBob holds Engineering's shape"
 
       post tenant_org_unit_merge_path(@org[:payments]), params: { into_unit_id: @org[:platform], effective_on: "2026-11-02" }
 
