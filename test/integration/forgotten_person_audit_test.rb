@@ -148,6 +148,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "integrations_ai_model_status" => {},
         "integrations_feedback_exchange_status" => {},
         "integrations_hris_titles" => {},
+        "org_graph_as_of" => { date: Date.current.iso8601, mode: "full" },
+        "org_graph_changes_between" => { from: 1.month.ago.to_date.iso8601, to: Date.current.iso8601, mode: "full" },
         "org_graph_units" => {},
         "reporting_capability_attainment" => cycle,
         "reporting_cycle_cohort" => { **cycle, mode: "full" },
