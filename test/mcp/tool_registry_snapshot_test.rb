@@ -2674,7 +2674,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "tenants_forgetting_dry_run",
         "description" => "Count the leavers the active tenant would forget today, after checking the HRIS, " \
-                         "and list their person ids. Erases nothing.",
+                         "and list their person ids. Erases nothing. reason, why you ask, is recorded and " \
+                         "doesn't change the answer.",
         "inputSchema" => {
           "type" => "object",
           "properties" => { "reason" => { "type" => "string", "enum" => %w[retention request] } },
