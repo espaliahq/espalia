@@ -66,6 +66,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
 
     as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_by_tool.fetch("org_graph_as_of"))
     assert_equal [ @quinn.id ], as_of[:people].map { it[:id] }, "org_graph_as_of reads an empty Org Graph here"
+    changes = Operations::OrgGraph::ChangesBetween.call(context: lead_context, params: params_by_tool.fetch("org_graph_changes_between"))
+    assert_includes changes[:changes].map { it[:person_id] }, @quinn.id, "org_graph_changes_between reads an empty Org Graph here"
   end
 
   private
@@ -168,6 +170,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "integrations_feedback_exchange_status" => {},
         "integrations_hris_titles" => {},
         "org_graph_as_of" => { date: Date.current.iso8601, mode: "full" },
+        "org_graph_changes_between" => { from: 1.month.ago.to_date.iso8601, to: Date.current.iso8601, mode: "full" },
         "org_graph_person_get" => { person_id: @quinn.id },
         "org_graph_units" => {},
         "reporting_capability_attainment" => cycle,
