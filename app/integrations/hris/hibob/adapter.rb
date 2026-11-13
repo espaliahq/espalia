@@ -31,6 +31,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # Five-pass approach:
   # 1. Fetch all employees, upsert Person records (without manager_id)
   # 2. Resolve manager_id via external_id → Person lookup
+  # 2b. Write an Org Graph event for each operational fact that differs
   # 3. Deactivate HRIS-sourced people no longer in the API response, then
   #    offboard every inactive person still participating (Pass 3b —
   #    withdraw from open cycles, remove framework assignments)
@@ -38,7 +39,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # 5. Assign (or reassign) active people to framework roles/levels via
   #    role_mappings (inactive people are skipped — Pass 3b owns them)
   #
-  # @return [Hash] summary with :created, :updated, :deactivated, :offboarded,
+  # @return [Hash] summary with :created, :updated, :deactivated, :offboarded, :org_graph_events,
   #   :skipped_inactive, :assigned,
   #   :role_changed, :level_changed, :unchanged, :errors,
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
@@ -51,6 +52,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       external_id_map = {}
       manager_links = {}
       touched_person_ids = []
+      org_graph_facts = {}
 
       # Pass 1: Upsert all employees
       employees.each do |raw_employee|
@@ -67,6 +69,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           external_id_map[attrs[:external_id]] = person
           manager_links[person] = manager_ext_id if manager_ext_id.present?
           touched_person_ids << person.id
+          org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id }
         end
       rescue => e
         result[:errors] << {
@@ -82,6 +85,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
                   Person.find_by(external_id: manager_ext_id)
         person.update!(manager: manager) if manager && person.manager_id != manager.id
       end
+
+      # Pass 2b: Write each Org Graph fact that differs
+      record_org_graph_differences(org_graph_facts, external_id_map, result)
 
       # Pass 3: Deactivate people no longer in HRIS
       deactivate_removed(employees, result)
@@ -224,6 +230,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       updated: 0,
       deactivated: 0,
       offboarded: 0,
+      org_graph_events: 0,
       skipped_inactive: 0,
       assigned: 0,
       role_changed: 0,
@@ -270,6 +277,37 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
 
     person
+  end
+
+  # Pass 2b: compares each row's operational facts with the person's Org
+  # Graph stream and writes an event for each that differs. A manager is read
+  # from the row itself, so a lost manager is recorded even though Pass 2
+  # never clears one; a manager the sync cannot find is left uncompared.
+  # The level is compared only when the tenant configures a level column.
+  #
+  # @param rows [Hash{Person => Hash}] title, level and manager_external_id per person
+  # @param external_id_map [Hash{String => Person}] people this sync touched
+  # @param result [Hash] running tally
+  def record_org_graph_differences(rows, external_id_map, result)
+    with_hris_event_context do
+      handler = OrgGraph::CommandHandler.new
+      today = Date.current
+
+      rows.each do |person, row|
+        facts = { title: row[:title] }
+        facts[:level] = row[:level] if config.level_field_id.present?
+        manager_ext_id = row[:manager_external_id]
+        if manager_ext_id.blank?
+          facts[:manager_id] = nil
+        elsif (manager = external_id_map[manager_ext_id] || Person.find_by(external_id: manager_ext_id))
+          facts[:manager_id] = manager.id
+        end
+
+        result[:org_graph_events] += handler.apply_facts(person.id, provider: provider_name, effective_on: today, **facts)
+      rescue => e
+        result[:errors] << { person_id: person.id, error: e.message }
+      end
+    end
   end
 
   # Marks HRIS-sourced people as inactive if they no longer appear in the response.
