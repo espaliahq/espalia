@@ -89,6 +89,7 @@ class OrgGraph::StructureAggregate
       raise "A live unit already mirrors #{provider} #{external_ref}"
     end
 
+    ensure_level_sits_with_its_provider!(provider, level_id)
     ensure_placeable!(provider, level_id, parent_id)
 
     apply(OrgGraph::Events::UnitCreated.new(data: {
@@ -211,6 +212,21 @@ class OrgGraph::StructureAggregate
     raise "#{unit.provider} supplies this unit; change it there" unless require_provider(provider) == unit.provider
 
     unit
+  end
+
+  # Levels an HRIS supplies sit above every level Espalia holds, whether or
+  # not the units share a parent.
+  def ensure_level_sits_with_its_provider!(provider, level_id)
+    index = level_index(level_id)
+    mirrored = provider != ESPALIA
+    others = live_units.select { |unit| (unit.provider != ESPALIA) != mirrored }.map { |unit| level_index(unit.level_id) }
+    return if others.empty?
+
+    if mirrored && index >= others.min
+      raise "A mirrored unit must sit above every level Espalia holds"
+    elsif !mirrored && index <= others.max
+      raise "A unit Espalia holds must sit below every level the HRIS supplies"
+    end
   end
 
   # A parent must be live and at a higher level, and a mirrored unit never

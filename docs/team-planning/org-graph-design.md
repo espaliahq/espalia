@@ -105,6 +105,8 @@ members are a projection.
   rejects an edit made in Espalia and still takes the sync's rename.
 - **A parent sits at a higher level**, is live, and is never the unit itself or a unit
   beneath it. A unit with live sub-units can't be retired.
+- **Levels an HRIS supplies sit above every level Espalia holds**, for top-level units
+  as much as for a parent and its child.
 - **A mirrored unit carries its reference, and one Espalia holds has none.** Two live
   units never mirror the same reference.
 - **A taxonomy level keeps its id through a rename.** A level that still holds a unit

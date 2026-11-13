@@ -19,7 +19,7 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
       @handler.define_taxonomy(taxonomy("Department", "Team"), effective_on: "2026-01-01")
       @handler.create_unit(@engineering, "Engineering", level_id: @department_level, effective_on: "2026-01-01",
                            provider: "hibob", external_ref: "dept-7")
-      @handler.create_unit(@product, "Product", level_id: @department_level, effective_on: "2026-01-01")
+      @handler.create_unit(@product, "Product", level_id: @team_level, effective_on: "2026-01-01")
       @handler.create_unit(@payments, "Payments", level_id: @team_level, parent_id: @engineering, effective_on: "2026-02-01")
     end
   end

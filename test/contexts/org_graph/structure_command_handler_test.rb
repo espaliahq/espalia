@@ -158,6 +158,26 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep the levels an HRIS supplies above every level Espalia holds, even at the top" do
+      create_unit(@team, "Payments", level: "Team")
+
+      assert_raises(RuntimeError) do
+        create_unit(@department, "Engineering", level: "Squad", provider: "hibob", external_ref: "d-1")
+      end
+      assert_raises(RuntimeError) do
+        create_unit(@squad, "Checkout", level: "Team", provider: "hibob", external_ref: "t-1")
+      end
+      create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "d-1")
+    end
+
+    should "keep a unit Espalia holds below every level the HRIS supplies, even at the top" do
+      create_unit(@team, "Payments", level: "Team", provider: "hibob", external_ref: "t-1")
+
+      assert_raises(RuntimeError) { create_unit(@department, "Engineering", level: "Department") }
+      assert_raises(RuntimeError) { create_unit(@squad, "Ledger", level: "Team") }
+      create_unit(@squad, "Checkout", level: "Squad")
+    end
+
     should "refuse a level outside the taxonomy" do
       assert_raises(RuntimeError) do
         as_tenant { @handler.create_unit(@team, "Payments", level_id: SecureRandom.uuid_v7, effective_on: @today) }
