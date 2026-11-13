@@ -570,12 +570,31 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal 7, names.size
     end
 
-    should "read named lists served as an object keyed by list name" do
-      keyed = @named_lists.to_h { |list| [ list["name"], { "items" => list["items"] } ] }
+    should "read named lists served as an object keyed by list id, whatever each list calls itself" do
+      keyed = @named_lists.to_h { |list| [ list["name"], { "name" => list["name"].titleize, "items" => list["items"] } ] }
 
       title = catalogue_adapter(named_lists: keyed).fetch_field_catalogue.find { it.id == "work.title" }
 
       assert_equal [ "Software Engineer", "Engineering Manager" ], title.values.map(&:name)
+    end
+
+    should "leave out a list value with no id, since nothing could refer to it" do
+      @named_lists.first["items"] << { "value" => "No id", "name" => "No id", "archived" => false }
+
+      title = catalogue_adapter.fetch_field_catalogue.find { it.id == "work.title" }
+
+      assert_not_includes title.values.map(&:name), "No id"
+    end
+
+    should "not ask for named lists when no field is a list" do
+      text_only = @fields.reject { Hris::Hibob::Adapter::LIST_TYPES.include?(it["type"]) }
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      client.expect(:get_fields, text_only)
+      adapter.instance_variable_set(:@client, client)
+
+      assert adapter.fetch_field_catalogue.all?(&:text?)
+      client.verify
     end
 
     should "raise when HiBob fails, rather than return no fields" do
@@ -594,10 +613,33 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_match "fields", error.message
     end
 
-    should "raise when the named lists response is neither a list nor an object" do
-      assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) do
-        catalogue_adapter(named_lists: "oops").fetch_field_catalogue
+    should "raise on a named lists body of the wrong shape" do
+      [
+        "oops",
+        [ "department" ],
+        { "department" => [ { "id" => 1 } ] },
+        [ { "name" => "title", "items" => "Software Engineer" } ],
+        [ { "name" => "title", "items" => [ "Software Engineer" ] } ]
+      ].each do |named_lists|
+        assert_raises(Hris::Hibob::Errors::UnexpectedResponseError, named_lists.inspect) do
+          catalogue_adapter(named_lists:).fetch_field_catalogue
+        end
       end
+    end
+
+    should "raise on a fields body holding something other than objects" do
+      assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) do
+        catalogue_adapter(fields: [ "work.title" ]).fetch_field_catalogue
+      end
+    end
+
+    should "read a list field whose typeData is not an object as a list with no values" do
+      @fields << { "jsonPath" => "work.odd", "name" => "Odd", "type" => "list", "typeData" => "department" }
+
+      odd = catalogue_adapter.fetch_field_catalogue.find { it.id == "work.odd" }
+
+      assert_predicate odd, :list?
+      assert_empty odd.values
     end
   end
 

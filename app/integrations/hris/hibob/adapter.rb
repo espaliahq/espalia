@@ -116,11 +116,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #   with a body of the wrong shape
   def fetch_field_catalogue
     fields = client.get_fields
-    unless fields.is_a?(Array)
-      raise Hris::Hibob::Errors::UnexpectedResponseError, "HiBob fields response is not a list"
-    end
+    unexpected!("fields response is not a list") unless fields.is_a?(Array) && fields.all?(Hash)
 
-    lists = named_lists_by_id(client.get_named_lists)
+    lists = fields.any? { list_type?(it) } ? named_lists_by_id(client.get_named_lists) : {}
     fields.filter_map { |field| catalogue_field(field, lists) }
   end
 
@@ -134,41 +132,54 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     return if id.nil?
 
     name = field["name"].presence || id
-    if LIST_TYPES.include?(field["type"])
-      Hris::Field.new(id:, name:, kind: :list, values: lists.fetch(field.dig("typeData", "listId").to_s, []))
-    else
-      Hris::Field.new(id:, name:, kind: :text)
-    end
+    return Hris::Field.new(id:, name:, kind: :text) unless list_type?(field)
+
+    type_data = field["typeData"]
+    list_id = type_data["listId"].to_s if type_data.is_a?(Hash)
+    Hris::Field.new(id:, name:, kind: :list, values: lists.fetch(list_id, []))
   end
+
+  def list_type?(field) = LIST_TYPES.include?(field["type"])
 
   # HiBob documents the named lists as an array of `{ name, items }`. An
   # object keyed by list name is read too, as no live response has yet
-  # confirmed which shape a tenant's account answers with.
+  # confirmed which shape a tenant's account answers with. Either way a
+  # field's `typeData.listId` is the list's key.
   #
   # @param response [Array<Hash>, Hash]
   # @return [Hash{String => Array<Hris::Field::Value>}]
   def named_lists_by_id(response)
     lists = case response
     when Array then response
-    when Hash then response.map { |key, list| { "name" => key }.merge(list.is_a?(Hash) ? list : {}) }
-    else raise Hris::Hibob::Errors::UnexpectedResponseError, "HiBob named lists response is not a list"
+    when Hash then response.map { |key, list| list.is_a?(Hash) ? list.merge("name" => key) : list }
     end
+    unexpected!("named lists response is not a list") unless lists&.all?(Hash)
 
     lists.to_h { |list| [ list["name"].to_s, list_values(list["items"]) ] }
   end
 
   # Flattens a hierarchy list, so a value at any depth can be chosen. An
-  # archived value takes its children with it.
+  # archived value takes its children with it, and a value with no id is
+  # left out, since nothing could refer to it.
   #
   # @param items [Array<Hash>, nil]
   # @return [Array<Hris::Field::Value>]
   def list_values(items)
-    Array(items).flat_map do |item|
-      next [] if item["archived"]
+    unexpected!("named list items are not a list") unless items.nil? || items.is_a?(Array)
+
+    items.to_a.flat_map do |item|
+      unexpected!("named list item is not an object") unless item.is_a?(Hash)
+      next [] if item["archived"] || item["id"].blank?
 
       [ Hris::Field::Value.new(id: item["id"].to_s, name: item["name"].presence || item["value"].to_s),
         *list_values(item["children"]) ]
     end
+  end
+
+  # @param detail [String]
+  # @raise [Hris::Hibob::Errors::UnexpectedResponseError]
+  def unexpected!(detail)
+    raise Hris::Hibob::Errors::UnexpectedResponseError, "HiBob #{detail}"
   end
 
   # `config` was read when the sync started; saving it would write back the
