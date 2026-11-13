@@ -87,6 +87,15 @@ class Operations::OrgGraph::SourcesTest < ActiveSupport::TestCase
                    ActsAsTenant.with_tenant(@tenant) { OrgFactProvider.find_by(fact: "cost_centre").fields })
     end
 
+    should "let a bug inside the aggregate surface as itself, not as a parameter error" do
+      broken = Object.new
+      def broken.set_fact_provider(*, **) = raise(FrozenError, "can't modify frozen Hash")
+
+      OrgGraph::StructureCommandHandler.stub(:new, broken) do
+        assert_raises(FrozenError) { call(Operations::OrgGraph::SetFactProvider, fact: "site", provider: "espalia") }
+      end
+    end
+
     should "refuse an HRIS the tenant hasn't connected, a part no field can supply, and an unknown fact" do
       @tenant.disconnect_hris!
       assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::SetFactProvider, fact: "title", provider: "hibob") }

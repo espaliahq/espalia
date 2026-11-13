@@ -19,10 +19,14 @@ module Operations::OrgGraph::SourceSupport
 
   def structure = ::OrgGraph::StructureCommandHandler.new(actor: context)
 
-  # The structure aggregate refuses a change with an error that says why.
+  # The structure aggregate refuses a change with a plain RuntimeError or
+  # ArgumentError that says why. Their subclasses, such as FrozenError, are
+  # bugs, and stay server errors.
   def refusals
     yield
   rescue ArgumentError, RuntimeError => e
+    raise unless e.instance_of?(ArgumentError) || e.instance_of?(RuntimeError)
+
     raise Operations::Base::ParameterError, e.message
   end
 end
