@@ -122,6 +122,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
     form(action: change_back_tenant_org_graph_path, method: "post", class: "mt-1") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "unit", value: @feed.unit.id)
+      input(type: "hidden", name: "activity_page", value: @feed.page) if @feed.page > 1
       if entry_id
         input(type: "hidden", name: "entry_id", value: entry_id)
       else

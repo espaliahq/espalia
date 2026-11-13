@@ -26,12 +26,14 @@ class Tenant::OrgGraphsController < ApplicationController
     else
       Operations::OrgGraph::ChangeBackGroup.call(context: pundit_user, params: { cause_id: params[:cause_id] })
     end
-    redirect_to tenant_org_graph_path(unit: params[:unit]), notice: "Changed back."
+    redirect_to activity_path, notice: "Changed back."
   rescue Operations::Base::ParameterError, OrgGraph::Authorization::Refused => e
-    redirect_to tenant_org_graph_path(unit: params[:unit]), alert: e.message
+    redirect_to activity_path, alert: e.message
   end
 
   private
+
+  def activity_path = tenant_org_graph_path(unit: params[:unit], activity_page: params[:activity_page].presence)
 
   def activity_sidebar(overview)
     return unless overview.selected

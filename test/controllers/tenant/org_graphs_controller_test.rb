@@ -97,6 +97,15 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert entry.reload.changed_back?
     end
 
+    should "return to the page of activity the change was made from" do
+      org = build_org_graph(@tenant)
+      entry = ActsAsTenant.with_tenant(@tenant) { OrgUnitActivity.for_unit(org[:platform]).first }
+
+      post change_back_tenant_org_graph_path, params: { entry_id: entry.id, unit: org[:platform], activity_page: "2" }
+
+      assert_redirected_to tenant_org_graph_path(unit: org[:platform], activity_page: "2")
+    end
+
     should "return to the unit with the reason when a change can't be changed back" do
       org = build_org_graph(@tenant)
       created = ActsAsTenant.with_tenant(@tenant) { OrgUnitActivity.for_unit(org[:platform]).last }
