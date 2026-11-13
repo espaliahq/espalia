@@ -37,7 +37,7 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
         label(for: "org-graph-retention", class: "text-sm font-medium text-default") { "Forget leavers after" }
         select(id: "org-graph-retention", name: "retention", class: Components::Kit::Field::SELECT) do
           (YEARS | [ years ].compact).sort.each do |choice|
-            option(value: choice, selected: choice == years) { "#{choice} #{choice == 1 ? 'year' : 'years'}" }
+            option(value: choice, selected: choice == years) { "#{choice} #{'year'.pluralize(choice)}" }
           end
           option(value: "never", selected: years.nil?) { "Never" }
         end
@@ -48,18 +48,21 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
 
   def schedule
     div(class: "mt-4 space-y-3 text-sm") do
-      if !@key_set
-        render Components::Kit::Alert.new(tone: :warning, title: "Forgetting isn't set up") do
-          "This server has no key to forget with, so nobody can be forgotten yet. " \
-            "Ask whoever runs Espalia to add it."
-        end
-      elsif years.nil?
-        p(class: "text-default") { "Nobody is forgotten while this is set to never." }
-      elsif @config.scheduled_forgetting
+      missing_key unless @key_set
+      if @config.scheduled_forgetting
         scheduled
-      else
+      elsif @key_set && years.nil?
+        p(class: "text-default") { "Nobody is forgotten while this is set to never." }
+      elsif @key_set
         render Views::Tenant::OrgGraph::Settings::ForgettingDueFrame.new(src: tenant_org_graph_settings_forgetting_due_path)
       end
+    end
+  end
+
+  def missing_key
+    render Components::Kit::Alert.new(tone: :warning, title: "Forgetting isn't set up") do
+      "This server has no key to forget with, so nobody can be forgotten yet. " \
+        "Ask whoever runs Espalia to add it."
     end
   end
 
@@ -67,7 +70,7 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
     p(class: "text-default") do
       plain "Scheduled forgetting is on"
       plain " since #{@config.scheduled_forgetting_enabled_at.to_date.to_fs(:long)}" if @config.scheduled_forgetting_enabled_at
-      plain ". Each leaver is forgotten once their date comes."
+      plain(years.nil? ? ", but nobody is forgotten while the period is never." : ". Each leaver is forgotten once their date comes.")
     end
     settings_form(tenant_org_graph_settings_forgetting_schedule_path, method: :delete) do
       render Components::Kit::Button.new(variant: :outline, tone: :danger, type: :submit, id: "org-graph-forgetting-off") do

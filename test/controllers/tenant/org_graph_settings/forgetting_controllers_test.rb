@@ -37,6 +37,26 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
       assert_nil config.retention_years
     end
 
+    should "say when a shorter period turns the schedule off" do
+      @tenant.update!(org_graph_config: { scheduled_forgetting: true })
+      patch tenant_org_graph_settings_retention_path, params: { retention: "1" }
+
+      assert_equal "Leavers are now forgotten 1 year after they leave. Scheduled forgetting is off until you check " \
+                   "who is due and turn it on again.", flash[:notice]
+      assert_not config.scheduled_forgetting
+    end
+
+    should "offer to turn the schedule off while it is on, even with no key or a period of never" do
+      @tenant.update!(org_graph_config: { scheduled_forgetting: true, retention_years: nil })
+      OrgGraph::Forgetting.stub(:key, nil) do
+        get tenant_org_graph_settings_path
+      end
+
+      assert_select "#org-graph-forgetting", text: /Forgetting isn't set up/
+      assert_select "#org-graph-forgetting", text: /nobody is forgotten while the period is never/
+      assert_select "#org-graph-forgetting-off"
+    end
+
     should "count the leavers due today" do
       get tenant_org_graph_settings_forgetting_due_path, headers: { "Turbo-Frame" => "org-graph-forgetting-due" }
 
