@@ -17,6 +17,7 @@
 #
 class OrgGraph::StructureAggregate
   include AggregateRoot
+  prepend OrgGraph::PlanReference::Stamping
 
   ESPALIA = "espalia"
   PROVIDERS = OrgGraph::PersonAggregate::PROVIDERS
@@ -26,6 +27,9 @@ class OrgGraph::StructureAggregate
   # The facts an HRIS supplies unless someone chose otherwise. The sync writes
   # these, and connecting an HRIS claims them for it.
   HRIS_FACTS = %w[employment_status title level manager site employment].freeze
+  # The parts of a fact an HRIS can be told to read from a field of the tenant's
+  # choosing. The rest come from the fields each adapter reads by default.
+  MAPPABLE_FIELDS = { "cost_centre" => %w[cost_centre], "site" => %w[country] }.freeze
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :owner_ids,
                     :created_on, :changed_on, keyword_init: true)
@@ -35,6 +39,7 @@ class OrgGraph::StructureAggregate
     @units = {}
     @level_providers = {}
     @fact_providers = {}
+    @fact_fields = {}
     @successions = {}
   end
 
@@ -53,10 +58,9 @@ class OrgGraph::StructureAggregate
   #   optional `provider:` for a new level
   # @param effective_on [Date, String] when the taxonomy took effect
   # @param defined_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError] if the levels are empty, blank or duplicated
   # @raise [RuntimeError] if a level in use is dropped or reordered
-  def define_taxonomy(levels, effective_on:, defined_by_id: nil, plan_change_id: nil)
+  def define_taxonomy(levels, effective_on:, defined_by_id: nil)
     new_providers = new_level_providers(levels)
     levels = normalise_levels(levels)
     return if levels == @levels
@@ -75,8 +79,7 @@ class OrgGraph::StructureAggregate
       levels: levels,
       previous_levels: @levels,
       effective_on: iso_date(effective_on),
-      defined_by_id: defined_by_id,
-      plan_change_id: plan_change_id
+      defined_by_id: defined_by_id
     }))
     new_providers.each do |level_id, provider|
       apply(OrgGraph::Events::LevelProviderSet.new(data: {
@@ -123,21 +126,30 @@ class OrgGraph::StructureAggregate
     }))
   end
 
-  # Sets who supplies a kind of person fact. An unchanged provider writes
-  # nothing, but the first choice is always written, Espalia included, so a
-  # later {#claim_facts} knows someone chose.
+  # Sets who supplies a kind of person fact and, for an HRIS, the fields it
+  # reads the fact from. A field names its provider in the same event, so no
+  # fact Espalia holds has one. Moving a fact to another provider clears its
+  # fields; restating the same provider without `fields:` keeps them. An
+  # unchanged setting writes nothing, but the first choice is always written,
+  # Espalia included, so a later {#claim_facts} knows someone chose.
   #
   # @param fact [String, Symbol] one of {FACTS}
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String]
+  # @param fields [Hash{String => String}, nil] the HRIS field path for each
+  #   part of the fact named in {MAPPABLE_FIELDS}; nil keeps the current ones
   # @param set_by_id [String, nil] person_id of the actor
-  # @raise [ArgumentError] if the fact or the provider is unknown
-  def set_fact_provider(fact, provider, effective_on:, set_by_id: nil)
+  # @raise [ArgumentError] if the fact, the provider or a field is unknown, or
+  #   a field is named for Espalia
+  def set_fact_provider(fact, provider, effective_on:, fields: nil, set_by_id: nil)
     fact = fact.to_s
     raise ArgumentError, "Unknown fact: #{fact}" unless FACTS.include?(fact)
 
     provider = require_provider(provider)
-    return if @fact_providers[fact] == provider
+    unchanged = @fact_providers[fact] == provider
+    current_fields = @fact_fields.fetch(fact, {})
+    fields = fields.nil? && unchanged ? current_fields : require_fields(fact, provider, fields)
+    return if unchanged && fields == current_fields
 
     previous = @fact_providers.fetch(fact, ESPALIA)
 
@@ -145,6 +157,7 @@ class OrgGraph::StructureAggregate
       fact: fact,
       provider: provider,
       previous_provider: previous,
+      fields: fields,
       effective_on: iso_date(effective_on),
       set_by_id: set_by_id
     }))
@@ -176,10 +189,9 @@ class OrgGraph::StructureAggregate
   #   a mirrored unit, absent for one Espalia holds
   # @param effective_on [Date, String]
   # @param created_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError, RuntimeError] if any invariant above fails
   def create_unit(unit_id, name, level_id:, effective_on:, parent_id: nil, provider: ESPALIA,
-                  external_ref: nil, created_by_id: nil, plan_change_id: nil)
+                  external_ref: nil, created_by_id: nil)
     unit_id = require_id(unit_id, "Unit id")
     level_id = require_id(level_id, "Level id")
     parent_id = require_id(parent_id, "Parent id") if parent_id
@@ -208,8 +220,7 @@ class OrgGraph::StructureAggregate
       provider: provider,
       external_ref: external_ref,
       effective_on: effective_on,
-      created_by_id: created_by_id,
-      plan_change_id: plan_change_id
+      created_by_id: created_by_id
     }))
   end
 
@@ -220,10 +231,8 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param renamed_by_id [String, nil]
-  # @param plan_change_id [String, nil]
   # @param changed_back_id [String, nil] the event this changes back
-  def rename_unit(unit_id, name, effective_on:, provider: ESPALIA, renamed_by_id: nil, plan_change_id: nil,
-                  changed_back_id: nil)
+  def rename_unit(unit_id, name, effective_on:, provider: ESPALIA, renamed_by_id: nil, changed_back_id: nil)
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     name = require_name(name)
@@ -237,7 +246,6 @@ class OrgGraph::StructureAggregate
       provider: unit.provider,
       effective_on: effective_on,
       renamed_by_id: renamed_by_id,
-      plan_change_id: plan_change_id,
       changed_back_id: changed_back_id
     }))
   end
@@ -250,10 +258,8 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param moved_by_id [String, nil]
-  # @param plan_change_id [String, nil]
   # @param changed_back_id [String, nil] the event this changes back
-  def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil, plan_change_id: nil,
-                changed_back_id: nil)
+  def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil, changed_back_id: nil)
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     parent_id = require_id(parent_id, "Parent id") if parent_id
@@ -269,7 +275,6 @@ class OrgGraph::StructureAggregate
       provider: unit.provider,
       effective_on: effective_on,
       moved_by_id: moved_by_id,
-      plan_change_id: plan_change_id,
       changed_back_id: changed_back_id
     }))
   end
@@ -280,12 +285,11 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param retired_by_id [String, nil]
-  # @param plan_change_id [String, nil]
-  def retire_unit(unit_id, effective_on:, provider: ESPALIA, retired_by_id: nil, plan_change_id: nil)
+  def retire_unit(unit_id, effective_on:, provider: ESPALIA, retired_by_id: nil)
     effective_on = iso_date(effective_on)
     unit = retirable_unit!(unit_id, provider, on: effective_on)
 
-    apply(retirement(unit, effective_on:, retired_by_id:, plan_change_id:))
+    apply(retirement(unit, effective_on:, retired_by_id:))
   end
 
   # States that the successors carry on from the predecessors: a split, a
@@ -304,10 +308,9 @@ class OrgGraph::StructureAggregate
   # @param provider [String] who supplies a retirement; must be each
   #   predecessor's own
   # @param stated_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError, RuntimeError] if a unit is missing or the link is impossible
   def record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:, retire_predecessors: false,
-                        provider: ESPALIA, stated_by_id: nil, plan_change_id: nil)
+                        provider: ESPALIA, stated_by_id: nil)
     succession_id = require_id(succession_id, "Succession id")
     predecessor_ids = require_ids(predecessor_ids, "predecessor")
     successor_ids = require_ids(successor_ids, "successor")
@@ -336,12 +339,11 @@ class OrgGraph::StructureAggregate
       apply(OrgGraph::Events::UnitSucceeded.new(data: {
         succession_id: succession_id,
         **succession,
-        stated_by_id: stated_by_id,
-        plan_change_id: plan_change_id
+        stated_by_id: stated_by_id
       }))
     end
     retiring.each do |unit|
-      apply(retirement(unit, effective_on:, retired_by_id: stated_by_id, plan_change_id:,
+      apply(retirement(unit, effective_on:, retired_by_id: stated_by_id,
                              succession_id:, successor_ids: succession[:successor_ids]))
     end
   end
@@ -354,18 +356,17 @@ class OrgGraph::StructureAggregate
   # @param person_id [String] UUID of the owner
   # @param effective_on [Date, String]
   # @param added_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @param changed_back_id [String, nil] the event this changes back
   # @raise [ArgumentError] if an id isn't a UUID or the date is invalid
   # @raise [RuntimeError] if the unit is unknown or retired
-  def add_unit_owner(unit_id, person_id, effective_on:, added_by_id: nil, plan_change_id: nil, changed_back_id: nil)
+  def add_unit_owner(unit_id, person_id, effective_on:, added_by_id: nil, changed_back_id: nil)
     unit = live_unit!(unit_id)
     person_id = require_id(person_id, "Person id")
     return if unit.owner_ids.include?(person_id)
 
     apply(OrgGraph::Events::UnitOwnerAdded.new(data: {
       unit_id: unit.unit_id, person_id: person_id, effective_on: iso_date(effective_on),
-      added_by_id: added_by_id, plan_change_id: plan_change_id, changed_back_id: changed_back_id
+      added_by_id: added_by_id, changed_back_id: changed_back_id
     }))
   end
 
@@ -375,19 +376,17 @@ class OrgGraph::StructureAggregate
   # @param person_id [String]
   # @param effective_on [Date, String]
   # @param removed_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @param changed_back_id [String, nil] the event this changes back
   # @raise [ArgumentError] if an id isn't a UUID or the date is invalid
   # @raise [RuntimeError] if the unit is unknown or retired
-  def remove_unit_owner(unit_id, person_id, effective_on:, removed_by_id: nil, plan_change_id: nil,
-                        changed_back_id: nil)
+  def remove_unit_owner(unit_id, person_id, effective_on:, removed_by_id: nil, changed_back_id: nil)
     unit = live_unit!(unit_id)
     person_id = require_id(person_id, "Person id")
     return unless unit.owner_ids.include?(person_id)
 
     apply(OrgGraph::Events::UnitOwnerRemoved.new(data: {
       unit_id: unit.unit_id, person_id: person_id, effective_on: iso_date(effective_on),
-      removed_by_id: removed_by_id, plan_change_id: plan_change_id, changed_back_id: changed_back_id
+      removed_by_id: removed_by_id, changed_back_id: changed_back_id
     }))
   end
 
@@ -402,6 +401,7 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::FactProviderSet do |event|
     @fact_providers[event.data[:fact]] = event.data[:provider]
+    @fact_fields[event.data[:fact]] = (event.data[:fields] || {}).transform_keys(&:to_s)
   end
 
   on OrgGraph::Events::UnitCreated do |event|
@@ -477,13 +477,12 @@ class OrgGraph::StructureAggregate
     unit
   end
 
-  def retirement(unit, effective_on:, retired_by_id:, plan_change_id:, succession_id: nil, successor_ids: nil)
+  def retirement(unit, effective_on:, retired_by_id:, succession_id: nil, successor_ids: nil)
     OrgGraph::Events::UnitRetired.new(data: {
       unit_id: unit.unit_id,
       provider: unit.provider,
       effective_on: effective_on,
       retired_by_id: retired_by_id,
-      plan_change_id: plan_change_id,
       succession_id: succession_id,
       successor_ids: successor_ids
     })
@@ -606,6 +605,20 @@ class OrgGraph::StructureAggregate
     raise ArgumentError, "Unknown provider: #{provider}" unless PROVIDERS.include?(provider)
 
     provider
+  end
+
+  # @return [Hash{String => String}]
+  def require_fields(fact, provider, fields)
+    fields = (fields || {}).to_h { |part, path| [ part.to_s, path.to_s.strip ] }
+    return fields if fields.empty?
+
+    raise ArgumentError, "A field needs an HRIS provider, not #{ESPALIA}" if provider == ESPALIA
+
+    unknown = fields.keys - MAPPABLE_FIELDS.fetch(fact, [])
+    raise ArgumentError, "No field can be chosen for #{fact} #{unknown.join(', ')}" if unknown.any?
+    raise ArgumentError, "A field needs a path" if fields.value?("")
+
+    fields
   end
 
   def iso_date(value)

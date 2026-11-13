@@ -164,6 +164,47 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#record_absence" do
+    should "leave someone the provider stopped returning, once" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
+
+      first = @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+      again = @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-03")
+
+      assert_equal [ 1, 0 ], [ first, again ]
+      assert_instance_of OrgGraph::Events::PersonLeft, stream_events.last
+      assert_equal "2026-11-02", stream_events.last.data[:effective_on]
+    end
+
+    should "leave a future starter who disappears before their start date" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-12-01")
+
+      assert_equal 1, @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+      assert_instance_of OrgGraph::Events::PersonLeft, stream_events.last
+    end
+
+    should "write nothing for someone the provider already reported as left" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
+      @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-02", employment_status: "left")
+
+      assert_equal 0, @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-05")
+      assert_equal "2026-11-02", stream_events.last.data[:effective_on]
+    end
+
+    should "leave someone employed on their start date when it has since moved ahead" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2026-10-01")
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-12-01")
+
+      assert_equal 1, @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+      assert_equal [ OrgGraph::Events::PersonLeft, "2026-12-01" ], [ stream_events.last.class, stream_events.last.data[:effective_on] ]
+    end
+
+    should "write nothing for someone the Org Graph never recorded" do
+      assert_equal 0, @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+      assert_empty stream_events
+    end
+  end
+
   context "#apply_facts" do
     should "leave a person the Org Graph has not recorded alone" do
       assert_equal 0, @handler.apply_facts(@person_id, **PROVENANCE, title: "Engineer")
@@ -300,6 +341,19 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       end
       assert_raises(RuntimeError, match: "espalia supplies employment_status") { @handler.leave(@person_id, **PROVENANCE) }
       assert_equal written, stream_events.size
+    end
+
+    should "refuse an absence whose status another provider holds, but not one that writes nothing" do
+      @structure.set_fact_provider("employment_status", "espalia", effective_on: "2026-11-01")
+      written = stream_events.size
+
+      assert_raises(RuntimeError, match: "espalia supplies employment_status") do
+        @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+      end
+      assert_equal written, stream_events.size
+
+      @handler.leave(@person_id, **HELD_BY_ESPALIA)
+      assert_equal 0, @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-03")
     end
 
     should "let Espalia record and edit a person who carries no external id from the fact's provider" do

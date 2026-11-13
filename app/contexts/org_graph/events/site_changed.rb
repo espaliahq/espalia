@@ -12,6 +12,8 @@
 #   @option data [String] :effective_on ISO date the fact took effect
 #   @option data [String, nil] :site the new site, or nil for none
 #   @option data [String, nil] :country the new country, or nil for none
+#   @option data [String, nil] :plan_id the plan it was applied from
+#   @option data [String, nil] :plan_change_id the plan change it was applied from
 #
 class OrgGraph::Events::SiteChanged < RubyEventStore::Event
 end

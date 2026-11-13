@@ -61,6 +61,16 @@ class Hris::Hibob::ClientTest < ActiveSupport::TestCase
       assert_equal "bob-002", employees[1]["id"]
     end
 
+    should "raise rather than stop early when a later page has no employee list" do
+      pages = [
+        { "employees" => [ { "id" => "bob-001", "email" => "a@b.com" } ], "cursor" => "next-page-token" },
+        { "cursor" => "another-token" }
+      ]
+      @stubs.post("/v1/people/search") { [ 200, { "Content-Type" => "application/json" }, pages.shift ] }
+
+      assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) { @client.search_people }
+    end
+
     should "raise AuthenticationError on 401" do
       @stubs.post("/v1/people/search") { raise Faraday::UnauthorizedError }
 
@@ -106,6 +116,16 @@ class Hris::Hibob::ClientTest < ActiveSupport::TestCase
         level_field_id: "column_test_id"
       )
       assert_includes client.default_fields, "work.customColumns.column_test_id"
+    end
+
+    should "request each field the tenant's mapping names, once" do
+      client = Hris::Hibob::Client.new(service_user_id: "u", api_token: "t",
+                                       mapped_fields: { "cost_centre" => "column_cc", "country" => "address.country",
+                                                        "other" => "work.site" })
+
+      assert_includes client.default_fields, "work.customColumns.column_cc"
+      assert_includes client.default_fields, "address.country"
+      assert_equal 1, client.default_fields.count("work.site")
     end
 
     should "request a level field stored as its path unchanged" do

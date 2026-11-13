@@ -220,6 +220,51 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_nil Hris::Hibob::ResponseMapper.new(employee).org_graph_facts[:fte]
     end
 
+    context "with mapped fields" do
+      setup do
+        @mapped = { "cost_centre" => "work.customColumns.column_cc", "country" => "address.country" }
+      end
+
+      should "read cost centre and country from the fields the mapping names, by HiBob's label" do
+        employee = { "work" => { "site" => "1", "customColumns" => { "column_cc" => "17" } },
+                     "address" => { "country" => "AU" },
+                     "humanReadable" => { "work" => { "site" => "Sydney", "customColumns" => { "column_cc" => "Platform" } },
+                                          "address" => { "country" => "Australia" } } }
+
+        assert_equal({ site: "Sydney", country: "Australia", cost_centre: "Platform" },
+          Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped).org_graph_facts)
+      end
+
+      should "leave out a mapped field HiBob does not send, and a site whose mapped country is missing" do
+        assert_empty Hris::Hibob::ResponseMapper.new({ "work" => { "site" => "Sydney" } }, mapped_fields: @mapped).org_graph_facts
+      end
+
+      should "record a mapped field HiBob sends blank as absent" do
+        employee = { "work" => { "site" => "Sydney", "customColumns" => { "column_cc" => "" } }, "address" => { "country" => nil } }
+
+        assert_equal({ site: "Sydney", country: nil, cost_centre: nil },
+          Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped).org_graph_facts)
+      end
+
+      should "read a root field, which HiBob returns at the top level" do
+        assert_equal({ cost_centre: "cc-17" },
+          Hris::Hibob::ResponseMapper.new({ "costCentre" => "cc-17" }, mapped_fields: { cost_centre: "root.costCentre" }).org_graph_facts)
+      end
+
+      should "read a bare custom-column id and the flat payload shape" do
+        employee = { "/work/customColumns/column_cc" => { "value" => "Platform" } }
+
+        assert_equal({ cost_centre: "Platform" },
+          Hris::Hibob::ResponseMapper.new(employee, mapped_fields: { cost_centre: "column_cc" }).org_graph_facts)
+      end
+    end
+
+    should "report no cost centre until the mapping names its field" do
+      employee = { "work" => { "customColumns" => { "column_cc" => "Platform" } } }
+
+      assert_not Hris::Hibob::ResponseMapper.new(employee).org_graph_facts.key?(:cost_centre)
+    end
+
     should "read the flat payload shape" do
       employee = { "/work/site" => { "value" => "Sydney" }, "/payroll/employment/fte" => { "value" => 50 },
                    "/payroll/employment/type" => { "value" => "4411" }, "/work/startDate" => { "value" => "2024-02-01" } }
