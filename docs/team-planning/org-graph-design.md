@@ -72,6 +72,7 @@ are shreddable from their first event.
 |---|---|
 | `PersonRecorded` | The first time the Org Graph sees a person, with the facts as they stood. History starts here. |
 | `PersonJoined`, `PersonLeft`, `PersonReturned` | Employment status, with the date. |
+| `StartDateChanged` | The start date of someone recorded and not left, when it was unknown or differs. |
 | `TitleChanged`, `LevelChanged` | The HRIS's own title and level, before any mapping to a framework. |
 | `ManagerChanged` | The new manager's id, or none. |
 | `CostCentreChanged`, `SiteChanged` | The cost centre as the HRIS names it. |
@@ -88,6 +89,15 @@ Two rules hold for the status events:
 
 - **`PersonReturned` is only for the same person.** The HRIS must show the same external id, and the person must not have been forgotten. Anyone else is a new person with a new id. The sync never merges a row into a person by email when that person already holds another external id: it skips the row and reports it for an admin to resolve.
 - **Returning restores no memberships.** A returner comes back with none, like a new person.
+
+Dates for the status events and the start date:
+
+- **`PersonJoined` is the move from pending to employed, effective on the start date** when the HRIS holds one, else the sync's date. A hire the HRIS shows before their start date stays pending and joins on the first sync on or after it.
+- **`PersonLeft` is effective on the HRIS termination date** when it holds one, else the sync's date. A leaver whose termination date arrives later, or changes, gets a second `PersonLeft` on that date. A termination date before the start date contradicts it, so the sync drops it and dates the leaving by the sync.
+- **`PersonReturned` is effective on the start date when it falls after the leaving**, else the sync's date, since an HRIS may still hold a returner's first start. A leaver whose rehire has not started yet stays left, and their facts are not compared until they return.
+- **`StartDateChanged` supplies or corrects the start date of someone recorded and not left**, effective on that date. `PersonRecorded` carries the start date when the HRIS sends one.
+- **The history projection reads employment as beginning on the start date** when one is held, not on the day the sync first saw the person.
+- **Country stays absent** until the tenant's field mapping names a field for it. HiBob gives a site no country.
 
 ### One structure stream per tenant
 
@@ -289,6 +299,17 @@ and the levels an HRIS provides sit above every level Espalia holds. That check 
 setting replaces the first version's check on each unit. A level that holds live units
 keeps its provider until a handover (6.8) moves it. A new level names its provider when
 the taxonomy adds it, so a level can be added above one an HRIS provides.
+
+The kinds of person fact, each naming the events it covers:
+
+| Kind | Events |
+|---|---|
+| `employment_status` | `PersonJoined`, `PersonLeft`, `PersonReturned`, `StartDateChanged` |
+| `title`, `level`, `manager`, `cost_centre` | `TitleChanged`, `LevelChanged`, `ManagerChanged`, `CostCentreChanged` |
+| `site` | `SiteChanged` (site and country) |
+| `employment` | `EmploymentChanged` (FTE and type) |
+
+The HiBob sync writes `employment_status`, `title`, `level`, `manager`, `site` and `employment`. Each must name the HRIS as its provider, or its writes are refused. `cost_centre` stays Espalia's until the field mapping (6.4) names a field.
 
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's
