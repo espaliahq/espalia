@@ -92,7 +92,9 @@ descendants. A descendant shows the change because its state is resolved at read
 3. The plan's own data and rules.
 4. Each scenario's changes, from the root of the chain down to the scenario on screen.
 
-The last change for a subject wins. "Rebase" is this resolution run over a new base, so
+The last change for a subject and facet wins. A facet is the part of a subject one kind
+of event sets: a person's assignment, their level and their reporting line are three
+facets, so `LevelSet` never competes with `AssignmentSet`. "Rebase" is this resolution run over a new base, so
 nothing has to be rewritten in storage. A descendant's explicit change survives an
 ancestor's edit because it is later in the chain, not because anything protected it.
 
@@ -107,8 +109,9 @@ scenario.
 
 ### Two people editing at once
 
-End-state changes to different subjects commute, so the aggregate retries them on a
-version conflict. Two changes to the same subject are a real conflict: the last write
+End-state changes to different subjects, or to different facets of one, commute, so the
+aggregate retries them on a version conflict. Two changes to the same subject and facet
+are a real conflict: the last write
 wins and both stay in the history.
 
 ## The base pointer
@@ -280,7 +283,9 @@ Approval is the one process this module owns.
   scenario*.
 - Tenant guardrails are binding at approval and nowhere earlier.
 - **Facts Espalia holds** are applied to the Org Graph on approval (R6). Each is recorded as
-  `ChangeApplied`.
+  `ChangeApplied`. So approving a scenario that changes any of them needs both
+  permissions: to approve, and to apply changes to the Org Graph. Without the second the
+  approval is refused whole. It is never recorded with its changes left unapplied.
 - **Facts another system holds** are not written by Espalia. Espalia is the source for
   the implementation: an Operation serves the approved change list, and an agent or a
   person raises each change upstream with their own authority there.
@@ -288,7 +293,14 @@ Approval is the one process this module owns.
 The change list is served only for an approved point, so a draft cannot be carried
 out. Each entry has a stable id, its subject, its end state, what it depends on and its
 status. One small write goes with it: `ChangeRaised`, with the upstream reference. It
-makes a second run safe and shows a planner what is in flight.
+shows a planner what is in flight.
+
+`ChangeRaised` alone does not make a second run safe. An agent can raise a change and
+fail before recording it, and two agents can pick up the same entry. The entry's stable
+id is the guard. The agent sends it with the upstream request, as an idempotency key or
+in the request's text, and looks for it upstream before raising. Where the other system
+offers neither, a duplicate request is possible and a person there has to catch it.
+Espalia's own state stays right either way, because done is read from the Org Graph.
 
 Done is still decided by the Org Graph. Nothing the agent reports marks a change done.
 
@@ -307,6 +319,9 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - **Nothing anyone sees changes.** The moved changes are now inherited by the original
   where before it set them itself, so it and every descendant resolve to exactly what
   they did. The split only draws a line through the scenario.
+- A change moves with every earlier change it overwrites. If the scenario set a level to
+  3 and later to 4, moving only the 4 would leave the 3 behind to win. The earlier
+  changes for the same subject and facet go across with it.
 - The two parts cover the same period. This is a third relation beside `then` and
   `instead`: the rest sits on top of the agreed part. The timeline shows them as one
   column with the agreed part marked.
@@ -370,3 +385,7 @@ yet. Three properties of the events keep it possible, and must not be given up:
 **Erasure inside a live plan.** A person the Org Graph has forgotten stays in a plan as
 an anonymous id, with whatever the plan held about them, until the plan is deleted. The
 plan is private and the identity is gone, so this is accepted.
+
+One thing can still name them: a note. A note is free text under the plan's key, so one
+that mentions the person stays readable to the plan's members until the plan is
+deleted. Deleting the plan is the remedy when that is not acceptable.
