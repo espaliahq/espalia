@@ -48,12 +48,17 @@ class Views::Tenant::OrgGraph::UnitStep < Views::Base
       "#{provider_label(@unit)} holds #{@unit.name}, so split, merge or retire it there."
     elsif children.any?
       "Move or retire #{@unit.name}'s sub-units first: #{children.map(&:name).to_sentence}."
-    elsif !allowed?
+    elsif !@rights.reshape?
       "You can't change #{@unit.name}'s shape. An admin, an Org Graph editor or an owner of the unit can."
+    elsif !allowed?
+      not_allowed_because
     end
   end
 
-  def children = @children ||= @unit.children.live.order(:name).to_a
+  # @return [String] why the viewer, who may reshape the unit, can't take this step
+  def not_allowed_because = raise(NotImplementedError)
+
+  def children = @overview.children_of(@unit)
 
   def memberships = @memberships ||= @overview.members_of(@unit).sort_by { |membership| membership.person.name }
 

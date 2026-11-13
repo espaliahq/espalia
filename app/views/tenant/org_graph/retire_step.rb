@@ -6,7 +6,7 @@ class Views::Tenant::OrgGraph::RetireStep < Views::Tenant::OrgGraph::UnitStep
 
   def title = "Retire #{@unit.name}"
 
-  def allowed? = @rights.reshape?
+  def allowed? = true
 
   def body
     count = memberships.size

@@ -11,6 +11,8 @@ class Views::Tenant::OrgGraph::MergeStep < Views::Tenant::OrgGraph::UnitStep
 
   def allowed? = @rights.merge?
 
+  def not_allowed_because = "There's no other unit you can merge #{@unit.name} into."
+
   def body
     count = memberships.size
     p(class: "text-sm text-default") do

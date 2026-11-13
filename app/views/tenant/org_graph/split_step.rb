@@ -23,6 +23,14 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
 
   def allowed? = @rights.split?
 
+  def not_allowed_because
+    if @unit.parent
+      "The new units sit beside #{@unit.name}, under #{@unit.parent.name}, and you can't add units there."
+    else
+      "The new units sit at the top level, where only an admin or an Org Graph editor can add units."
+    end
+  end
+
   def body
     case stage
     when "names" then names_page

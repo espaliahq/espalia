@@ -89,6 +89,14 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ "Platform" ], units_of(:dot)
     end
 
+    should "say so when there is no unit to merge into" do
+      [ :payments, :checkout ].each { |key| post tenant_org_unit_retirement_path(@org[key]) }
+
+      get new_tenant_org_unit_merge_path(@org[:platform])
+
+      assert_equal "There's no other unit you can merge Platform into.", drawer.at_css("#org-unit-step-blocked").text
+    end
+
     should "come back to the step with the reason when no unit is chosen" do
       post tenant_org_unit_merge_path(@org[:payments]), params: { into_unit_id: "" }
 
