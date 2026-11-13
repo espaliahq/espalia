@@ -39,9 +39,7 @@ module OrgGraph::PlanReference::Stamping
 
   # @see AggregateRoot#apply
   def apply(*events)
-    return super unless @plan_reference
-
-    super(*events.map { |event| event.class.new(event_id: event.event_id, metadata: event.metadata.to_h,
-                                                data: event.data.merge(@plan_reference)) })
+    events.each { |event| event.data.merge!(@plan_reference) } if @plan_reference
+    super
   end
 end
