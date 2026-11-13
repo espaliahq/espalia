@@ -62,9 +62,12 @@ else
   log "step 3: REBUILD_ON_DEPLOY not set, skipping"
 fi
 
-# 4. Hard fail if any projection's persisted version is older than its
-#    current CODE_VERSION constant. This is the predeploy guard — see
-#    `docs/runbooks/projection-rebuild.md` for the resolution flow.
-log "step 4: events:projections:verify"
-rake events:projections:verify
+# 4. Reset and stamp any never-rebuilt projection with no handled events in
+#    the store, so a newly registered one deploys without REBUILD_ON_DEPLOY.
+#    Then hard fail if any projection's persisted version differs from its
+#    CODE_VERSION constant. This is the predeploy guard — see
+#    `docs/runbooks/projection-rebuild.md` for the resolution flow. One rake
+#    process runs both, so the app boots once.
+log "step 4: events:projections:stamp_if_no_events, events:projections:verify"
+rake events:projections:stamp_if_no_events events:projections:verify
 log "step 4: done — predeploy complete"
