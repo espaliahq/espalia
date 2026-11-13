@@ -745,6 +745,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_160000) do
     t.index ["uid"], name: "index_oauth_applications_on_uid", unique: true
   end
 
+  create_table "org_fact_ages", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "person_id", null: false
+    t.string "fact", null: false
+    t.uuid "unit_id"
+    t.jsonb "value"
+    t.datetime "changed_at", null: false
+    t.datetime "confirmed_at"
+    t.datetime "checked_at", null: false
+    t.uuid "checked_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "checked_at"], name: "index_org_fact_ages_on_tenant_id_and_checked_at"
+    t.index ["tenant_id", "person_id", "fact", "unit_id"], name: "index_org_fact_ages_on_fact", unique: true, nulls_not_distinct: true
+  end
+
   create_table "org_fact_providers", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "fact", null: false
@@ -946,6 +962,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_160000) do
     t.jsonb "ai_config", default: {}, null: false
     t.string "ai_credentials"
     t.string "custom_domain"
+    t.jsonb "org_graph_config", default: {}, null: false
     t.index ["custom_domain"], name: "index_tenants_on_custom_domain", unique: true
     t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"
     t.index ["previous_inbound_key_id"], name: "index_tenants_on_previous_inbound_key_id", where: "(previous_inbound_key_id IS NOT NULL)"
@@ -1031,6 +1048,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_160000) do
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_tokens", "tenants"
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
+  add_foreign_key "org_fact_ages", "tenants"
   add_foreign_key "org_fact_providers", "tenants"
   add_foreign_key "org_memberships", "tenants"
   add_foreign_key "org_taxonomy_levels", "tenants"

@@ -40,6 +40,9 @@ class Tenant < ApplicationRecord
   serialize :feedback_exchange_credentials, coder: JSON
   encrypts :feedback_exchange_credentials
 
+  # The Org Graph's settings, such as when a fact Espalia holds goes stale.
+  attribute :org_graph_config, OrgGraphConfig.to_type, default: -> { OrgGraphConfig.new }
+
   # Slack bot credentials for this workspace, set when a tenant admin installs
   # the Espalia Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
   serialize :slack_credentials, coder: JSON
@@ -172,6 +175,7 @@ class Tenant < ApplicationRecord
   validates :hris_config, store_model: true
   validates :ai_config, store_model: true
   validates :feedback_exchange_config, store_model: true
+  validates :org_graph_config, store_model: true
   before_validation :sync_feedback_exchange_key_ids, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_inbound_secret_is_ours, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_secrets_are_strong, if: :feedback_exchange_credentials_changed?
@@ -257,6 +261,23 @@ class Tenant < ApplicationRecord
         hris_credentials: credentials.presence
       )
       save!
+    end
+    claim_hris_facts_after_save
+    true
+  end
+
+  # Hands the HRIS the person facts it supplies by default
+  # ({OrgGraph::StructureAggregate::HRIS_FACTS}), once it is configured. A
+  # fact whose provider was ever chosen keeps it, so this is safe to repeat;
+  # disconnecting hands nothing back, as that is a handover.
+  #
+  # @return [Array<String>] the facts claimed
+  def claim_hris_facts!
+    return [] unless hris_config.configured?(self)
+
+    ActsAsTenant.with_tenant(self) do
+      OrgGraph::StructureCommandHandler.new.claim_facts(OrgGraph::StructureAggregate::HRIS_FACTS, hris_config.provider,
+                                                        effective_on: Date.current)
     end
   end
 
@@ -410,6 +431,14 @@ class Tenant < ApplicationRecord
   end
 
   private
+
+  # The settings are saved by now, so a failed claim is reported rather than
+  # raised; predeploy and the next save claim again.
+  def claim_hris_facts_after_save
+    claim_hris_facts!
+  rescue => e
+    Rails.error.report(e, handled: true, context: { tenant_id: id })
+  end
 
   def custom_domain_is_not_the_instance_host
     return if custom_domain.blank?

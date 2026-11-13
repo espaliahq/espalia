@@ -227,6 +227,31 @@ when they leave the company and their `people` row goes inactive. That is read w
 owners are asked for, so leaving writes no ownership event. A unit nobody up its chain
 owns is flagged too (`OrgUnit#needs_owner?`).
 
+### Keeping a fact current
+
+An HRIS keeps its own facts fresh. A fact Espalia holds stays true only while someone
+keeps it so, so each one shows its age.
+
+- **`FactConfirmed` says a fact still holds**, and who said so. It names the fact, a
+  membership by its unit or a person fact by its key, and never copies the value, so a
+  confirmation can't disagree with the fact. Only a fact Espalia holds, for someone who
+  hasn't left, can be confirmed, and a membership only in a live unit. Like any person
+  command, a confirmation is refused once the tenant hands the fact or the unit to an
+  HRIS, even before the next sync rewrites it.
+- **A handover ends a fact's age.** The HRIS's next write names it as the provider, and
+  the fact drops out of `org_fact_ages`.
+- **A fact is stale** when nobody has changed or confirmed it within the tenant's
+  threshold, `Tenant#org_graph_config.staleness_days`, a quarter by default.
+- **Age runs from when the Org Graph learned of a change**, not from its effective date,
+  so a membership backdated to last year doesn't arrive already stale.
+- `OrgGraph::Projections::FactAges` keeps each fact's last change and confirmation in
+  `org_fact_ages`, and `OrgFactAge.stale(tenant)` lists the stale ones, oldest first. A
+  leaver's facts are never listed, nor a membership of a retired unit. Changing one half
+  of a pair, such as a site, leaves the other half's age alone.
+
+The flags and confirm buttons are 5.5. Units' own facts, their names and parents, have no
+confirmation yet.
+
 ### What happens to `people`
 
 The identifier columns stay as they are: mutable, written by the sync, and the only place
@@ -282,9 +307,19 @@ Facts Espalia holds change in two ways. Both issue the same commands.
   here, because a first plan applied whole creates the structure.
 
 Either way the change carries an effective date, so a move can be recorded as having
-happened on the first of the month.
+happened on the first of the month. A change may be backdated, but a fact's dates stay in
+order: a membership can't end before its latest change or restart before the last one
+ended, and a unit can't change before it was created, retire before its latest change, or
+sit beneath a parent that didn't yet exist.
 
 Facts another provider holds cannot be changed here. They change when the sync says so.
+Every person command is refused unless its provider holds what it writes: the tenant's
+setting for that kind of fact, or for a membership, its unit's own provider. A unit keeps
+the provider it was created with, which was its level's then, and a membership moves only
+into a unit the same provider supplies. The setting reaches only people who carry that
+provider's external id: anyone else, added by hand or with an account, is Espalia's for
+every fact, so Espalia edits them and the sync never writes them. The error names the
+provider that does. The sync reports a refused person and carries on with the rest.
 
 ## Providers and provenance (R5)
 
@@ -309,7 +344,16 @@ The kinds of person fact, each naming the events it covers:
 | `site` | `SiteChanged` (site and country) |
 | `employment` | `EmploymentChanged` (FTE and type) |
 
-The HiBob sync writes `employment_status`, `title`, `level`, `manager`, `site` and `employment`. Each must name the HRIS as its provider, or its writes are refused. `cost_centre` stays Espalia's until the field mapping (6.4) names a field.
+The HiBob sync writes `employment_status`, `title`, `level`, `manager`, `site` and `employment`. Each must name the HRIS as its provider, or its writes are refused; how it comes to is below. `cost_centre` stays Espalia's until the field mapping (6.4) names a field.
+
+An HRIS supplies some facts by default: employment status, title, level, manager, site
+and employment
+(`OrgGraph::StructureAggregate::HRIS_FACTS`). Saving a configured HRIS hands it each of
+those whose provider nobody has chosen, and a predeploy task does the same for tenants
+already connected. This records what was already true, since the sync has always
+overwritten those columns on `people`; it is not a handover. A fact whose provider was
+ever chosen keeps it, so a re-run reaches only facts added to the list since.
+Disconnecting hands nothing back: that is a handover too.
 
 The field a fact is read from is part of the same setting: `FactProviderSet` carries `fields`, so naming a field names its provider too. Cost centre and a site's country can be mapped today.
 
