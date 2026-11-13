@@ -2631,7 +2631,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "org_graph_changes_between",
-        "description" => "What changed in the Org Graph between two UTC dates: joiners, leavers, person " \
+        "description" => "What changed in the Org Graph between two UTC dates: joiners (with every fact " \
+          "they hold on their first day), leavers, person " \
           "fact changes (title, level, manager, cost centre, site, employment), memberships " \
           "started, ended or changed, moves between units, and units created, renamed, moved, " \
           "retired, succeeded or re-owned. by \"effective\" (the default) lists what took " \

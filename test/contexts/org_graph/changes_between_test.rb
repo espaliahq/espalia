@@ -71,6 +71,7 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
     assert_equal [ :effective, nil ], [ result.by, result.known_on ]
 
     assert_equal [ @linus.id, Date.new(2026, 3, 2) ], one(result, :joined).to_h.values_at(:person_id, :effective_on)
+    assert_equal({ "employment_status" => "employed", "title" => "Designer" }, one(result, :joined).after)
     left = one(result, :left)
     assert_equal [ @grace.id, Date.new(2026, 3, 6) ], left.to_h.values_at(:person_id, :effective_on)
 
@@ -122,8 +123,7 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
 
     from, to = as_of("2026-02-28"), as_of("2026-03-31")
     applied = apply(snapshot_shape(from), changes("2026-02-28", "2026-03-31").changes)
-    assert_equal snapshot_shape(to).except(:titles), applied.except(:titles)
-    assert_equal snapshot_shape(to)[:titles].slice(*applied[:titles].keys), applied[:titles]
+    assert_equal snapshot_shape(to), applied
   end
 
   should "read what was known on an earlier day, leaving out a correction learned since" do
@@ -259,15 +259,15 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
   end
 
   # Steps the earlier snapshot through the changes, keeping memberships and
-  # owners only where both ends survive, as as_of does. A joiner's facts were
-  # recorded before they joined, so titles are checked only for people on
-  # both days' rosters.
+  # owners only where both ends survive, as as_of does.
   def apply(shape, changes)
     people, titles, placements, units = shape[:people].dup, shape[:titles].dup, shape[:placements].dup, shape[:units].dup
     owners = shape[:owners].to_set
     changes.each do |change|
       case change.kind
-      when :joined then people << change.person_id
+      when :joined
+        people << change.person_id
+        titles[change.person_id] = change.after["title"]
       when :left then people.delete(change.person_id)
       when :fact_changed then titles[change.person_id] = change.after&.fetch("title") if change.fact == "title" && titles.key?(change.person_id)
       when :membership_started, :membership_changed then placements[[ change.person_id, change.unit_id ]] = change.after["allocation"]

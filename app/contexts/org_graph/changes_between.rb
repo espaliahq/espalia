@@ -56,7 +56,8 @@ class OrgGraph::ChangesBetween
   # @!attribute fact [String, nil] for `fact_changed`: "title", "level",
   #   "manager", "cost_centre", "site" or "employment"
   # @!attribute before [Hash, nil] the fact's fields before, nil when new
-  # @!attribute after [Hash, nil] the fact's fields after, nil when it ended
+  # @!attribute after [Hash, nil] the fact's fields after, nil when it ended;
+  #   for `joined`, every fact the person holds on their first day
   # @!attribute provider [String, nil] who supplied it
   # @!attribute event_id [String] the event that wrote it
   # @!attribute withdrawn [Boolean] by learned date only: true when the Org
@@ -110,7 +111,8 @@ class OrgGraph::ChangesBetween
     window = (@from + 1)..@to
     rows = facts(OrgFactPeriod.known_on(@known_on))
     rows = rows.where(effective_from: window).or(rows.where(effective_to: window))
-    changes_from(first_learned(steps(rows.to_a).select { window.cover?(it.on) }), withdrawn: false)
+    changes_from(first_learned(steps(rows.to_a).select { window.cover?(it.on) }), withdrawn: false,
+                                                                                   knowledge: OrgFactPeriod.known_on(@known_on))
   end
 
   # A row is rewritten whenever a later change cuts its period short, so its
@@ -138,7 +140,8 @@ class OrgGraph::ChangesBetween
     rows = facts(OrgFactPeriod.where(subject_id: touched.map { it[1] }.uniq, learned_at: ..closed))
     learned, withdrawn = rows.to_a.select { touched.include?(timeline(it)) }.group_by { timeline(it) }.values
                              .map { learned_on(it, opened, closed) }.transpose.map(&:flatten)
-    changes_from(learned, withdrawn: false) + changes_from(withdrawn, withdrawn: true)
+    changes_from(learned, withdrawn: false, knowledge: OrgFactPeriod.known_on(@to)) +
+      changes_from(withdrawn, withdrawn: true, knowledge: OrgFactPeriod.known_on(@from))
   end
 
   # One timeline's steps learned and withdrawn in the window, each with the
@@ -188,9 +191,28 @@ class OrgGraph::ChangesBetween
 
   # ── Kinds ──
 
-  def changes_from(steps, withdrawn:)
-    fold_unit_creation(fold_moves(steps)).filter_map { (it.is_a?(Change) ? it : change(it))&.with(withdrawn:) }
+  def changes_from(steps, withdrawn:, knowledge:)
+    changes = fold_unit_creation(fold_moves(steps)).filter_map { (it.is_a?(Change) ? it : change(it))&.with(withdrawn:) }
+    with_joiners_facts(changes, knowledge)
   end
+
+  # A joiner's title, level and other facts are often recorded while they are
+  # pending, before the window opens, so a joining carries them all.
+  def with_joiners_facts(changes, knowledge)
+    joiners = changes.select { it.kind == :joined }
+    return changes if joiners.empty?
+
+    rows = knowledge.where(subject_type: PERSON, subject_id: joiners.map(&:person_id).uniq,
+                           fact: OrgGraph::AsOf::PERSON_FACTS - %w[employment_status]).to_a
+    changes.map do |change|
+      next change unless change.kind == :joined
+
+      held = rows.select { it.subject_id == change.person_id && covers?(it, change.effective_on) }
+      change.with(after: held.filter_map(&:value).reduce(change.after, :merge))
+    end
+  end
+
+  def covers?(row, day) = row.effective_from <= day && (row.effective_to.nil? || row.effective_to > day)
 
   # A move ends one membership and starts another in one event.
   def fold_moves(steps)
