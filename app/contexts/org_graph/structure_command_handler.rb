@@ -117,7 +117,54 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
+  # Applies a split, a merge or a replacement, as approving a plan does: moves
+  # each person `placements` names to their successor, records the succession
+  # and retires the predecessors, all in one transaction. A merge or a
+  # replacement then moves every other member to its one successor; a split
+  # ends their membership, as {OrgGraph::SyncHandlers::RetiredUnitMemberships}
+  # does. Build the handler with the approval as its `cause_id:`, so every
+  # event shares it.
+  #
+  # @param succession_id [String]
+  # @param predecessor_ids [Array<String>]
+  # @param successor_ids [Array<String>]
+  # @param effective_on [Date, String]
+  # @param placements [Hash{String => String}] person id => the successor
+  #   they move to
+  # @param options [Hash] other keywords accepted by
+  #   {OrgGraph::StructureAggregate#record_succession}
+  # @raise [ArgumentError] if a placement names a unit outside the successors,
+  #   or a person who isn't a member of exactly one predecessor
+  def apply_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:, placements: {}, **options)
+    plan, options = OrgGraph::PlanReference.extract(options)
+    ActiveRecord::Base.transaction do
+      authorize_succession!([ predecessor_ids, successor_ids ])
+      place(placements, predecessor_ids, successor_ids, effective_on, plan)
+      with_structure(plan) do |structure|
+        structure.record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:,
+                                                   **attributed(options, :stated_by_id), retire_predecessors: true)
+      end
+    end
+  end
+
   private
+
+  def place(placements, predecessor_ids, successor_ids, effective_on, plan)
+    people = OrgGraph::CommandHandler.new(actor: @actor, cause_id: @cause_id, repository: @repository)
+    predecessor_ids = predecessor_ids.map { |id| id.to_s.downcase }
+    successor_ids = successor_ids.map { |id| id.to_s.downcase }
+
+    placements.each do |person_id, successor_id|
+      unless successor_ids.include?(successor_id.to_s.downcase)
+        raise ArgumentError, "A placement must name one of the successors"
+      end
+
+      from = OrgMembership.where(person_id: person_id, unit_id: predecessor_ids).pluck(:unit_id)
+      raise ArgumentError, "Only a member of one predecessor can be placed" unless from.one?
+
+      people.move_membership(person_id, from.first, successor_id, effective_on: effective_on, **plan.to_h)
+    end
+  end
 
   def with_structure(plan, &block)
     @repository.with_structure(plan:, cause_id: @cause_id, &block)
