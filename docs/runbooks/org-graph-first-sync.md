@@ -48,7 +48,9 @@ Every later sync writes only what changed: a person HiBob now shows as inactive 
 The events are immutable, and a person's first `PersonRecorded` is their starting point for good. A sync never records anyone twice, so re-running one is safe. It records whoever is still missing, then writes changes. If a bug wrote wrong facts for someone employed, fix it and let the next sync write the corrections as changes. The sync never compares a leaver's facts, so correct those in a console, inside the tenant. `change_title`, `change_level` and `change_manager` write the correction and leave the person's status as it is:
 
 ```ruby
+tenant = Tenant.find("<tenant id>")
 ActsAsTenant.with_tenant(tenant) do
+  person = Person.find("<person id>")
   OrgGraph::CommandHandler.new.change_title(person.id, "Designer", provider: "hibob", effective_on: Date.current)
 end
 ```
