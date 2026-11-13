@@ -45,4 +45,12 @@ Every later sync writes only what changed: a person HiBob now shows as inactive 
 
 ## If it goes wrong
 
-The events are immutable, and a person's first `PersonRecorded` is their starting point for good. A sync never records anyone twice, so re-running one is safe. It records whoever is still missing, then writes changes. If a bug wrote wrong facts, fix it and let the next sync write the corrections as changes. Do not delete streams: the design treats a correction as a new fact, never a rewrite.
+The events are immutable, and a person's first `PersonRecorded` is their starting point for good. A sync never records anyone twice, so re-running one is safe. It records whoever is still missing, then writes changes. If a bug wrote wrong facts for someone employed, fix it and let the next sync write the corrections as changes. The sync never compares a leaver's facts, so correct those in a console, inside the tenant. `change_title`, `change_level` and `change_manager` write the correction and leave the person's status as it is:
+
+```ruby
+ActsAsTenant.with_tenant(tenant) do
+  OrgGraph::CommandHandler.new.change_title(person.id, "Designer", provider: "hibob", effective_on: Date.current)
+end
+```
+
+Do not delete streams: the design treats a correction as a new fact, never a rewrite.
