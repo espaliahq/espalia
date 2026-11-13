@@ -113,6 +113,10 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     end
 
     should "be refused the root, a unit elsewhere, and a move or succession that reaches one" do
+      system = OrgGraph::StructureCommandHandler.new
+      system.add_unit_owner(@product_id, @lead.id, effective_on: "2026-01-01")
+      OrgGraph::CommandHandler.new.set_membership(@lead.id, @product_id, **ESPALIA)
+
       refusals = {
         "a unit at the root" => -> {
           structure(@actor).create_unit(SecureRandom.uuid_v7, "Design", level_id: @department, effective_on: "2026-02-01")
@@ -123,13 +127,36 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
           structure(@actor).record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments_id ],
             successor_ids: [ @product_id ], effective_on: "2026-02-01")
         },
+        "retire Product" => -> { structure(@actor).retire_unit(@product_id, effective_on: "2026-02-01") },
+        "own Product" => -> { structure(@actor).add_unit_owner(@product_id, @other.id, effective_on: "2026-02-01") },
         "membership of Product" => -> { people(@actor).set_membership(@report.id, @product_id, **ESPALIA) },
+        "end a membership of Product" => -> {
+          people(@actor).end_membership(@lead.id, @product_id, **ESPALIA)
+        },
+        "move a membership out of Product" => -> {
+          people(@actor).move_membership(@lead.id, @product_id, @payments_id, effective_on: "2026-02-02")
+        },
         "a person's facts" => -> { people(@actor).change_title(@report.id, "Lead", **ESPALIA) }
       }
 
       refusals.each do |label, command|
         assert_raises(OrgGraph::Authorization::Refused, label) { command.call }
       end
+      assert_equal [ @lead.id ], OrgUnitOwner.where(unit_id: @product_id).pluck(:person_id)
+      assert OrgMembership.exists?(person_id: @lead.id, unit_id: @product_id)
+    end
+
+    should "record a succession between units they hold, and remove an owner beneath" do
+      squad_id = SecureRandom.uuid_v7
+      OrgGraph::StructureCommandHandler.new.create_unit(squad_id, "Checkout", level_id: @team,
+        parent_id: @engineering_id, effective_on: "2026-01-01")
+      OrgGraph::StructureCommandHandler.new.add_unit_owner(@payments_id, @lead.id, effective_on: "2026-01-01")
+
+      structure(@actor).record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments_id ],
+        successor_ids: [ squad_id ], effective_on: "2026-02-01")
+      structure(@actor).remove_unit_owner(@payments_id, @lead.id, effective_on: "2026-02-01")
+
+      assert_not OrgUnitOwner.exists?(unit_id: @payments_id)
     end
 
     should "let the system move the members out when they retire a unit" do
@@ -158,6 +185,17 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
       people(@actor).end_membership(@report.id, @payments_id, provider: "espalia", effective_on: "2026-02-03")
 
       assert_not OrgMembership.exists?(person_id: @report.id)
+    end
+
+    should "be refused a move between units they don't hold for someone outside their chain" do
+      OrgGraph::StructureCommandHandler.new.add_unit_owner(@product_id, @lead.id, effective_on: "2026-01-01")
+      OrgGraph::CommandHandler.new.set_membership(@other.id, @product_id, **ESPALIA)
+
+      error = assert_raises(OrgGraph::Authorization::Refused) do
+        people(@actor).move_membership(@other.id, @product_id, @payments_id, effective_on: "2026-02-02")
+      end
+      assert_match "rights over both Product and Payments", error.message
+      people(@actor).end_membership(@other.id, @product_id, **ESPALIA)
     end
 
     should "be refused anyone else's membership and the units themselves" do

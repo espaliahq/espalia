@@ -82,8 +82,8 @@ class OrgGraph::StructureCommandHandler
   #
   # @see OrgGraph::StructureAggregate#retire_unit
   def retire_unit(unit_id, **options)
-    authorize_unit!(unit_id)
     ActiveRecord::Base.transaction do
+      authorize_unit!(unit_id)
       @repository.with_structure { |structure| structure.retire_unit(unit_id, **options) }
     end
   end
@@ -92,8 +92,8 @@ class OrgGraph::StructureCommandHandler
   #
   # @see OrgGraph::StructureAggregate#record_succession
   def record_succession(succession_id, **options)
-    authorize_units!(options[:predecessor_ids], options[:successor_ids])
     ActiveRecord::Base.transaction do
+      authorize_succession!([ options[:predecessor_ids], options[:successor_ids] ])
       @repository.with_structure { |structure| structure.record_succession(succession_id, **options) }
     end
   end

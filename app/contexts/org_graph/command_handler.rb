@@ -246,6 +246,10 @@ class OrgGraph::CommandHandler
     end
   end
 
+  def find_unit(unit_id)
+    OrgUnit.find_by(id: unit_id.to_s.downcase)
+  end
+
   # A unit keeps the provider it was created with, which was its level's then,
   # so a retired unit's members can still be ended after its level changes hands.
   def ensure_provides_unit!(unit, provider)
