@@ -254,9 +254,15 @@ Facts Espalia holds change in two ways. Both issue the same commands.
   here, because a first plan applied whole creates the structure.
 
 Either way the change carries an effective date, so a move can be recorded as having
-happened on the first of the month.
+happened on the first of the month. A change may be backdated, but a fact's dates stay in
+order: a membership can't end before its latest change or restart before the last one
+ended, and a unit can't change before it was created, retire before its latest change, or
+sit beneath a parent that didn't yet exist.
 
 Facts another provider holds cannot be changed here. They change when the sync says so.
+Every person command is refused unless its provider holds what it writes: the tenant's
+setting for that kind of fact, or for a membership, its unit's level. The error names the
+provider that does. The sync reports a refused person and carries on with the rest.
 
 ## Providers and provenance (R5)
 
@@ -271,6 +277,14 @@ and the levels an HRIS provides sit above every level Espalia holds. That check 
 setting replaces the first version's check on each unit. A level that holds live units
 keeps its provider until a handover (6.8) moves it. A new level names its provider when
 the taxonomy adds it, so a level can be added above one an HRIS provides.
+
+An HRIS supplies some facts by default: employment status, title, level and manager
+(`OrgGraph::StructureAggregate::HRIS_FACTS`). Saving a configured HRIS hands it each of
+those whose provider nobody has chosen, and a predeploy task does the same for tenants
+already connected. This records what was already true, since the sync has always
+overwritten those columns on `people`; it is not a handover. A fact whose provider was
+ever chosen keeps it, so a re-run reaches only facts added to the list since.
+Disconnecting hands nothing back: that is a handover too.
 
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's
