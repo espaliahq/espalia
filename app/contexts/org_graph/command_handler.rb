@@ -162,6 +162,21 @@ class OrgGraph::CommandHandler
     @repository.with_person(person_id) { |person| person.end_membership(unit_id, **options) }
   end
 
+  # Moves a person's membership to a live unit, keeping its terms.
+  #
+  # @param person_id [String]
+  # @param from_unit_id [String]
+  # @param unit_id [String] a live unit in the tenant's structure
+  # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#move_membership}
+  # @raise [RuntimeError] if the destination does not exist or is retired, or
+  #   another provider supplies it than the one that supplied the membership
+  def move_membership(person_id, from_unit_id, unit_id, **options)
+    unit = ensure_live_unit!(unit_id)
+    membership = OrgMembership.find_by(person_id: person_id, unit_id: from_unit_id.to_s.downcase)
+    ensure_provides_unit!(unit, membership.provider) if membership
+    @repository.with_person(person_id) { |person| person.move_membership(from_unit_id, unit_id, **options) }
+  end
+
   private
 
   # Reads the structure projection, which is written synchronously with the

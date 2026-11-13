@@ -405,6 +405,28 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       end
     end
 
+    should "date a move after the membership's last change, and after the destination's last end" do
+      @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-01-01")
+      @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-03-01")
+      @aggregate.set_membership(@guild, provider: "hibob", effective_on: "2026-01-01")
+      @aggregate.end_membership(@guild, provider: "hibob", effective_on: "2026-06-30")
+
+      assert_raises(RuntimeError, match: /move before its last change on 2026-03-01/) do
+        @aggregate.move_membership(@squad, @guild, effective_on: "2026-02-01")
+      end
+      assert_raises(RuntimeError, match: /restart before the last one ended on 2026-06-30/) do
+        @aggregate.move_membership(@squad, @guild, effective_on: "2026-05-01")
+      end
+
+      @aggregate.move_membership(@squad, @guild, effective_on: "2026-07-01")
+      assert_raises(RuntimeError, match: /end before its last change on 2026-07-01/) do
+        @aggregate.end_membership(@guild, provider: "hibob", effective_on: "2026-06-30")
+      end
+      assert_raises(RuntimeError, match: /restart before the last one ended on 2026-07-01/) do
+        @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-06-01")
+      end
+    end
+
     should "replay the dates from the stream, so a reloaded person keeps the same rules" do
       @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-03-01")
       @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-06-30")

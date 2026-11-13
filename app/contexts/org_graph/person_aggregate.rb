@@ -203,6 +203,45 @@ class OrgGraph::PersonAggregate
       ended_by_id: ended_by_id, plan_change_id: plan_change_id)))
   end
 
+  # Moves the person's membership of one unit to another, keeping its terms
+  # and when it began, since the destination carries on from the unit they
+  # were in. A person already in the destination keeps that membership, and a
+  # person who has left can't join one, so in either case the membership they
+  # had ends instead.
+  #
+  # @param from_unit_id [String] a unit they are a member of
+  # @param unit_id [String] the live unit they move to
+  # @param effective_on [Date, String]
+  # @param moved_by_id [String, nil] person_id of the actor
+  # @param plan_change_id [String, nil]
+  # @raise [RuntimeError] if the person is not a member, or it would move before it began
+  def move_membership(from_unit_id, unit_id, effective_on:, moved_by_id: nil, plan_change_id: nil)
+    ensure_recorded!
+    from_unit_id = validated_unit(from_unit_id)
+    unit_id = validated_unit(unit_id)
+    membership = @memberships[from_unit_id]
+    raise "Not a member of this unit" unless membership
+    raise "A membership can't move to the unit it is in" if from_unit_id == unit_id
+
+    if @memberships.key?(unit_id) || @employment_status == "left"
+      return end_membership(from_unit_id, provider: membership[:provider], effective_on:, ended_by_id: moved_by_id,
+                                          plan_change_id:)
+    end
+
+    data = provenance(membership[:provider], effective_on)
+    raise "A membership can't move before it begins" if data[:effective_on] < membership[:since]
+    if data[:effective_on] < membership[:changed_on]
+      raise "A membership can't move before its last change on #{membership[:changed_on]}"
+    end
+    ended_on = @membership_ends[unit_id]
+    if ended_on && data[:effective_on] < ended_on
+      raise "A membership can't restart before the last one ended on #{ended_on}"
+    end
+
+    apply(OrgGraph::Events::MembershipMoved.new(data: data.merge(from_unit_id: from_unit_id, unit_id: unit_id,
+      **membership.slice(:allocation, :role), moved_by_id: moved_by_id, plan_change_id: plan_change_id)))
+  end
+
   # @return [Boolean] whether the Org Graph has seen this person yet
   def recorded?
     !@employment_status.nil?
@@ -389,12 +428,22 @@ class OrgGraph::PersonAggregate
 
   on OrgGraph::Events::MembershipSet do |event|
     data = event.data
-    changed_on = [ @memberships.dig(data[:unit_id], :changed_on), data[:effective_on] ].compact.max
-    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(changed_on: changed_on)
+    current = @memberships[data[:unit_id]] || {}
+    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(
+      since: [ current[:since], data[:effective_on] ].compact.min,
+      changed_on: [ current[:changed_on], data[:effective_on] ].compact.max
+    )
   end
 
   on OrgGraph::Events::MembershipEnded do |event|
     @memberships.delete(event.data[:unit_id])
     @membership_ends[event.data[:unit_id]] = event.data[:effective_on]
+  end
+
+  on OrgGraph::Events::MembershipMoved do |event|
+    data = event.data
+    since = @memberships.delete(data[:from_unit_id])&.fetch(:since) || data[:effective_on]
+    @membership_ends[data[:from_unit_id]] = data[:effective_on]
+    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: since, changed_on: data[:effective_on])
   end
 end

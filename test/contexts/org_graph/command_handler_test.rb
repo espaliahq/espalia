@@ -147,14 +147,48 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded ], stream_events.drop(1).map(&:class)
     end
 
-    should "refuse a unit that does not exist or is retired, and still end a retired unit's membership" do
+    should "move a membership to another unit as one event, keeping its terms" do
+      @handler.set_membership(@person_id, @squad, allocation: 0.5, role: "Engineer", **HELD_BY_ESPALIA)
+      @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-12-01", moved_by_id: @person_id)
+      moved = stream_events.last
+
+      assert_kind_of OrgGraph::Events::MembershipMoved, moved
+      assert_equal [ @squad, @retired, 0.5, "Engineer", "espalia", "2026-12-01" ],
+                   moved.data.values_at(:from_unit_id, :unit_id, :allocation, :role, :provider, :effective_on)
+      assert_raises(RuntimeError, match: /Not a member/) { @handler.end_membership(@person_id, @squad, **HELD_BY_ESPALIA) }
+    end
+
+    should "end the old membership instead when the person is already in the destination" do
+      @handler.set_membership(@person_id, @squad, **HELD_BY_ESPALIA)
+      @handler.set_membership(@person_id, @retired, allocation: 0.3, **HELD_BY_ESPALIA)
+      @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-12-01")
+
+      assert_kind_of OrgGraph::Events::MembershipEnded, stream_events.last
+      assert_equal @squad, stream_events.last.data[:unit_id]
+    end
+
+    should "refuse a move to a missing unit, the same unit, or before the membership began" do
+      @handler.set_membership(@person_id, @squad, **HELD_BY_ESPALIA)
+
+      assert_raises(RuntimeError, match: /Unit not found/) do
+        @handler.move_membership(@person_id, @squad, SecureRandom.uuid_v7, effective_on: "2026-12-01")
+      end
+      assert_raises(RuntimeError, match: /unit it is in/) do
+        @handler.move_membership(@person_id, @squad, @squad, effective_on: "2026-12-01")
+      end
+      assert_raises(RuntimeError, match: /before it begins/) do
+        @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-10-01")
+      end
+    end
+
+    should "refuse a unit that does not exist or is retired" do
       @handler.set_membership(@person_id, @retired, **HELD_BY_ESPALIA)
       OrgGraph::StructureCommandHandler.new.retire_unit(@retired, effective_on: "2026-06-30")
 
       assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, SecureRandom.uuid_v7, **HELD_BY_ESPALIA) }
       assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, "squad", **HELD_BY_ESPALIA) }
       assert_raises(RuntimeError, match: /retired/) { @handler.set_membership(@person_id, @retired, allocation: 0.5, **HELD_BY_ESPALIA) }
-      assert_nothing_raised { @handler.end_membership(@person_id, @retired, **HELD_BY_ESPALIA) }
+      assert_kind_of OrgGraph::Events::MembershipEnded, stream_events.last
     end
 
     should "not see another tenant's unit" do
@@ -215,16 +249,18 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_nothing_raised { @handler.end_membership(@person_id, team, **PROVENANCE) }
     end
 
-    should "still end a retired unit's membership after its level changes hands" do
-      level = SecureRandom.uuid_v7
-      squad = SecureRandom.uuid_v7
-      @structure.define_taxonomy([ { level_id: level, name: "Squad" } ], effective_on: "2026-01-01")
-      @structure.create_unit(squad, "Payments", level_id: level, effective_on: "2026-01-01")
+    should "move a membership only into a unit the membership's provider supplies" do
+      squads, teams = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      squad, team = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      @structure.define_taxonomy([ { level_id: teams, name: "Team" }, { level_id: squads, name: "Squad" } ], effective_on: "2026-01-01")
+      @structure.set_level_provider(teams, "hibob", effective_on: "2026-01-01")
+      @structure.create_unit(squad, "Payments", level_id: squads, effective_on: "2026-01-01")
+      @structure.create_unit(team, "Billing", level_id: teams, effective_on: "2026-01-01", provider: "hibob", external_ref: "t-1")
       @handler.set_membership(@person_id, squad, **HELD_BY_ESPALIA)
-      @structure.retire_unit(squad, effective_on: "2026-11-01")
-      @structure.set_level_provider(level, "hibob", effective_on: "2026-11-02")
 
-      assert_nothing_raised { @handler.end_membership(@person_id, squad, **HELD_BY_ESPALIA) }
+      assert_raises(RuntimeError, match: "hibob supplies this unit;") do
+        @handler.move_membership(@person_id, squad, team, effective_on: "2026-12-01")
+      end
     end
   end
 end
