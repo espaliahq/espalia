@@ -120,6 +120,9 @@ module ProjectionReplayHelpers
         # The PK derives from the person and the unit — assert it survives reset! + replay.
         { memberships: rows(OrgMembership, stable_id: true) }
 
+      when "OrgGraph::Projections::PeopleColumns"
+        # Only the projected columns; the sync owns the rest of the row.
+        { people: rows(Person.select(:id, *OrgGraph::Projections::PeopleColumns::COLUMNS), stable_id: true) }
       when "OrgGraph::Projections::FactAges"
         # The PK derives from the person and the fact — assert it survives reset! + replay.
         { fact_ages: rows(OrgFactAge, stable_id: true) }
