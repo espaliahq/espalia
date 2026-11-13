@@ -59,10 +59,29 @@ module OrgUnitDrawer
   # changes back-dated to one day needs choosing once.
   def effective_on = params[:effective_on].presence
 
+  # The date a drawer step opens with: the one carried in, or today.
+  def step_date = params[:on].presence || effective_on || Date.current.iso8601
+
   def drawer_path
     on = effective_on unless effective_on == Date.current.iso8601
     edit_tenant_org_unit_path(@unit, on:)
   end
 
   def with_date(params) = effective_on ? params.merge(effective_on:) : params
+
+  # Renders a drawer over the Units view, opened at the unit.
+  #
+  # @yieldparam overview [OrgGraph::UnitsOverview]
+  # @yieldparam rights [OrgGraphPolicy::UnitRights]
+  # @yieldreturn [Phlex::SGML] the drawer
+  def render_drawer
+    overview = OrgGraph::UnitsOverview.new(selected_unit_id: @unit.id)
+    render Views::Tenant::OrgGraph::ShowView.new(
+      overview:,
+      user: current_user,
+      current_tenant: ActsAsTenant.current_tenant,
+      tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a },
+      drawer: yield(overview, OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview))
+    )
+  end
 end
