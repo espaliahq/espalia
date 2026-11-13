@@ -255,7 +255,9 @@ class OrgGraph::CommandHandler
     authorize_move_membership!(person_id, from_unit_id, unit_id)
     unit = ensure_live_unit!(unit_id)
     membership = OrgMembership.find_by(person_id: person_id, unit_id: from_unit_id.to_s.downcase)
-    ensure_provides_unit!(unit, membership.provider, person_id) if membership
+    if membership
+      ensure_provides_unit!(unit, membership.provider, person_id, held: find_unit(from_unit_id)&.provider == unit.provider)
+    end
     with_person(person_id, plan) do |person|
       person.move_membership(from_unit_id, unit_id, **attributed(options, :moved_by_id))
     end
@@ -325,12 +327,17 @@ class OrgGraph::CommandHandler
   # A unit keeps the provider it was created with, which was its level's then,
   # so a retired unit's members can still be ended after its level changes hands.
   # Espalia may place a person the unit's provider does not know, since its
-  # sync will never place them; that membership stays Espalia's.
-  def ensure_provides_unit!(unit, provider, person_id)
+  # sync will never place them; that membership stays Espalia's, and Espalia
+  # can still end or move it once the provider comes to know them.
+  def ensure_provides_unit!(unit, provider, person_id, held: holds?(person_id, unit, provider))
     return if unit.provider == provider.to_s
-    return if provider.to_s == OrgGraph::StructureAggregate::ESPALIA && !known_to?(unit.provider, person_id)
+    return if provider.to_s == OrgGraph::StructureAggregate::ESPALIA && (held || !known_to?(unit.provider, person_id))
 
     raise "#{unit.provider} supplies this unit; change its members there"
+  end
+
+  def holds?(person_id, unit, provider)
+    OrgMembership.exists?(person_id: person_id, unit_id: unit.id, provider: provider.to_s)
   end
 
   def known_to?(provider, person_id)

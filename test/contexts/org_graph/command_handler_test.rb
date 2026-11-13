@@ -423,6 +423,19 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
         assert_nothing_raised { @handler.confirm_fact(@hand_added, "membership", unit_id: @team, effective_on: "2026-11-03", confirmed_by_id: @person_id) }
       end
 
+      should "let Espalia end, move and confirm its membership once the HRIS knows them" do
+        other_team = SecureRandom.uuid_v7
+        @structure.create_unit(other_team, "Search", level_id: OrgTaxonomyLevel.first.id, effective_on: "2026-01-01",
+                                                     provider: "hibob", external_ref: "t-2")
+        @handler.set_membership(@hand_added, @team, **HELD_BY_ESPALIA)
+        Person.find(@hand_added).update!(hris_source: "hibob", external_id: "hb-2")
+
+        @handler.move_membership(@hand_added, @team, other_team, effective_on: "2026-11-02")
+        @handler.confirm_fact(@hand_added, "membership", unit_id: other_team, effective_on: "2026-11-03", confirmed_by_id: @person_id)
+        @handler.end_membership(@hand_added, other_team, **HELD_BY_ESPALIA, effective_on: "2026-11-04")
+        assert_not OrgMembership.exists?(person_id: @hand_added)
+      end
+
       should "still refuse a person the HRIS knows" do
         Person.find(@hand_added).update!(hris_source: "hibob", external_id: "hb-2")
 
