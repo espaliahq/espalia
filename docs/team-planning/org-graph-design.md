@@ -247,10 +247,19 @@ its memberships into `org_unit_activities`, and `OrgUnitActivity.for_unit(unit_i
 them newest first. Each entry says who made the change, or which provider supplied it,
 what it changed from and to, when it took effect and when the Org Graph learned it. A move
 between units is an entry in each, naming the other. A succession is an entry in every
-unit it names. Each entry keeps its event's `correlation_id`, the cause 7.2 groups by: the
-approval a plan's changes share, or the request that made one direct edit. It keeps
-`causation_id` too, though RES rewrites that inside sync handlers, so it names the event
-that triggered a handler rather than the cause.
+unit it names. Each entry keeps its event's `correlation_id`, its cause: the approval a
+plan's changes share, or the request that made one direct edit. It keeps `causation_id`
+too, though RES rewrites that inside sync handlers, so it names the event that triggered a
+handler rather than the cause. An entry also keeps the `plan_id` and `plan_change_id` its
+event carried, so an approved change names the plan change behind it.
+
+**One cause reads as one entry.** `OrgUnitActivity.feed(unit_id, page:)` groups a unit's
+entries by cause into `OrgUnitActivity::Group`s, newest first, and pages by group, so a
+page never splits one. A group's `summary` says what it did in a sentence: "split Payments
+into Billing and Ledger" for a succession, otherwise "moved 10 people out and removed 2
+people". Its `parts` are the entries underneath. A group needs no table of its own: it is
+read from the entries as they stand, so it rebuilds with them. A HiBob sync writes one
+cause per run, so a run reads as one entry in each unit it touched.
 
 **Changing it back writes the inverse.** `OrgGraph::ChangeBackHandler` undoes an entry
 with a new event that carries `changed_back_id`, the event it reverses. Nothing is
@@ -269,10 +278,17 @@ wherever the change itself would be. It is refused, too:
 - when the aggregate would write something else, such as ending a moved membership
   because the person has since left.
 
+**A group changes back whole, or not at all.** `change_back_group(cause_id)` undoes every
+entry of one cause, across every unit it touched, newest first, so a later part never
+blocks an earlier one. Every part must pass the checks above, and a later change counts
+against a part only when it came from outside the group. One refused part refuses the lot
+and writes nothing. An approved succession is always refused, since it retires a unit. The
+inverses share one new cause, so the change-back reads as one entry too.
+
 Every write to a stream holds a lock on it until its transaction ends: the person's stream
-for a membership, the tenant's structure stream for the rest. A change-back takes that lock
-before it checks anything, so no change to the fact can land between the checks and the
-inverse.
+for a membership, the tenant's structure stream for the rest. A change-back takes those
+locks before it checks anything, the structure's first and then each person's in id
+order, so no change to the facts can land between the checks and the inverses.
 
 The feed starts from the Org Graph's first event, so a deploy that adds it rebuilds it
 (`REBUILD_ON_DEPLOY=org_graph/unit_activity`) wherever Org Graph events exist. Without that
@@ -412,7 +428,7 @@ the reference existed. The Org Graph never reads them.
 The approval is the cause. A handler built with `cause_id:` gives every event it writes,
 a sync handler's included, that id as its `correlation_id`. Without one, events keep the
 request's, so one direct edit still reads as one change. The activity feed groups by
-`correlation_id` (7.2). Undoing a change is a new change with its own cause.
+`correlation_id`. Undoing a change is a new change with its own cause.
 
 Either way the change carries an effective date, so a move can be recorded as having
 happened on the first of the month. A change may be backdated, but a fact's dates stay in
