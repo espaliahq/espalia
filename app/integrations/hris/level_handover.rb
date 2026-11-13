@@ -117,6 +117,7 @@ class Hris::LevelHandover
         people.set_membership(membership.person_id, membership.unit_id, provider: OrgGraph::StructureAggregate::ESPALIA,
                               allocation: membership.allocation, role: membership.role, effective_on: @today)
       end
+      Hris::LevelMirror.forget_parent_readings([ @level ])
     end
     handback
   end

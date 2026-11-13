@@ -208,6 +208,14 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_equal [ @payments, "espalia" ], [ membership(@joiner).unit_id, membership(@joiner).provider ]
     end
 
+    should "forget the parents the HRIS was reading for its units" do
+      HrisUnitParentProposal.create!(unit_id: @payments, parent_id: SecureRandom.uuid_v7, first_seen_on: TODAY)
+
+      handover.hand_back!(fingerprint: handover.compare_handback.fingerprint, actor: @actor)
+
+      assert_not HrisUnitParentProposal.exists?(unit_id: @payments)
+    end
+
     should "refuse a stale comparison" do
       fingerprint = handover.compare_handback.fingerprint
       join(recorded_person("hb-late"), @payments, provider: "hibob")
