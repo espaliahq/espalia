@@ -46,6 +46,7 @@ module Operations::Integrations::HrisLevelHandoverSupport
       differing: comparison.differing.size, blank: comparison.blank.size,
       hand_added: comparison.hand_added.size, joining: comparison.joining,
       unresolved: comparison.unresolved,
+      blocked: comparison.blocked.map { it.slice(:name, :reason) },
       brake: { memberships_ended: comparison.memberships_ended, units_retired: comparison.units_retired,
                over: comparison.over_brake? },
       fingerprint: comparison.fingerprint

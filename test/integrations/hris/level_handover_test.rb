@@ -80,6 +80,27 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_not comparison.over_brake?
     end
 
+    should "block a unit that can't retire today, so the handover never fails partway" do
+      squad_level = SecureRandom.uuid_v7
+      @structure.define_taxonomy([ { level_id: @level_id, name: "Team" }, { level_id: squad_level, name: "Squad" } ],
+                                 effective_on: "2026-01-01")
+      @structure.create_unit(SecureRandom.uuid_v7, "Legacy squad", level_id: squad_level, parent_id: @legacy,
+                                                                   effective_on: "2026-01-01")
+
+      comparison = compare(matches: @matches, resolutions: retire_legacy)
+
+      assert_equal [ { unit_id: @legacy, name: "Legacy", reason: "it has live sub-units" } ], comparison.blocked
+      error = assert_raises(Hris::LevelHandover::Refused) { hand_over! }
+      assert_match(/Legacy \(it has live sub-units\)/, error.message)
+      assert_equal "espalia", OrgTaxonomyLevel.find(@level_id).provider
+    end
+
+    should "block a unit whose last change falls after today" do
+      @structure.rename_unit(@legacy, "Legacy 2027", effective_on: "2027-01-01")
+
+      assert_equal [ "it changes on 2027-01-01" ], compare(matches: @matches, resolutions: retire_legacy).blocked.pluck(:reason)
+    end
+
     should "change its fingerprint when the HRIS changes" do
       before = compare(matches: @matches).fingerprint
       @values["hb-0"] = item("8", "Search")

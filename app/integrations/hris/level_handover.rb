@@ -20,7 +20,8 @@ class Hris::LevelHandover
   end
 
   Comparison = Data.define(:level, :field, :provider, :units, :items, :differing, :blank, :hand_added, :joining,
-                           :unresolved, :memberships_ended, :units_retired, :held, :live_units, :preview, :fingerprint) do
+                           :unresolved, :blocked, :memberships_ended, :units_retired, :held, :live_units, :preview,
+                           :fingerprint) do
     def over_brake?
       self.class.braked?(memberships_ended, held) || self.class.braked?(units_retired, live_units)
     end
@@ -54,7 +55,7 @@ class Hris::LevelHandover
     field = catalogue_field(field_id)
     values = read(field)
     Comparer.new(@level, field, provider, values, units, memberships, matches.to_h.stringify_keys,
-                 resolutions.to_h.stringify_keys).call
+                 resolutions.to_h.stringify_keys, sub_units:, today: @today).call
   end
 
   # @param field_id [String]
@@ -72,6 +73,8 @@ class Hris::LevelHandover
     raise Refused, "The HRIS or the level has changed since that comparison: compare again" unless
       comparison.fingerprint == fingerprint
     raise Refused, "Match or resolve every unit first: #{comparison.unresolved.join(', ')}" if comparison.unresolved.any?
+    raise Refused, "These units can't retire yet: #{comparison.blocked.map { "#{it[:name]} (#{it[:reason]})" }.join(', ')}" if
+      comparison.blocked.any?
     confirm_counts!(comparison, confirm) if comparison.over_brake?
 
     cause_id = SecureRandom.uuid_v7
@@ -127,6 +130,9 @@ class Hris::LevelHandover
   def units = OrgUnit.live.where(level_id: @level.id).order(:name).to_a
 
   def memberships = OrgMembership.in_live_units.where(unit_id: units.map(&:id)).to_a
+
+  # Live units at any level whose parent is one of this level's.
+  def sub_units = OrgUnit.live.where(parent_id: units.map(&:id)).pluck(:parent_id).to_set
 
   def catalogue_field(field_id)
     id = @adapter.catalogue_id(field_id)
@@ -185,7 +191,7 @@ class Hris::LevelHandover
 
   # Sets the field's values against the level, for {#compare}.
   class Comparer
-    def initialize(level, field, provider, values, units, memberships, matches, resolutions)
+    def initialize(level, field, provider, values, units, memberships, matches, resolutions, sub_units:, today:)
       @level = level
       @field = field
       @provider = provider
@@ -194,6 +200,8 @@ class Hris::LevelHandover
       @memberships = memberships
       @matches = matches
       @resolutions = resolutions
+      @sub_units = sub_units
+      @today = today
     end
 
     def call
@@ -202,7 +210,7 @@ class Hris::LevelHandover
       unit_of_key = @matches.invert
       Comparison.new(
         level: @level, field: @field, provider: @provider, units: unit_rows(by_key), items: items.map { it.merge(unit_id: unit_of_key[it[:key]]) },
-        differing:, blank:, hand_added:, joining:, unresolved:, memberships_ended:, units_retired: retiring.size,
+        differing:, blank:, hand_added:, joining:, unresolved:, blocked:, memberships_ended:, units_retired: retiring.size,
         held: @memberships.size, live_units: @units.size, preview:, fingerprint:
       )
     end
@@ -280,6 +288,19 @@ class Hris::LevelHandover
       end
       (bad_matches.filter_map { |id| @units.find { it.id == id }&.name || id } + unresolved.map(&:name)).uniq
     end
+
+    # A unit the switch retires must be free to retire today, or the handover
+    # would fail partway through its writes.
+    def blocked
+      retiring.filter_map do |unit|
+        reason = if @sub_units.include?(unit.id) then "it has live sub-units"
+        elsif last_change(unit) > @today then "it changes on #{last_change(unit)}"
+        end
+        { unit_id: unit.id, name: unit.name, reason: } if reason
+      end
+    end
+
+    def last_change(unit) = [ unit.created_on, unit.name_effective_on, unit.parent_effective_on ].compact.max
 
     def item_keys = @item_keys ||= item_rows.map { it[:key] }.to_set
 
