@@ -77,7 +77,7 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
     assert_equal left.event_id, arrived.event_id
   end
 
-  should "record owners as Espalia's, and unit moves with the parent they left" do
+  should "record owners with no provider, as their events carry none, and unit moves with the parent they left" do
     engineering = SecureRandom.uuid_v7
     as_tenant do
       @structure.create_unit(engineering, "Engineering", level_id: @departments, effective_on: "2026-01-01")
@@ -87,7 +87,7 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
 
     moved, owned, = feed(@payments)
     assert_equal [ "parent", { "parent_id" => nil }, { "parent_id" => engineering } ], [ moved.subject, moved.before, moved.after ]
-    assert_equal [ "owner:#{@lead.id}", @lead.id, "espalia", @ada.id ],
+    assert_equal [ "owner:#{@lead.id}", @lead.id, nil, @ada.id ],
       [ owned.subject, owned.person_id, owned.provider, owned.actor_id ]
   end
 

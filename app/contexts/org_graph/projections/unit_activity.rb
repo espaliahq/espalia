@@ -81,8 +81,7 @@ class OrgGraph::Projections::UnitActivity
   end
 
   def owner(data, **values)
-    { subject: "owner:#{data[:person_id]}", person_id: data[:person_id], provider: OrgGraph::StructureAggregate::ESPALIA,
-      **values }
+    { subject: "owner:#{data[:person_id]}", person_id: data[:person_id], **values }
   end
 
   def membership(data, unit_id, position, after:, other_unit_id: nil)
