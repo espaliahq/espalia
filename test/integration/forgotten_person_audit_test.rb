@@ -62,6 +62,9 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "reporting_cycle_cohort"
     assert_includes reached, "frameworks_suggestion_get"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
+
+    as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_by_tool.fetch("org_graph_as_of"))
+    assert_equal [ @quinn.id ], as_of[:people].map { it[:id] }, "org_graph_as_of reads an empty Org Graph here"
   end
 
   private
@@ -92,6 +95,21 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     end
 
     suggest_as_quinn
+    place_quinn_in_the_org_graph
+  end
+
+  def place_quinn_in_the_org_graph
+    system = OrgGraph::Authorization::SYSTEM
+    structure = OrgGraph::StructureCommandHandler.new(actor: system)
+    level_id = SecureRandom.uuid_v7
+    @unit_id = SecureRandom.uuid_v7
+    structure.define_taxonomy([ { level_id:, name: "Squad" } ], effective_on: Date.current)
+    structure.create_unit(@unit_id, "Payments", level_id:, effective_on: Date.current)
+    OrgGraph::CommandHandler.new(actor: system).tap do |handler|
+      handler.record_person(@quinn.id, provider: "espalia", effective_on: Date.current, employment_status: "employed")
+      handler.set_membership(@quinn.id, @unit_id, provider: "espalia", effective_on: Date.current)
+    end
+    structure.add_unit_owner(@unit_id, @quinn.id, effective_on: Date.current)
   end
 
   def suggest_as_quinn
