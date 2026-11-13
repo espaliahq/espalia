@@ -93,7 +93,7 @@ class Views::Tenant::OrgGraph::Settings::FieldPickerFrame < Views::Base
       return
     end
 
-    settings_form(@picker.use_url, method: :patch, data: { turbo_frame: "_top" }) do
+    settings_form(@picker.use_url, method: :patch, class: "mt-3", data: { turbo_frame: "_top" }) do
       input(type: "hidden", name: "provider", value: ActsAsTenant.current_tenant.hris_config.provider)
       input(type: "hidden", name: @picker.field_param, value: @chosen)
       render Components::Kit::Button.new(variant: :solid, tone: :brand, type: :submit, id: "org-graph-field-use-#{key}") do
