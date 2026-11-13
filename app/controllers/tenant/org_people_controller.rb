@@ -19,10 +19,18 @@ class Tenant::OrgPeopleController < ApplicationController
         profile:,
         overview:,
         rights: OrgGraphPolicy::PersonRights.new(policy(:org_graph), @person, overview, profile.memberships),
-        effective_on: params[:on].presence || Date.current.iso8601,
+        effective_on: chosen_day || Date.current.iso8601,
         unit_id: unit_param,
         alert: flash[:drawer_alert]
       )
     )
+  end
+
+  private
+
+  def chosen_day
+    Date.iso8601(params[:on].to_s).iso8601
+  rescue Date::Error
+    nil
   end
 end

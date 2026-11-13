@@ -55,6 +55,12 @@ class Tenant::OrgPeopleControllerTest < ActionDispatch::IntegrationTest
       assert_equal Date.current.iso8601, drawer.at_css("input[name='effective_on']")["value"]
     end
 
+    should "start from today when the date in the address isn't one" do
+      get tenant_org_person_path(@org[:brook], on: "garbage")
+
+      assert_equal Date.current.iso8601, drawer.at_css("input##{Views::Tenant::OrgGraph::PersonDrawer::DATE_ID}")["value"]
+    end
+
     should "show an HRIS membership read-only, naming its provider" do
       place_in_engineering_from_hibob(:ada)
 
