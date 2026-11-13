@@ -82,6 +82,26 @@ class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCa
       end
     end
 
+    should "keep how long each member has been in the team" do
+      as_tenant do
+        @structure.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ @ledger ],
+                                                           effective_on: "2026-07-01", retire_predecessors: true)
+
+        assert_equal Date.new(2026, 2, 1), OrgMembership.find_by!(person_id: @ada.id, unit_id: @ledger).member_since
+      end
+    end
+
+    should "end, not move, the membership of someone who has left" do
+      as_tenant do
+        @people.leave(@ada.id, provider: "espalia", effective_on: "2026-05-31")
+        @structure.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ @ledger ],
+                                                           effective_on: "2026-07-01", retire_predecessors: true)
+
+        assert_kind_of OrgGraph::Events::MembershipEnded, person_events(@ada).last
+        assert_not OrgMembership.exists?(person_id: @ada.id, unit_id: @ledger)
+      end
+    end
+
     should "keep a member's place in the successor when they are already in it" do
       as_tenant do
         @structure.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ @billing ],

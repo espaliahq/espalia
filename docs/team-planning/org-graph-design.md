@@ -128,9 +128,10 @@ doesn't. Allocations across units are not summed or capped here: an over-allocat
 is for a plan's checks to flag. The same terms from the same provider write nothing. A
 person who has left can't join a unit, and a membership can only be set in a live unit.
 `MembershipEnded` dates the last day of one membership and leaves the others.
-`MembershipMoved` carries a membership to another unit with its allocation and role, so a
-move is one fact and the person is never ended and added again. A person already in the
-destination keeps that membership, and the one they came from ends instead.
+`MembershipMoved` carries a membership to another unit with its allocation, role and
+start, so a move is one fact and the person is never ended and added again. A person
+already in the destination keeps the membership they have there. For them, and for a
+person who has left, the membership they came from ends instead.
 
 `OrgGraph::Projections::Members` projects the current memberships into `org_memberships`.
 An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`

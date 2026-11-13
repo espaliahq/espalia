@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 # A person's membership moved from one unit to another, keeping its
-# allocation and role: the unit they were in was retired through a succession.
-# It is one fact, so the person is never ended and added again.
+# allocation, its role and when it began. A unit retired into one successor
+# moves its members this way, and a split moves the people it names. It is
+# one fact, so the person is never ended and added again.
 #
 # Like every Org Graph event, it holds identity by reference only: no name,
 # email or external id.

@@ -81,13 +81,13 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
     end
   end
 
-  should "move a member to another unit, starting the new membership on the move date" do
+  should "move a member to another unit, keeping when their membership began" do
     as_tenant do
       @handler.move_membership(@grace.id, @payments, @platform, effective_on: "2026-05-01")
       moved = OrgMembership.find_by!(person_id: @grace.id, unit_id: @platform)
 
       assert_not OrgMembership.exists?(person_id: @grace.id, unit_id: @payments)
-      assert_equal [ "hibob", Date.new(2026, 5, 1), Date.new(2026, 5, 1) ],
+      assert_equal [ "hibob", Date.new(2026, 3, 1), Date.new(2026, 5, 1) ],
                    [ moved.provider, moved.member_since, moved.effective_on ]
     end
   end

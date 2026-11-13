@@ -9,7 +9,7 @@
 #   the "in no team" tray; the handler never guesses a successor.
 # - A retirement through a succession with one successor (a merge or a
 #   replacement) moves each membership to it, so nobody is ended and added
-#   again.
+#   again. A member who has left is ended instead.
 #
 # RES stamps every event published here with the retirement as its
 # causation_id, so each change carries the retirement as its cause.
@@ -34,7 +34,8 @@ class OrgGraph::SyncHandlers::RetiredUnitMemberships
   private
 
   def handle(data)
-    successor_id = Array(data[:successor_ids]).sole if Array(data[:successor_ids]).one?
+    successor_ids = Array(data[:successor_ids])
+    successor_id = successor_ids.first if successor_ids.one?
     commands = OrgGraph::CommandHandler.new
 
     OrgMembership.where(unit_id: data[:unit_id]).to_a.each do |membership|

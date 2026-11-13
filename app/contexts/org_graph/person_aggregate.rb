@@ -183,9 +183,11 @@ class OrgGraph::PersonAggregate
       ended_by_id: ended_by_id, plan_change_id: plan_change_id)))
   end
 
-  # Moves the person's membership of one unit to another, keeping its terms.
-  # A person already in the destination keeps that membership, and the one
-  # they came from ends instead.
+  # Moves the person's membership of one unit to another, keeping its terms
+  # and when it began, since the destination carries on from the unit they
+  # were in. A person already in the destination keeps that membership, and a
+  # person who has left can't join one, so in either case the membership they
+  # had ends instead.
   #
   # @param from_unit_id [String] a unit they are a member of
   # @param unit_id [String] the live unit they move to
@@ -201,7 +203,7 @@ class OrgGraph::PersonAggregate
     raise "Not a member of this unit" unless membership
     raise "A membership can't move to the unit it is in" if from_unit_id == unit_id
 
-    if @memberships.key?(unit_id)
+    if @memberships.key?(unit_id) || @employment_status == "left"
       return end_membership(from_unit_id, provider: membership[:provider], effective_on:, ended_by_id: moved_by_id,
                                           plan_change_id:)
     end
@@ -386,7 +388,7 @@ class OrgGraph::PersonAggregate
 
   on OrgGraph::Events::MembershipMoved do |event|
     data = event.data
-    @memberships.delete(data[:from_unit_id])
-    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: data[:effective_on])
+    since = @memberships.delete(data[:from_unit_id])&.fetch(:since) || data[:effective_on]
+    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: since)
   end
 end

@@ -40,9 +40,11 @@ class OrgGraph::Projections::Members
   private
 
   def handle_membership_moved(data)
-    OrgMembership.where(person_id: data[:person_id], unit_id: data[:from_unit_id]).delete_all
+    from = OrgMembership.find_by(person_id: data[:person_id], unit_id: data[:from_unit_id])
+    member_since = from&.member_since || data[:effective_on]
+    from&.delete
     OrgMembership.find_or_initialize_by(data.slice(:person_id, :unit_id))
-                 .update!(**data.slice(:allocation, :role, :provider, :effective_on), member_since: data[:effective_on])
+                 .update!(**data.slice(:allocation, :role, :provider, :effective_on), member_since: member_since)
   end
 
   def handle_membership_set(data)
