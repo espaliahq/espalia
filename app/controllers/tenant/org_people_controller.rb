@@ -9,7 +9,7 @@ class Tenant::OrgPeopleController < ApplicationController
   def show
     authorize :org_graph, :show_units?
     overview = OrgGraph::UnitsOverview.new(selected_unit_id: unit_param)
-    profile = OrgGraph::PersonProfile.new(@person)
+    profile = person_profile
     render Views::Tenant::OrgGraph::ShowView.new(
       overview:,
       user: current_user,
@@ -29,6 +29,12 @@ class Tenant::OrgPeopleController < ApplicationController
   end
 
   private
+
+  def person_profile
+    read = Operations::OrgGraph::PersonGet.new(context: pundit_user, params: { person_id: @person.id })
+    read.call
+    read.profile
+  end
 
   def chosen_day
     Date.iso8601(params[:on].to_s).iso8601

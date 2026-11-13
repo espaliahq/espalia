@@ -18,11 +18,17 @@ class Operations::OrgGraph::PersonGet < Operations::Base
     authorize :org_graph, :show_units?
   end
 
+  # The profile the read was built from, for the web drawer, which renders
+  # units and people rather than their JSON.
+  #
+  # @return [OrgGraph::PersonProfile, nil] nil until {#call} has run
+  attr_reader :profile
+
   # @return [Hash] `{ person, memberships, employment, history }`
   def perform
     person = ::Person.find_by(id: params[:person_id].to_s.downcase) or
       raise Operations::Base::ParameterError, "person_id names no person in this tenant"
-    profile = ::OrgGraph::PersonProfile.new(person)
+    @profile = ::OrgGraph::PersonProfile.new(person)
 
     {
       person: { id: person.id, name: person.name, status: person.status, forgotten: person.forgotten? },
