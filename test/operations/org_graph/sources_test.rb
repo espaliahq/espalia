@@ -120,6 +120,15 @@ class Operations::OrgGraph::SourcesTest < ActiveSupport::TestCase
       assert_match(/hand it over/, error.message)
     end
 
+    should "refuse an HRIS level with no field to read its units from" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::SetLevelProvider, level_id: @empty, provider: "hibob")
+      end
+
+      assert_match(/field/, error.message)
+      assert_equal "espalia", OrgTaxonomyLevel.find(@empty).provider
+    end
+
     should "refuse an unknown level, and a field for Espalia" do
       assert_raises(Operations::Base::ParameterError) do
         call(Operations::OrgGraph::SetLevelProvider, level_id: SecureRandom.uuid_v7, provider: "espalia")

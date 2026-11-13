@@ -10,7 +10,7 @@ class Operations::OrgGraph::SetLevelProvider < Operations::Base
   include Operations::OrgGraph::SourceSupport
 
   description "Set who supplies an Org Graph structure level from today: \"espalia\", or the connected HRIS " \
-              "reading the level's units from field. Only a level with no live units; to move a level that " \
+              "reading the level's units from field, which an HRIS needs. Only a level with no live units; to move a level that " \
               "holds units, compare and hand it over with integrations_hris_level_handover. Levels an HRIS " \
               "supplies sit above the ones Espalia holds."
   category :write
@@ -30,6 +30,9 @@ class Operations::OrgGraph::SetLevelProvider < Operations::Base
     level = OrgTaxonomyLevel.find_by(id: params[:level_id].to_s.downcase) or
       raise ParameterError, "level_id: no structure level has that id"
     provider = require_provider!(params[:provider])
+    if provider != ::OrgGraph::StructureAggregate::ESPALIA && params[:field].blank?
+      raise ParameterError, "field: name the HRIS field this level's units are read from"
+    end
     refusals do
       structure.set_level_provider(level.id, provider, field: params[:field], effective_on: Date.current)
     end

@@ -2732,7 +2732,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "org_graph_set_level_provider",
-        "description" => "Set who supplies an Org Graph structure level from today: \"espalia\", or the connected HRIS reading the level's units from field. Only a level with no live units; to move a level that holds units, compare and hand it over with integrations_hris_level_handover. Levels an HRIS supplies sit above the ones Espalia holds.",
+        "description" => "Set who supplies an Org Graph structure level from today: \"espalia\", or the connected HRIS reading the level's units from field, which an HRIS needs. Only a level with no live units; to move a level that holds units, compare and hand it over with integrations_hris_level_handover. Levels an HRIS supplies sit above the ones Espalia holds.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
