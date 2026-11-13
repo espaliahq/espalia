@@ -86,6 +86,11 @@ Rails.configuration.to_prepare do
   )
 
   event_store.subscribe(
+    OrgGraph::Projections::PeopleColumns.new,
+    to: OrgGraph::Projections::PeopleColumns.handled_events
+  )
+
+  event_store.subscribe(
     OrgGraph::Projections::FactAges.new,
     to: OrgGraph::Projections::FactAges.handled_events
   )

@@ -962,6 +962,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_160000) do
     t.jsonb "ai_config", default: {}, null: false
     t.string "ai_credentials"
     t.string "custom_domain"
+    t.datetime "org_graph_people_projected_at"
     t.jsonb "org_graph_config", default: {}, null: false
     t.index ["custom_domain"], name: "index_tenants_on_custom_domain", unique: true
     t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"

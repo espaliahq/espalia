@@ -67,7 +67,8 @@ class OrgGraph::CommandHandler
   # stand; after that, it supplies or corrects their start date, moves their
   # status if it differs, then applies each fact that differs. A returner's
   # start date waits until they are back. A leaver's
-  # facts are not compared, even while a rehire waits for their start date.
+  # facts are not compared, even while a rehire waits for their start date,
+  # so who holds them can't refuse a leaving.
   # A leaving date before the start date contradicts it and is dropped.
   #
   # @param person_id [String]
@@ -81,7 +82,7 @@ class OrgGraph::CommandHandler
   def sync_person(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil, **facts)
     plan, facts = OrgGraph::PlanReference.extract(facts)
     authorize_structure!
-    ensure_provides!(person_id, provider, :employment_status, *facts.keys)
+    ensure_provides!(person_id, provider, :employment_status)
     written = 0
     left_on = nil if leaves_before_start?(left_on, started_on)
     with_person(person_id, plan) do |person|
@@ -91,10 +92,12 @@ class OrgGraph::CommandHandler
         person.change_start_date(started_on, provider:) unless was_left
         person.match_status(employment_status, provider:, effective_on:, started_on:, left_on:)
         unless person.left?
+          ensure_provides!(person_id, provider, *facts.keys)
           person.change_start_date(started_on, provider:) if was_left
           person.apply_facts(provider:, effective_on:, **facts)
         end
       else
+        ensure_provides!(person_id, provider, *facts.keys)
         left_on = nil unless employment_status == "left"
         person.record(person_id, provider:, effective_on:, employment_status:, started_on:, left_on:, **facts)
       end
