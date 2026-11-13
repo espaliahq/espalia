@@ -139,11 +139,17 @@ class Hris::LevelHandover
     @adapter.field_catalogue.find { it.id == id } or raise Refused, "The HRIS has no field #{field_id}"
   end
 
+  # A list value whose item the HRIS no longer offers reads as withheld, as
+  # the mirror reads it, so nobody is handed a unit the mirror would not keep.
+  #
   # @return [Hash{Person => Hris::FieldValue}] the people the sync writes for
   def read(field)
     by_external_id = @adapter.read_field(field.id, kind: field.kind)
-    Person.where(hris_source: provider, status: "active", external_id: by_external_id.keys).order(:id)
-      .to_h { |person| [ person, by_external_id.fetch(person.external_id) ] }
+    live_keys = field.values.to_set { it.id.to_s } if field.list?
+    Person.where(hris_source: provider, status: "active", external_id: by_external_id.keys).order(:id).to_h do |person|
+      value = by_external_id.fetch(person.external_id)
+      [ person, value.value? && live_keys && !live_keys.include?(value.key) ? Hris::FieldValue.withheld : value ]
+    end
   end
 
   def confirm_counts!(comparison, confirm)

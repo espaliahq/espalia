@@ -130,6 +130,14 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_equal 1, written_since(@before).map { it.metadata[:correlation_id] }.uniq.size
     end
 
+    should "leave a member whose item the HRIS dropped as Espalia's, as the mirror reads it" do
+      @values["hb-0"] = item("99", "Archived team")
+
+      assert_includes compare(matches: @matches).hand_added.pluck(:person_id), @staff[0].id
+      hand_over!
+      assert_equal [ @payments, "espalia" ], [ membership(@staff[0]).unit_id, membership(@staff[0]).provider ]
+    end
+
     should "succeed an unmatched unit into the one it names" do
       hand_over!(resolutions: { @legacy => @search })
 
