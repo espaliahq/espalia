@@ -69,6 +69,13 @@ class Tenant::OrgPeopleControllerTest < ActionDispatch::IntegrationTest
       assert_equal Date.current.iso8601, drawer.at_css("input##{Views::Tenant::OrgGraph::PersonDrawer::DATE_ID}")["value"]
     end
 
+    should "open someone in no team over the unit they were opened beside" do
+      get tenant_org_graph_path(unit: @org[:payments])
+
+      assert_equal tenant_org_person_path(@org[:ezra], unit: @org[:payments]),
+                   Nokogiri::HTML5(response.body).at_css("#in-no-team a")["href"]
+    end
+
     should "show an HRIS membership read-only, naming its provider" do
       place_in_engineering_from_hibob(:ada)
 

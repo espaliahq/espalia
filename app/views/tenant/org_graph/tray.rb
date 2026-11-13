@@ -7,8 +7,10 @@ class Views::Tenant::OrgGraph::Tray < Views::Base
   ID = "in-no-team"
 
   # @param people [Array<Person>]
-  def initialize(people:)
+  # @param unit_id [String, nil] the unit open beside the tray, which a person's drawer closes back to
+  def initialize(people:, unit_id: nil)
     @people = people
+    @unit_id = unit_id
   end
 
   def view_template
@@ -30,7 +32,7 @@ class Views::Tenant::OrgGraph::Tray < Views::Base
 
   def unplaced_person(person)
     li(class: "flex items-baseline gap-2 rounded-md border border-default bg-default px-3 py-1.5 text-sm") do
-      a(href: tenant_org_person_path(person), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+      a(href: tenant_org_person_path(person, unit: @unit_id), class: "font-medium text-link hover:text-link-hover underline") { person.name }
       details = [ person.job_title.presence, person.hris_level_ordinal && "L#{person.hris_level_ordinal}" ].compact
       span(class: "text-muted") { details.join(" ") } if details.any?
     end
