@@ -114,7 +114,8 @@ class Hris::Hibob::ResponseMapper
   end
 
   # What this person's record holds for one field: a list field's item id
-  # and label, or a text field's text.
+  # and label, or a text field's text. The label is read as {#org_graph_facts}
+  # reads it, so a preview compares the string the sync would write.
   #
   # @param field_id [String] the field's catalogue id
   # @param kind [Symbol] :list or :text, as {Hris::Field#kind}
@@ -127,7 +128,7 @@ class Hris::Hibob::ResponseMapper
       item = list_value(path)
       return Hris::FieldValue.blank if item.nil?
 
-      Hris::FieldValue.new(state: :value, id: item.id, label: item.label || item.id)
+      Hris::FieldValue.new(state: :value, id: item.id, label: label(path))
     else
       text = label(path)
       text ? Hris::FieldValue.new(state: :value, label: text) : Hris::FieldValue.blank

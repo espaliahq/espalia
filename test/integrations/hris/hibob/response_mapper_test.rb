@@ -166,6 +166,12 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
         Hris::Hibob::ResponseMapper.new(@list.except("humanReadable")).field_value("work.department", kind: :list).label
     end
 
+    should "trim a list item's label as the sync does before writing it" do
+      @list["humanReadable"]["work"]["department"] = " Payments  "
+
+      assert_equal "Payments", Hris::Hibob::ResponseMapper.new(@list).field_value("work.department", kind: :list).label
+    end
+
     should "read a text field as its text, with no id" do
       employee = { "work" => { "customColumns" => { "column_team" => "  Growth " } } }
 
