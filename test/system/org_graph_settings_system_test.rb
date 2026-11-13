@@ -152,6 +152,49 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         end
       end
 
+      should "compare a level with units against an HRIS field, hand it over, and hand it back" do
+        connect_hibob
+        squad_id = SecureRandom.uuid_v7
+        payments = SecureRandom.uuid_v7
+        legacy = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          structure.claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
+          structure.define_taxonomy([ { level_id: squad_id, name: "Squad" } ], effective_on: "2026-01-01")
+          structure.create_unit(payments, "Payments", level_id: squad_id, effective_on: "2026-01-01")
+          structure.create_unit(legacy, "Legacy", level_id: squad_id, effective_on: "2026-01-01")
+          people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          people.record_person(@member.id, provider: "hibob", effective_on: "2026-11-01", employment_status: "employed")
+          people.set_membership(@member.id, payments, provider: "espalia", effective_on: "2026-11-01")
+        end
+        adapter = FakeAdapter.new({ "hb-1" => Hris::FieldValue.new(state: :value, id: nil, label: "Payments") })
+
+        Hris::BaseAdapter.stub(:for, adapter) do
+          visit tenant_org_graph_settings_path
+          assert_selector "turbo-frame#org-graph-handover-frame-#{squad_id}[complete]", visible: :all
+
+          within("#org-graph-handover") { select "Cost centre code", from: "HRIS field to hand Squad to" }
+          click_button_with_js_fallback("org-graph-handover-compare-#{squad_id}", expect_text: "Call for Payments")
+          assert_select "Call for Payments", selected: "Payments · 1 person"
+
+          select "Retire it", from: "Call for Legacy"
+          click_button_with_js_fallback("org-graph-handover-compare-#{squad_id}", expect_text: "With these calls")
+          assert_no_sideways_overflow
+          scroll_to find("#org-graph-handover-summary-#{squad_id}")
+          screenshot("handover_compared_#{viewport}")
+
+          click_button_with_js_fallback("org-graph-hand-over-#{squad_id}",
+                                        expect_text: "Squad now comes from HiBob, and its memberships follow the HRIS.")
+          assert_selector "turbo-frame#org-graph-handover-frame-#{squad_id}[complete]", visible: :all
+          within("#org-graph-handover") { assert_text "HiBob supplies Squad: 1 unit and 1 membership." }
+          scroll_to find("#org-graph-handover")
+          screenshot("handback_#{viewport}")
+
+          click_button_with_js_fallback("org-graph-hand-back-#{squad_id}",
+                                        expect_text: "Squad now comes from Espalia. Its units and memberships stay as they are.")
+        end
+      end
+
       should "say plainly when forgetting has no key" do
         OrgGraph::Forgetting.stub(:key, nil) do
           visit tenant_org_graph_settings_path

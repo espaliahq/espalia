@@ -64,7 +64,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
         picker = self.class.picker(level[:id], level[:name])
         div(class: "mt-3") { render Views::Tenant::OrgGraph::Settings::FieldPickerFrame.new(picker:, src: picker.url) }
       else
-        p(class: "mt-1 text-sm text-muted") { "It holds units, so it changes hands through the handover." }
+        p(class: "mt-1 text-sm text-muted") { "It holds units, so it changes hands through the handover below." }
       end
     end
   end

@@ -34,6 +34,7 @@ class Views::Tenant::OrgGraph::SettingsView < Views::Base
         div(class: "lg:col-span-2 space-y-6 min-w-0") do
           render Views::Tenant::OrgGraph::Settings::SourcesPanel.new(hris: @sources[:hris], facts: @sources[:facts])
           render Views::Tenant::OrgGraph::Settings::LevelsPanel.new(hris: @sources[:hris], levels: @sources[:levels])
+          render Views::Tenant::OrgGraph::Settings::HandoverPanel.new(hris: @sources[:hris], levels: @sources[:levels])
         end
         div(class: "space-y-6 min-w-0") do
           render Views::Tenant::OrgGraph::Settings::EditorsPanel.new(editors: @editors, candidates: @editor_candidates)
