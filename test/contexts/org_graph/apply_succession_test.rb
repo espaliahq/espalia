@@ -80,6 +80,43 @@ class OrgGraph::ApplySuccessionTest < ActiveSupport::TestCase
     end
   end
 
+  context "an approved replacement" do
+    should "move every member to the replacement" do
+      apply_as(approver, predecessor_ids: [ @payments ], successor_ids: [ @ledger ])
+
+      as_tenant { assert_equal [ @ada.id, @grace.id, @linus.id ].sort, OrgUnit.find(@ledger).members.pluck(:id).sort }
+    end
+  end
+
+  context "a placement" do
+    should "move someone who joined after the split on the day they joined, as an unnamed member leaves" do
+      as_tenant { @people.set_membership(@approver.id, @payments, provider: "espalia", effective_on: "2026-08-01") }
+
+      apply_as(approver, predecessor_ids: [ @payments ], successor_ids: [ @billing, @ledger ],
+                         placements: { @approver.id => @billing })
+
+      assert_equal "2026-08-01", person_events(@approver).last.data[:effective_on]
+      assert_equal "2026-07-01", person_events(@ada).last.data[:effective_on]
+    end
+
+    should "name whoever the caller names when the system applies it" do
+      apply_as(OrgGraph::Authorization::SYSTEM, predecessor_ids: [ @payments ], successor_ids: [ @billing, @ledger ],
+                                                placements: { @ada.id => @billing }, stated_by_id: @approver.id)
+
+      assert_equal @approver.id, person_events(@ada).last.data[:moved_by_id]
+    end
+  end
+
+  context "a plan applied again" do
+    should "write nothing more" do
+      succession = { succession_id: SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ @billing, @ledger ],
+                     placements: { @ada.id => @billing } }
+      apply_as(approver, **succession)
+
+      assert_empty(written_during { apply_as(approver, **succession) })
+    end
+  end
+
   context "a succession that can't be applied" do
     should "write nothing when the approver may not change every unit in it" do
       assert_writes_nothing(OrgGraph::Authorization::Refused) do
@@ -99,6 +136,12 @@ class OrgGraph::ApplySuccessionTest < ActiveSupport::TestCase
       assert_writes_nothing(ArgumentError) do
         apply_as(approver, predecessor_ids: [ @payments ], successor_ids: [ @billing, @ledger ],
                            placements: { @ada.id => @billing, @approver.id => @ledger })
+      end
+    end
+
+    should "refuse a placement when no predecessors are given" do
+      assert_writes_nothing(ArgumentError) do
+        apply_as(approver, predecessor_ids: nil, successor_ids: [ @billing ], placements: { @ada.id => @billing })
       end
     end
 

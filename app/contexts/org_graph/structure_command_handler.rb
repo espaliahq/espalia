@@ -137,32 +137,48 @@ class OrgGraph::StructureCommandHandler
   #   or a person who isn't a member of exactly one predecessor
   def apply_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:, placements: {}, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
+    options = attributed(options, :stated_by_id)
     ActiveRecord::Base.transaction do
       authorize_succession!([ predecessor_ids, successor_ids ])
-      place(placements, predecessor_ids, successor_ids, effective_on, plan)
+      moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids))
+      place(moves, effective_on, plan, moved_by_id: options[:stated_by_id])
       with_structure(plan) do |structure|
         structure.record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:,
-                                                   **attributed(options, :stated_by_id), retire_predecessors: true)
+                                                   **options, retire_predecessors: true)
       end
     end
   end
 
   private
 
-  def place(placements, predecessor_ids, successor_ids, effective_on, plan)
-    people = OrgGraph::CommandHandler.new(actor: @actor, cause_id: @cause_id, repository: @repository)
-    predecessor_ids = predecessor_ids.map { |id| id.to_s.downcase }
-    successor_ids = successor_ids.map { |id| id.to_s.downcase }
+  # Checks every placement before any is written. Someone already in their
+  # successor and in no predecessor was placed when the plan was last applied.
+  def placement_moves(placements, predecessor_ids, successor_ids)
+    predecessor_ids, successor_ids = [ predecessor_ids, successor_ids ].map { |ids| ids.map { |id| id.to_s.downcase } }
+    held = OrgMembership.where(person_id: placements.keys, unit_id: predecessor_ids + successor_ids)
+                        .group_by(&:person_id)
 
-    placements.each do |person_id, successor_id|
-      unless successor_ids.include?(successor_id.to_s.downcase)
-        raise ArgumentError, "A placement must name one of the successors"
-      end
+    placements.filter_map do |person_id, successor_id|
+      successor_id = successor_id.to_s.downcase
+      raise ArgumentError, "A placement must name one of the successors" unless successor_ids.include?(successor_id)
 
-      from = OrgMembership.where(person_id: person_id, unit_id: predecessor_ids).pluck(:unit_id)
+      memberships = held.fetch(person_id.to_s.downcase, [])
+      from = memberships.select { |membership| predecessor_ids.include?(membership.unit_id) }
+      next if from.empty? && memberships.any? { |membership| membership.unit_id == successor_id }
       raise ArgumentError, "Only a member of one predecessor can be placed" unless from.one?
 
-      people.move_membership(person_id, from.first, successor_id, effective_on: effective_on, **plan.to_h)
+      [ from.first, successor_id ]
+    end
+  end
+
+  # As the system, since the succession's check already covers each move:
+  # whoever may change every unit in it may move a member between them.
+  def place(moves, effective_on, plan, moved_by_id:)
+    people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: @cause_id, repository: @repository)
+    moves.each do |membership, successor_id|
+      on = OrgGraph::SyncHandlers::RetiredUnitMemberships.leaving_on(membership, on: effective_on, repository: @repository)
+      people.move_membership(membership.person_id, membership.unit_id, successor_id,
+                             effective_on: on, moved_by_id: moved_by_id, **plan.to_h)
     end
   end
 
