@@ -147,6 +147,7 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
       [
         { successor_names: [ "Core" ] },
         { successor_names: [ "Core", " Core" ] },
+        { successor_names: [ "Core", "core" ] },
         { successor_names: [ "Core", "Edge" ], placements: { @org[:cyril].id => "Core" } },
         { successor_names: [ "Core", "Edge" ], placements: { @org[:ada].id => "Rim" } }
       ].each do |params|

@@ -37,6 +37,8 @@ class Operations::OrgGraph::SplitUnit < Operations::Base
     split(unit, successors, placements)
     { unit_id: unit.id, successors: successors.map { |name, id| { unit_id: id, name: name } },
       placed: placements.size, unplaced: unplaced.sort, effective_on: effective_on }
+  rescue ArgumentError => e # the aggregate's guards, such as a member who moved out meanwhile
+    raise Operations::Base::ParameterError, e.message
   end
 
   private
@@ -45,7 +47,7 @@ class Operations::OrgGraph::SplitUnit < Operations::Base
     names = Array(params[:successor_names]).map { |name| name.to_s.strip }
     raise Operations::Base::ParameterError, "Name at least two successors" if names.size < 2
     raise Operations::Base::ParameterError, "Every successor needs a name" if names.any?(&:empty?)
-    raise Operations::Base::ParameterError, "Each successor needs its own name" unless names.uniq.size == names.size
+    raise Operations::Base::ParameterError, "Each successor needs its own name" unless names.uniq(&:downcase).size == names.size
 
     names
   end
