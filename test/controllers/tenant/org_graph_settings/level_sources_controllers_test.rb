@@ -48,6 +48,19 @@ class Tenant::OrgGraphSettings::LevelSourcesControllersTest < ActionDispatch::In
       assert_equal "Tribe now comes from Espalia.", flash[:notice]
     end
 
+    should "offer to hold a fact or an empty level in Espalia again once the HRIS is disconnected" do
+      patch tenant_org_graph_settings_level_provider_path(@tribe_id), params: { provider: "hibob", field: TEAM.id }
+      patch tenant_org_graph_settings_fact_provider_path("cost_centre"), params: { provider: "hibob" }
+      @tenant.reload.disconnect_hris!
+
+      get tenant_org_graph_settings_path
+
+      assert_select "#org-graph-sources p", text: /nothing updates a fact that still comes from one/
+      assert_select "#org-graph-fact-cost_centre select[name=provider] option", text: "Espalia"
+      assert_select "#org-graph-fact-title select", count: 0
+      assert_select "#org-graph-level-espalia-#{@tribe_id}"
+    end
+
     should "say why a level that holds units can't change hands here" do
       patch tenant_org_graph_settings_level_provider_path(@squad_id), params: { provider: "hibob", field: TEAM.id }
 

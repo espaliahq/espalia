@@ -56,7 +56,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
           p(class: "text-sm font-medium text-default") { level[:name] }
           p(class: "text-sm text-muted") { "From #{provider_label(level[:provider])} · #{units(level[:live_units])}" }
         end
-        hand_back_form(level) if connected? && level[:live_units].zero? && level[:provider] != ESPALIA
+        hand_back_form(level) if level[:live_units].zero? && level[:provider] != ESPALIA
       end
       next unless connected?
 

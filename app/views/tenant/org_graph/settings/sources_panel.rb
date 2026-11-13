@@ -51,6 +51,8 @@ class Views::Tenant::OrgGraph::Settings::SourcesPanel < Views::Base
     if connected?
       "Espalia's facts are edited here; #{@hris[:label]}'s are read by each sync, which overwrites them. " \
         "A change takes effect today."
+    elsif @facts.any? { it[:provider] != ESPALIA }
+      "No HRIS is connected, so nothing updates a fact that still comes from one. Hold it in Espalia to edit it here."
     else
       "No HRIS is connected, so every fact is edited in Espalia."
     end
@@ -63,7 +65,7 @@ class Views::Tenant::OrgGraph::Settings::SourcesPanel < Views::Base
           p(class: "text-sm font-medium text-default") { fact_label(fact[:fact]) }
           p(class: "text-sm text-muted") { "From #{provider_label(fact[:provider])}" }
         end
-        provider_form(fact) if connected?
+        provider_form(fact) if connected? || fact[:provider] != ESPALIA
       end
       field_picker(fact) if connected? && fact[:provider] != ESPALIA && fact[:mappable_parts].any?
     end
@@ -75,7 +77,7 @@ class Views::Tenant::OrgGraph::Settings::SourcesPanel < Views::Base
     settings_form(tenant_org_graph_settings_fact_provider_path(name), method: :patch, class: "flex items-center gap-2") do
       label(for: select_id, class: "sr-only") { "Source of #{fact_label(name).downcase}" }
       select(id: select_id, name: "provider", class: Components::Kit::Field::SELECT) do
-        [ ESPALIA, @hris[:provider] ].each do |provider|
+        [ ESPALIA, (@hris[:provider] if connected?), fact[:provider] ].compact.uniq.each do |provider|
           option(value: provider, selected: provider == fact[:provider]) { provider_label(provider) }
         end
       end
