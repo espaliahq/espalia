@@ -164,11 +164,11 @@ Pundit's `authorize` passes none.
 | Action | Who |
 |--------|-----|
 | See the Org Graph (`show?`) | Any tenant member |
-| The taxonomy, providers, person facts, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
+| The taxonomy, providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
 | Rename, retire or own a unit, or add a unit beneath it (`edit_unit?`, `create_unit?(parent)`) | The above, or an active owner of that unit or any unit above it |
 | Move a unit (`move_unit?(unit, new_parent)`) | Rights over the unit and over its new parent; a move to the root needs `edit_structure?` |
 | Record a succession (`record_succession?(units)`) | Rights over every unit it names |
-| Set or end a membership (`edit_membership?(member, unit)`) | Anyone in the member's manager chain, or whoever holds rights over the unit |
+| Set, end or confirm a membership (`edit_membership?(member, unit)`) | Anyone in the member's manager chain, or whoever holds rights over the unit |
 | Move a membership (`move_membership?(member, from, to)`) | The manager chain, or rights over both units |
 
 Ownership inherits downward: owning Payments gives rights over every squad

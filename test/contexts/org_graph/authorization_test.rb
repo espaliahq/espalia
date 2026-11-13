@@ -77,6 +77,14 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
       assert_equal "Payments", OrgUnit.find(@payments_id).name
     end
 
+    should "be refused confirming a person's fact" do
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).change_title(@report.id, "Engineer", **ESPALIA)
+
+      assert_raises(OrgGraph::Authorization::Refused) do
+        people(@actor).confirm_fact(@report.id, "title", effective_on: "2026-02-02")
+      end
+    end
+
     should "be refused someone else's membership" do
       error = assert_raises(OrgGraph::Authorization::Refused) do
         people(@actor).set_membership(@report.id, @product_id, **ESPALIA)
@@ -206,6 +214,18 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
       people(@actor).end_membership(@report.id, @payments_id, provider: "espalia", effective_on: "2026-02-03")
 
       assert_not OrgMembership.exists?(person_id: @report.id)
+    end
+
+    should "confirm their report's membership, as the person who confirmed it" do
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_membership(@report.id, @product_id, **ESPALIA)
+
+      people(@actor).confirm_fact(@report.id, "membership", unit_id: @product_id, effective_on: "2026-02-02")
+
+      confirmed = Rails.configuration.event_store.read.of_type(OrgGraph::Events::FactConfirmed).last
+      assert_equal @lead.id, confirmed.data[:confirmed_by_id]
+      assert_raises(OrgGraph::Authorization::Refused) do
+        people(@actor).confirm_fact(@other.id, "membership", unit_id: @product_id, effective_on: "2026-02-02")
+      end
     end
 
     should "be refused a move between units they don't hold for someone outside their chain" do
