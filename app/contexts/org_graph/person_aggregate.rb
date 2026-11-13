@@ -24,6 +24,7 @@ class OrgGraph::PersonAggregate
     @employment_status = nil
     @last_status_change = nil
     @started_on = nil
+    @left_from = nil
     @facts = {}
     @fact_providers = {}
   end
@@ -156,11 +157,16 @@ class OrgGraph::PersonAggregate
       return if @last_status_change.last == data.values_at(:effective_on, :provider)
     elsif !from.include?(@employment_status)
       raise "Can't move from #{@employment_status} to #{to}"
-    elsif @employment_status == "employed" && to == "left" && @started_on && data[:effective_on] < @started_on
-      raise "A person can't leave before they start"
     end
+    ensure_leaves_after_start!(data[:effective_on]) if to == "left"
 
     apply(event_class.new(data: data))
+  end
+
+  # A hire who never started may drop out at any date, before or after a correction.
+  def ensure_leaves_after_start!(left_on)
+    had_started = @employment_status == "employed" || @left_from == "employed"
+    raise "A person can't leave before they start" if had_started && @started_on && left_on < @started_on
   end
 
   # A value the person already holds, from the same provider, writes nothing.
@@ -228,6 +234,7 @@ class OrgGraph::PersonAggregate
     OrgGraph::Events::PersonReturned => "employed"
   }.each do |event_class, status|
     on event_class do |event|
+      @left_from = @employment_status if event_class == OrgGraph::Events::PersonLeft && @employment_status != "left"
       @employment_status = status
       @last_status_change = [ event_class, event.data.values_at(:effective_on, :provider) ]
       @started_on = event.data[:effective_on] if event_class == OrgGraph::Events::PersonJoined

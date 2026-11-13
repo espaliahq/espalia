@@ -235,6 +235,20 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       assert_equal [ "hibob", "espalia" ], events.drop(1).map { |e| e.data[:provider] }
     end
 
+    should "refuse a corrected leaving date before the start date, unless they never started" do
+      record(started_on: "2026-11-10")
+      @aggregate.leave(provider: "hibob", effective_on: "2026-11-30")
+      assert_raises(RuntimeError, match: /leave before they start/) do
+        @aggregate.leave(provider: "hibob", effective_on: "2026-11-01")
+      end
+
+      dropout = OrgGraph::PersonAggregate.new
+      dropout.record(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-11-10")
+      dropout.leave(provider: "hibob", effective_on: "2026-11-05")
+      dropout.leave(provider: "hibob", effective_on: "2026-11-01")
+      assert_equal [ "2026-11-05", "2026-11-01" ], dropout.unpublished_events.drop(1).map { |e| e.data[:effective_on] }
+    end
+
     should "write nothing when joining someone recorded as employed" do
       record
       @aggregate.join(**PROVENANCE)
