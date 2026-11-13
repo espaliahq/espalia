@@ -103,5 +103,21 @@ class Operations::Integrations::HrisLevelHandoverTest < ActiveSupport::TestCase
       assert_match(/successions and retirements made by the handover stand/,
                    Operations::Integrations::HandBackHrisLevel.description)
     end
+
+    should "hand the level back after the HRIS is disconnected" do
+      fingerprint = compare(matches: @matches, resolutions: @resolutions)[:fingerprint]
+      call(Operations::Integrations::HandOverHrisLevel, field_id: TEAM.id, matches: @matches, resolutions: @resolutions, fingerprint:)
+      @tenant.disconnect_hris!
+
+      Hris::BaseAdapter.stub(:for, ->(*) { flunk "hand-back built an HRIS adapter" }) do
+        ActsAsTenant.with_tenant(@tenant) do
+          context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: nil)
+          handback = Operations::Integrations::HrisLevelHandover.call(context:, params: { level_id: @level_id })
+          Operations::Integrations::HandBackHrisLevel.call(context:, params: { level_id: @level_id, fingerprint: handback[:fingerprint] })
+        end
+      end
+
+      assert_equal "espalia", ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.find(@level_id).provider }
+    end
   end
 end

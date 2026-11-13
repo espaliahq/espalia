@@ -119,7 +119,11 @@ class Hris::LevelHandover
   end
 
   # @return [Boolean] whether Espalia holds the level, so it can be handed over
-  def espalia? = @level.provider.nil? || @level.provider == OrgGraph::StructureAggregate::ESPALIA
+  def espalia? = self.class.espalia?(@level)
+
+  # @param level [OrgTaxonomyLevel]
+  # @return [Boolean] whether Espalia holds the level
+  def self.espalia?(level) = level.provider.nil? || level.provider == OrgGraph::StructureAggregate::ESPALIA
 
   private
 

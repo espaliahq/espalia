@@ -8,12 +8,15 @@ module Operations::Integrations::HrisLevelHandoverSupport
 
   private
 
+  # Handing a level back reads nothing from the HRIS, so it needs no
+  # connection: a level can come back after the HRIS is disconnected.
   def handover
     tenant = ActsAsTenant.current_tenant
-    raise Operations::Base::ParameterError, "No HRIS is connected" unless tenant.hris_config.connected?(tenant)
-
     level = OrgTaxonomyLevel.find_by(id: params[:level_id].to_s.downcase) or
       raise Operations::Base::ParameterError, "level_id: no structure level has that id"
+    return Hris::LevelHandover.new(tenant, level, adapter: nil) unless Hris::LevelHandover.espalia?(level)
+    raise Operations::Base::ParameterError, "No HRIS is connected" unless tenant.hris_config.connected?(tenant)
+
     Hris::LevelHandover.new(tenant, level)
   end
 
