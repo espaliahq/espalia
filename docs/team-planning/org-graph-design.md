@@ -541,7 +541,10 @@ result for each kind of id separately.
   - `OrgLeaver.due_to_be_forgotten(tenant)` lists the leavers whose period has ended, by
     person id. The leaving date is the latest `PersonLeft`'s, so a corrected date counts.
     For a person the HRIS stopped returning, it is the day the sync noticed. Someone who
-    returns drops off the list.
+    returns drops off the list. A leaver whose rehire has not started yet stays on it, since
+    the sync writes nothing until they start, so 8.2 checks the HRIS before it erases anyone.
+  - `org_graph/leavers` reads event types production already holds, so its first deploy sets
+    `REBUILD_ON_DEPLOY=org_graph/leavers` to fill it.
 - At the end of the period, or on request, the identifiers are erased from the `people`
   row and `PersonForgotten` is written.
 - Only a person who has left can be forgotten. A request about someone still employed is
