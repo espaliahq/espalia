@@ -68,6 +68,18 @@ class OrgUnit < ApplicationRecord
     !own_owners.exists? && (owners_lost_on.present? || owner_links.exists?)
   end
 
+  # Whether the person, still working here, owns this unit or any unit above
+  # it. Owning a unit covers everything beneath it, even a unit with owners of
+  # its own.
+  #
+  # @param person [Person, nil]
+  # @return [Boolean]
+  def owned_by?(person)
+    return false unless person&.status == "active"
+
+    OrgUnitOwner.exists?(person_id: person.id, unit_id: ancestors_and_self.map(&:id))
+  end
+
   private
 
   def ancestors_and_self
