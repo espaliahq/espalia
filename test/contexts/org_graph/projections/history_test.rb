@@ -108,6 +108,27 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
       assert_no_difference(-> { as_tenant { OrgFactPeriod.count } }) { OrgGraph::Projections::History.new.call(event) }
     end
 
+    should "write an event's rows together or not at all" do
+      record(@ada, title: "Engineer", level: "L3")
+      event = Rails.configuration.event_store.read.of_type(OrgGraph::Events::PersonRecorded).last
+      as_tenant { OrgFactPeriod.delete_all }
+      insert, calls = OrgFactPeriod.method(:insert_all!), 0
+      failing_second = lambda do |*args|
+        calls += 1
+        raise ActiveRecord::StatementInvalid, "lost connection" if calls == 2
+
+        insert.call(*args)
+      end
+
+      OrgFactPeriod.stub(:insert_all!, failing_second) do
+        assert_raises(ActiveRecord::StatementInvalid) { OrgGraph::Projections::History.new.call(event) }
+      end
+      as_tenant { assert_equal 0, OrgFactPeriod.count }
+
+      OrgGraph::Projections::History.new.call(event)
+      assert_equal({ "level" => "L3" }, value_on(@ada.id, "level", "2026-02-01"))
+    end
+
     should "keep no event's state on the subscriber that every publishing thread shares" do
       record(@ada, title: "Engineer")
       projection = OrgGraph::Projections::History.new

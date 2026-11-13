@@ -65,7 +65,7 @@ class OrgGraph::Projections::History
   # @param event [RubyEventStore::Event]
   def call(event)
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
-      dup.learn_from(event) unless already_learned?(event)
+      OrgFactPeriod.transaction { dup.learn_from(event) unless already_learned?(event) }
     end
   end
 
