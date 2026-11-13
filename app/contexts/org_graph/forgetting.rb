@@ -50,7 +50,7 @@ class OrgGraph::Forgetting
   NAME_PARAMS = { "actor_name" => "actor_id", "assessee_name" => "assessee_id", "author_name" => "author_id",
                   "decliner_name" => "decliner_id", "requested_by_name" => "requested_by_id",
                   "requester_name" => "requester_id", "responder_name" => "responder_id",
-                  "started_by_name" => "started_by_id" }.freeze
+                  "started_by_name" => "started_by_id", "feedback_author_name" => "feedback_author_id" }.freeze
   NAME_LIST_PARAMS = { "skipped_names" => "skipped_ids" }.freeze
   # A comment notification's context opens "<name>'s feedback" when the
   # thread hangs off someone's evidence.
@@ -117,6 +117,11 @@ class OrgGraph::Forgetting
   end
 
   def self.drop_names(params, forgotten)
+    feedback = "#{params[:feedback_author_name]}#{FEEDBACK_CONTEXT}"
+    if forgotten.include?(params[:feedback_author_id].to_s) && params[:feedback_author_name].present? &&
+       params[:context].to_s.start_with?(feedback)
+      params[:context] = Person::FORMER_MEMBER + FEEDBACK_CONTEXT + params[:context].to_s.delete_prefix(feedback)
+    end
     NAME_PARAMS.each { |name_key, id_key| params[name_key.to_sym] = nil if forgotten.include?(params[id_key.to_sym].to_s) }
     NAME_LIST_PARAMS.each do |names_key, ids_key|
       next unless params[ids_key.to_sym].is_a?(Array)
@@ -124,9 +129,6 @@ class OrgGraph::Forgetting
       kept = params[ids_key.to_sym].each_with_index.reject { |id, _| forgotten.include?(id.to_s) }
       params[names_key.to_sym] = kept.map { |_, at| Array(params[names_key.to_sym])[at] } if params.key?(names_key.to_sym)
       params[ids_key.to_sym] = kept.map(&:first)
-    end
-    if forgotten.include?(params[:feedback_author_id].to_s) && params[:context].to_s.include?(FEEDBACK_CONTEXT)
-      params[:context] = Person::FORMER_MEMBER + params[:context].to_s.partition(FEEDBACK_CONTEXT).drop(1).join
     end
     params
   end
@@ -341,17 +343,24 @@ class OrgGraph::Forgetting
     end
   end
 
+  # Cuts the opening by the length of the name it carries, never at the first
+  # "'s feedback", which a name can contain.
   def scrub_feedback_contexts(person_id, name)
-    named = tenant_events.where("params->>'feedback_author_id' = ? AND strpos(params->>'context', ?) > 0",
-                                person_id, FEEDBACK_CONTEXT)
-    if name.present?
-      named = named.or(tenant_events.where("NOT jsonb_exists(params, 'feedback_author_id') AND starts_with(params->>'context', ?)",
-                                           name + FEEDBACK_CONTEXT))
-    end
-    named.update_all(sql(<<~SQL.squish, Person::FORMER_MEMBER + FEEDBACK_CONTEXT, FEEDBACK_CONTEXT, FEEDBACK_CONTEXT))
-      params = jsonb_set(params, '{context}',
-        to_jsonb(? || substr(params->>'context', strpos(params->>'context', ?) + char_length(?))))
-    SQL
+    former = Person::FORMER_MEMBER + FEEDBACK_CONTEXT
+    tenant_events
+      .where("params->>'feedback_author_id' = ? AND starts_with(params->>'context', (params->>'feedback_author_name') || ?)",
+             person_id, FEEDBACK_CONTEXT)
+      .update_all(sql(<<~SQL.squish, former, FEEDBACK_CONTEXT))
+        params = jsonb_set(params, '{context}', to_jsonb(? ||
+          substr(params->>'context', char_length(params->>'feedback_author_name') + char_length(?) + 1)))
+      SQL
+    return if name.blank?
+
+    tenant_events
+      .where("NOT jsonb_exists(params, 'feedback_author_id') AND starts_with(params->>'context', ?)", name + FEEDBACK_CONTEXT)
+      .update_all(sql(<<~SQL.squish, former, name + FEEDBACK_CONTEXT))
+        params = jsonb_set(params, '{context}', to_jsonb(? || substr(params->>'context', char_length(?) + 1)))
+      SQL
   end
 
   def notification_matches(person_id, name)

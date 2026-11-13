@@ -221,8 +221,9 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
     should "rename them in the context line of a comment on their feedback" do
       namesake = create(:person, tenant: @tenant)
-      theirs = notify(feedback_author_id: @leaver.id, context: "#{@leaver.name}'s feedback · Delivery · L2")
-      namesakes = notify(feedback_author_id: namesake.id, context: "#{@leaver.name}'s feedback · Delivery · L2")
+      name = @leaver.name
+      theirs = notify(feedback_author_id: @leaver.id, feedback_author_name: name, context: "#{name}'s feedback · Delivery · L2")
+      namesakes = notify(feedback_author_id: namesake.id, feedback_author_name: name, context: "#{name}'s feedback · Delivery · L2")
       legacy = notify(context: "#{@leaver.name}'s feedback · Delivery · L2")
       unrelated = notify(context: "Delivery · L2")
 
@@ -232,6 +233,19 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_equal "Pat Example hb-1's feedback · Delivery · L2", namesakes.reload.params[:context]
       assert_equal "Former member's feedback · Delivery · L2", legacy.reload.params[:context]
       assert_equal "Delivery · L2", unrelated.reload.params[:context]
+      assert_nil theirs.params[:feedback_author_name]
+    end
+
+    should "cut the whole name from the context line when the name holds the delimiter itself" do
+      @leaver.update!(name: "Pat's feedback Example")
+      name = @leaver.name
+      theirs = notify(feedback_author_id: @leaver.id, feedback_author_name: name, context: "#{name}'s feedback · Delivery · L2")
+      legacy = notify(context: "#{name}'s feedback · Delivery · L2")
+
+      forgetting.forget_due(on: TODAY)
+
+      assert_equal "Former member's feedback · Delivery · L2", theirs.reload.params[:context]
+      assert_equal "Former member's feedback · Delivery · L2", legacy.reload.params[:context]
     end
   end
 
@@ -243,7 +257,7 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
       late = notify(author_id: @leaver.id, author_name: name, assessee_id: namesake.id, assessee_name: name,
                     skipped_ids: [ @leaver.id, namesake.id ], skipped_names: [ name, name ],
-                    feedback_author_id: @leaver.id, context: "#{name}'s feedback · Delivery · L2")
+                    feedback_author_id: @leaver.id, feedback_author_name: name, context: "#{name}'s feedback · Delivery · L2")
 
       params = late.reload.params
       assert_nil params[:author_name]
@@ -251,6 +265,17 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_equal [ namesake.id ], params[:skipped_ids]
       assert_equal [ name ], params[:skipped_names]
       assert_equal "Former member's feedback · Delivery · L2", params[:context]
+      assert_nil params[:feedback_author_name]
+    end
+
+    should "cut a delimiter-holding name whole from a late context line" do
+      name = "Pat's feedback Example"
+      @leaver.update!(name: name)
+      forgetting.forget_due(on: TODAY)
+
+      late = notify(feedback_author_id: @leaver.id, feedback_author_name: name, context: "#{name}'s feedback · Delivery · L2")
+
+      assert_equal "Former member's feedback · Delivery · L2", late.reload.params[:context]
     end
 
     should "not reach a login resolved before the erasure and delivered after it" do

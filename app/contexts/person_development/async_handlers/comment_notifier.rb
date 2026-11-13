@@ -74,6 +74,8 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
     return if user.nil?
     return if already_delivered?(notifier_class, user, comment)
 
+    feedback_author_id, feedback_author_name = evidence_author(comment)
+
     notifier_class.with(
       record: comment,
       tenant_id: comment.tenant_id,
@@ -81,7 +83,8 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
       author_name: comment.author&.name,
       body: comment.body,
       context: context,
-      feedback_author_id: evidence_author_id(comment),
+      feedback_author_id: feedback_author_id,
+      feedback_author_name: feedback_author_name,
       url: url,
       comment_id: comment.id
     ).deliver(user)
@@ -100,7 +103,7 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
   # @return [String, nil]
   def context_line(comment)
     parts = []
-    feedback_author = evidence_author_name(comment)
+    feedback_author = evidence_author(comment).last
     parts << "#{feedback_author}'s feedback" if feedback_author
     parts << [ capability_name(comment), "L#{comment.level_ordinal}" ].compact.join(" · ")
     parts.join(" · ").presence
@@ -114,18 +117,14 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
       capability_stable_id: comment.capability_stable_id, level_ordinal: comment.level_ordinal)
   end
 
-  def evidence_author_name(comment)
-    return nil if comment.evidence_id.nil?
+  # The name opens the context line, and the id beside it lets forgetting
+  # the author find it.
+  #
+  # @return [Array(String, String), Array()] the evidence author's id and name
+  def evidence_author(comment)
+    return [] if comment.evidence_id.nil?
 
-    Person.where(id: EvidenceItem.where(id: comment.evidence_id).select(:author_id)).pick(:name)
-  end
-
-  # Beside the context line, which names this person, so forgetting them can
-  # find it.
-  def evidence_author_id(comment)
-    return nil if comment.evidence_id.nil?
-
-    EvidenceItem.where(id: comment.evidence_id).pick(:author_id)
+    Person.where(id: EvidenceItem.where(id: comment.evidence_id).select(:author_id)).pick(:id, :name) || []
   end
 
   def capability_name(comment)

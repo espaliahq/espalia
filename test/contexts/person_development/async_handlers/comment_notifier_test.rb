@@ -129,6 +129,7 @@ class PersonDevelopment::AsyncHandlers::CommentNotifierTest < ActiveSupport::Tes
       assert_not_nil notification
       assert_equal "Jordan's feedback · L2 — “Strong signal”", notification.inbox_body
       assert_equal peer.id, notification.event.params[:feedback_author_id]
+      assert_equal peer.name, notification.event.params[:feedback_author_name]
     end
   end
 
