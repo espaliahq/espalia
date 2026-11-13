@@ -145,27 +145,37 @@ namespace :events do
       end
     end
 
-    # What predeploy runs before `verify`. A projection whose handled events do
-    # not exist yet has nothing to replay, so its rebuild would only stamp it.
-    # Doing that here means a newly registered projection ships without a
-    # REBUILD_ON_DEPLOY step; one with any history still needs a real rebuild.
-    desc "Stamp every projection behind CODE_VERSION that has no handled events to replay (predeploy)."
+    # What predeploy runs before `verify`. A never-stamped projection whose
+    # handled events do not exist yet has nothing to replay, so its rebuild is
+    # a reset and a stamp; doing that here lets it ship without
+    # REBUILD_ON_DEPLOY. A CODE_VERSION bump still needs an explicit rebuild.
+    #
+    # Stamps nothing while another projection is stale: verify would then fail
+    # and leave the previous release serving, and any event of these types it
+    # wrote would never reach a projection already stamped current.
+    desc "Reset and stamp never-rebuilt projections that have no handled events yet (predeploy)."
     task stamp_if_no_events: :environment do
       event_store = Rails.configuration.event_store
+      nothing_to_replay = ->(klass) { klass.handled_events.empty? || event_store.read.of_type(klass.handled_events).first.nil? }
+      stamps = ProjectionVersion.pluck(:name, :version).to_h
 
-      Projections::Registry.classes.each do |klass|
+      stale = Projections::Registry.classes.reject { |klass| stamps[klass::PROJECTION_NAME] == klass::CODE_VERSION }
+      unstampable = stale.reject { |klass| stamps[klass::PROJECTION_NAME].nil? && nothing_to_replay.(klass) }
+      if unstampable.any?
+        puts "Not stamping new projections: #{unstampable.map { |k| k::PROJECTION_NAME }.join(', ')} " \
+             "must be rebuilt first."
+        next
+      end
+
+      stale.each do |klass|
         name = klass::PROJECTION_NAME
 
         ProjectionVersion.with_operation_lock(name) do
-          applied = ProjectionVersion.find_by(name: name)&.version
-          next if applied && applied >= klass::CODE_VERSION
+          next if ProjectionVersion.exists?(name: name) || !nothing_to_replay.(klass)
 
-          events = klass.handled_events
-          next if events.any? && event_store.read.of_type(events).limit(1).to_a.any?
-
-          ProjectionVersion.promote!(name, klass::CODE_VERSION)
-          puts "#{name}: applied=#{applied || '(never rebuilt)'} code=#{klass::CODE_VERSION} — " \
-               "no handled events to replay, stamped."
+          Tenant.find_each { |tenant| klass.reset!(tenant: tenant) }
+          ProjectionVersion.stamp!(klass)
+          puts "#{name}: never rebuilt, no handled events to replay — reset and stamped at #{klass::CODE_VERSION}."
         end
       end
     end
