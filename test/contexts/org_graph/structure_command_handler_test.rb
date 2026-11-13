@@ -291,6 +291,41 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#define_taxonomy with a new level's provider" do
+    setup do
+      provide("Department", "hibob")
+      create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "d-1")
+    end
+
+    should "add a level above one an HRIS provides, setting its provider in the same change" do
+      division = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.define_taxonomy([ { level_id: division, name: "Division", provider: "hibob" }, *levels(%w[Department Team Squad]) ],
+                                 effective_on: @today + 1, defined_by_id: @actor)
+      end
+      taxonomy, provider = structure_events.last(2)
+
+      assert_kind_of OrgGraph::Events::TaxonomyDefined, taxonomy
+      assert_equal %w[level_id name], taxonomy.data[:levels].first.keys.map(&:to_s)
+      assert_kind_of OrgGraph::Events::LevelProviderSet, provider
+      assert_equal({ level_id: division, provider: "hibob", previous_provider: "espalia", effective_on: "2026-11-02", set_by_id: @actor },
+                   provider.data.slice(:level_id, :provider, :previous_provider, :effective_on, :set_by_id))
+    end
+
+    should "refuse a new level above it that names no provider" do
+      assert_raises(RuntimeError) do
+        as_tenant { @handler.define_taxonomy([ { level_id: SecureRandom.uuid_v7, name: "Division" }, *levels(%w[Department Team Squad]) ], effective_on: @today) }
+      end
+    end
+
+    should "refuse a different provider for a level it already holds" do
+      changed = levels(%w[Department Team Squad]).tap { |all| all[0] = all[0].merge(provider: "espalia") }
+
+      error = assert_raises(RuntimeError) { as_tenant { @handler.define_taxonomy(changed, effective_on: @today) } }
+      assert_match "set_level_provider", error.message
+    end
+  end
+
   context "#set_fact_provider" do
     should "record the fact's provider, the one it replaced, the date and who set it" do
       as_tenant { @handler.set_fact_provider(:title, "hibob", effective_on: @today, set_by_id: @actor) }

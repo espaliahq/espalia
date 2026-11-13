@@ -41,13 +41,19 @@ class OrgGraph::StructureAggregate
   # levels live units hold must keep their order, or a unit would sit above
   # its own parent.
   #
-  # @param levels [Array<Hash>] each `{ level_id:, name: }`, top first
+  # A new level can name its provider, so a level can be added above one an
+  # HRIS provides. An existing level changes provider through
+  # {#set_level_provider}.
+  #
+  # @param levels [Array<Hash>] each `{ level_id:, name: }`, top first, with an
+  #   optional `provider:` for a new level
   # @param effective_on [Date, String] when the taxonomy took effect
   # @param defined_by_id [String, nil] person_id of the actor
   # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError] if the levels are empty, blank or duplicated
   # @raise [RuntimeError] if a level in use is dropped or reordered
   def define_taxonomy(levels, effective_on:, defined_by_id: nil, plan_change_id: nil)
+    new_providers = new_level_providers(levels)
     levels = normalise_levels(levels)
     return if levels == @levels
 
@@ -59,7 +65,7 @@ class OrgGraph::StructureAggregate
     kept_order = level_ids(@levels) & in_use
     raise "Levels in use must keep their order" unless level_ids(levels) & in_use == kept_order
 
-    ensure_hris_levels_on_top!(level_ids(levels))
+    ensure_hris_levels_on_top!(level_ids(levels), new_providers)
 
     apply(OrgGraph::Events::TaxonomyDefined.new(data: {
       levels: levels,
@@ -68,6 +74,15 @@ class OrgGraph::StructureAggregate
       defined_by_id: defined_by_id,
       plan_change_id: plan_change_id
     }))
+    new_providers.each do |level_id, provider|
+      apply(OrgGraph::Events::LevelProviderSet.new(data: {
+        level_id: level_id,
+        provider: provider,
+        previous_provider: ESPALIA,
+        effective_on: iso_date(effective_on),
+        set_by_id: defined_by_id
+      }))
+    end
   end
 
   # Sets who supplies a taxonomy level's units. An unchanged provider writes
@@ -418,6 +433,22 @@ class OrgGraph::StructureAggregate
 
   def level_ids(levels)
     levels.map { |level| level[:level_id] }
+  end
+
+  # The providers named for levels the taxonomy doesn't hold yet, Espalia's left out.
+  def new_level_providers(levels)
+    Array(levels).each_with_object({}) do |level, providers|
+      level = level.to_h.symbolize_keys
+      next if level[:provider].nil?
+
+      level_id = require_id(level[:level_id], "Level id")
+      provider = require_provider(level[:provider])
+      if level_index(level_id)
+        raise "Change an existing level's provider with set_level_provider" unless provider == level_provider(level_id)
+      elsif provider != ESPALIA
+        providers[level_id] = provider
+      end
+    end
   end
 
   def normalise_levels(levels)

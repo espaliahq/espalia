@@ -262,7 +262,8 @@ so each change keeps its date and who made it. A fact or a level has exactly one
 provider, and it's Espalia until another is set. A unit comes from its level's provider,
 and the levels an HRIS provides sit above every level Espalia holds. That check on the
 setting replaces the first version's check on each unit. A level that holds live units
-keeps its provider until a handover (6.8) moves it.
+keeps its provider until a handover (6.8) moves it. A new level names its provider when
+the taxonomy adds it, so a level can be added above one an HRIS provides.
 
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's
