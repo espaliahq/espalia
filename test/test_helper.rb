@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 ENV["RAILS_ENV"] ||= "test"
+ENV["ORG_GRAPH_FORGETTING_KEY"] ||= "test-only-org-graph-forgetting-key"
 require_relative "../config/environment"
 require "rails/test_help"
 require_relative "support/explorer_write_stream_assertions"

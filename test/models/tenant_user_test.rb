@@ -12,12 +12,33 @@ class TenantUserTest < ActiveSupport::TestCase
 
   context "associations" do
     should belong_to(:tenant)
-    should belong_to(:user)
+    should belong_to(:user).without_validating_presence
     should belong_to(:person).optional
   end
 
   context "validations" do
     should validate_presence_of(:role)
+
+    should "need a user until forgotten" do
+      membership = ActsAsTenant.with_tenant(@tenant) { build(:tenant_user, tenant: @tenant, user: nil) }
+
+      assert_not membership.valid?
+      membership.forgotten_at = Time.current
+      assert membership.valid?
+    end
+  end
+
+  context "a forgotten membership" do
+    should "be out of reach of every tenant query" do
+      ActsAsTenant.with_tenant(@tenant) do
+        membership = create(:tenant_user, tenant: @tenant, user: @user)
+        membership.update!(user: nil, forgotten_at: Time.current)
+
+        assert_nil TenantUser.find_by(id: membership.id)
+        assert_not_includes @tenant.users, @user
+        assert_includes @tenant.tenant_users.map(&:id), membership.id
+      end
+    end
   end
 
   context "role enum" do

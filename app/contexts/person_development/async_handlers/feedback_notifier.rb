@@ -82,7 +82,9 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
   def presentation(item)
     link = first_link(item)
     {
+      author_id: item.author_id,
       author_name: item.author&.name,
+      assessee_id: item.person_id,
       assessee_name: Person.where(id: item.person_id).pick(:name),
       placed: link.present?,
       context: link ? cell_label(item, link) : "Not yet placed on a capability — place it to show it on the assessment",

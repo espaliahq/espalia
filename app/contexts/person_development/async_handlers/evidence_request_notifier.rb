@@ -47,7 +47,9 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
 
     EvidenceRequestedNotifier.with(
       tenant_id: request.tenant_id,
+      requester_id: request.requested_by_id,
       requester_name: request.requester&.name,
+      assessee_id: request.person_id,
       assessee_name: regarding_assessee_name(request),
       capability_name: capability_name(request),
       message: request.message,
@@ -71,6 +73,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
     EvidenceRequestRespondedNotifier.with(
       tenant_id: request.tenant_id,
       request_id: request.id,
+      responder_id: event.data[:responded_by_id],
       responder_name: Person.find_by(id: event.data[:responded_by_id])&.name,
       capability_name: capability_name(request),
       response: EvidenceItem.find_by(id: event.data[:evidence_id])&.content
@@ -84,6 +87,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
     EvidenceRequestDeclinedNotifier.with(
       tenant_id: request.tenant_id,
       request_id: request.id,
+      decliner_id: event.data[:declined_by_id],
       decliner_name: Person.find_by(id: event.data[:declined_by_id])&.name,
       capability_name: capability_name(request),
       reason: event.data[:reason]
@@ -102,7 +106,9 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
       tenant_id: request.tenant_id,
       request_id: request.id,
       kind: event.data[:kind],
+      requester_id: request.requested_by_id,
       requester_name: request.requester&.name,
+      assessee_id: request.person_id,
       assessee_name: regarding_assessee_name(request),
       capability_name: capability_name(request),
       message: request.message,

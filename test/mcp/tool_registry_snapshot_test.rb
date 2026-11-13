@@ -2669,6 +2669,49 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "tenants_disable_scheduled_forgetting",
+        "description" => "Turn off scheduled forgetting for the active tenant. Anyone already forgotten stays forgotten.",
+        "inputSchema" => { "type" => "object", "properties" => {}, "required" => [], "additionalProperties" => false },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_enable_scheduled_forgetting",
+        "description" => "Turn on scheduled forgetting for the active tenant. Pass confirm_count, the count " \
+                         "tenants_forgetting_dry_run gives now; the call is refused if it differs.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "confirm_count" => { "type" => "integer" } },
+          "required" => %w[confirm_count],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_forgetting_dry_run",
+        "description" => "Count the leavers the active tenant would forget today, after checking the HRIS, " \
+                         "and list their person ids. Erases nothing. reason, why you ask, is recorded and " \
+                         "doesn't change the answer.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "reason" => { "type" => "string", "enum" => %w[retention request] } },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "tenants_update_retention_period",
         "description" => "Set how many years after a person leaves the active tenant forgets their identifiers " \
                          "(default 7), or never forget them.",

@@ -17,6 +17,101 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
+  context "a person already forgotten" do
+    setup do
+      @employees = @fixture["employees"]
+    end
+
+    should "stay skipped while HiBob shows them as gone" do
+      forgotten = forget_row("bob-003")
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 1, result[:forgotten_skipped]
+      assert_equal 2, result[:created]
+      assert_nil Person.find_by(external_id: "bob-003")
+      assert_equal OrgGraph::Forgetting.digest(@tenant, "hibob", "bob-003"), forgotten.reload.forgotten_external_id_digest
+    end
+
+    should "stay skipped while a rehire is yet to start" do
+      forget_row("bob-001")
+      @employees.find { it["id"] == "bob-001" }["work"]["startDate"] = (Date.current + 30).iso8601
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 1, result[:forgotten_skipped]
+      assert_nil Person.find_by(external_id: "bob-001")
+    end
+
+    should "stay skipped while HiBob holds no start date for them" do
+      forget_row("bob-001")
+      @employees.find { it["id"] == "bob-001" }["work"].delete("startDate")
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 1, result[:forgotten_skipped]
+      assert_nil Person.find_by(external_id: "bob-001")
+    end
+
+    should "not be adopted by a new hire whose email HiBob leaves blank" do
+      forgotten = forget_row("bob-003")
+      @employees.find { it["id"] == "bob-001" }["email"] = nil
+
+      build_adapter(@employees).sync_people
+
+      assert_nil forgotten.reload.external_id
+      assert_nil forgotten.email
+    end
+
+    should "come back as a new person, unlinked from the forgotten one, once back at work" do
+      forgotten = forget_row("bob-001")
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 0, result[:forgotten_skipped]
+      rehired = Person.find_by(external_id: "bob-001")
+      assert_not_equal forgotten.id, rehired.id
+      assert_nil forgotten.reload.forgotten_external_id_digest
+      assert forgotten.forgotten?
+    end
+
+    should "not write a forgotten manager back into their reports' payloads" do
+      forget_row("bob-002")
+      manager = @employees.find { it["id"] == "bob-002" }
+      manager["isActive"] = false
+      manager["internal"] = { "terminationDate" => "2026-10-31" }
+
+      build_adapter(@employees).sync_people
+
+      report = Person.find_by(external_id: "bob-001")
+      assert_nil report.hris_raw_data.dig("work", "reportsTo")
+      assert_equal "bob-002", @employees.first.dig("work", "reportsTo", "id")
+    end
+
+    should "refuse to sync, creating nobody, without the forgetting key" do
+      forget_row("bob-003")
+
+      OrgGraph::Forgetting.stub(:key, nil) do
+        assert_raises(OrgGraph::Forgetting::KeyMissing) { build_adapter(@employees).sync_people }
+      end
+      assert_equal 1, Person.count
+    end
+  end
+
+  context "#active_external_ids" do
+    should "hold everyone HiBob doesn't mark inactive, a hire yet to start included" do
+      ids = @fixture["employees"].map { it["id"].to_s }
+      inactive = @fixture["employees"].select { it["isActive"] == false }.map { it["id"].to_s }
+
+      assert_equal ids - inactive, build_adapter(@fixture["employees"]).active_external_ids
+      assert_not_empty inactive
+    end
+
+    should "refuse an empty response, which would spare nobody" do
+      assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) { build_adapter([]).active_external_ids }
+    end
+  end
+
   context "#sync_people" do
     should "create new Person records for new employees" do
       adapter = build_adapter(@fixture["employees"])
@@ -1387,6 +1482,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   #
   # @param employees [Array<Hash>]
   # @return [Hris::Hibob::Adapter]
+  def forget_row(external_id)
+    person = create(:person, tenant: @tenant, hris_source: "hibob")
+    person.update_columns(name: nil, email: nil, forgotten_at: Time.current, status: "inactive",
+                          forgotten_external_id_digest: OrgGraph::Forgetting.digest(@tenant, "hibob", external_id))
+    person
+  end
+
   def build_adapter(employees)
     adapter = Hris::Hibob::Adapter.new(@tenant)
     mock_client = Minitest::Mock.new
