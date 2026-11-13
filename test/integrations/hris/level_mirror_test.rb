@@ -73,6 +73,14 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert OrgUnit.live.exists?(external_ref: "work.department/Payments")
     end
 
+    should "keep every text unit when the HRIS sends nobody" do
+      @catalogue = [ division_field(%w[d1 Product]), Hris::Field.new(id: "work.department", name: "Team", kind: :text) ]
+      mirror(@staff[0] => { division: "d1", team_label: "Payments" })
+      mirror({})
+
+      assert OrgUnit.live.exists?(external_ref: "work.department/Payments")
+    end
+
     should "keep a text unit nobody is seen holding while a record withholds the field" do
       @catalogue = [ division_field(%w[d1 Product]), Hris::Field.new(id: "work.department", name: "Team", kind: :text) ]
       mirror(@staff[0] => { division: "d1", team_label: "Payments" })

@@ -270,12 +270,13 @@ class Hris::LevelMirror
 
   # A text value nobody is seen holding may still be held by someone whose
   # record withheld the field, so its unit stays until every record is read.
+  # An empty response is a failed read, as it is for people.
   def kept?(level_plan, unit)
     prefix = "#{level_plan.field.id}/"
     return false unless unit.external_ref.start_with?(prefix)
 
     key = unit.external_ref.delete_prefix(prefix)
-    level_plan.live_keys ? level_plan.live_keys.key?(key) : level_plan.held.key?(key) || level_plan.withheld
+    level_plan.live_keys ? level_plan.live_keys.key?(key) : level_plan.held.key?(key) || level_plan.withheld || @readings.empty?
   end
 
   def braked?(count, of, what, outcome)
