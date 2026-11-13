@@ -253,7 +253,9 @@ yet. That gives every scenario the same four numbers, everywhere a total appears
 - **Approved**: the budget.
 - **Funded**: what the scenario's positions draw from it.
 - **Remaining**: approved budget nothing draws on.
-- **Unfunded**: positions no budget line covers. This is the new money the scenario needs.
+- **Unfunded**: the cost no budget line covers. That is a position that draws on nothing,
+  and the shortfall of one whose budget lines do not meet its cost. This is the new money
+  the scenario needs.
 
 Nobody wires each position to a budget line by hand. The plan works out a default in two steps, and
 shows its reason beside the position.
