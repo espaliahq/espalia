@@ -68,7 +68,8 @@ class OrgGraph::Projections::PeopleColumns
   def call(event)
     tenant = ActsAsTenant.current_tenant
     tenant = Tenant.find(event.metadata[:tenant_id]) unless tenant&.id == event.metadata[:tenant_id]
-    return unless tenant.org_graph_people_projected?
+    # Read the flag from the database: a request's tenant may predate a cut-over.
+    return unless Tenant.where(id: tenant.id).where.not(org_graph_people_projected_at: nil).exists?
 
     ActsAsTenant.with_tenant(tenant) do
       Person.where(id: event.data[:person_id]).update_all(columns(event).merge(updated_at: Time.current))

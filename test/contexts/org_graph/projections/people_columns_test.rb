@@ -35,6 +35,14 @@ class OrgGraph::Projections::PeopleColumnsTest < ActiveSupport::TestCase
   context "a tenant cut over to the Org Graph" do
     setup { @tenant.update!(org_graph_people_projected_at: Time.current) }
 
+    should "write for a request whose tenant was loaded before the cut-over" do
+      stale = Tenant.find(@tenant.id).tap { it.org_graph_people_projected_at = nil }
+
+      ActsAsTenant.with_tenant(stale) { @handler.record_person(@ada.id, **PROVENANCE, employment_status: "employed", title: "Designer") }
+
+      assert_equal "Designer", columns(@ada).first
+    end
+
     should "write the title, manager and status a person was recorded with" do
       as_tenant do
         @handler.record_person(@ada.id, **PROVENANCE, employment_status: "employed", title: "Designer", manager_id: @grace.id)
