@@ -81,6 +81,19 @@ class Views::Tenant::OrgGraph::ActivitySidebarTest < ActiveSupport::TestCase
     assert_nil row.at_css("form")
   end
 
+  should "shorten a UUID plan reference to its random tail, keeping the whole id in its title" do
+    plan_id = "0193a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+    as_tenant do
+      handler.set_membership(@org[:ezra].id, @org[:platform], provider: "espalia", effective_on: "2026-02-01",
+                                                               plan_id:)
+    end
+
+    code = render_sidebar(@org[:platform]).at_css("ol > li code")
+
+    assert_equal "…2e3f4a5b", code.text
+    assert_equal plan_id, code["title"]
+  end
+
   should "name a forgotten person as a former member" do
     as_tenant { @org[:brook].update_columns(name: Person::FORMER_MEMBER, forgotten_at: Time.current) }
 

@@ -8,6 +8,8 @@
 class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   include Phlex::Rails::Helpers::Routes
 
+  UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+
   # @param feed [OrgGraph::ActivityFeed]
   def initialize(feed:)
     @feed = feed
@@ -63,12 +65,19 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
 
     p(class: "mt-0.5 text-xs text-muted") do
       plain "From plan "
-      code(class: "font-mono") { group.plan_id.first(8) }
+      reference_id(group.plan_id)
       if group.plan_change_id
         plain ", change "
-        code(class: "font-mono") { group.plan_change_id.first(8) }
+        reference_id(group.plan_change_id)
       end
     end
+  end
+
+  # A UUID v7 starts with its timestamp, which plans made in the same minute
+  # share, so a shortened one shows its random tail.
+  def reference_id(id)
+    short = id.match?(UUID) ? "…#{id.last(8)}" : id
+    code(class: "font-mono", title: id) { short }
   end
 
   def parts(item)
