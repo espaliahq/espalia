@@ -16,6 +16,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           person_development/assessment_authority
           assessment_cycles/current_state
           assessment_cycles/calibration_sessions
+          org_graph/structure
         ].sort,
         Projections::Registry.names.sort
       )

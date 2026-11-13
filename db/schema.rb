@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -745,6 +745,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
     t.index ["uid"], name: "index_oauth_applications_on_uid", unique: true
   end
 
+  create_table "org_taxonomy_levels", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "name", null: false
+    t.integer "position", null: false
+    t.date "effective_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
+  end
+
+  create_table "org_units", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "name", null: false
+    t.date "name_effective_on", null: false
+    t.uuid "parent_id"
+    t.date "parent_effective_on", null: false
+    t.uuid "level_id", null: false
+    t.string "provider", null: false
+    t.string "external_ref"
+    t.date "created_on", null: false
+    t.date "retired_on"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "parent_id"], name: "index_org_units_on_tenant_id_and_parent_id"
+    t.index ["tenant_id", "provider", "external_ref"], name: "index_org_units_on_live_external_ref", unique: true, where: "((external_ref IS NOT NULL) AND (retired_on IS NULL))"
+  end
+
   create_table "people", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "department"
@@ -950,6 +977,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_tokens", "tenants"
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
+  add_foreign_key "org_taxonomy_levels", "tenants"
+  add_foreign_key "org_units", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
   add_foreign_key "person_development_comments", "people", column: "author_id", on_delete: :restrict

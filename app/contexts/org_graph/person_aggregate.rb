@@ -135,10 +135,44 @@ class OrgGraph::PersonAggregate
       fte: validated_fte(fte), employment_type: label(employment_type))
   end
 
-  private
-
+  # @return [Boolean] whether the Org Graph has seen this person yet
   def recorded?
     !@employment_status.nil?
+  end
+
+  # Applies the facts a provider supplies, writing one event for each that
+  # differs. A fact left out is not compared, so a provider that does not
+  # supply a fact never clears it. A person not yet recorded writes nothing,
+  # once the facts have been checked.
+  #
+  # @param provider [String] one of {PROVIDERS}
+  # @param effective_on [Date, String]
+  # @param facts [Hash] any of :title, :level, :manager_id, :cost_centre,
+  #   :site with :country, and :fte with :employment_type
+  # @raise [ArgumentError] for a fact it does not name, or half a pair
+  def apply_facts(provider:, effective_on:, **facts)
+    unknown = facts.keys - FACT_KEYS
+    raise ArgumentError, "Unknown facts: #{unknown.join(", ")}" if unknown.any?
+    pair(facts, :site, :country) if facts.key?(:site) || facts.key?(:country)
+    pair(facts, :fte, :employment_type) if facts.key?(:fte) || facts.key?(:employment_type)
+    return unless recorded?
+
+    when_given = { provider:, effective_on: }
+    change_title(facts[:title], **when_given) if facts.key?(:title)
+    change_level(facts[:level], **when_given) if facts.key?(:level)
+    change_manager(facts[:manager_id], **when_given) if facts.key?(:manager_id)
+    change_cost_centre(facts[:cost_centre], **when_given) if facts.key?(:cost_centre)
+    change_site(**pair(facts, :site, :country), **when_given) if facts.key?(:site) || facts.key?(:country)
+    change_employment(**pair(facts, :fte, :employment_type), **when_given) if facts.key?(:fte) || facts.key?(:employment_type)
+  end
+
+  private
+
+  def pair(facts, *keys)
+    missing = keys - facts.keys
+    raise ArgumentError, "#{keys.join(" and ")} travel together; missing #{missing.join(", ")}" if missing.any?
+
+    facts.slice(*keys)
   end
 
   def ensure_recorded!

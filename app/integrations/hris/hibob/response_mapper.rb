@@ -14,6 +14,9 @@
 #   # => "456"
 #
 class Hris::Hibob::ResponseMapper
+  # A list field's value: the list item's id, which survives a rename, and its label.
+  ListValue = Data.define(:id, :label)
+
   # Maps a single HiBob employee hash to Person attributes.
   #
   # @param employee [Hash] raw employee data from HiBob API
@@ -55,9 +58,35 @@ class Hris::Hibob::ResponseMapper
     reports_to["id"]
   end
 
+  # The level as HiBob shows it, before any mapping to a framework: the
+  # Org Graph's level fact.
+  #
+  # @return [String, nil] nil when no level column is configured or it is blank
+  def level_label
+    return nil if level_field_id.blank?
+
+    raw = level_path.reduce(employee["humanReadable"]) { |node, key| node[key] if node.is_a?(Hash) }
+    raw.to_s.strip.presence unless raw.is_a?(Hash)
+  end
+
+  # The list fields' item ids beside their labels, keyed like the attributes they sit
+  # beside. A blank field is left out.
+  #
+  # @return [Hash{Symbol => ListValue}]
+  def list_values
+    {
+      department: list_value(%w[work department]),
+      job_title: list_value(%w[work title]),
+      level: (list_value(level_path) if level_field_id.present?)
+    }.compact
+  end
+
   private
 
   attr_reader :employee, :level_field_id
+
+  # HiBob returns root fields (`root.email`) at the top level, not under `root`.
+  def level_path = Hris::Hibob::Client.field_path(level_field_id).delete_prefix("root.").split(".")
 
   # Extracts the level ordinal from the HiBob custom column.
   #
@@ -69,12 +98,24 @@ class Hris::Hibob::ResponseMapper
   def extract_level_ordinal
     return nil if level_field_id.blank?
 
-    # HiBob returns root fields (`root.email`) at the top level, not under `root`.
-    path = Hris::Hibob::Client.field_path(level_field_id).delete_prefix("root.").split(".")
-    raw = path.reduce(employee["humanReadable"]) { |node, key| node[key] if node.is_a?(Hash) }
-    return nil if raw.blank?
+    raw = level_label
+    return nil if raw.nil?
 
-    Integer(raw.to_s, exception: false)
+    Integer(raw, exception: false)
+  end
+
+  # HiBob returns a list field either nested (`work.department`) or flat
+  # (`"/work/department" => { "value" => id }`); the label is only ever in the nested
+  # `humanReadable` node.
+  #
+  # @param path [Array<String>]
+  # @return [ListValue, nil]
+  def list_value(path)
+    flat = employee["/#{path.join('/')}"]
+    id = employee.dig(*path).presence || (flat.is_a?(Hash) ? flat["value"] : flat).presence
+    return nil if id.nil? || id.is_a?(Hash)
+
+    ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
   end
 
   # @return [String, nil]

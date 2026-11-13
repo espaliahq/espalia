@@ -105,6 +105,13 @@ module ProjectionReplayHelpers
           members:  rows(CalibrationSessionMember)
         }
 
+      when "OrgGraph::Projections::Structure"
+        {
+          # Both PKs are event-carried ids — assert they survive reset! + replay.
+          taxonomy_levels: rows(OrgTaxonomyLevel, stable_id: true),
+          units:           rows(OrgUnit, stable_id: true)
+        }
+
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"
       end

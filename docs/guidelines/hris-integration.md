@@ -14,7 +14,7 @@ app/
       dev_name_whimsifier.rb           # Dev-only deterministic name pseudonymizer
       hibob/
         client.rb                      # Hris::Hibob::Client — Faraday HTTP
-        adapter.rb                     # Hris::Hibob::Adapter — 5-pass sync
+        adapter.rb                     # Hris::Hibob::Adapter — the passes of a sync
         response_mapper.rb             # Hris::Hibob::ResponseMapper — pure mapping
         errors.rb                      # Hris::Hibob::Errors::{AuthenticationError,RateLimitError,ApiError,UnexpectedResponseError}
         webhook_validator.rb           # HMAC-SHA512 signature verification
@@ -35,6 +35,7 @@ app/
 - **Errors namespaced under `Errors` module.** Zeitwerk expects one constant per file; the errors module holds all error classes in a single `errors.rb`: `Hris::Hibob::Errors::AuthenticationError`.
 - **Tenant metadata on RES commands.** When dispatching PersonDevelopment commands (assign/change role/change level) from an adapter, wrap the loop in `Rails.configuration.event_store.with_metadata(tenant_id: tenant.id)`. The projection reads this to set `ActsAsTenant` context.
 - **Offboard on deactivation (Pass 3b).** An inactive person must hold no live participation: after Pass 3, the adapter withdraws every inactive person from any open cycle (`unenroll` reason `left_company` — a person-scoped removal, never `cycle_closed`, which is reserved for cycle conclusion) and removes their framework assignments. The sweep is state-driven and idempotent (it self-heals stragglers regardless of how the person became inactive), and Pass 5 skips inactive people. Reactivation needs no special handling — a returnee flows through the normal new-hire path (Pass 1 re-activates, Pass 5 re-assigns, auto-enroll picks them up). **New providers must implement the same offboarding sweep.**
+- **Write Org Graph differences (Pass 2b).** After managers resolve, the adapter hands each touched person's title, HiBob level label (only with a level column) and manager to `OrgGraph::CommandHandler#apply_facts`, inside `with_hris_event_context`. One load per person; each differing fact writes its event with provider `hibob`, effective today; a person the Org Graph has not recorded is skipped. The manager comes from the row's `reportsTo`, so a lost manager is recorded, while a manager Espalia does not know is left uncompared. Person Development is untouched. Site, FTE, employment type and cost centre join as the mapper learns to read them. See [org-graph-design.md](../team-planning/org-graph-design.md#how-the-sync-writes). **New providers must do the same.**
 - **Record the reporting manager.** Pass 5 also dispatches `record_reporting_manager(person_id, framework_id, person.manager_id, source: "hris")` for every touched person that has an assignment — independent of the title-mapping outcome, so a re-managed-but-unmapped person stays fresh. Like every other PersonDevelopment command above, it runs **inside the same `with_metadata(tenant_id: tenant.id)` block** (the Pass 5 loop is already wrapped) so the projection gets tenant context. Idempotent (no-op when unchanged or manager nil). This is the authoritative source for manager-rating authority (`RecordedReportingManager`); seed existing streams once via `bin/rails events:backfill_reporting_managers`. See [docs/guidelines/authorization.md](authorization.md#assessment-permissions).
 
 ## Development PII guard — whimsical pseudonyms
@@ -150,7 +151,7 @@ To pull an additional field (e.g. employment type, cost center, location) throug
 
 1. **Migration** — generate a new migration (`bin/rails generate migration AddXyzToPeople xyz:string`), run `bin/rails db:migrate`.
 2. **Client** — add the field to `BASE_FIELDS` in `Hris::Hibob::Client`. For custom columns, add a constructor parameter like `level_field_id` and include it via `default_fields`.
-3. **ResponseMapper** — extract from the raw or humanReadable hash and add to the attrs hash returned by `#call`. Use `dig_human_readable_work` for list-type fields, `dig_work` for plain strings.
+3. **ResponseMapper** — extract from the raw or humanReadable hash and add to the attrs hash returned by `#call`. Use `dig_human_readable_work` for list-type fields, `dig_work` for plain strings. A list field whose item id matters (it survives a rename, the label doesn't) also goes in `#list_values`, which pairs the id with the label from either payload shape: nested `work.<field>`, or flat `"/work/<field>" => { "value" => id }`.
 4. **Tests** — add a case to `response_mapper_test.rb` with fixture data. Update `test/fixtures/files/hibob/people_search_response.json` if needed.
 5. **Adapter** — no changes needed if you just want the field on Person. If the field affects assignment logic, add it to Pass 5.
 

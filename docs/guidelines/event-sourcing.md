@@ -144,7 +144,7 @@ Do **not** bump for:
 - Refactors that produce identical read-model state (extracted method, renamed variable, etc.).
 - DB-schema-only changes (column addition with a default; index addition).
 
-**A brand-new registered projection is "stale" too.** `verify` treats a projection with no `projection_versions` row as never rebuilt and fails the deploy, so adding one to `Projections::Registry` is a deploy step (`REBUILD_ON_DEPLOY=<name>` or `mark_rebuilt`) even when no historical event exists. Handing a new table to an existing projection avoids registering and stamping a separate one — declared explorations went to `CurrentAssessment` for this reason, with new event types and no history. If historical events must populate the table, bump that projection's `CODE_VERSION` and rebuild it all the same.
+**A brand-new registered projection is "stale" too, but predeploy stamps it when it has nothing to replay.** `verify` treats a projection with no `projection_versions` row as never rebuilt. Just before it, predeploy runs `events:projections:stamp_if_no_events`. For every never-stamped projection none of whose `handled_events` exist in the store, it does what a rebuild would: resets each tenant, replays nothing, stamps. So a new projection over new event types deploys on its own. It still needs `REBUILD_ON_DEPLOY=<name>` when an event of its types already exists, and the task stamps nothing while another projection is stale. A `CODE_VERSION` bump is never stamped this way. If historical events must populate a table, bump the owning projection's `CODE_VERSION` and rebuild it.
 
 When you do bump, the predeploy guard (`events:projections:verify`) will fail the next deploy until the projection is rebuilt. See the runbook for the resolution flow (`REBUILD_ON_DEPLOY` env var, two-stage deploy).
 
@@ -187,7 +187,8 @@ See [docs/runbooks/projection-rebuild.md](../runbooks/projection-rebuild.md) for
 | Schema migration (column add, index, table create) | Yes (`db:prepare`) | No |
 | Backfill new column from past events | No | Yes — bump `CODE_VERSION` |
 | Handler logic change | No | Usually yes — bump `CODE_VERSION` |
-| New projection added | No | Yes — initial backfill |
+| New projection added, its event types already in the store | No | Yes — initial backfill |
+| New projection added, no event of its types yet | Yes (`stamp_if_no_events`) | No |
 | New event type, no past events | No | No (additive) |
 | Existing event's payload shape | Use an upcaster, not a rebuild | No |
 

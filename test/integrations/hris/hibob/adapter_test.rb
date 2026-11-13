@@ -662,7 +662,157 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "#sync_people Org Graph differences (Pass 2b)" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_state)
+        e_role = create(:framework_role, code: "E", name: "Software Engineer")
+        em_role = create(:framework_role, code: "EM", name: "Engineering Manager", track: "management")
+        create(:framework_level, role_id: e_role.role_id, ordinal: 5, code: "E5", title: "Senior SWE")
+        create(:framework_level, role_id: em_role.role_id, ordinal: 6, code: "EM6", title: "Eng Manager")
+      end
+      build_adapter(@fixture["employees"]).sync_people
+      @people = ActsAsTenant.with_tenant(@tenant) { Person.all.index_by(&:external_id) }
+    end
+
+    should "write nothing when nobody is in the Org Graph yet" do
+      assert_empty org_graph_events
+    end
+
+    context "for people the Org Graph has recorded" do
+      setup do
+        record_as_in_fixture
+        @recorded = org_graph_events.size
+      end
+
+      should "write no events when nothing changed" do
+        result = build_adapter(@fixture["employees"]).sync_people
+
+        assert_empty result[:errors]
+        assert_equal 0, result[:org_graph_events]
+        assert_equal @recorded, org_graph_events.size
+      end
+
+      should "write exactly a TitleChanged from HiBob for a new title" do
+        employees = with_employee("bob-001") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Staff Engineer" }
+
+        result = build_adapter(employees).sync_people
+
+        event = org_graph_events.last
+        assert_equal 1, result[:org_graph_events]
+        assert_kind_of OrgGraph::Events::TitleChanged, event
+        assert_equal @people["bob-001"].id, event.data[:person_id]
+        assert_equal "Staff Engineer", event.data[:title]
+        assert_equal "hibob", event.data[:provider]
+        assert_equal Date.current.iso8601, event.data[:effective_on]
+      end
+
+      should "write a LevelChanged with HiBob's own level label" do
+        employees = with_employee("bob-002") { |e| e["humanReadable"]["work"]["customColumns"]["column_test_id"] = "7" }
+
+        build_adapter(employees).sync_people
+
+        assert_equal [ [ OrgGraph::Events::LevelChanged, "7" ] ], new_events.map { |e| [ e.class, e.data[:level] ] }
+      end
+
+      should "record a manager the HRIS no longer names, which Pass 2 keeps" do
+        employees = with_employee("bob-001") { |e| e["work"].delete("reportsTo") }
+
+        build_adapter(employees).sync_people
+
+        assert_equal [ [ OrgGraph::Events::ManagerChanged, nil ] ], new_events.map { |e| [ e.class, e.data[:manager_id] ] }
+      end
+
+      should "leave the manager uncompared when HiBob names someone Espalia does not know" do
+        employees = with_employee("bob-001") { |e| e["work"]["reportsTo"] = { "id" => "bob-999" } }
+
+        build_adapter(employees).sync_people
+
+        assert_empty new_events
+      end
+
+      should "leave a fact HiBob omits unchanged, never cleared" do
+        employees = with_employee("bob-001") do |e|
+          e["work"].delete("title")
+          e["humanReadable"]["work"].delete("title")
+          e["humanReadable"]["work"]["customColumns"].delete("column_test_id")
+        end
+
+        result = build_adapter(employees).sync_people
+
+        assert_empty result[:errors]
+        assert_empty new_events
+      end
+
+      should "write a self-managed person's other facts and leave the manager uncompared" do
+        employees = with_employee("bob-002") do |e|
+          e["work"]["reportsTo"] = { "id" => "bob-002" }
+          e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Director"
+        end
+
+        result = build_adapter(employees).sync_people
+
+        assert_empty result[:errors]
+        assert_equal [ OrgGraph::Events::TitleChanged ], new_events.map(&:class)
+      end
+
+      should "skip an inactive person, whose leaving is recorded elsewhere" do
+        employees = with_employee("bob-003") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Designer" }
+
+        build_adapter(employees).sync_people
+
+        assert_empty new_events
+      end
+
+      should "keep writing Person Development as before" do
+        pd_before = person_development_event_count
+        employees = with_employee("bob-001") do |e|
+          e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Engineering Manager"
+          e["humanReadable"]["work"]["customColumns"]["column_test_id"] = "6"
+        end
+
+        result = build_adapter(employees).sync_people
+
+        assert_equal 1, result[:role_changed]
+        assert_operator person_development_event_count, :>, pd_before
+      end
+    end
+  end
+
   private
+
+  def org_graph_events
+    Rails.configuration.event_store.read.of_type(OrgGraph::Events.constants.map { OrgGraph::Events.const_get(it) }).to_a
+  end
+
+  def new_events
+    org_graph_events.drop(@recorded)
+  end
+
+  def person_development_event_count
+    Rails.configuration.event_store.read.to_a.count { it.class.name.start_with?("PersonDevelopment::") }
+  end
+
+  # Records each synced person as the fixture describes them, so a second
+  # sync over the same fixture finds nothing to write.
+  def record_as_in_fixture
+    ActsAsTenant.with_tenant(@tenant) do
+      handler = OrgGraph::CommandHandler.new
+      @fixture["employees"].each do |employee|
+        person = @people.fetch(employee["id"])
+        handler.record_person(person.id, provider: "hibob", effective_on: Date.current, employment_status: "employed",
+          title: employee.dig("work", "title"), level: employee.dig("humanReadable", "work", "customColumns", "column_test_id"),
+          manager_id: person.manager_id)
+      end
+    end
+  end
+
+  # @param external_id [String]
+  # @yieldparam employee [Hash] a copy of that fixture employee, to change
+  # @return [Array<Hash>] the fixture employees with the change applied
+  def with_employee(external_id)
+    @fixture["employees"].deep_dup.each { yield it if it["id"] == external_id }
+  end
 
   # Builds an adapter with a stubbed client that returns the given employees.
   #
