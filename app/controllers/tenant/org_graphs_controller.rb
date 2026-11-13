@@ -7,7 +7,7 @@
 class Tenant::OrgGraphsController < ApplicationController
   # GET /tenant/org_graph
   def show
-    authorize ActsAsTenant.current_tenant, :show_org_graph?, policy_class: TenantPolicy
+    authorize :org_graph, :show_units?
     render Views::Tenant::OrgGraph::ShowView.new(
       overview: OrgGraph::UnitsOverview.new(selected_unit_id: params[:unit]),
       user: current_user,
