@@ -8,17 +8,21 @@ nothing and can start together: 1.1, 2.1, 6.0 and 6.2.
 
 ## Epics
 
-| # | Epic | Needs | Delivers |
-|---|---|---|---|
-| E1 | Person history | none | Every HRIS fact about a person is an event with a date |
-| E2 | Structure and membership | E1 | Units, owners, and who is in what |
-| E3 | Reading as of a date | E1, E2 | "As known on" reads, and the changes between two dates |
-| E4 | Editing and trust | E2 | Who may edit, effective dates, confirm, change it back |
-| E5 | Org Graph screens | E2, then E3 and E4 per screen | The Org Graph, the unit drawer and the person drawer |
-| E6 | Providers and HRIS fields | E2 | The settings screen, and levels mirrored from the HRIS |
-| E7 | Applying a plan | E2, E4 | The interface Team Planning calls on approval |
-| E8 | Forgetting people | E1 | Retention and identifier erasure |
-| E9 | One write path | E1 stable in production | Person Development fed from the Org Graph |
+| # | Epic | Needs | Delivers | Issue |
+|---|---|---|---|---|
+| E1 | Person history | none | Every HRIS fact about a person is an event with a date | [#37](https://github.com/espaliahq/espalia/issues/37) |
+| E2 | Structure and membership | E1 | Units, owners, and who is in what | [#38](https://github.com/espaliahq/espalia/issues/38) |
+| E3 | Reading as of a date | E1, E2 | "As known on" reads, and the changes between two dates | [#39](https://github.com/espaliahq/espalia/issues/39) |
+| E4 | Editing and trust | E2 | Who may edit, effective dates, confirm, change it back | [#40](https://github.com/espaliahq/espalia/issues/40) |
+| E5 | Org Graph screens | E2, then E3 and E4 per screen | The Org Graph, the unit drawer and the person drawer | [#41](https://github.com/espaliahq/espalia/issues/41) |
+| E6 | Providers and HRIS fields | E2 | The settings screen, and levels mirrored from the HRIS | [#42](https://github.com/espaliahq/espalia/issues/42) |
+| E7 | Applying a plan | E2, E4 | The interface Team Planning calls on approval | [#43](https://github.com/espaliahq/espalia/issues/43) |
+| E8 | Forgetting people | E1 | Retention and identifier erasure | [#44](https://github.com/espaliahq/espalia/issues/44) |
+| E9 | One write path | E1 stable in production | Person Development fed from the Org Graph | [#45](https://github.com/espaliahq/espalia/issues/45) |
+
+Each epic is a GitHub issue. The stories that can start have issues of their own, as
+sub-issues of their epic: all of E1 and E2, and 6.0 and 6.2. The rest get theirs when
+their epic comes up, so the open decisions can settle first.
 
 E1, E2 and E3 run in sequence. After E2, three tracks can run side by side: E4 with E5,
 E6, and E8.
