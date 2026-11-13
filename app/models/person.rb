@@ -25,7 +25,6 @@ class Person < ApplicationRecord
   scope :active, -> { where(status: "active") }
   scope :inactive, -> { where(status: "inactive") }
   scope :hris_managed, -> { where.not(hris_source: nil) }
-  # People with no membership of a live unit in the Org Graph.
   scope :in_no_unit, -> { where.not(id: OrgMembership.in_live_units.select(:person_id)) }
 
   # The one way to find a Person from an identity another system holds: the
