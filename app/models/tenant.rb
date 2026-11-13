@@ -40,6 +40,9 @@ class Tenant < ApplicationRecord
   serialize :feedback_exchange_credentials, coder: JSON
   encrypts :feedback_exchange_credentials
 
+  # The Org Graph's settings, such as when a fact Espalia holds goes stale.
+  attribute :org_graph_config, OrgGraphConfig.to_type, default: -> { OrgGraphConfig.new }
+
   # Slack bot credentials for this workspace, set when a tenant admin installs
   # the Espalia Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
   serialize :slack_credentials, coder: JSON
@@ -172,6 +175,7 @@ class Tenant < ApplicationRecord
   validates :hris_config, store_model: true
   validates :ai_config, store_model: true
   validates :feedback_exchange_config, store_model: true
+  validates :org_graph_config, store_model: true
   before_validation :sync_feedback_exchange_key_ids, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_inbound_secret_is_ours, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_secrets_are_strong, if: :feedback_exchange_credentials_changed?
