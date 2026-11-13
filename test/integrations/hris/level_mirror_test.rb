@@ -56,6 +56,14 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_not OrgMembership.in_live_units.exists?(person_id: @staff[0].id, unit_id: OrgUnit.where(level_id: @team))
     end
 
+    should "keep a text unit nobody is seen holding while a record can't be read" do
+      @catalogue = [ division_field(%w[d1 Product]), Hris::Field.new(id: "work.department", name: "Team", kind: :text) ]
+      mirror(@staff[0] => { division: "d1", team_label: "Payments" })
+      mirror(@staff[0] => { division: "d1", team: :unreadable })
+
+      assert OrgUnit.live.exists?(external_ref: "work.department/Payments")
+    end
+
     should "keep a text unit nobody is seen holding while a record withholds the field" do
       @catalogue = [ division_field(%w[d1 Product]), Hris::Field.new(id: "work.department", name: "Team", kind: :text) ]
       mirror(@staff[0] => { division: "d1", team_label: "Payments" })
@@ -79,6 +87,14 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
 
       mirror(@staff[0] => { division: "d1" })
       assert_equal unit("work.department/t2").id, team_membership(@staff[0])&.unit_id
+    end
+
+    should "change nothing for a person whose value can't be read" do
+      result = mirror(@staff[0] => { division: "d1", team: :unreadable }, @staff[1] => { division: "d1", team: :unreadable })
+
+      assert_equal unit("work.department/t1").id, team_membership(@staff[0])&.unit_id
+      assert_equal unit("work.department/t1").id, team_membership(@staff[1])&.unit_id
+      assert_empty result[:errors]
     end
 
     should "leave a hand-added person's Espalia membership alone" do
@@ -212,6 +228,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
     values["work.division"] = Hris::FieldValue.new(state: :value, id: held[:division], label: held[:division]) if held[:division]
     case held[:team]
     when :blank then values["work.department"] = Hris::FieldValue.blank
+    when :unreadable then values["work.department"] = Hris::FieldValue.unreadable
     when String then values["work.department"] = Hris::FieldValue.new(state: :value, id: held[:team], label: held[:team])
     end
     values["work.department"] = Hris::FieldValue.new(state: :value, label: held[:team_label]) if held[:team_label]
