@@ -107,6 +107,16 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
 
       assert_no_difference(-> { as_tenant { OrgFactPeriod.count } }) { OrgGraph::Projections::History.new.call(event) }
     end
+
+    should "keep no event's state on the subscriber that every publishing thread shares" do
+      record(@ada, title: "Engineer")
+      projection = OrgGraph::Projections::History.new
+      as_tenant { OrgFactPeriod.delete_all }
+      projection.call(Rails.configuration.event_store.read.of_type(OrgGraph::Events::PersonRecorded).last)
+
+      assert_equal [ [ "2026-02-01", nil, { "title" => "Engineer" } ] ], timeline(@ada.id, "title")
+      assert_empty projection.instance_variables
+    end
   end
 
   context "employment" do

@@ -65,13 +65,19 @@ class OrgGraph::Projections::History
   # @param event [RubyEventStore::Event]
   def call(event)
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
-      next if already_learned?(event)
-
-      @event = event
-      @data = event.data
-      @withdrawing = withdraws_original?
-      learn
+      dup.learn_from(event) unless already_learned?(event)
     end
+  end
+
+  protected
+
+  # One subscriber instance serves every publishing thread, so each event is
+  # learned on a copy that holds its state.
+  def learn_from(event)
+    @event = event
+    @data = event.data
+    @withdrawing = withdraws_original?
+    learn
   end
 
   private
