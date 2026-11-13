@@ -282,6 +282,12 @@ class OrgGraph::PersonAggregate
     changed_on && Date.iso8601(changed_on.to_s)
   end
 
+  # @param key [Symbol, String] one of the person facts, such as :cost_centre
+  # @return [Object, nil] what the Org Graph holds for it now
+  def fact(key)
+    @facts[key.to_sym]
+  end
+
   # @return [Boolean] whether the Org Graph has seen this person yet
   def recorded?
     !@employment_status.nil?

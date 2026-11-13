@@ -145,6 +145,66 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
     end
   end
 
+  context "#field_value" do
+    setup do
+      @list = { "work" => { "department" => "4021" }, "humanReadable" => { "work" => { "department" => "Payments" } } }
+    end
+
+    should "read a list field as its item's id and the label HiBob shows" do
+      assert_equal Hris::FieldValue.new(state: :value, id: "4021", label: "Payments"),
+        Hris::Hibob::ResponseMapper.new(@list).field_value("work.department", kind: :list)
+    end
+
+    should "read a list field from the flat payload shape" do
+      employee = @list.except("work").merge("/work/department" => { "value" => 4021 })
+
+      assert_equal "4021", Hris::Hibob::ResponseMapper.new(employee).field_value("work.department", kind: :list).id
+    end
+
+    should "fall back to the item's id when HiBob sends no label for it" do
+      assert_equal "4021",
+        Hris::Hibob::ResponseMapper.new(@list.except("humanReadable")).field_value("work.department", kind: :list).label
+    end
+
+    should "trim a list item's label as the sync does before writing it" do
+      @list["humanReadable"]["work"]["department"] = " Payments  "
+
+      assert_equal "Payments", Hris::Hibob::ResponseMapper.new(@list).field_value("work.department", kind: :list).label
+    end
+
+    should "read a text field as its text, with no id" do
+      employee = { "work" => { "customColumns" => { "column_team" => "  Growth " } } }
+
+      assert_equal Hris::FieldValue.new(state: :value, label: "Growth"),
+        Hris::Hibob::ResponseMapper.new(employee).field_value("column_team", kind: :text)
+    end
+
+    should "read a field HiBob sends empty as blank" do
+      assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "department" => "" } }).field_value("work.department", kind: :list), :blank?
+      assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "department" => nil } }).field_value("work.department", kind: :text), :blank?
+    end
+
+    should "read a list value in a shape it doesn't know as unreadable, never blank" do
+      [ { "id" => "7" }, %w[7 9] ].each do |raw|
+        employee = { "work" => { "customColumns" => { "column_team" => raw } } }
+
+        assert_predicate Hris::Hibob::ResponseMapper.new(employee).field_value("column_team", kind: :list), :unreadable?
+      end
+    end
+
+    should "read a flat wrapper with no value as unreadable, and one holding nil as blank" do
+      unknown = { "/work/department" => { "unexpected" => "7" } }
+      empty = { "/work/department" => { "value" => nil } }
+
+      assert_predicate Hris::Hibob::ResponseMapper.new(unknown).field_value("work.department", kind: :list), :unreadable?
+      assert_predicate Hris::Hibob::ResponseMapper.new(empty).field_value("work.department", kind: :list), :blank?
+    end
+
+    should "read a field the record leaves out as withheld" do
+      assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "title" => "Engineer" } }).field_value("work.department", kind: :list), :withheld?
+    end
+  end
+
   context "#manager_external_id" do
     should "extract manager ID from reportsTo object" do
       employee = @fixture["employees"][0]

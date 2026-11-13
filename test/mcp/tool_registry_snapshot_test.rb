@@ -2407,6 +2407,29 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "integrations_hris_field_preview",
+        "description" => "Preview what an HRIS field would give before choosing it as the source of an Org Graph " \
+                         "level or fact. For target \"level\": the units it would create, with their labels and how " \
+                         "many people fall in each, largest first. For a fact (\"cost_centre\", \"country\"): how many " \
+                         "people have a value and how many would change from what the Org Graph holds now. Both count " \
+                         "people the field is blank for and people whose record withholds it. Reads the HRIS live; " \
+                         "writes nothing.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "field_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "target"   => { "type" => "string", "enum" => %w[level cost_centre country] }
+          },
+          "required" => %w[field_id target],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "integrations_hris_titles",
         "description" => "List the job titles active HRIS people hold, each with the framework role mapping it " \
                          "resolves to (nil = unmapped, so the sync skips those people) and the people the next " \

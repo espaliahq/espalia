@@ -87,6 +87,18 @@ class Hris::BaseAdapter
     raise NotImplementedError, "#{self.class}#fetch_field_catalogue must be implemented"
   end
 
+  # What each current person's record holds for one field, read live and
+  # stored nowhere.
+  #
+  # @param field_id [String] the field's catalogue id
+  # @param kind [Symbol] :list or :text
+  # @param alongside [String, nil] a fact the sync writes this one only with,
+  #   as country travels with site; whoever withholds it reads as withheld
+  # @return [Hash{String => Hris::FieldValue}] keyed by the person's external id
+  def read_field(field_id, kind:, alongside: nil)
+    raise NotImplementedError, "#{self.class}#read_field must be implemented"
+  end
+
   # Returns the provider name (e.g., "hibob", "bamboohr").
   #
   # @return [String]
