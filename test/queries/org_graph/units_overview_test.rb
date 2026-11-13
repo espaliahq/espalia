@@ -57,7 +57,7 @@ class OrgGraph::UnitsOverviewTest < ActiveSupport::TestCase
 
   should "leave out a retired unit and count its people as unplaced" do
     ActsAsTenant.with_tenant(@tenant) do
-      OrgGraph::StructureCommandHandler.new.retire_unit(@org[:payments], effective_on: "2026-03-01")
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).retire_unit(@org[:payments], effective_on: "2026-03-01")
       view = OrgGraph::UnitsOverview.new
 
       assert_empty view.children_of(unit(:checkout))

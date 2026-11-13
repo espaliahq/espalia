@@ -47,7 +47,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
     should "count only the direct members on the opened unit's own card" do
       org = build_org_graph(@tenant)
       ActsAsTenant.with_tenant(@tenant) do
-        OrgGraph::CommandHandler.new.set_membership(org[:ezra].id, org[:engineering], **OrgGraphFixture::PROVENANCE)
+        OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_membership(org[:ezra].id, org[:engineering], **OrgGraphFixture::PROVENANCE)
       end
 
       get tenant_org_graph_path

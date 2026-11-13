@@ -16,8 +16,8 @@ module OrgGraphFixture
   # @return [Hash{Symbol => String, Person}] unit ids and people by name
   def build_org_graph(tenant)
     ids = %i[department team squad engineering platform checkout payments].index_with { SecureRandom.uuid_v7 }
-    structure = OrgGraph::StructureCommandHandler.new
-    handler = OrgGraph::CommandHandler.new
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
 
     ActsAsTenant.with_tenant(tenant) do
       structure.define_taxonomy([
