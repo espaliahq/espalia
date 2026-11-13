@@ -18,6 +18,14 @@ class OrgGraph::PersonAggregate
   EMPLOYMENT_STATUSES = %w[pending employed left].freeze
   FACT_KEYS = %i[title level manager_id cost_centre site country fte employment_type].freeze
   private_constant :FACT_KEYS
+  # The kind of fact each keyword writes, as the provider settings name them
+  # ({OrgGraph::StructureAggregate::FACTS}). A keyword missing here would be
+  # taken from any provider.
+  FACT_KINDS = {
+    employment_status: "employment_status", started_on: "employment_status", left_on: "employment_status",
+    title: "title", level: "level", manager_id: "manager", cost_centre: "cost_centre",
+    site: "site", country: "site", fte: "employment", employment_type: "employment"
+  }.freeze
 
   def initialize
     @person_id = nil

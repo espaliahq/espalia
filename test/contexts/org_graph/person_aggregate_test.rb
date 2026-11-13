@@ -52,6 +52,16 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "FACT_KINDS" do
+    should "name a provider setting for every fact a command writes" do
+      record_keywords = OrgGraph::PersonAggregate.instance_method(:record).parameters.filter_map { |type, name| name if type == :key }
+      written = record_keywords - %i[provider effective_on]
+
+      assert_empty written - OrgGraph::PersonAggregate::FACT_KINDS.keys
+      assert_empty OrgGraph::PersonAggregate::FACT_KINDS.values - OrgGraph::StructureAggregate::FACTS
+    end
+  end
+
   context "#record" do
     should "record the facts as they stood" do
       record(started_on: Date.new(2024, 3, 4), title: " Engineer ", level: "L3", manager_id: @manager_id,

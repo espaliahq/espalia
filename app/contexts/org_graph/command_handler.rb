@@ -8,13 +8,6 @@
 # is the tenant's setting for its kind, a membership's is its unit's own.
 #
 class OrgGraph::CommandHandler
-  FACT_KINDS = {
-    employment_status: "employment_status", started_on: "employment_status", left_on: "employment_status",
-    title: "title", level: "level", manager_id: "manager", cost_centre: "cost_centre",
-    site: "site", country: "site", fte: "employment", employment_type: "employment"
-  }.freeze
-  private_constant :FACT_KINDS
-
   # @param repository [OrgGraph::Repository]
   def initialize(repository: OrgGraph::Repository.new)
     @repository = repository
@@ -183,7 +176,7 @@ class OrgGraph::CommandHandler
 
   # Reads the fact providers the structure projection writes, as above.
   def ensure_provides!(provider, *keys)
-    keys.filter_map { |key| FACT_KINDS[key] }.uniq.each do |kind|
+    keys.filter_map { |key| OrgGraph::PersonAggregate::FACT_KINDS[key] }.uniq.each do |kind|
       holder = OrgFactProvider.provider_for(kind)
       raise "#{holder} supplies #{kind}; change it there" unless holder == provider.to_s
     end
