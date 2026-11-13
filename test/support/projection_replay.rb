@@ -133,6 +133,9 @@ module ProjectionReplayHelpers
       when "OrgGraph::Projections::Leavers"
         # The PK derives from the person — assert it survives reset! + replay.
         { leavers: rows(OrgLeaver, stable_id: true) }
+      when "OrgGraph::Projections::History"
+        # A row's natural key is its subject, fact, key, period and learned window.
+        { fact_periods: rows(OrgFactPeriod) }
 
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"

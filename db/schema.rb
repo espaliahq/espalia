@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -761,6 +761,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_180000) do
     t.index ["tenant_id", "person_id", "fact", "unit_id"], name: "index_org_fact_ages_on_fact", unique: true, nulls_not_distinct: true
   end
 
+  create_table "org_fact_periods", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "subject_type", null: false
+    t.uuid "subject_id", null: false
+    t.string "fact", null: false
+    t.string "key", default: "", null: false
+    t.jsonb "value"
+    t.string "provider"
+    t.date "effective_from", null: false
+    t.date "effective_to"
+    t.datetime "learned_at", null: false
+    t.datetime "superseded_at"
+    t.uuid "event_id", null: false
+    t.uuid "learned_by_event_id", null: false
+    t.uuid "superseded_by_event_id"
+    t.index ["tenant_id", "learned_by_event_id"], name: "index_org_fact_periods_on_tenant_id_and_learned_by_event_id"
+    t.index ["tenant_id", "subject_type", "fact", "learned_at"], name: "index_org_fact_periods_for_as_of"
+    t.index ["tenant_id", "subject_type", "subject_id", "fact", "key", "effective_from"], name: "index_org_fact_periods_on_current_knowledge", unique: true, where: "(superseded_at IS NULL)"
+    t.index ["tenant_id", "superseded_by_event_id"], name: "index_org_fact_periods_on_tenant_id_and_superseded_by_event_id"
+  end
+
   create_table "org_fact_providers", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "fact", null: false
@@ -1091,6 +1112,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_180000) do
   add_foreign_key "oauth_access_tokens", "tenants"
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
   add_foreign_key "org_fact_ages", "tenants"
+  add_foreign_key "org_fact_periods", "tenants"
   add_foreign_key "org_fact_providers", "tenants"
   add_foreign_key "org_leavers", "tenants"
   add_foreign_key "org_memberships", "tenants"
