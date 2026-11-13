@@ -77,7 +77,8 @@ class Hris::Hibob::ResponseMapper
   # The site, cost centre, employment and dates the Org Graph records, keyed as
   # {OrgGraph::CommandHandler#sync_person} takes them. A fact appears only when
   # the payload carries its field, so one HiBob withholds (the service user
-  # can't read it) is never compared. A pair travels together, so FTE and type
+  # can't read it) is never compared, and nor is one in a shape Espalia can't
+  # read, such as an array where a list id should be. A pair travels together, so FTE and type
   # are written only when both arrive, and so are a site and a mapped country.
   # A field it sends blank, or a value the Org Graph can't hold (an FTE outside
   # 1–100, a date that isn't ISO 8601), is nil. HiBob gives a site no country,
@@ -89,11 +90,11 @@ class Hris::Hibob::ResponseMapper
   def org_graph_facts
     facts = {}
     country = mapped_path("country")
-    if supplied?(%w[work site]) && (country.nil? || supplied?(country))
+    if readable?(%w[work site]) && (country.nil? || readable?(country))
       facts.merge!(site: label(%w[work site]), country: (label(country) if country))
     end
     cost_centre = mapped_path("cost_centre")
-    facts[:cost_centre] = label(cost_centre) if cost_centre && supplied?(cost_centre)
+    facts[:cost_centre] = label(cost_centre) if cost_centre && readable?(cost_centre)
     if supplied?(%w[payroll employment fte]) && supplied?(%w[payroll employment type])
       facts.merge!(fte: fraction(value(%w[payroll employment fte])),
         employment_type: human_readable(%w[payroll employment type]))
@@ -197,6 +198,10 @@ class Hris::Hibob::ResponseMapper
     flat = employee[flat_key(path)]
     flat.is_a?(Hash) && !flat.key?("value")
   end
+
+  # Supplied in a shape Espalia knows. The sync writes nothing for an
+  # unreadable value, as for a withheld one, so the preview's count holds.
+  def readable?(path) = supplied?(path) && !unreadable_list?(path)
 
   # @param path [Array<String>]
   def supplied?(path)

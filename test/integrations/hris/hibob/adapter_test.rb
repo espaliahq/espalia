@@ -955,6 +955,21 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
           new_events.map { |e| [ e.class, e.data[:cost_centre] || e.data[:country] ] }
       end
 
+      should "write no cost centre for a value it cannot read, as for one HiBob withholds" do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("cost_centre", "hibob",
+          fields: { cost_centre: "work.customColumns.column_cc" }, effective_on: Date.current)
+        @recorded = org_graph_events.size
+        employees = with_employee("bob-001") do |e|
+          e["work"]["customColumns"] = { "column_cc" => %w[17 18] }
+          e["humanReadable"]["work"]["customColumns"] = { "column_cc" => "Platform, Payments" }
+        end
+
+        result = build_adapter(employees).sync_people
+
+        assert_empty result[:errors]
+        assert_not new_events.any?(OrgGraph::Events::CostCentreChanged)
+      end
+
       should "request the mapped fields from HiBob" do
         OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("cost_centre", "hibob",
           fields: { cost_centre: "work.customColumns.column_cc" }, effective_on: Date.current)
