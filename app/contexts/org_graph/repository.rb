@@ -23,6 +23,16 @@ class OrgGraph::Repository
     end
   end
 
+  # Loads the tenant's structure aggregate, yields it, and stores any new events.
+  #
+  # @yield [OrgGraph::StructureAggregate] the loaded aggregate
+  # @raise [ArgumentError] if no tenant context is available
+  def with_structure(&block)
+    with_tenant_metadata do
+      @repository.with_aggregate(OrgGraph::StructureAggregate.new, EventStreamNaming.org_structure_stream, &block)
+    end
+  end
+
   private
 
   def with_tenant_metadata(&block)

@@ -112,6 +112,24 @@ class EventStreamNamingTest < ActiveSupport::TestCase
     end
   end
 
+  context ".org_structure_stream" do
+    should "return one tenant-namespaced stream per tenant" do
+      assert_equal "tenant-#{@tenant.id}/OrgStructure", EventStreamNaming.org_structure_stream(tenant: @tenant)
+    end
+
+    should "use ActsAsTenant.current_tenant when no tenant given" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "tenant-#{@tenant.id}/OrgStructure", EventStreamNaming.org_structure_stream
+      end
+    end
+
+    should "raise ArgumentError when no tenant context available" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ArgumentError) { EventStreamNaming.org_structure_stream }
+      end
+    end
+  end
+
   context ".extract_tenant_id" do
     should "extract tenant ID from framework stream name" do
       tenant_id = SecureRandom.uuid_v7
