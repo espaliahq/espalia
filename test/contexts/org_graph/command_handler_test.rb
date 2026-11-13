@@ -47,4 +47,36 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
 
     assert_equal 3, stream_events.size
   end
+
+  context "#apply_facts" do
+    should "leave a person the Org Graph has not recorded alone" do
+      assert_equal 0, @handler.apply_facts(@person_id, **PROVENANCE, title: "Engineer")
+      assert_empty stream_events
+    end
+
+    should "write one event per differing fact in a single load, and none for the rest" do
+      manager_id = SecureRandom.uuid_v7
+      @handler.record_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer",
+        level: "5", manager_id: manager_id, site: "Sydney", country: "Australia")
+
+      written = @handler.apply_facts(@person_id, **PROVENANCE, title: "Senior Engineer", level: "5",
+        manager_id: nil, site: "Sydney", country: "Australia")
+
+      assert_equal 2, written
+      assert_equal [ OrgGraph::Events::TitleChanged, OrgGraph::Events::ManagerChanged ], stream_events.drop(1).map(&:class)
+    end
+
+    should "not compare a fact it was not given" do
+      @handler.record_person(@person_id, **PROVENANCE, employment_status: "employed", cost_centre: "CC-100")
+
+      assert_equal 0, @handler.apply_facts(@person_id, **PROVENANCE, title: nil)
+    end
+
+    should "refuse a fact it does not name, or half a pair" do
+      @handler.record_person(@person_id, **PROVENANCE, employment_status: "employed")
+
+      assert_raises(ArgumentError) { @handler.apply_facts(@person_id, **PROVENANCE, department: "Design") }
+      assert_raises(ArgumentError) { @handler.apply_facts(@person_id, **PROVENANCE, site: "Sydney") }
+    end
+  end
 end
