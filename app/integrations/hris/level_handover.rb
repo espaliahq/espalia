@@ -23,11 +23,7 @@ class Hris::LevelHandover
                            :unresolved, :blocked, :memberships_ended, :units_retired, :held, :live_units, :preview,
                            :fingerprint) do
     def over_brake?
-      self.class.braked?(memberships_ended, held) || self.class.braked?(units_retired, live_units)
-    end
-
-    def self.braked?(count, of)
-      count > Hris::BaseAdapter::ABSENCE_BRAKE[:people] && count > of * Hris::BaseAdapter::ABSENCE_BRAKE[:share]
+      Hris::BaseAdapter.over_brake?(memberships_ended, held) || Hris::BaseAdapter.over_brake?(units_retired, live_units)
     end
   end
 
@@ -50,7 +46,7 @@ class Hris::LevelHandover
   # @return [Comparison]
   # @raise [Refused] when the level is not Espalia's or the field is unknown
   def compare(field_id:, matches: {}, resolutions: {})
-    raise Refused, "#{@level.provider} already supplies the #{@level.name} level" unless espalia?(@level.provider)
+    raise Refused, "#{@level.provider} already supplies the #{@level.name} level" unless espalia?
 
     field = catalogue_field(field_id)
     values = read(field)
@@ -93,7 +89,7 @@ class Hris::LevelHandover
   # @return [Handback] what handing the level back would keep
   # @raise [Refused] when Espalia already holds the level
   def compare_handback
-    raise Refused, "Espalia already holds the #{@level.name} level" if espalia?(@level.provider)
+    raise Refused, "Espalia already holds the #{@level.name} level" if espalia?
 
     held = units.map(&:id)
     rows = OrgMembership.where(unit_id: held).order(:id).pluck(:id, :person_id, :unit_id, :provider)
@@ -122,11 +118,12 @@ class Hris::LevelHandover
     handback
   end
 
+  # @return [Boolean] whether Espalia holds the level, so it can be handed over
+  def espalia? = @level.provider.nil? || @level.provider == OrgGraph::StructureAggregate::ESPALIA
+
   private
 
   def provider = @adapter.provider_name
-
-  def espalia?(provider) = provider.nil? || provider == OrgGraph::StructureAggregate::ESPALIA
 
   def units = OrgUnit.live.where(level_id: @level.id).order(:name).to_a
 
@@ -226,7 +223,11 @@ class Hris::LevelHandover
 
     def values_by_person = @values_by_person ||= @values.to_h { |person, value| [ person.id, value ] }
 
-    def item_rows
+    def item_rows = @item_rows ||= build_item_rows
+
+    def members_of(unit) = (@members_by_unit ||= @memberships.group_by(&:unit_id)).fetch(unit.id, [])
+
+    def build_item_rows
       counts = @values.values.select(&:value?).group_by(&:key)
       rows = if @field.list?
         @field.values.map { |item| { key: item.id.to_s, label: item.name, people: counts.fetch(item.id.to_s, []).size } }
@@ -238,7 +239,7 @@ class Hris::LevelHandover
 
     def unit_rows(by_key)
       @units.map do |unit|
-        members = @memberships.select { it.unit_id == unit.id }
+        members = members_of(unit)
         held = members.filter_map { values_by_person[it.person_id] }.select(&:value?).group_by(&:key)
           .map { |key, group| { key:, label: by_key.dig(key, :label) || key, people: group.size } }
           .sort_by { [ -it[:people], it[:label].to_s.downcase ] }.first(3)

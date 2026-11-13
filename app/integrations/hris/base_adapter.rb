@@ -23,6 +23,11 @@ class Hris::BaseAdapter
   # sync decides afresh.
   ABSENCE_BRAKE = { share: 0.10, people: 5 }.freeze
 
+  # @param count [Integer] how many the change would remove
+  # @param of [Integer] how many there are
+  # @return [Boolean] whether removing them trips {ABSENCE_BRAKE}
+  def self.over_brake?(count, of) = count > ABSENCE_BRAKE[:people] && count > of * ABSENCE_BRAKE[:share]
+
   # The adapter for the tenant's configured provider.
   #
   # @param tenant [Tenant]
@@ -125,7 +130,7 @@ class Hris::BaseAdapter
     absent = held.where.not(external_id: current_external_ids).pluck(:id, :status)
     employed = held.where(status: "active").count
     vanished = absent.count { |_, status| status == "active" }
-    return Person.where(id: absent.map(&:first)) unless vanished > ABSENCE_BRAKE[:people] && vanished > employed * ABSENCE_BRAKE[:share]
+    return Person.where(id: absent.map(&:first)) unless self.class.over_brake?(vanished, employed)
 
     message = "#{vanished} of #{employed} employed people are missing from #{provider_name}, more than " \
       "#{(ABSENCE_BRAKE[:share] * 100).round}% and #{ABSENCE_BRAKE[:people]} people, so no one was marked as left"

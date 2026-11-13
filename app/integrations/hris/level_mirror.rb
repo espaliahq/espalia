@@ -291,7 +291,7 @@ class Hris::LevelMirror
   end
 
   def braked?(count, of, what, outcome)
-    return false unless @brake && count > Hris::BaseAdapter::ABSENCE_BRAKE[:people] && count > of * Hris::BaseAdapter::ABSENCE_BRAKE[:share]
+    return false unless @brake && Hris::BaseAdapter.over_brake?(count, of)
 
     @result[:errors] << { error: "#{count} of #{of} #{what}, more than #{(Hris::BaseAdapter::ABSENCE_BRAKE[:share] * 100).round}% " \
                                  "and #{Hris::BaseAdapter::ABSENCE_BRAKE[:people]}, so #{outcome}" }

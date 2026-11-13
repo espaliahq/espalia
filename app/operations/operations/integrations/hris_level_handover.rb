@@ -31,18 +31,11 @@ class Operations::Integrations::HrisLevelHandover < Operations::Base
   def perform
     handover = self.handover
     refusals do
-      next handback_payload(handover.compare_handback) unless espalia?(handover)
+      next handback_payload(handover.compare_handback) unless handover.espalia?
       raise ParameterError, "field_id: required to hand a level to the HRIS" if params[:field_id].blank?
 
       comparison_payload(handover.compare(field_id: params[:field_id], matches: params[:matches] || {},
                                           resolutions: params[:resolutions] || {}))
     end
-  end
-
-  private
-
-  def espalia?(handover)
-    provider = OrgTaxonomyLevel.find(params[:level_id].to_s.downcase).provider
-    provider.nil? || provider == OrgGraph::StructureAggregate::ESPALIA
   end
 end
