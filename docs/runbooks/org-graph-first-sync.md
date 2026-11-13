@@ -12,7 +12,7 @@ The next HiBob sync writes `PersonRecorded` for every person HiBob returns, inac
 
 Every later sync writes only what changed: a person HiBob now shows as inactive gets `PersonLeft`, one active again gets `PersonReturned`, and a changed title, level or manager gets its event. Person Development is untouched, and so is everything a user sees.
 
-**A tenant recorded before site, FTE, employment type and start dates arrived** gets them on its next sync: up to three events per person (`SiteChanged`, `EmploymentChanged`, `StartDateChanged`), then quiet again. FTE and employment type need the service user to read HiBob's payroll fields; without that permission HiBob leaves them out and nothing is written for them.
+**A tenant recorded before site, FTE, employment type and start dates arrived** gets them on its next sync: up to three events per person (`SiteChanged`, `EmploymentChanged`, `StartDateChanged`), then quiet again. FTE and employment type need the service user to read HiBob's payroll fields; without that permission HiBob leaves them out and nothing is written for them. Each leaver HiBob holds a termination date for (`internal.terminationDate`, which needs the same kind of read access) also gets a `PersonLeft` on that date, correcting the sync day the first sync used.
 
 **Who is not recorded.** People HiBob does not return are not recorded: someone added by hand, or deactivated by an earlier sync because they had left HiBob altogether. Their history starts if HiBob returns them again.
 
