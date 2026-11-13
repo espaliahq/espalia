@@ -88,7 +88,7 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
 
     should "record the start date, and a leaver's leaving date, with the person" do
       @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15", left_on: "2026-12-01")
-      other = SecureRandom.uuid_v7
+      other = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-2").id
       @handler.sync_person(other, **PROVENANCE, employment_status: "left", started_on: "2023-01-15", left_on: "2026-10-31")
 
       assert_equal [ "2023-01-15", nil ], stream_events.first.data.values_at(:started_on, :left_on)
@@ -122,7 +122,7 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
 
     should "drop a leaving date before the start date, so the person is still recorded and left" do
       @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", started_on: "2026-12-01", left_on: "2026-11-15")
-      other = SecureRandom.uuid_v7
+      other = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-2").id
       @handler.sync_person(other, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15")
       @handler.sync_person(other, **PROVENANCE, employment_status: "left", started_on: "2023-01-15", left_on: "2022-12-31")
 
