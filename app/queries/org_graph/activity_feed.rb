@@ -14,9 +14,13 @@ class OrgGraph::ActivityFeed
   # @!attribute group [OrgUnitActivity::Group]
   # @!attribute parts [Array<Part>] newest first
   # @!attribute refusal [String, nil] why the whole group can't be changed back
-  Item = Data.define(:group, :parts, :refusal) do
+  # @!attribute unit_count [Integer] the units its cause touched, this one among them
+  Item = Data.define(:group, :parts, :refusal, :unit_count) do
     # @return [Boolean]
     def changeable? = refusal.nil?
+
+    # @return [String] the part itself when alone, so it names who it moved
+    def headline = parts.one? ? parts.first.description : group.summary.upcase_first
   end
 
   # @!attribute entry [OrgUnitActivity]
@@ -59,6 +63,10 @@ class OrgGraph::ActivityFeed
     @groups ||= OrgUnitActivity.feed(unit.id, page:, per_page: PER_PAGE).tap { preload(it) }
   end
 
+  def unit_counts
+    @unit_counts ||= OrgUnitActivity.where(cause_id: groups.map(&:cause_id)).group(:cause_id).distinct.count(:unit_id)
+  end
+
   def preload(groups)
     ActiveRecord::Associations::Preloader.new(records: groups.flat_map(&:parts), associations: %i[person actor other_unit]).call
   end
@@ -67,7 +75,8 @@ class OrgGraph::ActivityFeed
     parts = group.parts.map do |entry|
       Part.new(entry:, description: describe(entry), by: self.class.by(entry), refusal: @change_back.refusal(entry))
     end
-    Item.new(group:, parts:, refusal: group.parts.one? ? parts.first.refusal : @change_back.group_refusal(group.cause_id))
+    refusal = group.parts.one? ? parts.first.refusal : @change_back.group_refusal(group.cause_id)
+    Item.new(group:, parts:, refusal:, unit_count: unit_counts.fetch(group.cause_id, 1))
   end
 
   def describe(entry)

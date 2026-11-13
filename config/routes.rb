@@ -97,9 +97,12 @@ Rails.application.routes.draw do
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
 
-    # Org Graph Units view (#80), read-only. Here, admins only, until the
-    # Org Graph screens are finished.
-    resource :org_graph, only: :show, controller: "org_graphs"
+    # Org Graph Units view (#80), with "change it back" in its activity
+    # sidebar (#137). Here, admins only, until the Org Graph screens are
+    # finished.
+    resource :org_graph, only: :show, controller: "org_graphs" do
+      post :change_back
+    end
 
     # Feedback export for monthly reporting (#458): `new` is the picker,
     # `index.csv` the download.

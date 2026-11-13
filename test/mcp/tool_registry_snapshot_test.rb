@@ -2607,7 +2607,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "it took effect, when the Org Graph learned it, any plan reference, its parts and whether " \
           "the caller can change it back, with the reason when not. Each part has its own id, " \
           "description and change-back answer. Changing a group back reverses it in every unit it " \
-          "touched. Admins only while the Org Graph is unfinished.",
+          "touched, and units_touched counts them. Admins only while the Org Graph is unfinished.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

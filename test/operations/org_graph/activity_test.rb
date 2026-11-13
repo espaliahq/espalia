@@ -37,7 +37,7 @@ class Operations::OrgGraph::ActivityTest < ActiveSupport::TestCase
     groups = call({ unit_id: @org[:platform] })[:groups]
 
     latest = groups.first
-    assert_equal [ "Moved 1 person in", "Ada Quill", "2026-02-01", true ],
+    assert_equal [ "Moved Cyril Moss in from Checkout", "Ada Quill", "2026-02-01", true ],
       latest.values_at(:summary, :by, :effective_on, :can_change_back)
     assert_equal [ "Moved Cyril Moss in from Checkout" ], latest[:parts].map { it[:description] }
     assert_equal [ "Added Brook Tamsin", "Added Ada Quill" ], groups[1..2].map { it[:parts].first[:description] }

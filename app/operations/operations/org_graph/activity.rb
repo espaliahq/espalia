@@ -10,7 +10,7 @@ class Operations::OrgGraph::Activity < Operations::Base
               "when it took effect, when the Org Graph learned it, any plan reference, its parts and " \
               "whether the caller can change it back, with the reason when not. Each part has its own " \
               "id, description and change-back answer. Changing a group back reverses it in every unit " \
-              "it touched. Admins only while the Org Graph is unfinished."
+              "it touched, and units_touched counts them. Admins only while the Org Graph is unfinished."
   category :read
   approval :none
 
@@ -37,13 +37,14 @@ class Operations::OrgGraph::Activity < Operations::Base
     group = item.group
     {
       cause_id: group.cause_id,
-      summary: group.summary.upcase_first,
+      summary: item.headline,
       by: item.parts.first.by,
       effective_on: group.latest.effective_on&.iso8601,
       learned_at: group.learned_at.iso8601,
       plan_id: group.plan_id,
       plan_change_id: group.plan_change_id,
       changed_back: group.changed_back?,
+      units_touched: item.unit_count,
       can_change_back: item.changeable?,
       cannot_change_back_because: item.refusal,
       parts: item.parts.map { part_payload(it) }
