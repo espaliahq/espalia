@@ -14,7 +14,8 @@ class FrameworkPublicationTest < ActiveSupport::TestCase
   end
 
   should belong_to(:tenant)
-  should belong_to(:requested_by).class_name("TenantUser")
+  should belong_to(:requested_by).class_name("TenantUser").without_validating_presence
+  should validate_presence_of(:requested_by).on(:create)
   should validate_presence_of(:framework_id)
   should validate_presence_of(:draft_version)
   should define_enum_for(:status).with_values(%i[queued running succeeded failed])

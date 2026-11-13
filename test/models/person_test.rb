@@ -16,6 +16,35 @@ class PersonTest < ActiveSupport::TestCase
   context "validations" do
     should validate_presence_of(:email)
     should validate_presence_of(:name)
+
+    should "need neither once forgotten" do
+      assert build(:person, name: nil, email: nil, forgotten_at: Time.current).valid?
+    end
+  end
+
+  context "a forgotten person" do
+    setup do
+      @tenant = create(:tenant)
+      ActsAsTenant.current_tenant = @tenant
+      @person = create(:person, tenant: @tenant)
+      @person.update_columns(name: nil, email: nil, forgotten_at: Time.current)
+    end
+    teardown { ActsAsTenant.current_tenant = nil }
+
+    should "read as a former member, while the column holds nothing" do
+      assert_equal Person::FORMER_MEMBER, @person.reload.name
+      assert_nil Person.where(id: @person.id).pick(:name)
+    end
+
+    should "have no user to notify" do
+      assert_no_difference -> { User.count } do
+        assert_nil @person.ensure_user!
+      end
+    end
+
+    should "be refused by the database without that mark" do
+      assert_raises(ActiveRecord::StatementInvalid) { @person.update_columns(forgotten_at: nil) }
+    end
   end
 
   context "#ensure_user!" do

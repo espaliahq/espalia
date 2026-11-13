@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_170001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -880,7 +880,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170001) do
   create_table "people", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "department"
-    t.string "email", null: false
+    t.string "email"
     t.string "external_id"
     t.integer "hris_level_ordinal"
     t.jsonb "hris_raw_data"
@@ -888,16 +888,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170001) do
     t.string "job_title"
     t.string "level_id"
     t.uuid "manager_id"
-    t.string "name", null: false
+    t.string "name"
     t.string "role_id"
     t.string "status", default: "active", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
+    t.datetime "forgotten_at"
+    t.string "forgotten_external_id_digest"
     t.index ["manager_id"], name: "index_people_on_manager_id"
     t.index ["tenant_id", "email"], name: "index_people_on_tenant_id_and_email", unique: true
     t.index ["tenant_id", "external_id"], name: "index_people_on_tenant_id_and_external_id", unique: true, where: "(external_id IS NOT NULL)"
+    t.index ["tenant_id", "forgotten_external_id_digest"], name: "index_people_on_tenant_id_and_forgotten_external_id_digest", unique: true, where: "(forgotten_external_id_digest IS NOT NULL)"
     t.index ["tenant_id", "status"], name: "index_people_on_tenant_id_and_status"
     t.index ["tenant_id"], name: "index_people_on_tenant_id"
+    t.check_constraint "forgotten_at IS NOT NULL OR name IS NOT NULL AND email IS NOT NULL", name: "people_identified_unless_forgotten"
   end
 
   create_table "person_development_comments", id: :uuid, default: nil, force: :cascade do |t|
@@ -966,12 +970,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170001) do
     t.string "slack_user_id"
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
-    t.uuid "user_id", null: false
+    t.uuid "user_id"
     t.boolean "org_graph_editor", default: false, null: false
+    t.datetime "forgotten_at"
     t.index ["person_id"], name: "index_tenant_users_on_person_id"
     t.index ["tenant_id", "user_id"], name: "index_tenant_users_on_tenant_id_and_user_id", unique: true
     t.index ["tenant_id"], name: "index_tenant_users_on_tenant_id"
     t.index ["user_id"], name: "index_tenant_users_on_user_id"
+    t.check_constraint "forgotten_at IS NOT NULL OR user_id IS NOT NULL", name: "tenant_users_linked_unless_forgotten"
   end
 
   create_table "tenants", id: :uuid, default: nil, force: :cascade do |t|

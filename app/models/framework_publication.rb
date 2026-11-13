@@ -32,10 +32,12 @@ class FrameworkPublication < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
-  belongs_to :requested_by, class_name: "TenantUser"
+  # Optional only so a publication outlives a forgotten requester.
+  belongs_to :requested_by, class_name: "TenantUser", optional: true
 
   enum :status, [ :queued, :running, :succeeded, :failed ]
 
+  validates :requested_by, presence: true, on: :create
   validates :framework_id, presence: true
   validates :draft_version, presence: true
 
@@ -92,5 +94,5 @@ class FrameworkPublication < ApplicationRecord
   def in_flight? = finished_at.nil?
 
   # @return [Person, nil] who asked for the publish
-  def requester = requested_by.person
+  def requester = requested_by&.person
 end

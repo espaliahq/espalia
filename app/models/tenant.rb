@@ -17,7 +17,7 @@ class Tenant < ApplicationRecord
   # chars, ending in a TLD.
   CUSTOM_DOMAIN_FORMAT = /\A(?=.{4,253}\z)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\z/
 
-  has_many :tenant_users, dependent: :destroy
+  has_many :tenant_users, -> { unscope(where: :forgotten_at) }, dependent: :destroy, inverse_of: :tenant
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
 

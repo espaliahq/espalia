@@ -19,14 +19,20 @@ class TenantUser < ApplicationRecord
 
   ROLES = { member: "member", admin: "admin" }.freeze
 
+  # A forgotten membership keeps its row, since authored content points at
+  # it, but loses its user. No tenant query may reach it, or a name could
+  # still be derived from the login's email.
+  default_scope { where(forgotten_at: nil) }
+
   belongs_to :tenant
-  belongs_to :user
+  belongs_to :user, optional: true
   belongs_to :person, optional: true
 
   enum :role, ROLES, default: :member
 
   validates_uniqueness_to_tenant :user_id
   validates :role, presence: true
+  validates :user, presence: true, unless: -> { forgotten_at.present? }
 
   # Ensures this TenantUser has a linked Person — the invariant that lets
   # domain-authored columns (e.g. framework_suggested_edits.author_id) be
