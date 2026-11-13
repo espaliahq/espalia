@@ -7,7 +7,8 @@
 > ([#52](https://github.com/espaliahq/espalia/issues/52)) and membership
 > ([#54](https://github.com/espaliahq/espalia/issues/54)), which nothing writes to yet. The
 > units view ([#80](https://github.com/espaliahq/espalia/issues/80)) shows them, read-only, to
-> tenant admins at `/tenant/org_graph` until the Org Graph screens are finished.
+> tenant admins at `/tenant/org_graph` until the Org Graph screens are finished; MCP clients
+> read the same tree through `org_graph_units`.
 > [The index](README.md) lists the companion designs, the mockups and the plan.
 
 The Org Graph is Espalia's best-known view of the organisation: who is in it, what they

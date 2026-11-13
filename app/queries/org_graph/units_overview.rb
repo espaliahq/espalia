@@ -8,8 +8,7 @@
 # every unit beneath it, so someone in two squads of one team counts once
 # for the team.
 #
-# Web-only for now: the Org Graph is unfinished, and its read for MCP waits
-# for "as known on" (story 3.2), which changes what it returns.
+# The page and {Operations::OrgGraph::Units} both read it, so the two agree.
 class OrgGraph::UnitsOverview
   # @return [Array<OrgTaxonomyLevel>] top level first
   attr_reader :levels
