@@ -357,6 +357,65 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "unit owners" do
+    setup do
+      create_unit(@team, "Payments", level: "Team")
+      @owner = SecureRandom.uuid_v7
+    end
+
+    should "record who owns the unit, from when, and who named them" do
+      as_tenant { @handler.add_unit_owner(@team, @owner, effective_on: @today, added_by_id: @actor) }
+      event = structure_events.last
+
+      assert_kind_of OrgGraph::Events::UnitOwnerAdded, event
+      assert_equal({ unit_id: @team, person_id: @owner, effective_on: "2026-11-01", added_by_id: @actor },
+                   event.data.slice(:unit_id, :person_id, :effective_on, :added_by_id))
+    end
+
+    should "take several owners, none primary, and write nothing for one it already has" do
+      as_tenant do
+        @handler.add_unit_owner(@team, @owner, effective_on: @today)
+        @handler.add_unit_owner(@team, @actor, effective_on: @today)
+
+        assert_no_difference -> { structure_events.size } do
+          @handler.add_unit_owner(@team, @owner.upcase, effective_on: @today + 1)
+        end
+      end
+    end
+
+    should "remove an owner, and write nothing for someone who isn't one" do
+      as_tenant do
+        @handler.add_unit_owner(@team, @owner, effective_on: @today)
+        @handler.remove_unit_owner(@team, @owner, effective_on: @today + 5, removed_by_id: @actor)
+
+        assert_kind_of OrgGraph::Events::UnitOwnerRemoved, structure_events.last
+        assert_equal "2026-11-06", structure_events.last.data[:effective_on]
+        assert_no_difference -> { structure_events.size } do
+          @handler.remove_unit_owner(@team, @owner, effective_on: @today + 6)
+        end
+      end
+    end
+
+    should "name an owner for a unit an HRIS supplies, since Espalia states ownership" do
+      provide("Department", "hibob")
+      create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "d-1")
+
+      as_tenant { @handler.add_unit_owner(@department, @owner, effective_on: @today) }
+      assert_equal @department, structure_events.last.data[:unit_id]
+    end
+
+    should "refuse a retired or unknown unit, or an owner id that isn't a UUID" do
+      as_tenant do
+        @handler.retire_unit(@team, effective_on: @today)
+
+        assert_raises(RuntimeError) { @handler.add_unit_owner(@team, @owner, effective_on: @today) }
+        assert_raises(RuntimeError) { @handler.add_unit_owner(SecureRandom.uuid_v7, @owner, effective_on: @today) }
+        @handler.create_unit(@squad, "Checkout", level_id: level_id("Squad"), effective_on: @today)
+        assert_raises(ArgumentError) { @handler.add_unit_owner(@squad, "alice", effective_on: @today) }
+      end
+    end
+  end
+
   context "#move_unit" do
     setup do
       create_unit(@department, "Engineering", level: "Department")

@@ -782,6 +782,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_130001) do
     t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
   end
 
+  create_table "org_unit_owners", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "unit_id", null: false
+    t.uuid "person_id", null: false
+    t.date "owner_since", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "person_id"], name: "index_org_unit_owners_on_tenant_id_and_person_id"
+    t.index ["tenant_id", "unit_id", "person_id"], name: "index_org_unit_owners_on_tenant_id_and_unit_id_and_person_id", unique: true
+  end
+
   create_table "org_unit_successions", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "succession_id", null: false
@@ -808,6 +819,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_130001) do
     t.date "retired_on"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.date "owners_lost_on"
     t.index ["tenant_id", "parent_id"], name: "index_org_units_on_tenant_id_and_parent_id"
     t.index ["tenant_id", "provider", "external_ref"], name: "index_org_units_on_live_external_ref", unique: true, where: "((external_ref IS NOT NULL) AND (retired_on IS NULL))"
   end
@@ -1020,6 +1032,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_130001) do
   add_foreign_key "org_fact_providers", "tenants"
   add_foreign_key "org_memberships", "tenants"
   add_foreign_key "org_taxonomy_levels", "tenants"
+  add_foreign_key "org_unit_owners", "tenants"
   add_foreign_key "org_unit_successions", "tenants"
   add_foreign_key "org_units", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
