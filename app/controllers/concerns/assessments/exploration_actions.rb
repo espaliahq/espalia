@@ -31,9 +31,7 @@ module Assessments::ExplorationActions
     end
   end
 
-  def first_name(name)
-    name.to_s.split.first.presence
-  end
+  def first_name(name) = Person.first_name(name)
 
   def require_person
     redirect_to assessments_path, alert: "No person profile linked to your account." unless current_person

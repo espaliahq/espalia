@@ -135,6 +135,38 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
     assert_not ada.latest?
   end
 
+  should "show a handover in the unit's feed, naming its provider and field but not its value" do
+    product = SecureRandom.uuid_v7
+    as_tenant do
+      @structure.create_unit(product, "Product", level_id: @departments, effective_on: "2026-01-01")
+      @structure.hand_over_level(@departments, "hibob", field: "work.department", matches: { product => "work.department/7" },
+                                                        effective_on: "2026-02-01", set_by_id: @lead.id)
+      @structure.hand_back_level(@departments, effective_on: "2026-02-02", set_by_id: @ada.id)
+    end
+
+    back, over, = feed(product)
+    assert_equal %w[UnitHandedOver UnitHandedOver], [ back, over ].map(&:event_type)
+    assert_equal [ "provider", @lead.id, "hibob" ], [ over.subject, over.actor_id, over.provider ]
+    assert_equal [ { "provider" => "espalia", "field" => nil }, { "provider" => "hibob", "field" => "work.department" } ],
+      [ over.before, over.after ]
+    assert_equal [ @ada.id, { "provider" => "espalia", "field" => nil } ], [ back.actor_id, back.after ]
+    assert_no_match(/7/, [ over.before, over.after ].to_json)
+  end
+
+  should "read the field of a handover written before the event named it from the unit's reference" do
+    as_tenant do
+      Rails.configuration.event_store.publish(
+        OrgGraph::Events::UnitHandedOver.new(data: { unit_id: @payments, provider: "hibob", previous_provider: "espalia",
+                                                     external_ref: "work.team/7", previous_external_ref: nil,
+                                                     effective_on: "2026-02-01", handed_over_by_id: nil },
+                                             metadata: { tenant_id: @tenant.id }),
+        stream_name: EventStreamNaming.org_structure_stream(tenant: @tenant)
+      )
+    end
+
+    assert_equal({ "provider" => "hibob", "field" => "work.team" }, feed(@payments).first.after)
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       as_tenant do
@@ -142,6 +174,11 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
         @handler.set_membership(@ada.id, @payments, **ESPALIA, allocation: 0.5)
         @handler.move_membership(@ada.id, @payments, @platform, effective_on: "2026-02-03")
         @structure.rename_unit(@platform, "Platform Core", effective_on: "2026-02-03")
+        product = SecureRandom.uuid_v7
+        @structure.create_unit(product, "Product", level_id: @departments, effective_on: "2026-01-01")
+        @structure.hand_over_level(@departments, "hibob", field: "work.department",
+                                                          matches: { product => "work.department/7" }, effective_on: "2026-02-03")
+        @structure.hand_back_level(@departments, effective_on: "2026-02-04")
       end
 
       other = create(:tenant)
@@ -156,7 +193,7 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
       end
 
       before = snapshot_read_models(OrgGraph::Projections::UnitActivity, @tenant)
-      assert_equal 7, before[:unit_activities].size
+      assert_equal 10, before[:unit_activities].size
 
       OrgGraph::Projections::UnitActivity.reset!(tenant: @tenant)
       as_tenant { assert_equal 0, OrgUnitActivity.count }

@@ -8,6 +8,9 @@
 #   @option data [String] :unit_id
 #   @option data [String] :provider who supplies the unit from now on
 #   @option data [String] :previous_provider
+#   @option data [String, nil] :field the HRIS field the unit is read from; nil for Espalia.
+#     Absent from events written before it was added
+#   @option data [String, nil] :previous_field
 #   @option data [String, nil] :external_ref the new provider's reference; nil for Espalia
 #   @option data [String, nil] :previous_external_ref
 #   @option data [String] :effective_on ISO 8601 date
