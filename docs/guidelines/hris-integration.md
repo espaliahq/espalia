@@ -182,6 +182,10 @@ Take each path from the catalogue (`#field_catalogue`), never typed, so the sear
 
 A level the HRIS provides can name its field: `LevelProviderSet` carries `field`, projected as `OrgTaxonomyLevel#provider_field`. `Hris::LevelMirror.levels(provider)` lists those levels, the client requests each field, and after the people are recorded the adapter hands `Hris::LevelMirror` the catalogue and each current person's `ResponseMapper`. The mirror reads a person's value through `ResponseMapper#field_value`, which tells a value, a blank and a withheld field apart; keep that distinction in any new provider's mapper, since a withheld field must change nothing. Units are referenced as `"<field path>/<value id or text>"`. The rules are in [org-graph-design.md → How a sync mirrors a level](../team-planning/org-graph-design.md#how-a-sync-mirrors-a-level-67). The mirror is provider-agnostic: a new adapter calls it the same way.
 
+### Handing a level over
+
+A level Espalia holds moves to a field through `Hris::LevelHandover` (6.8): `#compare` reads the field live and sets it against the level's units, `#hand_over!` switches it as one cause in one transaction, and `#hand_back!` returns it. Each unit's value is suggested by name and confirmed by an admin; every unit left over must be succeeded or retired first. The switch runs the mirror with `cause_id:` and `brake: false`, because the admin has already confirmed what it ends: over the brake, the operation needs the comparison's two counts. Both switches carry the comparison's fingerprint and are `:in_app` over MCP. The rules are in [org-graph-design.md → Handing a level over, and back](../team-planning/org-graph-design.md#handing-a-level-over-and-back-68).
+
 ## Adding a new HRIS provider
 
 Subclass `Hris::BaseAdapter` under `app/integrations/hris/<provider>/`:
