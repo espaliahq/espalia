@@ -193,7 +193,7 @@ A refused command raises `OrgGraph::Authorization::Refused`, a
 generic flash; a controller that wants the reason on screen rescues it and
 shows `error.message`, as `Assessments::RatingsController` does. A handler built
 without an actor is the system: the HRIS sync, a retirement moving its members,
-the seed task. Nobody is acting, so nothing is checked. Never build one without
+a rake task. Nobody is acting, so nothing is checked. Never build one without
 an actor on a path a person drives.
 
 ## Policy Conventions
