@@ -41,12 +41,12 @@ class OrgUnitActivity < ApplicationRecord
   # newest first by each group's latest entry. A page never splits a group.
   #
   # @param unit_id [String]
-  # @param page [Integer] from 1
+  # @param page [Integer] from 1; anything lower reads as 1
   # @param per_page [Integer] groups per page
   # @return [Array<OrgUnitActivity::Group>]
   def self.feed(unit_id, page: 1, per_page: 25)
     causes = for_unit(unit_id).reorder(Arel.sql("MAX(position) DESC")).group(:cause_id)
-                              .offset((page - 1) * per_page).limit(per_page).pluck(:cause_id)
+                              .offset((page.to_i.clamp(1..) - 1) * per_page).limit(per_page).pluck(:cause_id)
     parts = for_unit(unit_id).where(cause_id: causes).group_by(&:cause_id)
     causes.map { |cause| OrgUnitActivity::Group.new(parts.fetch(cause)) }
   end

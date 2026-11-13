@@ -68,6 +68,7 @@ class OrgUnitActivityTest < ActiveSupport::TestCase
       second_page = as_tenant { OrgUnitActivity.feed(@payments, page: 2, per_page: 1) }
       assert_equal [ "moved 3 people out" ], first_page.map(&:summary)
       assert_equal [ "added 1 person" ], second_page.map(&:summary)
+      assert_equal first_page.map(&:cause_id), as_tenant { OrgUnitActivity.feed(@payments, page: 0, per_page: 1) }.map(&:cause_id)
     end
   end
 
