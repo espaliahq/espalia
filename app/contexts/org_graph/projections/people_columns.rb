@@ -21,27 +21,53 @@ class OrgGraph::Projections::PeopleColumns
   STATUS = { "pending" => "active", "employed" => "active", "left" => "inactive" }.freeze
   private_constant :STATUS
 
+  # The employment status a `people.status` (or a provider's active flag,
+  # mapped the same way) stands for.
+  #
+  # @param status [String] "active" or "inactive"
+  # @return [String] "employed" or "left"
+  def self.employment_status(status)
+    status == "inactive" ? "left" : "employed"
+  end
+
+  # The people whose stream holds their `PersonRecorded`, in one query.
+  #
+  # @param tenant [Tenant]
+  # @return [Array<String>] person ids
+  def self.recorded_person_ids(tenant)
+    prefix = EventStreamNaming.person_stream("", tenant:)
+    sql = ActiveRecord::Base.sanitize_sql_array([ <<~SQL, "#{prefix}%", OrgGraph::Events::PersonRecorded.name ])
+      SELECT DISTINCT streams.stream FROM event_store_events_in_streams streams
+      JOIN event_store_events events ON events.event_id = streams.event_id
+      WHERE streams.stream LIKE ? AND events.event_type = ?
+    SQL
+    ActiveRecord::Base.connection.select_values(sql).map { it.delete_prefix(prefix) }
+  end
+
   # @return [Array<Class>]
   def self.handled_events
     [ OrgGraph::Events::PersonRecorded, OrgGraph::Events::TitleChanged, OrgGraph::Events::ManagerChanged,
       OrgGraph::Events::PersonJoined, OrgGraph::Events::PersonLeft, OrgGraph::Events::PersonReturned ]
   end
 
-  # Clears the projected columns of a cut-over tenant's people. Leaves a
-  # tenant the sync still writes alone.
+  # Clears the projected columns of a cut-over tenant's recorded people, the
+  # ones a replay writes back. Leaves anyone without a stream, and a tenant
+  # the sync still writes, alone.
   #
   # @param tenant [Tenant]
   def self.reset!(tenant:)
     return unless tenant.reload.org_graph_people_projected?
 
     ActsAsTenant.with_tenant(tenant) do
-      Person.where(tenant_id: tenant.id).update_all(job_title: nil, manager_id: nil, status: "active")
+      Person.where(tenant_id: tenant.id, id: recorded_person_ids(tenant))
+            .update_all(job_title: nil, manager_id: nil, status: "active")
     end
   end
 
   # @param event [RubyEventStore::Event]
   def call(event)
-    tenant = Tenant.find(event.metadata[:tenant_id])
+    tenant = ActsAsTenant.current_tenant
+    tenant = Tenant.find(event.metadata[:tenant_id]) unless tenant&.id == event.metadata[:tenant_id]
     return unless tenant.org_graph_people_projected?
 
     ActsAsTenant.with_tenant(tenant) do

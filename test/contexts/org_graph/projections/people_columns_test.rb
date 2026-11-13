@@ -62,6 +62,16 @@ class OrgGraph::Projections::PeopleColumnsTest < ActiveSupport::TestCase
       assert_equal "active", columns(@ada).last
     end
 
+    should "leave someone with no stream alone on reset, since no event would write them back" do
+      as_tenant { @handler.record_person(@ada.id, **PROVENANCE, employment_status: "employed", title: "Designer") }
+
+      OrgGraph::Projections::PeopleColumns.reset!(tenant: @tenant)
+
+      assert_equal [ @ada.id ], OrgGraph::Projections::PeopleColumns.recorded_person_ids(@tenant)
+      assert_nil columns(@ada).first
+      assert_equal "Engineer", columns(@grace).first
+    end
+
     should "rebuild the same columns from the streams" do
       as_tenant do
         @handler.record_person(@ada.id, **PROVENANCE, employment_status: "employed", title: "Designer", manager_id: @grace.id)

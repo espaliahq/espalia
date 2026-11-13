@@ -336,7 +336,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           facts[:manager_id] = manager.id
         end
 
-        status = row[:status] == "inactive" ? "left" : "employed"
+        status = OrgGraph::Projections::PeopleColumns.employment_status(row[:status])
         result[:org_graph_events] += handler.sync_person(person.id, provider: provider_name, effective_on: today,
           employment_status: status, **facts)
       rescue => e

@@ -105,15 +105,13 @@ class OrgGraph::PeopleCutover
   end
 
   def recorded_ids
-    Person.pluck(:id).select do |id|
-      @event_store.read.stream(EventStreamNaming.person_stream(id)).first.is_a?(OrgGraph::Events::PersonRecorded)
-    end
+    OrgGraph::Projections::PeopleColumns.recorded_person_ids(@tenant)
   end
 
   def row_facts(person)
     held = person.external_id.present? && OrgGraph::PersonAggregate::PROVIDERS.include?(person.hris_source)
     { provider: held ? person.hris_source : "espalia", effective_on: Date.current,
-      employment_status: person.status == "inactive" ? "left" : "employed",
+      employment_status: OrgGraph::Projections::PeopleColumns.employment_status(person.status),
       title: person.job_title, manager_id: person.manager_id == person.id ? nil : person.manager_id }
   end
 end
