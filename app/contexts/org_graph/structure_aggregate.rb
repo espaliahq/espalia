@@ -203,12 +203,14 @@ class OrgGraph::StructureAggregate
     unless restated
       raise ArgumentError, "A unit can't succeed itself" if predecessor_ids.intersect?(successor_ids)
       raise "Unit not found" unless (predecessor_ids + successor_ids).all? { |id| @units.key?(id) }
-      raise "A successor must be live" if successor_ids.any? { |id| @units[id].retired }
       raise "A unit can't come to precede itself" if preceded_by(predecessor_ids).intersect?(successor_ids)
     end
 
     retiring = retire_predecessors ? predecessor_ids.map { |id| @units[id] }.reject(&:retired) : []
     retiring = retiring.sort_by { |unit| -level_index(unit.level_id) }
+    if (!restated || retiring.any?) && successor_ids.any? { |id| @units[id].retired }
+      raise "A successor must be live"
+    end
     retiring.each { |unit| retirable_unit!(unit.unit_id, provider, retiring: retiring) }
 
     unless restated

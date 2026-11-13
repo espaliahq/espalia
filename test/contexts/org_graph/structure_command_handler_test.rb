@@ -370,6 +370,14 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_equal id, structure_events.last.data[:succession_id]
     end
 
+    should "refuse to retire through a restated succession whose successor has since retired" do
+      id = succeed([ @payments ], [ @billing ])
+      as_tenant { @handler.retire_unit(@billing, effective_on: @today) }
+
+      succeed([ @payments ], [ @billing ], id: id)
+      assert_raises(RuntimeError) { succeed([ @payments ], [ @billing ], id: id, retire_predecessors: true) }
+    end
+
     should "refuse a unit succeeding itself, a missing or retired successor, or an empty side" do
       as_tenant { @handler.retire_unit(@ledger, effective_on: @today) }
 
