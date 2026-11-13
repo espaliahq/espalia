@@ -7,7 +7,8 @@ class Operations::OrgGraph::AddMember < Operations::Base
 
   description "Place a person in a live unit of the Org Graph, from effective_on (today by default), with an " \
               "optional role and allocation (greater than 0, at most 1). A person can be in several units. " \
-              "A unit an HRIS supplies takes only people that HRIS doesn't hold; place the others in the HRIS."
+              "A unit an HRIS supplies takes only people that HRIS doesn't hold; place the others in the HRIS. " \
+              "Someone already in the unit is refused."
   approval :mcp_client
 
   parameter :unit_id, String, required: true
@@ -19,6 +20,9 @@ class Operations::OrgGraph::AddMember < Operations::Base
   def perform
     unit = live_unit!(:unit_id)
     person = person!(:person_id)
+    if OrgMembership.exists?(person_id: person.id, unit_id: unit.id)
+      raise Operations::Base::ParameterError, "#{person.name} is already in #{unit.name}"
+    end
     allocation = params[:allocation]
     if allocation && !(allocation.positive? && allocation <= 1)
       raise Operations::Base::ParameterError, "allocation must be greater than 0 and at most 1"

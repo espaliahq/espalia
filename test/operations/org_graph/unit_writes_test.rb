@@ -136,6 +136,15 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
       assert_equal [ "Analyst", 0.4, "espalia" ], [ added.role, added.allocation.to_f, added.provider ]
     end
 
+    should "refuse someone already in the unit, keeping their terms" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::AddMember, unit_id: @org[:checkout], person_id: @org[:brook].id)
+      end
+
+      assert_equal "Brook Tamsin is already in Checkout", error.message
+      assert_equal "Tech lead", membership(:brook, :checkout).role
+    end
+
     should "refuse an allocation outside (0, 1]" do
       assert_raises(Operations::Base::ParameterError) do
         call(Operations::OrgGraph::AddMember, unit_id: @org[:platform], person_id: @org[:ezra].id, allocation: 1.5)

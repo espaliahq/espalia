@@ -2493,7 +2493,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Place a person in a live unit of the Org Graph, from effective_on (today by default), with " \
                          "an optional role and allocation (greater than 0, at most 1). A person can be in several " \
                          "units. A unit an HRIS supplies takes only people that HRIS doesn't hold; place the others " \
-                         "in the HRIS.",
+                         "in the HRIS. Someone already in the unit is refused.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
