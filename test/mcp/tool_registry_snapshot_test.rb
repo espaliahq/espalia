@@ -2600,6 +2600,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_add_editor",
+        "description" => "Make a person with an account in this organisation an Org Graph editor, so they may change its taxonomy, providers, units and people's facts. Admins already may. Returns the list as org_graph_editors reads it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_as_of",
         "description" => "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
           "level, owners and direct member count, and the number of employed people. A future " \
@@ -2627,6 +2648,42 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_editors",
+        "description" => "List who may change the whole Org Graph: the Org Graph editors an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_remove_editor",
+        "description" => "Stop a person being an Org Graph editor. They keep their rights over units they own and their reports' memberships. An admin's rights can't be removed this way. Returns the list as org_graph_editors reads it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {

@@ -1,0 +1,27 @@
+# frozen_string_literal: true
+
+# Lets a member change the whole Org Graph: its taxonomy, providers, units
+# and people's facts (#126).
+#
+# Approval is :in_app, as it changes someone's permissions.
+class Operations::OrgGraph::AddEditor < Operations::Base
+  include Operations::OrgGraph::EditorSupport
+
+  description "Make a person with an account in this organisation an Org Graph editor, so they may change " \
+              "its taxonomy, providers, units and people's facts. Admins already may. Returns the list as " \
+              "org_graph_editors reads it."
+  category :write
+  approval :in_app
+
+  parameter :person_id, String, required: true, allow_blank: false
+
+  # @return [Hash] editors and admins
+  # @raise [ParameterError] for a person with no account, or an admin
+  def perform
+    account = account!
+    raise ParameterError, "person_id: admins may already edit the Org Graph" if account.admin?
+
+    account.update!(org_graph_editor: true)
+    editors_payload
+  end
+end
