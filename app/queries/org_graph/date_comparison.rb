@@ -161,14 +161,16 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
   def joined_units(change) = change.after&.fetch("memberships", {})&.keys || []
 
   # A joiner's first teams already show on their joining line.
-  def joined_with?(change)
-    @changes.any? { it.kind == :joined && it.person_id == change.person_id && joined_units(it).include?(change.unit_id) }
+  def joined_with?(change) = joinings.include?([ change.person_id, change.unit_id ])
+
+  def joinings
+    @joinings ||= @changes.select { it.kind == :joined }.flat_map { |change| joined_units(change).map { [ change.person_id, it ] } }.to_set
   end
 
   # A leaving ends the leaver's memberships the same day, and those show on the
   # leaving line. A leaving that ended none names the units the person is in today.
   def leaver_units(change)
-    ended = @changes.select { it.kind == :membership_ended && it.person_id == change.person_id && it.effective_on == change.effective_on }
+    ended = ended_memberships.fetch([ change.person_id, change.effective_on ], [])
     return ended.map(&:unit_id).uniq if ended.any?
 
     @leaver_memberships ||= OrgMembership.where(person_id: @changes.select { it.kind == :left }.map(&:person_id))
@@ -176,8 +178,14 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
     @leaver_memberships.fetch(change.person_id, []).map(&:last)
   end
 
-  def left_with?(change)
-    @changes.any? { it.kind == :left && it.person_id == change.person_id && it.effective_on == change.effective_on }
+  def ended_memberships
+    @ended_memberships ||= @changes.select { it.kind == :membership_ended }.group_by { [ it.person_id, it.effective_on ] }
+  end
+
+  def left_with?(change) = leavings.include?([ change.person_id, change.effective_on ])
+
+  def leavings
+    @leavings ||= @changes.select { it.kind == :left }.to_set { [ it.person_id, it.effective_on ] }
   end
 
   # By learned date, a backdated change shows the day it took effect and the
