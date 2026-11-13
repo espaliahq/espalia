@@ -266,6 +266,18 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
       assert_equal [ [ "2026-01-01", "2026-02-15", { "parent_id" => @engineering } ],
                      [ "2026-02-15", nil, { "parent_id" => @other } ] ], timeline(squad, "parent")
     end
+
+    should "hold each owner of a unit from the day they were added to their last day" do
+      as_tenant do
+        @structure.add_unit_owner(@payments, @ada.id, effective_on: "2026-02-01")
+        @structure.add_unit_owner(@payments, @grace.id, effective_on: "2026-02-01")
+        @structure.remove_unit_owner(@payments, @ada.id, effective_on: "2026-03-31")
+      end
+
+      assert_equal [ [ "2026-02-01", "2026-04-01", { "owner" => true } ], [ "2026-04-01", nil, nil ] ],
+        timeline(@payments, "owner", key: @ada.id)
+      assert_equal [ [ "2026-02-01", nil, { "owner" => true } ] ], timeline(@payments, "owner", key: @grace.id)
+    end
   end
 
   context "rebuild contract" do
@@ -285,6 +297,7 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
         OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back(OrgUnitActivity.for_unit(@payments).first)
         @handler.leave(@grace.id, **ESPALIA, effective_on: "2026-04-30")
         @structure.rename_unit(@platform, "Platform Core", effective_on: "2026-01-15")
+        @structure.add_unit_owner(@platform, @ada.id, effective_on: "2026-02-01")
       end
 
       before = snapshot_read_models(OrgGraph::Projections::History, @tenant)

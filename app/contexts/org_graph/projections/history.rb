@@ -2,8 +2,8 @@
 
 # Synchronous projection of every fact's history with two times: when it took
 # effect, and when the Org Graph learned it. Answers "what was true on date X"
-# and "what did we know at instant Y" for person facts, memberships and
-# structure.
+# and "what did we know at instant Y" for person facts, memberships,
+# structure and ownership.
 #
 # Writes `org_fact_periods`, and nothing else writes it. Each event revises
 # the timelines it touches: the periods it changes are superseded at the
@@ -11,11 +11,11 @@
 # the periods only for knowledge from then on.
 #
 # Dates follow the events. A membership's or a unit's end date is its last
-# day, and so is a leaving date, so the period after it begins the next day.
-# A move leaves one unit and joins the other on the same date. Employment
-# begins on the start date when one is held. A change-back dated on the day
-# of the change it reverses withdraws that change, as though it never took
-# effect. `PersonForgotten` needs nothing here: the rows hold ids, and the
+# day, and so is a leaving date and an owner's removal, so the period after
+# it begins the next day. A move leaves one unit and joins the other on the
+# same date. Employment begins on the start date when one is held. A
+# change-back dated on the day of the change it reverses withdraws that
+# change, as though it never took effect. `PersonForgotten` needs nothing here: the rows hold ids, and the
 # history stays.
 #
 class OrgGraph::Projections::History
@@ -50,7 +50,8 @@ class OrgGraph::Projections::History
       OrgGraph::Events::PersonReturned, OrgGraph::Events::StartDateChanged,
       OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipMoved,
       OrgGraph::Events::UnitCreated, OrgGraph::Events::UnitRenamed, OrgGraph::Events::UnitMoved,
-      OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded
+      OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded,
+      OrgGraph::Events::UnitOwnerAdded, OrgGraph::Events::UnitOwnerRemoved
     ]
   end
 
@@ -91,6 +92,8 @@ class OrgGraph::Projections::History
     when OrgGraph::Events::UnitMoved then unit_fact("parent", effective_on, @data.slice(:parent_id))
     when OrgGraph::Events::UnitRetired then unit_retired
     when OrgGraph::Events::UnitSucceeded then succession
+    when OrgGraph::Events::UnitOwnerAdded then owner(effective_on, { owner: true })
+    when OrgGraph::Events::UnitOwnerRemoved then owner(effective_on + 1, nil)
     end
   end
 
@@ -182,6 +185,10 @@ class OrgGraph::Projections::History
 
   def unit_retired
     unit_fact("status", effective_on + 1, { status: "retired", **@data.slice(:succession_id, :successor_ids) })
+  end
+
+  def owner(from, value)
+    revise(UNIT, @data[:unit_id], "owner", key: @data[:person_id]) { |points| put(points, from, value) }
   end
 
   def unit_fact(fact, from, value)
