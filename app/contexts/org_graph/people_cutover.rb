@@ -94,7 +94,7 @@ class OrgGraph::PeopleCutover
     AuditMetadata.with(acting_via: :system, correlation_id: SecureRandom.uuid_v7) do
       AuditMetadata.wrap_event_store do
         Person.where.not(id: recorded_ids).find_each do |person|
-          handler.record_person(person.id, **row_facts(person))
+          ActiveRecord::Base.transaction(requires_new: true) { handler.record_person(person.id, **row_facts(person)) }
           recorded << person.id
         rescue => e
           failed[person.id] = e.message

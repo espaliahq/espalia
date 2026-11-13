@@ -109,6 +109,23 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
     assert_not @tenant.reload.org_graph_people_projected?
   end
 
+  should "report a database error on one person and still finish the run" do
+    as_tenant { @second_by_hand = create(:person, tenant: @tenant) }
+    failing_id = [ @by_hand.id, @second_by_hand.id ].min
+    real = OrgGraph::CommandHandler.new
+    flaky = Object.new
+    flaky.define_singleton_method(:record_person) do |id, **facts|
+      ActiveRecord::Base.connection.execute("SELECT 1/0") if id == failing_id
+      real.record_person(id, **facts)
+    end
+
+    report = OrgGraph::CommandHandler.stub(:new, flaky) { @cutover.run(apply: false) }
+
+    assert_equal [ failing_id ], report.failed.keys
+    assert_match(/division by zero/, report.failed[failing_id])
+    assert_equal [ ([ @by_hand.id, @second_by_hand.id ] - [ failing_id ]).sole ], report.recorded
+  end
+
   private
 
   def as_tenant(&block)
