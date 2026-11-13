@@ -14,9 +14,9 @@
 class HrisConfig
   include StoreModel::Model
 
-  # Only providers HrisSyncJob#resolve_adapter can dispatch to: a provider
+  # Only providers Hris::BaseAdapter.for can dispatch to: a provider
   # listed here but not there would save fine and then crash every sync.
-  # A new provider joins this list, PROVIDER_LABELS and the job together.
+  # A new provider joins this list, PROVIDER_LABELS and that factory together.
   PROVIDERS = %w[hibob].freeze
 
   # Display names for {PROVIDERS}, the one place a provider is spelled for

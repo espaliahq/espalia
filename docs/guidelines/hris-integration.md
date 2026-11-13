@@ -90,11 +90,11 @@ No `level_field_id` needed. The mapping's fixed `level_ordinal` wins even if the
 
 ### Mode 2 — level from a separate HRIS custom column
 
-Use when the HRIS has a "Level" custom column populated with the ordinal (e.g. a HiBob custom column `work.customColumns.column_1234567890123` containing values `"1"` through `"10"`):
+Use when the HRIS has a "Level" field populated with the ordinal (e.g. a HiBob custom column `work.customColumns.column_1234567890123` containing values `"1"` through `"10"`):
 
 ```ruby
-# On HrisConfig:
-level_field_id: "column_1234567890123"
+# On HrisConfig, the catalogue id the picker saves:
+level_field_id: "work.customColumns.column_1234567890123"
 
 # In role_mappings — no level_ordinal:
 HrisRoleMapping.new(
@@ -103,7 +103,11 @@ HrisRoleMapping.new(
 )
 ```
 
-The `Client` adds `work.customColumns.<level_field_id>` to the requested fields; `ResponseMapper` extracts `hris_level_ordinal` from `humanReadable.work.customColumns.<level_field_id>` (APPEND mode gives the display string, which should be the ordinal number). The adapter then uses `person.hris_level_ordinal` as the fallback when `mapping.level_ordinal` is nil.
+The `Client` adds the level field to the requested fields; `ResponseMapper` extracts `hris_level_ordinal` from the same path under `humanReadable` (APPEND mode gives the display string, which should be the ordinal number). The adapter then uses `person.hris_level_ordinal` as the fallback when `mapping.level_ordinal` is nil.
+
+**The admin chooses the level field by name** on the connection form (#67). `Views::Integrations::HrisLevelFieldFrame` is a lazy frame inside that form, loaded from `Tenant::HrisLevelFieldsController#show`, which reads `field_catalogue` and offers each field by name, marked list or text, with None first. The page never waits on the HRIS. Until the frame loads, and whenever the HRIS can't be read or no credentials are stored, it carries the current value in a hidden field and says why, so saving the connection keeps it. A stored field the catalogue no longer lists stays selected, marked "no longer in the HRIS". The frame is web-only like the rest of the connection form.
+
+**One stored form: the catalogue id**, the field's full path. A level field saved before #67 was a bare custom-column id (`column_…`); the `StoreHrisLevelFieldAsCatalogueId` migration gives it the `work.customColumns.` prefix. `Hris::Hibob::Client.field_path` reads either form, and the client and mapper both go through it, so the sync requests and reads the same field whether the migration or the code lands first.
 
 ### Mixed mode
 
@@ -133,7 +137,7 @@ A sync runs for a while, and a mapping can change underneath it. The adapter sta
 
 `adapter.field_catalogue` returns the HRIS's fields as `Hris::Field`s, so a settings screen can offer them by name and nobody pastes a field id ([org-graph-design.md → Which HRIS field a fact comes from](../team-planning/org-graph-design.md#which-hris-field-a-fact-comes-from)). Each field has:
 
-- **`id`**: the path the people API takes. For HiBob that is the field's `jsonPath`, such as `work.department` or `work.customColumns.column_1700000000001`. `HrisConfig#level_field_id` still holds the bare column id; a picker that writes it must strip the prefix, or the config must move to the full path.
+- **`id`**: the path the people API takes. For HiBob that is the field's `jsonPath`, such as `work.department` or `work.customColumns.column_1700000000001`. `HrisConfig#level_field_id` holds this id too (see Mode 2).
 - **`name`**: the label HiBob shows.
 - **`kind`**: `:list` when the value comes from a named list and so has an id of its own (HiBob types `list`, `multi-list`, `hierarchy-list`), else `:text`. Dates, numbers and employee references are `:text`, since their values carry no id.
 - **`values`**: a list field's `Hris::Field::Value`s (`id`, `name`), read from `GET /company/named-lists` by the field's `typeData.listId`. A hierarchy list is flattened, an archived value is dropped with its children, and a value with no id is dropped. The named lists are fetched only when some field is a list. A list HiBob did not return leaves the field a list with no values.
@@ -182,7 +186,7 @@ class Hris::Bamboohr::Adapter < Hris::BaseAdapter
 end
 ```
 
-Then register the provider in `HrisConfig::PROVIDERS` and add a branch in `HrisSyncJob#resolve_adapter`. A provider that needs credential fields beyond `HrisCredentials::KEYS` extends that list, the connection form and `Tenant#update_hris!` together.
+Then register the provider in `HrisConfig::PROVIDERS` and add a branch in `Hris::BaseAdapter.for`, which the sync job and the level field picker both use. A provider that needs credential fields beyond `HrisCredentials::KEYS` extends that list, the connection form and `Tenant#update_hris!` together.
 
 Each provider has its own Client, ResponseMapper, errors, and webhook validator. Do NOT try to abstract across providers — their APIs differ too much. Share conventions, not code.
 
@@ -235,6 +239,8 @@ def build_adapter(employees)
 end
 ```
 
+**No test reaches the live HiBob API.** `test/support/offline_hibob.rb` makes an unstubbed client raise the error an unreachable HRIS gives, so a system test that opens the HRIS page shows the level field frame's "did not answer" state. To show the picker, stub `Hris::BaseAdapter.for` with an object that answers `field_catalogue`, and keep the stub active until the frame is `[complete]` (`test/system/hris_level_field_system_test.rb`).
+
 For Pass 5 tests, seed `FrameworkState::Framework` + `Role` + `Level` via factories in `test/factories/framework_states.rb` before running the sync. The adapter finds the framework via `FrameworkState::Framework.first` within the tenant scope.
 
 ### Factory trait
@@ -247,7 +253,7 @@ trait :with_hibob_config do
     HrisConfig.new(
       provider: "hibob",
       sync_enabled: true,
-      level_field_id: "column_test_id",
+      level_field_id: "work.customColumns.column_test_id",
       role_mappings: [
         HrisRoleMapping.new(hris_titles: ["Software Engineer"], framework_role_code: "E"),
         HrisRoleMapping.new(hris_titles: ["Engineering Manager"], framework_role_code: "EM")
