@@ -122,6 +122,14 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       assert policy_for(context_for(@lead, org_graph_editor: true)).edit_membership?(nil, nil)
     end
 
+    should "refuse an owner a person the graph doesn't hold, even in a unit they own" do
+      as_tenant { @handler.add_unit_owner(@payments_id, @other.id, effective_on: "2026-01-01") }
+      owner = policy_for(context_for(@other))
+
+      assert_not owner.edit_membership?(nil, unit(@payments_id))
+      assert_not owner.move_membership?(nil, unit(@payments_id), unit(@billing_id))
+    end
+
     should "still let the manager chain end a membership of a unit that is gone" do
       assert policy_for(context_for(@lead)).edit_membership?(@report, nil)
     end
