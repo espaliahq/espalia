@@ -17,11 +17,14 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
   # The README's colours, applied here only: ExampleSeed leaves the demo on Default.
   THEME = { "brand" => { "light" => "#a83265" }, "nav-surface" => { "light" => "#2b2640" } }.freeze
 
+  # Once, before parallel workers fork. See testing.md → "Running One System-Test File".
+  if ENV["README_SCREENSHOTS"].present?
+    Rails.application.load_tasks if Rake::Task.tasks.empty?
+    Rake::Task["tailwindcss:build"].invoke
+  end
+
   setup do
     Rails.application.load_tasks if Rake::Task.tasks.empty?
-    # A one-file run doesn't rebuild Tailwind, and classes added since the last
-    # build would capture unstyled: an SVG with no fill class paints solid black.
-    Rake::Task["tailwindcss:build"].invoke if ENV["README_SCREENSHOTS"].present?
     @admin = create(:user, email: SeedAdmin::DEV_EMAIL, password: TEST_PASSWORD, global_admin: true)
     @tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
     @tenant.update!(theme: "custom", custom_theme: THEME)
@@ -83,6 +86,7 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
     assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
     assert_text "Theo Okonkwo"
     assert_text "Code & Systems Quality"
+    assert_selector "button[aria-label^='Open capability map']"
     capture "assessment"
   end
 
