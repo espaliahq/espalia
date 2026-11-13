@@ -252,9 +252,10 @@ The likely answer is to list it for someone to resolve, as a disagreement is.
 
 #### Are HiBob's list values stable ids?
 
-Yes, by HiBob's documentation, for list fields and for department in particular. Two
-links in the chain are inferred, and one sandbox read would confirm them. Each adapter
-needs the same check before a rename can be trusted to it.
+Yes, by HiBob's documentation, for list fields and for department in particular. Three
+links in the chain are inferred, and one sandbox read would confirm them
+([#61](https://github.com/espaliahq/espalia/issues/61)). Each adapter needs the same
+check before a rename can be trusted to it.
 
 What the documentation confirms:
 
