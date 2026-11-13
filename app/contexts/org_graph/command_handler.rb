@@ -37,6 +37,32 @@ class OrgGraph::CommandHandler
     written
   end
 
+  # What a provider's sync calls for each person it returns, in one load of
+  # their stream: the first time, it records them with the facts as they
+  # stand; after that, it moves their status if it differs and applies each
+  # fact that differs. A leaver's facts are not compared.
+  #
+  # @param person_id [String]
+  # @param provider [String]
+  # @param effective_on [Date, String]
+  # @param employment_status [String] "employed" or "left"
+  # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
+  # @return [Integer] how many events were written
+  def sync_person(person_id, provider:, effective_on:, employment_status:, **facts)
+    written = 0
+    @repository.with_person(person_id) do |person|
+      person.check_facts!(facts)
+      if person.recorded?
+        person.match_status(employment_status, provider:, effective_on:)
+        person.apply_facts(provider:, effective_on:, **facts) unless employment_status == "left"
+      else
+        person.record(person_id, provider:, effective_on:, employment_status:, **facts)
+      end
+      written = person.unpublished_events.count
+    end
+    written
+  end
+
   # @param person_id [String]
   # @param provider [String]
   # @param effective_on [Date, String] their start date

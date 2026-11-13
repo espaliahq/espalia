@@ -13,6 +13,8 @@ class HrisSyncJob < ApplicationJob
   SKIP_KEYS = %i[unmapped_titles missing_roles missing_levels missing_ordinals].freeze
 
   queue_as :default
+  # Sync now pressed during a scheduled run would race it to record each new person.
+  limits_concurrency to: 1, key: ->(tenant) { tenant.id }, duration: 1.hour
 
   retry_on Hris::Hibob::Errors::RateLimitError, wait: :polynomially_longer, attempts: 5
   retry_on Hris::Hibob::Errors::ApiError, wait: :polynomially_longer, attempts: 3
@@ -31,7 +33,8 @@ class HrisSyncJob < ApplicationJob
     Rails.logger.info(
       "[HrisSyncJob] Sync complete for tenant #{tenant.id}: " \
       "created=#{result[:created]} updated=#{result[:updated]} " \
-      "deactivated=#{result[:deactivated]} errors=#{result[:errors].size}"
+      "deactivated=#{result[:deactivated]} org_graph_events=#{result[:org_graph_events]} " \
+      "errors=#{result[:errors].size}"
     )
     log_skipped_assignments(tenant, result)
   end

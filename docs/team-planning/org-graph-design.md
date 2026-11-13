@@ -1,10 +1,12 @@
 # Org Graph — design
 
-> Status: proposal. Built so far, in `app/contexts/org_graph/`: the person stream
-> ([#46](https://github.com/espaliahq/espalia/issues/46)), the structure stream
+> Status: proposal, being built in `app/contexts/org_graph/`. Built so far: the person stream,
+> which the HiBob sync records and updates ([#46](https://github.com/espaliahq/espalia/issues/46) to
+> [#48](https://github.com/espaliahq/espalia/issues/48); rollout in
+> [the first-sync runbook](../runbooks/org-graph-first-sync.md)), the structure stream
 > ([#52](https://github.com/espaliahq/espalia/issues/52)) and membership
-> ([#54](https://github.com/espaliahq/espalia/issues/54)). Nothing writes to them yet. [The
-> index](README.md) lists the companion designs, the mockups and the plan.
+> ([#54](https://github.com/espaliahq/espalia/issues/54)), which nothing writes to yet.
+> [The index](README.md) lists the companion designs, the mockups and the plan.
 
 The Org Graph is Espalia's best-known view of the organisation: who is in it, what they
 do, who they report to and which teams they are in, with the history of how that
@@ -80,6 +82,11 @@ are shreddable from their first event.
 
 Every event carries the provider that supplied the fact, the date it took effect, and,
 where it came from a plan, a reference to the plan's change.
+
+Two rules hold for the status events:
+
+- **`PersonReturned` is only for the same person.** The HRIS must show the same external id, and the person must not have been forgotten. Anyone else is a new person with a new id. The sync never merges a row into a person by email when that person already holds another external id: it skips the row and reports it for an admin to resolve.
+- **Returning restores no memberships.** A returner comes back with none, like a new person.
 
 ### One structure stream per tenant
 

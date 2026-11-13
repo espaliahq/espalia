@@ -31,7 +31,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # The passes, in order:
   # 1. Fetch all employees, upsert Person records (without manager_id)
   # 2. Resolve manager_id via external_id → Person lookup
-  # 2b. Write an Org Graph event for each operational fact that differs
+  # 2b. Record new people in the Org Graph, then write an event per fact that differs
   # 3. Deactivate HRIS-sourced people no longer in the API response, then
   #    offboard every inactive person still participating (Pass 3b —
   #    withdraw from open cycles, remove framework assignments)
@@ -86,7 +86,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         person.update!(manager: manager) if manager && person.manager_id != manager.id
       end
 
-      # Pass 2b: Write each Org Graph fact that differs
+      # Pass 2b: Record new people in the Org Graph, then write each fact that differs
       record_org_graph_differences(org_graph_facts, managers, result)
 
       # Pass 3: Deactivate people no longer in HRIS
@@ -247,16 +247,29 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
   # Upserts a single Person from mapped attributes.
   #
-  # Matches by external_id first, then falls back to email. This handles
-  # people who were manually created before HRIS sync was configured.
+  # Matches by external_id first, then falls back to email. The email match
+  # claims only a person with no external id: one created by hand before the
+  # sync was set up. A person who already holds another external id is a
+  # different identity (a rehire under a new id, say), so the row is
+  # skipped and reported rather than merged into their history.
   #
   # @param attrs [Hash] Person-compatible attributes
   # @param result [Hash] running tally of sync results
-  # @return [Person, nil] the created or updated person, nil on validation failure
+  # @return [Person, nil] the created or updated person, nil when skipped or invalid
   def upsert_person(attrs, result)
-    person = Person.find_by(external_id: attrs[:external_id]) ||
-             Person.find_by(email: attrs[:email]) ||
-             Person.new
+    person = Person.find_by(external_id: attrs[:external_id])
+    unless person
+      person = Person.find_by(email: attrs[:email])
+      if person&.external_id.present?
+        result[:errors] << {
+          external_id: attrs[:external_id],
+          email: attrs[:email],
+          error: "Email belongs to a person with another HRIS id (#{person.external_id}); not merged"
+        }
+        return nil
+      end
+    end
+    person ||= Person.new
     is_new = person.new_record?
 
     person.assign_attributes(attrs.except(:hris_raw_data))
@@ -279,13 +292,15 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     person
   end
 
-  # Pass 2b: compares each row's operational facts with the person's Org
-  # Graph stream and writes an event for each that differs. A fact the row
+  # Pass 2b: records a person the Org Graph has not seen, with the facts as
+  # they stand (an inactive person as having left), and otherwise compares
+  # each row's operational facts with their stream and writes an event for
+  # each that differs. A fact the row
   # does not supply is left out, never cleared. A manager is read from the
   # row itself, so a lost manager is recorded even though Pass 2 never
   # clears one; a manager the sync cannot find, or the person themself, is
-  # left uncompared. Inactive people are skipped: recording their leaving is
-  # story 1.6.
+  # left uncompared. A change in employment status is written too; a
+  # leaver's other facts are not compared.
   #
   # @param rows [Hash{Person => Hash}] title, level and manager_external_id per person
   # @param managers [Hash{String => Person, nil}] each manager external id, resolved once
@@ -296,8 +311,6 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       today = Date.current
 
       rows.each do |person, row|
-        next if person.status == "inactive"
-
         facts = row.slice(:title, :level)
         if row[:manager_external_id].nil?
           facts[:manager_id] = nil
@@ -305,7 +318,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           facts[:manager_id] = manager.id
         end
 
-        result[:org_graph_events] += handler.apply_facts(person.id, provider: provider_name, effective_on: today, **facts)
+        status = person.status == "inactive" ? "left" : "employed"
+        result[:org_graph_events] += handler.sync_person(person.id, provider: provider_name, effective_on: today,
+          employment_status: status, **facts)
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end
@@ -385,7 +400,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # metadata, plus the tenant id the projections and replayer rely on.
   def with_hris_event_context(&block)
     AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
-      Rails.configuration.event_store.with_metadata(tenant_id: tenant.id, &block)
+      AuditMetadata.wrap_event_store do
+        Rails.configuration.event_store.with_metadata(tenant_id: tenant.id, &block)
+      end
     end
   end
 

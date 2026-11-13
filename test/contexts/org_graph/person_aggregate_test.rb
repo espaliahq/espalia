@@ -266,6 +266,27 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#match_status" do
+    should "write only the move a reported status needs, never a new date for the same one" do
+      record(employment_status: "pending")
+      @aggregate.match_status("employed", provider: "hibob", effective_on: "2026-11-02")
+      @aggregate.match_status("left", provider: "hibob", effective_on: "2026-11-03")
+      @aggregate.match_status("left", provider: "hibob", effective_on: "2026-11-04")
+      @aggregate.match_status("employed", provider: "hibob", effective_on: "2026-11-05")
+
+      assert_equal [
+        [ OrgGraph::Events::PersonJoined, "2026-11-02" ],
+        [ OrgGraph::Events::PersonLeft, "2026-11-03" ],
+        [ OrgGraph::Events::PersonReturned, "2026-11-05" ]
+      ], events.drop(1).map { |e| [ e.class, e.data[:effective_on] ] }
+    end
+
+    should "refuse a status it does not know" do
+      record
+      assert_raises(RuntimeError) { @aggregate.match_status("retired", **PROVENANCE) }
+    end
+  end
+
   context "memberships" do
     setup do
       @squad = SecureRandom.uuid_v7
