@@ -90,6 +90,19 @@ where it came from a plan, a reference to the plan's change.
 | `UnitSucceeded` | That one or more units carry on from one or more others: a split, a merge, a replacement. |
 | `UnitOwnerAdded`, `UnitOwnerRemoved` | Who may edit the unit. |
 
+A succession can retire its predecessors in the same step. Each such `UnitRetired`
+names the succession and its successors, and its members move rather than leave:
+
+- **One successor (a merge or a replacement):** every open membership moves to it on
+  the succession date.
+- **Several successors (a split):** whoever issues the split may name a successor per
+  person, and those people move. Anyone not named has their membership ended on that
+  date, so they appear in the "in no team" tray for someone to place. The handler never
+  guesses.
+- **Placements are not stored on the structure events.** They are ordinary membership
+  commands issued with the split, sharing its cause. The split screen (5.6) and applying
+  a plan (7.3) supply the names; the membership side lands in story 2.6.
+
 Units carry their provider too: a unit mirrored from an HRIS team is read-only in
 Espalia, and units Espalia holds can hang beneath it. A mirrored unit also carries the
 provider's own reference for it, so a rename in the HRIS is recognised as a rename. See
@@ -113,9 +126,14 @@ members are a projection.
   can't be dropped, and the levels in use keep their order.
 - **An unchanged name, parent or taxonomy writes nothing**, so a sync that finds no
   difference adds no event.
+- **Succession links only units that exist.** Its successors are live, no unit
+  succeeds itself, and no chain of successions loops back. Restating one exactly writes
+  nothing. Retiring a predecessor through it follows the usual rules: the predecessor's
+  own provider, and no live sub-unit left behind outside the succession.
 
 `OrgGraph::Projections::Structure` projects the current tree into `org_units` and
-`org_taxonomy_levels`. The history that reads "was X" is in the stream:
+`org_taxonomy_levels`, and each succession's links into `org_unit_successions`, so a
+reader can list a unit's predecessors and successors. The history that reads "was X" is in the stream:
 `UnitRenamed` carries the previous name, and the history projection (R4) will read it.
 
 ### The shape of the organisation has a history too
