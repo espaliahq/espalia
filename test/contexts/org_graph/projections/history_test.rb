@@ -159,6 +159,26 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
       assert_equal [ [ "2025-06-01", "2026-05-01", "employed" ], [ "2026-05-01", "2026-09-01", "left" ],
                      [ "2026-09-01", nil, "employed" ] ], statuses(@ada)
     end
+
+    should "end a pending hire who drops out on a date before they were recorded" do
+      as_tenant do
+        @handler.record_person(@ada.id, **ESPALIA, effective_on: "2026-02-01", employment_status: "pending")
+        @handler.leave(@ada.id, **ESPALIA, effective_on: "2026-01-15")
+      end
+
+      assert_equal [ [ "2026-01-16", nil, "left" ] ], statuses(@ada)
+    end
+
+    should "end a returner's new spell when their second leaving is dated before the return" do
+      record(@ada, started_on: "2025-06-01")
+      as_tenant do
+        @handler.leave(@ada.id, **ESPALIA, effective_on: "2026-04-30")
+        @handler.return_to_work(@ada.id, **ESPALIA, effective_on: "2026-09-01")
+        @handler.leave(@ada.id, **ESPALIA, effective_on: "2026-08-15")
+      end
+
+      assert_equal [ [ "2025-06-01", "2026-05-01", "employed" ], [ "2026-05-01", nil, "left" ] ], statuses(@ada)
+    end
   end
 
   context "memberships" do

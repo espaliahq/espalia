@@ -81,7 +81,7 @@ class OrgGraph::Projections::History
     when OrgGraph::Events::PersonRecorded then person_recorded
     when OrgGraph::Events::PersonJoined then person_joined
     when OrgGraph::Events::PersonLeft then person_left
-    when OrgGraph::Events::PersonReturned then status { |points| put(points, effective_on, "employed") }
+    when OrgGraph::Events::PersonReturned then status { |points| put_status(points, effective_on, "employed") }
     when OrgGraph::Events::StartDateChanged then start_date_changed
     when OrgGraph::Events::MembershipSet then membership(@data[:unit_id], effective_on, terms)
     when OrgGraph::Events::MembershipEnded then membership(@data[:unit_id], effective_on + 1, nil)
@@ -107,12 +107,12 @@ class OrgGraph::Projections::History
     started_on = date(@data[:started_on])
     status do |points|
       case @data[:employment_status]
-      when "pending" then put(points, effective_on, "pending")
-      when "employed" then put(points, started_on || effective_on, "employed")
+      when "pending" then put_status(points, effective_on, "pending")
+      when "employed" then put_status(points, started_on || effective_on, "employed")
       when "left"
         left_from = @data[:left_on] ? date(@data[:left_on]) + 1 : effective_on
-        put(points, started_on, "employed") if started_on && started_on < left_from
-        put(points, left_from, "left")
+        put_status(points, started_on, "employed") if started_on && started_on < left_from
+        put_status(points, left_from, "left")
       end
     end
   end
@@ -120,15 +120,18 @@ class OrgGraph::Projections::History
   def person_joined
     status do |points|
       points.reject! { |point| status_of(point) == "pending" && point.from >= effective_on }
-      put(points, effective_on, "employed")
+      put_status(points, effective_on, "employed")
     end
   end
 
   # A second leaving corrects the first, so it replaces the leaving it follows.
+  # Whatever the person was after the new date, they have left by then.
   def person_left
+    left_from = effective_on + 1
     status do |points|
       points.pop while points.last && status_of(points.last) == "left"
-      put(points, effective_on + 1, "left")
+      points.reject! { |point| point.from > left_from }
+      put_status(points, left_from, "left") unless status_of(value_point(points, left_from)) == "left"
     end
   end
 
@@ -145,13 +148,15 @@ class OrgGraph::Projections::History
       points.slice!(spell..)
       points.concat(later)
       points.reject! { |point| status_of(point) == "pending" && point.from >= started_on }
-      put(points, started_on, "employed")
+      put_status(points, started_on, "employed")
     end
   end
 
   def status(&) = revise(PERSON, @data[:person_id], "employment_status", &)
 
-  def status_of(point) = point.value&.fetch("employment_status", nil)
+  def put_status(points, from, employment_status) = put(points, from, { employment_status: })
+
+  def status_of(point) = point&.value&.fetch("employment_status", nil)
 
   # ── Memberships ──
 
@@ -209,16 +214,15 @@ class OrgGraph::Projections::History
   # change-back's own point is dropped when withdrawing the change already
   # leaves that value in effect.
   def put(points, from, value)
-    value = { employment_status: value } if value.is_a?(String)
     value = value&.deep_stringify_keys
-    return if @withdrawing && value_on(points, from) == value
+    return if @withdrawing && value_point(points, from)&.value == value
 
     points.reject! { |point| point.from == from }
     points << Point.new(from, value, @data[:provider], @event.event_id)
     points.sort_by!(&:from)
   end
 
-  def value_on(points, day) = points.select { |point| point.from <= day }.max_by(&:from)&.value
+  def value_point(points, day) = points.select { |point| point.from <= day }.max_by(&:from)
 
   def periods(points)
     points = points.sort_by(&:from)
