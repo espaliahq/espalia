@@ -105,7 +105,7 @@ class OrgGraph::PersonProfileTest < ActiveSupport::TestCase
 
   should "read a forgotten person as a former member and keep their history" do
     brook = @org[:brook]
-    as_tenant { brook.update_columns(name: nil, email: nil, forgotten_at: Time.current) }
+    as_tenant { brook.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
 
     result = profile(brook)
 
@@ -116,7 +116,7 @@ class OrgGraph::PersonProfileTest < ActiveSupport::TestCase
   should "name a manager who was forgotten as a former member" do
     as_tenant do
       @handler.apply_facts(@org[:brook].id, provider: "espalia", effective_on: "2026-02-01", manager_id: @org[:ada].id)
-      @org[:ada].update_columns(name: nil, email: nil, forgotten_at: Time.current)
+      @org[:ada].update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
     end
 
     assert_equal Person::FORMER_MEMBER, profile(@org[:brook]).employment.find { |f| f.fact == "manager" }.value

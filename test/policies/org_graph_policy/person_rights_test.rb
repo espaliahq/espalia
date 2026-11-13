@@ -54,7 +54,7 @@ class OrgGraphPolicy::PersonRightsTest < ActiveSupport::TestCase
     end
 
     should "change nothing for a forgotten person" do
-      as_tenant { @org[:brook].update_columns(name: nil, email: nil, forgotten_at: Time.current) }
+      as_tenant { @org[:brook].update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
       rights, held = rights_for(@org[:brook], viewer: @viewer, role: :admin)
 
       assert_not rights.membership?(held[@org[:checkout]])

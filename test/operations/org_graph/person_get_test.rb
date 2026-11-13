@@ -35,7 +35,7 @@ class Operations::OrgGraph::PersonGetTest < ActiveSupport::TestCase
   end
 
   should "read a forgotten person as a former member" do
-    ActsAsTenant.with_tenant(@tenant) { @org[:brook].update_columns(name: nil, email: nil, forgotten_at: Time.current) }
+    ActsAsTenant.with_tenant(@tenant) { @org[:brook].update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
 
     result = call(person_id: @org[:brook].id)
 

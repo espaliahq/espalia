@@ -89,7 +89,7 @@ class Tenant::OrgPeopleControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "open a forgotten person as a former member, with history" do
-      ActsAsTenant.with_tenant(@tenant) { @org[:dot].update_columns(name: nil, email: nil, forgotten_at: Time.current) }
+      ActsAsTenant.with_tenant(@tenant) { @org[:dot].update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
 
       get tenant_org_person_path(@org[:dot])
 
