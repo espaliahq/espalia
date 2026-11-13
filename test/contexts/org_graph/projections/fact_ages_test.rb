@@ -12,14 +12,14 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant, org_graph_config: { staleness_days: 30 })
-    @handler = OrgGraph::CommandHandler.new
+    @handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     departments, squads = SecureRandom.uuid_v7, SecureRandom.uuid_v7
     @payments, @platform, @engineering = Array.new(3) { SecureRandom.uuid_v7 }
 
     travel_to START
     as_tenant do
       @ada, @grace, @lead = (1..3).map { |n| create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-#{n}") }
-      structure = OrgGraph::StructureCommandHandler.new
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       structure.define_taxonomy([ { level_id: departments, name: "Department" }, { level_id: squads, name: "Squad" } ],
         effective_on: "2026-01-01")
       structure.set_level_provider(departments, "hibob", effective_on: "2026-01-01")
@@ -48,7 +48,7 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
   end
 
   def hand_title_to(provider)
-    OrgGraph::StructureCommandHandler.new.set_fact_provider("title", provider, effective_on: Date.current)
+    OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("title", provider, effective_on: Date.current)
   end
 
   def stale(now: Time.current)
@@ -135,7 +135,7 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
     design = SecureRandom.uuid_v7
     travel_to START + 4.days
     as_tenant do
-      OrgGraph::StructureCommandHandler.new.create_unit(design, "Design", level_id: OrgUnit.find(@engineering).level_id,
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).create_unit(design, "Design", level_id: OrgUnit.find(@engineering).level_id,
         effective_on: "2026-01-01", provider: "hibob", external_ref: "d-2")
       @handler.move_membership(@ada.id, @payments, @platform, effective_on: Date.current, moved_by_id: @grace.id)
       @handler.move_membership(@grace.id, @engineering, design, effective_on: Date.current)
@@ -201,7 +201,7 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
     end
 
     should "never list a membership of a retired unit, nor confirm one" do
-      as_tenant { OrgGraph::StructureCommandHandler.new.retire_unit(@payments, effective_on: "2026-02-10") }
+      as_tenant { OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).retire_unit(@payments, effective_on: "2026-02-10") }
       travel_to START + 31.days
 
       assert_empty stale

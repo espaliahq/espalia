@@ -276,7 +276,7 @@ class Tenant < ApplicationRecord
     return [] unless hris_config.configured?(self)
 
     ActsAsTenant.with_tenant(self) do
-      OrgGraph::StructureCommandHandler.new.claim_facts(OrgGraph::StructureAggregate::HRIS_FACTS, hris_config.provider,
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).claim_facts(OrgGraph::StructureAggregate::HRIS_FACTS, hris_config.provider,
                                                         effective_on: Date.current)
     end
   end

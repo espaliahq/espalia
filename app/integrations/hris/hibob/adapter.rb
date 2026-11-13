@@ -318,7 +318,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param result [Hash] running tally
   def record_org_graph_differences(rows, managers, result)
     with_hris_event_context do
-      handler = OrgGraph::CommandHandler.new
+      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       today = Date.current
 
       rows.each do |person, row|

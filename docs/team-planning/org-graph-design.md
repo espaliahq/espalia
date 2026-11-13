@@ -210,6 +210,10 @@ holds is open to:
 - **A person's manager chain**, for that person's memberships only. A design lead can
   place their designer in a squad they do not own.
 
+Every Org Graph command checks this when a person runs it, and a refusal says who may
+make the change. The HRIS sync and the system's own work, such as a retirement moving
+its members, run as the system and are not checked.
+
 **Trust, then verify.** No change waits for anyone's acceptance. A manager places their
 report in a squad and it is so. What keeps that honest is visibility: every change is an
 event with who made it and when, and the Org Graph shows an activity sidebar like the

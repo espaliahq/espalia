@@ -16,7 +16,7 @@ class TenantHrisFactsTest < ActiveSupport::TestCase
   context "connecting an HRIS" do
     should "leave a fact an admin chose for Espalia before connecting" do
       ActsAsTenant.with_tenant(@tenant) do
-        OrgGraph::StructureCommandHandler.new.set_fact_provider("title", "espalia", effective_on: Date.current)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("title", "espalia", effective_on: Date.current)
       end
       @tenant.update_hris!(settings: { provider: "hibob", sync_enabled: true }, service_user_id: "user", api_token: "token")
 
@@ -47,7 +47,7 @@ class TenantHrisFactsTest < ActiveSupport::TestCase
     should "leave a fact an admin handed back to Espalia when the settings are saved again" do
       @tenant.update_hris!(settings: { provider: "hibob", sync_enabled: true }, service_user_id: "user", api_token: "token")
       ActsAsTenant.with_tenant(@tenant) do
-        OrgGraph::StructureCommandHandler.new.set_fact_provider("title", "espalia", effective_on: Date.current)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("title", "espalia", effective_on: Date.current)
       end
       @tenant.update_hris!(settings: { sync_enabled: true })
 

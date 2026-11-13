@@ -10,8 +10,8 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant)
-    @handler = OrgGraph::CommandHandler.new
-    structure = OrgGraph::StructureCommandHandler.new
+    @handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     level = SecureRandom.uuid_v7
     @payments = SecureRandom.uuid_v7
     @platform = SecureRandom.uuid_v7
@@ -76,7 +76,7 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
     as_tenant do
       assert_equal [ @linus.id ], Person.in_no_unit.pluck(:id)
 
-      OrgGraph::StructureCommandHandler.new.retire_unit(@payments, effective_on: "2026-06-30")
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).retire_unit(@payments, effective_on: "2026-06-30")
       assert_equal [ @grace.id, @linus.id ].sort, Person.in_no_unit.pluck(:id).sort
     end
   end
@@ -118,8 +118,8 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
         level = SecureRandom.uuid_v7
         unit = SecureRandom.uuid_v7
         person = create(:person, tenant: other)
-        OrgGraph::StructureCommandHandler.new.define_taxonomy([ { level_id: level, name: "Squad" } ], effective_on: "2026-01-01")
-        OrgGraph::StructureCommandHandler.new.create_unit(unit, "Squad", level_id: level, effective_on: "2026-01-01")
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).define_taxonomy([ { level_id: level, name: "Squad" } ], effective_on: "2026-01-01")
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).create_unit(unit, "Squad", level_id: level, effective_on: "2026-01-01")
         @handler.record_person(person.id, **PROVENANCE, employment_status: "employed")
         @handler.set_membership(person.id, unit, **PROVENANCE)
       end
