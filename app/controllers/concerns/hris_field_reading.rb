@@ -14,9 +14,10 @@ module HrisFieldReading
     { problem: "The HRIS refused the stored credentials." }
   rescue Hris::Hibob::Errors::RateLimitError
     { problem: "The HRIS is limiting requests just now. Reload the page in a minute." }
+  rescue Pundit::NotAuthorizedError
+    raise
   rescue StandardError => e
-    Rails.error.report(e, handled: true, context: { tenant_id: ActsAsTenant.current_tenant&.id })
-    { problem: "The HRIS did not answer as expected. Reload the page to try again." }
+    { problem: hris_trouble(e, "Reload the page to try again.") }
   end
 
   # @param target [String] "level", or a fact's part
@@ -29,8 +30,19 @@ module HrisFieldReading
     ) }
   rescue Operations::Base::ParameterError => e
     { chosen: field_id, preview_problem: e.message }
+  rescue Pundit::NotAuthorizedError
+    raise
   rescue StandardError => e
-    Rails.error.report(e, handled: true, context: { tenant_id: ActsAsTenant.current_tenant&.id })
-    { chosen: field_id, preview_problem: "The HRIS did not answer as expected. Try again in a minute." }
+    { chosen: field_id, preview_problem: hris_trouble(e) }
+  end
+
+  # Reports a failure nobody named, and says so in a sentence.
+  #
+  # @param error [StandardError]
+  # @param next_step [String]
+  # @return [String]
+  def hris_trouble(error, next_step = "Try again in a minute.")
+    Rails.error.report(error, handled: true, context: { tenant_id: ActsAsTenant.current_tenant&.id })
+    "The HRIS did not answer as expected. #{next_step}"
   end
 end

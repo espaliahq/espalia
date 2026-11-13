@@ -78,6 +78,7 @@ class Views::Tenant::OrgGraph::Settings::HandoverFrame < Views::Base
   def hand_over
     form(action: tenant_org_graph_settings_level_handover_path(id), method: "get") do
       field_select
+      input(type: "hidden", name: "calls_field", value: @chosen) if @comparison
       unit_calls if @comparison
       div(class: "mt-3") do
         render Components::Kit::Button.new(variant: :outline, tone: :neutral, type: :submit, id: "org-graph-handover-compare-#{id}") do

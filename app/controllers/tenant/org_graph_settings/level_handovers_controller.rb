@@ -6,14 +6,16 @@
 #
 # Each unit's call arrives as `calls[<unit id>]` (see
 # {Views::Tenant::OrgGraph::Settings::HandoverFrame}) and is split here into
-# the matches and resolutions the Operations take.
+# the matches and resolutions the Operations take. `calls_field` names the
+# field the calls were made for, so calls for another field are dropped and
+# its own suggestions offered.
 class Tenant::OrgGraphSettings::LevelHandoversController < ApplicationController
   include HrisFieldReading
   include OrgGraphSettingsRedirect
 
   before_action :set_level
 
-  # GET /tenant/org_graph/settings/level_handovers/:level_id?field_id=&calls[<unit id>]=
+  # GET /tenant/org_graph/settings/level_handovers/:level_id?field_id=&calls_field=&calls[<unit id>]=
   def show
     authorize :integrations, :hand_over_hris_level?
 
@@ -24,7 +26,7 @@ class Tenant::OrgGraphSettings::LevelHandoversController < ApplicationController
   def update
     authorize :integrations, :hand_over_hris_level?
 
-    matches, resolutions = split_calls
+    matches, resolutions = split(calls)
     Operations::Integrations::HandOverHrisLevel.call(context: pundit_user, params: {
       level_id: @level.id, field_id: params.expect(:field_id), matches:, resolutions:,
       fingerprint: params.expect(:fingerprint),
@@ -61,13 +63,17 @@ class Tenant::OrgGraphSettings::LevelHandoversController < ApplicationController
     field_id = params[:field_id].presence
     return catalogue unless field_id && catalogue[:fields]
 
-    { **catalogue, chosen: field_id, calls:, compared: params.key?(:calls), comparison: compare(field_id) }
+    sent = params[:calls_field] == field_id ? calls : {}
+    { **catalogue, chosen: field_id, calls: sent, compared: sent.any?, comparison: compare(field_id, *split(sent)) }
   rescue Operations::Base::ParameterError => e
     { **(catalogue || {}), chosen: field_id, problem: e.message.sub(/\A\w+: /, "") }
+  rescue Pundit::NotAuthorizedError
+    raise
+  rescue StandardError => e
+    { **(catalogue || {}), chosen: field_id, problem: hris_trouble(e) }
   end
 
-  def compare(field_id = nil)
-    matches, resolutions = split_calls
+  def compare(field_id = nil, matches = {}, resolutions = {})
     Operations::Integrations::HrisLevelHandover.call(
       context: pundit_user, params: { level_id: @level.id, field_id:, matches:, resolutions: }.compact
     )
@@ -79,8 +85,9 @@ class Tenant::OrgGraphSettings::LevelHandoversController < ApplicationController
     sent.is_a?(ActionController::Parameters) ? sent.permit(*sent.keys).to_h : {}
   end
 
+  # @param calls [Hash{String => String}]
   # @return [Array(Hash, Hash)] matches (unit id => value key) and resolutions (unit id => unit id or "retire")
-  def split_calls
+  def split(calls)
     calls.each_with_object([ {}, {} ]) do |(unit_id, call), (matches, resolutions)|
       kind, value = call.to_s.split(":", 2)
       case kind

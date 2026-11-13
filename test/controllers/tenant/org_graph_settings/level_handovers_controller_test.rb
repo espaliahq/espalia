@@ -44,7 +44,7 @@ class Tenant::OrgGraphSettings::LevelHandoversControllerTest < ActionDispatch::I
   def stubbed(&) = Hris::BaseAdapter.stub(:for, @adapter, &)
 
   def fingerprint
-    stubbed { get tenant_org_graph_settings_level_handover_path(@level_id), params: { field_id: TEAM.id, calls: @calls } }
+    stubbed { get tenant_org_graph_settings_level_handover_path(@level_id), params: { field_id: TEAM.id, calls_field: TEAM.id, calls: @calls } }
     css_select("input[name=fingerprint]").first["value"]
   end
 
@@ -63,7 +63,7 @@ class Tenant::OrgGraphSettings::LevelHandoversControllerTest < ActionDispatch::I
 
     should "hold the switch back until every unit has a call" do
       stubbed do
-        get tenant_org_graph_settings_level_handover_path(@level_id), params: { field_id: TEAM.id, calls: { @payments => "match:7" } }
+        get tenant_org_graph_settings_level_handover_path(@level_id), params: { field_id: TEAM.id, calls_field: TEAM.id, calls: { @payments => "match:7" } }
       end
 
       assert_select "#org-graph-handover-summary-#{@level_id}", text: /Still to decide: Legacy/
@@ -98,6 +98,28 @@ class Tenant::OrgGraphSettings::LevelHandoversControllerTest < ActionDispatch::I
 
       assert_match(/\ATeam was not handed over: The HRIS or the level has changed/, flash[:alert])
       assert_equal "espalia", level.provider
+    end
+
+    should "drop calls made for another field and suggest the new field's values" do
+      stubbed do
+        get tenant_org_graph_settings_level_handover_path(@level_id),
+            params: { field_id: TEAM.id, calls_field: "work.department", calls: { @payments => "match:99", @legacy => "retire" } }
+      end
+
+      assert_select "select[name='calls[#{@payments}]'] option[selected]", text: /Payments/
+      assert_select "input[name=calls_field][value='#{TEAM.id}']"
+      assert_select "#org-graph-handover-summary-#{@level_id}", count: 0
+    end
+
+    should "say so when the HRIS fails in a way nobody named" do
+      failing = FakeAdapter.new(nil, [ TEAM ])
+      def failing.read_field(*, **) = raise(Hris::Hibob::Errors::ApiError.new(status: 502, body: "Bad gateway"))
+      Hris::BaseAdapter.stub(:for, failing) do
+        get tenant_org_graph_settings_level_handover_path(@level_id), params: { field_id: TEAM.id }
+      end
+
+      assert_response :success
+      assert_select "p[role=status]", text: /The HRIS did not answer as expected/
     end
 
     should "answer 404 for a level that doesn't exist" do

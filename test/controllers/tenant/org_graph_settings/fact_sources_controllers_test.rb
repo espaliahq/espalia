@@ -89,6 +89,20 @@ class Tenant::OrgGraphSettings::FactSourcesControllersTest < ActionDispatch::Int
     end
   end
 
+  context "as an Org Graph editor" do
+    should "be turned away from a preview, as the HRIS's values are for admins" do
+      editor = create(:user)
+      ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: editor, role: :member, org_graph_editor: true) }
+      sign_in editor
+
+      Hris::BaseAdapter.stub(:for, FakeAdapter.new) do
+        get tenant_org_graph_settings_fact_field_path("cost_centre"), params: { field_id: CENTRE.id }
+      end
+
+      assert_redirected_to root_path
+    end
+  end
+
   context "as a member" do
     setup { sign_in @member_user }
 
