@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-# Confirming that a fact Espalia holds about a person is still true (#81).
-#
-# Kept out of {OrgGraph::PersonAggregate}'s own file so the fact commands there
-# can change without touching it. Reads the aggregate's facts, their providers
-# and the memberships.
+# Confirming that a fact Espalia holds about a person is still true. Mixed
+# into {OrgGraph::PersonAggregate}, whose facts, providers and memberships it
+# reads.
 module OrgGraph::FactConfirmation
   extend ActiveSupport::Concern
 
