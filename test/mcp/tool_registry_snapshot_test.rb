@@ -2695,6 +2695,33 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_merge_unit",
+        "description" => "Merge a unit into another live unit from effective_on (today by default). Every membership moves to into_unit_id, keeping its role and allocation, and unit_id retires, all under one cause. A unit with live sub-units, or one an HRIS supplies, is refused. The caller must be able to change both units.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "into_unit_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "unit_id", "into_unit_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_move_member",
         "description" => "Move a person's membership of one unit to another live unit, keeping its role and " \
                          "allocation, from effective_on (today by default). A membership an HRIS supplies moves in " \
@@ -2837,6 +2864,69 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id", "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_retire_unit",
+        "description" => "Retire a unit in the Org Graph from effective_on (today by default), ending every membership in it, so its people show as in no team. A unit with live sub-units is refused until they are moved or retired, and one an HRIS supplies is retired in the HRIS. Refused unless the caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "unit_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_split_unit",
+        "description" => "Split a unit into two or more new units from effective_on (today by default). The successors take the unit's level and parent. Each person placements names moves to their successor with the same role and allocation; anyone not named leaves and shows as in no team. The unit retires, and everything shares one cause. A unit with live sub-units, or one an HRIS supplies, is refused.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "successor_names" => {
+              "type" => "array",
+              "items" => {
+                "type" => "string"
+              },
+              "minItems" => 2,
+              "description" => "names of the new units, at least two, each different"
+            },
+            "placements" => {
+              "type" => "object",
+              "additionalProperties" => {
+                "type" => "string"
+              },
+              "description" => "person_id => the name of the successor they move to, one of successor_names. Members left out end their membership and show as in no team."
+            }
+          },
+          "required" => [ "unit_id", "successor_names" ],
           "additionalProperties" => false
         },
         "annotations" => {

@@ -55,7 +55,27 @@ module Operations::OrgGraph::UnitWrite
     raise Operations::Base::ParameterError, "#{name} must be a UUID, got #{value.inspect}"
   end
 
-  def structure_handler = ::OrgGraph::StructureCommandHandler.new(actor: context)
+  # @param unit [OrgUnit]
+  # @raise [Operations::Base::ParameterError] if an HRIS mirrors the unit
+  def held_by_espalia!(unit)
+    return if unit.held_by_espalia?
+
+    raise Operations::Base::ParameterError,
+          "#{HrisConfig.provider_label(unit.provider)} supplies #{unit.name}; change it there"
+  end
+
+  # @param unit [OrgUnit]
+  # @raise [Operations::Base::ParameterError] if the unit has live sub-units
+  def without_live_children!(unit)
+    children = unit.children.live.order(:name).pluck(:name)
+    return if children.empty?
+
+    raise Operations::Base::ParameterError,
+          "Move or retire #{unit.name}'s sub-units first: #{children.to_sentence}"
+  end
+
+  # @param cause_id [String, nil] shared by every event the handler writes
+  def structure_handler(cause_id: nil) = ::OrgGraph::StructureCommandHandler.new(actor: context, cause_id: cause_id)
 
   def person_handler = ::OrgGraph::CommandHandler.new(actor: context)
 end
