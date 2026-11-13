@@ -143,6 +143,19 @@ class OrgGraph::CommandHandler
     written
   end
 
+  # Records that a leaver's identifiers were erased. Only {OrgGraph::Forgetting}
+  # calls this, as the system, inside the transaction that erases them, once
+  # it has checked {TenantPolicy#forget_person?} for whoever asked.
+  #
+  # @param person_id [String]
+  # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#forget}
+  # @raise [OrgGraph::Authorization::Refused] for any actor but the system
+  def forget_person(person_id, **options)
+    raise Refused, "Only the forgetting step can forget a person" unless system?
+
+    @repository.with_person(person_id, cause_id: @cause_id) { |person| person.forget(**options) }
+  end
+
   # @param person_id [String]
   # @param provider [String]
   # @param effective_on [Date, String] their return date

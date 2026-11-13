@@ -24,6 +24,13 @@ class OrgGraphConfig
   # Nil keeps them for ever.
   attribute :retention_years, :integer, default: DEFAULT_RETENTION_YEARS
 
+  # Whether the daily job forgets leavers once their period ends. Off until
+  # an admin turns it on, having seen how many it would forget first.
+  attribute :scheduled_forgetting, :boolean, default: false
+  attribute :scheduled_forgetting_enabled_at, :datetime
+  # The tenant_user id of the admin who turned it on.
+  attribute :scheduled_forgetting_enabled_by_id, :string
+
   validates :staleness_days, numericality: { only_integer: true, greater_than: 0,
                                              less_than_or_equal_to: MAX_STALENESS_DAYS }
   validates :retention_years, numericality: { only_integer: true, greater_than: 0,

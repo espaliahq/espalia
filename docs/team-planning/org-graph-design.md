@@ -662,6 +662,19 @@ result for each kind of id separately.
   back. They are removed there first.
 - Projections act on that event. The person renders as a former member. Positions, teams and
   past plans keep their history.
+  - `org_graph/leavers` drops the person, so they leave the due list. The other Org Graph
+    projections hold ids and no identifiers, so they keep their rows unchanged. The history
+    projection (3.1) handles `PersonForgotten` from its first version.
+  - Each person is forgotten in one transaction: the row, the tenant membership, the names
+    stored notifications copied, and the event with its synchronous projections. A run that
+    dies partway leaves each person forgotten or untouched, so no checkpoint is needed.
+  - The tenant membership is kept, deactivated and unlinked from its login. The global login
+    is untouched, since it can belong to other tenants.
+- The schedule ships off. A tenant admin turns it on with the count a dry run gives, and
+  forgetting one person on request stays off MCP. Operating it, the key and what a restore
+  undoes: [org-graph-forgetting.md](../runbooks/org-graph-forgetting.md).
+- Free text that names the person, in evidence, comments, feedback and alignment notes, is
+  not erased until shreddable fields land ([#110](https://github.com/espaliahq/espalia/issues/110)).
 - The sync must not undo it. An HRIS often keeps returning a person long after they
   leave, and a sync that upserts every row it is given would write the name back. The
   row keeps a keyed hash of the external id, enough to recognise the person and nothing

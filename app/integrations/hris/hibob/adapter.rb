@@ -50,7 +50,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #   :skipped_inactive, :assigned,
   #   :role_changed, :level_changed, :unchanged, :errors,
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
-  #   :skipped_no_title, :split_units (mirrored units whose people sit under different parents)
+  #   :skipped_no_title, :forgotten_skipped,
+  #   :split_units (mirrored units whose people sit under different parents)
   def sync_people
     @sync_correlation_id = correlation_id.presence || SecureRandom.uuid_v7
     employees = fetch_employees
@@ -66,6 +67,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         org_graph_facts = {}
         mirror_readings = {}
         projected = tenant.org_graph_people_projected?
+        ensure_forgotten_recognisable!
 
         # Pass 1: Upsert all employees
         employees.each do |raw_employee|
@@ -78,7 +80,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           attrs = Hris::DevNameWhimsifier.call(mapper.call)
           manager_ext_id = mapper.manager_external_id
 
-          person = upsert_person(attrs, result, projected:)
+          person = upsert_person(attrs, result, projected:, started_on: mapper.org_graph_facts[:started_on])
           if person
             external_id_map[attrs[:external_id]] = person
             manager_links[person] = manager_ext_id if manager_ext_id.present?
@@ -156,6 +158,18 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @return [Array<Hash>] raw employee hashes
   def fetch_employees
     client.search_people(show_inactive: true)
+  end
+
+  # HiBob marks a leaver `isActive: false`; a hire yet to start is active.
+  # An empty response would protect nobody, so it raises instead.
+  #
+  # @return [Array<String>]
+  # @raise [Hris::Hibob::Errors::UnexpectedResponseError] when HiBob returns no one
+  def active_external_ids
+    employees = fetch_employees
+    unexpected!("returned no employees") if employees.blank?
+
+    employees.reject { it["isActive"] == false }.filter_map { it["id"].presence&.to_s }
   end
 
   # A bare custom-column id, the form stored before the picker, as its path.
@@ -304,6 +318,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       level_changed: 0,
       unchanged: 0,
       skipped_no_title: 0,
+      forgotten_skipped: 0,
       errors: [],
       split_units: [],
       unmapped_titles: Set.new,
@@ -325,14 +340,25 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # HiBob's title and status, so a leaver is never briefly active; from then
   # on their stream writes both.
   #
+  # An id that matches a forgotten person's digest is skipped and counted as
+  # `forgotten_skipped` while they are gone or yet to start. Once they are
+  # back at work they get a new record, never linked to the forgotten one,
+  # and the old row gives up its digest in the same transaction.
+  #
   # @param attrs [Hash] Person-compatible attributes
   # @param result [Hash] running tally of sync results
   # @param projected [Boolean] whether the tenant is cut over to the Org Graph
+  # @param started_on [String, nil] HiBob's start date, ISO 8601
   # @return [Person, nil] the created or updated person, nil when skipped or invalid
-  def upsert_person(attrs, result, projected: false)
+  def upsert_person(attrs, result, projected: false, started_on: nil)
     person = Person.find_by(external_id: attrs[:external_id])
+    forgotten = forgotten_person(attrs[:external_id]) unless person
+    if forgotten && !back_at_work?(attrs, started_on)
+      result[:forgotten_skipped] += 1
+      return nil
+    end
     unless person
-      person = Person.find_by(email: attrs[:email])
+      person = Person.where(forgotten_at: nil).find_by(email: attrs[:email]) if attrs[:email].present?
       if person&.external_id.present?
         result[:errors] << {
           external_id: attrs[:external_id],
@@ -346,11 +372,15 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     is_new = person.new_record?
 
     person.assign_attributes(attrs.except(:hris_raw_data, *(PROJECTED_ATTRS if projected && !is_new)))
-    person.hris_raw_data = attrs[:hris_raw_data]
+    person.hris_raw_data = without_forgotten_manager(attrs[:hris_raw_data])
     person.hris_source = "hibob"
 
     if person.changed? || is_new
-      if person.save
+      saved = Person.transaction do
+        forgotten&.update_columns(forgotten_external_id_digest: nil)
+        person.save || raise(ActiveRecord::Rollback)
+      end
+      if saved
         is_new ? result[:created] += 1 : result[:updated] += 1
       else
         result[:errors] << {
@@ -439,6 +469,48 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         result[:errors] << { person_id: person.id, error: e.message }
       end
     end
+  end
+
+  # A sync must recognise everyone already forgotten, so it refuses to run
+  # without the key once anyone has been.
+  #
+  # @raise [OrgGraph::Forgetting::KeyMissing]
+  def ensure_forgotten_recognisable!
+    return unless forgotten_digests_held?
+
+    OrgGraph::Forgetting.key!
+  end
+
+  def forgotten_digests_held?
+    return @forgotten_digests_held if defined?(@forgotten_digests_held)
+
+    @forgotten_digests_held = Person.where.not(forgotten_external_id_digest: nil).exists?
+  end
+
+  # @param external_id [String, nil]
+  # @return [Person, nil] the forgotten row this HiBob id once belonged to
+  # A report's payload keeps naming a manager who has been forgotten.
+  def without_forgotten_manager(raw)
+    manager_id = raw&.dig("work", "reportsTo", "id")
+    return raw unless forgotten_person(manager_id) && !Person.exists?(external_id: manager_id.to_s)
+
+    raw.deep_dup.tap do |copy|
+      copy["work"]&.delete("reportsTo")
+      copy.dig("humanReadable", "work")&.delete("reportsTo")
+    end
+  end
+
+  def forgotten_person(external_id)
+    return if external_id.blank? || !forgotten_digests_held?
+
+    Person.find_by(forgotten_external_id_digest: OrgGraph::Forgetting.digest(tenant, provider_name, external_id.to_s))
+  end
+
+  # A forgotten person comes back only as a new record, and only once they
+  # are back at work: neither a leaver, a hire yet to start, nor one with no
+  # start date is recorded.
+  def back_at_work?(attrs, started_on)
+    started_on.present? && org_graph_status(attrs[:status], started_on, Date.current) == "employed"
   end
 
   # HiBob marks a hire active before they start, so a start date still ahead
