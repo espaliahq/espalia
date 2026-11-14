@@ -311,7 +311,7 @@ on main yet.
 | # | Story | Needs |
 |---|---|---|
 | 7.1 | Capacity model interface, chosen per role family and overridable per role, as a rule. [Design: Capacity as built](team-planning-design.md#capacity-as-built) | 3.3 |
-| 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph | 7.1, 3.7 |
+| 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph. [Design: The units model](team-planning-design.md#the-units-model) | 7.1, 3.7 |
 | 7.3 | Override a person's capacity in an assignment, with the calculated figure behind it | 7.2, 3.9 |
 | 7.4 | Capacity per model, per unit and per scenario, each figure with its working, and the unclassified role check | 7.2 |
 
