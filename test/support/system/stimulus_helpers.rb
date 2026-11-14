@@ -76,6 +76,60 @@ module StimulusHelpers
     const btn = matches.length === 1 ? matches[0] : null;
   JS
 
+  # Records, in the page's ms clock, when the signal text enters or leaves the
+  # page, as an element, a text node or an edit to one, and whether it arrived
+  # where it could be seen, and when Turbo submits and renders, for a failed guarded click to
+  # report (#241). Observes <html>, which survives Turbo swapping <body>; a
+  # full page load wipes it, and the report says so. The observer stops after
+  # a minute, well past any guarded click's waits, so a click that landed
+  # leaves nothing running. Returns the page's clock, so the report can line
+  # it up with Ruby's.
+  SIGNAL_TIMELINE_JS = <<~JS
+    const text = arguments[0];
+    window.__signalTimeline = [];
+    const note = what => window.__signalTimeline?.push([Date.now(), what]);
+    const holds = n => [1, 3].includes(n.nodeType) && (n.textContent || "").includes(text);
+    const where = n => n.nodeType === 1 ? `<${n.localName}>` : `text in <${n.parentElement?.localName}>`;
+    const shown = n => (n.nodeType === 1 ? n : n.parentElement)?.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+    const added = n => note(`signal added${shown(n) ? "" : " out of sight"} in ${where(n)}`);
+    window.__signalTimelineObserver?.disconnect();
+    window.__signalTimelineObserver = null;
+    if (text) {
+      const observer = window.__signalTimelineObserver = new MutationObserver(records => {
+        // A record keeps only the value before its edit; the next edit to the
+        // same node records the value this one left.
+        const left = new Map();
+        const next = new Map();
+        for (const r of [...records].reverse()) {
+          if (r.type !== "characterData") continue;
+          left.set(r, next.has(r.target) ? next.get(r.target) : r.target.data);
+          next.set(r.target, r.oldValue || "");
+        }
+        for (const r of records) {
+          if (r.type === "characterData") {
+            const was = (r.oldValue || "").includes(text);
+            const now = left.get(r).includes(text);
+            if (now && !was) added(r.target);
+            if (was && !now) note(`signal removed from ${where(r.target)}`);
+          }
+          for (const n of r.addedNodes) if (holds(n)) added(n);
+          for (const n of r.removedNodes) if (holds(n)) note(`signal removed with ${n.nodeType === 1 ? where(n) : `text in <${r.target.localName}>`}`);
+        }
+      });
+      observer.observe(document.documentElement, { childList: true, characterData: true, characterDataOldValue: true, subtree: true });
+      setTimeout(() => observer.disconnect(), 60000);
+    }
+    if (!window.__signalTimelineTurbo) {
+      window.__signalTimelineTurbo = true;
+      ["turbo:submit-start", "turbo:submit-end", "turbo:before-render", "turbo:render", "turbo:load"].forEach(type =>
+        document.addEventListener(type, e => {
+          const status = e.detail?.fetchResponse?.statusCode;
+          window.__signalTimeline?.push([Date.now(), status ? `${type} ${status}` : type]);
+        }));
+    }
+    return Date.now();
+  JS
+
   # Waits until the named Stimulus controller has connected.
   #
   # @param controller_name [String] the Stimulus controller identifier
@@ -468,9 +522,12 @@ module StimulusHelpers
       expect_text: expect_text, expect_selector: expect_selector, expect_no_text: expect_no_text
     )
 
+    timeline = arm_signal_timeline(expect_text)
+
     begin
+      timeline.mark("click")
       click_button locator
-      return if landed?(expect_text, expect_selector, expect_no_text, wait: landed_wait)
+      return if timeline.probe(1) { landed?(expect_text, expect_selector, expect_no_text, wait: landed_wait) }
     rescue Selenium::WebDriver::Error::ElementClickInterceptedError
       # Same interception-is-a-drop rule as the link/selector helpers.
     end
@@ -487,7 +544,7 @@ module StimulusHelpers
       })()
     JS
 
-    return if landed?(expect_text, expect_selector, expect_no_text, wait: landed_wait)
+    return if timeline.probe(2) { landed?(expect_text, expect_selector, expect_no_text, wait: landed_wait) }
 
     # JS click also dropped (or the synthetic click event bypassed Turbo's
     # submit interceptor). Submit the button's form via requestSubmit() —
@@ -505,9 +562,11 @@ module StimulusHelpers
       })()
     JS
 
+    timeline.mark("final assertion started")
     assert_after_recovery(
       button_misses(locator, clicked, outcome),
-      expect_text: expect_text, expect_selector: expect_selector, expect_no_text: expect_no_text
+      expect_text: expect_text, expect_selector: expect_selector, expect_no_text: expect_no_text,
+      diagnostics: -> { timeline.report }
     )
   end
 
@@ -1034,7 +1093,7 @@ module StimulusHelpers
   # @param expect_no_text [String, nil] text the click should remove
   # @yield an assertion to run instead of the signal ladder
   # @raise [Minitest::Assertion] the original failure, with the notes appended
-  def assert_after_recovery(misses, expect_text: nil, expect_selector: nil, expect_no_text: nil)
+  def assert_after_recovery(misses, expect_text: nil, expect_selector: nil, expect_no_text: nil, diagnostics: nil)
     if block_given?
       yield
     elsif expect_text
@@ -1045,9 +1104,39 @@ module StimulusHelpers
       assert_no_text expect_no_text, wait: Capybara.default_max_wait_time
     end
   rescue Minitest::Assertion => e
-    raise if misses.empty?
+    notes = misses + recovery_diagnostics(diagnostics)
+    raise if notes.empty?
 
-    raise e.class, "#{e.message}\n\n#{misses.join("\n")}", e.backtrace
+    raise e.class, "#{e.message}\n\n#{notes.join("\n")}", e.backtrace
+  end
+
+  # Diagnostics for a failed click, never at the cost of the failure itself.
+  #
+  # @param diagnostics [#call, nil]
+  # @return [Array<String>]
+  def recovery_diagnostics(diagnostics)
+    Array(diagnostics&.call)
+  rescue StandardError => e
+    [ "(diagnostics could not be gathered: #{e.class}: #{e.message.lines.first&.strip})" ]
+  end
+
+  # Starts recording when a guarded click's signal text comes and goes.
+  #
+  # @param expect_text [String, nil] the signal; nil records Turbo events only
+  # @return [SignalTimeline]
+  def arm_signal_timeline(expect_text)
+    sent = SignalTimeline.now
+    page_clock = evaluate_recovery_script("(() => { #{SIGNAL_TIMELINE_JS} })()", expect_text.to_s)
+    page_offset = ((sent + SignalTimeline.now) / 2) - page_clock if page_clock.is_a?(Numeric)
+    SignalTimeline.new(-> { read_signal_timeline }, page_offset:, watching: expect_text.present?)
+  rescue StandardError # a diagnostic must never be what fails the click
+    SignalTimeline.new(-> { :unavailable }, watching: expect_text.present?)
+  end
+
+  def read_signal_timeline
+    evaluate_recovery_script("window.__signalTimeline || null")
+  rescue StandardError
+    :unavailable
   end
 
   # A miss phrase, carrying the prefix every note shares so a reader (or a

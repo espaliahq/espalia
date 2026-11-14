@@ -31,6 +31,20 @@ class TeamPlanning::Resolution
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def structure
     winning = @repository.load_plan(@plan.id).winning_changes(@scenario_id).values
-    winning.reduce(@baseline.structure) { |resolved, change| change.class.apply_to(resolved, change.data) }
+    resolved = winning.reduce(@baseline.structure) { |map, change| change.class.apply_to(map, change.data) }
+    explained(resolved.settled)
+  end
+
+  private
+
+  # A person off the map either left by the base date, or was forgotten, or
+  # joined after it.
+  def explained(map)
+    return map if map.unresolved.empty?
+
+    ids = map.unresolved.map(&:person_id)
+    left = OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: ids).where(left_on: ..map.base_on).pluck(:person_id) +
+           ::Person.where(tenant_id: @plan.tenant_id, id: ids).where.not(forgotten_at: nil).pluck(:id)
+    map.with(unresolved: map.unresolved.map { it.with(why: left.include?(it.person_id) ? it.class::LEFT : it.class::JOINED_LATER) })
   end
 end
