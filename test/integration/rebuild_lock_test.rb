@@ -38,6 +38,14 @@ class RebuildLockTest < ActiveSupport::TestCase
     assert_raises(PG::ConnectionBad) { with_failing_unlock { while_rebuilding(create(:tenant)) { } } }
   end
 
+  should "raise a failed unlock inside a rescue that already handled something else" do
+    assert_raises(PG::ConnectionBad) do
+      raise "handled before the rebuild"
+    rescue RuntimeError
+      with_failing_unlock { while_rebuilding(create(:tenant)) { } }
+    end
+  end
+
   private
 
   def with_failing_unlock(&)
