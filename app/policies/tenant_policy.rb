@@ -36,6 +36,9 @@ class TenantPolicy < ApplicationPolicy
   # @return [Boolean] whether the viewer can list, add or remove Org Graph editors
   def manage_org_graph_editors? = tenant_admin?
 
+  # @return [Boolean] whether the viewer can list, grant or take back the planner role
+  def manage_team_planners? = tenant_admin?
+
   # Narrower than the cycle report's bar (which admits managers): the export
   # carries names and feedback text. A linked Person is required so every
   # export is attributable to someone in the audit log.

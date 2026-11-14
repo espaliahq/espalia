@@ -3592,8 +3592,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "team_planning_create_plan",
         "description" => "Create a Team Planning plan, a private draft of the organisation built on the Org Graph " \
-                         "as it stood on base_on (today by default). Only its creator sees it. Refused unless the " \
-                         "caller is a tenant admin linked to a person.",
+                         "as it stood on base_on (today by default). Only its members see it, and its creator is its first editor. " \
+                         "Refused unless the caller is a tenant admin or a planner, linked to a person.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -3619,7 +3619,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "team_planning_delete_plan",
-        "description" => "Delete a Team Planning plan. It cannot be restored. Refused unless the caller created the plan.",
+        "description" => "Delete a Team Planning plan. It cannot be restored. Refused unless the caller is one of its editors.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -3638,7 +3638,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "team_planning_rename_plan",
-        "description" => "Rename a Team Planning plan. Refused unless the caller created the plan.",
+        "description" => "Rename a Team Planning plan. Refused unless the caller is one of its editors.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

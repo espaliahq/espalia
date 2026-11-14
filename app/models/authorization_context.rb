@@ -38,4 +38,12 @@ class AuthorizationContext
   def org_graph_editor?
     tenant_user&.org_graph_editor? || false
   end
+
+  # Whether the membership carries the planner grant, which lets someone
+  # create Team Planning plans without being an admin.
+  #
+  # @return [Boolean]
+  def team_planner?
+    tenant_user&.team_planner? || false
+  end
 end
