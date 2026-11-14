@@ -62,9 +62,14 @@ class BudgetLine < ApplicationRecord
 
   # @param name [Symbol] :amount or :head_count
   # @return [String, nil] the figure with its decimal places, "120000.00", or nil when the line has none
-  def figure(name)
-    value = public_send(name) or return nil
-    whole, fraction = value.to_s("F").split(".")
+  def figure(name) = self.class.figure_of(public_send(name))
+
+  # @param value [BigDecimal, String, nil]
+  # @return [String, nil] such as "120000.00"
+  def self.figure_of(value)
+    return nil if value.nil?
+
+    whole, fraction = BigDecimal(value.to_s).to_s("F").split(".")
     "#{whole}.#{fraction.to_s.ljust(2, '0')}"
   end
 
