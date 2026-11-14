@@ -83,6 +83,7 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
       sign_in_as(@admin_user)
       visit new_tenant_org_unit_split_path(@org[:platform], names: %w[Core Edge], stage: "review")
       assert_selector "#org-unit-split-unplaced"
+      wait_for_stimulus "effective-date"
 
       tomorrow = Date.tomorrow.iso8601
       js_fill_in "Takes effect", with: tomorrow
