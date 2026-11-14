@@ -32,9 +32,9 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  def move(scenario_id: @q1, **fields)
+  def move(scenario_id: @q1, return_to: nil, **fields)
     patch plan_assignment_path(@plan_id, @ada.id),
-          params: { move: { scenario_id:, from_unit_id: @payments, to: @growth, allocation: "60", role: "Lead", **fields } }
+          params: { move: { scenario_id:, from_unit_id: @payments, to: @growth, allocation: "60", role: "Lead", **fields }, return_to: }.compact
   end
 
   context "an editor" do
@@ -90,6 +90,39 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
         assert_select "[data-map-position='#{position}'] span.font-medium", text: "New position: Software Engineer (#{index + 1})"
         assert_select "[data-map-position='#{position}'] button[aria-label='Move New position: Software Engineer (#{index + 1}) in Growth']"
       end
+    end
+
+    should "land back on the timeline step it came from" do
+      back = timeline_plan_path(@plan_id, scenario: @q1, step: 1)
+      move(return_to: back)
+
+      assert_redirected_to back
+      assert_equal "Move saved.", flash[:notice]
+    end
+
+    should "say on the timeline why a move was refused" do
+      back = timeline_plan_path(@plan_id, step: 1)
+      move(scenario_id: @plan_id, return_to: back)
+
+      assert_redirected_to back
+      assert_match "Today can't be edited", flash[:alert]
+    end
+
+    should "ignore a return_to that leaves this plan's timeline" do
+      [ "https://example.com/planning", plan_path(@plan_id), "//example.com#{timeline_plan_path(@plan_id)}", "http://[bad" ].each do |back|
+        move(return_to: back)
+
+        assert response.location.start_with?(map_plan_url(@plan_id)), "#{back} sent the move to #{response.location}"
+      end
+    end
+
+    should "give each step on the timeline its own move dialog and field ids" do
+      get timeline_plan_path(@plan_id)
+
+      assert_select "#move-person-modal-1 select#move-to-1"
+      assert_select "#move-person-modal-1 input[name='return_to'][value='#{timeline_plan_path(@plan_id, scenario: @q1, step: 0)}']"
+      assert_select "#move-person-modal-0", count: 0
+      assert_select "#move-person-modal", count: 0
     end
 
     should "refuse Today and say why" do
