@@ -56,4 +56,13 @@ class TeamPlanning::SourceOfTruthTest < ActiveSupport::TestCase
       assert_equal %w[espalia], @sources.of_plan("assignment")
     end
   end
+
+  should "read a list's units and successions once, ahead of its changes" do
+    assert_queries_count(2) { @sources.preload(unit_ids: [ @sales, @payments ], succession_ids: [ @split ]) }
+    assert_no_queries do
+      assert_equal %w[espalia hibob], @sources.of_drift(change(:unit_moved, unit_id: @sales, from_unit_id: @billing))
+      assert_equal %w[espalia], @sources.of_drift(change(:unit_succeeded, succession_id: @split))
+    end
+    assert_equal "Sales", @sources.unit_name(@sales)
+  end
 end

@@ -20,8 +20,30 @@ class TeamPlanning::SourceOfTruth
   # @param tenant_id [String]
   def initialize(tenant_id:)
     @tenant_id = tenant_id
-    @unit_providers = {}
+    @units = {}
+    @successions = {}
   end
+
+  # Reads the units and successions a list of changes touches in one query
+  # each, rather than one per change.
+  #
+  # @param unit_ids [Array<String, nil>]
+  # @param succession_ids [Array<String, nil>]
+  # @return [self]
+  def preload(unit_ids: [], succession_ids: [])
+    succession_ids = succession_ids.compact.uniq - @successions.keys
+    if succession_ids.any?
+      rows = OrgUnitSuccession.where(tenant_id: @tenant_id, succession_id: succession_ids)
+                              .pluck(:succession_id, :predecessor_id, :successor_id)
+      succession_ids.each { |id| @successions[id] = rows.select { it.first == id }.flat_map { it.drop(1) } }
+    end
+    load_units(unit_ids + @successions.values_at(*succession_ids).flatten)
+    self
+  end
+
+  # @param id [String]
+  # @return [String, nil] the unit's name, once loaded
+  def unit_name(id) = @units[id]&.first
 
   # @param change [OrgGraph::ChangesBetween::Change]
   # @return [Array<String>] sorted providers
@@ -52,8 +74,8 @@ class TeamPlanning::SourceOfTruth
   # @return [Array<String>]
   def of_units(ids)
     ids = ids.compact.uniq
-    load_units(ids - @unit_providers.keys)
-    providers = ids.map { @unit_providers[it] || ESPALIA }.uniq.sort
+    load_units(ids)
+    providers = ids.map { @units[it]&.last || ESPALIA }.uniq.sort
     providers.empty? ? [ ESPALIA ] : providers
   end
 
@@ -62,12 +84,14 @@ class TeamPlanning::SourceOfTruth
   def fact_providers = @fact_providers ||= OrgFactProvider.where(tenant_id: @tenant_id).pluck(:fact, :provider).to_h
 
   def load_units(ids)
+    ids = ids.compact.uniq - @units.keys
     return if ids.empty?
 
-    @unit_providers.merge!(OrgUnit.where(tenant_id: @tenant_id, id: ids).pluck(:id, :provider).to_h)
+    @units.merge!(OrgUnit.where(tenant_id: @tenant_id, id: ids).pluck(:id, :name, :provider).to_h { |id, *rest| [ id, rest ] })
   end
 
   def succession_units(succession_id)
-    OrgUnitSuccession.where(tenant_id: @tenant_id, succession_id:).pluck(:predecessor_id, :successor_id).flatten
+    preload(succession_ids: [ succession_id ])
+    @successions[succession_id]
   end
 end
