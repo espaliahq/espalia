@@ -21,6 +21,7 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
   parameter :parent_id, String, allow_blank: false
   parameter :top_level, :boolean
   parameter :level_id, String, allow_blank: false
+  forbids_when :parent_id, if: :top_level, equals: true, message: "Give parent_id or top_level, not both"
 
   # @return [Hash] `{ plan_id, scenario_id, unit_id, name, parent_id, level_id }`
   def perform
@@ -45,7 +46,6 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
   end
 
   def parent_for(current)
-    refuse!("Give parent_id or top_level, not both") if params[:top_level] && params[:parent_id]
     return nil if params[:top_level]
 
     params[:parent_id] ? uuid!(:parent_id) : current&.parent_id

@@ -40,7 +40,24 @@
     "required": [
       "plan_id"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "if": {
+      "properties": {
+        "top_level": {
+          "const": true
+        }
+      },
+      "required": [
+        "top_level"
+      ]
+    },
+    "then": {
+      "not": {
+        "required": [
+          "parent_id"
+        ]
+      }
+    }
   },
   "annotations": {
     "readOnlyHint": false,
