@@ -19,9 +19,12 @@ module RebuildLock
     end
     yield
   ensure
-    # Closing alone frees the lock only once the backend exits, after we return.
-    rebuild.exec("SELECT pg_advisory_unlock_all()") if rebuild && !rebuild.finished?
-    rebuild&.close
+    begin
+      # Closing alone frees the lock only once the backend exits, after we return.
+      rebuild.exec("SELECT pg_advisory_unlock_all()") if rebuild && !rebuild.finished?
+    ensure
+      rebuild&.close
+    end
   end
 
   # Finishes the rebuild: replays each projection for the tenant.
