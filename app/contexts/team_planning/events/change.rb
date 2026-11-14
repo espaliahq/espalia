@@ -28,6 +28,10 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @raise [TeamPlanning::Error] when the end state is not one this kind can hold
   def self.end_state(end_state) = end_state
 
+  # Kinds land in the order they were made, not by kind, so this must not
+  # depend on another kind having landed first. Checks across kinds, such as
+  # a misfit, run on the resolved map instead.
+  #
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash] the stored event data
   # @return [TeamPlanning::Baseline::Map] the map with this end state in place
