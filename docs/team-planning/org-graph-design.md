@@ -684,7 +684,9 @@ screen and MCP share one implementation.
 - **Where each fact comes from.** Each fact's provider, and, for a fact the HRIS supplies,
   the field it is read from. A field is previewed before it is chosen.
 - **Levels.** Each level's provider and live units. An empty level is read from a field
-  directly. Adding and reordering levels is [#127](https://github.com/espaliahq/espalia/issues/127).
+  directly. An admin adds a level, which starts at the bottom, and moves the ones Espalia
+  holds up or down a place ([#127](https://github.com/espaliahq/espalia/issues/127)). A move
+  that would put a unit above its parent's level, or shift a level the HRIS supplies, isn't offered.
   Removing one is [#148](https://github.com/espaliahq/espalia/issues/148): only a level Espalia
   holds that no unit has ever held, retired units included, can go. A unit keeps its level
   for life, so a level that held one stays to explain the unit's history. The refusal names
