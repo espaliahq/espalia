@@ -50,6 +50,16 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
                    [ "Q2", "2027-03-01", "2027-06-30" ], [ "Lean Q2", "2027-03-01", "2027-05-31" ] ], periods
   end
 
+  should "follow a moved end in a plan that has no baseline row yet" do
+    TeamPlanningScenario.find(@plan_id).delete
+    q1 = fork(ends_on: "2027-03-31")
+    fork(q1, name: "Q2", ends_on: "2027-06-30")
+
+    @handler.set_scenario_period(@plan_id, q1, ends_on: "2027-02-28")
+
+    assert_equal [ [ "Q1", "2027-01-01", "2027-02-28" ], [ "Q2", "2027-03-01", "2027-06-30" ] ], periods
+  end
+
   should "drop a removed scenario, and every scenario of a deleted plan" do
     q1 = fork(ends_on: "2027-03-31")
     q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")

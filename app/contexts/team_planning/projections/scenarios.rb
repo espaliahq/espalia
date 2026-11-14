@@ -4,8 +4,9 @@
 #
 # Writes `team_planning_scenarios`, and nothing else writes it. A plan's
 # baseline row comes with `PlanCreated`; a deleted plan's scenarios go with
-# it. Only a `then` scenario's end is held, so after every change to the tree
-# the plan's starts, and its alternatives' ends, are worked out again.
+# it. A fork carries its own period. Only a `then` scenario's end is held, so
+# when one moves the plan's starts, and its alternatives' ends, are worked out
+# again.
 #
 class TeamPlanning::Projections::Scenarios
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -40,10 +41,8 @@ class TeamPlanning::Projections::Scenarios
       when TeamPlanning::Events::PlanDeleted then TeamPlanningScenario.where(plan_id: data[:plan_id]).delete_all
       when TeamPlanning::Events::ScenarioForked
         write(data[:scenario_id], event, **data.slice(:plan_id, :parent_id, :relation, :name, :starts_on, :ends_on, :forked_by_id))
-        follow_tree(data[:plan_id], event)
       when TeamPlanning::Events::ScenarioPeriodSet
-        TeamPlanningScenario.where(id: data[:scenario_id]).update_all(ends_on: data[:ends_on], updated_at: event.timestamp)
-        follow_tree(data[:plan_id], event)
+        follow_tree(data[:plan_id], event, moved: data[:scenario_id], ends_on: Date.iso8601(data[:ends_on]))
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningScenario.where(id: data[:scenario_id]).delete_all
       end
     end
@@ -57,24 +56,25 @@ class TeamPlanning::Projections::Scenarios
     row.update!(**attributes, updated_at: event.timestamp)
   end
 
-  # Sets every start from the tree, and each alternative's end from its parent.
-  def follow_tree(plan_id, event)
+  # Moves one step's end, then sets every start from the tree and each
+  # alternative's end from its parent. A row whose parent row is missing, as in
+  # a plan created before this projection was rebuilt, keeps its own period.
+  def follow_tree(plan_id, event, moved:, ends_on:)
     rows = TeamPlanningScenario.where(plan_id:).index_by(&:id)
+    rows[moved]&.ends_on = ends_on
     periods = {}
     period = lambda do |row|
       periods[row.id] ||=
-        if row.baseline? then [ row.starts_on, nil ]
-        elsif row.relation == "instead" then period.call(rows.fetch(row.parent_id))
+        if row.baseline? || !rows.key?(row.parent_id) then [ row.starts_on, row.ends_on ]
+        elsif row.relation == "instead" then period.call(rows[row.parent_id])
         else
-          parent = rows.fetch(row.parent_id)
+          parent = rows[row.parent_id]
           [ parent.baseline? ? parent.starts_on : period.call(parent).last + 1, row.ends_on ]
         end
     end
     rows.each_value do |row|
-      starts_on, ends_on = period.call(row)
-      next if row.baseline? || [ row.starts_on, row.ends_on ] == [ starts_on, ends_on ]
-
-      row.update!(starts_on:, ends_on:, updated_at: event.timestamp)
+      row.starts_on, row.ends_on = period.call(row)
+      row.update!(updated_at: event.timestamp) if row.changed?
     end
   end
 end
