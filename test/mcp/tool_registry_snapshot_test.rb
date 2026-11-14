@@ -2681,6 +2681,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
+            **plan_reference_properties,
             "effective_on" => {
               "type" => "string",
               "minLength" => 1,
@@ -2700,7 +2701,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id", "person_id" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "dependentRequired" => plan_reference_dependencies
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -2916,6 +2918,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
+            **plan_reference_properties,
             "effective_on" => {
               "type" => "string",
               "minLength" => 1,
@@ -2929,7 +2932,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id", "into_unit_id" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "dependentRequired" => plan_reference_dependencies
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -2945,6 +2949,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
+            **plan_reference_properties,
             "effective_on" => {
               "type" => "string",
               "minLength" => 1,
@@ -2961,7 +2966,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "person_id", "from_unit_id", "unit_id" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "dependentRequired" => plan_reference_dependencies
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -2978,6 +2984,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
+            **plan_reference_properties,
             "effective_on" => {
               "type" => "string",
               "minLength" => 1,
@@ -2993,7 +3000,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "dependentRequired" => plan_reference_dependencies
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -3084,6 +3092,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
+            **plan_reference_properties,
             "effective_on" => {
               "type" => "string",
               "minLength" => 1,
@@ -3097,7 +3106,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "person_id", "unit_id" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "dependentRequired" => plan_reference_dependencies
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -3141,6 +3151,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
+            **plan_reference_properties,
             "effective_on" => {
               "type" => "string",
               "minLength" => 1,
@@ -3156,7 +3167,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id", "name" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "dependentRequired" => plan_reference_dependencies
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -3202,6 +3214,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
+            **plan_reference_properties,
             "effective_on" => {
               "type" => "string",
               "minLength" => 1,
@@ -3212,7 +3225,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "dependentRequired" => plan_reference_dependencies
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -3313,6 +3327,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
+            **plan_reference_properties,
             "effective_on" => {
               "type" => "string",
               "minLength" => 1,
@@ -3338,7 +3353,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id", "successor_names" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "dependentRequired" => plan_reference_dependencies
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -3853,4 +3869,19 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
 
     { "allOf" => branches }
   end
+
+  # The plan reference every Org Graph write a plan change makes takes (#193).
+  def plan_reference_properties
+    {
+      "plan_id" => uuid_property("the plan whose change this applies. Refused unless you may apply that plan's changes"),
+      "plan_change_id" => uuid_property("the plan change this applies; needs plan_id"),
+      "cause_id" => uuid_property("groups this with the plan's other changes, to change back together; needs plan_id")
+    }
+  end
+
+  def uuid_property(description)
+    { "type" => "string", "minLength" => 1, "pattern" => "\\S", "format" => "uuid", "description" => description }
+  end
+
+  def plan_reference_dependencies = { "plan_change_id" => [ "plan_id" ], "cause_id" => [ "plan_id" ] }
 end

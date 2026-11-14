@@ -524,6 +524,10 @@ Every command takes the plan change it came from as two opaque ids, `plan_id` an
 moves carry them too. A direct edit carries neither, nor does any event written before
 the reference existed. The Org Graph never reads them.
 
+The Org Graph Operations for the changes a plan makes take the same reference and a cause
+([#193](https://github.com/espaliahq/espalia/issues/193)). They refuse it unless the caller may apply
+that plan's changes, which nobody may until plans exist.
+
 The approval is the cause. A handler built with `cause_id:` gives every event it writes,
 a sync handler's included, that id as its `correlation_id`. Without one, events keep the
 request's, so one direct edit still reads as one change. The activity feed groups by

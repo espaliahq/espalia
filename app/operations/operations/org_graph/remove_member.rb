@@ -3,6 +3,7 @@
 # Ends a person's membership of a unit. effective_on is their last day there.
 class Operations::OrgGraph::RemoveMember < Operations::Base
   include Operations::OrgGraph::UnitWrite
+  include Operations::OrgGraph::PlanWrite
 
   description "End a person's membership of a unit in the Org Graph; effective_on (today by default) is " \
               "their last day in it. A membership an HRIS supplies ends in the HRIS, not here."
@@ -17,7 +18,7 @@ class Operations::OrgGraph::RemoveMember < Operations::Base
     unit = live_unit!(:unit_id)
 
     person_handler.end_membership(person.id, unit.id, provider: ::OrgGraph::StructureAggregate::ESPALIA,
-                                  effective_on: effective_on)
+                                  effective_on: effective_on, **plan)
     { person_id: person.id, unit_id: unit.id, effective_on: effective_on }
   end
 end

@@ -3,6 +3,7 @@
 # Renames a unit Espalia holds. A unit an HRIS supplies keeps its HRIS name.
 class Operations::OrgGraph::RenameUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
+  include Operations::OrgGraph::PlanWrite
 
   description "Rename a unit in the Org Graph, from effective_on (today by default). Only a unit Espalia " \
               "holds can be renamed here; one an HRIS supplies is renamed in the HRIS. Refused unless the " \
@@ -18,7 +19,7 @@ class Operations::OrgGraph::RenameUnit < Operations::Base
     name = params[:name].strip
     raise Operations::Base::ParameterError, "name can't be blank" if name.empty?
 
-    structure_handler.rename_unit(unit.id, name, effective_on: effective_on)
+    structure_handler.rename_unit(unit.id, name, effective_on: effective_on, **plan)
     { unit_id: unit.id, name: name, effective_on: effective_on }
   end
 end
