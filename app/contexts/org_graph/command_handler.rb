@@ -243,6 +243,8 @@ class OrgGraph::CommandHandler
   # @param person_id [String]
   # @param unit_id [String]
   # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#end_membership}
+  # @raise [RuntimeError] if the structure doesn't hold the unit, or another
+  #   provider supplies it than the one ending the membership
   def end_membership(person_id, unit_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_membership!(person_id, unit_id)
@@ -269,8 +271,10 @@ class OrgGraph::CommandHandler
   # @param from_unit_id [String]
   # @param unit_id [String] a live unit in the tenant's structure
   # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#move_membership}
-  # @raise [RuntimeError] if the destination does not exist or is retired, or
-  #   another provider supplies it than the one that supplied the membership
+  # @raise [RuntimeError] if either unit is missing from the structure, the
+  #   destination is retired, the person's stream holds no membership of the
+  #   source, or another provider supplies the destination than the one that
+  #   supplied the membership
   def move_membership(person_id, from_unit_id, unit_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_move_membership!(person_id, from_unit_id, unit_id)
@@ -278,7 +282,10 @@ class OrgGraph::CommandHandler
     from = find_unit(from_unit_id) or raise "Unit not found"
     with_person(person_id, plan) do |person|
       provider = person.membership_provider(from.id) or raise "Not a member of this unit"
-      ensure_provides_unit!(unit, provider, person_id, held: (provider if from.provider == unit.provider))
+      # Espalia keeps a membership it holds as it moves between one provider's units.
+      unless provider == OrgGraph::StructureAggregate::ESPALIA && from.provider == unit.provider
+        ensure_provides_unit!(unit, provider, person_id, held: nil)
+      end
       person.move_membership(from_unit_id, unit_id, **attributed(options, :moved_by_id))
     end
   end
@@ -357,7 +364,8 @@ class OrgGraph::CommandHandler
   # can still end or move it once the provider comes to know them.
   #
   # `held` is who supplies the membership as the person's stream has it,
-  # never org_memberships, which a Members rebuild empties while writes go on (#170).
+  # never org_memberships, which a Members rebuild empties while writes go on
+  # ([#170](https://github.com/espaliahq/espalia/issues/170)).
   def ensure_provides_unit!(unit, provider, person_id, held:)
     return if unit.provider == provider.to_s
     return if provider.to_s == OrgGraph::StructureAggregate::ESPALIA &&

@@ -56,7 +56,8 @@ module Operations::OrgGraph::UnitWrite
   end
 
   # Yields who supplies the person's membership of the unit, or nil, as their
-  # stream has it: org_memberships is empty while a Members rebuild runs (#170).
+  # stream has it: org_memberships is empty while a Members rebuild runs
+  # ([#170](https://github.com/espaliahq/espalia/issues/170)).
   # Holds the stream's lock, so the command the block makes can't be overtaken.
   #
   # @param person [Person]
