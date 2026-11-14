@@ -10,14 +10,16 @@
 class TeamPlanning::CommandHandler
   # @param actor [AuthorizationContext] who is acting
   # @param repository [TeamPlanning::Repository]
+  # @param key_store [PlanKeyStore] destroys a deleted plan's keys
   # @raise [ArgumentError] without an actor
-  def initialize(actor:, repository: TeamPlanning::Repository.new)
+  def initialize(actor:, repository: TeamPlanning::Repository.new, key_store: PlanKeyStore.new)
     unless actor.is_a?(AuthorizationContext)
       raise ArgumentError, "A Team Planning handler needs an actor: an AuthorizationContext"
     end
 
     @actor = actor
     @repository = repository
+    @key_store = key_store
   end
 
   # @param plan_id [String] UUID minted by the caller
@@ -46,6 +48,9 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Deletes the plan and destroys its keys, so its shreddable fields read as
+  # removed.
+  #
   # @param plan_id [String]
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
@@ -53,12 +58,12 @@ class TeamPlanning::CommandHandler
   def delete_plan(plan_id)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:destroy?, plan)
-      plan.delete(deleted_by_id: actor_id!)
+      delete!(plan, reason: nil)
     end
   end
 
   # Deletes a frozen plan, one no editor can reach any more, for a tenant
-  # admin who never opens it.
+  # admin who never opens it. Its keys are destroyed too.
   #
   # @param plan_id [String]
   # @param reason [String] why, kept on the event
@@ -71,7 +76,7 @@ class TeamPlanning::CommandHandler
 
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:destroy_frozen?, plan)
-      plan.delete(deleted_by_id: actor_id!, reason: reason)
+      delete!(plan, reason: reason)
     end
   end
 
@@ -169,6 +174,13 @@ class TeamPlanning::CommandHandler
   end
 
   private
+
+  # Runs inside the plan's transaction, so the event and the destroyed keys
+  # commit together or not at all.
+  def delete!(plan, reason:)
+    plan.delete(deleted_by_id: actor_id!, reason: reason)
+    @key_store.destroy_plan(plan.plan_id)
+  end
 
   # Someone who has left may still be made a viewer of a plan they are in, so
   # an editor can step a former co-editor down; nobody gone, and nobody

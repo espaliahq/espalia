@@ -78,7 +78,9 @@ tenant-<tenant_id>/plan-<plan_id>/person-<person_id>
   refused.
 - **`destroy_plan` and `destroy_person` write in the caller's transaction** and queue
   nothing, so the transaction that writes `PlanDeleted` or `PersonForgotten` can destroy
-  the keys too, and a plan or person is never half forgotten. `OrgGraph::Forgetting`
+  the keys too, and a plan or person is never half forgotten. Both of
+  `TeamPlanning::CommandHandler`'s delete paths, an editor's and a tenant admin's for a
+  frozen plan, call `destroy_plan` inside the plan's transaction. `OrgGraph::Forgetting`
   will call `destroy_person` inside its own per-person transaction.
 - **A destroyed key stays destroyed.** Its row keeps no key material, and `create`
   refuses a new key for a deleted plan or a forgotten person, including a plan that never

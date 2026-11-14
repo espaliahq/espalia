@@ -152,6 +152,58 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "a deleted plan's keys" do
+    setup do
+      handler(@admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
+      @plan_key = PlanKeyStore.plan_identifier(@tenant.id, @plan_id)
+      @person_key = PlanKeyStore.person_identifier(@tenant.id, @plan_id, @admin.person.id)
+      @other_plan_key = PlanKeyStore.plan_identifier(@tenant.id, SecureRandom.uuid_v7)
+      [ @plan_key, @person_key, @other_plan_key ].each { key_store.create(it) }
+    end
+
+    should "be destroyed with the plan, and no new one minted" do
+      handler(@admin).delete_plan(@plan_id)
+
+      assert_nil key_store.key_of(@plan_key)
+      assert_nil key_store.key_of(@person_key)
+      assert_raises(PlanKeyStore::Destroyed) { key_store.create(@plan_key) }
+      assert key_store.key_of(@other_plan_key)
+    end
+
+    should "be destroyed when a tenant admin deletes the plan frozen" do
+      @admin.person.update!(status: "inactive")
+      other_admin = context_for(create(:person, tenant: @tenant), role: :admin)
+
+      handler(other_admin).delete_frozen_plan(@plan_id, reason: "Its only editor left")
+
+      assert_nil key_store.key_of(@plan_key)
+      assert_nil key_store.key_of(@person_key)
+    end
+
+    should "survive a delete that is refused" do
+      outsider = context_for(create(:person, tenant: @tenant), role: :admin)
+      assert_raises(TeamPlanning::Error) { handler(outsider).delete_plan(@plan_id) }
+
+      assert key_store.key_of(@plan_key)
+    end
+
+    should "survive a delete whose event fails to write, since both share one transaction" do
+      failing_store = Class.new(SimpleDelegator) do
+        def publish(*, **) = raise(RubyEventStore::WrongExpectedEventVersion)
+      end.new(event_store)
+      repository = TeamPlanning::Repository.new(event_store: failing_store)
+
+      assert_raises(RubyEventStore::WrongExpectedEventVersion) do
+        ActiveRecord::Base.transaction(requires_new: true) do
+          TeamPlanning::CommandHandler.new(actor: @admin, repository:).delete_plan(@plan_id)
+        end
+      end
+
+      assert key_store.key_of(@plan_key)
+      assert key_store.key_of(@person_key)
+    end
+  end
+
   context "a plan's creator and everyone else" do
     setup { handler(@admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14") }
 
@@ -186,6 +238,8 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
   def handler(actor) = TeamPlanning::CommandHandler.new(actor:)
 
   def event_store = Rails.configuration.event_store
+
+  def key_store = PlanKeyStore.new
 
   def context_for(person, role: :member, tenant: @tenant, **grants)
     user = create(:user)
