@@ -52,10 +52,10 @@ class ProjectionVersion < ApplicationRecord
   # @return [Object] the block's value
   def self.with_operation_lock(name)
     key = lock_key(name)
-    connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_lock(?)", key ]))
+    advisory("pg_advisory_lock", key)
     yield
   ensure
-    connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_unlock(?)", key ]))
+    advisory("pg_advisory_unlock", key)
   end
 
   # {.with_operation_lock} on several projections at once, taken in name
@@ -83,14 +83,33 @@ class ProjectionVersion < ApplicationRecord
     held = []
     names.each do |name|
       key = lock_key(name)
-      raise Rebuilding unless connection.select_value(sanitize_sql_array([ "SELECT pg_try_advisory_lock_shared(?)", key ]))
+      raise Rebuilding unless advisory("pg_try_advisory_lock_shared", key)
 
       held << key
     end
     yield
   ensure
-    held&.each { connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_unlock_shared(?)", it ])) }
+    release_shared(held) if held
   end
+
+  # A failed statement aborts the transaction around it, and an aborted
+  # transaction runs nothing more, an unlock included, until it rolls back.
+  def self.release_shared(keys)
+    keys.each_with_index do |key, index|
+      advisory("pg_advisory_unlock_shared", key)
+    rescue ActiveRecord::StatementInvalid
+      current_transaction.after_rollback { release_shared(keys.drop(index)) }
+      break
+    end
+  end
+  private_class_method :release_shared
+
+  # Uncached: the query cache would answer a repeated lock or unlock without
+  # running it.
+  def self.advisory(function, key)
+    uncached { connection.select_value(sanitize_sql_array([ "SELECT #{function}(?)", key ])) }
+  end
+  private_class_method :advisory
 
   # @param name [String]
   # @return [Integer] a stable 32-bit key for the advisory lock

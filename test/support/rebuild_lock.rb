@@ -12,6 +12,7 @@ module RebuildLock
     config = ActiveRecord::Base.connection_db_config.configuration_hash
     rebuild = PG.connect({ dbname: config[:database], user: config[:username], password: config[:password],
                            host: config[:host], port: config[:port] }.compact)
+    rebuild.exec("SET lock_timeout = '10s'") # a write that never lets go fails the test, not hangs it
     projections.each do |projection|
       rebuild.exec("SELECT pg_advisory_lock(#{ProjectionVersion.lock_key(projection::PROJECTION_NAME)})")
       ActsAsTenant.with_tenant(tenant) { projection.reset!(tenant:) }

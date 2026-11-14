@@ -129,6 +129,24 @@ class ProjectionVersionTest < ActiveSupport::TestCase
         assert_equal "t", @other.exec("SELECT pg_try_advisory_lock(#{other_key})").getvalue(0, 0),
                      "the lock it did take is let go"
       end
+
+      should "let go each time under the query cache, which would answer a repeated unlock unrun" do
+        ActiveRecord::Base.cache do
+          2.times { ProjectionVersion.unless_rebuilding("some/projection") { } }
+        end
+
+        assert_equal "t", @other.exec("SELECT pg_try_advisory_lock(#{@key})").getvalue(0, 0)
+      end
+
+      should "let go once the transaction a failed statement aborted rolls back" do
+        assert_raises(ActiveRecord::StatementInvalid) do
+          ActiveRecord::Base.transaction(requires_new: true) do
+            ProjectionVersion.unless_rebuilding("some/projection") { ActiveRecord::Base.connection.execute("SELECT 1/0") }
+          end
+        end
+
+        assert_equal "t", @other.exec("SELECT pg_try_advisory_lock(#{@key})").getvalue(0, 0)
+      end
     end
 
     should "hold every projection's lock through .with_operation_locks" do
