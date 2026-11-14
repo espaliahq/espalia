@@ -6,7 +6,8 @@
 # Authorize against the `:org_graph` symbol. A unit predicate takes the
 # {OrgUnit} it acts on, a membership predicate the {Person} and the unit.
 #
-# - A tenant admin or an Org Graph editor may change anything.
+# - A tenant admin or an Org Graph editor may change anything but the
+#   taxonomy, whose shape only a tenant admin may change.
 # - A unit's owners may change it and every unit beneath it. Owning any unit
 #   up the chain counts, so a unit with no owner of its own inherits its
 #   parent's.
@@ -28,7 +29,14 @@ class OrgGraphPolicy < ApplicationPolicy
   # @return [Boolean]
   def show_units? = tenant_admin?
 
-  # The taxonomy, the providers, units at the root, and people's facts.
+  # Add a level to the taxonomy, rename one or change their order. Admins
+  # only: every unit sits at a level, so the taxonomy's shape is a bigger call
+  # than any one unit.
+  #
+  # @return [Boolean]
+  def edit_taxonomy? = tenant_admin?
+
+  # The providers, units at the root, and people's facts.
   #
   # @return [Boolean]
   def edit_structure?

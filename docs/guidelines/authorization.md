@@ -165,7 +165,8 @@ Pundit's `authorize` passes none.
 |--------|-----|
 | See the Org Graph (`show?`) | Any tenant member |
 | The Units view, its activity sidebar and change it back, and `org_graph_units`, `org_graph_activity`, `org_graph_change_back` and `org_graph_change_back_group` (`show_units?`; a change-back also needs the rights to make the inverse change) | A tenant admin, until the Org Graph's screens are finished; it then opens to `show?` |
-| The taxonomy, providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
+| Add, rename or reorder the taxonomy's levels (`edit_taxonomy?`) | A tenant admin. Every unit sits at a level, so the taxonomy's shape is a bigger call than a unit edit |
+| Providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
 | Rename, retire or own a unit, or add a unit beneath it (`edit_unit?`, `create_unit?(parent)`) | The above, or an active owner of that unit or any unit above it |
 | Move a unit (`move_unit?(unit, new_parent)`) | Rights over the unit and over its new parent; a move to the root needs `edit_structure?` |
 | Record a succession (`record_succession?(units)`) | Rights over every unit it names |

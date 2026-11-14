@@ -32,7 +32,7 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#define_taxonomy
   def define_taxonomy(levels, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
-    authorize_structure!
+    authorize_taxonomy!
     with_structure(plan) { |structure| structure.define_taxonomy(levels, **attributed(options, :defined_by_id)) }
   end
 

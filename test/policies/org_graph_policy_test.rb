@@ -40,6 +40,7 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
 
       assert policy.show?
       assert_not policy.show_units?
+      assert_not policy.edit_taxonomy?
       assert_not policy.edit_structure?
       assert_not policy.create_unit?(nil)
       assert_not policy.edit_unit?(unit(@engineering_id))
@@ -53,6 +54,7 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
 
       assert_full_rights policy
       assert policy.show_units?
+      assert policy.edit_taxonomy?
     end
   end
 
@@ -62,6 +64,7 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
 
       assert_full_rights policy
       assert_not policy.show_units?, "the Units view is for admins until the Org Graph's screens are done"
+      assert_not policy.edit_taxonomy?, "the taxonomy's shape is the admin's call"
     end
   end
 
