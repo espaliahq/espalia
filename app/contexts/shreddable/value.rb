@@ -60,16 +60,24 @@ class Shreddable::Value
   # @raise [Unserialisable]
   def marshal_dump = removed? ? :removed : raise(Unserialisable)
 
+  # Loads a value cached as removed. Marshal never holds a value in clear.
+  #
+  # @return [void]
   def marshal_load(_)
     @value = nil
     @removed = true
     freeze
   end
 
-  def ==(other) = other.is_a?(self.class) && other.removed? == removed? && other.reveal == reveal
+  # A value read back sealed equals the value written.
+  #
+  # @param other [Object]
+  # @return [Boolean]
+  def ==(other) = other.is_a?(Shreddable::Value) && other.removed? == removed? && other.reveal == reveal
   alias eql? ==
 
-  def hash = [ self.class, @removed, @value ].hash
+  # @return [Integer]
+  def hash = [ Shreddable::Value, @removed, @value ].hash
 
   REMOVED = new(nil, removed: true)
 end

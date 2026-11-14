@@ -189,4 +189,15 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
     assert_equal "[removed]", loaded.to_s
     assert_equal Shreddable::Value.removed.hash, loaded.hash
   end
+
+  should "compare a value read back equal to the value written, either way round" do
+    publish(note_written)
+    written = Shreddable::Value.new("Moving to the platform team")
+    read = read_back.data[:note]
+
+    assert_equal written, read
+    assert_equal read, written
+    assert read.eql?(written)
+    assert_equal written.hash, read.hash
+  end
 end
