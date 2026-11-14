@@ -137,6 +137,7 @@ class PlanKeyStoreTest < ActiveSupport::TestCase
       in_tenant { @store.destroy_plan(@plan_id) }
 
       assert_raises(PlanKeyStore::Destroyed) { in_tenant { @store.create(@plan_key) } }
+      assert_equal "7", PlanEncryptionKey.unscoped.sole.id[14], "the tombstone's id is a UUID v7"
     end
 
     should "need a current tenant" do

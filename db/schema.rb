@@ -984,7 +984,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
     t.index ["tenant_id"], name: "index_person_framework_assignments_on_tenant_id"
   end
 
-  create_table "plan_encryption_keys", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "plan_encryption_keys", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "plan_id", null: false
     t.uuid "person_id"
