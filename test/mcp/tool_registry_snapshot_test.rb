@@ -3724,6 +3724,67 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_fork_scenario",
+        "description" => "Fork a scenario in a Team Planning plan. relation 'then' adds the step after parent_id: it starts the day after its parent ends (on the plan's base date after the baseline) and needs ends_on. relation 'instead' adds an alternative to parent_id over the same period. parent_id defaults to the baseline, whose id is the plan's. A parent has at most one 'then' step. Refused unless the caller is one of the plan's editors.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "parent_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "relation" => {
+              "type" => "string",
+              "enum" => [ "then", "instead" ]
+            },
+            "name" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S",
+              "description" => "What the scenario is, such as 'Lean Q1'. Don't put a person's name in it."
+            },
+            "starts_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "ends_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          "required" => [ "plan_id", "relation", "name" ],
+          "additionalProperties" => false,
+          "if" => {
+            "properties" => {
+              "relation" => {
+                "const" => "then"
+              }
+            },
+            "required" => [ "relation" ]
+          },
+          "then" => {
+            "required" => [ "ends_on" ],
+            "properties" => {
+              "ends_on" => {
+                "minLength" => 1,
+                "pattern" => "\\S"
+              }
+            }
+          }
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "team_planning_frozen_plans",
         "description" => "List the Team Planning plans that are frozen because none of their editors is still in the organisation. Each is a plan id, the day it froze (null when no leaving date is known) and the number of viewers who can still read it; never its name, contents or members. Tenant admins only, who may then delete one.",
         "inputSchema" => {
@@ -3833,6 +3894,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_remove_scenario",
+        "description" => "Remove a scenario from a Team Planning plan. It cannot be restored. Refused for the baseline, for a scenario others fork from (remove those first), or unless the caller is one of its editors.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "scenario_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "plan_id", "scenario_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "team_planning_rename_plan",
         "description" => "Rename a Team Planning plan. Refused unless the caller is one of its editors.",
         "inputSchema" => {
@@ -3848,6 +3931,52 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "plan_id", "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "team_planning_scenarios",
+        "description" => "List the scenarios of a Team Planning plan the caller is in. The baseline comes first: its id is the plan's, it stands on the base date and has no parent, relation or end. Each other scenario has its parent_id, its relation ('then' follows the parent, 'instead' is an alternative to it) and its period. Refused, as an unknown plan, unless the caller is a member.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "plan_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_set_scenario_period",
+        "description" => "Move the end of a 'then' scenario in a Team Planning plan. Its start follows from the tree, every step after it starts the day after the new end, and its alternatives take the new period. Refused if a later step would end before it starts, naming that step, or unless the caller is an editor.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "scenario_id" => {
+              "type" => "string"
+            },
+            "ends_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          "required" => [ "plan_id", "scenario_id", "ends_on" ],
           "additionalProperties" => false
         },
         "annotations" => {
