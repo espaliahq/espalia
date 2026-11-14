@@ -24,10 +24,16 @@ class Operations::TeamPlanning::Drift < Operations::Base
     report = ::TeamPlanning::Drift.new(context:, plan:).call
     { plan_id: plan.id, from: report.from.iso8601, to: report.to.iso8601,
       changes: report.changes.map { serialize(it) },
-      names: report.names.keys.index_with { report.name_of(it) } }
+      names: names_for(report) }
   end
 
   private
+
+  # Every id the changes name, so a client never meets an id it can't name.
+  def names_for(report)
+    ids = report.changes.flat_map { [ it.change.person_id, it.change.before&.dig("manager_id"), it.change.after&.dig("manager_id") ] }
+    ids.compact.uniq.index_with { report.name_of(it) }
+  end
 
   def serialize(drifted)
     change = drifted.change
