@@ -103,8 +103,8 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
     drift = read(Operations::TeamPlanning::Drift)
     assert_equal [ @plan_id, "2026-03-01", "2026-03-10" ], drift.values_at(:plan_id, :from, :to)
     change = drift[:changes].sole
-    assert_equal [ "fact_changed", "2026-03-10", "2026-03-10T09:00:00Z", false, [] ],
-                 change.values_at(:kind, :effective_on, :learned_at, :from_plan, :meets)
+    assert_equal [ "fact_changed", "2026-03-10", "2026-03-10T09:00:00Z", false, false, [] ],
+                 change.values_at(:kind, :effective_on, :learned_at, :withdrawn, :from_plan, :meets)
     assert_equal({ @ada.id => "Ada Quill" }, drift[:names])
   end
 

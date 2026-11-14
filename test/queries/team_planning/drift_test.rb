@@ -112,6 +112,18 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
     assert_equal [ [], [ "placements" ] ], report.changes.map { it.meets.map(&:facet) }
   end
 
+  should "show a change the Org Graph learned before the base and no longer believes as withdrawn" do
+    plan(PlacementsSet, @ada, placements: [ { unit_id: @platform, allocation: 1.0 } ])
+    on(Time.utc(2026, 2, 20, 9)) { @org.move_membership(@ada.id, @payments, @platform, effective_on: "2026-03-15") }
+    on(Time.utc(2026, 3, 10, 9)) do
+      OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back(OrgUnitActivity.for_unit(@platform).first)
+    end
+
+    withdrawn = drift.changes.sole
+    assert_equal [ :moved, Date.new(2026, 3, 15), true ], withdrawn.change.to_h.values_at(:kind, :effective_on, :withdrawn)
+    assert_equal [ "placements" ], withdrawn.meets.map(&:facet), "it still says which planned change it meets"
+  end
+
   should "mark a change applied from this plan, and not one from another plan or a direct edit" do
     other_plan = SecureRandom.uuid_v7
     on(Time.utc(2026, 3, 10, 9)) do
