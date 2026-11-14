@@ -63,14 +63,16 @@ module Operations::Tenants::PayBandSupport
     }
   end
 
-  # Who last changed each band, by the person linked to them in this tenant, or their email.
+  # Who last changed each band: the person linked to them in this tenant, or their email.
+  # Anyone forgotten, or no longer a member, reads as a former member.
   #
   # @param bands [Array<PayBand>]
   # @return [Hash{String => String}] by user id
   def editor_names(bands)
-    users = User.where(id: bands.filter_map(&:updated_by_id).uniq).to_a
-    people = TenantUser.where(user_id: users.map(&:id)).includes(:person).to_h { [ it.user_id, it.person&.name ] }
-    users.to_h { [ it.id, people[it.id] || it.email ] }
+    ids = bands.filter_map(&:updated_by_id).uniq
+    members = TenantUser.where(user_id: ids, forgotten_at: nil).includes(:person, :user)
+                        .to_h { [ it.user_id, it.person&.name || it.user.email ] }
+    ids.to_h { [ it, members.fetch(it, Person::FORMER_MEMBER) ] }
   end
 
   # @param pay_band_id [String]
