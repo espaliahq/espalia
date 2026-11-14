@@ -101,6 +101,24 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
         within(unit("Payments")) { assert_no_text "Backfill: Software Engineer" }
         assert_no_sideways_overflow
       end
+
+      should "name positions that read alike the same way on the map and in Move…" do
+        twin = call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id,
+                                                                     level_id: @e2.level_id, unit_id: @payments, fte: 1, basis: "backfill")[:position_id]
+        open_move("Cy Loose")
+        within("#move-person-modal") do
+          select "Payments › Backfill: Software Engineer (2) · Engineer II", from: "To"
+          js_fill_in "Allocation (%)", with: "100"
+        end
+        click_button_with_js_fallback("Save move", expect_text: "Move saved.")
+
+        within("[data-map-position='#{twin}']") do
+          assert_text "Backfill: Software Engineer (2)"
+          assert_text "Cy Loose · 100%"
+        end
+        within(position) { assert_text "Backfill: Software Engineer (1)" }
+        assert_no_sideways_overflow
+      end
     end
   end
 
@@ -194,24 +212,6 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
       assert_text "Moving Bea Split in Q1 hires"
       assert_field "Allocation (%)", with: "40"
     end
-  end
-
-  should "name positions that read alike the same way on the map and in Move…" do
-    twin = call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id,
-                                                                 level_id: @e2.level_id, unit_id: @payments, fte: 1, basis: "backfill")[:position_id]
-    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-    open_move("Cy Loose")
-    within("#move-person-modal") do
-      select "Payments › Backfill: Software Engineer (2) · Engineer II", from: "To"
-      js_fill_in "Allocation (%)", with: "100"
-    end
-    click_button_with_js_fallback("Save move", expect_text: "Move saved.")
-
-    within("[data-map-position='#{twin}']") do
-      assert_text "Backfill: Software Engineer (2)"
-      assert_text "Cy Loose · 100%"
-    end
-    within(position) { assert_text "Backfill: Software Engineer (1)" }
   end
 
   should "offer no handles on Today" do
