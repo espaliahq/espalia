@@ -40,6 +40,7 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
         open_move("Ada Quill")
         within("#move-person-modal") do
           assert_text "Moving Ada Quill in Q1 hires"
+          assert_text "except one they already hold in the unit they move to, which this replaces"
           select "Growth", from: "To"
           js_fill_in "Allocation (%)", with: "50"
         end

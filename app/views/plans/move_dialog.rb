@@ -61,7 +61,7 @@ class Views::Plans::MoveDialog < Views::Base
         strong(class: "text-default", data: { move_form_target: "name" })
         plain " in "
         strong(class: "text-default") { @scenario_name }
-        plain ". Their other places stay as they are."
+        plain ". Their other places stay as they are, except one they already hold in the unit they move to, which this replaces."
       end
       field("move-to", "To") { to_select }
       div(class: "grid grid-cols-2 gap-3", data: { move_form_target: "placeFields" }) do
