@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Renames a plan. Only its creator may.
+# Renames a plan. Only an editor may.
 class Operations::TeamPlanning::RenamePlan < Operations::Base
   include Operations::TeamPlanning::PlanWrite
 
-  description "Rename a Team Planning plan. Refused unless the caller created the plan."
+  description "Rename a Team Planning plan. Refused unless the caller is one of its editors."
   category :write
   approval :mcp_client
 
