@@ -15,6 +15,7 @@ class Operations::TeamPlanning::Plans < Operations::Base
       { plan_id: it.id, name: it.name&.reveal, base_on: it.base_on.iso8601, role: it.role_of(context.person.id) }
     end
     # A name is sealed, so the caller's own few plans sort here, not in SQL.
-    { plans: plans.sort_by { [ it[:name].to_s, it[:plan_id] ] } }
+    # Case aside, as the database collation sorted them, with removed names last.
+    { plans: plans.sort_by { [ it[:name] ? 0 : 1, it[:name].to_s.unicode_normalize(:nfkc).downcase, it[:plan_id] ] } }
   end
 end
