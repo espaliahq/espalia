@@ -1,0 +1,145 @@
+# frozen_string_literal: true
+
+require "application_system_test_case"
+
+class PlanTimelineSystemTest < ApplicationSystemTestCase
+  ESPALIA = { provider: "espalia" }.freeze
+
+  setup do
+    @tenant = create(:tenant)
+    handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    since = (Date.current - 30).iso8601
+    team = SecureRandom.uuid_v7
+    @payments = SecureRandom.uuid_v7
+    @growth = SecureRandom.uuid_v7
+
+    ActsAsTenant.with_tenant(@tenant) do
+      @planner = account(team_planner: true, name: "Erin Editor")
+      @viewer = account(name: "Vic Viewer")
+      @outsider = account(name: "Olly Outsider")
+      @ada = create(:person, tenant: @tenant, name: "Ada Quill")
+      @bo = create(:person, tenant: @tenant, name: "Bo Reyes")
+      @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+      @level_id = create(:framework_level, tenant: @tenant, role_id: @engineer.role_id, ordinal: 2, title: "Engineer II").level_id
+
+      structure.define_taxonomy([ { level_id: team, name: "Team" } ], effective_on: since)
+      structure.create_unit(@payments, "Payments", level_id: team, effective_on: since)
+      structure.create_unit(@growth, "Growth", level_id: team, effective_on: since)
+      handler.record_person(@ada.id, **ESPALIA, effective_on: since, employment_status: "employed")
+      handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0, role: "ENG")
+      handler.record_person(@bo.id, **ESPALIA, effective_on: since, employment_status: "employed")
+      handler.set_membership(@bo.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0, role: "PM")
+    end
+
+    # The baseline reads the Org Graph as known the day before the base date, so a plan based tomorrow sees today's facts.
+    @plan_id = call(Operations::TeamPlanning::CreatePlan, @planner, name: "Pay review 2027", base_on: (Date.current + 1).iso8601)[:plan_id]
+    call(Operations::TeamPlanning::AddPlanMember, @planner, plan_id: @plan_id, person_id: @viewer.person.id, role: "viewer")
+    @q1 = fork(relation: "then", name: "Q1 hires", ends_on: (Date.current + 120).iso8601)
+    fork(parent_id: @q1, relation: "then", name: "Q2 settle", ends_on: (Date.current + 240).iso8601)
+    call(Operations::TeamPlanning::SetAssignment, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @bo.id,
+                                                            placements: [ { unit_id: @growth, allocation: 1, role: "PM" } ])
+    backfill = call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id,
+                                                                     level_id: @level_id, unit_id: @payments, fte: 1, basis: "backfill")[:position_id]
+    call(Operations::TeamPlanning::SetDeparture, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, position_id: backfill)
+    # An alternative inherits Q1's changes; this one keeps Ada.
+    lean = fork(parent_id: @q1, relation: "instead", name: "Lean Q1", ends_on: (Date.current + 120).iso8601)
+    call(Operations::TeamPlanning::WithdrawDeparture, @planner, plan_id: @plan_id, scenario_id: lean, person_id: @ada.id)
+  end
+
+  context "on a desktop" do
+    setup { page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE) }
+
+    should "lay the first path out a column per step, with each block's lanes, moves and backfills" do
+      sign_in_as(@viewer.user)
+      visit plan_path(@plan_id)
+      click_link_with_js_fallback("Timeline", expect_text: "Showing the path to Q2 settle.")
+
+      within("[data-timeline-grid]") do
+        assert_selector "[data-timeline-step]", count: 3
+        assert_selector "[data-timeline-step='0']", text: "Today"
+        assert_selector "[data-timeline-step='1']", text: "Q1 hires"
+        assert_selector "[data-timeline-step='2']", text: "Q2 settle"
+        assert_selector "h3", text: "Payments"
+        assert_selector "h3", text: "Growth"
+        assert_text "ENG"
+        assert_selector "[data-timeline-lane]", text: /Ada\s+Quill\s+leaves\s+in\s+Q1\s+hires/
+        assert_selector "[data-timeline-lane]", text: "Replaces Ada Quill. Backfill, Software Engineer, Engineer II"
+        assert_selector "[data-timeline-lane]", text: /Bo\s+Reyes\s+to\s+Growth/
+        assert_selector "[data-timeline-lane]", text: /from\s+Payments\s+Bo\s+Reyes/
+      end
+      assert_text "One other path runs through this plan"
+      assert_no_sideways_overflow
+    end
+
+    should "follow an alternative to redraw the path" do
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id)
+      assert_text "Showing the path to Q2 settle."
+
+      within("[data-timeline-step='1']") { assert_text "or instead Lean Q1" }
+      click_link_with_js_fallback("Lean Q1", expect_text: "Showing the path to Lean Q1.")
+
+      within("[data-timeline-grid]") do
+        assert_selector "[data-timeline-step]", count: 2
+        assert_selector "[data-timeline-lane]", text: "Ada Quill"
+        assert_no_text "leaves in"
+        assert_no_text "Replaces Ada Quill"
+      end
+      assert_text "or instead Q1 hires"
+    end
+  end
+
+  context "on a phone" do
+    setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
+
+    should "show one step at a time, each lane saying where it came from and goes" do
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id)
+      assert_text "Step 1 of 3"
+      assert_no_selector "[data-timeline-grid]", visible: true
+
+      within("[data-timeline-phone]") do
+        assert_selector "a[aria-current='step']", text: "Today"
+        assert_selector "[data-timeline-lane]", text: /Bo\s+Reyes\s+to\s+Growth/
+        assert_selector "[data-timeline-lane]", text: "Ada Quill"
+      end
+      assert_no_sideways_overflow
+
+      click_link_with_js_fallback("Q1 hires", expect_text: "Step 2 of 3")
+      within("[data-timeline-phone]") do
+        assert_selector "a[aria-current='step']", text: "Q1 hires"
+        assert_text "or instead Lean Q1"
+        assert_selector "[data-timeline-lane]", text: /from\s+Payments\s+Bo\s+Reyes/
+        assert_selector "[data-timeline-lane]", text: /Ada\s+Quill\s+leaves\s+in\s+Q1\s+hires/
+        assert_selector "[data-timeline-lane]", text: "Replaces Ada Quill"
+      end
+      assert_no_sideways_overflow
+    end
+
+    should "show an outsider no timeline" do
+      sign_in_as(@outsider.user)
+      visit timeline_plan_path(@plan_id)
+      # The test environment shows Rails' error page, so the 404 reads as the exception that makes one.
+      assert_text "ActiveRecord::RecordNotFound"
+      [ "Pay review 2027", "Payments", "Ada Quill" ].each { assert_no_text it }
+    end
+  end
+
+  private
+
+  def fork(**params) = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, **params)[:scenario_id]
+
+  def account(role: :member, name: "Someone", **grants)
+    user = create(:user, password: TEST_PASSWORD)
+    person = create(:person, tenant: @tenant, name:, email: user.email)
+    create(:tenant_user, tenant: @tenant, user:, role:, person:, **grants)
+  end
+
+  def call(operation, account, **params)
+    ActsAsTenant.with_tenant(@tenant) do
+      context = AuthorizationContext.new(user: account.user, tenant_user: account, person: account.person)
+      operation.call(context:, params:)
+    end
+  end
+end
