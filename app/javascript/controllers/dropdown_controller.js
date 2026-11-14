@@ -88,9 +88,8 @@ export default class extends BaseController {
   // trigger out from under a fixed menu, so close rather than float loose.
   // Scrolls INSIDE the menu are exempt — a tall panel scrolls its own
   // content (max-h + overflow on the panel) without dismissing itself.
-  // A scroll's event fires a frame late, so one made just before the menu
-  // opened (a tap that scrolls its trigger into view) arrives after it:
-  // close only once the trigger has really moved from where the menu sits.
+  // A scroll's event fires a frame late, so a scroll that brought the trigger
+  // into view can arrive after the menu opened: close only once it has moved.
   #onAnyScroll(event) {
     if (this.menuTarget.classList.contains("hidden")) return
     if (event && this.menuTarget.contains(event.target)) return
