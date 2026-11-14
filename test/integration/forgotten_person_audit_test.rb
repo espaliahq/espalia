@@ -12,8 +12,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
   # Reads that cannot meet a forgotten person, with the reason.
   EXEMPT = {
     "integrations_hris_field_preview" => "reads the live HRIS, which no longer holds a forgotten person",
-    "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person",
-    "team_planning_plan_members" => "returns person ids and roles, never a name, until story 1.4 brings names"
+    "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person"
   }.freeze
 
   setup do
@@ -67,6 +66,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "org_graph_activity"
     assert_includes reached, "org_graph_person_get"
     assert_includes reached, "tenants_pay_bands"
+    assert_includes reached, "team_planning_plan_members"
+    assert_includes reached, "team_planning_baseline"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
 
     editors = Operations::OrgGraph::Editors.call(context: lead_context, params: {})
@@ -78,18 +79,6 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_equal [ @quinn.id ], as_of[:people].map { it[:id] }, "org_graph_as_of reads an empty Org Graph here"
     changes = Operations::OrgGraph::ChangesBetween.call(context: lead_context, params: params_by_tool.fetch("org_graph_changes_between"))
     assert_includes changes[:changes].map { it[:person_id] }, @quinn.id, "org_graph_changes_between reads an empty Org Graph here"
-  end
-
-  # The baseline has no Operation until story 1.4, so the registry walk can't reach it.
-  should "show a forgotten person as a former member in a plan's baseline" do
-    plan_id = SecureRandom.uuid_v7
-    TeamPlanning::CommandHandler.new(actor: lead_context).create_plan(plan_id, name: "Next year", base_on: Date.current + 1)
-    map = TeamPlanning::Baseline.new(context: lead_context, plan: TeamPlanningPlan.find(plan_id)).call
-
-    assert_equal [ @quinn.id ], map.people.map(&:id), "the baseline reads an empty Org Graph here"
-    assert_equal [ @quinn.id ], map.units.sole.owner_ids
-    assert_equal Person::FORMER_MEMBER, map.name_of(@quinn.id)
-    assert_not_includes map.names.values, ERASED_NAME
   end
 
   private
@@ -121,6 +110,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
 
     suggest_as_quinn
     place_quinn_in_the_org_graph
+    plan_with_quinn
     PayBand.create!(level: @fx.e_levels.fetch(2), currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
                     updated_by: User.find_by!(email: ERASED_EMAIL))
   end
@@ -137,6 +127,15 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
       handler.set_membership(@quinn.id, @unit_id, provider: "espalia", effective_on: Date.current)
     end
     structure.add_unit_owner(@unit_id, @quinn.id, effective_on: Date.current)
+  end
+
+  # Quinn joins while still in the organisation, as a viewer of the lead's plan.
+  def plan_with_quinn
+    @plan_id = SecureRandom.uuid_v7
+    TeamPlanning::CommandHandler.new(actor: lead_context).tap do |handler|
+      handler.create_plan(@plan_id, name: "Next year", base_on: Date.current + 1)
+      handler.add_member(@plan_id, @quinn.id, role: "viewer")
+    end
   end
 
   def suggest_as_quinn
@@ -208,7 +207,10 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "reporting_evidence_coverage" => { **cycle, mode: "full" },
         "reporting_feedback_export" => cycle,
         "system_whoami" => {},
+        "team_planning_baseline" => { plan_id: @plan_id },
         "team_planning_frozen_plans" => {},
+        "team_planning_plan" => { plan_id: @plan_id },
+        "team_planning_plan_members" => { plan_id: @plan_id },
         "team_planning_planners" => {},
         "team_planning_plans" => {},
         "tenants_pay_bands" => {},
