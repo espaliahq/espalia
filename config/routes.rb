@@ -111,7 +111,7 @@ Rails.application.routes.draw do
       resources :editors, only: [ :create, :destroy ], param: :person_id
       resources :fact_providers, only: :update, param: :fact
       resources :fact_fields, only: :show, param: :fact
-      resources :levels, only: :create
+      resources :levels, only: [ :create, :destroy ]
       resource :level_order, only: :update
       resources :level_providers, only: :update, param: :level_id
       resources :level_fields, only: :show, param: :level_id

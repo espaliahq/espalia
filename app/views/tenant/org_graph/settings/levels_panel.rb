@@ -3,7 +3,8 @@
 # "Levels": the structure's levels from the top down, and who supplies each.
 # An empty level can be read from an HRIS field, or handed back to Espalia,
 # here. A level that holds units changes hands through the handover. An admin
-# adds a level at the bottom and moves the ones Espalia holds a place at a time.
+# adds a level at the bottom, moves the ones Espalia holds a place at a time,
+# and removes one no unit has ever held.
 class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   include Views::Tenant::OrgGraph::Settings::FormHelpers
 
@@ -25,8 +26,8 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   # @param hris [Hash] provider, label and connected, as Operations::OrgGraph::Sources reads them
-  # @param levels [Array<Hash>] id, name, provider, field and live_units, top first
-  # @param can_edit_taxonomy [Boolean] whether the viewer may add and move levels
+  # @param levels [Array<Hash>] each level as Operations::OrgGraph::Sources reads it, top first
+  # @param can_edit_taxonomy [Boolean] whether the viewer may add, move and remove levels
   def initialize(hris:, levels:, can_edit_taxonomy: false)
     @hris = hris
     @levels = levels
@@ -59,11 +60,12 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
       div(class: "flex flex-wrap items-center justify-between gap-x-4 gap-y-2") do
         div(class: "min-w-0") do
           p(class: "text-sm font-medium text-default") { level[:name] }
-          p(class: "text-sm text-muted") { "From #{provider_label(level[:provider])} · #{units(level[:live_units])}" }
+          p(class: "text-sm text-muted") { summary(level) }
         end
         div(id: "org-graph-level-actions-#{level[:id]}", class: "flex shrink-0 items-center gap-2") do
           hand_back_form(level) if level[:live_units].zero? && level[:provider] != ESPALIA
           move_buttons(level, index) if @can_edit_taxonomy && movable?(index)
+          level_menu(level) if @can_edit_taxonomy && level[:removable]
         end
       end
       next unless connected?
@@ -121,6 +123,49 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
     end
   end
 
+  # Remove is destructive, so it sits in the row's kebab, which opens the dialog.
+  def level_menu(level)
+    render Components::Kit::Modal.new(id: "org-graph-remove-level-#{level[:id]}", title: "Remove #{level[:name]}?",
+                                      size: :sm) do |modal|
+      render Components::Kit::Dropdown.new(align: :right, strategy: :fixed) do |menu|
+        menu.trigger(label: "Actions for #{level[:name]}",
+                     button: { variant: :ghost, size: :sm, icon: true, compact: true, id: "org-graph-level-menu-#{level[:id]}" }) do
+          icon(:kebab, class: "size-4")
+        end
+        menu.menu(width: "w-44") do
+          menu.item(tone: :danger, data: { action: "modal#open" }, id: "org-graph-level-remove-#{level[:id]}") do
+            "Remove #{level[:name]}"
+          end
+        end
+      end
+      modal.body { remove_form(level) }
+    end
+  end
+
+  def remove_form(level)
+    p(class: "text-sm text-default") { "No unit has ever sat at this level, so nothing else changes." }
+    settings_form(tenant_org_graph_settings_level_path(level[:id]), method: :delete,
+                                                                    class: "mt-4 flex justify-end gap-2") do
+      render Components::Kit::Button.new(variant: :outline, tone: :neutral, data: { action: "modal#close" }) { "Cancel" }
+      render Components::Kit::Button.new(tone: :danger, type: :submit, id: "org-graph-level-remove-confirm-#{level[:id]}") do
+        "Remove #{level[:name]}"
+      end
+    end
+  end
+
+  def summary(level)
+    held_now = level[:live_units].positive? ? "holds #{unit_names(level[:live_unit_names], level[:live_units])}" : "0 units"
+    parts = [ "From #{provider_label(level[:provider])}", held_now ]
+    parts << "held #{unit_names(level[:retired_unit_names], level[:retired_units])}" if level[:retired_units].positive?
+    parts.join(" · ")
+  end
+
+  def unit_names(names, count)
+    return names.to_sentence if count <= names.size
+
+    "#{names.first(2).join(', ')} and #{count - 2} more"
+  end
+
   def add_form
     settings_form(tenant_org_graph_settings_levels_path, class: "mt-4") do
       label(for: "org-graph-new-level", class: "block text-sm font-medium text-default") { "Name of the new level" }
@@ -131,8 +176,6 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
       end
     end
   end
-
-  def units(count) = "#{count} #{count == 1 ? 'unit' : 'units'}"
 
   def provider_label(provider)
     return "Espalia" if provider == ESPALIA
