@@ -68,17 +68,19 @@ class OrgGraph::PeopleCutover
   # When a leaver left, from the best evidence their row holds: the
   # termination date in the HRIS record it stored, then the row's last
   # update, then the day the Org Graph first records them. Nothing records
-  # when a row became inactive, so the last update stands in for it, but only
-  # from before that day: an update that day says nothing about when they
-  # left. Any later write moves it, so it can fall after they truly left. A
-  # termination date after that day is passed over.
+  # when a row became inactive, so the last update of an inactive row stands
+  # in for it, but only from before that day: an update that day says
+  # nothing about when they left. Any later write moves it, so it can fall
+  # after they truly left. A still-active row's update says nothing either,
+  # as for someone a sync finds gone. A termination date after that day is
+  # passed over.
   #
   # @param person [Person]
-  # @param on [Date] the day they are first recorded: the cut-over date, or a sign-in after it
+  # @param on [Date] the day they are first recorded: the cut-over date, or a sign-in or sync after it
   # @return [Hash] :left_on and :left_on_source, one of {OrgGraph::PersonAggregate::LEFT_ON_SOURCES}
   def self.leaving(person, on: Date.current)
     evidence = { "hris_termination_date" => Hris::BaseAdapter.terminated_on(person)&.then { Date.iso8601(it) },
-                 "row_updated" => person.updated_at&.to_date&.then { it if it < on } }
+                 "row_updated" => (person.updated_at&.to_date if person.status == "inactive")&.then { it if it < on } }
     source, left_on = evidence.find { |_, date| date && date <= on } || [ "first_recorded", on ]
     { left_on:, left_on_source: source }
   end

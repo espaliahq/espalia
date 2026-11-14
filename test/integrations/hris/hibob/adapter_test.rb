@@ -1295,6 +1295,35 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal "inactive", stray.reload.status
       end
 
+      should "date a leaver with no stream by the termination date their stored HiBob record holds" do
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst",
+                                hris_raw_data: { "id" => "bob-009", "internal" => { "terminationDate" => "2019-03-15" } })
+
+        build_adapter(@fixture["employees"]).sync_people
+
+        assert_equal [ "left", "2019-03-15", "hris_termination_date" ],
+                     recorded(stray).values_at(:employment_status, :left_on, :left_on_source)
+        assert_equal Date.new(2019, 3, 15), ActsAsTenant.with_tenant(@tenant) { OrgLeaver.find_by(person_id: stray.id).left_on }
+      end
+
+      should "date a leaver with no stream and no termination date by the sync, whenever their row last changed" do
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst")
+        stray.update_columns(updated_at: Time.zone.parse("2025-06-30 10:00"))
+
+        build_adapter(@fixture["employees"]).sync_people
+
+        assert_equal [ Date.current.iso8601, "first_recorded" ], recorded(stray).values_at(:left_on, :left_on_source)
+      end
+
+      should "pass over a termination date still to come for a leaver with no stream" do
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob",
+                                hris_raw_data: { "internal" => { "terminationDate" => (Date.current + 30).iso8601 } })
+
+        build_adapter(@fixture["employees"]).sync_people
+
+        assert_equal [ Date.current.iso8601, "first_recorded" ], recorded(stray).values_at(:left_on, :left_on_source)
+      end
+
       should "record someone with no stream as having left when Espalia holds their title and manager" do
         handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
         %w[title manager].each { handler.set_fact_provider(it, "espalia", effective_on: Date.current) }
