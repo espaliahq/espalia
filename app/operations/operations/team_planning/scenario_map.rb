@@ -16,7 +16,7 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
               "because the HRIS gave no allocation. unassigned_ids are the people in no live unit. Positions " \
               "carry their occupants, open_fte and backfill_for_ids (whose departure each backfills). " \
               "People carry their reporting line (manager_id, or manager_position_id for a manager being hired) " \
-              "and leaving, with backfill_position_id, when they leave in this scenario's step; departed lists " \
+              "and leaving, with leaves_on (null without a date) and backfill_position_id, when they leave in this scenario's step; departed lists " \
               "those who left in an earlier step, with their backfill. unresolved lists people the plan places who aren't on the " \
               "map, with why: 'joined after the base date' (team_planning_rebase_plan brings them in) or " \
               "'has left'. `names` maps every person id to a name; a forgotten person reads as " \

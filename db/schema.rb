@@ -1202,6 +1202,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_194123) do
     t.datetime "org_graph_people_projected_at"
     t.jsonb "org_graph_config", default: {}, null: false
     t.datetime "person_development_fed_at"
+    t.datetime "pay_bands_changed_at"
     t.index ["custom_domain"], name: "index_tenants_on_custom_domain", unique: true
     t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"
     t.index ["previous_inbound_key_id"], name: "index_tenants_on_previous_inbound_key_id", where: "(previous_inbound_key_id IS NOT NULL)"

@@ -12,6 +12,16 @@ class TeamPlanning::Events::DepartureSetTest < ActiveSupport::TestCase
     assert_equal({ leaves_in_id: STEP.downcase, position_id: nil }, KIND.end_state(leaves_in_id: STEP))
   end
 
+  should "add a leaving date only when one is given, so a departure set before dates reads as it did" do
+    assert_equal({ leaves_in_id: STEP.downcase, position_id: nil, leaves_on: "2027-03-31" }, KIND.end_state(leaves_in_id: STEP, leaves_on: " 2027-03-31 "))
+    assert_equal({ leaves_in_id: STEP.downcase, position_id: nil }, KIND.end_state(leaves_in_id: STEP, leaves_on: ""))
+    assert_equal "A leaving date must be a date, such as 2027-03-31",
+                 assert_raises(TeamPlanning::Error) { KIND.end_state(leaves_in_id: STEP, leaves_on: "2027-02-30") }.message
+
+    gone = TeamPlanning::Baseline::Departed.new(person_id: SEAT, leaves_in_id: STEP, position_id: nil)
+    assert_equal({ leaves_in_id: STEP, position_id: nil }, gone.departure)
+  end
+
   should "refuse a departure that names no step" do
     assert_equal "A departure names the step the person leaves in", assert_raises(TeamPlanning::Error) { KIND.end_state(position_id: SEAT) }.message
   end

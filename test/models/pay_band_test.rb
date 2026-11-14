@@ -23,6 +23,19 @@ class PayBandTest < ActiveSupport::TestCase
                           event_id: SecureRandom.uuid_v7, learned_by_event_id: SecureRandom.uuid_v7)
   end
 
+  should "make a full-time year of any period, exactly, an hour by the hours given" do
+    assert_equal [ 150r, 1_800r, 300_000r ], %w[year month hour].map { band(period: it).yearly(:midpoint, hours_per_year: 2_000r) }
+    assert_equal Rational(2_001, 10) * 1_950, band(period: "hour", midpoint: "200.1").yearly(:midpoint, hours_per_year: 1_950r)
+  end
+
+  should "price a seat at its country's band, ignoring case and spacing, else at the band for any location" do
+    bands = [ band(location: "Atlantis"), band(location: nil), band(location: "Lemuria") ]
+    bands.each { it.valid? }
+
+    assert_equal [ "Atlantis", "Lemuria", "Any location", "Any location" ], [ " atlantis ", "LEMURIA", "Mu", nil ].map { PayBand.covering(bands, it).location_name }
+    assert_nil PayBand.covering(bands.first(1), "Mu")
+  end
+
   should "name its level by role, code and title, so the name outlives the level" do
     assert_equal [ "Software Engineer", "E2 Engineer II" ], band.values_at(:role_name, :level_name)
     assert_equal "Software Engineer, E2 Engineer II", band.level_label

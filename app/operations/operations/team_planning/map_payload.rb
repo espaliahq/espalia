@@ -29,7 +29,7 @@ module Operations::TeamPlanning::MapPayload
       unassigned_ids: map.unassigned_ids,
       positions: positions_payload(map),
       unresolved: map.unresolved.map(&:to_h),
-      departed: map.departed.map { it.to_h.except(:leaves_in_id) },
+      departed: map.departed.map { it.departure.except(:leaves_in_id).merge(person_id: it.person_id) },
       names: names_for(map) }
   end
 
@@ -40,7 +40,7 @@ module Operations::TeamPlanning::MapPayload
             .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
                    capacity_overrides: person.capacity_overrides.transform_values { sealed_payload(it) },
                    placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
-                   leaving: person.leaving?, backfill_position_id: person.backfill_id)
+                   leaving: person.leaving?, leaves_on: (person.departure[:leaves_on] if person.leaving?), backfill_position_id: person.backfill_id)
     end
   end
 
