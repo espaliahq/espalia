@@ -63,6 +63,29 @@ class OrgGraph::PersonDevelopmentFeedTest < ActiveSupport::TestCase
     assert_equal @lead.id, held(@ada).manager_id
   end
 
+  should "offboard a leaver from every framework and every open cycle" do
+    reconcile(@ada)
+    as_tenant do
+      other = create(:framework_state)
+      other_role = create(:framework_role, code: "D", name: "Designer")
+      other_level = create(:framework_level, role_id: other_role.role_id, ordinal: 1, code: "D1", title: "Designer")
+      @development.assign_to_framework(@ada.id, other.framework_id, other_role.role_id, other_level.level_id)
+      cycles = AssessmentCycles::CommandHandler.new
+      [ @framework, other ].each do |framework|
+        cycle_id = SecureRandom.uuid_v7
+        cycles.define_cycle(cycle_id, framework.framework_id, "Q1", "regular", 1)
+        cycles.enroll(cycle_id, @ada.id)
+      end
+      @people.leave(@ada.id, provider: "hibob", effective_on: "2026-06-30")
+    end
+
+    assert_equal %i[withdraw withdraw unassign unassign], reconcile(@ada)
+    as_tenant do
+      assert_not PersonFrameworkAssignment.exists?(person_id: @ada.id)
+      assert_not AssessmentCycleEnrollment.active.exists?(person_id: @ada.id)
+    end
+  end
+
   should "clear a manager only when the HRIS recorded none" do
     reconcile(@ada)
     as_tenant { @people.change_manager(@ada.id, nil, **HIBOB) }

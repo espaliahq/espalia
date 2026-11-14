@@ -41,14 +41,15 @@ class OrgGraph::PersonDevelopmentFeed
   # @return [Array<Symbol>] the changes made, or that would be made, from {KINDS}
   def reconcile(person_id)
     person = Person.hris_managed.find_by(id: person_id)
-    return [] if person.nil? || framework.nil?
+    return [] if person.nil?
 
     stream = @org_graph.load_person(person_id)
     return [] unless stream.recorded?
     return [] if stream.forgotten?
+    return offboard(person_id) if stream.left?
+    return [] if framework.nil?
 
     held = @person_development.load(person_id, framework_id)
-    return offboard(person_id, held) if stream.left?
 
     placed = place(person_id, stream, held)
     placed + manager(person, stream, held, assigned: held.assigned? || placed.include?(:assign))
@@ -56,16 +57,18 @@ class OrgGraph::PersonDevelopmentFeed
 
   private
 
-  def offboard(person_id, held)
-    return [] unless held.assigned?
+  # Every open cycle and every framework, as the sync's own sweep did, not
+  # only the framework the title mapping assigns into.
+  def offboard(person_id)
+    cycle_ids = AssessmentCycleEnrollment.active.where(person_id:)
+      .joins(:cycle).where(assessment_cycles: { status: "open" }).pluck(:cycle_id)
+    framework_ids = PersonFrameworkAssignment.where(person_id:).pluck(:framework_id)
 
-    changes = []
-    if held.current_cycle_id
-      issue { @cycles.unenroll(held.current_cycle_id, person_id, OFFBOARD_REASON) }
-      changes << :withdraw
+    cycle_ids.each { |cycle_id| issue { @cycles.unenroll(cycle_id, person_id, OFFBOARD_REASON) } }
+    framework_ids.each do |id|
+      issue { @person_development.unassign_from_framework(person_id, id, reason: OFFBOARD_REASON) }
     end
-    issue { @person_development.unassign_from_framework(person_id, framework_id, reason: OFFBOARD_REASON) }
-    changes << :unassign
+    ([ :withdraw ] * cycle_ids.size) + ([ :unassign ] * framework_ids.size)
   end
 
   def place(person_id, stream, held)
