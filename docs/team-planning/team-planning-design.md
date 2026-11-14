@@ -192,6 +192,24 @@ a plan's changes before anything is named. `call` joins the names last from the
 `people` table, for the people, their managers and the units' owners, so anyone forgotten
 reads "Former member". The forgotten-person audit walks it.
 
+### The drift reader
+
+`TeamPlanning::Drift` reads `OrgGraph::ChangesBetween` by learned date, from the day
+before the base date to today, so it covers exactly what the baseline leaves out. A
+backdated correction learned since the base shows with the day it took effect. A plan
+whose base is still to come has no drift.
+
+Each change says what it meets in the plan: for each scenario, the latest planned change
+to the facet it moves. Each kind decides which Org Graph changes move its facet, through
+`Change.subject_moved_by`, which returns the subject's id or nil. A person's placements
+are one facet, so a move in one placement meets the plan's whole list for that person.
+A change applied from this plan comes back `from_plan`, matched through the `plan_id` on
+its event; nothing sets one until approval exists. Whether a planned change is done,
+pending or conflicting is 4.3's status, below.
+
+`team_planning_drift` gives the same report to MCP, with people by id and a `names` map
+beside them.
+
 ## Status is derived, never stored
 
 Each planned change is compared with the Org Graph as it stands now:
