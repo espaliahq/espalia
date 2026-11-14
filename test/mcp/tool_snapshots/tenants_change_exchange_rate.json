@@ -1,0 +1,29 @@
+{
+  "name": "tenants_change_exchange_rate",
+  "description": "Correct an exchange rate, by exchange_rate_id from tenants_exchange_rates. Its pair and applies_from don't change: remove the rate and add another for that. Every report that converts on a date it covers changes with it. A rate is a decimal string above zero with at most twelve decimal places, such as \"0.92\": one unit of from_currency is worth that much to_currency. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "exchange_rate_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "rate": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,12})?$"
+      }
+    },
+    "required": [
+      "exchange_rate_id",
+      "rate"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

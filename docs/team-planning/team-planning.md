@@ -1,7 +1,8 @@
 # Team Planning — module description
 
-> Status: proposal. Only pay bands are built ([#191](https://github.com/espaliahq/espalia/issues/191)):
-> tenant admins keep them under Admin, Pay bands. This page says what the module is for and what
+> Status: proposal. Only pay bands ([#191](https://github.com/espaliahq/espalia/issues/191)) and
+> exchange rates ([#205](https://github.com/espaliahq/espalia/issues/205)) are built: tenant admins
+> keep both under Admin, Pay bands. This page says what the module is for and what
 > it can do, so the design that follows has something to answer to. It names no
 > organisation, person or figure. [The index](README.md) lists the mockups and the plan.
 >
@@ -189,6 +190,10 @@ Positions are priced from pay bands per role, level and location, with on-costs,
 band's own currency. A band belongs to a framework level, which names its role, and to
 one country or to any country; it holds a minimum, midpoint and maximum for a year, a
 month or an hour, exactly as entered. Conversion to a reference currency happens once, at report time.
+The tenant names that reference currency and declares its rates, each for a pair of currencies
+from a date, since a plan spans periods. A report uses the latest rate in force on the date it
+reports, or the inverse of the reverse pair's; it never chains through a third currency, and
+nothing it converts is stored. A missing rate stops the report and names the pair.
 A position costs for the part of the period it exists, so a hire planned for the third
 quarter costs half a year. Costs roll up by unit and by cost centre, and every scenario
 shows its difference from the baseline.

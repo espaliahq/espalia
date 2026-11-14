@@ -8,6 +8,8 @@
 # [#191](https://github.com/espaliahq/espalia/issues/191). A band keys on a
 # framework level and a country, blank for any.
 module Operations::Tenants::PayBandSupport
+  include Operations::Tenants::EditorNames
+
   FIGURE = /\A\d{1,12}(\.\d{1,2})?\z/
   FIGURE_SCHEMA = { type: "string", pattern: FIGURE.source.sub("\\A", "^").sub("\\z", "$") }.freeze
   FIGURE_HELP = "Figures are decimal strings with at most two decimal places, such as \"120000\"."
@@ -29,15 +31,15 @@ module Operations::Tenants::PayBandSupport
     end
   end
 
-  # @param band [PayBand]
-  # @raise [Operations::Base::ParameterError] naming what is wrong, never a figure
-  def save_band!(band)
-    band.updated_by = context.user
-    return band if band.save
+  # @param record [PayBand, ExchangeRate, ReferenceCurrency]
+  # @raise [Operations::Base::ParameterError] naming what is wrong, never a figure or a rate
+  def save_setting!(record)
+    record.updated_by = context.user
+    return record if record.save
 
-    raise Operations::Base::ParameterError, band.errors.full_messages.to_sentence
+    raise Operations::Base::ParameterError, record.errors.full_messages.to_sentence
   rescue ActiveRecord::RecordNotUnique
-    raise Operations::Base::ParameterError, band.duplicate_message
+    raise Operations::Base::ParameterError, record.try(:duplicate_message) || "Someone else set it at the same moment; try again"
   end
 
   # Names a band by its level as the framework has it now, or as it was
@@ -65,18 +67,6 @@ module Operations::Tenants::PayBandSupport
       updated_at: band.updated_at.iso8601,
       updated_by: names[band.updated_by_id]
     }
-  end
-
-  # Who last changed each band: the person linked to them in this tenant, or their email.
-  # Anyone forgotten, or no longer a member, reads as a former member.
-  #
-  # @param bands [Array<PayBand>]
-  # @return [Hash{String => String}] by user id
-  def editor_names(bands)
-    ids = bands.filter_map(&:updated_by_id).uniq
-    members = TenantUser.where(user_id: ids, forgotten_at: nil).includes(:person, :user)
-                        .to_h { [ it.user_id, it.person&.name || it.user.email ] }
-    ids.to_h { [ it, members.fetch(it, Person::FORMER_MEMBER) ] }
   end
 
   # @param pay_band_id [String]

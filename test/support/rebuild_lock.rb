@@ -3,7 +3,7 @@
 # Puts projections in the state a rebuild leaves them in while it runs: their
 # lock held by another database session, as the rake task holds it, and their
 # tables reset for the tenant. Transactional tests share one connection, so
-# the lock needs a PG connection of its own; closing it releases the lock.
+# the lock needs a PG connection of its own, released before it closes.
 module RebuildLock
   # @param tenant [Tenant]
   # @param projections [Array<Class>] projection classes
@@ -19,7 +19,12 @@ module RebuildLock
     end
     yield
   ensure
-    rebuild&.close
+    begin
+      # Closing alone frees the lock only once the backend exits, after we return.
+      rebuild.exec("SELECT pg_advisory_unlock_all()") if rebuild && !rebuild.finished?
+    ensure
+      rebuild&.close
+    end
   end
 
   # Finishes the rebuild: replays each projection for the tenant.

@@ -1,0 +1,24 @@
+{
+  "name": "tenants_remove_exchange_rate",
+  "description": "Remove an exchange rate, by exchange_rate_id from tenants_exchange_rates. Dates it covered then use the latest remaining rate between the two currencies, either way round, or fail if none applies. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "exchange_rate_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "exchange_rate_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}
