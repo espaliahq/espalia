@@ -45,6 +45,16 @@ class Shreddable::Value::Sealed < Shreddable::Value
   # @return [Integer]
   def hash = opened.hash
 
+  # What a shreddable column stores, still encrypted. Copying it needs no key.
+  #
+  # @return [Hash{String => String}, nil] nil for a value loaded from Marshal,
+  #   which keeps no ciphertext
+  def envelope
+    return unless @ciphertext
+
+    { "cipher" => @cipher, "ciphertext" => @ciphertext, "identifier" => @identifier, "iv" => @iv }
+  end
+
   private
 
   def opened

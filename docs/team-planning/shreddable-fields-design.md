@@ -200,6 +200,32 @@ streams from every context built through the real handlers.
   It catches a handler that bypasses the base class.
 - **Projections.** Rebuild with every key forgotten and expect nothing to raise.
 
+### 4. A read model holds the sealed form
+
+A read model that copies a shreddable value declares the column with
+`Shreddable::Column`: `shreddable_column :name, by: :plan, plan: :id`. The jsonb column
+holds what the event store holds: the ciphertext, the IV, the cipher and the key's
+identifier. It reads back as a sealed value that opens on `reveal`.
+
+- **Destroying a key reaches every copy at once.** There is no scrub to run, no list of
+  columns to keep complete, and no window between the destroy and the scrub. That holds
+  even for a projection that lags or fails.
+- **A rebuild needs no key.** The projection copies the sealed value from the event as it
+  is, so a rebuild after the key is gone writes a value that opens as removed.
+- **A live write encrypts.** A sync projection receives the value in clear from the
+  publish, so the column encrypts it under the row's key, inside the publish's
+  transaction. `seal_column` does the same for a write that skips the model.
+- **The identifier must be the row's own.** A sealed value copied into another plan's row
+  opens as removed.
+- **The column can't be ordered, filtered, grouped or plucked.** Each raises, and its type
+  refuses any value in clear, so `update_all` and `insert_all` can't store one.
+- **`Components::Shared::ShreddableText`** shows the value, or "Removed".
+
+The cost is a key lookup each time a read shows the value. The other option was a
+column in clear, scrubbed by every key destruction through a registry of such columns.
+It reads faster, but a column someone forgets to register keeps the value for good.
+`test/contexts/shreddable/column_test.rb` proves this with a test event and projection.
+
 ## Forgetting
 
 Deleting a key is not enough. Read models, caches and exports hold decrypted copies.
@@ -207,7 +233,8 @@ Deleting a key is not enough. Read models, caches and exports hold decrypted cop
 1. An event says what was forgotten: `PersonForgotten`, `PlanDeleted`.
 2. The key is deleted.
 3. Projections handle the event and scrub what they hold. A full rebuild gives the same
-   result, which is why the projection spec matters.
+   result, which is why the projection spec matters. A shreddable column has nothing to
+   scrub: it opens as removed the moment step 2 commits.
 
 Steps 1 and 2 are one database transaction. Keys and events live in the same database,
 so there is no moment when the event exists and the key still does. A crash leaves both
@@ -242,7 +269,8 @@ so each projection decides for itself.
   it was written under.
 - **Encryption is not access control.** A reason still needs its own permission to view.
   Capturing reasons is opt-in per tenant, because some are special-category data.
-- **Shreddable fields cannot be queried in the event store.** Query a projection.
+- **Shreddable fields cannot be queried, in the event store or in a read model.** Query
+  another column of a projection.
 - **The key store is critical.** Losing it loses the data.
 - **Backups bound how soon forgetting is complete.** Keys live in the application
   database, so a backup holds both a key and the values it protects. A value is

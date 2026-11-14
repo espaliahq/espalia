@@ -239,14 +239,13 @@ because a binding budget guardrail needs them.
 
 ### P2 Shreddable plan fields
 
-Built from [the shreddable fields design](shreddable-fields-design.md). Nothing of it is
-on main yet.
+Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
 | 2.1 | Key store: a key per plan, and one per person within a plan, to encrypt a field, decrypt it, and destroy the key | none |
 | 2.2 | Shreddable fields on events, and the aggregate guard: an aggregate never decides on a shreddable value | 2.1 |
-| 2.3 | Projections rebuild with keys destroyed, showing a value as removed | 2.2 |
+| 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form | 2.2 |
 | 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
 | 2.5 | A handler on `PersonForgotten` destroys that person's key in every plan at once (decision 6) | 2.2 |
 
