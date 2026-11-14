@@ -12,7 +12,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "succession), a reason, and the change it belongs to: its kind, the scenario that made it and its " \
               "event_id. That is the later to land of the subject's own change and the change that broke it, such " \
               "as a parent unit's retirement; change is null when nothing in the plan explains it. " \
-              "Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
+              "Items come grouped by check, in a fixed order, then " \
+              "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
