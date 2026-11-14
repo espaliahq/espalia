@@ -255,6 +255,21 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
     assert_not(Units::Graph.new(map:, facts:, manager_role_ids: []).span("m").map(&:id).include?("d"))
   end
 
+  should "pass a line to a position only a leaver fills to the position backfilling them" do
+    @positions << position("lead", "squad")
+    @people.map! do
+      case it.id
+      when "c" then member("c", "squad", manager_id: "a", position_id: "lead", departure: { leaves_in_id: "s1", position_id: "v" })
+      when "d" then member("d", "squad", manager_position_id: "lead")
+      else it
+      end
+    end
+    graph = Units::Graph.new(map:, facts:, manager_role_ids: [])
+
+    assert_includes graph.span("v").map(&:id), "d"
+    assert_not graph.manager?("lead")
+  end
+
   should "price a seat whose level resolves to none as nothing, with a reason" do
     figure = price("x", ordinal: nil)
 

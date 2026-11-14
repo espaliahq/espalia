@@ -411,7 +411,8 @@ flatters a scenario.
 - **A vacant manager seat never takes its own manager as a report.** The head of the tree
   has no manager, so without this an open seat beneath them would take them, and with them
   everyone.
-- **A leaver is never a report.** Their reports pass to their backfill, or to nobody.
+- **A leaver is never a report.** Their reports pass to their backfill, or to nobody,
+  whether the line names the leaver or a position only the leaver fills.
 - **A leaver keeps the positions they fill filled for the step**, so their capacity goes to
   their backfill or nowhere. Reopening those positions too would count the seat twice
   whenever a backfill exists.

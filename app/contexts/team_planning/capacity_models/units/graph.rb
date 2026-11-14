@@ -14,8 +14,8 @@
 #   haven't been redrawn yet still carries its span. Someone who already
 #   manages the seat, as the head of the tree does, is never its report.
 #
-# A leaver is never a report, and their reports pass to the position
-# backfilling them, or to nobody.
+# A leaver is never a report, and their reports, by name or by position,
+# pass to the position backfilling them, or to nobody.
 class TeamPlanning::CapacityModels::Units::Graph
   # @!attribute id [String] a person or a position
   # @!attribute kind [String] "person" or "position"
@@ -88,36 +88,37 @@ class TeamPlanning::CapacityModels::Units::Graph
     Report.new(id:, kind: position ? "position" : "person", distance:, fte: position ? @open.fetch(id, 0r) : 1r)
   end
 
-  # A line to a leaver passes to their backfill; a line to anyone or any seat
-  # no longer on the map leaves the person unmanaged.
+  # A line to a leaver, or to a position only a leaver fills, passes to their
+  # backfill; a line to anyone or any seat no longer on the map leaves the
+  # person unmanaged.
   def route_lines
-    backfill_of = @map.backfills.flat_map { |position_id, ids| ids.map { [ it, position_id ] } }.to_h
-    occupants = @map.occupants
+    @backfill_of = @map.backfills.flat_map { |position_id, ids| ids.map { [ it, position_id ] } }.to_h
+    @occupants = @map.occupants
     @people.each_value do |person|
-      target = manager_for(person, backfill_of, occupants)
+      target = manager_for(person)
       target ? @lines[target] << person.id : @unmanaged << person
     end
   end
 
-  def manager_for(person, backfill_of, occupants)
-    if person.manager_id
-      return person.manager_id if @people.key?(person.manager_id)
+  def manager_for(person)
+    return seat_of(person.manager_position_id) unless person.manager_id
+    return person.manager_id if @people.key?(person.manager_id)
 
-      seat_of(backfill_of[person.manager_id], occupants)
-    else
-      seat_of(person.manager_position_id, occupants)
-    end
+    seat_of(@backfill_of[person.manager_id])
   end
 
   # A position manages through the one person in it, or as itself while
   # nobody is. Shared or closed, it manages nobody.
-  def seat_of(position_id, occupants)
-    return unless @positions.key?(position_id)
+  def seat_of(position_id, seen = Set.new)
+    return unless @positions.key?(position_id) && seen.add?(position_id)
 
-    filled = occupants.fetch(position_id, []).map(&:first).reject(&:leaving?).map(&:id).uniq
-    return filled.first if filled.one?
+    filled, leaving = @occupants.fetch(position_id, []).map(&:first).uniq(&:id).partition { !it.leaving? }
+    return filled.first.id if filled.one?
+    return unless filled.empty?
+    return position_id if @open.key?(position_id)
 
-    position_id if filled.empty? && @open.key?(position_id)
+    backfills = leaving.filter_map { @backfill_of[it.id] }.uniq
+    seat_of(backfills.first, seen) if backfills.one?
   end
 
   def manager_ids
