@@ -12,6 +12,10 @@
 # @example
 #   PlanPolicy.new(context, plan).update?
 class PlanPolicy < ApplicationPolicy
+  # Whether the caller may work on plans at all; each plan then asks {#update?}.
+  # @return [Boolean]
+  def index? = tenant_member?
+
   # @return [Boolean]
   def create? = tenant_admin?
 
