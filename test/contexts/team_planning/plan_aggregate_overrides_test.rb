@@ -61,6 +61,16 @@ class TeamPlanning::PlanAggregateOverridesTest < ActiveSupport::TestCase
     assert_equal [ "Staff Engineer" ], @plan.changes_in(@lean).map { it.data[:title] }
   end
 
+  should "refuse a pin whose end state sets the plan, the scenario or who set it" do
+    %i[plan_id scenario_id set_by_id].each do |field|
+      error = assert_raises(ArgumentError) do
+        @plan.pin_change(TitleSet, scenario_id: @lean, subject_id: "ada", facet: "title", end_state: { title: "x", field => @q1 },
+                                   pinned_by_id: @editor_id)
+      end
+      assert_equal "An end state can't set #{field}", error.message
+    end
+  end
+
   should "refuse to clear a facet the scenario doesn't change, even when its parent does" do
     set(@q1, "Senior Engineer")
 

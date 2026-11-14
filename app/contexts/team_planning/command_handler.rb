@@ -203,6 +203,7 @@ class TeamPlanning::CommandHandler
     facet = facet.to_s
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      plan.ensure_pinnable!(scenario_id, [ subject_id, facet ])
       kind, end_state, pinned_from = inherited(plan, scenario_id, subject_id, facet)
       plan.pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_from:, pinned_by_id: actor_id!)
     end

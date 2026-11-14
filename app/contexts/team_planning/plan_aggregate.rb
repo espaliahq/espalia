@@ -290,12 +290,8 @@ class TeamPlanning::PlanAggregate
   def pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from: nil)
     raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change && kind.complete?
 
-    ensure_open!
-    raise TeamPlanning::Error, "The baseline inherits nothing to pin" if live_scenario!(scenario_id) == @plan_id
-    if own_change?(scenario_id, [ subject_id, facet ])
-      raise TeamPlanning::Error, "#{name_of(scenario_id)} already changes this: clear it to follow its parent, or set it"
-    end
-
+    ensure_pinnable!(scenario_id, [ subject_id, facet ])
+    end_state = own_fields!(end_state.to_h.symbolize_keys)
     pinned = pinned_change(kind, { plan_id: @plan_id, scenario_id:, subject_id:, set_by_id: pinned_by_id }, end_state)
     raise ArgumentError, "That end state doesn't make a #{facet} change" unless pinned.key == [ subject_id, facet ]
 
@@ -304,6 +300,19 @@ class TeamPlanning::PlanAggregate
       plan_id: @plan_id, scenario_id:, subject_id:, facet:, kind: kind.name, end_state: end_state.to_h,
       pinned_from_scenario_id: from_scenario_id, pinned_from_event_id: from_event_id, pinned_by_id:
     }))
+  end
+
+  # Refuses a pin before anyone works out what it would keep.
+  #
+  # @param scenario_id [String]
+  # @param key [Array(String, String)] a subject and a facet
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the root, or it already changes that facet
+  def ensure_pinnable!(scenario_id, key)
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline inherits nothing to pin" if live_scenario!(scenario_id) == @plan_id
+    return unless own_change?(scenario_id, key)
+
+    raise TeamPlanning::Error, "#{name_of(scenario_id)} already changes this: clear it to follow its parent, or set it"
   end
 
   # The scenarios whose changes a scenario resolves through, root first and
