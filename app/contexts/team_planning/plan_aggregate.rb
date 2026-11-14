@@ -227,6 +227,17 @@ class TeamPlanning::PlanAggregate
   # @return [Array<TeamPlanning::Events::Change>] the scenario's own changes, oldest first
   def changes_in(scenario_id) = @changes.fetch(scenario_id, []).dup
 
+  # The change that wins for each subject and facet along the scenario's
+  # resolution chain: the last one made, nearest the scenario.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @return [Hash{Array(String, String) => TeamPlanning::Events::Change}] by {TeamPlanning::Events::Change#key}, in the order they land
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def winning_changes(scenario_id)
+    resolution_chain(scenario_id).flat_map { changes_in(it) }
+      .each_with_object({}) { |change, latest| latest.delete(change.key); latest[change.key] = change }
+  end
+
   # The scenarios whose changes a scenario resolves through, root first and
   # the scenario last. An alternative follows its parent, so it starts as the
   # parent plus its own differences.

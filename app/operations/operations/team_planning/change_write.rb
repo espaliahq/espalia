@@ -21,9 +21,7 @@ module Operations::TeamPlanning::ChangeWrite
 
   # @return [TeamPlanning::Events::Change, nil] the change the scenario resolves to for this subject and facet
   def winning_change(subject_id, facet)
-    plan = editable_plan!
-    refusing_bad_plans { plan.resolution_chain(scenario_id!(:scenario_id)) }
-      .flat_map { plan.changes_in(it) }.select { it.key == [ subject_id, facet ] }.last
+    refusing_bad_plans { editable_plan!.winning_changes(scenario_id!(:scenario_id)) }[[ subject_id, facet ]]
   end
 
   # @param kind [Class<TeamPlanning::Events::Change>]
