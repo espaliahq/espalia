@@ -335,7 +335,8 @@ rename during its rebuild can leave the old name in the plans or scenarios read 
 scenario rename reads the current name from that read model, so it can also record no
 previous name, or skip a rename it took for a repeat. A second run won't repair that, as it
 finds nothing in clear and skips the rebuild; rebuild `team_planning/plans` and
-`team_planning/scenarios` instead.
+`team_planning/scenarios` instead. A skipped rename wrote no event, so no rebuild brings it
+back: rename that scenario again.
 
 ```bash
 bin/rails team_planning:names:dry_run
