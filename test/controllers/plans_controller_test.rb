@@ -80,9 +80,11 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to plan_path(plan.id)
     end
 
-    should "see why a plan could not be created" do
-      post plans_path, params: { plan: { name: "", base_on: "2026-11-01" } }
+    should "see why a plan could not be created, and keep what they typed" do
+      post plans_path, params: { plan: { name: "Reorg 2027", base_on: "not a date" } }
       assert_response :unprocessable_content
+      assert_select "input#plan_name[value='Reorg 2027']"
+      assert_select "input#plan_base_on[value='not a date']"
     end
   end
 

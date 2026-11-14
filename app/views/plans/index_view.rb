@@ -7,10 +7,12 @@ class Views::Plans::IndexView < Views::Base
   # @param plans [Array<Hash>] from `team_planning_plans`
   # @param can_create [Boolean] whether the caller may start a plan
   # @param error [String, nil] why the last plan could not be created
-  def initialize(plans:, can_create:, user:, current_tenant:, tenants: [], error: nil)
+  # @param draft [Hash] the name and base date the caller last typed, kept when the create was refused
+  def initialize(plans:, can_create:, user:, current_tenant:, tenants: [], error: nil, draft: {})
     @plans = plans
     @can_create = can_create
     @error = error
+    @draft = draft
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -71,12 +73,12 @@ class Views::Plans::IndexView < Views::Base
             input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
             div do
               label(for: "plan_name", class: "block text-sm font-medium text-default") { "Name" }
-              input(id: "plan_name", name: "plan[name]", type: "text", required: true, class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
+              input(id: "plan_name", name: "plan[name]", type: "text", required: true, value: @draft[:name], class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
             end
             div do
               label(for: "plan_base_on", class: "block text-sm font-medium text-default") { "Start from the organisation on" }
               input(id: "plan_base_on", name: "plan[base_on]", type: "date", required: true,
-                    value: Date.current.iso8601, class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
+                    value: @draft[:base_on].presence || Date.current.iso8601, class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
             end
             render Components::Kit::Button.new(variant: :solid, tone: :brand, type: :submit) { "Create plan" }
           end

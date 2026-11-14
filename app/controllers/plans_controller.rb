@@ -13,10 +13,11 @@ class PlansController < ApplicationController
   # POST /planning
   def create
     authorize TeamPlanningPlan, :create?, policy_class: PlanPolicy
-    plan = Operations::TeamPlanning::CreatePlan.call(context: pundit_user, params: params.expect(plan: [ :name, :base_on ]).to_h)
+    draft = params.expect(plan: [ :name, :base_on ]).to_h.symbolize_keys
+    plan = Operations::TeamPlanning::CreatePlan.call(context: pundit_user, params: draft)
     redirect_to plan_path(plan[:plan_id]), notice: "Plan created."
   rescue Operations::Base::ParameterError => e
-    render index_view(error: e.message), status: :unprocessable_content
+    render index_view(error: e.message, draft:), status: :unprocessable_content
   end
 
   # GET /planning/:id
@@ -35,11 +36,12 @@ class PlansController < ApplicationController
 
   private
 
-  def index_view(error: nil)
+  def index_view(error: nil, draft: {})
     Views::Plans::IndexView.new(
       plans: Operations::TeamPlanning::Plans.call(context: pundit_user)[:plans],
       can_create: policy_for(TeamPlanningPlan).create?,
       error:,
+      draft:,
       **layout
     )
   end
