@@ -13,9 +13,19 @@ class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
     def self.apply_to(map, _data) = map
   end
 
-  # Runs a block while a write is between loading the plan and storing it.
+  # Runs a block as a write loads the plan, and again before it stores it.
   class PausingRepository < TeamPlanning::Repository
-    def initialize(during_write) = super().tap { @during_write = during_write }
+    class Probing < AggregateRoot::Repository
+      def initialize(event_store, during_load) = super(event_store).tap { @during_load = during_load }
+
+      def load(...) = @during_load.call.then { super }
+    end
+
+    def initialize(during_load, during_write)
+      super()
+      @repository = Probing.new(@event_store, during_load)
+      @during_write = during_write
+    end
 
     def with_plan(plan_id)
       super { |plan| yield(plan).tap { @during_write.call } }
@@ -61,12 +71,13 @@ class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
 
   should "hold the plan's lock from load to store, so a second editor's change loads after the first lands" do
     assert try_lock_from_another_session, "nothing may hold the lock before the write"
-    held = nil
-    pausing = PausingRepository.new(-> { held = try_lock_from_another_session })
+    held_at_load = held = nil
+    pausing = PausingRepository.new(-> { held_at_load = try_lock_from_another_session }, -> { held = try_lock_from_another_session })
     TeamPlanning::CommandHandler.new(actor: @editor, repository: pausing)
       .set_change(@plan_id, TitleSet, scenario_id: @q1, subject_id: @ada, end_state: { title: "Senior Engineer" })
     handler(@editor).set_change(@plan_id, SiteSet, scenario_id: @q1, subject_id: @ada, end_state: { site: "York" })
 
+    assert_equal false, held_at_load, "another session must wait from the moment the plan loads"
     assert_equal false, held, "another session must wait while a change is stored"
     plan = TeamPlanning::Repository.new.load_plan(@plan_id)
     assert_equal [ TitleSet, SiteSet ], plan.changes_in(@q1).map(&:class)
