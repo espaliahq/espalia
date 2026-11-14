@@ -45,9 +45,11 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # Once the tenant is cut over to the Org Graph, passes 1 to 3 leave
   # `job_title`, `manager_id` and `status` alone: Pass 2b's events write them
   # through {OrgGraph::Projections::PeopleColumns}, and Pass 3 records a leaving.
-  # Once it is also fed from the Org Graph, passes 3b and 5 are skipped:
+  # Once it is also fed from the Org Graph,
   # {OrgGraph::SyncHandlers::PersonDevelopmentFeed} follows each Org Graph
-  # write, and :person_development counts what it did.
+  # write and :person_development counts what it did. Pass 3b then offboards
+  # only Espalia-held people, and Pass 5 only tallies the titles that resolve
+  # to nothing.
   #
   # @return [Hash] summary with :created, :updated, :deactivated, :offboarded, :org_graph_events,
   #   :person_development,
@@ -128,13 +130,13 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
           # Pass 3b: Offboard every inactive person still participating —
           # withdraw from open cycles, remove framework assignments
-          offboard_inactive(result) unless fed
+          offboard_inactive(result, espalia_held_only: fed)
 
           # Pass 4: Auto-link TenantUsers to Person records by email
           auto_link_tenant_users
 
           # Pass 5: Assign (or reassign) to framework roles/levels
-          assign_to_framework(result, touched_person_ids) unless fed
+          assign_to_framework(result, touched_person_ids, dispatch: !fed)
 
           stamp_last_synced
         end
@@ -619,8 +621,10 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # progress slate (plus prior-aligned-cycle rating seeds, if any).
   #
   # @param result [Hash] running tally
-  def offboard_inactive(result)
-    inactive_ids = Person.inactive.select(:id)
+  def offboard_inactive(result, espalia_held_only: false)
+    inactive = Person.inactive
+    inactive = inactive.where(hris_source: nil) if espalia_held_only
+    inactive_ids = inactive.select(:id)
 
     open_enrollments = AssessmentCycleEnrollment.active
       .where(person_id: inactive_ids)
@@ -695,7 +699,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #
   # @param result [Hash] running tally of sync results
   # @param touched_person_ids [Array<String>] Person ids touched in Pass 1
-  def assign_to_framework(result, touched_person_ids)
+  def assign_to_framework(result, touched_person_ids, dispatch: true)
     return if config.role_mappings.blank?
     return if touched_person_ids.empty?
 
@@ -714,7 +718,10 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           next
         end
 
-        dispatch_framework_assignment(row: row, framework: framework, command_handler: command_handler, result: result)
+        unresolved = tally_unresolved(row, result)
+        next unless dispatch
+
+        dispatch_framework_assignment(row: row, framework: framework, command_handler: command_handler, result: result) unless unresolved
         record_reporting_manager(person: row.person, framework: framework, command_handler: command_handler)
       end
     end
@@ -730,16 +737,6 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     person = row.person
 
     case row.status
-    when Integrations::HrisPersonRow::STATUS_NO_TITLE
-      result[:skipped_no_title] += 1
-    when Integrations::HrisPersonRow::STATUS_UNMAPPED
-      result[:unmapped_titles] << person.job_title
-    when Integrations::HrisPersonRow::STATUS_MISSING_ROLE
-      result[:missing_roles] << row.mapping.framework_role_code
-    when Integrations::HrisPersonRow::STATUS_MISSING_ORDINAL
-      result[:missing_ordinals] << { title: person.job_title, code: row.mapping.framework_role_code }
-    when Integrations::HrisPersonRow::STATUS_MISSING_LEVEL
-      result[:missing_levels] << { code: row.mapping.framework_role_code, ordinal: row.resolved_ordinal }
     when Integrations::HrisPersonRow::STATUS_PENDING_SYNC
       command_handler.assign_to_framework(person.id, framework.framework_id, row.role.role_id, row.level.level_id)
       result[:assigned] += 1
@@ -754,6 +751,31 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         result[:level_changed] += 1
       end
     end
+  end
+
+  # Tallies why a row's title resolves to nothing. A fed tenant's sync runs
+  # only this, so its result still names the titles that need a mapping.
+  #
+  # @param row [Integrations::HrisPersonRow]
+  # @param result [Hash]
+  # @return [Boolean] whether the row resolves to nothing
+  def tally_unresolved(row, result)
+    person = row.person
+    case row.status
+    when Integrations::HrisPersonRow::STATUS_NO_TITLE
+      result[:skipped_no_title] += 1
+    when Integrations::HrisPersonRow::STATUS_UNMAPPED
+      result[:unmapped_titles] << person.job_title
+    when Integrations::HrisPersonRow::STATUS_MISSING_ROLE
+      result[:missing_roles] << row.mapping.framework_role_code
+    when Integrations::HrisPersonRow::STATUS_MISSING_ORDINAL
+      result[:missing_ordinals] << { title: person.job_title, code: row.mapping.framework_role_code }
+    when Integrations::HrisPersonRow::STATUS_MISSING_LEVEL
+      result[:missing_levels] << { code: row.mapping.framework_role_code, ordinal: row.resolved_ordinal }
+    else
+      return false
+    end
+    true
   end
 
   # Records the reporting manager as a first-class fact on the stream so the

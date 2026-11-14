@@ -1495,6 +1495,26 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
     end
 
+    should "still name a title nothing maps to, and keep the assignment" do
+      result = build_adapter(with_employee("bob-001") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Chief Vibes Officer" }).sync_people
+
+      assert_includes result[:unmapped_titles], "Chief Vibes Officer"
+      assert_empty result[:person_development]
+      assert ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.exists?(person_id: @alice.id) }
+    end
+
+    should "still offboard an inactive person Espalia holds" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @carol = create(:person, tenant: @tenant, status: "inactive", hris_source: nil)
+        PersonDevelopment::CommandHandler.new.assign_to_framework(@carol.id, @framework.framework_id, @e_role.role_id, @e_level_5.level_id)
+      end
+
+      result = build_adapter(@fixture["employees"]).sync_people
+
+      assert_equal 1, result[:offboarded]
+      assert_not ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.exists?(person_id: @carol.id) }
+    end
+
     should "clear the manager when HiBob says there is none" do
       result = build_adapter(with_employee("bob-001") { it["work"]["reportsTo"] = nil }).sync_people
 
