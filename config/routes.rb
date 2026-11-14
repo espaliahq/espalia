@@ -397,6 +397,9 @@ Rails.application.routes.draw do
     end
   end
 
+  # Team Planning (#226): the plans a person is in, and one plan's page.
+  resources :plans, only: [ :index, :show, :create ], path: "planning"
+
   # Calibration sessions — facilitator-run rating-calibration forums.
   # See docs/architecture/calibration-sessions.md.
   resources :calibration_sessions, only: [ :index, :new, :create, :show ] do
