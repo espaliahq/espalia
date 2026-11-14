@@ -96,11 +96,21 @@ module StimulusHelpers
     window.__signalTimelineObserver = null;
     if (text) {
       const observer = window.__signalTimelineObserver = new MutationObserver(records => {
+        // A record keeps only the value before its edit; the next edit to the
+        // same node records the value this one left.
+        const left = new Map();
+        const next = new Map();
+        for (const r of [...records].reverse()) {
+          if (r.type !== "characterData") continue;
+          left.set(r, next.has(r.target) ? next.get(r.target) : r.target.data);
+          next.set(r.target, r.oldValue || "");
+        }
         for (const r of records) {
           if (r.type === "characterData") {
             const was = (r.oldValue || "").includes(text);
-            if (holds(r.target) && !was) added(r.target);
-            if (was && !holds(r.target)) note(`signal removed from ${where(r.target)}`);
+            const now = left.get(r).includes(text);
+            if (now && !was) added(r.target);
+            if (was && !now) note(`signal removed from ${where(r.target)}`);
           }
           for (const n of r.addedNodes) if (holds(n)) added(n);
           for (const n of r.removedNodes) if (holds(n)) note(`signal removed with ${n.nodeType === 1 ? where(n) : `text in <${r.target.localName}>`}`);

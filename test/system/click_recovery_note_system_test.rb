@@ -97,8 +97,8 @@ class ClickRecoveryNoteSystemTest < ApplicationSystemTestCase
       assert_match(/probe 2 ended, not landed/, timeline)
       assert_match(/final assertion started/, timeline)
     end
-    # The signal can also arrive by an edit to a text node, or out of sight,
-    # and Capybara reads neither as landed.
+    # The signal can also arrive by an edit to a text node, even one undone in
+    # the same task, or out of sight, and Capybara reads neither as landed.
     should "report a signal edited into a text node, and one added out of sight" do
       visit new_user_session_path
       assert_selector "input#user_email"
@@ -111,7 +111,7 @@ class ClickRecoveryNoteSystemTest < ApplicationSystemTestCase
         button.textContent = "Edit quietly";
         button.addEventListener("click", () => {
           status.firstChild.data = "Quiet signal";
-          queueMicrotask(() => { status.firstChild.data = "Idle"; });
+          status.firstChild.data = "Idle";
           const hidden = document.createElement("div");
           hidden.hidden = true;
           hidden.textContent = "Quiet signal";
