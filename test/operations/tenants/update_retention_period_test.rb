@@ -27,8 +27,27 @@ class Operations::Tenants::UpdateRetentionPeriodTest < ActiveSupport::TestCase
     should "set the period and say how it now reads" do
       result = call(retention_years: 3)
 
-      assert_equal({ tenant_id: @tenant.id, retention_years: 3 }, result)
+      assert_equal({ tenant_id: @tenant.id, retention_years: 3, scheduled_forgetting_stopped: false }, result)
       assert_equal 3, retention_years
+    end
+
+    should "turn scheduled forgetting off when the period makes more people due" do
+      on = { scheduled_forgetting: true, scheduled_forgetting_enabled_at: Time.current }
+      @tenant.update!(org_graph_config: { retention_years: 7, **on })
+      assert call(retention_years: 1)[:scheduled_forgetting_stopped]
+      assert_not @tenant.reload.org_graph_config.scheduled_forgetting
+
+      @tenant.update!(org_graph_config: { retention_years: nil, **on })
+      assert call(retention_years: 20)[:scheduled_forgetting_stopped]
+      assert_nil @tenant.reload.org_graph_config.scheduled_forgetting_enabled_at
+    end
+
+    should "leave scheduled forgetting on when the period makes nobody new due" do
+      @tenant.update!(org_graph_config: { retention_years: 3, scheduled_forgetting: true })
+
+      assert_not call(retention_years: 5)[:scheduled_forgetting_stopped]
+      assert_not call(never: true)[:scheduled_forgetting_stopped]
+      assert @tenant.reload.org_graph_config.scheduled_forgetting
     end
 
     should "keep leavers for ever, then set a period again" do

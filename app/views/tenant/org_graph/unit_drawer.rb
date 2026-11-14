@@ -5,6 +5,7 @@
 # own and comes back here; the date at the top applies to whichever is sent.
 class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   include Phlex::Rails::Helpers::Routes
+  include Views::Tenant::OrgGraph::KeepsComparison
   include Views::Tenant::OrgGraph::Formatting
 
   DATE_ID = "org-unit-effective-on"
@@ -12,9 +13,11 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   # @param unit [OrgUnit]
   # @param overview [OrgGraph::UnitsOverview] opened at the unit
   # @param rights [OrgGraphPolicy::UnitRights]
+  # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members (#142)
   # @param effective_on [String] ISO date the forms send
   # @param alert [String, nil] why the last change was refused
-  def initialize(unit:, overview:, rights:, effective_on:, alert: nil)
+  def initialize(unit:, overview:, rights:, effective_on:, alert: nil, confirmations: nil)
+    @confirmations = confirmations
     @unit = unit
     @overview = overview
     @rights = rights
@@ -26,7 +29,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     render Views::Tenant::OrgGraph::Drawer.new(
       title: @unit.name,
       subtitle: subtitle,
-      close_href: tenant_org_graph_path(unit: @unit.id)
+      close_href: tenant_org_graph_path(unit: @unit.id, **compared)
     ) do
       div(class: "space-y-6", data: { controller: "effective-date", action: "submit->effective-date#stamp" }) do
         if @alert
@@ -187,14 +190,19 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     person = membership.person
     li(id: "org-unit-member-#{person.id}", class: "space-y-2 py-3 text-sm") do
       div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5") do
-        a(href: tenant_org_person_path(person, unit: @unit.id, back: "edit"), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+        a(href: tenant_org_person_path(person, unit: @unit.id, back: "edit", **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
         span(class: "text-muted") { terms(membership) }
         unless membership.provider == ::OrgGraph::StructureAggregate::ESPALIA
           render Components::Kit::Badge.new("From #{HrisConfig.provider_label(membership.provider)}", leading_icon: :lock)
         end
       end
+      stale_flag(membership) if @confirmations
       member_actions(membership) if @rights.member?(membership)
     end
+  end
+
+  def stale_flag(membership)
+    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "unit", unit: @unit.id, effective_on: @effective_on })
   end
 
   def terms(membership)
@@ -290,6 +298,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "_method", value: method) unless method == "post"
       input(type: "hidden", name: "effective_on", value: @effective_on)
+      comparison_fields
       block.call
     end
   end

@@ -28,6 +28,18 @@ class Hris::Hibob::ResponseMapper
     new(employee, level_field_id: level_field_id).call
   end
 
+  # The termination date a stored employee record holds, unless it falls
+  # before the record's start date: then it ended an earlier spell.
+  #
+  # @param employee [Hash] raw employee data from HiBob API, as `people.hris_raw_data` keeps it
+  # @return [String, nil] ISO date
+  def self.terminated_on(employee)
+    mapper = new(employee)
+    terminated_on = mapper.terminated_on
+    started_on = mapper.started_on
+    terminated_on unless terminated_on && started_on && terminated_on < started_on
+  end
+
   # @param employee [Hash] raw employee data from HiBob API
   # @param level_field_id [String, nil] the level field's path, or a bare custom-column id
   # @param mapped_fields [Hash{String => String}] the field the tenant's mapping
@@ -99,10 +111,16 @@ class Hris::Hibob::ResponseMapper
       facts.merge!(fte: fraction(value(%w[payroll employment fte])),
         employment_type: human_readable(%w[payroll employment type]))
     end
-    facts[:started_on] = iso_date(value(%w[work startDate])) if supplied?(%w[work startDate])
-    facts[:terminated_on] = iso_date(value(%w[internal terminationDate])) if supplied?(%w[internal terminationDate])
+    facts[:started_on] = started_on if supplied?(%w[work startDate])
+    facts[:terminated_on] = terminated_on if supplied?(%w[internal terminationDate])
     facts
   end
+
+  # @return [String, nil] ISO date
+  def terminated_on = iso_date(value(%w[internal terminationDate]))
+
+  # @return [String, nil] ISO date
+  def started_on = iso_date(value(%w[work startDate]))
 
   # The list fields' item ids beside their labels, keyed like the attributes they sit
   # beside. A blank field is left out.

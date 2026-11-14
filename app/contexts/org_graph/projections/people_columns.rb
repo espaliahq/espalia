@@ -8,13 +8,16 @@
 # them and this projection writes nothing. The identifier columns, and the
 # framework mapping the sync derives, stay with the sync.
 #
+# A title or manager dated before one the stream already holds fills in
+# history only, so the columns keep the later one, as history does.
+#
 class OrgGraph::Projections::PeopleColumns
   # Stable identifier used as the natural key in `projection_versions.name`.
   PROJECTION_NAME = "org_graph/people_columns"
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   COLUMNS = %w[job_title manager_id status].freeze
 
@@ -72,21 +75,38 @@ class OrgGraph::Projections::PeopleColumns
     return unless Tenant.where(id: tenant.id).where.not(org_graph_people_projected_at: nil).exists?
 
     ActsAsTenant.with_tenant(tenant) do
-      Person.where(id: event.data[:person_id]).update_all(columns(event).merge(updated_at: Time.current))
+      columns = columns(event)
+      Person.where(id: event.data[:person_id]).update_all(columns.merge(updated_at: Time.current)) if columns.any?
     end
   end
 
   private
 
+  FACT_EVENTS = { job_title: OrgGraph::Events::TitleChanged, manager_id: OrgGraph::Events::ManagerChanged }.freeze
+  private_constant :FACT_EVENTS
+
   def columns(event)
     data = event.data
     case event
     when OrgGraph::Events::PersonRecorded
-      { job_title: data[:title], manager_id: data[:manager_id], status: STATUS.fetch(data[:employment_status]) }
-    when OrgGraph::Events::TitleChanged then { job_title: data[:title] }
-    when OrgGraph::Events::ManagerChanged then { manager_id: data[:manager_id] }
+      { status: STATUS.fetch(data[:employment_status]),
+        **current(event, job_title: data[:title], manager_id: data[:manager_id]) }
+    when OrgGraph::Events::TitleChanged then current(event, job_title: data[:title])
+    when OrgGraph::Events::ManagerChanged then current(event, manager_id: data[:manager_id])
     when OrgGraph::Events::PersonLeft then { status: "inactive" }
     when OrgGraph::Events::PersonJoined, OrgGraph::Events::PersonReturned then { status: "active" }
     end
+  end
+
+  def current(event, **columns)
+    columns.reject { |column, _| dated_later?(event, FACT_EVENTS.fetch(column)) }
+  end
+
+  # Events on the same date resolve by the order learned, so only a strictly
+  # later date holds its ground.
+  def dated_later?(event, event_class)
+    stream = EventStreamNaming.person_stream(event.data[:person_id], tenant: ActsAsTenant.current_tenant)
+    Rails.configuration.event_store.read.stream(stream).of_type([ OrgGraph::Events::PersonRecorded, event_class ])
+         .to(event.event_id).each.any? { it.data[:effective_on].to_s > event.data[:effective_on].to_s }
   end
 end

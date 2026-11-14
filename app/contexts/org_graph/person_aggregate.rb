@@ -19,6 +19,8 @@ class OrgGraph::PersonAggregate
   PROVIDERS = (HrisConfig::PROVIDERS + %w[espalia]).freeze
   EMPLOYMENT_STATUSES = %w[pending employed left].freeze
   FORGETTING_REASONS = %w[retention request].freeze
+  # Where a leaving date worked out from a row came from, best evidence first.
+  LEFT_ON_SOURCES = %w[hris_termination_date row_updated first_recorded].freeze
   FACT_KEYS = %i[title level manager_id cost_centre site country fte employment_type].freeze
   private_constant :FACT_KEYS
   # The kind of fact each keyword writes, as the provider settings name them
@@ -26,6 +28,7 @@ class OrgGraph::PersonAggregate
   # taken from any provider.
   FACT_KINDS = {
     employment_status: "employment_status", started_on: "employment_status", left_on: "employment_status",
+    left_on_source: "employment_status",
     title: "title", level: "level", manager_id: "manager", cost_centre: "cost_centre",
     site: "site", country: "site", fte: "employment", employment_type: "employment"
   }.freeze
@@ -37,8 +40,7 @@ class OrgGraph::PersonAggregate
     @started_on = nil
     @left_on = nil
     @left_from = nil
-    @facts = {}
-    @fact_providers = {}
+    @fact_points = {}
     @memberships = {}
     @membership_ends = {}
     @forgotten = false
@@ -52,6 +54,8 @@ class OrgGraph::PersonAggregate
   # @param employment_status [String] one of {EMPLOYMENT_STATUSES}
   # @param started_on [Date, String, nil]
   # @param left_on [Date, String, nil]
+  # @param left_on_source [String, nil] one of {LEFT_ON_SOURCES}, when the
+  #   leaving date was worked out rather than supplied
   # @param title [String, nil]
   # @param level [String, nil]
   # @param manager_id [String, nil] person_id of their manager
@@ -62,7 +66,7 @@ class OrgGraph::PersonAggregate
   # @param employment_type [String, nil]
   # @raise [RuntimeError] if already recorded or a fact is invalid
   def record(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil,
-             title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil,
+             left_on_source: nil, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil,
              fte: nil, employment_type: nil)
     raise "Person already recorded" if recorded?
     raise "Person id can't be blank" if person_id.blank?
@@ -71,12 +75,15 @@ class OrgGraph::PersonAggregate
     started_on = normalize_date(started_on, :started_on)
     left_on = normalize_date(left_on, :left_on)
     raise "A person can't leave before they start" if started_on && left_on && left_on < started_on
+    raise "Invalid leaving date source: #{left_on_source}" unless left_on_source.nil? || LEFT_ON_SOURCES.include?(left_on_source)
+    raise "A leaving date source needs a leaving date" if left_on_source && left_on.nil?
 
     @person_id = person_id
     apply(OrgGraph::Events::PersonRecorded.new(data: provenance(provider, effective_on).merge(
       employment_status: employment_status,
       started_on: started_on,
       left_on: left_on,
+      **({ left_on_source: } if left_on_source),
       title: label(title),
       level: label(level),
       manager_id: validated_manager(manager_id),
@@ -217,7 +224,8 @@ class OrgGraph::PersonAggregate
     data = provenance(provider, effective_on)
     terms = { allocation: validated_fraction(allocation, "Allocation"), role: label(role) }
     current = @memberships[unit_id]
-    return if current && current.slice(:allocation, :role, :provider) == terms.merge(provider: provider)
+    return if current && current.slice(:allocation, :role, :provider) == terms.merge(provider: provider) &&
+              data[:effective_on] >= current[:changed_on]
 
     ended_on = @membership_ends[unit_id]
     if ended_on && data[:effective_on] < ended_on
@@ -313,9 +321,10 @@ class OrgGraph::PersonAggregate
   end
 
   # @param key [Symbol, String] one of the person facts, such as :cost_centre
-  # @return [Object, nil] what the Org Graph holds for it now
-  def fact(key)
-    @facts[key.to_sym]
+  # @param on [Date, String] the day to read it for
+  # @return [Object, nil] what the Org Graph holds for it that day
+  def fact(key, on: Date.current)
+    fact_point(key.to_sym, normalize_date(on, :on))&.value
   end
 
   # @return [Boolean] whether the Org Graph has seen this person yet
@@ -469,10 +478,27 @@ class OrgGraph::PersonAggregate
   def change(event_class, provider, effective_on, **facts)
     ensure_recorded!
     data = provenance(provider, effective_on)
-    return if facts.all? { |key, value| @facts[key] == value && @fact_providers[key] == provider }
+    return if facts.all? { |key, value| fact_point(key, data[:effective_on])&.then { [ it.value, it.provider ] } == [ value, provider ] }
 
     apply(event_class.new(data: data.merge(facts)))
   end
+
+  FactPoint = Data.define(:on, :value, :provider)
+  private_constant :FactPoint
+
+  # Each fact keeps its dated values, so a backdated one fills in the days
+  # before a later one without replacing it, and a later one on the same date
+  # replaces the earlier.
+  def hold_facts(data, keys)
+    keys.each do |key|
+      points = (@fact_points[key] ||= [])
+      points.reject! { it.on == data[:effective_on] }
+      points << FactPoint.new(on: data[:effective_on], value: data[key], provider: data[:provider])
+      points.sort_by!(&:on)
+    end
+  end
+
+  def fact_point(key, on) = @fact_points[key]&.reverse_each&.find { it.on <= on }
 
   def provenance(provider, effective_on)
     raise "Unknown provider: #{provider}" unless PROVIDERS.include?(provider)
@@ -530,8 +556,8 @@ class OrgGraph::PersonAggregate
     @employment_status = event.data[:employment_status]
     @started_on = event.data[:started_on]
     @left_on = event.data[:left_on]
-    @facts = event.data.slice(*FACT_KEYS)
-    @fact_providers = FACT_KEYS.index_with(event.data[:provider])
+    @fact_points = {}
+    hold_facts(event.data, FACT_KEYS)
   end
 
   {
@@ -553,9 +579,7 @@ class OrgGraph::PersonAggregate
     OrgGraph::Events::CostCentreChanged, OrgGraph::Events::SiteChanged, OrgGraph::Events::EmploymentChanged
   ].each do |event_class|
     on event_class do |event|
-      changed = event.data.slice(*FACT_KEYS)
-      @facts.merge!(changed)
-      @fact_providers.merge!(changed.keys.index_with(event.data[:provider]))
+      hold_facts(event.data, event.data.keys & FACT_KEYS)
     end
   end
 
@@ -570,7 +594,8 @@ class OrgGraph::PersonAggregate
   on OrgGraph::Events::MembershipSet do |event|
     data = event.data
     current = @memberships[data[:unit_id]] || {}
-    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(
+    terms = current[:changed_on].to_s > data[:effective_on].to_s ? current : data
+    @memberships[data[:unit_id]] = terms.slice(:allocation, :role, :provider).merge(
       since: [ current[:since], data[:effective_on] ].compact.min,
       changed_on: [ current[:changed_on], data[:effective_on] ].compact.max
     )

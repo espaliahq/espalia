@@ -96,6 +96,17 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal "2026-10-31", leaver.data[:left_on]
     end
 
+    should "keep where a leaving date came from when it first records them, and drop it with the date" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", left_on: "2026-10-31", left_on_source: "first_recorded")
+      other = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-2").id
+      @handler.sync_person(other, **PROVENANCE, employment_status: "left", started_on: "2026-12-01", left_on: "2026-11-15",
+                                  left_on_source: "hris_termination_date")
+
+      assert_equal [ "2026-10-31", "first_recorded" ], stream_events.first.data.values_at(:left_on, :left_on_source)
+      dropped = Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(other)).first
+      assert_equal [ nil, nil ], dropped.data.values_at(:left_on, :left_on_source)
+    end
+
     should "supply a start date the stream lacks, once" do
       @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
 

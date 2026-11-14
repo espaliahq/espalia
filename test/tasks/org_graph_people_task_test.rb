@@ -17,8 +17,17 @@ class OrgGraphPeopleTaskTest < ActiveSupport::TestCase
 
     assert_includes output, "recorded from their row: 1\n  #{@person.id}"
     assert_includes output, "cut over: no"
+    assert_no_match(/leavers dated by/, output)
     assert_no_match(/Ada|ada@example.com/, output)
     assert_not @tenant.reload.org_graph_people_projected?
+  end
+
+  should "count leavers by where their leaving date came from" do
+    ActsAsTenant.with_tenant(@tenant) { @person.update!(status: "inactive") }
+
+    output = capture_io { Rake::Task["org_graph:people:cut_over"].invoke(@tenant.id) }.first
+
+    assert_includes output, "leavers dated by first recorded: 1"
   end
 
   should "cut over with APPLY=1, and revert" do

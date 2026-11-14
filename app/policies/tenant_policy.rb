@@ -30,6 +30,12 @@ class TenantPolicy < ApplicationPolicy
   # @return [Boolean] whether the viewer can forget a leaver or turn on scheduled forgetting
   def forget_person? = tenant_admin?
 
+  # An admin's alone: an editor may change the Org Graph but not choose who
+  # else may.
+  #
+  # @return [Boolean] whether the viewer can list, add or remove Org Graph editors
+  def manage_org_graph_editors? = tenant_admin?
+
   # Narrower than the cycle report's bar (which admits managers): the export
   # carries names and feedback text. A linked Person is required so every
   # export is attributable to someone in the audit log.

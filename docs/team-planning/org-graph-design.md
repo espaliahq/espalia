@@ -301,7 +301,17 @@ The feed starts from the Org Graph's first event, so a deploy that adds it rebui
 (`REBUILD_ON_DEPLOY=org_graph/unit_activity`) wherever Org Graph events exist. Without that
 history a membership's earlier terms would be missing.
 
-The sidebar that shows this is 5.4.
+The sidebar that shows this is 5.4 ([#137](https://github.com/espaliahq/espalia/issues/137)). It sits beside the opened
+unit on a wide screen and below it on a phone, 25 groups a page. A group of one reads as
+its part, naming the person it moved; a larger group gives a summary and opens to its
+parts. Each says who made it, or which provider supplied it, when it took effect and when
+the Org Graph learned it, with any plan reference. "Change it back" appears only where it
+would work for the reader: `ChangeBackHandler#refusal` and `#group_refusal` run the same
+rules and the same rights the change-back enforces, without locks or writes, and the entry
+shows the reason instead. A group that touched other units says how many it changes back.
+A refusal only the write can find, such as a person who has since left, still comes back
+as a flash. The same feed is `org_graph_activity` over MCP, and `org_graph_change_back` and
+`org_graph_change_back_group` write the inverses.
 
 ### Keeping a fact current
 
@@ -325,8 +335,20 @@ keeps it so, so each one shows its age.
   leaver's facts are never listed, nor a membership of a retired unit. Changing one half
   of a pair, such as a site, leaves the other half's age alone.
 
-The flags and confirm buttons are 5.5. Units' own facts, their names and parents, have no
-confirmation yet.
+- **A stale fact shows a quiet flag** ([#142](https://github.com/espaliahq/espalia/issues/142)):
+  "Not confirmed since" a date, and who last checked it. It shows in the Units view's member
+  rows, the unit drawer's member list and the person drawer's teams and employment.
+  `OrgGraph::StaleFacts` reads them for the people on screen, and nothing shows when
+  nothing is stale.
+- **"Still true" confirms a fact as of today.** Whoever may change a membership may confirm
+  it; a person's own facts take an admin or Org Graph editor (`OrgGraphPolicy::Confirmations`).
+  A pair, such as site and country, is confirmed together. MCP confirms through
+  `org_graph_confirm_fact`, and `org_graph_person_get` says which facts are stale.
+- **An HRIS-held fact is never flagged**, since each sync confirms it. The person drawer
+  says so.
+
+Units' own facts, their names and parents, have no confirmation yet, and the person's
+history doesn't show confirmations.
 
 ### What happens to `people`
 
@@ -439,6 +461,13 @@ Graph could no longer say what it knew before. From it:
   counts it apart. A correction to an earlier value leaves a later change standing unless
   it turns that change into another kind or into no change at all. MCP clients read it
   through `org_graph_changes_between`.
+- The Units view's "Compare with a date" (5.7) reads through `ChangesBetween`, in either
+  mode. `OrgGraph::DateComparison` marks units new, renamed, moved or succeeded in today's
+  tree, lists who joined, left or moved on each unit's card, counts each kind and lists the
+  units retired in the window. The window lives in the URL, so a comparison can be shared.
+  Every link, form and redirect on the Units view and its drawers carries it
+  (`OrgGraphComparison`, `Views::Tenant::OrgGraph::KeepsComparison`), so no action there
+  drops it; only Clear does.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what
 was known last Tuesday, even if a backdated correction arrived since. The correction
@@ -467,6 +496,12 @@ The dates follow the events:
 - A change-back on the same date as the change it reverses withdraws that change, as
   though it never took effect. On a later date it is an ordinary change.
 - `PersonForgotten` changes nothing here. The rows hold ids, and the history stays.
+
+Two rules hold across history, `AsOf`, `ChangesBetween` and the live tables
+(`org_memberships`, the `people` columns). First, a fact dated before one already held
+fills in the days before it and leaves the later fact in force; on the same date, the
+fact learned last wins. Second, a membership counts on its end date and not the day
+after, and a move counts the person in the new unit only, from its date.
 
 Production already holds events of every type it reads, so the deploy that ships it needs
 `REBUILD_ON_DEPLOY=org_graph/history` to fill it. Without it, predeploy's `verify` stops
@@ -608,7 +643,7 @@ the sync's result as split, for someone to resolve. Espalia never picks a majori
 `Hris::LevelHandover` compares a level Espalia holds with the field it would come from,
 then switches it. The operations are `integrations_hris_level_handover` (the comparison),
 `integrations_hand_over_hris_level` and `integrations_hand_back_hris_level`. The settings
-screen (6.9) hosts them.
+screen (6.9, below) hosts them.
 
 - **Suggested by name, confirmed by a person.** Each unit gets the value whose label
   matches its name, and the values its members hold, with how many hold each. Nothing is
@@ -639,6 +674,32 @@ screen (6.9) hosts them.
 - **Handing back undoes no history.** The level and its units become Espalia's again and
   lose their references. Units and memberships stay as they are; successions and
   retirements made by the handover stand. The brake does not apply in reverse.
+
+#### The settings screen (6.9)
+
+`/tenant/org_graph/settings` gathers the Org Graph's settings on one page
+([#126](https://github.com/espaliahq/espalia/issues/126)). Only a tenant admin reaches it,
+and the Units view links to it. Each panel writes through the Operations above, so the
+screen and MCP share one implementation.
+
+- **Where each fact comes from.** Each fact's provider, and, for a fact the HRIS supplies,
+  the field it is read from. A field is previewed before it is chosen.
+- **Levels.** Each level's provider and live units. An empty level is read from a field
+  directly. An admin adds a level, which starts at the bottom, and moves the ones Espalia
+  holds up or down a place ([#127](https://github.com/espaliahq/espalia/issues/127)). A move
+  that would put a unit above its parent's level, or shift a level the HRIS supplies, isn't offered.
+- **Handing a level over.** A level with units is compared with a field. Each unit gets
+  one call: match a value, succeed into another unit, or retire. The calls start from the
+  suggested value, and the switch appears only once the calls are compared and nothing is
+  left to decide. The switch carries that comparison's fingerprint, and over the brake it
+  asks for both counts. A level the HRIS holds is handed back from the same panel.
+- **Keeping facts fresh.** The staleness threshold, and how many facts have passed it.
+- **Forgetting.** The retention period, who reaches their date today, and the schedule.
+  Without a forgetting key the panel says forgetting isn't set up and offers no switch.
+  There is no button to forget one person.
+- **Who may edit.** The Org Graph editors, added and removed by name.
+
+Frames that read the HRIS load eagerly, so the page never waits on it.
 
 #### What the sync needs for this
 

@@ -9,18 +9,22 @@ class Tenant::OrgUnitsController < ApplicationController
   def edit
     authorize :org_graph, :show_units?
     overview = OrgGraph::UnitsOverview.new(selected_unit_id: @unit.id)
+    confirmations = OrgGraphPolicy::Confirmations.for_cards(policy(:org_graph), overview)
     render Views::Tenant::OrgGraph::ShowView.new(
       overview:,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a },
+      confirmations:,
       drawer: Views::Tenant::OrgGraph::UnitDrawer.new(
         unit: @unit,
         overview:,
         rights: OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview),
+        confirmations:,
         effective_on: params[:on].presence || Date.current.iso8601,
         alert: flash[:drawer_alert]
-      )
+      ),
+      **comparison_slots(unit_id: @unit.id)
     )
   end
 

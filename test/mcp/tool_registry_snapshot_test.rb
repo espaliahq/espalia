@@ -2600,6 +2600,79 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_activity",
+        "description" => "Read one Org Graph unit's activity, newest first, 25 groups a page. A group is every " \
+          "change made under one cause, such as one request or one approved plan change. Each group " \
+          "has its summary, who made it (a person's name, or the provider that supplied it), when " \
+          "it took effect, when the Org Graph learned it, any plan reference, its parts and whether " \
+          "the caller can change it back, with the reason when not. Each part has its own id, " \
+          "description and change-back answer. Changing a group back reverses it in every unit it " \
+          "touched, and units_touched counts them. Admins only while the Org Graph is unfinished.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "unit_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S", "format" => "uuid" },
+            "page" => { "type" => "integer" }
+          },
+          "required" => %w[unit_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_add_editor",
+        "description" => "Make an active person with an account in this organisation an Org Graph editor, so they may change its providers, units and people's facts. Admins already may, and only admins may add or reorder its levels. Returns the list as org_graph_editors reads it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_add_level",
+        "description" => "Add a level to the bottom of the Org Graph's taxonomy, from effective_on (today by default). " \
+                         "Espalia holds the new level; use org_graph_reorder_levels to move it up. Level names are " \
+                         "unique, ignoring case. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "name" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_add_member",
         "description" => "Place a person in a live unit of the Org Graph, from effective_on (today by default), with " \
                          "an optional role and allocation (greater than 0, at most 1). A person can be in several " \
@@ -2695,6 +2768,47 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_change_back",
+        "description" => "Change back one entry of an Org Graph unit's activity, by its id from " \
+          "org_graph_activity. Writes the inverse as a new change; history keeps both. Refused, " \
+          "with the reason, for a change the caller couldn't make, one another provider supplied, " \
+          "one already changed back, one a later change has replaced, or a backdated change that " \
+          "moved the day someone joined a unit earlier.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "entry_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S", "format" => "uuid" }
+          },
+          "required" => %w[entry_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_change_back_group",
+        "description" => "Change back every change made under one cause, by the cause_id of a group from " \
+          "org_graph_activity. Reverses it in every unit it touched, not just the one read, as new " \
+          "changes; history keeps both. Refused as a whole, with the reason, unless every part can " \
+          "be changed back.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cause_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[cause_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_changes_between",
         "description" => "What changed in the Org Graph between two UTC dates: joiners (with every fact and " \
           "membership and the units they own on their first day), leavers, person " \
@@ -2725,6 +2839,70 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "additionalProperties" => false,
           "if" => { "properties" => { "by" => { "const" => "learned" } }, "required" => %w[by] },
           "then" => { "not" => { "required" => %w[known_on] } }
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_confirm_fact",
+        "description" => "Confirm that a fact Espalia holds about a person is still true, so it is no longer stale. " \
+                         "A membership names its unit in unit_id; any other fact is the person's own. " \
+                         "A fact an HRIS supplies is confirmed by each sync and can't be confirmed here. " \
+                         "A confirmation is dated the day it is made.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string"
+            },
+            "fact" => {
+              "type" => "string",
+              "enum" => %w[title level manager_id cost_centre site country fte employment_type membership]
+            },
+            "unit_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id", "fact" ],
+          "additionalProperties" => false,
+          "allOf" => [
+            {
+              "if" => { "properties" => { "fact" => { "const" => "membership" } }, "required" => [ "fact" ] },
+              "then" => {
+                "required" => [ "unit_id" ],
+                "properties" => { "unit_id" => { "minLength" => 1, "pattern" => "\\S" } }
+              }
+            },
+            {
+              "if" => {
+                "properties" => {
+                  "fact" => { "enum" => %w[title level manager_id cost_centre site country fte employment_type] }
+                },
+                "required" => [ "fact" ]
+              },
+              "then" => { "not" => { "required" => [ "unit_id" ] } }
+            }
+          ]
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_editors",
+        "description" => "List who may change the whole Org Graph: the Org Graph editors an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
         },
         "annotations" => {
           "readOnlyHint" => true,
@@ -2829,7 +3007,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
                          "allocation, since, and the provider that holds each, \"espalia\" or an HRIS), their employment " \
                          "facts in effect today (title, level, manager, cost centre, site, employment, start date), each " \
                          "with its provider and since when, and their history newest first: each change with the day it " \
-                         "took effect, when the Org Graph learned it, its provider and who made it. A forgotten person " \
+                         "took effect, when the Org Graph learned it, its provider and who made it. A membership or fact " \
+                         "Espalia holds that nobody has changed or confirmed within the tenant's threshold carries " \
+                         "stale: when it was last checked and by whom. A forgotten person " \
                          "reads as \"Former member\". Admins only while the Org Graph is unfinished.",
         "inputSchema" => {
           "type" => "object",
@@ -2845,6 +3025,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_remove_editor",
+        "description" => "Stop a person being an Org Graph editor. They keep their rights over units they own and their reports' memberships. An admin's rights can't be removed this way. Returns the list as org_graph_editors reads it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {
@@ -2935,6 +3136,38 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_reorder_levels",
+        "description" => "Change the order of the Org Graph's taxonomy levels, from effective_on (today by default). " \
+                         "level_ids lists every level once, top first. A level an HRIS provides keeps its place, as its " \
+                         "order comes from the HRIS, and sits above every level Espalia holds. Two levels that both hold " \
+                         "units keep their order, so no unit ends up above its parent's level. Refused unless the " \
+                         "caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "level_ids" => {
+              "type" => "array",
+              "items" => {
+                "type" => "string"
+              },
+              "description" => "every level_id in the taxonomy, top first"
+            }
+          },
+          "required" => [ "level_ids" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_retire_unit",
         "description" => "Retire a unit in the Org Graph from effective_on (today by default), ending every membership in it, so its people show as in no team. A unit with live sub-units is refused until they are moved or retired, and one an HRIS supplies is retired in the HRIS. Refused unless the caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it.",
         "inputSchema" => {
@@ -2956,6 +3189,93 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => false,
           "destructiveHint" => false,
           "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_set_fact_provider",
+        "description" => "Set who supplies one kind of person fact from today: \"espalia\", or the connected HRIS. Facts: employment_status, title, level, manager, cost_centre, site, employment. For an HRIS, fields names the HRIS field to read a part from (cost_centre: cost_centre; site: country); leave it out to keep the fields already chosen. Moving a fact to another provider clears its fields. Writes nothing when nothing changes.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "fact" => {
+              "type" => "string",
+              "enum" => [
+                "employment_status",
+                "title",
+                "level",
+                "manager",
+                "cost_centre",
+                "site",
+                "employment"
+              ]
+            },
+            "provider" => {
+              "type" => "string",
+              "enum" => [ "hibob", "espalia" ]
+            },
+            "fields" => {
+              "type" => "object",
+              "properties" => {
+                "cost_centre" => {
+                  "type" => "string"
+                },
+                "country" => {
+                  "type" => "string"
+                }
+              },
+              "additionalProperties" => false
+            }
+          },
+          "required" => [ "fact", "provider" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_set_level_provider",
+        "description" => "Set who supplies an Org Graph structure level from today: \"espalia\", or the connected HRIS reading the level's units from field, which an HRIS needs. Only a level with no live units; to move a level that holds units, compare and hand it over with integrations_hris_level_handover. Levels an HRIS supplies sit above the ones Espalia holds.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "level_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "provider" => {
+              "type" => "string",
+              "enum" => [ "hibob", "espalia" ]
+            },
+            "field" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "level_id", "provider" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_sources",
+        "description" => "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact with its provider and the fields an HRIS reads it from, each structure level (top first) with its provider, field and number of live units, and the staleness threshold with how many facts Espalia holds are stale, by fact. Admins and Org Graph editors only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
         }
       },
       {
@@ -2998,6 +3318,31 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_stale_facts",
+        "description" => "List which of the given people's memberships and facts are stale: Espalia holds them and nobody " \
+                         "has changed or confirmed them within the tenant's threshold. Each row has the person id, the " \
+                         "fact (\"membership\", or a fact such as \"site\" or \"title\"), the unit id for a membership, the " \
+                         "day it was last checked and the id of whoever checked it. Oldest first. A fact an HRIS holds is " \
+                         "never stale, since each sync confirms it. Admins only while the Org Graph is unfinished.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_ids" => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "person_ids to look at"
+            }
+          },
+          "required" => [ "person_ids" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "org_graph_units",
         "description" => "List the Org Graph's live units in tree order, the order the Units page shows them: each " \
                          "with its id, name, level, parent, the provider that holds it (\"espalia\" or an HRIS), its " \
@@ -3014,6 +3359,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_update_staleness_threshold",
+        "description" => "Set how many days a fact Espalia holds about a person (a title, a manager, a membership) may go without a change or a confirmation before it counts as stale. The default is 90; at most 3650.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "staleness_days" => {
+              "type" => "integer"
+            }
+          },
+          "required" => [ "staleness_days" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {

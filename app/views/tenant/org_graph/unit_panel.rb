@@ -5,11 +5,16 @@
 class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Views::Tenant::OrgGraph::Formatting
+  include Views::Tenant::OrgGraph::KeepsComparison
 
   # @param overview [OrgGraph::UnitsOverview] with a selected unit
-  def initialize(overview:)
+  # @param comparison [OrgGraph::Comparison] marks what changed in the window
+  # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members shown (#142)
+  def initialize(overview:, comparison: OrgGraph::Comparison::NONE, confirmations: nil)
     @overview = overview
+    @confirmations = confirmations
     @unit = overview.selected
+    @comparison = comparison
   end
 
   def view_template
@@ -20,16 +25,18 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
       end
       div(class: "flex flex-wrap items-center gap-x-3 gap-y-1") do
         h3(id: "org-graph-unit", class: "text-lg font-semibold text-default") { @unit.name }
+        @comparison.unit_marks(@unit).each { render Components::Kit::Badge.new(it, tone: :info) } unless own_card?
         unless @unit.held_by_espalia?
           render Components::Kit::Badge.new("From #{provider_label(@unit)}, read-only", leading_icon: :lock)
         end
         p(class: "text-sm text-muted") { unit_summary }
-        render Components::Kit::Button.new(variant: :outline, size: :sm, href: edit_tenant_org_unit_path(@unit),
+        render Components::Kit::Button.new(variant: :outline, size: :sm, href: edit_tenant_org_unit_path(@unit, **compared),
                                            class: "sm:ml-auto") do
           icon(:pencil, class: "size-4")
           plain "Edit unit"
         end
       end
+      people_changes(@unit) unless own_card?
 
       div(class: "@container mt-4") do
         div(class: "grid grid-cols-1 @2xl:grid-cols-2 gap-4") do
@@ -41,9 +48,14 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
 
   private
 
+  # A unit with teams beneath it and no one directly in it has no card of its
+  # own, so its marks and people changes show under its heading instead.
+  def own_card? = @overview.cards.first&.id == @unit.id
+
   def unit_summary
-    beneath = @overview.descendants_of(@unit).group_by { |child| @overview.level_of(child) }.filter_map do |level, units|
-      level && pluralize_level(units.size, level.name)
+    counts = @overview.descendants_of(@unit).map(&:level_id).tally
+    beneath = @overview.levels.filter_map do |level|
+      counts[level.id] && pluralize_level(counts[level.id], level.name)
     end
     [ people(@overview.headcount(@unit)), *beneath ].join(", ")
   end
@@ -52,11 +64,15 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
     render Components::Kit::Card.new(density: :compact, id: "unit-#{unit.id}") do |card|
       card.body do
         div(class: "flex items-baseline justify-between gap-3 pt-3") do
-          h4(class: "font-semibold text-default") { unit.name }
+          div(class: "flex flex-wrap items-baseline gap-2") do
+            h4(class: "font-semibold text-default") { unit.name }
+            @comparison.unit_marks(unit).each { render Components::Kit::Badge.new(it, tone: :info) }
+          end
           span(class: "shrink-0 text-sm text-muted tabular-nums") { card_count(unit) }
         end
         p(class: "text-xs text-muted") { @overview.level_of(unit)&.name }
         members_list(unit)
+        people_changes(unit)
         sub_units_line(unit)
       end
     end
@@ -87,13 +103,35 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   def member_row(membership)
     person = membership.person
     li(class: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm") do
-      a(href: tenant_org_person_path(person, unit: @unit.id), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+      a(href: tenant_org_person_path(person, unit: @unit.id, **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
       also = @overview.other_units_of(membership)
       span(class: "text-xs text-muted") { "also #{also.map(&:name).join(', ')}" } if also.any?
       span(class: "ml-auto flex items-baseline gap-3 text-muted") do
         span { [ membership.role, person.job_title ].compact_blank.join(" · ") }
         span(class: "tabular-nums") { "#{(membership.allocation * 100).round}%" } if membership.allocation
         hris_level(person)
+      end
+      stale_flag(membership) if @confirmations
+    end
+  end
+
+  def stale_flag(membership)
+    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "units", unit: @unit.id })
+  end
+
+  def people_changes(unit)
+    changes = @comparison.people_changes(unit)
+    return if changes.empty?
+
+    div(class: "mt-3 border-t border-subtle pt-2") do
+      p(class: "text-xs font-semibold text-muted") { @comparison.window_label }
+      ul(class: "mt-1 space-y-1 text-sm text-default", aria: { label: "#{@comparison.window_label} in #{unit.name}" }) do
+        changes.each do |change|
+          li do
+            span(class: "font-medium text-default") { change.name }
+            plain " #{change.text}"
+          end
+        end
       end
     end
   end
@@ -114,7 +152,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
       plain "Beneath: "
       children.each_with_index do |child, index|
         plain ", " if index.positive?
-        a(href: tenant_org_graph_path(unit: child.id), class: "text-link hover:text-link-hover underline") do
+        a(href: tenant_org_graph_path(unit: child.id, **compared), class: "text-link hover:text-link-hover underline") do
           "#{child.name} #{@overview.headcount(child)}"
         end
       end

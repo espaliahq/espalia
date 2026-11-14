@@ -97,9 +97,30 @@ Rails.application.routes.draw do
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
 
-    # Org Graph Units view (#80), read-only. Here, admins only, until the
-    # Org Graph screens are finished.
-    resource :org_graph, only: :show, controller: "org_graphs"
+    # Org Graph Units view (#80), with "change it back" in its activity
+    # sidebar (#137). Here, admins only, until the Org Graph screens are
+    # finished.
+    resource :org_graph, only: :show, controller: "org_graphs" do
+      post :change_back
+    end
+
+    # Org Graph settings (#126): one screen, and a controller per panel's
+    # writes.
+    resource :org_graph_settings, only: :show, path: "org_graph/settings", controller: "org_graph_settings"
+    scope "org_graph/settings", module: :org_graph_settings, as: :org_graph_settings do
+      resources :editors, only: [ :create, :destroy ], param: :person_id
+      resources :fact_providers, only: :update, param: :fact
+      resources :fact_fields, only: :show, param: :fact
+      resources :levels, only: :create
+      resource :level_order, only: :update
+      resources :level_providers, only: :update, param: :level_id
+      resources :level_fields, only: :show, param: :level_id
+      resources :level_handovers, only: [ :show, :update, :destroy ], param: :level_id
+      resource :freshness, only: :update, controller: "freshness"
+      resource :retention, only: :update, controller: "retention"
+      resource :forgetting_due, only: :show
+      resource :forgetting_schedule, only: [ :create, :destroy ]
+    end
 
     # The unit drawer (#124): `edit` opens it over the Units view, and each
     # change posts to its own small resource.
@@ -117,6 +138,7 @@ Rails.application.routes.draw do
     # membership change posts to its own resource, keyed by the unit.
     resources :org_people, only: :show, path: "org_graph/people" do
       resources :memberships, only: [ :create, :update, :destroy ], controller: "org_person_memberships"
+      resources :confirmations, only: :create, controller: "org_fact_confirmations"
     end
 
     # Feedback export for monthly reporting (#458): `new` is the picker,

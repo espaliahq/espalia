@@ -71,8 +71,7 @@ class OrgGraph::StructureAggregate
 
     in_use = live_units.map(&:level_id).uniq
 
-    kept_order = level_ids(@levels) & in_use
-    raise "Levels in use must keep their order" unless level_ids(levels) & in_use == kept_order
+    ensure_levels_in_use_keep_order!(levels, in_use)
 
     ensure_hris_levels_on_top!(level_ids(levels), new_providers)
 
@@ -91,6 +90,37 @@ class OrgGraph::StructureAggregate
         set_by_id: defined_by_id
       }))
     end
+  end
+
+  # Adds a level Espalia holds below every other level. Works from the levels
+  # this stream holds, so a level added or moved meanwhile is kept.
+  #
+  # @param level_id [String] a new level's id
+  # @param name [String]
+  # @param effective_on [Date, String]
+  # @param defined_by_id [String, nil] person_id of the actor
+  # @raise [ArgumentError] if the id is taken or the name blank or taken
+  def add_level(level_id, name, effective_on:, defined_by_id: nil)
+    raise ArgumentError, "Level id is taken" if level_index(require_id(level_id, "Level id"))
+
+    define_taxonomy([ *@levels, { level_id:, name: } ], effective_on:, defined_by_id:)
+  end
+
+  # Puts the levels this stream holds in a new order, keeping their names.
+  #
+  # @param level_ids [Array<String>] every level's id once, top first
+  # @param effective_on [Date, String]
+  # @param defined_by_id [String, nil] person_id of the actor
+  # @raise [ArgumentError] unless the ids are exactly the current levels'
+  # @raise [RuntimeError] if the order breaks one {#define_taxonomy} keeps
+  def reorder_levels(level_ids, effective_on:, defined_by_id: nil)
+    by_id = @levels.index_by { |level| level[:level_id] }
+    ids = Array(level_ids).map { |id| id.to_s.downcase }
+    unless ids.any? && ids.uniq.size == ids.size && ids.sort == by_id.keys.sort
+      raise ArgumentError, "Name every level in the taxonomy once, top first"
+    end
+
+    define_taxonomy(ids.map { |id| by_id[id] }, effective_on:, defined_by_id:)
   end
 
   # Sets who supplies a taxonomy level's units and, for an HRIS, the field
@@ -614,6 +644,16 @@ class OrgGraph::StructureAggregate
       end
     end
     seen
+  end
+
+  def ensure_levels_in_use_keep_order!(levels, in_use)
+    kept_order = level_ids(@levels) & in_use
+    new_order = level_ids(levels) & in_use
+    moved, passed = new_order.zip(kept_order).find { |new_id, old_id| new_id != old_id }
+    return unless moved
+
+    name = ->(id) { levels.find { |level| level[:level_id] == id }[:name] }
+    raise "#{name[passed]} and #{name[moved]} both hold units, so #{name[passed]} must stay above #{name[moved]}"
   end
 
   # Levels an HRIS provides sit above every level Espalia holds, so the levels
