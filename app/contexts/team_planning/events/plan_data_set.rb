@@ -77,9 +77,14 @@ class TeamPlanning::Events::PlanDataSet < TeamPlanning::Events::Change
   # @return [String, nil] the person, when the Org Graph changes a field the plan can hold
   def self.subject_moved_by(change) = (change.person_id if change.kind == :fact_changed && FACTS.value?(change.fact))
 
+  # @param planned [PlanDataSet]
+  # @param change [OrgGraph::ChangesBetween::Change]
+  # @return [Boolean] whether the change moves the field this one holds
+  def self.moved_by?(planned, change) = super && FACTS[planned.data[:field]] == change.fact
+
   # @param facet [String]
   # @return [Boolean]
-  def self.holds?(facet) = facet.start_with?("#{self.facet}:")
+  def self.holds?(facet) = facet.start_with?("#{self.facet}:") && FIELDS.key?(facet.delete_prefix("#{self.facet}:"))
 
   # @return [Array(String, String)]
   def key = [ data[:subject_id], "#{self.class.facet}:#{data[:field]}" ]

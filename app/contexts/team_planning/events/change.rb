@@ -58,6 +58,11 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [String, nil] the subject's id, nil when it moves none
   def self.subject_moved_by(change) = nil
 
+  # @param planned [TeamPlanning::Events::Change] a change of this kind
+  # @param change [OrgGraph::ChangesBetween::Change]
+  # @return [Boolean] whether the Org Graph's change moves what the planned change holds
+  def self.moved_by?(planned, change) = subject_moved_by(change) == planned.data[:subject_id]
+
   # Whether two end states of this kind are the same, as when one is read
   # off a map and the other was planned. They can differ in key type alone.
   #

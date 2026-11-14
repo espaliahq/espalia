@@ -98,7 +98,7 @@ class TeamPlanning::Baseline
     # @param occupants [Array<Array(Member, Membership)>] from {#occupants}
     # @return [Float]
     def open_fte(position, occupants)
-      filled = occupants.sum { |person, placement| placement.allocation.to_f * (person.fte || 1).to_f }
+      filled = occupants.sum { |person, placement| placement.allocation.to_f * person.fte_or_one.to_f }
       (position.fte.to_f - filled).round(4)
     end
 
@@ -222,6 +222,12 @@ class TeamPlanning::Baseline
 
     # @return [Boolean]
     def placeholder? = !placeholder.nil?
+
+    # @return [Numeric] the FTE the plan counts, 1 when nobody knows it
+    def fte_or_one
+      fte = planned_or_own(:fte)
+      fte.nil? || fte == UNKNOWN ? 1 : fte
+    end
 
     # @return [Line, nil] nil when they report to nobody
     def line = manager_id || manager_position_id ? Line.new(person_id: manager_id, position_id: manager_position_id) : nil

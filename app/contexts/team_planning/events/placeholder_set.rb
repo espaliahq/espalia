@@ -32,8 +32,8 @@ class TeamPlanning::Events::PlaceholderSet < TeamPlanning::Events::Change
     { label:, level: end_state[:level].to_s.strip.presence, fte: }
   end
 
-  # Kinds land in the order they were made, so a placeholder lands before
-  # anything places it.
+  # Resolution lands every placeholder first, so editing one never lands it
+  # after what places it.
   #
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]

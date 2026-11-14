@@ -65,6 +65,7 @@ class TeamPlanning::Status
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     @aggregate = @repository.load_plan(@plan.id)
     @resolved = {}
+    @winning = {}
     changes = tracked_changes
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
@@ -76,9 +77,14 @@ class TeamPlanning::Status
 
   private
 
+  # A placeholder hire never reaches the Org Graph, so nothing it holds has a status.
   def tracked_changes
-    @repository.sealed(@aggregate.winning_changes(@scenario_id)).select { |_, change| change.class.readable? && change.class.meets_org_graph? }
+    changes = winning(@scenario_id)
+    hires = changes.keys.filter_map { |subject_id, facet| subject_id if facet == TeamPlanning::Events::PlaceholderSet.facet }
+    changes.select { |(subject_id, _), change| change.class.readable? && change.class.meets_org_graph? && hires.exclude?(subject_id) }
   end
+
+  def winning(scenario_id) = @winning[scenario_id] ||= @repository.sealed(@aggregate.winning_changes(scenario_id))
 
   def entry(change, key, base:, now:)
     kind = change.class
@@ -115,7 +121,7 @@ class TeamPlanning::Status
     chain = @aggregate.resolution_chain(@scenario_id)
     step = chain.drop(chain.index(change.data[:scenario_id])).find { path.include?(it) }
     index = path.index(step)
-    earlier = @repository.sealed(@aggregate.winning_changes(path[index - 1]))[key] if index.positive?
+    earlier = winning(path[index - 1])[key] if index.positive?
     return [] unless earlier
     return [ [ end_state_of(earlier), resolved(path[index - 1]) ] ] if earlier.instance_of?(change.class)
 

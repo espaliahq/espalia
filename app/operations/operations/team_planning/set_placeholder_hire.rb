@@ -5,7 +5,9 @@
 # the level and FTE they'd join at. A placeholder is not a person, so all
 # three seal under the plan's key: forgetting anyone leaves it as it was, and
 # deleting the plan shreds it. The map names it by its label, and
-# team_planning_set_assignment places it like anyone else.
+# team_planning_set_assignment places it like anyone else. Its level and FTE
+# change only here, since the person tools want a real person, and each call
+# replaces all three.
 class Operations::TeamPlanning::SetPlaceholderHire < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
 
@@ -13,7 +15,8 @@ class Operations::TeamPlanning::SetPlaceholderHire < Operations::Base
 
   description "Add a placeholder hire to a scenario of a Team Planning plan, or change one, with a label and the " \
               "level and FTE they'd join at. Leave placeholder_id out to add one; the map then lists it as a " \
-              "person under that id, named by its label, and team_planning_set_assignment places it. An FTE is " \
+              "person under that id, named by its label, and team_planning_set_assignment places it. A change " \
+              "replaces the label, level and FTE together, so send all three: one left out is cleared. An FTE is " \
               "above 0 and at most 1. Refused unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client

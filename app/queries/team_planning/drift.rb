@@ -76,9 +76,9 @@ class TeamPlanning::Drift
   def meeting(planned, change)
     planned.filter_map do |scenario_id, planned_change|
       subject_id = planned_change.data[:subject_id]
-      next unless planned_change.class.subject_moved_by(change) == subject_id
+      next unless planned_change.class.moved_by?(planned_change, change)
 
-      Met.new(scenario_id:, change_id: planned_change.event_id, facet: planned_change.class.facet, subject_id:)
+      Met.new(scenario_id:, change_id: planned_change.event_id, facet: planned_change.key.last, subject_id:)
     end
   end
 

@@ -52,6 +52,18 @@ class TeamPlanning::PlanDataTest < ActiveSupport::TestCase
 
   def delete_plan_keys = as_tenant { PlanKeyStore.new.destroy_plan(@plan_id) }
 
+  def place_hire
+    payments, squad = Array.new(2) { SecureRandom.uuid_v7 }
+    as_tenant do
+      structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+      structure.define_taxonomy([ { level_id: squad, name: "Squad" } ], effective_on: "2026-01-01")
+      structure.create_unit(payments, "Payments", level_id: squad, effective_on: "2026-01-01")
+    end
+    add_hire
+    set(TeamPlanning::Events::AssignmentSet, subject_id: @hire, placements: [ { unit_id: payments, allocation: 1 } ])
+    payments
+  end
+
   def promote_and_correct
     set(TeamPlanning::Events::LevelSet, level: "4")
     set(TeamPlanning::Events::PlanDataSet, field: "fte", value: "0.8")
@@ -144,6 +156,48 @@ class TeamPlanning::PlanDataTest < ActiveSupport::TestCase
     forget_ada
 
     assert_equal :unknown, status.call
+  end
+
+  should "land a placeholder before what places it, so an edit after placing it keeps the placement" do
+    payments = place_hire
+    add_hire(label: "Payments lead")
+
+    assert_equal [ "Payments lead", [ payments ] ], [ hire.placeholder.reveal, hire.memberships.map(&:unit_id) ]
+  end
+
+  should "give a placeholder hire and its placement no status, since the Org Graph never holds one" do
+    place_hire
+    statuses = as_tenant { TeamPlanning::Status.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @q1).call }.statuses
+
+    assert_empty statuses.select { it.subject_id == @hire }
+  end
+
+  should "meet a drift in the fact a plan value holds, and only that fact, under the value's own facet" do
+    set(TeamPlanning::Events::PlanDataSet, field: "fte", value: "0.8")
+    org = OrgGraph::CommandHandler.new(actor: SYSTEM)
+    travel_to(Time.utc(2026, 3, 10, 9)) { as_tenant { org.change_level(@ada.id, "4", **ESPALIA, effective_on: "2026-03-10") } }
+    travel_to(Time.utc(2026, 3, 11, 9)) { as_tenant { org.change_employment(@ada.id, fte: 0.6, employment_type: "permanent", **ESPALIA, effective_on: "2026-03-11") } }
+    drift = as_tenant { TeamPlanning::Drift.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), today: Date.new(2026, 4, 1)).call }
+
+    assert_equal [ [], [ "data:fte" ] ], drift.changes.map { it.meets.map(&:facet) }
+  end
+
+  should "fill a position by the plan's FTE, and a removed one as full time" do
+    set(TeamPlanning::Events::PlanDataSet, field: "fte", value: "0.5")
+    position = Struct.new(:fte).new(1)
+    place = TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1, role: nil, position_id: SecureRandom.uuid_v7)
+    open_fte = -> { (resolved = map).open_fte(position, [ [ resolved.people.find { it.id == @ada.id }, place ] ]) }
+
+    assert_in_delta 0.5, open_fte.call
+
+    forget_ada
+
+    assert_in_delta 0.0, open_fte.call
+  end
+
+  should "hold only the fields a plan value can take" do
+    assert TeamPlanning::Events::PlanDataSet.holds?("data:fte")
+    assert_not TeamPlanning::Events::PlanDataSet.holds?("data:salary")
   end
 
   should "refuse to pin a sealed value" do
