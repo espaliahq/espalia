@@ -299,6 +299,14 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :done, statuses(status)[[ @brook.id, "departure" ]]
   end
 
+  should "read a planned departure pending again once the Org Graph has the leaver back" do
+    plan(TeamPlanning::Events::DepartureSet, @brook.id, leaves_in_id: @q1)
+    on(Time.utc(2026, 3, 10, 9)) { @org.leave(@brook.id, **ESPALIA, effective_on: "2026-03-10") }
+    on(Time.utc(2026, 3, 20, 9)) { @org.return_to_work(@brook.id, **ESPALIA, effective_on: "2026-03-20") }
+
+    assert_equal :pending, statuses(status)[[ @brook.id, "departure" ]]
+  end
+
   should "leave out a kind the Org Graph never moves, which would read pending forever" do
     plan(NoteSet, @ada.id, text: "Ask about the move")
 
