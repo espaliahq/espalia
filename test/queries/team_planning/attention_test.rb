@@ -148,6 +148,7 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
     away = position.with(unit_id: LIVE)
     assert_equal [ "Their manager's position shares no unit with them" ], reasons(map(positions: [ away ], people: [ member, elsewhere ]))
+    assert_equal [ "In a retired unit" ], reasons(map(positions: [ position.with(unit_id: RETIRED) ], people: [ member, elsewhere ]))
 
     orphans = [ member(SecureRandom.uuid_v7, manager_id: SecureRandom.uuid_v7), member(SecureRandom.uuid_v7, manager_position_id: SecureRandom.uuid_v7) ]
     assert_equal [ "Their manager is no longer in this scenario", "Their manager's position is no longer in this scenario" ].sort,

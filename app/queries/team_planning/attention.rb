@@ -139,7 +139,8 @@ class TeamPlanning::Attention
   # The head of the tree owns a unit with no parent, so has no manager by
   # right. A manager shares a unit when they are in or own one of the
   # person's units, or the unit above it, so a lead reporting to the owner
-  # of the group around their team is not marked.
+  # of the group around their team is not marked. A position in a gone unit
+  # is that position's item, not each report's.
   def managers
     by_id = @map.people.index_by(&:id)
     positions = @map.positions.index_by(&:id)
@@ -171,7 +172,7 @@ class TeamPlanning::Attention
     else
       position = positions[line.position_id]
       return "Their manager's position is no longer in this scenario" unless position
-      return if nearby.empty?
+      return if nearby.empty? || !@live.include?(position.unit_id)
 
       "Their manager's position shares no unit with them" unless nearby.include?(position.unit_id)
     end
