@@ -22,12 +22,10 @@ class PlansController < ApplicationController
 
   # GET /planning/:id
   def show
-    plan = TeamPlanningPlan.includes(:members).find_by(id: params.expect(:id))
-    raise ActiveRecord::RecordNotFound, "No such plan" unless plan && policy_for(plan).show?
-
-    authorize plan, :show?, policy_class: PlanPolicy
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     render Views::Plans::ShowView.new(
-      plan: read(Operations::TeamPlanning::Plan),
+      plan:,
       scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios],
       members: read(Operations::TeamPlanning::PlanMembers)[:members],
       **layout
@@ -46,7 +44,13 @@ class PlansController < ApplicationController
     )
   end
 
-  def read(operation) = operation.call(context: pundit_user, params: { plan_id: params[:id] })
+  # The Operations decide who may open a plan, so their "No such plan" is
+  # this page's 404, as it is the MCP tools' refusal.
+  def read(operation)
+    operation.call(context: pundit_user, params: { plan_id: params.expect(:id) })
+  rescue Operations::Base::ParameterError => e
+    raise ActiveRecord::RecordNotFound, e.message
+  end
 
   def policy_for(record) = PlanPolicy.new(pundit_user, record)
 
