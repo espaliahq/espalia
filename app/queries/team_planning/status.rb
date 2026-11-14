@@ -70,6 +70,7 @@ class TeamPlanning::Status
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
+    @plan.reload
     @aggregate = @repository.load_plan(@plan.id)
     @carried = @aggregate.carried_conflicts(@scenario_id)
     @resolved = {}

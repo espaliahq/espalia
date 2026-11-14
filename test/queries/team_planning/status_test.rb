@@ -110,6 +110,16 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal [ :conflicting, nil ], status.statuses.find { it.subject_id == @brook.id }.then { [ it.status, it.since ] }
   end
 
+  should "read against the updated base when a reader is used again after an update to today" do
+    plan(TitleSet, @brook.id, title: "Lead Engineer")
+    reader = as_tenant { TeamPlanning::Status.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @q1, today: TODAY) }
+    on(Time.utc(2026, 3, 20, 9)) { @org.change_title(@brook.id, "Staff Engineer", **ESPALIA, effective_on: "2026-03-20") }
+    on(Time.utc(2026, 3, 25, 9)) { handler.rebase_plan(@plan_id, base_on: "2026-03-25", expected_base_on: BASE_ON) }
+    plan(TitleSet, @brook.id, title: "Principal Engineer")
+
+    assert_equal :pending, statuses(as_tenant { reader.call })[[ @brook.id, "title" ]]
+  end
+
   should "carry each change's own scenario and event, and read the latest change to a facet" do
     plan(TitleSet, @ada.id, title: "Lead Engineer")
     latest = plan(TitleSet, @ada.id, title: "Senior Engineer").changes_in(@q1).last
