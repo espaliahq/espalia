@@ -63,5 +63,5 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
 
   private
 
-  def tray = render(Views::Tenant::OrgGraph::Tray.new(people: @overview.unplaced))
+  def tray = render(Views::Tenant::OrgGraph::Tray.new(people: @overview.unplaced, unit_id: @overview.selected&.id))
 end
