@@ -21,7 +21,7 @@ class TeamPlanning::CapacityModels::PerFte < TeamPlanning::CapacityModel
   # @param seat [TeamPlanning::CapacityModel::Seat]
   # @param place [TeamPlanning::CapacityModel::Place]
   # @return [TeamPlanning::CapacityModel::Figure]
-  def self.capacity_of(seat, place:, params:, map:)
+  def self.capacity_of(seat, place:, params:, map:, facts: Facts.new)
     amount = seat.fte * place.allocation
     Figure.new(amount:, working: [
       Step.new(label: seat.fte_known ? "FTE" : "FTE not recorded, counted as 1", amount: seat.fte),

@@ -17,7 +17,7 @@
 #   class TeamPlanning::CapacityModels::Fractions < TeamPlanning::CapacityModel
 #     def self.model_name = "fractions"
 #     def self.description = "A person's share of their time"
-#     def self.capacity_of(seat, place:, params:, map:)
+#     def self.capacity_of(seat, place:, params:, map:, facts:)
 #       amount = seat.fte * place.allocation
 #       Figure.new(amount:, working: [ Step.new(label: "FTE × allocation", amount:) ])
 #     end
@@ -49,11 +49,32 @@ class TeamPlanning::CapacityModel
 
   # @!attribute label [String] what the step counts, for a person's card
   # @!attribute amount [Rational]
-  Step = Data.define(:label, :amount)
+  # @!attribute op [String, nil] "+" adds to the figure, "×" scales it, "=" is the result
+  # @!attribute subject_id [String, nil] the person or position the step is about, such as a report
+  Step = Data.define(:label, :amount, :op, :subject_id) do
+    def initialize(op: nil, subject_id: nil, **) = super
+  end
 
   # @!attribute amount [Rational]
   # @!attribute working [Array<Step>] how the model reached the amount
-  Figure = Data.define(:amount, :working)
+  # @!attribute overloaded [Boolean] the seat costs more to run than it delivers, so the amount is floored
+  # @!attribute excess [Rational] by how much, when overloaded
+  # @!attribute notes [Array<String>] what a reader should know about the seat, as keys a screen can name
+  # @!attribute reason [String, nil] why the model can't price the place, so it counts nowhere
+  Figure = Data.define(:amount, :working, :overloaded, :excess, :notes, :reason) do
+    def initialize(overloaded: false, excess: 0r, notes: [], reason: nil, **) = super
+  end
+
+  # What the query resolved, which a model can't read off the map alone.
+  #
+  # @!attribute level_of [Hash{String => Integer}] person or position id => level ordinal, where one resolves
+  # @!attribute ordinal_of [Hash{String => Integer}] level id => ordinal
+  # @!attribute role_ids_of [Hash{String => Array<String>}] person or position id => the roles its places do
+  # @!attribute open_fte [Hash{String => Rational}] position id => the FTE its occupants leave open
+  # @!attribute cache [Hash] for a model to keep what it works out once per map
+  Facts = Data.define(:level_of, :ordinal_of, :role_ids_of, :open_fte, :cache) do
+    def initialize(level_of: {}, ordinal_of: {}, role_ids_of: {}, open_fte: {}, cache: {}) = super
+  end
 
   # @return [String] the name a rule chooses the model by, in snake_case
   def self.model_name = raise(NotImplementedError, "#{name} must name its model")
@@ -73,6 +94,7 @@ class TeamPlanning::CapacityModel
   # @param place [Place] one of the seat's places
   # @param params [Hash] as {.check} stored them
   # @param map [TeamPlanning::Baseline::Map] the resolved scenario
+  # @param facts [Facts]
   # @return [Figure]
-  def self.capacity_of(seat, place:, params:, map:) = raise(NotImplementedError, "#{name} must say how it prices a seat")
+  def self.capacity_of(seat, place:, params:, map:, facts: Facts.new) = raise(NotImplementedError, "#{name} must say how it prices a seat")
 end
