@@ -20,9 +20,10 @@ class TeamPlanning::Baseline
   # @!attribute units [Array<Unit>] the live units, by name
   # @!attribute people [Array<Member>] the people employed that day, by id
   # @!attribute unassigned_ids [Array<String>] the people in no live unit
+  # @!attribute positions [Array<Position>] the open positions; the Org Graph has none, so only a plan adds them
   # @!attribute names [Hash{String => String}] person id => name, empty until joined
   # @!attribute rules [Rules] the rules the organisation follows
-  Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :names, :rules) do
+  Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :positions, :names, :rules) do
     # @param person_id [String]
     # @return [String]
     def name_of(person_id) = names.fetch(person_id, Person::FORMER_MEMBER)
@@ -82,6 +83,17 @@ class TeamPlanning::Baseline
   # A person's place in one unit.
   Membership = Data.define(:unit_id, :allocation, :role)
 
+  # An open position. Its role and level names are nil until joined, and stay
+  # nil for a role or level the framework no longer has.
+  Position = Data.define(:id, :role_id, :level_id, :unit_id, :fte, :basis, :role_name, :level_name) do
+    # @param basis [String]
+    # @return [String] "committed" for a backfill, "planned" for a new position
+    def self.budget_of(basis) = basis == "backfill" ? "committed" : "planned"
+
+    # @return [String] see {.budget_of}
+    def budget = self.class.budget_of(basis)
+  end
+
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
   def initialize(context:, plan:)
@@ -102,21 +114,30 @@ class TeamPlanning::Baseline
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
-    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {},
+    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), positions: [], names: {},
             rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {}))
   end
 
-  # Joins the names of everyone a map names: its people, their managers and
-  # the units' owners.
+  # Joins the names of everyone a map names (its people, their managers and
+  # the units' owners) and of each position's role and level.
   #
   # @param map [Map]
   # @return [Map]
   def named(map)
     ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids)
-    map.with(names: ::Person.where(tenant_id: @plan.tenant_id, id: ids.compact.uniq).pluck(:id, :name).to_h)
+    map.with(names: ::Person.where(tenant_id: @plan.tenant_id, id: ids.compact.uniq).pluck(:id, :name).to_h,
+             positions: named_positions(map.positions))
   end
 
   private
+
+  def named_positions(positions)
+    return positions if positions.empty?
+
+    roles = FrameworkState::Role.where(tenant_id: @plan.tenant_id, role_id: positions.map(&:role_id).uniq).pluck(:role_id, :name).to_h
+    levels = FrameworkState::Level.where(tenant_id: @plan.tenant_id, level_id: positions.map(&:level_id).uniq).pluck(:level_id, :title).to_h
+    positions.map { it.with(role_name: roles[it.role_id], level_name: levels[it.level_id]) }
+  end
 
   def person_from(person, memberships)
     places = memberships.map { Membership.new(**it.to_h.slice(*Membership.members)) }

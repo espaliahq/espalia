@@ -78,7 +78,10 @@ tenant-<tenant_id>/plan-<plan_id>/person-<person_id>
   refused.
 - **`destroy_plan` and `destroy_person` write in the caller's transaction** and queue
   nothing, so the transaction that writes `PlanDeleted` or `PersonForgotten` can destroy
-  the keys too, and a plan or person is never half forgotten. `OrgGraph::Forgetting`
+  the keys too, and a plan or person is never half forgotten.
+  `TeamPlanning::SyncHandlers::DeletedPlanKeys` calls `destroy_plan` in the transaction
+  that appends `PlanDeleted`, after the append, so it covers every path that deletes a
+  plan and a later shreddable field on that event still finds its key. `OrgGraph::Forgetting`
   calls `destroy_person` inside its own per-person transaction, after it writes
   `PersonForgotten`.
 - **A destroyed key stays destroyed.** Its row keeps no key material, and `create`
