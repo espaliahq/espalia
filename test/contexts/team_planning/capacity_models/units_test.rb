@@ -279,6 +279,12 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
 
     assert_includes graph.span("v").map(&:id), "d"
     assert_not graph.manager?("lead")
+
+    @open["lead"] = Rational(1, 2)
+    @facts = nil
+    part_filled = Units::Graph.new(map:, facts:, manager_role_ids: [])
+    assert_includes part_filled.span("v").map(&:id), "d"
+    assert_not part_filled.manager?("lead")
   end
 
   should "price a seat whose level resolves to none as nothing, with a reason" do

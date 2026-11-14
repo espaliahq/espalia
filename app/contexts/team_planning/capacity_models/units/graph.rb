@@ -115,10 +115,11 @@ class TeamPlanning::CapacityModels::Units::Graph
     filled, leaving = @occupants.fetch(position_id, []).map(&:first).uniq(&:id).partition { !it.leaving? }
     return filled.first.id if filled.one?
     return unless filled.empty?
-    return position_id if @open.key?(position_id)
 
     backfills = leaving.filter_map { @backfill_of[it.id] }.uniq
-    seat_of(backfills.first, seen) if backfills.one?
+    return seat_of(backfills.first, seen) if backfills.one?
+
+    position_id if leaving.empty? && @open.key?(position_id)
   end
 
   def manager_ids
