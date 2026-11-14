@@ -85,7 +85,7 @@ module Shreddable::Column
     def shreddable_column(field, by:, plan: :plan_id, person: :person_id)
       Shreddable.check_key!(by)
 
-      own_shreddable_columns[field.to_sym] = { by:, plan:, person: }
+      own_shreddable_columns[field.to_sym] = { by:, plan:, person:, named_in: /(?<![\w.])(?:\w+\.)?#{field}\b/ }
       attribute field, Shreddable::Column::Type.new
 
       define_method(field) { shreddable_value(field) }
@@ -166,11 +166,11 @@ module Shreddable::Column
 
   # @raise [Refused] if any argument names a shreddable column
   def self.refuse!(model, args, method)
-    fields = model.shreddable_columns.keys.map(&:to_s)
-    return if fields.empty?
+    columns = model.shreddable_columns
+    return if columns.empty?
 
     named = args.flat_map { names_in(it) }.compact.map(&:to_s)
-    hit = fields.find { |field| named.any? { it == field || it.match?(/(?<![\w.])(?:\w+\.)?#{field}\b/) } }
+    hit, = columns.find { |field, rule| named.any? { it == field.to_s || it.match?(rule[:named_in]) } }
     raise Refused, "#{model.name}##{hit} is shreddable, so it can't be used in #{method}" if hit
   end
 
@@ -191,6 +191,7 @@ module Shreddable::Column
   # @return [self]
   def reload(*)
     @shreddable_pending = {}
+    @shreddable_read = nil
     super
   end
 
@@ -199,6 +200,7 @@ module Shreddable::Column
   def initialize_dup(other)
     super
     @shreddable_pending = @shreddable_pending&.dup
+    @shreddable_read = nil
   end
 
   def assign_shreddable(field, value)
@@ -221,16 +223,22 @@ module Shreddable::Column
     return if stored.nil?
     return Shreddable::Value.removed unless stored["ciphertext"]
 
-    own = self.class.shreddable_identifier(field, attributes.symbolize_keys)
-    Shreddable::Value::Sealed.new(
+    # One sealed value per stored value, so reading it twice looks up its key once.
+    read = (@shreddable_read ||= {})[field]
+    return read.last if read&.first.equal?(stored)
+
+    own = self.class.shreddable_identifier(field, self)
+    sealed = Shreddable::Value::Sealed.new(
       ciphertext: stored["ciphertext"], iv: stored["iv"], identifier: stored["identifier"], cipher: stored["cipher"],
       key_of: ->(identifier, cipher) { PlanKeyStore.new.key_of(identifier, cipher:) if identifier == own }
     )
+    @shreddable_read[field] = [ stored, sealed ]
+    sealed
   end
 
   def seal_shreddable_columns
     (@shreddable_pending || {}).each do |field, value|
-      write_attribute(field, Shreddable::Column.seal(value, -> { self.class.shreddable_identifier(field, attributes.symbolize_keys) }))
+      write_attribute(field, Shreddable::Column.seal(value, -> { self.class.shreddable_identifier(field, self) }))
     end
   end
 end

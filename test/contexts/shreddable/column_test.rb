@@ -110,6 +110,16 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       assert_equal NOTE, note.reveal
     end
 
+    should "look up its key once however often a row reads it" do
+      write_note
+      ActsAsTenant.with_tenant(@tenant) do
+        row = Note.find_by!(plan_id: @plan_id)
+        assert_equal NOTE, row.note.reveal
+
+        assert_no_queries { assert_equal NOTE, row.note.reveal }
+      end
+    end
+
     should "read as removed when it holds another row's sealed value" do
       write_note
       other_plan_id = SecureRandom.uuid_v7
