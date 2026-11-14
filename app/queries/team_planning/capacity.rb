@@ -94,7 +94,9 @@ class TeamPlanning::Capacity
   def person_seat(member)
     fte_known = ![ nil, TeamPlanning::Baseline::UNKNOWN ].include?(member.planned_or_own(:fte))
     fte = exact(member.fte_or_one)
-    own = titles.target(member.title, Integer(member.planned_or_own(:level), exception: false))
+    level = member.planned_or_own(:level)
+    own = titles.target(member.title, Integer(level, exception: false))
+    own = own.with(level: nil, ordinal: nil) if level == TeamPlanning::Baseline::UNKNOWN
     placements = member.memberships.presence || [ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]
     places, reasons = allocations(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]
