@@ -17,8 +17,13 @@
 # its parent's period. Only a `then` scenario's end is held: every start, and
 # an alternative's whole period, follows from the tree, so the periods along
 # any path from the root stay contiguous.
+#
+# Each scenario holds its changes ({TeamPlanning::Events::Change}) in the order
+# made. A scenario resolves along its {#resolution_chain}, so an alternative is
+# its parent plus its own differences, while on the timeline
+# ({#timeline_path}) it stands in its parent's place.
 class TeamPlanning::PlanAggregate
-  include AggregateRoot
+  include AggregateRoot.with(strategy: -> { TeamPlanning::ChangeAwareApplyStrategy.new })
 
   NAME_LIMIT = 120
   ROLES = %w[editor viewer].freeze
@@ -35,6 +40,7 @@ class TeamPlanning::PlanAggregate
     @members = {}
     @scenarios = {}
     @removed_scenario_ids = Set.new
+    @changes = {}
   end
 
   # Opens the plan.
@@ -198,6 +204,56 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
+  # Records the end state of one facet of one subject in a scenario.
+  #
+  # @param kind [Class<TeamPlanning::Events::Change>]
+  # @param scenario_id [String] the root or a live scenario
+  # @param subject_id [String]
+  # @param set_by_id [String] person_id of the actor
+  # @param end_state [Hash] the kind's own fields, none of them a field every change holds
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the end state refused
+  # @raise [ArgumentError] for a kind that is not a change, or an end state naming a field every change holds
+  def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {})
+    raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change
+    raise ArgumentError, "#{kind} must name its facet and say how it lands on a map" unless kind.complete?
+
+    ensure_open!
+    live_scenario!(scenario_id)
+    fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
+    apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }))
+  end
+
+  # @param scenario_id [String]
+  # @return [Array<TeamPlanning::Events::Change>] the scenario's own changes, oldest first
+  def changes_in(scenario_id) = @changes.fetch(scenario_id, []).dup
+
+  # The scenarios whose changes a scenario resolves through, root first and
+  # the scenario last. An alternative follows its parent, so it starts as the
+  # parent plus its own differences.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @return [Array<String>]
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def resolution_chain(scenario_id)
+    return [ @plan_id ] if live_scenario!(scenario_id) == @plan_id
+
+    resolution_chain(@scenarios.fetch(scenario_id).parent_id) + [ scenario_id ]
+  end
+
+  # The steps from the root to a scenario as the timeline lays them out. An
+  # alternative takes its parent's place, so the path has one entry per step.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @return [Array<String>]
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def timeline_path(scenario_id)
+    return [ @plan_id ] if live_scenario!(scenario_id) == @plan_id
+
+    scenario = @scenarios.fetch(scenario_id)
+    path = timeline_path(scenario.parent_id)
+    (scenario.relation == "instead" ? path[0...-1] : path) + [ scenario_id ]
+  end
+
   # @return [Hash{String => Scenario}] the live scenarios, by id, without the root
   def scenarios = @scenarios.dup
 
@@ -276,10 +332,24 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::ScenarioRemoved do |event|
     @scenarios.delete(event.data[:scenario_id])
+    @changes.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
   private
+
+  # Checked on the caller's fields and on the kind's, so a kind that filters
+  # its input can't let a caller's plan_id through unrefused.
+  def own_fields!(fields)
+    taken = fields.keys & TeamPlanning::Events::Change::FIELDS
+    raise ArgumentError, "An end state can't set #{taken.join(", ")}" if taken.any?
+
+    fields
+  end
+
+  def record_change(event)
+    (@changes[event.data[:scenario_id]] ||= []) << event
+  end
 
   def ensure_editor_remains!(person_id)
     return unless editor_ids == [ person_id ]

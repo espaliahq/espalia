@@ -39,7 +39,7 @@ class Operations::TeamPlanning::PlanMembersTest < ActiveSupport::TestCase
     add(@colleague.person_id, "editor")
 
     assert_equal [ { person_id: @colleague.person_id, role: "editor" }, { person_id: @editor.person_id, role: "editor" } ].sort_by { it[:person_id] },
-                 members(as: @colleague)
+                 members(as: @colleague).map { it.slice(:person_id, :role) }
   end
 
   should "let a viewer leave, and not take anyone else off" do

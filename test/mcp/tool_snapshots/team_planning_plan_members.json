@@ -1,6 +1,6 @@
 {
   "name": "team_planning_plan_members",
-  "description": "List the members of a Team Planning plan the caller is in, each a person id and a role (editor or viewer). Refused, as an unknown plan, unless the caller is a member.",
+  "description": "List the members of a Team Planning plan the caller is in, each a person id, their name and a role (editor or viewer). A forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
   "inputSchema": {
     "type": "object",
     "properties": {

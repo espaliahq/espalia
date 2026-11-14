@@ -153,6 +153,21 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # @param plan_id [String]
+  # @param kind [Class<TeamPlanning::Events::Change>]
+  # @param scenario_id [String]
+  # @param subject_id [String]
+  # @param end_state [Hash] the kind's own fields
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#set_change
+  def set_change(plan_id, kind, scenario_id:, subject_id:, end_state: {})
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.set_change(kind, scenario_id:, subject_id:, set_by_id: actor_id!, end_state:)
+    end
+  end
+
   private
 
   # Someone who has left may still be made a viewer of a plan they are in, so
