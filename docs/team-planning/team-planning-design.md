@@ -260,13 +260,14 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. The first kind is `capacity_model` (7.1, below); 5.2 and 8.1 bring more.
+object. The kinds so far are `capacity_model` (7.1) and `on_cost` (5.2), both below; 8.1 brings more.
 
 `RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
 that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
 on one subject both land. A plan editor sets one with `team_planning_set_rule`, which takes
 any registered kind, so a story that adds a kind adds no tool; `team_planning_clear_change`
-with facet `rule:<name>` hands it back to the parent. `Map#rule(name, unit_id:)` reads a
+with facet `rule:<name>` hands it back to the parent, and `team_planning_rule` reads one
+as a scenario resolves it. `Map#rule(name, unit_id:)` reads a
 rule in this order:
 
 1. The unit, then each unit above it on the scenario's map.
@@ -281,6 +282,28 @@ A rule's value may one day be sensitive: an on-cost rate, a guardrail on pay. So
 names what is wrong and never repeats the value. A kind declares `shreddable?`, and until
 [#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
 yes is refused at registration.
+
+### On-costs as built
+
+An on-cost model prices what a seat costs on top of its base pay.
+`TeamPlanning::OnCostModel` is the interface and `TeamPlanning::OnCostModels` the registry.
+A model checks its params and returns a `Figure` in the base's currency: an exact
+`Rational` and the `Step`s of its working. It never converts, since exchange rates apply
+once, at report time (5.3).
+
+- **Flat:** one percentage of base pay.
+- **By country:** a percentage per country and one for every other country, or none
+  recorded. The Org Graph holds country as the HRIS gives it, as free text, so a country
+  matches ignoring case and spacing.
+- **Itemised:** named parts, summed. A part is a percentage of base pay, or a fixed amount
+  a year for a full-time seat in a stated currency, scaled by the share of a full-time year
+  being priced. A fixed amount in another currency than the seat's is refused when priced.
+
+The `on_cost` rule chooses the model and its params. Its default adds nothing, so a plan
+costs base pay alone until a tenant or plan chooses. Read at a seat's unit, a unit can
+price its subtree differently. 5.4 prices positions with
+`TeamPlanning::RuleKinds::OnCost.on_cost_of`. Rates are tenant configuration, as pay bands
+are, not a person's data, so the rule is not shreddable.
 
 ### Capacity as built
 
