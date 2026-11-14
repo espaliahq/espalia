@@ -53,9 +53,9 @@ class TeamPlanning::Attention
         if place.position_id
           next if open.include?(place.position_id)
 
-          item(person.id, ASSIGNMENT, "Placed in a closed position", broken_by: [ place.position_id, POSITION ])
+          item(person.id, ASSIGNMENT, "Placed in a closed position", broken_by: [ [ place.position_id, POSITION ] ])
         elsif !@live.include?(place.unit_id)
-          item(person.id, ASSIGNMENT, "Placed in #{gone(place.unit_id)}", broken_by: [ place.unit_id, UNIT ])
+          item(person.id, ASSIGNMENT, "Placed in #{gone(place.unit_id)}", broken_by: [ [ place.unit_id, UNIT ] ])
         end
       end.uniq(&:reason)
     end
@@ -66,8 +66,8 @@ class TeamPlanning::Attention
     @map.positions.flat_map do |position|
       held = by_position.fetch(position.id, [])
       open_fte = @map.open_fte(position, held)
-      [ (item(position.id, POSITION, "In #{gone(position.unit_id)}", broken_by: [ position.unit_id, UNIT ]) unless @live.include?(position.unit_id)),
-        (item(position.id, POSITION, "Overfilled by #{fte(-open_fte)} FTE") if open_fte.negative?) ].compact
+      [ (item(position.id, POSITION, "In #{gone(position.unit_id)}", broken_by: [ [ position.unit_id, UNIT ] ]) unless @live.include?(position.unit_id)),
+        (item(position.id, POSITION, "Overfilled by #{fte(-open_fte)} FTE", broken_by: held.map { [ it.first.id, ASSIGNMENT ] }) if open_fte.negative?) ].compact
     end
   end
 
@@ -75,7 +75,7 @@ class TeamPlanning::Attention
     @map.units.filter_map do |unit|
       next if unit.parent_id.nil? || @live.include?(unit.parent_id)
 
-      item(unit.id, UNIT, "Its parent is #{gone(unit.parent_id)}", broken_by: [ unit.parent_id, UNIT ])
+      item(unit.id, UNIT, "Its parent is #{gone(unit.parent_id)}", broken_by: [ [ unit.parent_id, UNIT ] ])
     end
   end
 
@@ -88,14 +88,14 @@ class TeamPlanning::Attention
       gone_before = succession.predecessor_ids.reject { @live.include?(it) || @retired.include?(it) }
       still_live = succession.predecessor_ids.select { @live.include?(it) }
       gone_after = succession.successor_ids.reject { @live.include?(it) }
-      [ (item(succession.id, SUCCESSION, "It carries on from a unit no longer in this scenario", broken_by: [ gone_before.first, UNIT ]) if gone_before.any?),
-        (item(succession.id, SUCCESSION, "It carries on from a unit that is still live", broken_by: [ still_live.first, UNIT ]) if still_live.any?),
-        (item(succession.id, SUCCESSION, "It is carried on by #{gone(gone_after.first)}", broken_by: [ gone_after.first, UNIT ]) if gone_after.any?) ].compact
+      [ (item(succession.id, SUCCESSION, "It carries on from a unit no longer in this scenario", broken_by: [ [ gone_before.first, UNIT ] ]) if gone_before.any?),
+        (item(succession.id, SUCCESSION, "It carries on from a unit that is still live", broken_by: [ [ still_live.first, UNIT ] ]) if still_live.any?),
+        (item(succession.id, SUCCESSION, "It is carried on by #{gone(gone_after.first)}", broken_by: [ [ gone_after.first, UNIT ] ]) if gone_after.any?) ].compact
     end
   end
 
-  def item(subject_id, facet, reason, broken_by: nil)
-    keys = [ [ subject_id, facet ], broken_by ].select { @order.key?(it) }
+  def item(subject_id, facet, reason, broken_by: [])
+    keys = [ [ subject_id, facet ], *broken_by ].select { @order.key?(it) }
     Item.new(subject_id:, facet:, reason:, change: keys.max_by { @order[it] }&.then { @changes[it] })
   end
 

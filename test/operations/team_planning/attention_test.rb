@@ -98,6 +98,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assign(@q2, @ada, { position_id: position, allocation: 1 })
     assign(@q2, @bo, { position_id: position, allocation: 1 })
     assert_equal [ [ position, "position", "Overfilled by 0.8 FTE" ] ], items
+    assert_equal({ kind: "AssignmentSet", scenario_id: @q2 }, change_of(position).except(:event_id))
 
     write(Operations::TeamPlanning::ClosePosition, @q1, position_id: position)
     assert_equal [ [ @ada.id, "assignment", "Placed in a closed position" ], [ @bo.id, "assignment", "Placed in a closed position" ] ], items
