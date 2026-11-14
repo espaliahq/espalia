@@ -62,22 +62,25 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
   end
 
-  # Asks HiBob for one field beside each person's id, so a preview never
-  # pulls the rest of their record.
+  # Asks HiBob for one field beside the id of each person the sync's first
+  # pass keeps, so a preview counts whom the mirror then places and never
+  # pulls the rest of anyone's record. HiBob's own active filter would drop
+  # people on leave and hires yet to start, so it reads everyone and leaves
+  # out whom the sync won't place: a leaver, a leaver rehired but yet to start
+  # (the Org Graph holds them as left until then), a forgotten person not back
+  # at work, and a newcomer whose email belongs to a row with another HRIS id.
   #
   # @param field_id [String]
   # @param kind [Symbol] :list or :text
   # @param alongside [String, nil] see {Hris::BaseAdapter#read_field}
   # @return [Hash{String => Hris::FieldValue}]
   def read_field(field_id, kind:, alongside: nil)
-    fields = [ "root.id", catalogue_id(field_id) ]
+    fields = [ *READ_FIELD_IDENTITY, catalogue_id(field_id) ]
     fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
-    employees = client.search_people(fields: fields.uniq, show_inactive: false)
-    employees.each_with_object({}) do |employee, values|
-      next if employee["id"].blank?
-
-      values[employee["id"].to_s] = Hris::Hibob::ResponseMapper.new(employee).field_value(field_id, kind:, alongside:)
-    end
+    employees = client.search_people(fields: fields.uniq, show_inactive: true).select { it["id"].present? }
+    # A leaver still claims and frees emails in the sync's walk, so they leave only after it.
+    kept = ActsAsTenant.with_tenant(tenant) { employees.select(&upserted(employees)) }.reject { it["isActive"] == false }
+    kept.to_h { [ it["id"].to_s, Hris::Hibob::ResponseMapper.new(it).field_value(field_id, kind:, alongside:) ] }
   end
 
   # Fetches all employees from HiBob, handling pagination.
@@ -204,6 +207,48 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
 
     result
+  end
+
+  # What {#read_field} asks for to tell whom the sync keeps.
+  READ_FIELD_IDENTITY = %w[root.id root.isActive root.email work.startDate].freeze
+
+  # The rule {#upsert_person} applies to a current person, read for many at once.
+  #
+  # @param employees [Array<Hash>]
+  # @return [Proc] true for an employee the sync's first pass keeps
+  def upserted(employees)
+    rows = Person.where(external_id: employees.map { it["id"].to_s }).pluck(:external_id, :id, :email)
+    held = rows.to_h { |external_id, id, _| [ external_id, id ] }
+    held_emails = rows.to_h { |external_id, _, email| [ external_id, email ] }
+    emails = employees.filter_map { it["email"]&.downcase&.strip.presence }
+    # Each email's row, by HRIS id; nil for a row without one, which a newcomer adopts.
+    owners = Person.where(email: [ *emails, *held_emails.values ].compact).pluck(:email, :external_id).to_h
+    adoptable = Person.where(forgotten_at: nil, external_id: nil, email: emails).pluck(:email, :id).to_h
+    left = OrgLeaver.where(person_id: [ *held.values, *adoptable.values ]).pluck(:person_id).to_set
+    lambda do |employee|
+      external_id = employee["id"].to_s
+      email = employee["email"]&.downcase&.strip.presence
+      attrs = { status: employee["isActive"] == false ? "inactive" : "active" }
+      started_on = Hris::Hibob::ResponseMapper.new(employee).started_on
+      if held.key?(external_id)
+        # The sync writes each row's new email in response order, freeing the old one.
+        # The unique index refuses an email another row holds, and the sync skips the person.
+        if email && email != held_emails[external_id]
+          next false if owners.key?(email)
+
+          owners.delete(held_emails[external_id])
+          owners[email] = external_id
+        end
+        # The Org Graph takes a leaver back once HiBob has them employed, on the sync date if no start date is given.
+        next !left.include?(held[external_id]) || employed?(attrs, started_on)
+      end
+      next false if forgotten_person(external_id) && !back_at_work?(attrs, started_on)
+      next false if owners[email]
+
+      # The sync creates people in response order, so the first to claim an email keeps it.
+      owners[email] = external_id if email
+      !left.include?(adoptable[email]) || employed?(attrs, started_on)
+    end
   end
 
   # @param field [Hash] one entry of GET /company/people/fields
@@ -568,7 +613,11 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # are back at work: neither a leaver, a hire yet to start, nor one with no
   # start date is recorded.
   def back_at_work?(attrs, started_on)
-    started_on.present? && org_graph_status(attrs[:status], started_on, Date.current) == "employed"
+    started_on.present? && employed?(attrs, started_on)
+  end
+
+  def employed?(attrs, started_on)
+    org_graph_status(attrs[:status], started_on, Date.current) == "employed"
   end
 
   # HiBob marks a hire active before they start, so a start date still ahead
