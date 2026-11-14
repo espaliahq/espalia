@@ -107,9 +107,18 @@ class TeamPlanning::Baseline
 
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def structure
+  def structure = map_on(@plan.base_on, known_on: @plan.base_on - 1)
+
+  # The organisation on another day, in the shape {#structure} gives, so a
+  # reader can hold the plan up against it.
+  #
+  # @param date [Date]
+  # @param known_on [Date, nil] nil for what the Org Graph knows now
+  # @return [Map] by id, with no names
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  def map_on(date, known_on: nil)
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
-    snapshot = OrgGraph::AsOf.new(context: @context, date: @plan.base_on, known_on: @plan.base_on - 1).call
+    snapshot = OrgGraph::AsOf.new(context: @context, date:, known_on:).call
 
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
