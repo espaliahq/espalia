@@ -213,7 +213,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_link_commented" then evidence_link_commented_summary
     when "delegation_granted"    then "#{actor_name || 'Manager'} delegated rating to #{delegate_name}"
     when "delegation_revoked"    then "#{actor_name || 'Manager'} revoked #{delegate_name}'s delegation"
-    when "reporting_manager_recorded" then "Reporting manager changed to #{manager_name}"
+    when "reporting_manager_recorded" then reporting_manager_summary
     when "rating_revisit_requested" then revisit_summary
     when "exploration_started"   then exploration_started_summary
     when "exploration_closed"    then exploration_closed_summary
@@ -277,6 +277,12 @@ class Views::Assessments::Activity::Entry < Views::Base
   end
 
   # New reporting manager's name for a reporting_manager_recorded entry.
+  def reporting_manager_summary
+    return "Reporting manager cleared" if payload_value(:manager_id).nil?
+
+    "Reporting manager changed to #{manager_name}"
+  end
+
   def manager_name
     payload_value(:manager_name).to_s.strip.presence || "someone new"
   end

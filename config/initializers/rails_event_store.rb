@@ -115,6 +115,16 @@ Rails.configuration.to_prepare do
     to: TeamPlanning::Projections::Plans.handled_events
   )
 
+  event_store.subscribe(
+    TeamPlanning::Projections::PlanMembers.new,
+    to: TeamPlanning::Projections::PlanMembers.handled_events
+  )
+
+  event_store.subscribe(
+    TeamPlanning::Projections::Scenarios.new,
+    to: TeamPlanning::Projections::Scenarios.handled_events
+  )
+
   # ── Synchronous cross-stream sync handlers ──
   # NOTE: PersonEnrollmentSync dispatches PersonDevelopment commands,
   # so it MUST NOT be registered as a projection — running it twice
@@ -200,6 +210,14 @@ Rails.configuration.to_prepare do
   event_store.subscribe(
     OrgGraph::SyncHandlers::LeaverMemberships.new,
     to: OrgGraph::SyncHandlers::LeaverMemberships.handled_events
+  )
+
+  # PersonDevelopmentFeed reconciles a fed tenant's Person Development
+  # streams from the Org Graph. Dispatches Person Development and cycle
+  # commands, so it MUST NOT be registered as a projection.
+  event_store.subscribe(
+    OrgGraph::SyncHandlers::PersonDevelopmentFeed.new,
+    to: OrgGraph::SyncHandlers::PersonDevelopmentFeed.handled_events
   )
 
   # ── Async handlers (via SolidQueue) ──

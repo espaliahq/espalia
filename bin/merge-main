@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Merge origin/main into the current branch, and rebuild db/schema.rb from both
+# sides' migrations when the merge leaves it conflicted (two PRs that both migrate
+# always clash on its `version:` line). Any other conflict is left for you.
+#
+# Each run rebuilds on its own throwaway database, so the dev and test databases,
+# and any agent using them, are untouched. Run `bin/rails db:migrate` afterwards.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+  echo "Commit or stash your changes first." >&2
+  exit 1
+fi
+
+if [[ -n "$(git ls-files --others --exclude-standard db/migrate)" ]]; then
+  echo "Commit or remove your untracked migrations first; the rebuilt schema would include them." >&2
+  exit 1
+fi
+
+git fetch origin main
+if git merge --no-edit origin/main; then
+  echo "Merged cleanly."
+  exit 0
+fi
+
+if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+  echo "The merge did not start; see git's message above." >&2
+  exit 1
+fi
+
+conflicted=$(git diff --name-only --diff-filter=U)
+others=$(grep -vx "db/schema.rb" <<<"$conflicted" || true)
+
+if [[ -n "$others" ]]; then
+  echo >&2
+  echo "Resolve these by hand, then run bin/merge-main again after committing, or rebuild the schema yourself:" >&2
+  echo "$others" >&2
+  exit 1
+fi
+
+restore_conflict() {
+  git checkout --conflict=merge -- db/schema.rb
+  echo "The rebuild failed; db/schema.rb is back to its conflicted state. The merge is still in progress." >&2
+}
+trap restore_conflict ERR
+
+echo "Rebuilding db/schema.rb from main's schema plus this branch's migrations…"
+export RAILS_ENV=test DATABASE_URL="postgresql:///growth_os_merge_main_$$"
+trap 'bin/rails db:drop >/dev/null 2>&1 || true' EXIT
+git show origin/main:db/schema.rb > db/schema.rb
+
+# Loading a schema marks every migration file older than its version as run,
+# which would skip this branch's own migrations. Un-mark the ones main lacks.
+main_migrations=$(git ls-tree --name-only origin/main db/migrate/)
+ours=$(git diff --name-only --diff-filter=A origin/main...HEAD -- db/migrate \
+  | grep -vxF -f <(printf '%s\n' "$main_migrations") \
+  | sed -E 's#.*/([0-9]+)_.*#\1#' | paste -sd, - || true)
+
+bin/rails db:drop db:create db:schema:load
+if [[ -n "$ours" ]]; then
+  OURS="$ours" bin/rails runner 'ENV["OURS"].split(",").each { |v| ActiveRecord::Base.connection_pool.schema_migration.delete_version(v) }'
+fi
+bin/rails db:migrate db:schema:dump
+trap - ERR
+
+git add db/schema.rb
+echo
+echo "db/schema.rb now differs from main by:"
+git --no-pager diff --cached origin/main -- db/schema.rb
+echo
+echo "If that shows only this branch's changes, commit the merge with: git commit --no-edit"

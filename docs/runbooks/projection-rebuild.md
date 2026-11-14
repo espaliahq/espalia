@@ -57,11 +57,13 @@ So the writers that plan from those tables refuse while the projection they read
 | Retiring a unit, applying a succession | `org_graph/members` |
 | The HRIS level mirror, handing a level over or back | `org_graph/members` or `org_graph/structure` |
 | An HRIS sync's Org Graph writes (people, leavings, the mirror) | `org_graph/structure` |
+| Feeding Person Development from the Org Graph: each reconcile, the sweep, the cut-over | `person_development/current_assessment`, `assessment_cycles/current_state` or `frameworks/published_state` |
 
 So:
 
 - a write during a rebuild refuses at once. A person sees "The Org Graph is being rebuilt; try again in a minute." over the web or MCP.
-- an HRIS sync during a rebuild still updates people's rows, offboards and assigns, and counts what it held back apart from the errors: `levels_skipped_while_rebuilding` for a mirror refused by a members rebuild, `people_skipped_while_rebuilding` for the people it wrote nothing for during a structure rebuild. It offboards anyone HiBob reported as gone and assigns them nothing, though a cut-over tenant's row still reads active. The next sync writes them.
+- an HRIS sync during a rebuild still updates people's rows, offboards and assigns, and counts what it held back apart from the errors: `levels_skipped_while_rebuilding` for a mirror refused by a members rebuild, `people_skipped_while_rebuilding` for the people it wrote nothing for during a structure rebuild. On a tenant that is not fed, it offboards anyone HiBob reported as gone and assigns them nothing, though a cut-over tenant's row still reads active. The next sync writes them. A fed tenant's Pass 3b offboards only Espalia-held people, so a leaver HiBob holds keeps their assignment until the next sync writes `PersonLeft` and the feed offboards them.
+- a fed tenant's reconcile during one of those three rebuilds is refused. The handler counts it under `errors`. The sweep skips everyone and counts them under `skipped_while_rebuilding`, and the next sync's sweep catches it up. The Person Development cut-over refuses to start.
 - a rebuild that starts during a write waits for it to finish. A structure rebuild waits for a running HRIS sync, HiBob fetch included.
 
 **The guard covers only rebuilds that start after it ships.** A rebuild that runs in the same deploy as the guard, through `REBUILD_ON_DEPLOY`, runs while the old release still serves traffic, and the old release takes no lock. Rebuild `org_graph/members` or `org_graph/structure` in a quiet window until one deploy carrying the guard has gone out.

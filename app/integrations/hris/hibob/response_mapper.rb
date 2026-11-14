@@ -75,6 +75,19 @@ class Hris::Hibob::ResponseMapper
     reports_to["id"]
   end
 
+  # Whether HiBob said who the manager is: a manager, or an explicit null for
+  # nobody. A field left out of the response, or one in a shape we cannot
+  # read, says nothing, so it never clears a manager the Org Graph holds.
+  #
+  # @return [Boolean]
+  def manager_supplied?
+    work = employee["work"]
+    return false unless work.is_a?(Hash) && work.key?("reportsTo")
+
+    reports_to = work["reportsTo"]
+    reports_to.nil? || (reports_to.is_a?(Hash) && reports_to["id"].present?)
+  end
+
   # The level as HiBob shows it, before any mapping to a framework: the
   # Org Graph's level fact.
   #

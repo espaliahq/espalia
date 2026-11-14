@@ -198,6 +198,36 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Records that the person no longer has a reporting manager. Only the Org
+  # Graph feed calls it, and only for an explicit "no manager" from the HRIS.
+  # A no-op when none is recorded.
+  #
+  # @param source [String] "hris"
+  def clear_reporting_manager(source: "hris")
+    return if @manager_id.nil?
+
+    apply(PersonDevelopment::Events::ReportingManagerRecorded.new(data: {
+      manager_id: nil,
+      previous_manager_id: @manager_id,
+      source: source
+    }))
+  end
+
+  # @return [Boolean] whether the person is assigned to the framework
+  def assigned? = @assigned
+
+  # @return [String, nil] the role the person is assigned at
+  attr_reader :role_id
+
+  # @return [String, nil] the level the person is assigned at
+  attr_reader :level_id
+
+  # @return [String, nil] the recorded reporting manager
+  attr_reader :manager_id
+
+  # @return [String, nil] the cycle the person is enrolled in
+  attr_reader :current_cycle_id
+
   # ── Manager-rating delegation ──
 
   # Grants manager-rating authority for this person/framework to another person.

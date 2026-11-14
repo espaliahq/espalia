@@ -14,8 +14,8 @@
 #
 # @!attribute [r] data
 #   @return [Hash] event data
-#   @option data [String] :manager_id UUID of the Person who is now the
-#     reporting manager
+#   @option data [String, nil] :manager_id UUID of the Person who is now the
+#     reporting manager, or nil when the HRIS says the person has none
 #   @option data [String, nil] :previous_manager_id UUID of the prior recorded
 #     manager, or nil when this is the first recording
 #   @option data [String] :source "hris" (routine sync) or "backfill" (one-off)
