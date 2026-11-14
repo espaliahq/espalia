@@ -71,14 +71,18 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
     @window.to == @today ? "Since #{day(@window.from)}" : "#{day(@window.from)} to #{day(@window.to)}"
   end
 
-  # @return [Array<Array(String, Integer)>] each kind of change and how many,
-  #   e.g. ["Joined", 3]
+  COUNTED = {
+    "Joined" => :joined, "Left" => :left, "Moved" => :moved,
+    "New units" => :unit_created, "Renamed" => :unit_renamed, "Units moved" => :unit_moved,
+    "Retired" => :unit_retired, "Succeeded" => :unit_succeeded
+  }.freeze
+
+  # @return [Array<Array(String, Integer)>] each kind of change the Org Graph
+  #   still believes and how many, e.g. ["Joined", 3], then "Withdrawn" when any are
   def counts
-    {
-      "Joined" => :joined, "Left" => :left, "Moved" => :moved,
-      "New units" => :unit_created, "Renamed" => :unit_renamed, "Units moved" => :unit_moved,
-      "Retired" => :unit_retired, "Succeeded" => :unit_succeeded
-    }.map { |label, kind| [ label, @changes.count { it.kind == kind } ] }
+    believed, withdrawn = @changes.select { COUNTED.value?(it.kind) }.partition { !it.withdrawn }
+    counts = COUNTED.map { |label, kind| [ label, believed.count { it.kind == kind } ] }
+    withdrawn.any? ? counts << [ "Withdrawn", withdrawn.size ] : counts
   end
 
   # @param unit [OrgUnit]

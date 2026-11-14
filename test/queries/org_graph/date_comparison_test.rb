@@ -138,6 +138,17 @@ class OrgGraph::DateComparisonTest < ActiveSupport::TestCase
     assert_includes comparison.unit_marks(unit(:checkout)), "succeeds Payments"
   end
 
+  should "by learned date, count a change withdrawn in the window apart from the changes still believed" do
+    as_tenant { @structure.rename_unit(@org[:platform], "Core", effective_on: "2026-10-07") }
+    travel_to Time.zone.parse("2026-11-10 09:00")
+    as_tenant { OrgGraph::ChangeBackHandler.new(actor: OrgGraph::Authorization::SYSTEM).change_back(OrgUnitActivity.for_unit(@org[:platform]).first) }
+    travel_to TODAY
+
+    counts = compare("2026-11-01", nil, "learned").counts.to_h
+    assert_equal [ 0, 1 ], counts.values_at("Renamed", "Withdrawn")
+    assert_not_includes compare("2026-10-01").counts.to_h, "Withdrawn"
+  end
+
   should "by learned date, show a backdated change learned in the window with the day it took effect" do
     travel_to Time.zone.parse("2026-11-10 09:00")
     as_tenant { @handler.move_membership(@org[:dot].id, @org[:payments], @org[:platform], effective_on: "2026-09-15") }
