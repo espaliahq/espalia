@@ -19,12 +19,13 @@
 #
 class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   PLACES = %i[position_id unit_id].freeze
+  MOVED_BY = %i[membership_started membership_ended membership_changed moved].freeze
 
   # @return [String]
   def self.facet = "assignment"
 
   # @param end_state [Hash] `{ placements: [{ position_id or unit_id, allocation, role }] }`
-  # @return [Hash] the ids downcased, each allocation a Float
+  # @return [Hash] the ids downcased, each allocation a Float, the placements in place order
   # @raise [TeamPlanning::Error] for a placement in both a position and a unit, or neither, an
   #   allocation outside (0, 1], or a place held twice. A total over 1 is never refused.
   def self.end_state(end_state)
@@ -34,8 +35,24 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
     placements = placements.map { placement!(it) }
     raise TeamPlanning::Error, "A person holds each position and unit once" if placements.map { it.slice(*PLACES) }.uniq.size < placements.size
 
-    { placements: }
+    { placements: in_order(placements) }
   end
+
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param subject_id [String]
+  # @return [Hash, nil] the person's placements in the shape {.end_state} gives, nil when the map hasn't them
+  def self.read_from(map, subject_id:, facet: self.facet)
+    person = map.people.find { it.id == subject_id }
+    return unless person
+
+    { placements: in_order(person.memberships.map { it.to_h.slice(*PLACES, :allocation, :role) }) }
+  end
+
+  # @param change [OrgGraph::ChangesBetween::Change]
+  # @return [String, nil] the person an Org Graph change places, moves or takes out of a unit
+  def self.subject_moved_by(change) = (change.person_id if MOVED_BY.include?(change.kind))
+
+  def self.in_order(placements) = placements.sort_by { [ it[:unit_id].to_s, it[:position_id].to_s ] }
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
@@ -70,5 +87,5 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "An allocation is above 0 and at most 1"
   end
 
-  private_class_method :placement!, :allocation!
+  private_class_method :placement!, :allocation!, :in_order
 end

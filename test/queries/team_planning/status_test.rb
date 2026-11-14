@@ -8,8 +8,7 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
   BASE_ON = Date.new(2026, 3, 2)
   TODAY = Date.new(2026, 4, 1)
 
-  # Test-only kinds standing in for those 3.3 to 3.7 add: one fact, the
-  # placement list as a whole, and a kind only the plan holds.
+  # Test-only kinds: one fact the Org Graph holds, and a kind only the plan holds.
   class TitleSet < TeamPlanning::Events::Change
     def self.facet = "title"
     def self.apply_to(map, data) = map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(title: data[:title]) : it })
@@ -18,18 +17,6 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     def self.read_from(map, subject_id:, facet: self.facet)
       person = map.people.find { it.id == subject_id }
       { title: person.title } if person
-    end
-  end
-
-  class PlacementsSet < TeamPlanning::Events::Change
-    def self.facet = "placements"
-    def self.end_state(end_state) = { placements: end_state[:placements].sort_by { it[:unit_id] } }
-    def self.apply_to(map, _data) = map
-    def self.subject_moved_by(change) = change.person_id
-
-    def self.read_from(map, subject_id:, facet: self.facet)
-      person = map.people.find { it.id == subject_id }
-      { placements: person.memberships.map { it.to_h.except(:position_id) }.sort_by { it[:unit_id] } } if person
     end
   end
 
@@ -87,7 +74,7 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
 
   def statuses(report) = report.statuses.to_h { [ [ it.subject_id, it.facet ], it.status ] }
 
-  def placements(*places) = places.map { |unit_id, allocation| { unit_id:, allocation:, role: nil } }
+  def placements(*places) = places.map { |unit_id, allocation| { unit_id:, allocation: } }
 
   should "read done when today matches the end state, pending when it still matches the base, and conflicting otherwise" do
     plan(TitleSet, @ada.id, title: "Senior Engineer")
@@ -124,13 +111,15 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
   end
 
   should "read a placement list done only when the whole list matches" do
-    plan(PlacementsSet, @brook.id, placements: placements([ @payments, 0.5 ], [ @platform, 0.5 ]))
+    plan(TeamPlanning::Events::AssignmentSet, @brook.id, placements: placements([ @platform, 0.5 ], [ @payments, 0.5 ]))
+    assert_equal :pending, statuses(status)[[ @brook.id, "assignment" ]]
+
     on(Time.utc(2026, 3, 10, 9)) { @org.set_membership(@brook.id, @platform, **ESPALIA, effective_on: "2026-03-10", allocation: 0.5) }
 
-    assert_equal :conflicting, statuses(status)[[ @brook.id, "placements" ]]
+    assert_equal :conflicting, statuses(status)[[ @brook.id, "assignment" ]]
 
     on(Time.utc(2026, 3, 11, 9)) { @org.set_membership(@brook.id, @payments, **ESPALIA, effective_on: "2026-03-11", allocation: 0.5) }
-    assert_equal :done, statuses(status)[[ @brook.id, "placements" ]]
+    assert_equal :done, statuses(status)[[ @brook.id, "assignment" ]]
   end
 
   should "read pending while today matches the step before, and conflicting once it leaves both" do

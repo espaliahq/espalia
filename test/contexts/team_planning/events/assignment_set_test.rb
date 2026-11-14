@@ -26,4 +26,17 @@ class TeamPlanning::Events::AssignmentSetTest < ActiveSupport::TestCase
     assert_equal [ TeamPlanning::Baseline::Unresolved.new(person_id: "p1", why: nil) ], placed.unresolved
     assert_equal map, TeamPlanning::Events::AssignmentSet.apply_to(map, { subject_id: "p1", placements: [] })
   end
+
+  should "read a person's placements back as the end state that set them, in place order, and nothing for someone the map hasn't" do
+    person = TeamPlanning::Baseline::Member.new(id: "p1", title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil,
+                                                fte: nil, employment_type: nil, memberships: [])
+    map = TeamPlanning::Baseline::Map.new(base_on: Date.current, known_on: Date.current, units: [], people: [ person ], unassigned_ids: [],
+                                          positions: [], names: {}, rules: nil)
+    state = end_state({ unit_id: "0190a1b2-0000-7000-8000-000000000009", allocation: 0.5 }, { unit_id: UNIT, allocation: 0.5, role: "Lead" })
+    placed = TeamPlanning::Events::AssignmentSet.apply_to(map, { subject_id: "p1", **state })
+
+    assert_equal state, TeamPlanning::Events::AssignmentSet.read_from(placed, subject_id: "p1")
+    assert_equal [ UNIT.downcase, "0190a1b2-0000-7000-8000-000000000009" ], state[:placements].map { it[:unit_id] }
+    assert_nil TeamPlanning::Events::AssignmentSet.read_from(map, subject_id: "p2")
+  end
 end
