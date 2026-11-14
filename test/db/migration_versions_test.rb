@@ -9,8 +9,9 @@ class MigrationVersionsTest < ActiveSupport::TestCase
   # Versions up to here predate the rule and stay as they are.
   LAST_HAND_TYPED = "20261114120000"
 
-  # The minutes and seconds lanes have typed: 0000-0009, 0100, 0200, 0300…
-  HAND_TYPED = /(000\d|0\d00)\z/
+  # The minutes and seconds lanes type: 0000-0009, and any five minutes on the
+  # dot (0500, 1500, 3000…). A generated version ends like that 1 time in 300.
+  HAND_TYPED = /(000\d|[0-5][05]00)\z/
 
   should "take a generated version for each new migration" do
     hand_typed = versions.select { |v| v > LAST_HAND_TYPED && (v.match?(HAND_TYPED) || v > in_a_day) }
