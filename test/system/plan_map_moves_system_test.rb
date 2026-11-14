@@ -72,7 +72,7 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
       should "place a person in a position, with Move…" do
         open_move("Cy Loose")
         within("#move-person-modal") do
-          select "Payments › Backfill: Software Engineer", from: "To"
+          select "Payments › Backfill: Software Engineer · Engineer II", from: "To"
           js_fill_in "Allocation (%)", with: "100"
         end
         click_button_with_js_fallback("Save move", expect_text: "Move saved.")

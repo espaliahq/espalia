@@ -95,11 +95,23 @@ class Views::Plans::MoveDialog < Views::Base
       @units.each do |unit, path|
         trail = path + [ unit[:name] ]
         option(value: unit[:id]) { trail.join(" › ") }
-        @positions.fetch(unit[:id], []).each do |position|
-          option(value: self.class.position_choice(position[:position_id])) { (trail + [ Views::Plans::ScenarioMap.position_label(position) ]).join(" › ") }
+        position_options(unit[:id]).each do |position, label|
+          option(value: self.class.position_choice(position[:position_id])) { (trail + [ label ]).join(" › ") }
         end
       end
       option(value: UNASSIGNED) { "Unassigned" }
+    end
+  end
+
+  # Each position as the map names it, with its level; positions that still
+  # read alike are numbered in map order, so no two choices look the same.
+  def position_options(unit_id)
+    positions = @positions.fetch(unit_id, [])
+    labels = positions.map { [ Views::Plans::ScenarioMap.position_label(it), it[:level_name] ].compact.join(" · ") }
+    counts = labels.tally
+    seen = Hash.new(0)
+    positions.zip(labels).map do |position, label|
+      [ position, counts[label] > 1 ? "#{label} (#{seen[label] += 1})" : label ]
     end
   end
 

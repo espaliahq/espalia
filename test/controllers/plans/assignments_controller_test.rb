@@ -70,6 +70,22 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-map-position='#{position}'] [data-map-occupant='#{@ada.id}']"
     end
 
+    should "name each position choice by its level, and number ones that still read alike" do
+      ActsAsTenant.with_tenant(@tenant) do
+        role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+        level = create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 2, title: "Engineer II")
+        2.times do
+          call(Operations::TeamPlanning::SetPosition, @editor, plan_id: @plan_id, scenario_id: @q1, role_id: role.role_id,
+                                                              level_id: level.level_id, unit_id: @growth, fte: 1, basis: "new")
+        end
+      end
+
+      get map_plan_path(@plan_id, scenario: @q1)
+
+      assert_equal [ "Growth › New position: Software Engineer · Engineer II (1)", "Growth › New position: Software Engineer · Engineer II (2)" ],
+                   css_select("#move-to option[value^='#{Views::Plans::MoveDialog::POSITION}']").map(&:text)
+    end
+
     should "refuse Today and say why" do
       move(scenario_id: @plan_id)
 
