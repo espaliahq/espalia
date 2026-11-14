@@ -560,8 +560,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   ESPALIA_CHANGES = { title: :change_title, manager_id: :change_manager }.freeze
 
   # Records a person with no stream as having left, keeping the title and
-  # manager on their row. Their leaving date comes from the same evidence a
-  # cut-over reads ({OrgGraph::PeopleCutover.leaving}), so the two agree. Each fact is written by whoever holds it, since
+  # manager on their row. Each fact is written by whoever holds it, since
   # one command can't carry facts split between HiBob and Espalia. They
   # commit together, or a half-written leaver would never be revisited.
   def record_as_left(handler, person)

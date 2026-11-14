@@ -65,15 +65,11 @@ class OrgGraph::PeopleCutover
       **(leaving(person, on:) if employment_status == "left") }
   end
 
-  # When a leaver left, from the best evidence their row holds: the
-  # termination date in the HRIS record it stored, then the row's last
-  # update, then the day the Org Graph first records them. Nothing records
-  # when a row became inactive, so the last update of an inactive row stands
-  # in for it, but only from before that day: an update that day says
-  # nothing about when they left. Any later write moves it, so it can fall
-  # after they truly left. A still-active row's update says nothing either,
-  # as for someone a sync finds gone. A termination date after that day is
-  # passed over.
+  # When a leaver left, from the best evidence their row holds, shared by
+  # the cut-over and a sync so the two agree. Nothing records when a row
+  # became inactive, so an inactive row's last update stands in for it, but
+  # only from before that day. Any later write moves it, so it can fall
+  # after they truly left.
   #
   # @param person [Person]
   # @param on [Date] the day they are first recorded: the cut-over date, or a sign-in or sync after it

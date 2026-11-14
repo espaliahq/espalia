@@ -1315,6 +1315,15 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal [ Date.current.iso8601, "first_recorded" ], recorded(stray).values_at(:left_on, :left_on_source)
       end
 
+      should "pass over a termination date that ended an earlier spell, before their stored start date" do
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob",
+                                hris_raw_data: { "work" => { "startDate" => "2024-02-01" }, "internal" => { "terminationDate" => "2019-03-15" } })
+
+        build_adapter(@fixture["employees"]).sync_people
+
+        assert_equal [ Date.current.iso8601, "first_recorded" ], recorded(stray).values_at(:left_on, :left_on_source)
+      end
+
       should "pass over a termination date still to come for a leaver with no stream" do
         stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob",
                                 hris_raw_data: { "internal" => { "terminationDate" => (Date.current + 30).iso8601 } })
