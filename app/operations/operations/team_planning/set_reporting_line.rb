@@ -48,22 +48,23 @@ class Operations::TeamPlanning::SetReportingLine < Operations::Base
     if manager_position_id && !winning_change(plan, manager_position_id, ::TeamPlanning::Events::PositionSet.facet)
       raise Operations::Base::ParameterError, "This scenario has no such position"
     end
-    return unless manager_id
-    raise Operations::Base::ParameterError, "A person can't report to themself" if manager_id == person_id
-    raise Operations::Base::ParameterError, "No such manager" unless person?(manager_id)
-    return unless loop?(plan, person_id, manager_id)
+    if manager_id
+      raise Operations::Base::ParameterError, "A person can't report to themself" if manager_id == person_id
+      raise Operations::Base::ParameterError, "No such manager" unless person?(manager_id)
+    end
+    return unless (manager_id || manager_position_id) && loop?(plan, person_id, manager_id:, manager_position_id:)
 
     raise Operations::Base::ParameterError, "That line makes a loop: the manager already reports up to this person"
   end
 
-  # Walks up from the manager, through a manager position to the people
-  # holding it, looking for the person.
-  def loop?(plan, person_id, manager_id)
+  # Walks up from the manager, or from the people holding the manager
+  # position, through each line, looking for the person.
+  def loop?(plan, person_id, manager_id:, manager_position_id:)
     record = ::TeamPlanningPlan.find(plan_id!)
     map = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id: scenario_id!(:scenario_id)).structure(plan)
     lines = map.people.to_h { [ it.id, it.line ] }
     holders = map.occupants.transform_values { it.map { |holder, _| holder.id } }
-    above = [ manager_id ]
+    above = manager_id ? [ manager_id ] : holders.fetch(manager_position_id, [])
     seen = Set.new
     while (id = above.shift)
       return true if id == person_id

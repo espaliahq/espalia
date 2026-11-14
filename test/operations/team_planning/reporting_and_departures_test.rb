@@ -122,6 +122,15 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
     assert_equal "That line makes a loop: the manager already reports up to this person", refusal(person_id: @bo.id, manager_id: @ada.id)
   end
 
+  should "refuse a loop that starts at a manager position someone below holds" do
+    seat = open_position(@q1)
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @q1, person_id: @bo.id,
+                                                  placements: [ { position_id: seat, allocation: 1 } ])
+
+    assert_equal "That line makes a loop: the manager already reports up to this person",
+                 refusal(person_id: @ada.id, manager_position_id: seat)
+  end
+
   should "refuse a self-line, a loop, both targets, a missing position and someone outside the tenant" do
     elsewhere = create(:person, tenant: create(:tenant))
 
