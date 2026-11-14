@@ -2600,6 +2600,30 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_activity",
+        "description" => "Read one Org Graph unit's activity, newest first, 25 groups a page. A group is every " \
+          "change made under one cause, such as one request or one approved plan change. Each group " \
+          "has its summary, who made it (a person's name, or the provider that supplied it), when " \
+          "it took effect, when the Org Graph learned it, any plan reference, its parts and whether " \
+          "the caller can change it back, with the reason when not. Each part has its own id, " \
+          "description and change-back answer. Changing a group back reverses it in every unit it " \
+          "touched, and units_touched counts them. Admins only while the Org Graph is unfinished.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "unit_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S", "format" => "uuid" },
+            "page" => { "type" => "integer" }
+          },
+          "required" => %w[unit_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "org_graph_add_member",
         "description" => "Place a person in a live unit of the Org Graph, from effective_on (today by default), with " \
                          "an optional role and allocation (greater than 0, at most 1). A person can be in several " \
@@ -2692,6 +2716,46 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_change_back",
+        "description" => "Change back one entry of an Org Graph unit's activity, by its id from " \
+          "org_graph_activity. Writes the inverse as a new change; history keeps both. Refused, " \
+          "with the reason, for a change the caller couldn't make, one another provider supplied, " \
+          "one already changed back or one a later change has replaced.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "entry_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S", "format" => "uuid" }
+          },
+          "required" => %w[entry_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_change_back_group",
+        "description" => "Change back every change made under one cause, by the cause_id of a group from " \
+          "org_graph_activity. Reverses it in every unit it touched, not just the one read, as new " \
+          "changes; history keeps both. Refused as a whole, with the reason, unless every part can " \
+          "be changed back.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cause_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[cause_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {
