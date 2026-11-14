@@ -40,7 +40,7 @@ export default class extends BaseController {
 
   over(event) {
     const target = event.currentTarget
-    if (!this.#accepts(target)) return
+    if (!this.#accepts(target)) return this.#refuse(event)
 
     event.preventDefault()
     event.stopPropagation()
@@ -59,7 +59,7 @@ export default class extends BaseController {
 
   drop(event) {
     const target = event.currentTarget
-    if (!this.#accepts(target)) return
+    if (!this.#accepts(target)) return this.#refuse(event)
 
     event.preventDefault()
     event.stopPropagation()
@@ -71,6 +71,13 @@ export default class extends BaseController {
   }
 
   // private
+
+  // A position sits inside its unit, so a drop refused on the position the
+  // person already holds would otherwise land on the unit as a move.
+  #refuse(event) {
+    const { mapPosition } = event.currentTarget.dataset
+    if (mapPosition && mapPosition === this.dragged?.dataset.mapMoveFromPosition) event.stopPropagation()
+  }
 
   #accepts(target) {
     if (!this.dragged) return false

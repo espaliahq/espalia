@@ -151,6 +151,18 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
     within(unit("Payments")) { assert_text "Cy Loose" }
   end
 
+  should "open no dialog when someone is dropped on the position they hold" do
+    call(Operations::TeamPlanning::SetAssignment, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @cy.id,
+                                                            placements: [ { position_id: @position, allocation: 1 } ])
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit map_plan_path(@plan_id, scenario: @q1)
+    within(position) { assert_text "Cy Loose · 100%" }
+    wait_for_stimulus "map-move"
+    drag("[data-map-person='#{@cy.id}']", "[data-map-position='#{@position}']")
+
+    assert_no_selector "#move-person-modal", visible: true
+  end
+
   should "open the position dialog on the unit a position is dropped on" do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     visit map_plan_path(@plan_id, scenario: @q1)
