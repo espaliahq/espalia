@@ -19,7 +19,7 @@ class MigrationVersionsTest < ActiveSupport::TestCase
     assert_empty hand_typed, <<~MSG
       #{hand_typed.join(', ')} looks typed by hand: a round time, or one in the future, where
       other lanes pick the same version. Create migrations with `bin/rails g migration <Name>`.
-      If the generator chose it, run it again a minute later.
+      If the generator chose it, rename the file with its seconds moved on by one; your edits stay.
     MSG
   end
 
