@@ -58,7 +58,7 @@ class TeamPlanning::CapacityModel
   # @!attribute amount [Rational]
   # @!attribute working [Array<Step>] how the model reached the amount
   # @!attribute overloaded [Boolean] the seat costs more to run than it delivers, so the amount is floored
-  # @!attribute excess [Rational] by how much, when overloaded
+  # @!attribute excess [Rational] by how much, when overloaded, for the whole seat: before its share and FTE
   # @!attribute notes [Array<String>] what a reader should know about the seat, as keys a screen can name
   # @!attribute reason [String, nil] why the model can't price the place, so it counts nowhere
   Figure = Data.define(:amount, :working, :overloaded, :excess, :notes, :reason) do
