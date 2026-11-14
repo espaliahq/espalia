@@ -116,6 +116,20 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "start someone in a position on its unit in the timeline's dialog, which lists units only" do
+      position = ActsAsTenant.with_tenant(@tenant) do
+        role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+        level = create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 2, title: "Engineer II")
+        call(Operations::TeamPlanning::SetPosition, @editor, plan_id: @plan_id, scenario_id: @q1, role_id: role.role_id,
+                                                            level_id: level.level_id, unit_id: @growth, fte: 1, basis: "new")[:position_id]
+      end
+      move(to: Views::Plans::MoveDialog.position_choice(position))
+
+      get timeline_plan_path(@plan_id)
+
+      assert_select "button[data-modal-target-id='move-person-modal-1'][data-move-from-position='#{position}'][data-move-at='#{@growth}']"
+    end
+
     should "give each step on the timeline its own move dialog and field ids" do
       get timeline_plan_path(@plan_id)
 

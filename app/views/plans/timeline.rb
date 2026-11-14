@@ -308,7 +308,7 @@ class Views::Plans::Timeline < Views::Base
       url: plan_assignment_path(@timeline[:plan_id], bar[:subject_id]), name: name(bar[:subject_id]),
       from: bar[:unit_id] || UNASSIGNED_ID, place: { position_id: bar[:position_id], role: bar[:role] },
       share: bar[:allocation]&.to_r, dialog: move_dialog_id(step)
-    )
+    ).merge(move_at: bar[:unit_id] || UNASSIGNED_ID) # the dialog here lists units, not positions
   end
 
   def move_dialog_id(step) = "#{Views::Plans::MoveDialog::ID}-#{step}"
