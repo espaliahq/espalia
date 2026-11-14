@@ -177,7 +177,7 @@ class TeamPlanning::Capacity
 
     calculated = priced.figure
     amount = exact(override.reveal)
-    step = Model::Step.new(label: "Planner's override, in place of #{calculated.amount.to_f.round(2)}", amount:, op: "=")
+    step = Model::Step.new(label: "Planner's override, in place of #{decimal(calculated.amount)}", amount:, op: "=")
     priced.with(figure: Model::Figure.new(amount:, working: calculated.working + [ step ]), calculated:)
   end
 
@@ -217,4 +217,6 @@ class TeamPlanning::Capacity
   def titles = @titles ||= Integrations::HrisTitleResolution.new(@plan.tenant)
 
   def exact(value) = Rational(value.to_s)
+
+  def decimal(value) = BigDecimal(value, 20).round(4).to_s("F").delete_suffix(".0")
 end

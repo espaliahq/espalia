@@ -72,7 +72,7 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
     place = place_of_ada
     assert_equal [ "0.8", { "per_fte" => "0.8" } ], place.values_at(:capacity, :totals)
     assert_match(/\A0\.3333/, place[:calculated])
-    assert_equal({ label: "Planner's override, in place of 0.33", amount: "0.8", op: "=", subject_id: nil }, place[:working].last)
+    assert_equal({ label: "Planner's override, in place of 0.3333", amount: "0.8", op: "=", subject_id: nil }, place[:working].last)
     assert_nil place_of_ada(@plan_id)[:calculated]
     assert_equal({ value: "0.8" }, call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id: @q2)[:people]
                                      .find { it[:id] == @ada.id }[:capacity_overrides][@unit_id])
@@ -90,6 +90,7 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
 
     place = TeamPlanning::CapacityModels.stub(:fetch, floored) { place_of_ada }
     assert_equal [ "0.8", "0", false, "0", [] ], place.values_at(:capacity, :calculated, :overloaded, :excess, :notes)
+    assert_equal "Planner's override, in place of 0", place[:working].last[:label]
   end
 
   should "let an alternative override its parent's override, and clear one back to the model" do
