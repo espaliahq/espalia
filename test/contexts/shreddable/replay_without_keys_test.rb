@@ -79,6 +79,9 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
       planner.set_change(@plan_id, TeamPlanning::Events::PlanDataSet, scenario_id: @plan_id, subject_id: person.id, end_state: { field: "fte", value: 0.8 })
       planner.set_change(@plan_id, TeamPlanning::Events::PlaceholderSet, scenario_id: @plan_id, subject_id: SecureRandom.uuid_v7,
                                                                        end_state: { label: "Payments engineer", level: "3", fte: 1 })
+      q1 = SecureRandom.uuid_v7
+      planner.fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+      planner.describe_scenario(@plan_id, q1, description: "Hire two seniors before Q3")
     end
     write_note(@tenant, @plan_id)
   end

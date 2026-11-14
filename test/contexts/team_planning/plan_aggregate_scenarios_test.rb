@@ -185,6 +185,62 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     end
   end
 
+  context "#describe_scenario" do
+    setup { @q1 = fork(ends_on: "2027-03-31") }
+
+    should "say what a scenario is for, sealing the description" do
+      @plan.describe_scenario(@q1, description: "  Hire two seniors before Q3 ", described_by_id: @editor_id)
+
+      assert_kind_of TeamPlanning::Events::ScenarioDescribed, last_event
+      assert_kind_of Shreddable::Value, last_event.data[:description]
+      assert_equal "Hire two seniors before Q3", last_event.data[:description].reveal
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, described_by_id: @editor_id }, last_event.data.except(:description))
+    end
+
+    should "count a submitted line break as one character, as the form does" do
+      text = "#{"a" * 249}\r\n#{"b" * 250}"
+      @plan.describe_scenario(@q1, description: text, described_by_id: @editor_id)
+
+      assert_equal "#{"a" * 249}\n#{"b" * 250}", last_event.data[:description].reveal
+    end
+
+    should "clear a description with a blank" do
+      @plan.describe_scenario(@q1, description: " ", described_by_id: @editor_id, current: -> { "Hire two seniors" })
+
+      assert_nil last_event.data[:description]
+    end
+
+    should "write nothing when the caller says the scenario already holds the text" do
+      assert_no_difference -> { @plan.unpublished_events.count } do
+        @plan.describe_scenario(@q1, description: " Hire two seniors ", described_by_id: @editor_id, current: -> { "Hire two seniors" })
+        @plan.describe_scenario(@q1, description: "", described_by_id: @editor_id, current: -> { nil })
+      end
+    end
+
+    should "not ask what the scenario holds for a command it refuses" do
+      asked = false
+      assert_raises(TeamPlanning::Error) do
+        @plan.describe_scenario(@plan_id, description: "Now", described_by_id: @editor_id, current: -> { asked = true })
+      end
+      assert_not asked
+    end
+
+    should "write when the caller can't say what the scenario holds" do
+      assert_difference -> { @plan.unpublished_events.count } do
+        @plan.describe_scenario(@q1, description: nil, described_by_id: @editor_id)
+      end
+    end
+
+    should "refuse the baseline, an unknown scenario and an overlong description" do
+      assert_equal "The baseline can't be described",
+                   refusal { @plan.describe_scenario(@plan_id, description: "Now", described_by_id: @editor_id) }
+      assert_equal "This plan has no such scenario",
+                   refusal { @plan.describe_scenario(SecureRandom.uuid_v7, description: "Q9", described_by_id: @editor_id) }
+      assert_equal "A scenario's description can be at most 500 characters",
+                   refusal { @plan.describe_scenario(@q1, description: "x" * 501, described_by_id: @editor_id) }
+    end
+  end
+
   context "#remove_scenario" do
     setup do
       @q1 = fork(ends_on: "2027-03-31")

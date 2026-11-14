@@ -16,6 +16,12 @@
 # A plan whose base is still to come holds every change against today, so
 # nothing it plans reads conflicting before the plan starts.
 #
+# Once a plan is updated to today, today reads its base, so a change that
+# conflicted would read pending. A conflict the update carried forward in this
+# scenario ({TeamPlanning::PlanAggregate#carried_conflicts}) reads conflicting,
+# with `since` the day of the update that first found it, while the scenario
+# still resolves to the same change. A change that reads done reads done.
+#
 # Only a kind the Org Graph can show has a status
 # ({TeamPlanning::Events::Change.tracked?}). A plan-only kind, such as a rule,
 # would read pending forever, so it is left out. Today's map holds the units
@@ -44,7 +50,8 @@ class TeamPlanning::Status
   # @!attribute subject_id [String]
   # @!attribute facet [String]
   # @!attribute status [Symbol] :done, :pending, :conflicting or :unknown
-  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status)
+  # @!attribute since [Date, nil] for a conflict an update to today carried forward, the day of that update
+  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since)
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -65,7 +72,9 @@ class TeamPlanning::Status
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
+    @plan.reload
     @aggregate = @repository.load_plan(@plan.id)
+    @carried = @aggregate.carried_conflicts(@scenario_id)
     @resolved = {}
     @winning = {}
     changes = tracked_changes
@@ -102,8 +111,10 @@ class TeamPlanning::Status
     subject_id, facet = key
     today = kind.read_org_graph(now, change)
     before = [ [ kind.read_org_graph(base, change), base ], *step_before(change, key, base) ]
+    status = status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before)
+    since = @carried[key] unless %i[done unknown].include?(status)
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
-              status: status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before))
+              status: since ? :conflicting : status, since:)
   end
 
   def removed?(end_state) = end_state.values.any? { it.is_a?(Shreddable::Value) && it.removed? }

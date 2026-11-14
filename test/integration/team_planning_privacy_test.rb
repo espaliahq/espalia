@@ -8,6 +8,7 @@ require "test_helper"
 # out, and nothing is written. A new tool joins the walk on its own.
 class TeamPlanningPrivacyTest < ActiveSupport::TestCase
   setup do
+    travel_to Time.utc(2026, 12, 1, 9)
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
     @editor = account(role: :member, team_planner: true)
@@ -103,14 +104,16 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
   end
 
   def params_for(operation)
-    values = { plan_id: @plan_id, name: "Taken over", person_id: @viewer.person.id, role: "editor", reason: "Curious",
+    values = { plan_id: @plan_id, name: "Taken over", description: "Taken over", person_id: @viewer.person.id, role: "editor", reason: "Curious",
                base_on: "2026-11-14", scenario_id: @scenario_id, parent_id: @scenario_id, relation: "instead",
                ends_on: "2027-04-30", position_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
                level_id: SecureRandom.uuid_v7, unit_id: SecureRandom.uuid_v7, fte: 1, basis: "new", predecessor_ids: [ UNIT_ID ],
                successor_ids: [ UNIT_ID ],
                placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap",
-               level: "4", label: "Payments lead", field: "fte", value: "1",
+               rule: "capacity_model", level: "4", label: "Payments lead", field: "fte", value: "1",
                from_unit_id: "unassigned", to_unit_id: "unassigned" }
+    values[:value] = {} if operation == Operations::TeamPlanning::SetRule
+    values.delete(:unit_id) if operation.category == :read
     values.slice(*operation.parameters.keys)
   end
 
