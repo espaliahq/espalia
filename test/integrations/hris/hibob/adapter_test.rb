@@ -694,6 +694,12 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "3141" ], read_department(employees).keys
     end
 
+    should "read only the first of two newcomers who share an email, as the sync creates only the first" do
+      employees = [ { "id" => "3141", "email" => "Shared@example.com" }, { "id" => "2718", "email" => "shared@example.com" } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
     should "read a rehired leaver only once their new start date comes" do
       %w[3141 2718].each do |external_id|
         person = create(:person, tenant: @tenant, hris_source: "hibob", external_id:)
@@ -712,6 +718,14 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
                     { "id" => "2718", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
 
       assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "leave out a forgotten person back at work whose email another HRIS id holds" do
+      forget_row("3141")
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "taken@example.com")
+      employees = [ { "id" => "3141", "email" => "taken@example.com", "work" => { "startDate" => (Date.current - 1).iso8601 } } ]
+
+      assert_empty read_department(employees)
     end
   end
 

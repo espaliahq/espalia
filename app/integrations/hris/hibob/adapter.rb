@@ -214,9 +214,14 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       external_id = employee["id"].to_s
       # The Org Graph takes a leaver back only once their new start date comes.
       next !left.include?(held[external_id]) || back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on) if held.key?(external_id)
-      next back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on) if forgotten_person(external_id)
+      next false if forgotten_person(external_id) && !back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on)
 
-      !taken.include?(employee["email"]&.downcase&.strip)
+      email = employee["email"]&.downcase&.strip.presence
+      next false if taken.include?(email)
+
+      # The sync creates people in response order, so the first to claim an email keeps it.
+      taken << email if email
+      true
     end
   end
 
