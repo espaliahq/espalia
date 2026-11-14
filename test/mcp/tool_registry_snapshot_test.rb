@@ -3689,10 +3689,10 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "List the active tenant's pay bands: each band's framework level, location (null for any location), " \
                          "currency, period (year, month or hour) and minimum, midpoint and maximum as decimal strings, as " \
                          "entered and never converted. in_framework is false for a band whose level has left the framework. " \
-                         "Refused unless the caller is a tenant admin.",
+                         "Give pay_band_id to read one band. Refused unless the caller is a tenant admin.",
         "inputSchema" => {
           "type" => "object",
-          "properties" => {},
+          "properties" => { "pay_band_id" => { "type" => "string" } },
           "required" => [],
           "additionalProperties" => false
         },

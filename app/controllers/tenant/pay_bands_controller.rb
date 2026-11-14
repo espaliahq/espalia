@@ -69,9 +69,9 @@ class Tenant::PayBandsController < ApplicationController
 
   # @raise [ActiveRecord::RecordNotFound] for a band this tenant doesn't hold, which renders a 404
   def band_payload
-    band = Operations::Tenants::PayBands.call(context: pundit_user, params: {})[:pay_bands]
-                                        .find { it[:pay_band_id] == params[:id] }
-    band || raise(ActiveRecord::RecordNotFound)
+    Operations::Tenants::PayBands.call(context: pundit_user, params: { pay_band_id: params[:id] })[:pay_bands].sole
+  rescue Operations::Base::ParameterError
+    raise ActiveRecord::RecordNotFound
   end
 
   # Figures arrive as typed, so the thousands separators a person types are dropped here.

@@ -98,13 +98,6 @@ class PayBand < ApplicationRecord
   # @return [Boolean] whether this is the fallback band for any location
   def any_location? = location_key.blank?
 
-  # @return [String, nil] the person linked to whoever last changed the band, or their email
-  def updated_by_name
-    return if updated_by.nil?
-
-    TenantUser.find_by(user: updated_by)&.person&.name || updated_by.email
-  end
-
   # @return [String] the refusal for a second band at this level and location
   def duplicate_message = "There is already a band for this level in #{any_location? ? 'any location' : location}"
 

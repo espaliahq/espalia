@@ -44,7 +44,7 @@ module Operations::Tenants::PayBandSupport
   # @param role [FrameworkState::Role, nil]
   # @return [Hash]
   def band_payload(band, level = FrameworkState::Level.find_by(level_id: band.level_id),
-                   role = level && FrameworkState::Role.find_by(role_id: level.role_id))
+                   role = level && FrameworkState::Role.find_by(role_id: level.role_id), names: editor_names([ band ]))
     band.take_names_from(level, role) if level
     {
       pay_band_id: band.id,
@@ -59,8 +59,18 @@ module Operations::Tenants::PayBandSupport
       period: band.period,
       **PayBand::FIGURES.to_h { [ it, band.figure(it) ] },
       updated_at: band.updated_at.iso8601,
-      updated_by: band.updated_by_name
+      updated_by: names[band.updated_by_id]
     }
+  end
+
+  # Who last changed each band, by the person linked to them in this tenant, or their email.
+  #
+  # @param bands [Array<PayBand>]
+  # @return [Hash{String => String}] by user id
+  def editor_names(bands)
+    users = User.where(id: bands.filter_map(&:updated_by_id).uniq).to_a
+    people = TenantUser.where(user_id: users.map(&:id)).includes(:person).to_h { [ it.user_id, it.person&.name ] }
+    users.to_h { [ it.id, people[it.id] || it.email ] }
   end
 
   # @param pay_band_id [String]

@@ -23,6 +23,13 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) { "Operations::Tenants::#{operation}".constantize.call(context: context(as), params:) }
   end
 
+  def count_queries(&)
+    count = 0
+    counter = ->(*, payload) { count += 1 unless payload[:name] == "SCHEMA" }
+    ActiveRecord::Base.uncached { ActiveSupport::Notifications.subscribed(counter, "sql.active_record", &) }
+    count
+  end
+
   def add(**params)
     call(:AddPayBand, level_id: @level.level_id, location: "Fixtureland", currency: "AUD", period: "year", **FIGURES, **params)
   end
@@ -45,6 +52,16 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     removed = call(:RemovePayBand, pay_band_id: added[:pay_band_id])
     assert_equal "Fixtureland", removed[:location]
     assert_empty call(:PayBands)[:pay_bands]
+  end
+
+  should "read one band by id, naming who changed it in one query for every band" do
+    added = add
+    add(location: "Testonia")
+
+    assert_equal [ added[:pay_band_id] ], call(:PayBands, pay_band_id: added[:pay_band_id])[:pay_bands].pluck(:pay_band_id)
+    queries = count_queries { call(:PayBands) }
+    add(location: "Elsewhere")
+    assert_equal queries, count_queries { call(:PayBands) }
   end
 
   should "keep a band whose level has left the framework, marked so" do
