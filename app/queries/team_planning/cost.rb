@@ -74,7 +74,7 @@ class TeamPlanning::Cost
     def currency = band&.currency
 
     # @return [Integer]
-    def days = held ? held.count : 0
+    def days = held && held.end >= held.begin ? (held.end - held.begin).to_i + 1 : 0
 
     # @return [Rational] the part of a full-time year the place covers
     def share = fte * fraction * Rational(days, YEAR_DAYS)
@@ -167,8 +167,8 @@ class TeamPlanning::Cost
     @positions = map.positions.index_by(&:id)
     people = map.people.flat_map { person_lines(it) }
     lines = people + open_lines(map)
-    Priced.new(map:, lines:, total: sum(lines), units: by(lines, &:unit_id), units_with_below: with_below(lines),
-               cost_centres: by(lines, &:cost_centre))
+    units = by(lines, &:unit_id)
+    Priced.new(map:, lines:, total: sum(lines), units:, units_with_below: with_below(units), cost_centres: by(lines, &:cost_centre))
   end
 
   def person_lines(member)
@@ -270,11 +270,18 @@ class TeamPlanning::Cost
 
   def by(lines, &key) = lines.group_by(&key).transform_values { sum(it) }
 
-  def with_below(lines)
+  # Each unit's own sum plus its children's, each child's folded in once.
+  def with_below(units)
     children = @map.units.group_by(&:parent_id)
-    own = lines.group_by(&:unit_id)
-    below = ->(id) { own.fetch(id, []) + children.fetch(id, []).flat_map { below.(it.id) } }
-    @map.units.to_h { [ it.id, sum(below.(it.id)) ] }
+    totals = {}
+    fold = ->(id) { totals[id] ||= children.fetch(id, []).reduce(units[id] || self.class.nothing(@reference)) { |sum, child| plus(sum, fold.(child.id)) } }
+    @map.units.each { fold.(it.id) }
+    totals
+  end
+
+  def plus(one, other)
+    Sum.new(native: one.native.merge(other.native) { |_, a, b| a + b }.sort.to_h,
+            converted: one.converted && other.converted && (one.converted + other.converted), missing: one.missing | other.missing)
   end
 
   def sum(lines)
