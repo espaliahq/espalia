@@ -3049,6 +3049,35 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_remove_level",
+        "description" => "Remove a level from the Org Graph's taxonomy, from effective_on (today by default). Only a " \
+                         "level no unit has ever held, retired units included, can go; the refusal names the units. " \
+                         "A level an HRIS provides is handed back to Espalia first. Refused unless the caller is a " \
+                         "tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "level_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "level_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_remove_member",
         "description" => "End a person's membership of a unit in the Org Graph; effective_on (today by default) is " \
                          "their last day in it. A membership an HRIS supplies ends in the HRIS, not here.",

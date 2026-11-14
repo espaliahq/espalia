@@ -48,6 +48,13 @@ class OrgGraph::StructureCommandHandler
     with_structure(OrgGraph::PlanReference.new) { |structure| structure.reorder_levels(level_ids, **attributed(options, :defined_by_id)) }
   end
 
+  # @see OrgGraph::StructureAggregate#remove_level
+  def remove_level(level_id, **options)
+    plan, options = OrgGraph::PlanReference.extract(options)
+    authorize_taxonomy!
+    with_structure(plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
+  end
+
   # @see OrgGraph::StructureAggregate#set_level_provider
   def set_level_provider(level_id, provider, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
