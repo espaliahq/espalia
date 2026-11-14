@@ -6,6 +6,7 @@
 # that class. Walked by the privacy test and the forgotten-person audit.
 class Operations::TeamPlanning::Timeline < Operations::Base
   include Operations::TeamPlanning::PlanRead
+  include Operations::TeamPlanning::MapPayload
 
   description "Get one path of a Team Planning plan the caller is in, from the baseline to a scenario, laid out " \
               "along the calendar. columns are the steps, root first, each with its name, period and " \
@@ -17,7 +18,8 @@ class Operations::TeamPlanning::Timeline < Operations::Base
               "lane of the person it replaces, and the first hire into a position in that position's lane. Bars " \
               "give the columns a place is held (from and to are column indexes); a unit_id of null is " \
               "Unassigned, listed in unassigned_lane_ids. moves name the units a person left and joined after a " \
-              "column, and departures the column they leave in, with its backfill. `names` maps every person id " \
+              "column, and departures the column they leave in, with its backfill. positions are keyed by id, each as " \
+              "it stands in the last column it appears in. `names` maps every person id " \
               "to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
@@ -33,7 +35,8 @@ class Operations::TeamPlanning::Timeline < Operations::Base
     timeline = refusing_bad_plans { ::TeamPlanning::Timeline.new(context:, plan:, scenario_id:).call }
     { plan_id: plan.id, scenario_id:, columns: columns(plan, timeline), next_ids: timeline.next_ids,
       blocks: blocks(timeline), unassigned_lane_ids: timeline.unassigned_lane_ids,
-      lanes: timeline.lanes.map { lane(it) }, positions: positions(timeline), names: timeline.names }
+      lanes: timeline.lanes.map { lane(it) }, positions: positions(timeline),
+      names: timeline.maps.map { names_for(it) }.reduce({}, :merge) }
   end
 
   private
@@ -62,8 +65,6 @@ class Operations::TeamPlanning::Timeline < Operations::Base
   end
 
   def positions(timeline)
-    timeline.maps.flat_map(&:positions).reverse.uniq(&:id).reverse.to_h do |position|
-      [ position.id, position.to_h.except(:id).merge(budget: position.budget) ]
-    end
+    timeline.maps.flat_map { positions_payload(it) }.to_h { [ it[:position_id], it.except(:position_id) ] }
   end
 end

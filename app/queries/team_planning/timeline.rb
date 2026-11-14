@@ -54,8 +54,7 @@ class TeamPlanning::Timeline
   # @!attribute blocks [Array<Block>]
   # @!attribute unassigned_lane_ids [Array<String>] lanes with a bar in no live unit
   # @!attribute lanes [Array<Lane>]
-  # @!attribute names [Hash{String => String}] person id => name, across every column
-  Result = Data.define(:columns, :next_ids, :maps, :blocks, :unassigned_lane_ids, :lanes, :names)
+  Result = Data.define(:columns, :next_ids, :maps, :blocks, :unassigned_lane_ids, :lanes)
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -115,7 +114,7 @@ class TeamPlanning::Timeline
       lane_of = lane_owners
       lanes = lanes(lane_of)
       Result.new(columns:, next_ids:, maps: @maps, blocks: blocks(lanes), unassigned_lane_ids: lane_ids_in(lanes, nil),
-                 lanes: lanes.sort_by { lane_order(it, it.bars) }, names: @names)
+                 lanes: lanes.sort_by { lane_order(it, it.bars) })
     end
 
     private
