@@ -81,6 +81,15 @@ class Operations::Tenants::ExchangeRatesTest < ActiveSupport::TestCase
     errors.each { |message| assert_no_match(/\d\.\d|-3/, message) }
   end
 
+  should "list rates by pair, each pair's latest first" do
+    add
+    add(from_currency: "USD", applies_from: "2026-06-01")
+    add(applies_from: "2026-08-01")
+
+    listed = call(:ExchangeRates)[:exchange_rates].map { it.values_at(:from_currency, :applies_from) }
+    assert_equal [ %w[NZD 2026-08-01], %w[NZD 2026-07-01], %w[USD 2026-06-01] ], listed
+  end
+
   should "refuse a change to a rate removed after it was found" do
     added = add
     stale = ActsAsTenant.with_tenant(@tenant) { ExchangeRate.find(added[:exchange_rate_id]).tap { ExchangeRate.find(it.id).destroy! } }

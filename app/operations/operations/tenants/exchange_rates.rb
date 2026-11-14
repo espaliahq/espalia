@@ -18,10 +18,13 @@ class Operations::Tenants::ExchangeRates < Operations::Base
   # @return [Hash] `{ reference_currency:, exchange_rates: [...] }`
   # @raise [Operations::Base::ParameterError] for an exchange_rate_id the tenant doesn't hold
   def perform
-    rates = params[:exchange_rate_id].present? ? [ find_rate(params[:exchange_rate_id]) ] : ExchangeRate.all.to_a
+    rates = if params[:exchange_rate_id].present?
+              [ find_rate(params[:exchange_rate_id]) ]
+    else
+              ExchangeRate.order(:from_currency, :to_currency, applies_from: :desc).to_a
+    end
     reference = ReferenceCurrency.current
     names = editor_names([ *rates, reference ].compact)
-    rates = rates.sort_by { [ it.from_currency, it.to_currency, -it.applies_from.jd ] }
     { reference_currency: reference_payload(reference, names:), exchange_rates: rates.map { rate_payload(it, names:) } }
   end
 end
