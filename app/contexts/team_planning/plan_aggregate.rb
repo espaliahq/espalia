@@ -17,8 +17,6 @@
 # its parent's period. Only a `then` scenario's end is held: every start, and
 # an alternative's whole period, follows from the tree, so the periods along
 # any path from the root stay contiguous.
-#
-
 class TeamPlanning::PlanAggregate
   include AggregateRoot
 
