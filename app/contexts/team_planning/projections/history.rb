@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # Synchronous projection of each scenario's history: every change, pin and
-# clear it made, and every undo and redo of one, in the order made, read
-# through {TeamPlanning::ChangeEntry}.
+# clear it made, every undo and redo of one, and every rewrite of a note, in
+# the order made, read through {TeamPlanning::ChangeEntry}.
 #
 # Writes `team_planning_history_entries`, and nothing else writes it. An undo
 # marks the entry it reverses as undone and a redo lifts the mark; both stay
@@ -25,7 +25,8 @@ class TeamPlanning::Projections::History
   def self.handled_events
     TeamPlanning::ChangeKinds.all + [
       TeamPlanning::Events::ChangePinned, TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangeUndone,
-      TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanDeleted
+      TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::ScenarioRemoved,
+      TeamPlanning::Events::PlanDeleted
     ]
   end
 
@@ -57,7 +58,7 @@ class TeamPlanning::Projections::History
     TeamPlanningHistoryEntry.create!(
       id: entry.event_id, position: next_position(entry.scenario_id),
       **entry.to_h.slice(:plan_id, :scenario_id, :action, :kind, :end_state, :sealed_fields, :actor_id, :at, :note,
-                         :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :subject_id, :facet)
+                         :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :noted_event_id, :subject_id, :facet)
     )
   end
 

@@ -310,6 +310,29 @@ class TeamPlanning::PlanAggregate
     apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id:, in_effect_event_id: }))
   end
 
+  # Writes, rewrites or clears the note on a change or pin, which must still
+  # stand in its scenario: not undone, not cleared and not replaced.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param event_id [String] the change's or pin's event id
+  # @param note [String, nil] blank clears it
+  # @param noted_by_id [String] person_id of the actor
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the change not in its log or no
+  #   longer standing, or the note too long
+  def note_change(scenario_id:, event_id:, note:, noted_by_id:)
+    ensure_open!
+    entry = log_entry!(live_scenario!(scenario_id), event_id)
+    raise TeamPlanning::Error, "That change is undone: redo it to note it" if undone?(event_id)
+
+    subject_id, facet = key_of(entry)
+    unless changes_in(scenario_id).reverse_each.find { it.key == [ subject_id, facet ] }&.event_id == event_id
+      raise TeamPlanning::Error, "That change no longer stands in #{this(scenario_id).downcase}, so it takes no note"
+    end
+
+    apply(TeamPlanning::Events::ChangeNoted.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, noted_event_id: event_id,
+                                                        note: require_note(note), noted_by_id: }))
+  end
+
   # What an Undo button takes back for one person: their latest entry in the
   # scenario that is in effect and that nothing later replaced.
   #
@@ -552,6 +575,9 @@ class TeamPlanning::PlanAggregate
   on TeamPlanning::Events::ChangeRedone do |event|
     @undone.delete(event.data[:redone_event_id])
     @redo_stacks.fetch(event.data[:scenario_id], {}).each_value { it.delete(event.data[:redone_event_id]) }
+  end
+
+  on TeamPlanning::Events::ChangeNoted do |_event|
   end
 
   on TeamPlanning::Events::ScenarioRemoved do |event|

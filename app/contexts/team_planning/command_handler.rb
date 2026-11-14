@@ -246,6 +246,22 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Writes, rewrites or clears the note on a change or pin that stands in a scenario.
+  #
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param event_id [String] the change's or pin's event id, from the scenario's history
+  # @param note [String, nil] blank clears it
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#note_change
+  def note_change(plan_id, scenario_id:, event_id:, note:)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.note_change(scenario_id:, event_id:, note:, noted_by_id: actor_id!)
+    end
+  end
+
   # Takes back a change, pin or clear in a scenario. Without an event id, takes
   # back the actor's own latest one that can be undone, as an Undo button does.
   #

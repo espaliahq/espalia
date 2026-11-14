@@ -6,10 +6,12 @@
 #
 # A shreddable value never leaves the event: {#end_state} holds only the
 # fields in clear, and {#sealed_fields} names the rest. {#note} is the
-# planner's note as the event holds it, sealed.
+# planner's note as the event holds it, sealed; a note entry names the
+# change it notes in {#noted_event_id}.
 TeamPlanning::ChangeEntry = Data.define(
   :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
-  :actor_id, :at, :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :note
+  :actor_id, :at, :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :note,
+  :noted_event_id
 ) do
   # @param event [RubyEventStore::Event]
   # @return [TeamPlanning::ChangeEntry, nil] nil for an event that changes no facet
@@ -18,7 +20,7 @@ TeamPlanning::ChangeEntry = Data.define(
 
     new(event_id: event.event_id, plan_id: event.data[:plan_id], scenario_id: event.data[:scenario_id],
         at: event.timestamp, subject_id: nil, facet: nil, kind: nil, end_state: nil, sealed_fields: [],
-        pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, note: nil, **fields)
+        pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, note: nil, noted_event_id: nil, **fields)
   end
 
   def self.fields_of(event)
@@ -34,6 +36,8 @@ TeamPlanning::ChangeEntry = Data.define(
       { action: "clear", **data.slice(:subject_id, :facet), actor_id: data[:cleared_by_id] }
     when TeamPlanning::Events::ChangeUndone
       { action: "undo", **data.slice(:subject_id, :facet), reverses_event_id: data[:undone_event_id], actor_id: data[:undone_by_id] }
+    when TeamPlanning::Events::ChangeNoted
+      { action: "note", **data.slice(:subject_id, :facet, :noted_event_id, :note), actor_id: data[:noted_by_id] }
     when TeamPlanning::Events::ChangeRedone
       { action: "redo", **data.slice(:subject_id, :facet), reverses_event_id: data[:redone_event_id], actor_id: data[:redone_by_id] }
     end
@@ -47,6 +51,9 @@ TeamPlanning::ChangeEntry = Data.define(
 
   # @return [Boolean] whether it sets an end state: a set or a pin
   def sets? = %w[set pin].include?(action)
+
+  # @return [Boolean] whether it rewrites the note on another entry
+  def notes? = action == "note"
 
   # @return [Boolean] whether it reverses another entry
   def reverses? = !reverses_event_id.nil?

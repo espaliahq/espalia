@@ -25,8 +25,8 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
 
-  def call(operation, **params)
-    as_tenant { operation.call(context: AuthorizationContext.new(user: @editor.user, tenant_user: @editor, person: @editor.person), params:) }
+  def call(operation, as: @editor, **params)
+    as_tenant { operation.call(context: AuthorizationContext.new(user: as.user, tenant_user: as, person: as.person), params:) }
   end
 
   def fork(name, **) = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, name:, **)[:scenario_id]
@@ -45,6 +45,16 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
     as_tenant { Rails.configuration.event_store.read.stream(stream).to_a }
       .select { it.is_a?(TeamPlanning::Events::Change) && it.data[:scenario_id] == scenario_id }
   end
+
+  def note(note, as: @editor, event_id: @change_id)
+    call(Operations::TeamPlanning::NoteChange, as:, plan_id: @plan_id, scenario_id: @noted, event_id:, note:)
+  end
+
+  def refusal(...) = assert_raises(Operations::Base::ParameterError) { note(...) }.message
+
+  def override = call(Operations::TeamPlanning::Overrides, plan_id: @plan_id, scenario_id: @noted)[:overrides].sole
+
+  def history = call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id: @noted)[:entries]
 
   def without_scenario(rows) = rows.map { it.except(:scenario_id, :change_id) }
 
@@ -111,5 +121,65 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
       write(Operations::TeamPlanning::SetPlannedLevel, @noted, person_id: @ada.id, level: "4", note: "x" * 2_001)
     end
     assert_equal "A note can be at most 2000 characters", error.message
+  end
+
+  context "a note rewritten on a change" do
+    setup do
+      write(Operations::TeamPlanning::SetPlannedLevel, @noted, person_id: @ada.id, level: "4", note: "Ready since the platform launch")
+      @change_id = changes_in(@noted).sole.event_id
+    end
+
+    should "show each edit in the history, with who made it and when, and the latest on the override" do
+      travel 1.hour
+      assert_equal({ plan_id: @plan_id, scenario_id: @noted, event_id: @change_id, noted: true }, note("Ready, and asked for it"))
+      travel 1.hour
+      assert_equal false, note(nil)[:noted]
+
+      set, rewritten, cleared = history
+      assert_equal [ "set", "note", "note" ], [ set, rewritten, cleared ].map { it[:action] }
+      assert_equal [ { value: "Ready since the platform launch" }, { value: "Ready, and asked for it" }, nil ], [ set, rewritten, cleared ].map { it[:note] }
+      assert_equal [ @change_id ] * 2, [ rewritten, cleared ].map { it[:noted_event_id] }
+      assert_equal [ { person_id: @editor.person_id, name: @editor.person.name } ] * 2, [ rewritten, cleared ].map { it[:by] }
+      assert_equal [ "2026-02-01T10:00:00Z", "2026-02-01T11:00:00Z" ], [ rewritten, cleared ].map { it[:at] }
+      assert_not override.key?(:note)
+    end
+
+    should "follow its change through undo and redo, and never be undone itself" do
+      note("Ready, and asked for it")
+      write(Operations::TeamPlanning::SetPlannedLevel, @noted, person_id: @ada.id, level: "5")
+      write(Operations::TeamPlanning::UndoChange, @noted)
+      assert_equal({ value: "Ready, and asked for it" }, override[:note])
+
+      write(Operations::TeamPlanning::RedoChange, @noted)
+      assert_not override.key?(:note)
+      write(Operations::TeamPlanning::UndoChange, @noted)
+      assert_equal({ value: "Ready, and asked for it" }, override[:note])
+      ada = call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id: @noted)[:people].find { it[:id] == @ada.id }
+      assert_equal({ value: "4" }, ada[:planned_level])
+    end
+
+    should "refuse a change since cleared, undone or replaced, and one the scenario never made" do
+      write(Operations::TeamPlanning::SetPlannedLevel, @noted, person_id: @ada.id, level: "5")
+      assert_equal "That change no longer stands in this scenario, so it takes no note", refusal("Too late")
+
+      write(Operations::TeamPlanning::UndoChange, @noted)
+      replaced_id = changes_in(@noted).last.event_id
+      assert_equal "That change is undone: redo it to note it", refusal("Too late", event_id: replaced_id)
+
+      write(Operations::TeamPlanning::ClearChange, @noted, subject_id: @ada.id, facet: "level")
+      assert_equal "That change no longer stands in this scenario, so it takes no note", refusal("Too late")
+      assert_equal "This scenario has no such change", refusal("Lost", event_id: SecureRandom.uuid)
+    end
+
+    should "refuse a frozen plan, to its last editor and to a tenant admin alike" do
+      admin = as_tenant { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant)) }
+      as_tenant do
+        @editor.person.update!(status: "inactive")
+        OrgLeaver.create!(tenant: @tenant, person_id: @editor.person_id, left_on: Date.new(2026, 2, 1))
+      end
+
+      [ @editor, admin ].each { assert_equal "No such plan", refusal("Frozen", as: it) }
+      assert_equal 1, as_tenant { TeamPlanningHistoryEntry.where(plan_id: @plan_id).count }
+    end
   end
 end
