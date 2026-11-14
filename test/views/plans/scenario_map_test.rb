@@ -50,6 +50,15 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
     end
   end
 
+  context "the units" do
+    should "still show units whose parents loop" do
+      growth = "01a1da48-c64a-7529-af90-0f97e41cdaa4"
+      html = render_map(units: [ unit(PAYMENTS, "Payments", parent_id: growth), unit(growth, "Growth", parent_id: PAYMENTS) ])
+
+      assert_equal %w[Growth Payments], html.css("[data-map-unit] h3").map(&:text)
+    end
+  end
+
   context "the Unassigned card" do
     should "list a position whose unit isn't on the map" do
       gone = "01a1da48-c64a-7529-af90-0f97e41cdaa3"

@@ -194,15 +194,20 @@ class Views::Plans::ScenarioMap < Views::Base
   def name(person_id) = @map[:names].fetch(person_id, Person::FORMER_MEMBER)
 
   # Each unit with the names of the units above it, parents before children.
+  # Scenarios can set any unit's parent, so units caught in a loop come last
+  # rather than not at all.
   def ordered_units
     @ordered_units ||= begin
       children = @map[:units].group_by { it[:parent_id] }
       ids = @map[:units].to_set { it[:id] }
-      roots = @map[:units].reject { ids.include?(it[:parent_id]) }
+      seen = Set.new
       walk = lambda do |unit, path|
+        next [] unless seen.add?(unit[:id])
+
         [ [ unit, path ] ] + children.fetch(unit[:id], []).sort_by { it[:name] }.flat_map { walk.(it, path + [ unit[:name] ]) }
       end
-      roots.sort_by { it[:name] }.flat_map { walk.(it, []) }
+      roots, rest = @map[:units].sort_by { it[:name] }.partition { !ids.include?(it[:parent_id]) }
+      (roots + rest).flat_map { walk.(it, []) }
     end
   end
 
