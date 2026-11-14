@@ -36,14 +36,4 @@ class Tenant::OrgUnitMembersController < ApplicationController
       Operations::OrgGraph::RemoveMember.call(context: pundit_user, params: with_date(person_id: params[:id], unit_id: @unit.id))
     end
   end
-
-  private
-
-  # The form asks for a percentage; the Org Graph stores a fraction.
-  def allocation
-    percent = params[:allocation].presence or return
-    Float(percent) / 100
-  rescue ArgumentError
-    raise Operations::Base::ParameterError, "Allocation must be a number, got #{percent.inspect}"
-  end
 end
