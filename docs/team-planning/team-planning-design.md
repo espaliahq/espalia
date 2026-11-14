@@ -120,6 +120,22 @@ ancestor's edit because it is later in the chain, not because anything protected
 A change that no longer fits (it places someone in a unit an ancestor has retired) still
 resolves. The projection marks it as needing attention.
 
+A scenario has two paths from the root, and the code keeps them apart:
+
+- **The resolution chain** (`PlanAggregate#resolution_chain`) is every scenario whose
+  changes it resolves through. An alternative follows its parent, so it starts as the
+  parent plus its own differences, and its own changes win.
+- **The timeline path** (`PlanAggregate#timeline_path`) is the steps as the timeline lays
+  them out. An alternative takes its parent's place, sharing its period and column.
+
+An alternative that wants what its parent's parent had sets that end state itself. A
+one-step "follow the parent's parent again" is `ChangeCleared` (3.9).
+
+In code, each change kind subclasses `TeamPlanning::Events::Change`, names its facet and
+says how its end state lands on a map. `TeamPlanning::Resolution` reads
+`TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
+along the resolution chain, and joins names last.
+
 ### Rules
 
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
@@ -143,22 +159,6 @@ A rule's value may one day be sensitive: an on-cost rate, a guardrail on pay. So
 names what is wrong and never repeats the value. A kind declares `shreddable?`, and until
 [#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
 yes is refused at registration.
-
-A scenario has two paths from the root, and the code keeps them apart:
-
-- **The resolution chain** (`PlanAggregate#resolution_chain`) is every scenario whose
-  changes it resolves through. An alternative follows its parent, so it starts as the
-  parent plus its own differences, and its own changes win.
-- **The timeline path** (`PlanAggregate#timeline_path`) is the steps as the timeline lays
-  them out. An alternative takes its parent's place, sharing its period and column.
-
-An alternative that wants what its parent's parent had sets that end state itself. A
-one-step "follow the parent's parent again" is `ChangeCleared` (3.9).
-
-In code, each change kind subclasses `TeamPlanning::Events::Change`, names its facet and
-says how its end state lands on a map. `TeamPlanning::Resolution` reads
-`TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
-along the resolution chain, and joins names last.
 
 ### Undo
 
