@@ -1,6 +1,6 @@
 {
   "name": "team_planning_plan_members",
-  "description": "List the members of a Team Planning plan the caller is in, each a person id, their name and a role (editor or viewer). A forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
+  "description": "List the members of a Team Planning plan the caller is in, each a person id, their name, a role (editor or viewer) and see_pay: whether they hold the see-pay right. A holder also has see_pay_granted, saying who granted it, when, and whether a tenant admin restored it to a plan locked out of pay. A forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
   "inputSchema": {
     "type": "object",
     "properties": {

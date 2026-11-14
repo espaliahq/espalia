@@ -25,6 +25,12 @@ class Operations::TeamPlanning::PlanMembersTest < ActiveSupport::TestCase
 
   def add(person_id, role, as: @editor) = call(Operations::TeamPlanning::AddPlanMember, as:, plan_id: @plan_id, person_id:, role:)
 
+  def grant(person_id, as: @editor) = call(Operations::TeamPlanning::GrantSeePay, as:, plan_id: @plan_id, person_id:)
+
+  def withdraw(person_id, as: @editor) = call(Operations::TeamPlanning::WithdrawSeePay, as:, plan_id: @plan_id, person_id:)
+
+  def holder(person_id, as: @editor) = members(as:).find { it[:person_id] == person_id }
+
   should "list a person's plans with their role, and nobody else's" do
     add(@colleague.person_id, "viewer")
     call(Operations::TeamPlanning::CreatePlan, as: @admin, name: "Admin's own")
@@ -143,6 +149,68 @@ class Operations::TeamPlanning::PlanMembersTest < ActiveSupport::TestCase
 
     should "keep the frozen list from anyone but a tenant admin" do
       assert_raises(Pundit::NotAuthorizedError) { call(Operations::TeamPlanning::FrozenPlans, as: @editor) }
+    end
+  end
+
+  context "the see-pay right" do
+    setup { add(@colleague.person_id, "viewer") }
+
+    should "show the creator holding it from the start, and who granted it" do
+      creator = holder(@editor.person_id)
+      assert creator[:see_pay]
+      assert_equal({ by_id: @editor.person_id, by_name: @editor.person.name, recovery: false },
+                   creator[:see_pay_granted].except(:at))
+      assert_equal({ person_id: @colleague.person_id, name: @colleague.person.name, role: "viewer", see_pay: false },
+                   holder(@colleague.person_id))
+    end
+
+    should "let a holder grant it and take it back" do
+      assert_equal({ plan_id: @plan_id, person_id: @colleague.person_id, see_pay: true }, grant(@colleague.person_id))
+      assert_equal @editor.person_id, holder(@colleague.person_id, as: @colleague)[:see_pay_granted][:by_id]
+
+      assert_equal({ plan_id: @plan_id, person_id: @colleague.person_id, see_pay: false }, withdraw(@colleague.person_id))
+      assert_nil holder(@colleague.person_id)[:see_pay_granted]
+    end
+
+    should "refuse a member who doesn't hold it as though the plan weren't there" do
+      [ -> { grant(@colleague.person_id, as: @colleague) }, -> { withdraw(@editor.person_id, as: @colleague) } ].each do |command|
+        assert_equal "No such plan", assert_raises(Operations::Base::ParameterError, &command).message
+      end
+    end
+
+    should "refuse to leave the plan with nobody who can grant it" do
+      error = assert_raises(Operations::Base::ParameterError) { withdraw(@editor.person_id) }
+      assert_match "A plan needs someone who can see pay", error.message
+    end
+
+    context "once its only holder leaves" do
+      setup do
+        add(@colleague.person_id, "editor")
+        @editor.person.update!(status: "inactive")
+      end
+
+      should "let a tenant admin restore it unread, to the editors left, as the admin's grant" do
+        assert_equal({ plan_id: @plan_id, restored: true },
+                     call(Operations::TeamPlanning::RestoreSeePay, as: @admin, plan_id: @plan_id))
+
+        assert_equal({ by_id: @admin.person_id, by_name: @admin.person.name, recovery: true },
+                     holder(@colleague.person_id, as: @colleague)[:see_pay_granted].except(:at))
+        assert_raises(Operations::Base::ParameterError) { members(as: @admin) }
+      end
+
+      should "refuse anyone but a tenant admin, as an unknown plan" do
+        error = assert_raises(Operations::Base::ParameterError) do
+          call(Operations::TeamPlanning::RestoreSeePay, as: @colleague, plan_id: @plan_id)
+        end
+        assert_equal "No such plan", error.message
+      end
+    end
+
+    should "refuse a tenant admin a plan that has a holder, as an unknown plan" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::TeamPlanning::RestoreSeePay, as: @admin, plan_id: @plan_id)
+      end
+      assert_equal "No such plan", error.message
     end
   end
 end
