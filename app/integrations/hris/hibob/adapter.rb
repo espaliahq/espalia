@@ -466,7 +466,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     held_email = person.email
 
     person.assign_attributes(attrs.except(:hris_raw_data, *(PROJECTED_ATTRS if projected && !is_new)))
-    person.hris_raw_data = without_forgotten_manager(attrs[:hris_raw_data])
+    # A dry run reads only the fields it previews, so the payload it holds is not the one the sync would store.
+    person.hris_raw_data = without_forgotten_manager(attrs[:hris_raw_data]) if write
     person.hris_source = "hibob"
 
     if person.changed? || is_new

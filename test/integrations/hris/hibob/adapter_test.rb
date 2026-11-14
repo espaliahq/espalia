@@ -818,6 +818,19 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep a held row the sync leaves untouched, though the slim read differs from the payload it stored" do
+      held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
+      held.update_columns(name: "", department: "Sales", hris_raw_data: { "id" => "1618", "work" => { "title" => "Chef" } })
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      client.expect(:search_people, [ { "id" => "1618", "email" => "held@example.com", "work" => { "department" => "Sales" } } ],
+        fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
+        show_inactive: true)
+      adapter.instance_variable_set(:@client, client)
+
+      assert_equal [ "1618" ], adapter.read_field("work.department", kind: :text).keys
+    end
+
     should "put each value on the row the sync writes it to, adopted by email or held by id" do
       held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
       adopted = create(:person, tenant: @tenant, email: "adopt@example.com")
