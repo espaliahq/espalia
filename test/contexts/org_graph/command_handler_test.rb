@@ -18,6 +18,8 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
+  def empty_member_list = OrgGraph::Projections::Members.reset!(tenant: @tenant)
+
   def stream_events
     Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(@person_id)).to_a
   end
@@ -485,6 +487,65 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
 
       assert_raises(RuntimeError, match: "hibob supplies this unit;") do
         @handler.move_membership(@person_id, squad, team, effective_on: "2026-12-01")
+      end
+    end
+
+    context "while a Members rebuild has emptied the member list" do
+      setup do
+        teams, squads = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+        @team, @other_team, @squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7, SecureRandom.uuid_v7
+        @structure.define_taxonomy([ { level_id: teams, name: "Team" }, { level_id: squads, name: "Squad" } ], effective_on: "2026-01-01")
+        @structure.set_level_provider(teams, "hibob", effective_on: "2026-01-01")
+        @structure.create_unit(@team, "Payments", level_id: teams, effective_on: "2026-01-01", provider: "hibob", external_ref: "t-1")
+        @structure.create_unit(@other_team, "Search", level_id: teams, effective_on: "2026-01-01", provider: "hibob", external_ref: "t-2")
+        @structure.create_unit(@squad, "Billing", level_id: squads, effective_on: "2026-01-01")
+      end
+
+      should "still refuse to move an Espalia membership into a unit the HRIS supplies" do
+        @handler.set_membership(@person_id, @squad, **HELD_BY_ESPALIA)
+        empty_member_list
+
+        assert_raises(RuntimeError, match: "hibob supplies this unit;") do
+          @handler.move_membership(@person_id, @squad, @team, effective_on: "2026-12-01")
+        end
+      end
+
+      should "still refuse to move an HRIS membership into a unit Espalia supplies" do
+        @handler.set_membership(@person_id, @team, **PROVENANCE)
+        empty_member_list
+
+        assert_raises(RuntimeError, match: "espalia supplies this unit;") do
+          @handler.move_membership(@person_id, @team, @squad, effective_on: "2026-12-01")
+        end
+      end
+
+      should "refuse to end a membership when a Structure rebuild has emptied the units too" do
+        @handler.set_membership(@person_id, @squad, **HELD_BY_ESPALIA)
+        empty_member_list
+        OrgUnit.where(id: @squad).delete_all
+        written = stream_events.size
+
+        assert_raises(RuntimeError, match: "Unit not found") do
+          @handler.end_membership(@person_id, @squad, **HELD_BY_ESPALIA)
+        end
+        assert_equal written, stream_events.size
+      end
+
+      should "let Espalia end, move and confirm the membership it holds for someone the HRIS now knows" do
+        hand_added = create(:person, tenant: @tenant).id
+        @handler.record_person(hand_added, **HELD_BY_ESPALIA, employment_status: "employed")
+        @handler.set_membership(hand_added, @team, **HELD_BY_ESPALIA)
+        Person.find(hand_added).update!(hris_source: "hibob", external_id: "hb-2")
+        empty_member_list
+
+        @handler.set_membership(hand_added, @team, **HELD_BY_ESPALIA, role: "Lead")
+        @handler.move_membership(hand_added, @team, @other_team, effective_on: "2026-11-02")
+        @handler.confirm_fact(hand_added, "membership", unit_id: @other_team, effective_on: "2026-11-03", confirmed_by_id: @person_id)
+        @handler.end_membership(hand_added, @other_team, **HELD_BY_ESPALIA, effective_on: "2026-11-04")
+
+        assert_equal %w[MembershipSet MembershipSet MembershipMoved FactConfirmed MembershipEnded],
+                     Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(hand_added))
+                          .to_a.map { it.class.name.demodulize }.grep(/Membership|FactConfirmed/)
       end
     end
   end

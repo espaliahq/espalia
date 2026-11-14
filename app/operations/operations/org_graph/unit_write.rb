@@ -55,6 +55,23 @@ module Operations::OrgGraph::UnitWrite
     raise Operations::Base::ParameterError, "#{name} must be a UUID, got #{value.inspect}"
   end
 
+  # Yields who supplies the person's membership of the unit, or nil, as their
+  # stream has it: org_memberships is empty while a Members rebuild runs
+  # ([#170](https://github.com/espaliahq/espalia/issues/170)).
+  # Holds the stream's lock, so the command the block makes can't be overtaken.
+  #
+  # @param person [Person]
+  # @param unit [OrgUnit]
+  # @yieldparam provider [String, nil]
+  def with_membership(person, unit)
+    repository = ::OrgGraph::Repository.new
+    ActiveRecord::Base.transaction do
+      repository.lock_person(person.id)
+      yield repository.load_person(person.id).membership_provider(unit.id)
+    end
+  end
+
+
   # @param unit [OrgUnit]
   # @raise [Operations::Base::ParameterError] if an HRIS mirrors the unit
   def held_by_espalia!(unit)
