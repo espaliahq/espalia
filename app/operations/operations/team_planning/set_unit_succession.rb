@@ -30,12 +30,12 @@ class Operations::TeamPlanning::SetUnitSuccession < Operations::Base
     succession_id = succession_for(map)
     predecessor_ids, successor_ids = ids(:predecessor_ids), ids(:successor_ids)
     check!(map, succession_id, predecessor_ids, successor_ids)
-    retiring = map.units.select { predecessor_ids.include?(it.id) }.map(&:id)
-    check_retirable!(map, retiring)
+    retiring = map.units.select { predecessor_ids.include?(it.id) }
+    check_retirable!(map, retiring.map(&:id))
 
     refusing_bad_plans { handler.set_changes(plan.id, changes(scenario_id, succession_id, predecessor_ids, successor_ids, retiring)) }
     { plan_id: plan.id, scenario_id:, succession_id:, predecessor_ids: predecessor_ids.sort,
-      successor_ids: successor_ids.sort, retired_ids: retiring.sort }
+      successor_ids: successor_ids.sort, retired_ids: retiring.map(&:id).sort }
   end
 
   private
@@ -78,7 +78,7 @@ class Operations::TeamPlanning::SetUnitSuccession < Operations::Base
   end
 
   def changes(scenario_id, succession_id, predecessor_ids, successor_ids, retiring)
-    retiring.map { { kind: ::TeamPlanning::Events::UnitRetired, scenario_id:, subject_id: it } } +
+    retiring.map { { kind: ::TeamPlanning::Events::UnitRetired, scenario_id:, subject_id: it.id, end_state: as_it_stands(it) } } +
       [ { kind: ::TeamPlanning::Events::UnitSuccessionSet, scenario_id:, subject_id: succession_id,
           end_state: { predecessor_ids:, successor_ids: } } ]
   end

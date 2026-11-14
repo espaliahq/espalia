@@ -24,7 +24,8 @@ class Operations::TeamPlanning::RetireUnit < Operations::Base
     refuse!("Move or retire its sub-units first") if map.units.any? { it.parent_id == unit.id }
 
     refusing_bad_plans do
-      handler.set_change(plan.id, ::TeamPlanning::Events::UnitRetired, scenario_id:, subject_id: unit.id)
+      handler.set_change(plan.id, ::TeamPlanning::Events::UnitRetired, scenario_id:, subject_id: unit.id,
+                                                                                   end_state: as_it_stands(unit))
     end
     { plan_id: plan.id, scenario_id:, unit_id: unit.id }
   end

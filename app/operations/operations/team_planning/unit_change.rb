@@ -41,6 +41,9 @@ module Operations::TeamPlanning::UnitChange
     children + children.flat_map { descendant_ids(map, it) }
   end
 
+  # @return [Hash] a unit's name, parent and level, as a change carries them
+  def as_it_stands(unit) = unit.to_h.slice(:name, :parent_id, :level_id)
+
   # @return [Array<String>] the taxonomy's level ids, top first
   def level_ids = @level_ids ||= OrgTaxonomyLevel.top_first.pluck(:id)
 

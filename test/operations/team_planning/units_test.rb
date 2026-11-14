@@ -95,6 +95,16 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
       assert_equal %w[Engineering Payments Platform], names(@lean)
       assert_empty units(@lean)[:retired_units]
     end
+
+    should "retire a unit the plan created, and one it renamed, as each stood" do
+      risk = write(Operations::TeamPlanning::SetUnit, name: "Risk", parent_id: @engineering, level_id: @squad)[:unit_id]
+      write(Operations::TeamPlanning::SetUnit, unit_id: @payments, name: "Billing")
+      write(Operations::TeamPlanning::RetireUnit, unit_id: risk)
+      write(Operations::TeamPlanning::SetUnitSuccession, predecessor_ids: [ @payments ], successor_ids: [ @platform ])
+
+      assert_equal %w[Billing Risk], names(@q1, :retired_units).sort
+      assert_equal %w[Engineering Platform], names
+    end
   end
 
   context "SetUnitSuccession" do

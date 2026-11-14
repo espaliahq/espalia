@@ -1,22 +1,28 @@
 # frozen_string_literal: true
 
 # A unit wound down in a scenario. It shares its facet with {UnitSet}, so the
-# last of the two wins. Its people keep their place: moving them is an
-# assignment's job, and a place in a retired unit is a misfit.
+# last of the two wins, and it carries the unit as it stood, since winning
+# drops any UnitSet before it: the one that created the unit, or renamed it.
+# Its people keep their place: moving them is an assignment's job, and a
+# place in a retired unit is a misfit.
+#
+# @!attribute [r] data
+#   @return [Hash] the fields every {Change} holds, plus the unit's `name`,
+#     `parent_id` and `level_id` as {UnitSet} holds them
 class TeamPlanning::Events::UnitRetired < TeamPlanning::Events::Change
   def self.facet = TeamPlanning::Events::UnitSet::FACET
 
-  # @param end_state [Hash] nothing; a retirement has no fields of its own
+  # @param end_state [Hash] `{ name:, parent_id:, level_id: }`, the unit as it stood
   # @return [Hash]
-  def self.end_state(_end_state) = {}
+  # @raise [TeamPlanning::Error] as {UnitSet.end_state} does
+  def self.end_state(end_state) = TeamPlanning::Events::UnitSet.end_state(end_state)
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
-  # @return [TeamPlanning::Baseline::Map] with the unit among the retired, if the map knew it
+  # @return [TeamPlanning::Baseline::Map] with the unit among the retired, as it stood
   def self.apply_to(map, data)
-    unit = map.units.find { it.id == data[:subject_id] }
-    return map unless unit
-
-    map.with(units: map.units - [ unit ], retired_units: map.retired_units + [ unit ])
+    live = TeamPlanning::Events::UnitSet.apply_to(map, data)
+    unit = live.units.find { it.id == data[:subject_id] }
+    live.with(units: live.units - [ unit ], retired_units: live.retired_units + [ unit ])
   end
 end

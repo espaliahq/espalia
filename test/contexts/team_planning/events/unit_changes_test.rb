@@ -43,11 +43,13 @@ class TeamPlanning::Events::UnitChangesTest < ActiveSupport::TestCase
       assert_equal TeamPlanning::Events::UnitSet.facet, TeamPlanning::Events::UnitRetired.facet
     end
 
-    should "move a live unit to the retired, and leave a map without it alone" do
+    should "retire the unit as it stood, whether or not the map already holds it" do
       id = SecureRandom.uuid_v7
-      retired = TeamPlanning::Events::UnitRetired.apply_to(map(units: [ unit(id) ]), subject_id: id)
-      assert_equal [ [], [ id ] ], [ retired.units, retired.retired_units.map(&:id) ]
-      assert_equal retired, TeamPlanning::Events::UnitRetired.apply_to(retired, subject_id: id)
+      as_it_stood = { subject_id: id, name: "Billing", parent_id: nil, level_id: LEVEL }
+      retired = TeamPlanning::Events::UnitRetired.apply_to(map(units: [ unit(id) ]), as_it_stood)
+      assert_equal [ [], [ [ "Billing", [ OTHER ] ] ] ], [ retired.units, retired.retired_units.map { [ it.name, it.owner_ids ] } ]
+      assert_equal retired, TeamPlanning::Events::UnitRetired.apply_to(retired, as_it_stood)
+      assert_equal [ "Billing" ], TeamPlanning::Events::UnitRetired.apply_to(map, as_it_stood).retired_units.map(&:name)
     end
   end
 
