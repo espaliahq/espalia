@@ -38,6 +38,17 @@ class OrgGraph::FactConfirmationTest < ActiveSupport::TestCase
     assert_equal [ "manager_id", nil ], confirmations.sole.data.values_at(:fact, :unit_id)
   end
 
+  should "confirm a fact Espalia holds on the day, while a later handover waits to take effect" do
+    @aggregate.change_manager(SecureRandom.uuid_v7, **ESPALIA)
+    @aggregate.change_manager(SecureRandom.uuid_v7, provider: "hibob", effective_on: "2026-12-01")
+
+    confirm(:manager_id)
+    assert_raises(RuntimeError, match: /Espalia holds/) do
+      @aggregate.confirm_fact(:manager_id, confirmed_by_id: @confirmer_id, effective_on: "2026-12-02")
+    end
+    assert_equal [ "2026-11-10" ], confirmations.map { it.data[:effective_on] }
+  end
+
   should "refuse a fact another provider holds, and write nothing" do
     @aggregate.set_membership(@unit_id, **HIBOB)
 

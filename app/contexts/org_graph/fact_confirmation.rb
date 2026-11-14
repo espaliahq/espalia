@@ -34,7 +34,7 @@ module OrgGraph::FactConfirmation
     raise "Unknown fact: #{fact}" unless self.class.confirmable_facts.include?(fact)
 
     unit_id = confirmed_unit(fact, unit_id)
-    raise "Only a fact Espalia holds can be confirmed" unless held_by_espalia?(fact, unit_id)
+    raise "Only a fact Espalia holds can be confirmed" unless held_by_espalia?(fact, unit_id, effective_on)
 
     apply(OrgGraph::Events::FactConfirmed.new(data: provenance("espalia", effective_on).merge(
       fact: fact, unit_id: unit_id, confirmed_by_id: confirmed_by_id
@@ -50,14 +50,14 @@ module OrgGraph::FactConfirmation
     nil
   end
 
-  def held_by_espalia?(fact, unit_id)
+  def held_by_espalia?(fact, unit_id, effective_on)
     if fact == MEMBERSHIP
       raise "Not a member of this unit" unless @memberships.key?(unit_id)
 
       @memberships.dig(unit_id, :provider) == "espalia"
     else
-      key = fact.to_sym
-      !@facts[key].nil? && @fact_providers[key] == "espalia"
+      held = fact_point(fact.to_sym, normalize_date(effective_on, :effective_on))
+      !held&.value.nil? && held.provider == "espalia"
     end
   end
 end
