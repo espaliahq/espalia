@@ -24,7 +24,7 @@ class OrgGraph::PersonDevelopmentSweepJob < ApplicationJob
     ActsAsTenant.with_tenant(tenant) do
       AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id || job_id) do
         AuditMetadata.wrap_event_store do
-          Person.hris_managed.ids.each { |person_id| sweep(tenant, feed, person_id, counts) }
+          sweepable.each { |person_id| sweep(tenant, feed, person_id, counts) }
         end
       end
     end
@@ -34,6 +34,13 @@ class OrgGraph::PersonDevelopmentSweepJob < ApplicationJob
   end
 
   private
+
+  # A leaver with no assignment has nothing left to reconcile until they return.
+  def sweepable
+    Person.hris_managed.where(status: "active")
+      .or(Person.hris_managed.where(id: PersonFrameworkAssignment.select(:person_id)))
+      .ids
+  end
 
   def sweep(tenant, feed, person_id, counts)
     OrgGraph::PeopleCutover.hold_off(tenant) do
