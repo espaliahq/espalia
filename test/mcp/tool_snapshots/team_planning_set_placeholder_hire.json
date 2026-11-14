@@ -6,7 +6,7 @@
     "properties": {
       "note": {
         "type": "string",
-        "description": "Why this is in the plan, such as why this person moves. Optional, at most 2000 characters; it never changes what the scenario resolves to. Deleting the plan erases it."
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. Keep personal details out: deleting the plan erases the note, forgetting a person does not."
       },
       "plan_id": {
         "type": "string"

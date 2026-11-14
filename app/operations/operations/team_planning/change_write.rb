@@ -11,9 +11,9 @@ module Operations::TeamPlanning::ChangeWrite
 
   included do
     parameter :note, String, schema: {
-      description: "Why this is in the plan, such as why this person moves. Optional, at most " \
+      description: "Why this is in the plan, such as the business reason for a move. Optional, at most " \
                    "#{::TeamPlanning::PlanAggregate::NOTE_LIMIT} characters; it never changes what the scenario " \
-                   "resolves to. Deleting the plan erases it."
+                   "resolves to. Keep personal details out: deleting the plan erases the note, forgetting a person does not."
     }
     prose_fields :note
   end

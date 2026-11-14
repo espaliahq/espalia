@@ -11,7 +11,7 @@ class Operations::TeamPlanning::NoteChange < Operations::Base
               "clear it. A note never changes what the scenario resolves to, can't be undone, and follows its " \
               "change through undo and redo. Refused for a change since undone, cleared or replaced in its " \
               "scenario, for a note over #{::TeamPlanning::PlanAggregate::NOTE_LIMIT} characters, or unless the " \
-              "caller is an editor. Deleting the plan erases every note."
+              "caller is an editor. Keep personal details out: deleting the plan erases every note, forgetting a person does not."
   category :write
   approval :mcp_client
 

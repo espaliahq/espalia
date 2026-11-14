@@ -1,6 +1,6 @@
 {
   "name": "team_planning_note_change",
-  "description": "Write, rewrite or clear the note on a change or pin in a scenario of a Team Planning plan: why it is in the plan. Give event_id as team_planning_history lists it, and leave note out or blank to clear it. A note never changes what the scenario resolves to, can't be undone, and follows its change through undo and redo. Refused for a change since undone, cleared or replaced in its scenario, for a note over 2000 characters, or unless the caller is an editor. Deleting the plan erases every note. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "description": "Write, rewrite or clear the note on a change or pin in a scenario of a Team Planning plan: why it is in the plan. Give event_id as team_planning_history lists it, and leave note out or blank to clear it. A note never changes what the scenario resolves to, can't be undone, and follows its change through undo and redo. Refused for a change since undone, cleared or replaced in its scenario, for a note over 2000 characters, or unless the caller is an editor. Keep personal details out: deleting the plan erases every note, forgetting a person does not. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
