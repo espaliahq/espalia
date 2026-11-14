@@ -3,6 +3,7 @@
 # The In no team tray: active people the Org Graph holds in no live unit.
 class Views::Tenant::OrgGraph::Tray < Views::Base
   include Phlex::Rails::Helpers::Routes
+  include Views::Tenant::OrgGraph::KeepsComparison
 
   ID = "in-no-team"
 
@@ -35,7 +36,7 @@ class Views::Tenant::OrgGraph::Tray < Views::Base
 
   def unplaced_person(person)
     li(class: "flex items-baseline gap-2 rounded-md border border-default bg-default px-3 py-1.5 text-sm") do
-      a(href: tenant_org_person_path(person, unit: @unit_id), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+      a(href: tenant_org_person_path(person, unit: @unit_id, **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
       details = [ person.job_title.presence, person.hris_level_ordinal && "L#{person.hris_level_ordinal}" ].compact
       span(class: "text-muted") { details.join(" ") } if details.any?
     end

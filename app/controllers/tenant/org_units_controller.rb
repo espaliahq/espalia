@@ -23,7 +23,8 @@ class Tenant::OrgUnitsController < ApplicationController
         confirmations:,
         effective_on: params[:on].presence || Date.current.iso8601,
         alert: flash[:drawer_alert]
-      )
+      ),
+      **comparison_slots(unit_id: @unit.id)
     )
   end
 

@@ -210,6 +210,12 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
       assert_equal [ [ "hris_termination_date", 1 ], [ "row_updated", 1 ], [ "first_recorded", 1 ] ], report.left_on_sources.to_a
     end
 
+    should "take no leaving date from the last update of a row still active" do
+      as_tenant { @by_hand.update_columns(status: "active", hris_raw_data: nil, updated_at: Time.zone.parse("2025-06-30 10:00")) }
+
+      assert_equal({ left_on: Date.current, left_on_source: "first_recorded" }, OrgGraph::PeopleCutover.leaving(@by_hand.reload))
+    end
+
     should "leave on the cut-over date with no evidence, and count them" do
       as_tenant { @by_hand.update!(hris_raw_data: nil) }
 

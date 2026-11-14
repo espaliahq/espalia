@@ -60,7 +60,7 @@ class Tenant::OrgFactConfirmationsControllerTest < ActionDispatch::IntegrationTe
 
   should "keep the Units view's comparison open across Still true" do
     travel 91.days
-    window = { from: 30.days.ago.to_date.iso8601, to: Date.current.iso8601, by: "learned" }
+    window = { from: 30.days.ago.to_date.iso8601, by: "learned" }
 
     get tenant_org_graph_path(unit: @org[:checkout], **window)
     form = page.at_css("[data-stale-flag=\"Cyril Moss's membership of Checkout\"] form")
@@ -69,6 +69,24 @@ class Tenant::OrgFactConfirmationsControllerTest < ActionDispatch::IntegrationTe
     post tenant_org_person_confirmations_path(@org[:cyril]),
          params: { facts: [ "membership" ], unit_id: @org[:checkout], return_to: "units", unit: @org[:checkout], **window }
     assert_redirected_to tenant_org_graph_path(unit: @org[:checkout], **window)
+  end
+
+  should "keep the comparison across Still true in the unit drawer and the person drawer" do
+    travel 91.days
+    window = { from: 30.days.ago.to_date.iso8601, by: "learned" }
+
+    get edit_tenant_org_unit_path(@org[:checkout], **window)
+    form = page.at_css("aside#org-graph-drawer [data-stale-flag=\"Cyril Moss's membership of Checkout\"] form")
+    assert_equal window.stringify_keys, form.css("input[name=from], input[name=by]").to_h { [ it["name"], it["value"] ] }
+    post tenant_org_person_confirmations_path(@org[:cyril]),
+         params: { facts: [ "membership" ], unit_id: @org[:checkout], return_to: "unit", unit: @org[:checkout], **window }
+    assert_redirected_to edit_tenant_org_unit_path(@org[:checkout], **window)
+
+    get tenant_org_person_path(@org[:brook], **window)
+    form = page.at_css("aside#org-graph-drawer [data-stale-flag='site'] form")
+    assert_equal window.stringify_keys, form.css("input[name=from], input[name=by]").to_h { [ it["name"], it["value"] ] }
+    post tenant_org_person_confirmations_path(@org[:brook]), params: { facts: %w[site country], **window }
+    assert_redirected_to tenant_org_person_path(@org[:brook], **window)
   end
 
   should "confirm a pair of facts together and go back to the person drawer" do

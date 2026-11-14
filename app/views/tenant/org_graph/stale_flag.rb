@@ -5,6 +5,7 @@
 # it as of today and comes back to the screen it was pressed on.
 class Views::Tenant::OrgGraph::StaleFlag < Views::Base
   include Phlex::Rails::Helpers::Routes
+  include Views::Tenant::OrgGraph::KeepsComparison
 
   # @param ages [Array<OrgFactAge>] the stale facts behind one line, oldest first
   # @param person [Person]
@@ -55,6 +56,7 @@ class Views::Tenant::OrgGraph::StaleFlag < Views::Base
       end
       input(type: "hidden", name: "unit_id", value: @ages.first.unit_id) if @ages.first.membership?
       @back_to.each { |name, value| input(type: "hidden", name: name.to_s, value:) }
+      comparison_fields
       render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit, compact: true,
                                          aria_label: "Confirm #{@subject} is still true") { "Still true" }
     end
