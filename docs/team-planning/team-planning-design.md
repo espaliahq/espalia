@@ -138,6 +138,30 @@ says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
 
+### Unit changes as built
+
+`UnitSet` carries a unit's whole end state: its name, its parent and its level. It creates a
+unit (the plan mints the id), renames one or moves one, and a later `UnitSet` brings a
+retired unit back. `UnitRetired` shares its facet, `unit`, so whichever of the two comes
+later wins. Since winning drops any earlier `UnitSet`, a retirement carries the unit as it
+stood, so a unit the plan created, or renamed, retires as the plan had it. A unit's level never changes, as in the Org Graph: a unit at a new level is a new
+unit with a succession.
+
+`UnitSuccessionSet` is its own subject, with the facet `succession`. It names which units
+carry on from which: one predecessor and several successors is a split, several and one is a
+merge. `team_planning_set_unit_succession` retires each live predecessor in the same write,
+as the Org Graph's own succession does. People stay where they are until an assignment moves
+them.
+
+The checks the Org Graph makes run in the operations, under the plan's lock, against the
+scenario as it then resolves: the level is in the taxonomy and below the parent's, the parent
+is live, no unit moves beneath itself, no unit retires with live sub-units, and no succession
+loops back. A rename or move fills what the caller leaves out from that same resolve, so it
+can't undo another editor's change. Only an ancestor's later edit can still break the checks;
+the change resolves anyway, and 3.8 marks it. The unit tools write through
+`CommandHandler#set_changes`, whose block returns the changes, since a succession lands with
+the retirements it implies.
+
 ### Positions as built
 
 `PositionSet` and `PositionClosed` share the facet `position`, so the later one wins and a
@@ -147,6 +171,29 @@ mapping, and the write checks that the level belongs to the role. `basis` is `ba
 which is committed budget, or `new`, which is planned; the map reads it as the position's
 budget. A position's unit is not checked at write: a position in a retired unit still
 resolves, and 3.8 marks it. The baseline has no positions, so every one starts in a plan.
+
+### Assignments as built
+
+`AssignmentSet` ([#229](https://github.com/espaliahq/espalia/issues/229)) has the facet
+`assignment`, and its subject is a person. It holds the person's whole placement list:
+each placement is in a position or a unit, never both, with an allocation above 0 and at
+most 1 and an optional role. An empty list leaves the person unassigned. A child scenario
+that changes one placement owns the whole list from then on, so a later edit to the
+parent's list no longer reaches it.
+
+- **Totals are read, not refused.** A person's `allocation_total` may pass 1, and 4.6
+  flags it. A total is `nil`, which means unknown, when the HRIS gave a place no
+  allocation. A check must not read unknown as under-allocated.
+- **Unassigned is derived.** After the changes apply, `Map#settled` gives each position
+  placement its position's unit, then lists everyone in no live unit as unassigned. A
+  placement in a closed position keeps its `position_id` with no unit, and a placement in
+  a unit gone from the map counts for nothing.
+- **Open FTE** is a position's FTE less each occupant's allocation times their FTE, an
+  unknown FTE counting as full time. It goes below 0 when a position is overfilled.
+- **A person not on the map is never placed, but never silently.** The map lists them in
+  `unresolved` with `why`: "joined after the base date", which updating the plan to today
+  (4.2) fixes, or "has left", for a leaver by the base date or a forgotten person. 3.8
+  marks them and the changes tab shows them.
 
 ### Adding a change kind
 
@@ -167,7 +214,9 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    resolver.
 3. **The map.** If the kind adds something the map doesn't hold, add it to
    `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
-   any names it needs in `Baseline#named`, never in `apply_to`.
+   any names it needs in `Baseline#named`, never in `apply_to`. Anything derived from
+   several kinds, such as who is unassigned, belongs in `Map#settled`, which `Resolution`
+   runs once every change has applied.
 4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
    `ChangeWrite` and calls `set_change!`. Put the checks the aggregate can't make, such as
    whether a framework role exists, in the block you pass it, since the aggregate reads no
