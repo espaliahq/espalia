@@ -39,7 +39,7 @@ The schedule ships off for every tenant. `OrgGraph::ForgetDueLeaversJob` runs da
 3. Turn it on with that count. A tenant admin calls `tenants_enable_scheduled_forgetting` with `confirm_count` set to the dry run's number. If the number has moved since, the call is refused: run the dry run again. The tenant records when it was turned on and by which tenant user.
 4. The next run logs `[OrgGraph::Forgetting] scheduled tenant=<id> reason=retention count=<n> person_ids=…`.
 
-`tenants_disable_scheduled_forgetting` turns it off. A run already going stops before the next person, and anyone already forgotten stays forgotten. A run also reads the retention period afresh for each person, so lengthening it spares anyone it no longer covers.
+`tenants_disable_scheduled_forgetting` turns it off. A run already going stops before the next person, and anyone already forgotten stays forgotten. A run also reads the retention period afresh for each person, so lengthening it spares anyone it no longer covers. Shortening it, or moving it from never to a number of years, turns the schedule off, since the count it was turned on with no longer holds. Run the dry run again and turn it back on.
 
 ## Forgetting one leaver on request
 
