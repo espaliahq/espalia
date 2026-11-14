@@ -2,19 +2,25 @@
 
 # The Org Graph's Units view (#80): the unit tree, the members of the unit
 # opened, the people in no team, and the opened unit's activity beside them,
-# where a change can be changed back (#137).
+# where a change can be changed back (#137). With a date picked it marks what
+# changed since (#139).
 #
 class Tenant::OrgGraphsController < ApplicationController
   # GET /tenant/org_graph
   def show
     authorize :org_graph, :show_units?
     overview = OrgGraph::UnitsOverview.new(selected_unit_id: params[:unit])
+    comparison, error = comparison_asked_for
     render Views::Tenant::OrgGraph::ShowView.new(
       overview:,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants_for_user,
-      sidebar: activity_sidebar(overview)
+      sidebar: activity_sidebar(overview),
+      comparison_bar: Views::Tenant::OrgGraph::ComparisonBar.new(
+        comparison:, error:, values: params.permit(:from, :to, :by).to_h, unit_id: params[:unit].presence
+      ),
+      comparison: comparison || OrgGraph::Comparison::NONE
     )
   end
 
@@ -40,6 +46,15 @@ class Tenant::OrgGraphsController < ApplicationController
 
     feed = OrgGraph::ActivityFeed.new(unit: overview.selected, actor: pundit_user, page: params[:activity_page] || 1)
     Views::Tenant::OrgGraph::ActivitySidebar.new(feed:)
+  end
+
+  # @return [Array(OrgGraph::DateComparison, nil), Array(nil, String)] the
+  #   comparison the dates ask for, or why they make none
+  def comparison_asked_for
+    window = OrgGraph::DateComparison.window(from: params[:from], to: params[:to], by: params[:by])
+    [ window && OrgGraph::DateComparison.new(context: pundit_user, window:), nil ]
+  rescue OrgGraph::DateComparison::InvalidWindow => e
+    [ nil, e.message ]
   end
 
   # @return [Array<Tenant>]

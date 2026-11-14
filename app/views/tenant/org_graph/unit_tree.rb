@@ -8,9 +8,11 @@ class Views::Tenant::OrgGraph::UnitTree < Views::Base
 
   # @param overview [OrgGraph::UnitsOverview]
   # @param tray_id [String] the tray's element id, for the In no team link
-  def initialize(overview:, tray_id:)
+  # @param comparison [OrgGraph::Comparison] marks a unit that changed in the window
+  def initialize(overview:, tray_id:, comparison: OrgGraph::Comparison::NONE)
     @overview = overview
     @tray_id = tray_id
+    @comparison = comparison
   end
 
   def view_template
@@ -52,17 +54,27 @@ class Views::Tenant::OrgGraph::UnitTree < Views::Base
   def tree_link(unit)
     selected = unit.id == @overview.selected&.id
     a(
-      href: tenant_org_graph_path(unit: unit.id),
+      href: tenant_org_graph_path(unit: unit.id, **@comparison.params),
       class: [
-        "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm",
+        "block rounded-md px-2 py-1.5 text-sm",
         selected ? "bg-neutral-muted font-semibold text-default" : "text-default hover:bg-default-hover"
       ],
       aria: { current: selected ? "page" : nil }
     ) do
-      span(class: "min-w-0 truncate") { unit.name }
-      hris_lock(unit) unless unit.held_by_espalia?
-      span(class: "ml-auto pl-2 tabular-nums text-muted") { @overview.headcount(unit).to_s }
+      span(class: "flex items-center gap-1.5") do
+        span(class: "min-w-0 truncate") { unit.name }
+        hris_lock(unit) unless unit.held_by_espalia?
+        span(class: "ml-auto pl-2 tabular-nums text-muted") { @overview.headcount(unit).to_s }
+      end
+      unit_marks(unit)
     end
+  end
+
+  def unit_marks(unit)
+    marks = @comparison.unit_marks(unit)
+    return if marks.empty?
+
+    span(class: "mt-1 flex flex-wrap gap-1") { marks.each { render Components::Kit::Badge.new(it, tone: :info) } }
   end
 
   def hris_lock(unit)
