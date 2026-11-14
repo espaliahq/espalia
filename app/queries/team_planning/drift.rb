@@ -16,7 +16,7 @@ class TeamPlanning::Drift
   # @!attribute from [Date] the day before the base date
   # @!attribute to [Date] today
   # @!attribute changes [Array<Drifted>] in effective date order
-  # @!attribute names [Hash{String => String}] person id => name for everyone the changes name
+  # @!attribute names [Hash{String => String}] person or unit id => name for everyone and every unit the changes name
   Report = Data.define(:from, :to, :changes, :names) do
     # @param person_id [String]
     # @return [String]
@@ -94,6 +94,8 @@ class TeamPlanning::Drift
 
   def names_for(changes)
     ids = changes.flat_map { [ it.person_id, it.before&.dig("manager_id"), it.after&.dig("manager_id") ] }.compact.uniq
-    ::Person.where(tenant_id: @plan.tenant_id, id: ids).pluck(:id, :name).to_h
+    unit_ids = changes.flat_map { [ it.unit_id, it.from_unit_id ] }.compact.uniq
+    OrgUnit.where(tenant_id: @plan.tenant_id, id: unit_ids).pluck(:id, :name).to_h
+           .merge(::Person.where(tenant_id: @plan.tenant_id, id: ids).pluck(:id, :name).to_h)
   end
 end
