@@ -219,6 +219,16 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal "2026-11-02", stream_events.last.data[:effective_on]
     end
 
+    should "write its leaving under the handler's cause, as every other command does" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
+      cause_id = SecureRandom.uuid_v7
+
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id:)
+                              .record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+
+      assert_equal cause_id, stream_events.last.metadata[:correlation_id]
+    end
+
     should "leave a future starter who disappears before their start date" do
       @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-12-01")
 

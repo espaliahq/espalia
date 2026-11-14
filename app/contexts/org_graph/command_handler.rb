@@ -133,7 +133,7 @@ class OrgGraph::CommandHandler
   def record_absence(person_id, provider:, effective_on:)
     authorize_structure!
     written = 0
-    @repository.with_person(person_id, facts: true) do |person|
+    with_person(person_id, nil, facts: true) do |person|
       person.leave_when_absent(provider:, effective_on:)
       written = person.unpublished_events.count
       ensure_provides!(person_id, provider, :employment_status) if written.positive?
