@@ -1,0 +1,95 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
+  ESPALIA = { provider: "espalia" }.freeze
+
+  setup do
+    @tenant = create(:tenant)
+    handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    @payments = SecureRandom.uuid_v7
+    @growth = SecureRandom.uuid_v7
+    @platform = SecureRandom.uuid_v7
+    level = SecureRandom.uuid_v7
+
+    travel_to Time.utc(2026, 2, 1, 9)
+    ActsAsTenant.with_tenant(@tenant) do
+      @editor = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
+      @viewer = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant))
+      @ada = create(:person, tenant: @tenant, name: "Ada Quill")
+      @bo = create(:person, tenant: @tenant, name: "Bo Reyes")
+      @cy = create(:person, tenant: @tenant, name: "Cy Loner")
+      structure.define_taxonomy([ { level_id: level, name: "Squad" } ], effective_on: "2026-01-01")
+      structure.create_unit(@payments, "Payments", level_id: level, effective_on: "2026-01-01")
+      structure.create_unit(@growth, "Growth", level_id: level, effective_on: "2026-01-01")
+      structure.create_unit(@platform, "Platform", level_id: level, effective_on: "2026-01-01")
+      handler.record_person(@ada.id, **ESPALIA, effective_on: "2026-01-02", employment_status: "employed")
+      handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-01-02", allocation: 0.6, role: "Lead")
+      handler.set_membership(@ada.id, @platform, **ESPALIA, effective_on: "2026-01-02", allocation: 0.4)
+      handler.record_person(@bo.id, **ESPALIA, effective_on: "2026-01-02", employment_status: "employed")
+      handler.set_membership(@bo.id, @payments, **ESPALIA, effective_on: "2026-01-02")
+      handler.record_person(@cy.id, **ESPALIA, effective_on: "2026-01-02", employment_status: "employed")
+    end
+    @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-03-02")[:plan_id]
+    call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @viewer.person_id, role: "viewer")
+    @q1 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1", ends_on: "2026-06-30")[:scenario_id]
+  end
+
+  def call(operation, as: @editor, **params)
+    ActsAsTenant.with_tenant(@tenant) do
+      operation.call(context: AuthorizationContext.new(user: as.user, tenant_user: as, person: as.person), params:)
+    end
+  end
+
+  def move(person, as: @editor, scenario_id: @q1, **params)
+    call(Operations::TeamPlanning::MovePlace, as:, plan_id: @plan_id, scenario_id:, person_id: person.id, **params)
+  end
+
+  def places(person, scenario_id: @q1)
+    call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id:)[:people]
+      .find { it[:id] == person.id }[:memberships].map { it.slice(:unit_id, :allocation, :role).compact }
+  end
+
+  def refusal(person = @ada, **params)
+    assert_raises(Operations::Base::ParameterError) { move(person, **params) }.message
+  end
+
+  should "move the one place dragged and keep the person's others" do
+    move(@ada, from_unit_id: @payments, to_unit_id: @growth, allocation: 0.5, role: "Lead")
+
+    assert_equal [ { unit_id: @platform, allocation: 0.4 }, { unit_id: @growth, allocation: 0.5, role: "Lead" } ], places(@ada)
+    assert_equal [ @payments, @platform ].sort, places(@ada, scenario_id: @plan_id).pluck(:unit_id).sort
+  end
+
+  should "drop the place on Unassigned, leaving someone with no other place unassigned" do
+    move(@ada, from_unit_id: @payments, to_unit_id: "unassigned")
+    move(@bo, from_unit_id: @payments, to_unit_id: "unassigned")
+
+    assert_equal [ { unit_id: @platform, allocation: 0.4 } ], places(@ada)
+    assert_empty places(@bo)
+  end
+
+  should "place someone from Unassigned, and write an HRIS place with no allocation at its share" do
+    move(@cy, from_unit_id: "unassigned", to_unit_id: @growth, allocation: 1)
+    move(@bo, from_unit_id: @payments, to_unit_id: @payments, allocation: 0.5)
+
+    assert_equal [ { unit_id: @growth, allocation: 1.0 } ], places(@cy)
+    assert_equal [ { unit_id: @payments, allocation: 0.5 } ], places(@bo)
+  end
+
+  should "replace a place the person already holds in the unit they move to" do
+    move(@ada, from_unit_id: @payments, to_unit_id: @platform, allocation: 1)
+
+    assert_equal [ { unit_id: @platform, allocation: 1.0 } ], places(@ada)
+  end
+
+  should "refuse Today, a viewer, a place the person doesn't hold and a move with no allocation" do
+    assert_match "Today can't be edited", refusal(scenario_id: @plan_id, from_unit_id: @payments, to_unit_id: @growth, allocation: 1)
+    assert_equal "No such plan", refusal(as: @viewer, from_unit_id: @payments, to_unit_id: @growth, allocation: 1)
+    assert_equal "Ada Quill holds no such place", refusal(from_unit_id: @growth, to_unit_id: @payments, allocation: 1)
+    assert_equal "allocation is required", refusal(from_unit_id: @payments, to_unit_id: @growth)
+    assert_equal [ @payments, @platform ].sort, places(@ada).pluck(:unit_id).sort
+  end
+end
