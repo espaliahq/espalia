@@ -13,7 +13,8 @@
 # changes nothing.
 class TeamPlanning::NameSealing
   EVENT_TYPES = [
-    TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanRenamed, TeamPlanning::Events::ScenarioForked
+    TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanRenamed, TeamPlanning::Events::ScenarioForked,
+    TeamPlanning::Events::ScenarioRenamed
   ].freeze
   PROJECTIONS = [ TeamPlanning::Projections::Plans, TeamPlanning::Projections::Scenarios ].freeze
 
