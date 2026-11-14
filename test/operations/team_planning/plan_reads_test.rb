@@ -74,6 +74,16 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
     assert_not_includes map[:people].to_json, "Ada Quill"
   end
 
+  should "name every id the baseline uses, one it can't find as a former member" do
+    stranger = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        .change_manager(@ada.id, stranger, **ESPALIA, effective_on: "2026-02-01")
+    end
+
+    assert_equal Person::FORMER_MEMBER, read(Operations::TeamPlanning::Baseline)[:names][stranger]
+  end
+
   should "read as an unknown plan to anyone outside it, a tenant admin included" do
     [ Operations::TeamPlanning::Plan, Operations::TeamPlanning::PlanMembers, Operations::TeamPlanning::Baseline ].each do |op|
       error = assert_raises(Operations::Base::ParameterError) { read(op, as: @admin) }

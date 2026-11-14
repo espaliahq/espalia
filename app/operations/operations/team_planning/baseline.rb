@@ -21,6 +21,14 @@ class Operations::TeamPlanning::Baseline < Operations::Base
     { plan_id: plan.id, base_on: map.base_on.iso8601, known_on: map.known_on.iso8601,
       units: map.units.map(&:to_h),
       people: map.people.map { it.to_h.merge(memberships: it.memberships.map(&:to_h)) },
-      unassigned_ids: map.unassigned_ids, names: map.names }
+      unassigned_ids: map.unassigned_ids, names: names_for(map) }
+  end
+
+  private
+
+  # Every id the map uses, so a client never meets an id it can't name.
+  def names_for(map)
+    ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids)
+    ids.compact.uniq.to_h { [ it, map.name_of(it) ] }
   end
 end
