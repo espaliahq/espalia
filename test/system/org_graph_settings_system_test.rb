@@ -229,8 +229,10 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         end
         visit tenant_org_graph_settings_path
 
-        assert_no_selector "#org-graph-level-remove-#{squad_id}"
-        click_button "org-graph-level-remove-#{guild_id}"
+        assert_no_selector "#org-graph-level-menu-#{squad_id}"
+        click_button_with_js_fallback("org-graph-level-menu-#{guild_id}", expect_selector: "#org-graph-level-remove-#{guild_id}")
+        click_button_with_js_fallback("org-graph-level-remove-#{guild_id}",
+                                      expect_text: "No unit has ever sat at this level, so nothing else changes.")
         within("#org-graph-remove-level-#{guild_id}") do
           assert_text "No unit has ever sat at this level, so nothing else changes."
           screenshot("level_remove_asked_#{viewport}")

@@ -65,7 +65,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
         div(id: "org-graph-level-actions-#{level[:id]}", class: "flex shrink-0 items-center gap-2") do
           hand_back_form(level) if level[:live_units].zero? && level[:provider] != ESPALIA
           move_buttons(level, index) if @can_edit_taxonomy && movable?(index)
-          remove_dialog(level) if @can_edit_taxonomy && level[:removable]
+          level_menu(level) if @can_edit_taxonomy && level[:removable]
         end
       end
       next unless connected?
@@ -123,13 +123,21 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
     end
   end
 
-  def remove_dialog(level)
+  # Remove is destructive, so it sits in the row's kebab, which opens the dialog.
+  def level_menu(level)
     render Components::Kit::Modal.new(id: "org-graph-remove-level-#{level[:id]}", title: "Remove #{level[:name]}?",
                                       size: :sm) do |modal|
-      render Components::Kit::Button.new(
-        variant: :ghost, tone: :danger, size: :sm, compact: true, data: { action: "modal#open" },
-        id: "org-graph-level-remove-#{level[:id]}", aria_label: "Remove #{level[:name]}"
-      ) { "Remove" }
+      render Components::Kit::Dropdown.new(align: :right, strategy: :fixed) do |menu|
+        menu.trigger(label: "Actions for #{level[:name]}",
+                     button: { variant: :ghost, size: :sm, icon: true, compact: true, id: "org-graph-level-menu-#{level[:id]}" }) do
+          icon(:kebab, class: "size-4")
+        end
+        menu.menu(width: "w-44") do
+          menu.item(tone: :danger, data: { action: "modal#open" }, id: "org-graph-level-remove-#{level[:id]}") do
+            "Remove #{level[:name]}"
+          end
+        end
+      end
       modal.body { remove_form(level) }
     end
   end

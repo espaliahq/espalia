@@ -155,11 +155,12 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
 
       get tenant_org_graph_settings_path
 
-      assert_select "#org-graph-level-remove-#{@squad_id}", text: "Remove"
+      assert_select "#org-graph-level-remove-#{@squad_id}", text: "Remove Squad"
       assert_select "#org-graph-level-remove-#{@team_id}", count: 0
       assert_select "#org-graph-level-remove-#{@guild_id}", count: 0
       assert_select "#org-graph-level-#{@guild_id}", text: /0 units · held Atlas/
       assert_select "#org-graph-level-#{@team_id}", text: /From Espalia · holds Payments/
+      assert_select "#org-graph-level-menu-#{@squad_id}[aria-label=?]", "Actions for Squad"
     end
   end
 
@@ -180,6 +181,7 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
 
       get tenant_org_graph_settings_path
       assert_select "#org-graph-level-remove-#{@squad_id}", count: 0
+      assert_select "#org-graph-level-menu-#{@squad_id}", count: 0
     end
   end
 end
