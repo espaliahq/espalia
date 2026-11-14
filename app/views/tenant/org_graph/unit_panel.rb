@@ -87,7 +87,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   def member_row(membership)
     person = membership.person
     li(class: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm") do
-      span(class: "font-medium text-default") { person.name }
+      a(href: tenant_org_person_path(person, unit: @unit.id), class: "font-medium text-link hover:text-link-hover underline") { person.name }
       also = @overview.other_units_of(membership)
       span(class: "text-xs text-muted") { "also #{also.map(&:name).join(', ')}" } if also.any?
       span(class: "ml-auto flex items-baseline gap-3 text-muted") do

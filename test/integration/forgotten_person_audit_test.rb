@@ -62,6 +62,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "reporting_cycle_cohort"
     assert_includes reached, "frameworks_suggestion_get"
     assert_includes reached, "org_graph_activity"
+    assert_includes reached, "org_graph_person_get"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
 
     as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_by_tool.fetch("org_graph_as_of"))
@@ -172,6 +173,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "org_graph_activity" => { unit_id: @unit_id },
         "org_graph_as_of" => { date: Date.current.iso8601, mode: "full" },
         "org_graph_changes_between" => { from: 1.month.ago.to_date.iso8601, to: Date.current.iso8601, mode: "full" },
+        "org_graph_person_get" => { person_id: @quinn.id },
         "org_graph_units" => {},
         "reporting_capability_attainment" => cycle,
         "reporting_cycle_cohort" => { **cycle, mode: "full" },
