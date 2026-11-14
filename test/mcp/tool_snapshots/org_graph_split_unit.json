@@ -1,0 +1,72 @@
+{
+  "name": "org_graph_split_unit",
+  "description": "Split a unit into two or more new units from effective_on (today by default). The successors take the unit's level and parent. Each person placements names moves to their successor with the same role and allocation; anyone not named leaves, and shows as in no team if they have no other live unit. The unit retires, and everything shares one cause. A unit with live sub-units, or one an HRIS supplies, is refused.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "plan_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan whose change this applies. Refused unless you may apply that plan's changes"
+      },
+      "plan_change_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan change this applies; needs plan_id"
+      },
+      "cause_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "groups this with the plan's other changes, to change back together; needs plan_id"
+      },
+      "unit_id": {
+        "type": "string"
+      },
+      "successor_names": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "description": "names of the new units, at least two, each different"
+      },
+      "placements": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "description": "person_id => the name of the successor they move to, one of successor_names. Members left out end their membership, and those with no other live unit show as in no team."
+      }
+    },
+    "required": [
+      "unit_id",
+      "successor_names"
+    ],
+    "additionalProperties": false,
+    "dependentRequired": {
+      "plan_change_id": [
+        "plan_id"
+      ],
+      "cause_id": [
+        "plan_id"
+      ]
+    }
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

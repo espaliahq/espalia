@@ -1,0 +1,28 @@
+{
+  "name": "assessments_reopen_alignment",
+  "description": "Re-open a completed alignment so the manager can correct it; agreed values are preserved. Pass as_role_id to re-open an alignment against another role.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "as_role_id": {
+        "type": "string"
+      },
+      "as_level_ordinal": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "assignment_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

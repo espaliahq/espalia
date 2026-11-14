@@ -1,0 +1,40 @@
+{
+  "name": "assessments_post_comment",
+  "description": "Post a comment on a capability × level of an assessment (optionally as a reply). Pass evidence_id to comment on that evidence item's linkage at the cell instead — the discussion of the feedback's relevance and valence there. `body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "body": {
+        "type": "string"
+      },
+      "parent_id": {
+        "type": "string"
+      },
+      "evidence_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "capability_stable_id",
+      "level_ordinal",
+      "body"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

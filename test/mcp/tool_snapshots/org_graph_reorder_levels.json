@@ -1,0 +1,31 @@
+{
+  "name": "org_graph_reorder_levels",
+  "description": "Change the order of the Org Graph's taxonomy levels, from effective_on (today by default). level_ids lists every level once, top first. A level an HRIS provides keeps its place, as its order comes from the HRIS, and sits above every level Espalia holds. Two levels that both hold units keep their order, so no unit ends up above its parent's level. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "level_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "every level_id in the taxonomy, top first"
+      }
+    },
+    "required": [
+      "level_ids"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

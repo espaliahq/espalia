@@ -1,0 +1,16 @@
+{
+  "name": "tenants_disable_scheduled_forgetting",
+  "description": "Turn off scheduled forgetting for the active tenant. Anyone already forgotten stays forgotten.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "tenants_enable_scheduled_forgetting",
+  "description": "Turn on scheduled forgetting for the active tenant. Pass confirm_count, the count tenants_forgetting_dry_run gives now; the call is refused if it differs.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "confirm_count": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "confirm_count"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

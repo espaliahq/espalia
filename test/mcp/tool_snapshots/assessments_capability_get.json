@@ -1,0 +1,38 @@
+{
+  "name": "assessments_capability_get",
+  "description": "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument. Pass as_role_id and/or as_level_ordinal to score it against another role or level (a lens); lens.home is then false, and in_role says whether the record's role and the lens role read the capability. Pass cycle_id (from assessments_get's past_cycles) to read a past cycle: its ratings and score at that cycle's own role and level, lens.past_cycle true; the assessee sees the manager's ratings only where alignment had started, as on the open cycle.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "capability_id": {
+        "type": "string"
+      },
+      "as_role_id": {
+        "type": "string"
+      },
+      "as_level_ordinal": {
+        "type": "integer"
+      },
+      "cycle_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "A cycle the person joined on this framework, from past_cycles. Ratings and scores are then that cycle's, at its own role and level. Omit for the open cycle."
+      }
+    },
+    "required": [
+      "assignment_id",
+      "capability_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

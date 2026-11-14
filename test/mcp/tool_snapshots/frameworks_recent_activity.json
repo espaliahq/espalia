@@ -1,0 +1,25 @@
+{
+  "name": "frameworks_recent_activity",
+  "description": "Recent framework activity (suggestions, draft/version lifecycle, structural and editorial edits, collaborator changes) — metadata only, most-recent first.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "framework_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

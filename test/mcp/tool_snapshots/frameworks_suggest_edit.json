@@ -1,0 +1,58 @@
+{
+  "name": "frameworks_suggest_edit",
+  "description": "Edit framework content (capability/category name or description, expectation or example text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal. `rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "entity_type": {
+        "type": "string",
+        "enum": [
+          "capability",
+          "capability_category",
+          "behavioural_expectation",
+          "role_illustration"
+        ]
+      },
+      "entity_id": {
+        "type": "string"
+      },
+      "field": {
+        "type": "string",
+        "enum": [
+          "name",
+          "description"
+        ]
+      },
+      "value": {
+        "type": "string"
+      },
+      "rationale": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "editing",
+          "suggesting"
+        ]
+      }
+    },
+    "required": [
+      "framework_id",
+      "entity_type",
+      "entity_id",
+      "field",
+      "value"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

@@ -1,0 +1,35 @@
+{
+  "name": "assessments_evidence_list",
+  "description": "List active feedback / evidence on an assessment for one capability (optionally one level), or — with no capability — the unplaced items still waiting to be placed on one. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_stable_id argument. Each item carries its full set of linked cells.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "assignment_id"
+    ],
+    "additionalProperties": false,
+    "dependentRequired": {
+      "level_ordinal": [
+        "capability_stable_id"
+      ]
+    }
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

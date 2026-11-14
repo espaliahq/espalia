@@ -1,0 +1,24 @@
+{
+  "name": "org_graph_add_editor",
+  "description": "Make an active person with an account in this organisation an Org Graph editor, so they may change its providers, units and people's facts. Admins already may, and only admins may add or reorder its levels. Returns the list as org_graph_editors reads it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "person_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

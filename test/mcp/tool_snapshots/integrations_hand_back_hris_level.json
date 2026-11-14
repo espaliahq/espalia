@@ -1,0 +1,30 @@
+{
+  "name": "integrations_hand_back_hris_level",
+  "description": "Hand an Org Graph structure level back from the HRIS to Espalia, so people edit its units here again. Pass the fingerprint integrations_hris_level_handover gave for the level. Units and memberships stay as they are; successions and retirements made by the handover stand.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "level_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "fingerprint": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "level_id",
+      "fingerprint"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

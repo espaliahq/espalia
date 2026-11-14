@@ -1,0 +1,55 @@
+{
+  "name": "assessments_rate_as_manager",
+  "description": "Record or update a manager rating for one of your direct reports' capability × level. Pass as_role_id to rate a cell another role reads (a role lens): the report sees it only once you start alignment against a role that reads the cell. A cell a started alignment reads is frozen.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "frequency": {
+        "type": "string",
+        "enum": [
+          "none",
+          "some",
+          "occasional",
+          "consistent"
+        ]
+      },
+      "comment": {
+        "type": "string"
+      },
+      "rationale": {
+        "type": "string"
+      },
+      "clear": {
+        "type": "boolean"
+      },
+      "confirm": {
+        "type": "boolean"
+      },
+      "as_role_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "capability_stable_id",
+      "level_ordinal",
+      "frequency"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

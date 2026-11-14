@@ -1,0 +1,22 @@
+{
+  "name": "calibration_sessions_close",
+  "description": "Close a calibration session (terminal — a closed session becomes the follow-through record).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

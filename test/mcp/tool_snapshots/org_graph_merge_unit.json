@@ -1,0 +1,60 @@
+{
+  "name": "org_graph_merge_unit",
+  "description": "Merge a unit into another live unit from effective_on (today by default). Every membership moves to into_unit_id, keeping its role and allocation, and unit_id retires, all under one cause. A unit with live sub-units is refused, as is either unit when an HRIS supplies it. The caller must be able to change both units.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "plan_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan whose change this applies. Refused unless you may apply that plan's changes"
+      },
+      "plan_change_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan change this applies; needs plan_id"
+      },
+      "cause_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "groups this with the plan's other changes, to change back together; needs plan_id"
+      },
+      "unit_id": {
+        "type": "string"
+      },
+      "into_unit_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "unit_id",
+      "into_unit_id"
+    ],
+    "additionalProperties": false,
+    "dependentRequired": {
+      "plan_change_id": [
+        "plan_id"
+      ],
+      "cause_id": [
+        "plan_id"
+      ]
+    }
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "calibration_sessions_get",
+  "description": "Get one calibration session — lifecycle state plus participant and calibrant rosters.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
