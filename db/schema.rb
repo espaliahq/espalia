@@ -915,6 +915,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
     t.index ["tenant_id", "provider", "external_ref"], name: "index_org_units_on_live_external_ref", unique: true, where: "((external_ref IS NOT NULL) AND (retired_on IS NULL))"
   end
 
+  create_table "pay_bands", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "level_id", null: false
+    t.string "role_name", null: false
+    t.string "level_name", null: false
+    t.string "location", default: "", null: false
+    t.string "location_key", default: "", null: false
+    t.string "currency", null: false
+    t.string "period", null: false
+    t.decimal "minimum", precision: 14, scale: 2, null: false
+    t.decimal "midpoint", precision: 14, scale: 2, null: false
+    t.decimal "maximum", precision: 14, scale: 2, null: false
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "level_id", "location_key"], name: "index_pay_bands_on_tenant_id_and_level_id_and_location_key", unique: true
+    t.index ["updated_by_id"], name: "index_pay_bands_on_updated_by_id"
+    t.check_constraint "minimum <= midpoint AND midpoint <= maximum", name: "pay_bands_ordered"
+    t.check_constraint "minimum >= 0::numeric", name: "pay_bands_not_negative"
+  end
+
   create_table "people", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "department"
@@ -1166,6 +1187,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
   add_foreign_key "org_unit_owners", "tenants"
   add_foreign_key "org_unit_successions", "tenants"
   add_foreign_key "org_units", "tenants"
+  add_foreign_key "pay_bands", "tenants"
+  add_foreign_key "pay_bands", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
   add_foreign_key "person_development_comments", "people", column: "author_id", on_delete: :restrict

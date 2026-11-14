@@ -96,6 +96,7 @@ Rails.application.routes.draw do
       get :preview
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
+    resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ]
 
     # Org Graph Units view (#80), with "change it back" in its activity
     # sidebar (#137). Here, admins only, until the Org Graph screens are

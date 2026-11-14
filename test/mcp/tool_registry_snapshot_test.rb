@@ -3661,6 +3661,58 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "tenants_add_pay_band",
+        "description" => "Add a pay band for a framework level (level_id, from frameworks_get) in a location: a country, " \
+                         "matched to the Org Graph's country ignoring case, or blank for any location. One band per level " \
+                         "and location; use tenants_change_pay_band to change one. Currency is an ISO 4217 code and period " \
+                         "is year, month or hour; figures are kept as entered, never converted or annualised. Figures are decimal strings with at most two decimal places, such as \"120000\". " \
+                         "Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "level_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "location" => { "type" => "string" },
+            "currency" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "period" => { "type" => "string", "enum" => %w[year month hour] },
+            "minimum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" },
+            "midpoint" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" },
+            "maximum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" }
+          },
+          "required" => %w[level_id currency period minimum midpoint maximum],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_change_pay_band",
+        "description" => "Change a pay band's currency, period and minimum, midpoint and maximum, by pay_band_id from " \
+                         "tenants_pay_bands. All are required, as the band reads afterwards. Its level and location don't " \
+                         "change: remove the band and add another for that. Every plan priced from it reprices. Figures are decimal strings with at most two decimal places, such as \"120000\". " \
+                         "Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "pay_band_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "currency" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "period" => { "type" => "string", "enum" => %w[year month hour] },
+            "minimum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" },
+            "midpoint" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" },
+            "maximum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" }
+          },
+          "required" => %w[pay_band_id currency period minimum midpoint maximum],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "tenants_disable_scheduled_forgetting",
         "description" => "Turn off scheduled forgetting for the active tenant. Anyone already forgotten stays forgotten.",
         "inputSchema" => { "type" => "object", "properties" => {}, "required" => [], "additionalProperties" => false },
@@ -3701,6 +3753,42 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "tenants_pay_bands",
+        "description" => "List the active tenant's pay bands: each band's framework level, location (null for any location), " \
+                         "currency, period (year, month or hour) and minimum, midpoint and maximum as decimal strings, as " \
+                         "entered and never converted. in_framework is false for a band whose level has left the framework. " \
+                         "Give pay_band_id to read one band. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "pay_band_id" => { "type" => "string" } },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "tenants_remove_pay_band",
+        "description" => "Remove a pay band, by pay_band_id from tenants_pay_bands. Positions it priced fall back to the " \
+                         "level's any-location band, or go unpriced. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "pay_band_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[pay_band_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => true,
+          "idempotentHint" => false
         }
       },
       {

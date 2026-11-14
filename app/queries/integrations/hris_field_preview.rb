@@ -2,8 +2,8 @@
 
 # What choosing an HRIS field would give, before anyone chooses it (#107).
 #
-# Reads the field live for the people Espalia holds from that HRIS and counts
-# what it finds. It writes nothing: no event, no row, no cached value.
+# Reads the field live for the people the next sync places and counts what
+# it finds. It writes nothing: no event, no row, no cached value.
 #
 # For a level, each distinct value is a unit, told apart as the mirror (#100)
 # tells them apart: a list item's id, else the text. For a fact, each value is
@@ -60,20 +60,20 @@ class Integrations::HrisFieldPreview
     adapter.field_catalogue.find { it.id == id } or raise UnknownField, "The HRIS has no field #{field_id}"
   end
 
-  # Only the people the sync would write for, keyed by person id.
+  # Each person the adapter read, whom the next sync places, beside their
+  # value. The adapter applies the sync's rule; this only finds their row,
+  # matched by id as the sync matches it.
   #
   # @param by_external_id [Hash{String => Hris::FieldValue}]
-  # @return [Hash{String => Hris::FieldValue}]
+  # @return [Array<(String, Hris::FieldValue)>] the row's id, or nil for a
+  #   person the sync has yet to create or link by email, beside their value
   def held_values(by_external_id)
-    ActsAsTenant.with_tenant(tenant) do
-      Person.where(hris_source: adapter.provider_name, status: "active", external_id: by_external_id.keys)
-        .pluck(:id, :external_id)
-        .to_h { |id, external_id| [ id, by_external_id.fetch(external_id) ] }
-    end
+    rows = ActsAsTenant.with_tenant(tenant) { Person.where(external_id: by_external_id.keys).pluck(:external_id, :id).to_h }
+    by_external_id.map { |external_id, value| [ rows[external_id], value ] }
   end
 
   def level(field, values)
-    units = values.values.select(&:value?).group_by(&:key).map do |_, group|
+    units = values.map(&:last).select(&:value?).group_by(&:key).map do |_, group|
       Unit.new(label: group.first.label, people: group.size)
     end
     Level.new(field:, people: values.size, units: units.sort_by { [ -it.people, it.label.downcase ] },
@@ -83,7 +83,8 @@ class Integrations::HrisFieldPreview
   def fact(field, values)
     changing = ActsAsTenant.with_tenant(tenant) do
       values.count do |person_id, value|
-        (value.value? || value.blank?) && repository.load_person(person_id).fact(target) != (value.label if value.value?)
+        held = repository.load_person(person_id).fact(target) if person_id
+        (value.value? || value.blank?) && held != (value.label if value.value?)
       end
     end
     Fact.new(field:, target:, people: values.size, with_value: values.count { it.last.value? }, would_change: changing,

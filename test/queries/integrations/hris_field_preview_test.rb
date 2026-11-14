@@ -56,14 +56,15 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
       assert_equal [ 1, 1 ], result.units.map(&:people)
     end
 
-    should "count only the active people Espalia holds from that HRIS" do
+    should "count everyone the adapter reads, with a row or yet to have one" do
       @people["hb-2"].update!(status: "inactive")
       create(:person, tenant: @tenant, hris_source: "bamboohr", external_id: "hb-9")
 
       result = preview({ "hb-1" => value("Payments", id: "7"), "hb-2" => value("Payments", id: "7"),
-                         "hb-9" => value("Payments", id: "7"), "hb-404" => value("Payments", id: "7") }, target: "level")
+                         "hb-9" => value("Payments", id: "7"), "hb-404" => value("Growth", id: "9") }, target: "level")
 
-      assert_equal 1, result.people
+      assert_equal [ [ "Payments", 3 ], [ "Growth", 1 ] ], result.units.map { [ it.label, it.people ] }
+      assert_equal 4, result.people
     end
   end
 
@@ -81,6 +82,13 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
 
       assert_equal [ 5, 3, 1, 1 ], [ result.people, result.with_value, result.blank, result.withheld ]
       assert_equal 3, result.would_change, "a new value, a value cleared and a first value change; a match does not"
+    end
+
+    should "count a first value for someone the next sync adds as a change" do
+      result = preview({ "hb-404" => value("Platform"), "hb-405" => Hris::FieldValue.blank },
+        target: "cost_centre", field: CENTRE)
+
+      assert_equal [ 2, 1 ], [ result.people, result.would_change ]
     end
 
     should "read each person's stream in the tenant it was given, whatever tenant is current" do
