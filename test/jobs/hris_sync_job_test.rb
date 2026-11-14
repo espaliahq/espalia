@@ -3,6 +3,8 @@
 require "test_helper"
 
 class HrisSyncJobTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   context "#perform" do
     should "skip tenants without configured HRIS" do
       tenant = create(:tenant)
@@ -38,6 +40,19 @@ class HrisSyncJobTest < ActiveSupport::TestCase
 
       assert_match(/Assignments skipped for tenant #{tenant.id}: unmapped_titles=\["Analytics Lead"\] missing_levels=/, log.string)
       assert_no_match(/missing_roles/, log.string)
+    end
+
+    should "sweep Person Development after the sync only once the tenant is fed" do
+      tenant = create(:tenant, :with_hibob_config)
+      result = { created: 0, updated: 0, deactivated: 0, errors: [] }
+      adapter = Struct.new(:sync_people).new(result)
+
+      Hris::Hibob::Adapter.stub(:new, adapter) do
+        assert_no_enqueued_jobs(only: OrgGraph::PersonDevelopmentSweepJob) { HrisSyncJob.new.perform(tenant) }
+
+        tenant.update!(person_development_fed_at: Time.current)
+        assert_enqueued_with(job: OrgGraph::PersonDevelopmentSweepJob) { HrisSyncJob.new.perform(tenant) }
+      end
     end
   end
 

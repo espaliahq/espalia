@@ -35,9 +35,11 @@ class HrisSyncJob < ApplicationJob
       "created=#{result[:created]} updated=#{result[:updated]} " \
       "deactivated=#{result[:deactivated]} org_graph_events=#{result[:org_graph_events]} " \
       "forgotten_skipped=#{result[:forgotten_skipped]} " \
+      "person_development=#{result[:person_development].to_h.sort.to_h} " \
       "errors=#{result[:errors].size}"
     )
     log_skipped_assignments(tenant, result)
+    OrgGraph::PersonDevelopmentSweepJob.perform_later(tenant, correlation_id: job_id) if tenant.reload.person_development_fed?
   end
 
   private
