@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -984,6 +984,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_200000) do
     t.index ["tenant_id"], name: "index_person_framework_assignments_on_tenant_id"
   end
 
+  create_table "plan_encryption_keys", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.uuid "person_id"
+    t.string "cipher", null: false
+    t.text "key_material"
+    t.datetime "destroyed_at"
+    t.string "destroyed_reason"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "person_id"], name: "index_plan_keys_on_person", where: "(person_id IS NOT NULL)"
+    t.index ["tenant_id", "plan_id", "person_id"], name: "index_plan_keys_one_per_person_in_plan", unique: true, where: "(person_id IS NOT NULL)"
+    t.index ["tenant_id", "plan_id"], name: "index_plan_keys_one_per_plan", unique: true, where: "(person_id IS NULL)"
+    t.check_constraint "destroyed_at IS NULL AND key_material IS NOT NULL OR destroyed_at IS NOT NULL AND key_material IS NULL AND destroyed_reason IS NOT NULL", name: "plan_encryption_keys_live_or_destroyed"
+  end
+
   create_table "projection_versions", primary_key: "name", id: :string, force: :cascade do |t|
     t.datetime "applied_at", null: false
     t.integer "version", null: false
@@ -1148,6 +1164,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_200000) do
   add_foreign_key "person_development_comments", "person_development_comments", column: "parent_id", on_delete: :restrict
   add_foreign_key "person_development_comments", "tenants"
   add_foreign_key "person_framework_assignments", "tenants"
+  add_foreign_key "plan_encryption_keys", "tenants"
   add_foreign_key "recorded_reporting_managers", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
