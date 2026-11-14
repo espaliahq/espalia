@@ -8,8 +8,9 @@
 # Each record keeps its id, type, order and timestamps, and every byte but
 # the name fields and the `shreddable` entries in its metadata. A deleted
 # plan's names are sealed under a key that is thrown away, so they read as
-# removed. A record already sealed is left alone, so a second run changes
-# nothing.
+# removed. A plan deleted before deleting destroyed its keys gets its
+# tombstone first. A record already sealed is left alone, so a second run
+# changes nothing.
 class TeamPlanning::NameSealing
   EVENT_TYPES = [
     TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanRenamed, TeamPlanning::Events::ScenarioForked
@@ -50,6 +51,7 @@ class TeamPlanning::NameSealing
   def seal!
     ActsAsTenant.with_tenant(@tenant) do
       StoredEvent.transaction do
+        deleted_plans.each { PlanKeyStore.new.destroy_plan(it) }
         rows = unsealed
         rows.each { |row| row.update_columns(**sealed(row)) }
         PROJECTIONS.each { rebuild(it) } if rows.any?
@@ -61,10 +63,22 @@ class TeamPlanning::NameSealing
   private
 
   def unsealed
-    StoredEvent.where(event_type: EVENT_TYPES.map(&:name)).order(:id).select do |row|
+    tenant_events(EVENT_TYPES).order(:id).select do |row|
       metadata = JSON.parse(row.metadata)
       metadata["tenant_id"] == @tenant.id && !metadata.key?("shreddable")
     end
+  end
+
+  def deleted_plans
+    tenant_events([ TeamPlanning::Events::PlanDeleted ]).map { JSON.parse(it.data).fetch("plan_id") }
+  end
+
+  def tenant_events(types)
+    streams = StoredEvent.sanitize_sql_array(
+      [ "SELECT event_id FROM event_store_events_in_streams WHERE stream LIKE ?",
+        "#{StoredEvent.sanitize_sql_like(EventStreamNaming.plan_stream('', tenant: @tenant))}%" ]
+    )
+    StoredEvent.where(event_type: types.map(&:name)).where("event_id IN (#{streams})")
   end
 
   def count(rows) = EVENT_TYPES.to_h { |type| [ type.name, rows.count { it.event_type == type.name } ] }

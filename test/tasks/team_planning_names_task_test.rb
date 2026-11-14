@@ -9,14 +9,19 @@ class TeamPlanningNamesTaskTest < ActiveSupport::TestCase
     Rails.application.load_tasks if Rake::Task.tasks.empty?
     %w[team_planning:names:dry_run team_planning:names:seal].each { Rake::Task[it].reenable }
     @tenant = create(:tenant)
-    TeamPlanning::NameSealing::StoredEvent.create!(
+    plan_id = SecureRandom.uuid_v7
+    row = TeamPlanning::NameSealing::StoredEvent.create!(
       event_id: SecureRandom.uuid, event_type: "TeamPlanning::Events::PlanCreated", created_at: Time.current,
-      data: JSON.generate("plan_id" => SecureRandom.uuid_v7, "name" => "Next year", "base_on" => "2026-11-14",
+      data: JSON.generate("plan_id" => plan_id, "name" => "Next year", "base_on" => "2026-11-14",
                           "created_by_id" => SecureRandom.uuid_v7),
       metadata: JSON.generate("tenant_id" => @tenant.id, "types" => {
         "data" => %w[plan_id name base_on created_by_id].to_h { [ it, %w[Symbol String] ] },
         "metadata" => { "tenant_id" => %w[Symbol String] }
       })
+    )
+    row.class.connection.exec_insert(
+      "INSERT INTO event_store_events_in_streams (stream, position, event_id, created_at) VALUES ($1, 0, $2, $3)", "Stream",
+      [ EventStreamNaming.plan_stream(plan_id, tenant: @tenant), row.event_id, Time.current ]
     )
   end
 

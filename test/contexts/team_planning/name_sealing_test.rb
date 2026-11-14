@@ -14,6 +14,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
   Stored = TeamPlanning::NameSealing::StoredEvent
 
   setup do
+    @positions = {}
     @tenant = create(:tenant)
     @other = create(:tenant)
     @deleted_plan = SecureRandom.uuid_v7
@@ -28,6 +29,13 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
       ))
     end
     ActsAsTenant.with_tenant(@tenant) { PlanKeyStore.new.destroy_plan(@deleted_plan) }
+    @deleted_without_tombstone = SecureRandom.uuid_v7
+    store(@tenant, "TeamPlanning::Events::PlanCreated", JSON.generate(
+      "plan_id" => @deleted_without_tombstone, "name" => "Closing the office", "base_on" => "2026-11-14", "created_by_id" => ACTOR
+    ))
+    store(@tenant, "TeamPlanning::Events::PlanDeleted", JSON.generate(
+      "plan_id" => @deleted_without_tombstone, "deleted_by_id" => ACTOR
+    ))
     @before = rows(@tenant)
   end
 
@@ -36,8 +44,13 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     metadata ||= JSON.generate("tenant_id" => FIXTURE_TENANT, "correlation_id" => SecureRandom.uuid,
                                "types" => { "data" => JSON.parse(data).keys.to_h { [ it, %w[Symbol String] ] },
                                             "metadata" => { "tenant_id" => %w[Symbol String], "correlation_id" => %w[Symbol String] } })
-    Stored.create!(event_id: SecureRandom.uuid, event_type: type, data:, metadata: metadata.sub(FIXTURE_TENANT, tenant.id),
-                   created_at: Time.current, valid_at: nil)
+    row = Stored.create!(event_id: SecureRandom.uuid, event_type: type, data:, metadata: metadata.sub(FIXTURE_TENANT, tenant.id),
+                         created_at: Time.current, valid_at: nil)
+    stream = EventStreamNaming.plan_stream(JSON.parse(data).fetch("plan_id"), tenant:)
+    Stored.connection.exec_insert(
+      "INSERT INTO event_store_events_in_streams (stream, position, event_id, created_at) VALUES ($1, $2, $3, $4)", "Stream",
+      [ stream, (@positions[stream] = @positions.fetch(stream, -1) + 1), row.event_id, Time.current ]
+    )
   end
 
   def rows(tenant) = Stored.order(:id).select { JSON.parse(it.metadata)["tenant_id"] == tenant.id }.map(&:attributes)
@@ -50,7 +63,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
   should "count what it would seal, and change nothing" do
     counts = sealing.dry_run
 
-    assert_equal({ "TeamPlanning::Events::PlanCreated" => 2, "TeamPlanning::Events::PlanRenamed" => 1,
+    assert_equal({ "TeamPlanning::Events::PlanCreated" => 3, "TeamPlanning::Events::PlanRenamed" => 1,
                    "TeamPlanning::Events::ScenarioForked" => 1 }, counts)
     assert_equal @before, rows(@tenant)
   end
@@ -62,7 +75,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     assert_equal @before.size, after.size
     @before.zip(after).each do |was, now|
       assert_equal was.except("data", "metadata"), now.except("data", "metadata"), "id, type and timestamps"
-      fields = JSON.parse(now["metadata"])["shreddable"].keys
+      fields = JSON.parse(now["metadata"])["shreddable"]&.keys or next assert_equal(was, now)
 
       old_data, new_data = JSON.parse(was["data"]), JSON.parse(now["data"])
       assert_equal JSON.generate(old_data.except(*fields)), JSON.generate(new_data.except(*fields))
@@ -84,6 +97,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     assert_equal "The year after", names[[ LIVE_PLAN, "PlanRenamed" ]].reveal
     assert_equal "Lean Q1", names[[ LIVE_PLAN, "ScenarioForked" ]].reveal
     assert_predicate names[[ @deleted_plan, "PlanCreated" ]], :removed?
+    assert_predicate names[[ @deleted_without_tombstone, "PlanCreated" ]], :removed?, "a plan deleted before its keys could be"
     assert_equal "Next year", events.find { it.data[:previous_name] }.data[:previous_name].reveal
   end
 
