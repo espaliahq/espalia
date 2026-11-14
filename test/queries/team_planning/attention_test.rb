@@ -103,9 +103,12 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_empty reasons(map(people: [ member(places: [ [ LIVE, 0.5 ], [ ROOT, nil ] ]) ]))
   end
 
-  should "mark someone still placed after the Org Graph has them leave, unless the plan has them leave" do
+  should "mark someone the Org Graph has had leave once, placed or not, unless the plan has them leave" do
     leaver = member
     assert_equal [ "Placed, but has since left" ], TeamPlanning::Attention.new(map(people: [ leaver ]), {}, left_ids: [ PERSON ]).call.map(&:reason)
+    assert_equal [ "Has since left" ], TeamPlanning::Attention.new(map(people: [ member(places: []) ]), {}, left_ids: [ PERSON ]).call.map(&:reason)
+    assert_equal [ "Placed, but has since left" ],
+                 TeamPlanning::Attention.new(map(people: [ member(places: [ [ LIVE, 0.5 ] ]) ]), {}, left_ids: [ PERSON ]).call.map(&:reason)
 
     leaving = leaver.with(departure: { leaves_in_id: ROOT, position_id: nil })
     assert_empty TeamPlanning::Attention.new(map(people: [ leaving ]), {}, left_ids: [ PERSON ]).call

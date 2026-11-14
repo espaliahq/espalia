@@ -114,12 +114,14 @@ class TeamPlanning::Attention
 
   # Someone placed only in a gone unit or a closed position has that item
   # already, so placed nowhere is someone with no place at all. An unknown
-  # total is never under-allocated.
+  # total is never under-allocated, and someone who has left is the
+  # leavers' item.
   def allocations
     totals = @map.allocation_totals
     @map.people.filter_map do |person|
       total = totals[person.id]
-      reason = if person.memberships.empty? then "Placed nowhere"
+      reason = if gone?(person) then nil
+      elsif person.memberships.empty? then "Placed nowhere"
       elsif total.nil? || total.zero? then nil
       elsif total > 1 then "Over-allocated, at #{percent(total)}"
       elsif total < 1 then "Under-allocated, at #{percent(total)}"
@@ -130,9 +132,9 @@ class TeamPlanning::Attention
 
   def leavers
     @map.people.filter_map do |person|
-      next unless @left.include?(person.id) && person.memberships.any? && !person.leaving?
+      next unless gone?(person)
 
-      item(person.id, ASSIGNMENT, "Placed, but has since left")
+      item(person.id, ASSIGNMENT, person.memberships.any? ? "Placed, but has since left" : "Has since left")
     end
   end
 
@@ -184,6 +186,8 @@ class TeamPlanning::Attention
   end
 
   def units_of(person) = person.memberships.map(&:unit_id).compact.to_set | @owned[person.id]
+
+  def gone?(person) = @left.include?(person.id) && !person.leaving?
 
   def percent(total) = "#{fte(total * 100)}%"
 
