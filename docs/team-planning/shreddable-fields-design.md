@@ -219,7 +219,10 @@ identifier. It reads back as a sealed value that opens on `reveal`.
   under the row's key, inside the transaction. `seal_column` does the same for a write
   that skips the model.
 - **The identifier must be the row's own.** A sealed value copied into another plan's row
-  opens as removed.
+  opens as removed. A live value written there is sealed again under that row's key, so
+  it reads in clear until a rebuild copies the event's sealed form and it opens as
+  removed. A projection that copies a value across plans therefore can't rebuild what it
+  wrote live. None does: each copies into the row of the plan the event names.
 - **The column can't be ordered, filtered, grouped or plucked.** The query methods raise,
   and the column's type refuses any value in clear, so `update_all` and `insert_all`
   can't store one. Raw SQL isn't checked.
