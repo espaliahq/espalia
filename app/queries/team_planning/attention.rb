@@ -143,6 +143,8 @@ class TeamPlanning::Attention
     by_id = @map.people.index_by(&:id)
     positions = @map.positions.index_by(&:id)
     heads = @map.units.select { it.parent_id.nil? }.flat_map(&:owner_ids).to_set
+    @parents = @map.units.to_h { [ it.id, it.parent_id ] }
+    @owned = @map.units.each_with_object(Hash.new { |hash, id| hash[id] = Set.new }) { |unit, owned| unit.owner_ids.each { owned[it] << unit.id } }
     @map.people.filter_map do |person|
       reason = manager_reason(person, by_id, positions, heads)
       item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ] ]) if reason
@@ -169,12 +171,11 @@ class TeamPlanning::Attention
   end
 
   def near_units(person)
-    parent = @map.units.to_h { [ it.id, it.parent_id ] }
     own = person.memberships.map(&:unit_id).select { @live.include?(it) }
-    (own + own.filter_map { parent[it] }).to_set
+    (own + own.filter_map { @parents[it] }).to_set
   end
 
-  def units_of(person) = person.memberships.map(&:unit_id).compact.to_set | @map.units.select { it.owner_ids.include?(person.id) }.to_set(&:id)
+  def units_of(person) = person.memberships.map(&:unit_id).compact.to_set | @owned[person.id]
 
   def percent(total) = "#{fte(total * 100)}%"
 
