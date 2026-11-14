@@ -123,11 +123,12 @@ class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
       assert_equal [ [ @position, "Overfilled by 1 FTE" ] ], items.map { it.values_at(:subject_id, :reason) }
     end
 
-    should "refuse a position the scenario lacks, and a unit and a position together" do
+    should "refuse a position the scenario lacks, and both destinations or neither" do
       assert_equal "This scenario has no such position",
                    refusal(from_unit_id: @payments, to_position_id: SecureRandom.uuid_v7, allocation: 1)
       assert_equal "Give to_unit_id or to_position_id, not both",
                    refusal(from_unit_id: @payments, to_unit_id: @growth, to_position_id: @position, allocation: 1)
+      assert_equal "provide at least one of: to_unit_id, to_position_id", refusal(from_unit_id: @payments, allocation: 1)
       assert_equal [ @payments, @platform ].sort, places(@ada).pluck(:unit_id).sort
     end
 

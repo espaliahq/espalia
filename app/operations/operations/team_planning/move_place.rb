@@ -19,8 +19,9 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
   description "Move one of a person's places in a scenario of a Team Planning plan to another unit, or to " \
               "Unassigned, keeping their other places. from_unit_id names the place: a unit, with " \
               "from_position_id for a place in a position, or 'unassigned' for a person in no live unit. " \
-              "to_unit_id is the unit they move to, or 'unassigned' to drop the place; to_position_id instead " \
-              "places them in a position, even a full one, which the scenario then reports as overfilled. " \
+              "Give exactly one of to_unit_id or to_position_id; giving both or neither is refused. to_unit_id " \
+              "is the unit they move to, or 'unassigned' to drop the place; to_position_id instead places them " \
+              "in a position, even a full one, which the scenario then reports as overfilled. " \
               "allocation (above 0, at most 1) and role describe the new place; a place they already hold in " \
               "that unit, or in that position, is replaced. " \
               "Written as one AssignmentSet. Refused on the baseline, and unless the caller is one of the plan's editors."
@@ -32,8 +33,8 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
   parameter :person_id, String, required: true
   parameter :from_unit_id, String, required: true, schema: { description: "The unit the place is in, or 'unassigned'." }
   parameter :from_position_id, String, schema: { description: "The position the place is in, when it is in one." }
-  parameter :to_unit_id, String, allow_blank: false, schema: { description: "The unit to move to, or 'unassigned'. Give this or to_position_id." }
-  parameter :to_position_id, String, allow_blank: false, schema: { description: "A position of the scenario to place them in." }
+  parameter :to_unit_id, String, allow_blank: false, schema: { description: "The unit to move to, or 'unassigned'. Give exactly one of this or to_position_id." }
+  parameter :to_position_id, String, allow_blank: false, schema: { description: "A position of the scenario to place them in. Give exactly one of this or to_unit_id." }
   requires_any_of :to_unit_id, :to_position_id
   parameter :allocation, Numeric, schema: { exclusiveMinimum: 0, maximum: 1,
                                             description: "The new place's allocation. Required unless moving to 'unassigned'." }
