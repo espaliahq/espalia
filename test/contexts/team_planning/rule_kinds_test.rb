@@ -11,7 +11,8 @@ class TeamPlanning::RuleKindsTest < ActiveSupport::TestCase
     end
   end
 
-  should "hold every built-in kind, each complete" do
+  should "hold every built-in kind once, each complete" do
+    assert_equal TeamPlanning::RuleKinds::BUILT_IN.uniq, TeamPlanning::RuleKinds::BUILT_IN
     TeamPlanning::RuleKinds::BUILT_IN.map(&:constantize).each do |built_in|
       assert_kind_of String, built_in.description
       assert_equal built_in.default.deep_stringify_keys, TeamPlanning::RuleKinds.check(built_in.rule_name, built_in.default)

@@ -103,7 +103,7 @@ class TeamPlanning::Baseline
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
     Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {},
-            rules: Rules.new(plan_id: @plan.id, defaults: TeamPlanning::RuleKinds.defaults, by_subject: {}))
+            rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {}))
   end
 
   # Joins the names of everyone a map names: its people, their managers and

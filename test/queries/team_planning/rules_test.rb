@@ -90,6 +90,21 @@ class TeamPlanning::RulesTest < ActiveSupport::TestCase
     assert_equal 10, cap(@q1, unit_id: @payments)
   end
 
+  should "read the tenant's own default over the built-in one, and only this tenant's" do
+    as_tenant { PlanningRuleDefault.create!(rule: "test_headcount_cap", value: { cap: 7 }) }
+    other = create(:tenant)
+    as_tenant(other) { PlanningRuleDefault.create!(rule: "test_headcount_cap", value: { cap: 2 }) }
+
+    assert_equal [ 7, 7 ], [ cap(@plan_id), cap(@lean, unit_id: @payments) ]
+  end
+
+  should "let the root override the tenant's default" do
+    as_tenant { PlanningRuleDefault.create!(rule: "test_headcount_cap", value: { cap: 7 }) }
+    set_rule(@plan_id, @plan_id, "test_headcount_cap", { cap: 8 })
+
+    assert_equal [ 8, 8 ], [ cap(@plan_id), cap(@q1) ]
+  end
+
   should "let the root override the default, and carry it down every step" do
     set_rule(@plan_id, @plan_id, "test_headcount_cap", { cap: 8 })
 

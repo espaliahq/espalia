@@ -45,6 +45,11 @@ class TenantPolicy < ApplicationPolicy
   # @return [Boolean] whether the viewer can list, add, change or remove pay bands
   def manage_pay_bands? = tenant_admin?
 
+  # A tenant default starts every plan's rules, so only an admin sets it.
+  #
+  # @return [Boolean] whether the viewer can list or set the tenant's Team Planning rule defaults
+  def manage_planning_rules? = tenant_admin?
+
   # Narrower than the cycle report's bar (which admits managers): the export
   # carries names and feedback text. A linked Person is required so every
   # export is attributable to someone in the audit log.

@@ -4137,6 +4137,19 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "tenants_planning_rules",
+        "description" => "List the Team Planning rules a plan may set. Each gives its description, value_schema (the " \
+                         "shape of its value), built_in_default, and the active tenant's own tenant_default with who " \
+                         "set it and when, or null where the tenant hasn't set one. A plan follows the tenant default, " \
+                         "else the built-in one, until it sets the rule itself. Refused unless the caller is a tenant admin.",
+        "inputSchema" => { "type" => "object", "properties" => {}, "required" => [], "additionalProperties" => false },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "tenants_remove_pay_band",
         "description" => "Remove a pay band, by pay_band_id from tenants_pay_bands. Positions it priced fall back to the " \
                          "level's any-location band, or go unpriced. Refused unless the caller is a tenant admin.",
@@ -4151,6 +4164,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "annotations" => {
           "readOnlyHint" => false,
           "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_set_planning_rule",
+        "description" => "Set the active tenant's default for one Team Planning rule, by its name from " \
+                         "tenants_planning_rules. value is an object in the shape that rule's value_schema gives. Every " \
+                         "plan follows it until the plan sets the rule itself. A refusal names what is wrong, never the " \
+                         "value. Returns the rule as tenants_planning_rules lists it. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "rule" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "value" => { "type" => "object", "description" => "In the rule's value_schema" }
+          },
+          "required" => %w[rule value],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
           "idempotentHint" => false
         }
       },
