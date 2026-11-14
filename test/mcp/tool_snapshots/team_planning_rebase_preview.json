@@ -1,0 +1,22 @@
+{
+  "name": "team_planning_rebase_preview",
+  "description": "Preview updating a Team Planning plan the caller is in to today (a UTC day), before team_planning_rebase_plan does it. The drift being taken in is what team_planning_drift lists. For the baseline (scenario_id equal to the plan_id) and each scenario, it counts the planned changes reading done, pending and conflicting, as team_planning_status reads them. Once the base is today a conflicting change would read pending, so `conflicts` names each one, by the scenario that made it, subject_id and facet: the update records them, and status keeps them conflicting. Pass base_on to team_planning_rebase_plan. Refused when the plan already stands on today or on a day still to come, and, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

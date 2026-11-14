@@ -8,6 +8,7 @@ require "test_helper"
 # out, and nothing is written. A new tool joins the walk on its own.
 class TeamPlanningPrivacyTest < ActiveSupport::TestCase
   setup do
+    travel_to Time.utc(2026, 12, 1, 9)
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
     @editor = account(role: :member, team_planner: true)
