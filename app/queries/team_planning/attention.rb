@@ -168,6 +168,7 @@ class TeamPlanning::Attention
     if line.person_id
       manager = by_id[line.person_id]
       return "Their manager is no longer in this scenario" unless manager
+      return "Their manager has since left" if gone?(manager)
       return if nearby.empty?
 
       "Their manager shares no unit with them" unless nearby.intersect?(units_of(manager))

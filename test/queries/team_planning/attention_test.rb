@@ -114,6 +114,12 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_empty TeamPlanning::Attention.new(map(people: [ leaving ]), {}, left_ids: [ PERSON ]).call
   end
 
+  should "mark someone whose manager the Org Graph has had leave" do
+    report = member(SecureRandom.uuid_v7, manager_id: PERSON)
+    assert_equal [ [ PERSON, "Placed, but has since left" ], [ report.id, "Their manager has since left" ] ],
+                 TeamPlanning::Attention.new(map(people: [ member, report ]), {}, left_ids: [ PERSON ]).call.map { [ it.subject_id, it.reason ] }
+  end
+
   should "mark a contributor with no manager, but not the head of the tree" do
     other = SecureRandom.uuid_v7
     assert_equal [ [ other, "reporting_line", "Has no manager" ] ],

@@ -301,14 +301,17 @@ It also checks each person (4.6):
   over-allocated, and one below is under-allocated. An unknown total is neither. Someone placed
   only in a gone unit or a closed position already has that item, so they are not also placed
   nowhere.
-- **Placed but left.** Someone the scenario still places, with no planned departure, whom the
-  Org Graph has had leave by today, a UTC day. `Resolution#attention` reads them from
+- **Since left.** Someone the scenario still has, with no planned departure, whom the Org Graph
+  has had leave by today, a UTC day. They are placed but left, or, with no place, left. Either
+  way that is their only allocation item. `Resolution#attention` reads them from
   `org_leavers`, since the base map can't know.
 - **Manager.** A contributor with no manager, though not the head of the tree, who owns a unit
   with no parent. A manager, or a manager's position, no longer in the scenario. A manager who
-  shares no unit with them: a manager shares one by being in or owning one of the person's units
-  or the unit above it, so a lead reporting to the owner of the group around their team is not
-  marked. These items have the facet `reporting_line`.
+  has since left. A manager who shares no unit with them: a manager shares one by being in or
+  owning one of the person's units or the unit above it, so a lead reporting to the owner of the
+  group around their team is not marked. A position in a gone unit is the position's item, not
+  its reports'. These items have the facet `reporting_line`, and name the person's own change or
+  their manager's, whichever landed last.
 
 ### Adding a change kind
 

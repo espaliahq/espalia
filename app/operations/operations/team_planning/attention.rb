@@ -13,8 +13,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "event_id. That is the later to land of the subject's own change and the change that broke it, such " \
               "as a parent unit's retirement; change is null when nothing in the plan explains it. " \
               "It also checks each person: placed nowhere, over or under 100% allocated (an unknown total is " \
-              "neither), still placed after the Org Graph has them leave, no manager (except the head of the " \
-              "tree), or a manager who is gone or shares no unit with them, nor the unit above it. " \
+              "neither), still in the plan after the Org Graph has them leave, no manager (except the head of the " \
+              "tree), or a manager who is gone, has left, or shares no unit with them, nor the unit above it. " \
               "Items come grouped by check, in a fixed order, then " \
               "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
