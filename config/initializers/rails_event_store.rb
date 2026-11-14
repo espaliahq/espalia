@@ -4,13 +4,14 @@ require "aggregate_root"
 
 # Configures RailsEventStore with:
 # - ActiveRecord-backed PostgreSQL repository
-# - JSON serialization
+# - JSON serialization, with shreddable fields encrypted (Shreddable::Mapper)
 # - ComposedDispatcher: sync handlers (same transaction) + async handlers (SolidQueue)
 #
 # Access via: Rails.configuration.event_store
 #
 Rails.configuration.to_prepare do
   event_store = RailsEventStore::JSONClient.new(
+    mapper: Shreddable::Mapper.new(Shreddable::Mapper.json_client_default),
     repository: RubyEventStore::ActiveRecord::EventRepository.new(serializer: JSON),
     message_broker: RubyEventStore::Broker.new(
       subscriptions: RubyEventStore::Subscriptions.new,
@@ -28,6 +29,13 @@ Rails.configuration.to_prepare do
   # `Rails.configuration.event_store` — so it must be set before the
   # subscribe lines autoload those handler classes.
   Rails.configuration.event_store = event_store
+
+  # What the /res browser reads: the same events, with shreddable fields
+  # shown as a placeholder.
+  Rails.configuration.event_store_browser = RailsEventStore::JSONClient.new(
+    mapper: Shreddable::DisplayMapper.new(Shreddable::Mapper.json_client_default),
+    repository: RubyEventStore::ActiveRecord::EventRepository.new(serializer: JSON)
+  )
 
   # ── Synchronous projections (same transaction) ──
   event_store.subscribe(

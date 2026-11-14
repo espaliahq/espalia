@@ -14,7 +14,7 @@ require "set"
 # inside this aggregate.
 #
 class AssessmentCycles::Aggregate
-  include AggregateRoot
+  include Shreddable::AggregateRoot
 
   CYCLE_TYPES = %w[regular performance_review promotion_review].freeze
 

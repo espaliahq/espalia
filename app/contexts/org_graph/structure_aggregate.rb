@@ -16,7 +16,7 @@
 # set. A level's units come from its provider.
 #
 class OrgGraph::StructureAggregate
-  include AggregateRoot
+  include Shreddable::AggregateRoot
   prepend OrgGraph::PlanReference::Stamping
 
   ESPALIA = "espalia"

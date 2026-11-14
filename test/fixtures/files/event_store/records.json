@@ -1,0 +1,290 @@
+[
+  {
+    "event_id": "4880ddc3-2409-4c9d-a1ad-cb97ce8df3cf",
+    "event_type": "AssessmentCycles::Events::CycleDefined",
+    "data": "{\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"framework_version\":1,\"name\":\"Q4 2026 Capability Review\",\"cycle_type\":\"regular\",\"defined_by\":\"01a1d958-a132-71b9-9b5e-9cebc043d5b0\",\"planned_end_at\":\"2026-12-26\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"f84d4001-b4a4-47be-a17e-32e58ea55d6d\",\"types\":{\"data\":{\"cycle_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"framework_version\":[\"Symbol\",\"Integer\"],\"name\":[\"Symbol\",\"String\"],\"cycle_type\":[\"Symbol\",\"String\"],\"defined_by\":[\"Symbol\",\"String\"],\"planned_end_at\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:07.815187Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "266b3acc-1200-4dc7-9f7f-16f40b213c26",
+    "event_type": "AssessmentCycles::Events::PersonEnrolled",
+    "data": "{\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"person_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"framework_version\":1,\"enrolled_by\":\"01a1d958-a132-71b9-9b5e-9cebc043d5b0\",\"role_id\":\"01a1d958-9ab4-7f51-a1b0-90b4ac9f9d79\",\"level_id\":\"01a1d958-9ab4-716b-a82a-e55fe4f0f7a8\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"d41f0ce1-398b-4331-9dc9-4844804127c7\",\"types\":{\"data\":{\"cycle_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"framework_version\":[\"Symbol\",\"Integer\"],\"enrolled_by\":[\"Symbol\",\"String\"],\"role_id\":[\"Symbol\",\"String\"],\"level_id\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:07.844637Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "42d24e90-7f25-442a-b39e-8cf4b3de9dc3",
+    "event_type": "Frameworks::Events::BehaviouralExpectationSet",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"expectation_id\":\"01a1d958-9ab4-7b88-a591-60985917b5f4\",\"stable_id\":\"01a1d958-9ab4-78e1-b7b3-2a80930fa964\",\"capability_id\":\"01a1d958-9ab4-72d1-a0d7-7f6143d4df30\",\"level_ordinal\":1,\"description\":\"Writes small, tested changes that follow the team's conventions, and asks for review early.\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"23a76bf9-5875-4da9-82c1-742e30d736bc\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"expectation_id\":[\"Symbol\",\"String\"],\"stable_id\":[\"Symbol\",\"String\"],\"capability_id\":[\"Symbol\",\"String\"],\"level_ordinal\":[\"Symbol\",\"Integer\"],\"description\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108948Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "ef42d54c-4d1a-467c-a4c0-d18a2b773c64",
+    "event_type": "Frameworks::Events::CapabilityAdded",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"capability_id\":\"01a1d958-9ab4-72d1-a0d7-7f6143d4df30\",\"stable_id\":\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",\"category_id\":\"01a1d958-9ab4-7288-9e83-979098c55308\",\"name\":\"Code & Systems Quality\",\"description\":\"Writes code and designs systems that stay correct, observable and changeable as the platform grows.\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"84215490-b017-46c6-9977-ca3e26fda3e8\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"capability_id\":[\"Symbol\",\"String\"],\"stable_id\":[\"Symbol\",\"String\"],\"category_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"description\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108908Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "a780dac7-eccf-480a-b6ee-bf7b0e0d428f",
+    "event_type": "Frameworks::Events::CapabilityCategoryAdded",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"category_id\":\"01a1d958-9ab4-7288-9e83-979098c55308\",\"name\":\"Craft\",\"description\":\"How we build — the quality bar for the work itself, whatever the discipline.\",\"ordinal\":1}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"0d3f2a9f-ba3c-48b2-9c1a-cfa23f9dd1da\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"category_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"description\":[\"Symbol\",\"String\"],\"ordinal\":[\"Symbol\",\"Integer\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108895Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "32e8516d-7408-4ae5-a90d-f448c150f33a",
+    "event_type": "Frameworks::Events::CapabilityRoleBindingCreated",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"binding_id\":\"01a1d958-9ab4-7dec-8c79-1d656cd603e7\",\"capability_id\":\"01a1d958-9ab4-72d1-a0d7-7f6143d4df30\",\"role_id\":\"01a1d958-9ab3-7ac4-913d-2ea78b02dead\",\"weight\":2,\"individual_tolerance\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"45ceb575-afc4-484b-b4a1-da60e0ac6d21\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"binding_id\":[\"Symbol\",\"String\"],\"capability_id\":[\"Symbol\",\"String\"],\"role_id\":[\"Symbol\",\"String\"],\"weight\":[\"Symbol\",\"Integer\"],\"individual_tolerance\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108921Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "96784e25-9462-4a87-98d4-848675ac6f7d",
+    "event_type": "Frameworks::Events::CollaboratorAdded",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"person_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"collaborator_role\":\"owner\",\"scope_type\":null,\"scope_id\":null,\"added_by\":\"01a1d958-a132-71b9-9b5e-9cebc043d5b0\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"78ac5bf2-3218-4ea1-89b9-118f7bfdfc22\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"collaborator_role\":[\"Symbol\",\"String\"],\"scope_type\":[\"Symbol\",\"NilClass\"],\"scope_id\":[\"Symbol\",\"NilClass\"],\"added_by\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:07.543308Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "0f89e28b-e26a-4392-8dc7-86ca3f4c709a",
+    "event_type": "Frameworks::Events::DraftVersionStarted",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"target_version\":1,\"started_by\":\"system\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"1148e424-b8bb-4890-9c62-7c973633d4bb\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"target_version\":[\"Symbol\",\"Integer\"],\"started_by\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108303Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "5e8c7e6b-60fe-448a-98fe-287c1b41abf8",
+    "event_type": "Frameworks::Events::EditSuggested",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"suggestion_id\":\"01a1d958-bb51-71ee-8432-25a9280fa858\",\"target_entity_type\":\"role_illustration\",\"target_entity_id\":\"01a1d958-9ab4-747b-a68a-02077b2ae169\",\"field\":\"description\",\"suggested_value\":\"Ships a fix to the geocoder's house-number parsing with a regression test covering the case that broke. Names the follow-up owner, too.\",\"author_id\":\"01a1d958-a1a1-7e7e-b961-8fa5e5636d43\",\"rationale\":\"The follow-up is the part people skip.\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"8b1e1164-f02d-4d9d-b0d6-cc9b0f859c20\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"suggestion_id\":[\"Symbol\",\"String\"],\"target_entity_type\":[\"Symbol\",\"String\"],\"target_entity_id\":[\"Symbol\",\"String\"],\"field\":[\"Symbol\",\"String\"],\"suggested_value\":[\"Symbol\",\"String\"],\"author_id\":[\"Symbol\",\"String\"],\"rationale\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:13.448675Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "d0bcf10f-7894-40b8-a61f-32b4ba542c71",
+    "event_type": "Frameworks::Events::EntityCreationSuggested",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"suggestion_id\":\"01a1d958-bbe4-734c-8b40-2cfe8528e91d\",\"target_entity_type\":\"role_illustration\",\"proposed_attributes\":{\"role_id\":\"01a1d958-9ab4-7a9e-b7b0-64ce172cee06\",\"description\":\"Walks the support queue weekly and files the top recurring confusion as a design issue.\"},\"parent_id\":\"01a1d958-9ab5-7013-9e5a-56a62101c048\",\"author_id\":\"01a1d958-a1a1-7e7e-b961-8fa5e5636d43\",\"rationale\":\"PD needs an illustration at this level.\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"38dd041f-4e6c-45d0-a0a6-2485f60e1ea1\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"suggestion_id\":[\"Symbol\",\"String\"],\"target_entity_type\":[\"Symbol\",\"String\"],\"proposed_attributes\":[\"Symbol\",{\"role_id\":[\"Symbol\",\"String\"],\"description\":[\"Symbol\",\"String\"]}],\"parent_id\":[\"Symbol\",\"String\"],\"author_id\":[\"Symbol\",\"String\"],\"rationale\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:13.597669Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "ff08145f-ef2c-44e0-a69f-b22163ef8b8b",
+    "event_type": "Frameworks::Events::FrameworkCreated",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"name\":\"Null Island Capability Framework\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"16f754fb-a654-4dd3-9549-7da72bc4e070\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108245Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "985280c0-681e-4753-b8f6-846f12f8467b",
+    "event_type": "Frameworks::Events::FrameworkVersionPublished",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"version\":1,\"published_by\":\"seed\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"8ebc41fc-abaf-43f7-9014-ec476e874436\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"version\":[\"Symbol\",\"Integer\"],\"published_by\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:06.007027Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "3e7f084c-fcbf-432d-8afe-db2c62696b41",
+    "event_type": "Frameworks::Events::LevelAdded",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"level_id\":\"01a1d958-9ab3-7ff9-a810-1d474d5ac0df\",\"role_id\":\"01a1d958-9ab3-7ac4-913d-2ea78b02dead\",\"ordinal\":1,\"title\":\"Engineer I\",\"code\":\"E1\",\"is_entry\":true}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"8e5d4a5b-993b-47d3-a428-7cb114a36bc2\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"level_id\":[\"Symbol\",\"String\"],\"role_id\":[\"Symbol\",\"String\"],\"ordinal\":[\"Symbol\",\"Integer\"],\"title\":[\"Symbol\",\"String\"],\"code\":[\"Symbol\",\"String\"],\"is_entry\":[\"Symbol\",\"TrueClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108346Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "8a264fea-93ef-4d76-b501-f706a4b23085",
+    "event_type": "Frameworks::Events::RoleAdded",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"role_id\":\"01a1d958-9ab3-7ac4-913d-2ea78b02dead\",\"role_family_id\":\"01a1d958-9ab3-7b47-8165-538f854c49bd\",\"name\":\"Software Engineer\",\"code\":\"E\",\"track\":\"ic\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"5d0b4351-8928-4fb7-b8d9-d1e809ba0ddb\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"role_id\":[\"Symbol\",\"String\"],\"role_family_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"code\":[\"Symbol\",\"String\"],\"track\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108333Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "014586c5-9727-4f46-9ae3-72f1e3e67a67",
+    "event_type": "Frameworks::Events::RoleFamilyAdded",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"role_family_id\":\"01a1d958-9ab3-7b47-8165-538f854c49bd\",\"name\":\"Engineering\",\"description\":null,\"department\":\"Product & Engineering\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"145068d3-772d-4943-8122-c76fcda5450a\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"role_family_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"description\":[\"Symbol\",\"NilClass\"],\"department\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108319Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "10946745-1f95-43d5-ba95-b77d4e1a0c77",
+    "event_type": "Frameworks::Events::RoleIllustrationAdded",
+    "data": "{\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"illustration_id\":\"01a1d958-9ab4-747b-a68a-02077b2ae169\",\"stable_id\":\"01a1d958-9ab4-7d91-bdf3-17ab8d606115\",\"expectation_id\":\"01a1d958-9ab4-7b88-a591-60985917b5f4\",\"role_id\":\"01a1d958-9ab3-7ac4-913d-2ea78b02dead\",\"ordinal\":1,\"description\":\"Ships a fix to the geocoder's house-number parsing with a regression test covering the case that broke.\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"13a8119e-70bf-40ab-afc2-42d02dbc6fce\",\"types\":{\"data\":{\"framework_id\":[\"Symbol\",\"String\"],\"illustration_id\":[\"Symbol\",\"String\"],\"stable_id\":[\"Symbol\",\"String\"],\"expectation_id\":[\"Symbol\",\"String\"],\"role_id\":[\"Symbol\",\"String\"],\"ordinal\":[\"Symbol\",\"Integer\"],\"description\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:05.108961Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "3b11af34-3392-48c1-87a9-d7749782d274",
+    "event_type": "OrgGraph::Events::LevelProviderSet",
+    "data": "{\"level_id\":\"01a1d95d-7b5c-77af-b07a-acdf17f13032\",\"provider\":\"hibob\",\"previous_provider\":\"espalia\",\"effective_on\":\"2026-01-01\",\"set_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"5bb9bbfe-b7c6-47fd-9124-bdf9f9e02a47\",\"types\":{\"data\":{\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"previous_provider\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"set_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:22:24.745334Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "a11d890c-bcd8-4923-9712-ead51ad8fc24",
+    "event_type": "OrgGraph::Events::MembershipSet",
+    "data": "{\"person_id\":\"01a1d95d-7c18-70bf-a1fb-b04863090581\",\"provider\":\"espalia\",\"effective_on\":\"2026-01-05\",\"unit_id\":\"01a1d95d-7b5c-7d2f-8141-c83a37e9608a\",\"allocation\":1.0,\"role\":null,\"set_by_id\":null,\"changed_back_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"f2f2e0ea-dcc2-4207-8775-8e87d391523f\",\"types\":{\"data\":{\"person_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"unit_id\":[\"Symbol\",\"String\"],\"allocation\":[\"Symbol\",\"Float\"],\"role\":[\"Symbol\",\"NilClass\"],\"set_by_id\":[\"Symbol\",\"NilClass\"],\"changed_back_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:22:25.010085Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "49028dec-6b09-4e50-867c-baedc78019f3",
+    "event_type": "OrgGraph::Events::PersonRecorded",
+    "data": "{\"person_id\":\"01a1d95d-7c18-70bf-a1fb-b04863090581\",\"provider\":\"espalia\",\"effective_on\":\"2026-01-05\",\"employment_status\":\"employed\",\"started_on\":null,\"left_on\":null,\"title\":null,\"level\":null,\"manager_id\":null,\"cost_centre\":null,\"site\":null,\"country\":null,\"fte\":null,\"employment_type\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"ab2589ba-70b1-4c9b-8046-91fccfbb780f\",\"types\":{\"data\":{\"person_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"employment_status\":[\"Symbol\",\"String\"],\"started_on\":[\"Symbol\",\"NilClass\"],\"left_on\":[\"Symbol\",\"NilClass\"],\"title\":[\"Symbol\",\"NilClass\"],\"level\":[\"Symbol\",\"NilClass\"],\"manager_id\":[\"Symbol\",\"NilClass\"],\"cost_centre\":[\"Symbol\",\"NilClass\"],\"site\":[\"Symbol\",\"NilClass\"],\"country\":[\"Symbol\",\"NilClass\"],\"fte\":[\"Symbol\",\"NilClass\"],\"employment_type\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:22:24.939377Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "ef73d7b2-b488-4a04-ab9c-1e9f4d00c7ef",
+    "event_type": "OrgGraph::Events::TaxonomyDefined",
+    "data": "{\"levels\":[{\"level_id\":\"01a1d95d-7b5c-77af-b07a-acdf17f13032\",\"name\":\"Department\"},{\"level_id\":\"01a1d95d-7b5c-7e11-b147-54b06ae23ef2\",\"name\":\"Team\"},{\"level_id\":\"01a1d95d-7b5c-7302-bb95-561f652e7b97\",\"name\":\"Squad\"}],\"previous_levels\":[],\"effective_on\":\"2026-01-01\",\"defined_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"0a211034-c0d2-4975-8fee-da60b2539c90\",\"types\":{\"data\":{\"levels\":[\"Symbol\",[{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]}]],\"previous_levels\":[\"Symbol\",[]],\"effective_on\":[\"Symbol\",\"String\"],\"defined_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:22:24.745298Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "8b64a5a9-edbb-4613-bac7-1e59ea671bf0",
+    "event_type": "OrgGraph::Events::UnitCreated",
+    "data": "{\"unit_id\":\"01a1d95d-7b5c-7716-9d7d-d78922fa3cf5\",\"name\":\"Engineering\",\"parent_id\":null,\"level_id\":\"01a1d95d-7b5c-77af-b07a-acdf17f13032\",\"provider\":\"hibob\",\"external_ref\":\"dept-100\",\"effective_on\":\"2026-01-01\",\"created_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"e3a5f935-9122-4313-9edb-23221b538799\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"parent_id\":[\"Symbol\",\"NilClass\"],\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:22:24.795368Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "c1508438-9111-46d2-a29e-55ca15526087",
+    "event_type": "PersonDevelopment::Events::AlignmentStarted",
+    "data": "{\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"started_by_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"role_id\":\"01a1d958-9ab3-7ac4-913d-2ea78b02dead\",\"level_ordinal\":null,\"cell_keys\":[[\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",1],[\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",2],[\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",3],[\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",4],[\"01a1d958-9ab5-7e44-8264-e157d534711e\",1],[\"01a1d958-9ab5-7e44-8264-e157d534711e\",2],[\"01a1d958-9ab5-7e44-8264-e157d534711e\",3],[\"01a1d958-9ab5-7e44-8264-e157d534711e\",4],[\"01a1d958-9ab5-7a53-a662-f9373fa6fc43\",1],[\"01a1d958-9ab5-7a53-a662-f9373fa6fc43\",2],[\"01a1d958-9ab5-7a53-a662-f9373fa6fc43\",3],[\"01a1d958-9ab5-7a53-a662-f9373fa6fc43\",4],[\"01a1d958-9ab7-77a0-87f7-2698aa7131df\",1],[\"01a1d958-9ab7-77a0-87f7-2698aa7131df\",2],[\"01a1d958-9ab7-77a0-87f7-2698aa7131df\",3],[\"01a1d958-9ab7-77a0-87f7-2698aa7131df\",4],[\"01a1d958-9ab7-72f8-ab78-3ff0110ef101\",1],[\"01a1d958-9ab7-72f8-ab78-3ff0110ef101\",2],[\"01a1d958-9ab7-72f8-ab78-3ff0110ef101\",3],[\"01a1d958-9ab7-72f8-ab78-3ff0110ef101\",4],[\"01a1d958-9ab7-7153-bbc2-1b23dcd17069\",1],[\"01a1d958-9ab7-7153-bbc2-1b23dcd17069\",2],[\"01a1d958-9ab7-7153-bbc2-1b23dcd17069\",3],[\"01a1d958-9ab7-7153-bbc2-1b23dcd17069\",4],[\"01a1d958-9ab8-74fe-8785-ee3ff59dce0f\",1],[\"01a1d958-9ab8-74fe-8785-ee3ff59dce0f\",2],[\"01a1d958-9ab8-74fe-8785-ee3ff59dce0f\",3],[\"01a1d958-9ab8-74fe-8785-ee3ff59dce0f\",4]]}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a148-79b5-89e3-46481ca024c3\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"ac9da552-6c56-4ee4-ac62-430d4f889d0a\",\"types\":{\"data\":{\"cycle_id\":[\"Symbol\",\"String\"],\"started_by_id\":[\"Symbol\",\"String\"],\"role_id\":[\"Symbol\",\"String\"],\"level_ordinal\":[\"Symbol\",\"NilClass\"],\"cell_keys\":[\"Symbol\",[[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"],[\"String\",\"Integer\"]]]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:09.089203Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "a38f8542-db03-43d8-8f9f-d3e34c482c12",
+    "event_type": "PersonDevelopment::Events::AssessmentAligned",
+    "data": "{\"capability_stable_id\":\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",\"level_ordinal\":3,\"aligned_frequency\":\"consistent\",\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"comment\":\"Auto-aligned: self and manager already agreed\",\"aligned_by_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a148-79b5-89e3-46481ca024c3\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"a9b3f839-2af0-466c-8620-0d3f266e81aa\",\"types\":{\"data\":{\"capability_stable_id\":[\"Symbol\",\"String\"],\"level_ordinal\":[\"Symbol\",\"Integer\"],\"aligned_frequency\":[\"Symbol\",\"String\"],\"cycle_id\":[\"Symbol\",\"String\"],\"comment\":[\"Symbol\",\"String\"],\"aligned_by_id\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:09.089242Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "634ef52b-f993-434a-a8cf-2a2a40709297",
+    "event_type": "PersonDevelopment::Events::EvidenceRecorded",
+    "data": "{\"evidence_id\":\"01a1d958-b9c8-7e88-8457-0b7b4a2a6734\",\"capability_stable_id\":\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",\"level_ordinal\":2,\"source\":\"self\",\"evidence_type\":\"project_outcome\",\"custom_type_label\":null,\"title\":\"Shipped the tile cache eviction fix\",\"content\":\"Found the leak under zoom-level churn, added load-shaped tests, and the p99 dropped 40ms.\",\"external_reference\":null,\"author_id\":\"01a1d958-a14e-7a30-be19-38a8dd5e809d\",\"feedback_direction\":\"self\",\"valence\":\"demonstrated\",\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"request_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a14e-7a30-be19-38a8dd5e809d\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"1ca41eb0-d743-4d72-89e9-77b0374c5840\",\"types\":{\"data\":{\"evidence_id\":[\"Symbol\",\"String\"],\"capability_stable_id\":[\"Symbol\",\"String\"],\"level_ordinal\":[\"Symbol\",\"Integer\"],\"source\":[\"Symbol\",\"String\"],\"evidence_type\":[\"Symbol\",\"String\"],\"custom_type_label\":[\"Symbol\",\"NilClass\"],\"title\":[\"Symbol\",\"String\"],\"content\":[\"Symbol\",\"String\"],\"external_reference\":[\"Symbol\",\"NilClass\"],\"author_id\":[\"Symbol\",\"String\"],\"feedback_direction\":[\"Symbol\",\"String\"],\"valence\":[\"Symbol\",\"String\"],\"cycle_id\":[\"Symbol\",\"String\"],\"request_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:13.042396Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "92161fc4-c1c7-4c3d-bbdf-d1a7d5e1d829",
+    "event_type": "PersonDevelopment::Events::EvidenceRequestResponded",
+    "data": "{\"request_id\":\"01a1d958-bb10-7214-ba5b-850e7d15e6df\",\"evidence_id\":\"01a1d958-bb29-772f-b657-c7fe059bf51e\",\"responded_by_id\":\"01a1d958-a140-7892-85d1-2efee3f6e451\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a14e-7a30-be19-38a8dd5e809d\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"385886f7-f715-48e6-b7ca-25f88c9d9139\",\"types\":{\"data\":{\"request_id\":[\"Symbol\",\"String\"],\"evidence_id\":[\"Symbol\",\"String\"],\"responded_by_id\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:13.400376Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "670d6a36-425f-4270-9f5d-e7f1f5d9d124",
+    "event_type": "PersonDevelopment::Events::EvidenceRequested",
+    "data": "{\"request_id\":\"01a1d958-bae8-7a46-a479-5be1a09091c0\",\"requested_by_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"requestee_person_id\":\"01a1d958-a148-79b5-89e3-46481ca024c3\",\"capability_stable_id\":\"01a1d958-9ab5-7a53-a662-f9373fa6fc43\",\"level_ordinal\":2,\"message\":\"Could you share what you saw during the geocoder incident?\",\"due_at\":null,\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a14e-7a30-be19-38a8dd5e809d\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"1af5f6b7-4bab-47ea-a466-897ddf7dd85b\",\"types\":{\"data\":{\"request_id\":[\"Symbol\",\"String\"],\"requested_by_id\":[\"Symbol\",\"String\"],\"requestee_person_id\":[\"Symbol\",\"String\"],\"capability_stable_id\":[\"Symbol\",\"String\"],\"level_ordinal\":[\"Symbol\",\"Integer\"],\"message\":[\"Symbol\",\"String\"],\"due_at\":[\"Symbol\",\"NilClass\"],\"cycle_id\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:13.330321Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "9c096f8e-8b07-4f0a-bece-69dc2d817059",
+    "event_type": "PersonDevelopment::Events::EvidenceWithdrawn",
+    "data": "{\"evidence_id\":\"01a1d958-baab-7f9f-b7b2-90594c230976\",\"withdrawn_by_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"reason\":\"misattributed\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a14e-7a30-be19-38a8dd5e809d\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"d1a6f58d-b719-48d5-bab9-e2f211134374\",\"types\":{\"data\":{\"evidence_id\":[\"Symbol\",\"String\"],\"withdrawn_by_id\":[\"Symbol\",\"String\"],\"reason\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:13.303423Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "7c000a83-4e35-431c-8012-4e51a5301e04",
+    "event_type": "PersonDevelopment::Events::FullAlignmentCompleted",
+    "data": "{\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"completed_by_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"framework_version\":1,\"role_id\":\"01a1d958-9ab3-7ac4-913d-2ea78b02dead\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a148-79b5-89e3-46481ca024c3\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"72152ce9-e7fb-417f-bec2-2f8841bae481\",\"types\":{\"data\":{\"cycle_id\":[\"Symbol\",\"String\"],\"completed_by_id\":[\"Symbol\",\"String\"],\"framework_version\":[\"Symbol\",\"Integer\"],\"role_id\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:09.156957Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "4a948689-e105-4886-a3ea-9c34c16c40a8",
+    "event_type": "PersonDevelopment::Events::JoinedAssessmentCycle",
+    "data": "{\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"framework_version\":1}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"correlation_id\":\"d41f0ce1-398b-4331-9dc9-4844804127c7\",\"causation_id\":\"266b3acc-1200-4dc7-9f7f-16f40b213c26\",\"person_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"types\":{\"data\":{\"cycle_id\":[\"Symbol\",\"String\"],\"framework_version\":[\"Symbol\",\"Integer\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"],\"causation_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:07.877198Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "4c73d9f9-9c45-4ed7-be5a-9d5d2477a197",
+    "event_type": "PersonDevelopment::Events::ManagerRated",
+    "data": "{\"capability_stable_id\":\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",\"level_ordinal\":3,\"frequency\":\"consistent\",\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"comment\":null,\"source\":\"human\",\"seeded_from_cycle_id\":null,\"rated_by_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"via_delegation\":false,\"via_role_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a148-79b5-89e3-46481ca024c3\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"d5779aaf-7e24-4153-9da6-695138fb28dc\",\"types\":{\"data\":{\"capability_stable_id\":[\"Symbol\",\"String\"],\"level_ordinal\":[\"Symbol\",\"Integer\"],\"frequency\":[\"Symbol\",\"String\"],\"cycle_id\":[\"Symbol\",\"String\"],\"comment\":[\"Symbol\",\"NilClass\"],\"source\":[\"Symbol\",\"String\"],\"seeded_from_cycle_id\":[\"Symbol\",\"NilClass\"],\"rated_by_id\":[\"Symbol\",\"String\"],\"via_delegation\":[\"Symbol\",\"FalseClass\"],\"via_role_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:08.894967Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "0750a848-37a5-42e6-bc03-6ff3c45b61ae",
+    "event_type": "PersonDevelopment::Events::PersonAssignedToFramework",
+    "data": "{\"person_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"role_id\":\"01a1d958-9ab4-7f51-a1b0-90b4ac9f9d79\",\"level_id\":\"01a1d958-9ab4-716b-a82a-e55fe4f0f7a8\",\"assigned_by\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"65e82eb9-7122-4110-a262-00c428830f3a\",\"types\":{\"data\":{\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"role_id\":[\"Symbol\",\"String\"],\"level_id\":[\"Symbol\",\"String\"],\"assigned_by\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:06.939191Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "bb9a5fe8-2a61-42cc-bfaf-96d8d2a7222d",
+    "event_type": "PersonDevelopment::Events::ReportingManagerRecorded",
+    "data": "{\"manager_id\":\"01a1d958-a132-71b9-9b5e-9cebc043d5b0\",\"previous_manager_id\":null,\"source\":\"backfill\"}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a13a-7614-a52a-51953b3bbbe6\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"d796703a-1ba7-4321-a896-abd2dd3b0362\",\"types\":{\"data\":{\"manager_id\":[\"Symbol\",\"String\"],\"previous_manager_id\":[\"Symbol\",\"NilClass\"],\"source\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:06.968284Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "38557540-6aee-4ae7-8390-22339cd6b390",
+    "event_type": "PersonDevelopment::Events::SelfRated",
+    "data": "{\"capability_stable_id\":\"01a1d958-9ab4-76ae-b2c7-b85c952ce5da\",\"level_ordinal\":3,\"frequency\":\"consistent\",\"cycle_id\":\"01a1d958-a563-77f6-ba4e-b1f1b781340f\",\"comment\":null,\"source\":\"human\",\"seeded_from_cycle_id\":null,\"via_role_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d958-9a53-71ad-a93a-4a6c5744a6ce\",\"person_id\":\"01a1d958-a148-79b5-89e3-46481ca024c3\",\"framework_id\":\"01a1d958-9a8f-7c11-b7b3-efb7f204232b\",\"correlation_id\":\"b097e674-c426-4890-9578-b472dafd0d17\",\"types\":{\"data\":{\"capability_stable_id\":[\"Symbol\",\"String\"],\"level_ordinal\":[\"Symbol\",\"Integer\"],\"frequency\":[\"Symbol\",\"String\"],\"cycle_id\":[\"Symbol\",\"String\"],\"comment\":[\"Symbol\",\"NilClass\"],\"source\":[\"Symbol\",\"String\"],\"seeded_from_cycle_id\":[\"Symbol\",\"NilClass\"],\"via_role_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"person_id\":[\"Symbol\",\"String\"],\"framework_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:17:08.658185Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "624b1862-8d91-4e44-a6c3-565a060dba5f",
+    "event_type": "TeamPlanning::Events::PlanCreated",
+    "data": "{\"plan_id\":\"01a1d95d-7d14-7bef-a3cd-04d39d0e4ee4\",\"name\":\"Next year\",\"base_on\":\"2026-11-14\",\"created_by_id\":\"01a1d95d-7cea-70f5-aef9-85f2e797741b\"}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"0e47fa22-379f-44a1-b2b8-c63768392db2\",\"types\":{\"data\":{\"plan_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"base_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:22:25.176271Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "0c22a97e-1cc9-4aa5-bcd2-8fcb5dc46b54",
+    "event_type": "TeamPlanning::Events::PlanDeleted",
+    "data": "{\"plan_id\":\"01a1d95d-7d14-7bef-a3cd-04d39d0e4ee4\",\"deleted_by_id\":\"01a1d95d-7cea-70f5-aef9-85f2e797741b\"}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"6137af5f-aa32-4dc9-acc0-c08dbd822c1a\",\"types\":{\"data\":{\"plan_id\":[\"Symbol\",\"String\"],\"deleted_by_id\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:22:25.202702Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "7c6e1fe2-b1f0-4478-89ac-5504680d2781",
+    "event_type": "TeamPlanning::Events::PlanRenamed",
+    "data": "{\"plan_id\":\"01a1d95d-7d14-7bef-a3cd-04d39d0e4ee4\",\"name\":\"The year after\",\"previous_name\":\"Next year\",\"renamed_by_id\":\"01a1d95d-7cea-70f5-aef9-85f2e797741b\"}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"96e2a18b-3f7b-4af3-b88a-78d6f3a7e2ad\",\"types\":{\"data\":{\"plan_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"previous_name\":[\"Symbol\",\"String\"],\"renamed_by_id\":[\"Symbol\",\"String\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-14T09:22:25.195424Z",
+    "valid_at": null
+  }
+]

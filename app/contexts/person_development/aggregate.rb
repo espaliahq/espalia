@@ -17,7 +17,7 @@
 # PersonUnenrolled / CycleClosed events — never by controllers.
 #
 class PersonDevelopment::Aggregate
-  include AggregateRoot
+  include Shreddable::AggregateRoot
 
   # Domain-specific error for command violations the controller layer
   # is expected to surface as user-facing flash alerts. Distinguishes

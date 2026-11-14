@@ -12,7 +12,7 @@
 # sync that finds no difference leaves the stream untouched.
 #
 class OrgGraph::PersonAggregate
-  include AggregateRoot
+  include Shreddable::AggregateRoot
   prepend OrgGraph::PlanReference::Stamping
   include OrgGraph::FactConfirmation
 
