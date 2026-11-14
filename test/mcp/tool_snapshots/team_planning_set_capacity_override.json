@@ -1,0 +1,59 @@
+{
+  "name": "team_planning_set_capacity_override",
+  "description": "Override a person's capacity in one place they hold, a position or a unit, in a scenario of a Team Planning plan. team_planning_capacity then prices the place at this amount, in the units of the place's capacity model, with the model's figure behind it as `calculated`. Steps after the scenario, and its alternatives, inherit the override unless they set it again. The plan keeps the amount private to that person, so once they are forgotten the place counts nowhere. Clear it with team_planning_clear_change and the facet `capacity:<position or unit id>`. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      },
+      "person_id": {
+        "type": "string",
+        "description": "A person, or a placeholder hire's id."
+      },
+      "position_id": {
+        "type": "string",
+        "description": "The position the override is for. Give this or unit_id, not both."
+      },
+      "unit_id": {
+        "type": "string",
+        "description": "The unit, for a place in no position."
+      },
+      "amount": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^\\d+(\\.\\d+)?$",
+        "description": "What the person delivers there, 0 or more, as a decimal such as \"0.8\"."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "person_id",
+      "amount"
+    ],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "position_id"
+        ]
+      },
+      {
+        "required": [
+          "unit_id"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
