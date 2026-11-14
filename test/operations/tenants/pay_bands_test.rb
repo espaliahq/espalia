@@ -94,6 +94,21 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_match(/already a band for this level in/, error.message)
   end
 
+  should "refuse the second of two adds that race past the check" do
+    add
+    racing = ActsAsTenant.with_tenant(@tenant) do
+      PayBand.new(tenant: @tenant, level_id: @level.level_id, level_label: PayBand.level_label(@level), location: "Fixtureland",
+                  currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3)
+    end
+    racing.define_singleton_method(:one_band_per_level_and_location) { nil }
+
+    PayBand.stub(:new, racing) do
+      error = assert_raises(Operations::Base::ParameterError) { add }
+
+      assert_equal "There is already a band for this level in Fixtureland", error.message
+    end
+  end
+
   should "refuse a band this tenant doesn't hold" do
     assert_raises(Operations::Base::ParameterError) { call(:RemovePayBand, pay_band_id: SecureRandom.uuid_v7) }
   end

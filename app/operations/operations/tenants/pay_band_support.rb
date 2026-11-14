@@ -32,6 +32,8 @@ module Operations::Tenants::PayBandSupport
     return band if band.save
 
     raise Operations::Base::ParameterError, band.errors.full_messages.to_sentence
+  rescue ActiveRecord::RecordNotUnique
+    raise Operations::Base::ParameterError, band.duplicate_message
   end
 
   # @param band [PayBand]

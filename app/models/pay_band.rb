@@ -99,6 +99,9 @@ class PayBand < ApplicationRecord
     TenantUser.find_by(user: updated_by)&.person&.name || updated_by.email
   end
 
+  # @return [String] the refusal for a second band at this level and location
+  def duplicate_message = "There is already a band for this level in #{any_location? ? 'any location' : location}"
+
   private
 
   def figures_in_order
@@ -110,6 +113,6 @@ class PayBand < ApplicationRecord
 
   def one_band_per_level_and_location
     taken = PayBand.where(level_id:, location_key:).where.not(id:).exists?
-    errors.add(:base, "There is already a band for this level in #{any_location? ? 'any location' : location}") if taken
+    errors.add(:base, duplicate_message) if taken
   end
 end
