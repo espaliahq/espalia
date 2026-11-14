@@ -29,7 +29,7 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
 
     def self.read_from(map, subject_id:, facet: self.facet)
       person = map.people.find { it.id == subject_id }
-      { placements: person.memberships.map(&:to_h).sort_by { it[:unit_id] } } if person
+      { placements: person.memberships.map { it.to_h.except(:position_id) }.sort_by { it[:unit_id] } } if person
     end
   end
 
