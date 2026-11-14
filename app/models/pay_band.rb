@@ -12,17 +12,6 @@
 class PayBand < ApplicationRecord
   PERIODS = %w[year month hour].freeze
   FIGURES = %i[minimum midpoint maximum].freeze
-  # ISO 4217's circulating currencies as of 2026. Its fund, metal and test codes
-  # are left out, as nobody is paid in them. Add a code when ISO issues one.
-  CURRENCIES = %w[
-    AED AFN ALL AMD AOA ARS AUD AWG AZN BAM BBD BDT BHD BIF BMD BND BOB BRL BSD BTN BWP BYN BZD
-    CAD CDF CHF CLP CNY COP CRC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS
-    GIP GMD GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW
-    KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MYR
-    MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR
-    SDG SEK SGD SHP SLE SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX
-    USD UYU UZS VED VES VND VUV WST XAF XCD XCG XOF XPF YER ZAR ZMW ZWG
-  ].to_set.freeze
 
   acts_as_tenant :tenant
 
@@ -30,13 +19,13 @@ class PayBand < ApplicationRecord
   belongs_to :updated_by, class_name: "User", optional: true
 
   normalizes :location, with: ->(location) { known_spelling(location.to_s.squish) }, apply_to_nil: true
-  normalizes :currency, with: ->(currency) { currency.to_s.strip.upcase }
+  normalizes :currency, with: Currency::NORMALIZE
 
   before_validation { self.location_key = self.class.location_key(location) }
 
   validates :level_id, presence: true
   validates :role_name, :level_name, presence: true
-  validates :currency, inclusion: { in: CURRENCIES, message: "must be an ISO 4217 currency code, such as AUD" }
+  validates :currency, inclusion: { in: Currency::CODES, message: Currency::INVALID }
   validates :period, inclusion: { in: PERIODS, message: "must be year, month or hour" }
   validates(*FIGURES, presence: true, numericality: { greater_than_or_equal_to: 0, less_than: 10**12 })
   validate :figures_in_order
