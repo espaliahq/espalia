@@ -160,6 +160,32 @@ names what is wrong and never repeats the value. A kind declares `shreddable?`, 
 [#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
 yes is refused at registration.
 
+### Clearing and pinning
+
+`ChangeCleared` hands one facet of one subject back to the scenario's parent. The aggregate
+drops the scenario's own changes for that key, so resolution reads the parent's value
+again. The changes stay in the stream. Clearing a person's `assignment` clears their whole
+placement list, since the list is one facet.
+
+`ChangePinned` keeps what a scenario inherits for a facet as it resolves now, so a later
+change in the parent no longer reaches it. It records the end state, the kind of change it
+stands for, and where the value came from: the ancestor scenario and the event that set
+it, or neither when the parent's resolved map gave it (a rule above the subject, or the
+baseline). The aggregate replays a pin as a change of that kind. The baseline has no
+parent, so it pins nothing, and a scenario can't pin a facet it already changes.
+
+To pin a value the baseline gives, a kind reads its end state off a map with
+`Change.read_from(map, subject_id:, facet:)`. The caller chooses the map: the parent's
+resolved map for a pin, and a map built from the Org Graph today for a change's status
+(4.3). A kind that doesn't implement it can still be pinned from an ancestor's change.
+
+Every kind of change is listed in `TeamPlanning::ChangeKinds::ALL`, which a test holds to
+every `Change` subclass. The overrides projection subscribes through it and writes
+`team_planning_overrides`: one row per scenario, subject and facet the scenario sets or
+pinned. `team_planning_overrides` lists them, each beside what the scenario would inherit
+without it, and says when a pin's parent has moved on. Reconcile (4.5) reuses both: keep
+the plan is a pin, and follow reality is a clear.
+
 ### Undo
 
 Undo and redo are events that point at the event they reverse. The stream is never
