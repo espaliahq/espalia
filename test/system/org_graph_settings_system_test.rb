@@ -204,7 +204,7 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         end
         visit tenant_org_graph_settings_path
 
-        fill_in "Name of the new level", with: "Guild"
+        js_fill_in "Name of the new level", with: "Guild"
         click_button_with_js_fallback("Add a level", expect_text: "Guild is now the bottom level.")
         assert_equal %w[Squad Guild], level_names
         guild_id = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.find_by!(name: "Guild").id }
