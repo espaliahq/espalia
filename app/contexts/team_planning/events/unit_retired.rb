@@ -30,7 +30,7 @@ class TeamPlanning::Events::UnitRetired < TeamPlanning::Events::Change
   # @param planned [Hash, nil]
   # @param map [TeamPlanning::Baseline::Map]
   # @return [Boolean]
-  def self.shows?(read, planned, map:) = (read && planned) ? true : same_end_state?(read, planned)
+  def self.shows?(read, planned, map:) = read.nil? == planned.nil?
 
   # @param change [OrgGraph::ChangesBetween::Change]
   # @return [String, nil] the unit an Org Graph change creates, renames, moves or retires
