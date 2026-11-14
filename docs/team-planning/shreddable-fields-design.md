@@ -107,16 +107,31 @@ end
   Base64. The record's metadata gains `shreddable: { field => { cipher:, iv:,
   identifier: } }`. The tenant comes from the event's own `tenant_id` metadata. Writing
   for a deleted plan or a forgotten person raises `PlanKeyStore::Destroyed`.
-- **On read it gives back a `Shreddable::Value`**, or `Shreddable::Value.removed` once the
-  key is gone. A read memoises keys for that read only. A nil field is stored as nil, with
-  no key.
+- **A shreddable write runs in a transaction.** Taking the key locks the plan, and the
+  person, until that transaction commits, so a destroy can't land between the key and
+  the append. Outside a transaction the write raises.
+- **On read it gives back a sealed `Shreddable::Value`**, which looks up its key on the
+  first `reveal` or `removed?`. It opens as removed once the key is gone, or if the
+  field is damaged. A read memoises keys for that read only. So an aggregate load, or a
+  replayer passing over another tenant's events, never touches a key, and nothing reads
+  differently where Active Record encryption has no keys until a line asks for the
+  value. Revealing another tenant's value raises, as `PlanKeyStore#key_of` does. A nil
+  field is stored as nil, with no key.
 - **An event that declares nothing passes through untouched**: no query, no key lookup,
   and the same bytes at rest. `test/contexts/shreddable/storage_compatibility_test.rb`
-  proves it against a stored record of every event type in every context.
+  proves it against stored records of 36 event types, drawn from all five contexts. The
+  other event types are untested there, so a change to the inner mapper should add
+  records for the types it touches.
 - **`Shreddable::Value#reveal` is the one way in.** The value prints as `[shreddable]`, and
   raises on `to_json`, `as_json`, YAML and Marshal, so it cannot reach a clear field of
   another event, a log line or a cache. A value is a JSON value: a string, number,
-  boolean, array or hash with string keys.
+  boolean, array or hash with string keys. Anything JSON would read back differently,
+  such as symbol keys or a date, is refused, because a subscriber would see one value
+  and a replay another.
+- **A declaration can't be skipped.** A subclass inherits its parent's fields, and data
+  that names a declared field with a string key is refused rather than stored in clear.
+- **The event store browser at `/res` reads through `Shreddable::DisplayMapper`**, which
+  shows each shreddable field as `[shreddable]`.
 - **Every aggregate includes `Shreddable::AggregateRoot`** in place of `AggregateRoot`. Its
   apply strategy hands each `on` handler a copy with every declared field set to
   `Shreddable::Value.removed`. The aggregate still publishes the real event, so
