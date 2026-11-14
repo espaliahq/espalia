@@ -170,6 +170,8 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
     assert_equal [], map(@q2)[:positions].find { it[:position_id] == seat }[:backfill_for_ids]
     assert_equal "This scenario has nobody leaving by that id",
                  refusal(Operations::TeamPlanning::WithdrawDeparture, scenario_id: @plan_id, person_id: @ada.id)
+    assert_equal "This scenario sets that departure itself: clear it to follow its parent",
+                 refusal(Operations::TeamPlanning::WithdrawDeparture, scenario_id: @q1, person_id: @ada.id)
   end
 
   should "drop the link when the departure is cleared, and keep a pinned departure gone in a later step" do
