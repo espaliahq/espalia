@@ -28,12 +28,12 @@ class Operations::TeamPlanning::SetPosition < Operations::Base
   def perform
     position_id = params[:position_id].nil? ? SecureRandom.uuid_v7 : uuid!(:position_id)
     end_state = { role_id: uuid!(:role_id), level_id: uuid!(:level_id), unit_id: uuid!(:unit_id), fte: params[:fte], basis: params[:basis] }
-    plan = set_change!(POSITION, subject_id: position_id, end_state:) do |locked|
-      known_position!(locked, position_id) unless params[:position_id].nil?
+    set_change!(POSITION, subject_id: position_id, end_state:) do |plan|
+      known_position!(plan, position_id) unless params[:position_id].nil?
       role_and_level!(end_state)
     end
 
-    stored = plan.changes_in(scenario_id!(:scenario_id)).last.data.slice(*POSITION::IDS, :fte, :basis)
+    stored = POSITION.end_state(end_state)
     { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), position_id:, **stored,
       budget: ::TeamPlanning::Baseline::Position.budget_of(stored[:basis]) }
   end
