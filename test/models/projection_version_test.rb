@@ -95,9 +95,100 @@ class ProjectionVersionTest < ActiveSupport::TestCase
       other&.close
     end
 
+    context ".unless_rebuilding" do
+      setup do
+        config = ActiveRecord::Base.connection_db_config.configuration_hash
+        @other = PG.connect({ dbname: config[:database], user: config[:username], password: config[:password],
+                              host: config[:host], port: config[:port] }.compact)
+        @key = ProjectionVersion.lock_key("some/projection")
+      end
+
+      teardown { @other&.close }
+
+      should "run the write while no rebuild holds the projection, and keep one from starting meanwhile" do
+        held = ProjectionVersion.unless_rebuilding("some/projection") do
+          @other.exec("SELECT pg_try_advisory_lock(#{@key})").getvalue(0, 0)
+        end
+
+        assert_equal "f", held
+        assert_equal "t", @other.exec("SELECT pg_try_advisory_lock(#{@key})").getvalue(0, 0), "the write lets go afterwards"
+      end
+
+      should "refuse at once while a rebuild holds any of the projections, saying to try again" do
+        @other.exec("SELECT pg_advisory_lock(#{@key})")
+        ran = false
+
+        error = assert_raises(ProjectionVersion::Rebuilding) do
+          ProjectionVersion.unless_rebuilding("other/projection", "some/projection") { ran = true }
+        end
+
+        assert_not ran
+        assert_equal "The Org Graph is being rebuilt; try again in a minute.", error.message
+        @other.exec("SELECT pg_advisory_unlock(#{@key})")
+        other_key = ProjectionVersion.lock_key("other/projection")
+        assert_equal "t", @other.exec("SELECT pg_try_advisory_lock(#{other_key})").getvalue(0, 0),
+                     "the lock it did take is let go"
+      end
+
+      should "let go each time under the query cache, which would answer a repeated unlock unrun" do
+        ActiveRecord::Base.cache do
+          2.times { ProjectionVersion.unless_rebuilding("some/projection") { } }
+        end
+
+        assert_equal "t", @other.exec("SELECT pg_try_advisory_lock(#{@key})").getvalue(0, 0)
+      end
+
+      should "let go once the transaction a failed statement aborted rolls back" do
+        assert_raises(ActiveRecord::StatementInvalid) do
+          ActiveRecord::Base.transaction(requires_new: true) do
+            ProjectionVersion.unless_rebuilding("some/projection") { ActiveRecord::Base.connection.execute("SELECT 1/0") }
+          end
+        end
+
+        assert_equal "t", @other.exec("SELECT pg_try_advisory_lock(#{@key})").getvalue(0, 0)
+      end
+    end
+
+    should "hold every projection's lock through .with_operation_locks" do
+      config = ActiveRecord::Base.connection_db_config.configuration_hash
+      other = PG.connect({ dbname: config[:database], user: config[:username], password: config[:password],
+                           host: config[:host], port: config[:port] }.compact)
+      free = ->(name) { other.exec("SELECT pg_try_advisory_lock_shared(#{ProjectionVersion.lock_key(name)})").getvalue(0, 0) == "t" }
+
+      ProjectionVersion.with_operation_locks(%w[b/projection a/projection]) do
+        assert_not free.call("a/projection")
+        assert_not free.call("b/projection")
+      end
+    ensure
+      other&.close
+    end
+
     should "reject a negative or non-integer version" do
       assert_raises(ArgumentError) { ProjectionVersion.promote!("some/projection", -1) }
       assert_raises(ArgumentError) { ProjectionVersion.promote!("some/projection", "5") }
     end
+  end
+end
+
+# A real COMMIT needs a transaction of its own, outside the one each
+# transactional test runs in. These tests take locks and write no rows.
+class ProjectionVersionCommitTest < ActiveSupport::TestCase
+  self.use_transactional_tests = false
+
+  should "let go of the rebuild guard once a caller that rescued the failure commits the aborted transaction" do
+    config = ActiveRecord::Base.connection_db_config.configuration_hash
+    other = PG.connect({ dbname: config[:database], user: config[:username], password: config[:password],
+                         host: config[:host], port: config[:port] }.compact)
+    key = ProjectionVersion.lock_key("some/projection")
+
+    ActiveRecord::Base.transaction do
+      ProjectionVersion.unless_rebuilding("some/projection") { ActiveRecord::Base.connection.execute("SELECT 1/0") }
+    rescue ActiveRecord::StatementInvalid
+      nil
+    end
+
+    assert_equal "t", other.exec("SELECT pg_try_advisory_lock(#{key})").getvalue(0, 0)
+  ensure
+    other&.close
   end
 end

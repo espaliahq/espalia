@@ -65,26 +65,29 @@ class Hris::LevelHandover
   # @return [Comparison] what was written
   # @raise [Refused] when the comparison changed, a unit is unresolved, or the
   #   counts over the brake were not confirmed
+  # @raise [ProjectionVersion::Rebuilding] while the units or members are rebuilt
   def hand_over!(field_id:, matches:, resolutions:, fingerprint:, actor:, confirm: {})
-    comparison = compare(field_id:, matches:, resolutions:)
-    raise Refused, "The HRIS or the level has changed since that comparison: compare again" unless
-      comparison.fingerprint == fingerprint
-    raise Refused, "Match or resolve every unit first: #{comparison.unresolved.join(', ')}" if comparison.unresolved.any?
-    raise Refused, "These units can't retire yet: #{comparison.blocked.map { "#{it[:name]} (#{it[:reason]})" }.join(', ')}" if
-      comparison.blocked.any?
-    confirm_counts!(comparison, confirm) if comparison.over_brake?
+    ProjectionVersion.unless_rebuilding(*Hris::LevelMirror::PLANNED_FROM) do
+      comparison = compare(field_id:, matches:, resolutions:)
+      raise Refused, "The HRIS or the level has changed since that comparison: compare again" unless
+        comparison.fingerprint == fingerprint
+      raise Refused, "Match or resolve every unit first: #{comparison.unresolved.join(', ')}" if comparison.unresolved.any?
+      raise Refused, "These units can't retire yet: #{comparison.blocked.map { "#{it[:name]} (#{it[:reason]})" }.join(', ')}" if
+        comparison.blocked.any?
+      confirm_counts!(comparison, confirm) if comparison.over_brake?
 
-    cause_id = SecureRandom.uuid_v7
-    ActiveRecord::Base.transaction do
-      resolve(comparison, matches.to_h.stringify_keys, resolutions.to_h.stringify_keys, actor, cause_id)
-      OrgGraph::StructureCommandHandler.new(actor:, cause_id:).hand_over_level(
-        @level.id, provider, field: comparison.field.id, effective_on: @today,
-        matches: matches.to_h.stringify_keys.to_h { |unit_id, key| [ unit_id, "#{comparison.field.id}/#{key}" ] }
-      )
-      take_memberships(comparison, actor, cause_id)
-      mirror(comparison, cause_id)
+      cause_id = SecureRandom.uuid_v7
+      ActiveRecord::Base.transaction do
+        resolve(comparison, matches.to_h.stringify_keys, resolutions.to_h.stringify_keys, actor, cause_id)
+        OrgGraph::StructureCommandHandler.new(actor:, cause_id:).hand_over_level(
+          @level.id, provider, field: comparison.field.id, effective_on: @today,
+          matches: matches.to_h.stringify_keys.to_h { |unit_id, key| [ unit_id, "#{comparison.field.id}/#{key}" ] }
+        )
+        take_memberships(comparison, actor, cause_id)
+        mirror(comparison, cause_id)
+      end
+      comparison
     end
-    comparison
   end
 
   # @return [Handback] what handing the level back would keep
@@ -102,21 +105,24 @@ class Hris::LevelHandover
   # @param actor [AuthorizationContext]
   # @return [Handback]
   # @raise [Refused] when the level changed since the comparison
+  # @raise [ProjectionVersion::Rebuilding] while the units or members are rebuilt
   def hand_back!(fingerprint:, actor:)
-    handback = compare_handback
-    raise Refused, "The level has changed since that comparison: compare again" unless handback.fingerprint == fingerprint
+    ProjectionVersion.unless_rebuilding(*Hris::LevelMirror::PLANNED_FROM) do
+      handback = compare_handback
+      raise Refused, "The level has changed since that comparison: compare again" unless handback.fingerprint == fingerprint
 
-    cause_id = SecureRandom.uuid_v7
-    ActiveRecord::Base.transaction do
-      OrgGraph::StructureCommandHandler.new(actor:, cause_id:).hand_back_level(@level.id, effective_on: @today)
-      people = OrgGraph::CommandHandler.new(actor:, cause_id:)
-      OrgMembership.where(unit_id: units.map(&:id), provider: handback.provider).find_each do |membership|
-        people.set_membership(membership.person_id, membership.unit_id, provider: OrgGraph::StructureAggregate::ESPALIA,
-                              allocation: membership.allocation, role: membership.role, effective_on: @today)
+      cause_id = SecureRandom.uuid_v7
+      ActiveRecord::Base.transaction do
+        OrgGraph::StructureCommandHandler.new(actor:, cause_id:).hand_back_level(@level.id, effective_on: @today)
+        people = OrgGraph::CommandHandler.new(actor:, cause_id:)
+        OrgMembership.where(unit_id: units.map(&:id), provider: handback.provider).find_each do |membership|
+          people.set_membership(membership.person_id, membership.unit_id, provider: OrgGraph::StructureAggregate::ESPALIA,
+                                allocation: membership.allocation, role: membership.role, effective_on: @today)
+        end
+        Hris::LevelMirror.forget_parent_readings([ @level ])
       end
-      Hris::LevelMirror.forget_parent_readings([ @level ])
+      handback
     end
-    handback
   end
 
   # @return [Boolean] whether Espalia holds the level, so it can be handed over
