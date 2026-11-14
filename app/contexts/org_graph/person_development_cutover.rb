@@ -81,7 +81,7 @@ class OrgGraph::PersonDevelopmentCutover
     changes = Hash.new { |all, kind| all[kind] = [] }
     failed = {}
     Person.hris_managed.ids.sort.each do |person_id|
-      ActiveRecord::Base.transaction(requires_new: true) { feed.reconcile(person_id) }.each { changes[it] << person_id }
+      ActiveRecord::Base.transaction(requires_new: true) { feed.reconcile(person_id) }.uniq.each { changes[it] << person_id }
     rescue => e
       failed[person_id] = e.message
     end
@@ -101,7 +101,10 @@ class OrgGraph::PersonDevelopmentCutover
     feed = OrgGraph::PersonDevelopmentFeed.new(@tenant)
     AuditMetadata.with(acting_via: :system, correlation_id: SecureRandom.uuid_v7) do
       AuditMetadata.wrap_event_store do
-        report.changes.fetch(:clear_manager, []).each { feed.reconcile(it) }
+        report.changes.fetch(:clear_manager, []).each do |person_id|
+          unexpected = feed.reconcile(person_id) - EXPECTED
+          raise "#{person_id} changed since the dry run (#{unexpected.join(', ')}); run it again" if unexpected.any?
+        end
       end
     end
     report.with(applied: true)
