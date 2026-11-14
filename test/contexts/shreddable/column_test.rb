@@ -153,6 +153,21 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       assert_equal NOTE, note.reveal
     end
 
+    should "seal afresh a value whose publish rolled back, rather than copy it under the lost key" do
+      event = NoteWritten.new(data: { plan_id: @plan_id, note: NOTE })
+      ActsAsTenant.with_tenant(@tenant) do
+        Note.transaction(requires_new: true) do
+          @event_store.with_metadata(tenant_id: @tenant.id) do
+            @event_store.publish(event, stream_name: "tenant-#{@tenant.id}/PlanNotes-#{@plan_id}")
+          end
+          raise ActiveRecord::Rollback
+        end
+        Note.create!(tenant_id: @tenant.id, plan_id: @plan_id, note: event.data[:note])
+      end
+
+      assert_equal NOTE, note.reveal
+    end
+
     should "copy a value already in its stored form, and forget a clear one on reload or in a copy" do
       write_note
       ActsAsTenant.with_tenant(@tenant) do
