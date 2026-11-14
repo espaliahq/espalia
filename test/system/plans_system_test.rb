@@ -36,7 +36,7 @@ class PlansSystemTest < ApplicationSystemTestCase
         assert_text "You're a viewer."
         assert_text "Based on the Org Graph on 14 November 2026"
         within("table") do
-          assert_text "Baseline"
+          assert_text "Today"
           assert_text "Read only"
           assert_text "As of 14 Nov 2026"
           assert_text "then Q1 hires"

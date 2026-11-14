@@ -30,7 +30,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       get plan_path(@plan_id)
       assert_response :success
       assert_includes response.body, "Private to 2 members"
-      assert_includes response.body, "Baseline"
+      assert_includes response.body, "Today"
       assert_includes response.body, "Q1 hires"
       assert_includes response.body, "Erin Editor"
       assert_includes response.body, "your organisation&#39;s defaults"

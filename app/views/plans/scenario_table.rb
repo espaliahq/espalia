@@ -48,7 +48,7 @@ class Views::Plans::ScenarioTable < Views::Base
         div(style: ("padding-left: #{depth * 1.25}rem" if depth.positive?)) do
           p(class: "font-medium text-default") do
             span(class: "text-muted font-normal") { "#{scenario[:relation]} " } if scenario[:relation]
-            plain(baseline ? "Baseline" : scenario[:name])
+            plain(baseline ? "Today" : scenario[:name])
           end
           p(class: "text-muted") { "The Org Graph. Nothing set by this plan." } if baseline
           div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
