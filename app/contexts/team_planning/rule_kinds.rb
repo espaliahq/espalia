@@ -35,19 +35,32 @@ class TeamPlanning::RuleKinds
     #
     # @param kind [Class<TeamPlanning::RuleKind>]
     # @raise [ArgumentError] for a kind {TeamPlanning::RuleKinds} can't hold
-    def register(kind) = @registered |= [ admit!(kind) ]
+    def register(kind)
+      @registered |= [ admit!(kind) ]
+      kinds
+    rescue ArgumentError
+      unregister(kind)
+      raise
+    end
 
     # @param kind [Class<TeamPlanning::RuleKind>]
     def unregister(kind) = @registered.delete(kind)
 
     private
 
-    def kinds = (BUILT_IN.map(&:constantize) + @registered).to_h { [ admit!(it).rule_name, it ] }
+    def kinds
+      (BUILT_IN.map(&:constantize) + @registered).each_with_object({}) do |kind, by_name|
+        name = admit!(kind).rule_name
+        raise ArgumentError, "#{kind} names #{name}, which #{by_name[name]} already holds" if by_name.key?(name)
+
+        by_name[name] = kind
+      end
+    end
 
     def admit!(kind)
       raise ArgumentError, "#{kind} is not a kind of rule" unless kind.is_a?(Class) && kind < TeamPlanning::RuleKind
       raise ArgumentError, "#{kind} must name its rule in snake_case" unless kind.rule_name.to_s.match?(NAME)
-      raise ArgumentError, "#{kind} holds a shreddable value, which waits on #213" if kind.shreddable?
+      raise ArgumentError, "#{kind} holds a shreddable value, which waits on shredding: https://github.com/espaliahq/espalia/issues/213" if kind.shreddable?
 
       kind
     end

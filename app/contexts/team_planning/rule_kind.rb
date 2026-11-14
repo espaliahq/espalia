@@ -32,7 +32,8 @@ class TeamPlanning::RuleKind
   def self.check(value) = value
 
   # A shreddable value is stored encrypted under the plan's key, so it can be
-  # shredded. The shredding comes with Team Planning 2.2 (#213); until then
+  # shredded. The shredding comes with Team Planning 2.2
+  # (https://github.com/espaliahq/espalia/issues/213); until then
   # {TeamPlanning::RuleKinds} refuses a kind that declares one.
   #
   # @return [Boolean]

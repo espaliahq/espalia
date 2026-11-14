@@ -33,7 +33,18 @@ class TeamPlanning::RuleKindsTest < ActiveSupport::TestCase
   should "refuse a kind with a shreddable value until shredding lands" do
     error = assert_raises(ArgumentError) { TeamPlanning::RuleKinds.register(kind("test_rate", shreddable: true)) }
 
-    assert_match "#213", error.message
+    assert_match "issues/213", error.message
+  end
+
+  should "refuse a second kind with a name another kind holds, and keep the first" do
+    first = kind("test_cap")
+    TeamPlanning::RuleKinds.register(first)
+
+    error = assert_raises(ArgumentError) { TeamPlanning::RuleKinds.register(kind("test_cap")) }
+    assert_match "already holds", error.message
+    assert_equal first, TeamPlanning::RuleKinds.fetch("test_cap")
+  ensure
+    TeamPlanning::RuleKinds.unregister(first)
   end
 
   should "refuse a kind whose name isn't snake_case, and a class that isn't a kind" do
