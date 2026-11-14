@@ -1,0 +1,24 @@
+{
+  "name": "assessments_dismiss_evidence_suggestion",
+  "description": "Dismiss a placement suggestion for a piece of feedback / evidence, optionally saying why. The same capability × level is not suggested for that item again.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "suggestion_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "suggestion_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

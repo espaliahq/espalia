@@ -1,0 +1,32 @@
+{
+  "name": "frameworks_amend_suggestion",
+  "description": "Revise your own pending framework suggested edit (author only). `rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "suggestion_id": {
+        "type": "string"
+      },
+      "suggested_value": {
+        "type": "string"
+      },
+      "rationale": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "suggestion_id",
+      "suggested_value"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

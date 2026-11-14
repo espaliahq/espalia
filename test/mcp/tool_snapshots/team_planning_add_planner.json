@@ -1,0 +1,23 @@
+{
+  "name": "team_planning_add_planner",
+  "description": "Make an active person with an account in this organisation a planner, so they may create Team Planning plans. It opens no plan they aren't a member of. Admins already may create plans. Returns the list as team_planning_planners reads it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "person_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

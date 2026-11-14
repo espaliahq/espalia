@@ -1,0 +1,50 @@
+{
+  "name": "assessments_confirm_carried_ratings",
+  "description": "Confirm ratings carried forward from the last cycle, unchanged, as this cycle's rating — the same as re-picking each value. perspective self confirms your own ratings, manager the manager ratings you give. Only cells whose value on that side is still carried are confirmed; the rest are listed under skipped with the reason. To change a value use assessments_rate_self or assessments_rate_as_manager instead.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "perspective": {
+        "type": "string",
+        "enum": [
+          "self",
+          "manager"
+        ]
+      },
+      "cells": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "properties": {
+            "capability_stable_id": {
+              "type": "string"
+            },
+            "level_ordinal": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "capability_stable_id",
+            "level_ordinal"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "assignment_id",
+      "perspective",
+      "cells"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

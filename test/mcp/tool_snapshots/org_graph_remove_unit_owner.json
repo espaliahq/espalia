@@ -1,0 +1,30 @@
+{
+  "name": "org_graph_remove_unit_owner",
+  "description": "Remove a person from a live unit's owners in the Org Graph, from effective_on (today by default). This takes away their rights over the unit and the units beneath it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "unit_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "unit_id",
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

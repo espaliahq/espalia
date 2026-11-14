@@ -1,0 +1,116 @@
+{
+  "name": "assessments_respond_to_evidence_request",
+  "description": "Respond to a feedback / evidence request by providing the requested feedback. `content` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "request_id": {
+        "type": "string"
+      },
+      "evidence_type": {
+        "type": "string",
+        "enum": [
+          "peer_feedback",
+          "manager_feedback",
+          "customer_feedback",
+          "impact",
+          "project_outcome",
+          "code_review",
+          "design_review",
+          "incident_response",
+          "presentation",
+          "mentoring",
+          "observation",
+          "other"
+        ]
+      },
+      "content": {
+        "type": "string"
+      },
+      "valence": {
+        "type": "string",
+        "enum": [
+          "strongly_demonstrated",
+          "demonstrated",
+          "growth_area",
+          "significant_growth_area"
+        ]
+      },
+      "custom_type_label": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "external_reference": {
+        "type": "object",
+        "description": "Optional pointer to a supporting source in an external system.",
+        "properties": {
+          "system": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[_-][a-z0-9]+)*$",
+            "examples": [
+              "github",
+              "gitlab",
+              "linear",
+              "jira",
+              "slack",
+              "notion",
+              "google_doc",
+              "figma",
+              "other",
+              "chip"
+            ],
+            "description": "Originating system, as a lowercase slug."
+          },
+          "url": {
+            "type": "string",
+            "description": "An http(s) link to the source."
+          },
+          "external_id": {
+            "type": "string",
+            "description": "The item's ID within that system."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Free-form additional fields."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "request_id",
+      "evidence_type",
+      "content",
+      "valence"
+    ],
+    "additionalProperties": false,
+    "if": {
+      "properties": {
+        "evidence_type": {
+          "const": "other"
+        }
+      },
+      "required": [
+        "evidence_type"
+      ]
+    },
+    "then": {
+      "required": [
+        "custom_type_label"
+      ],
+      "properties": {
+        "custom_type_label": {
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    }
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

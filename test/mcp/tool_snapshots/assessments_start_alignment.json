@@ -1,0 +1,27 @@
+{
+  "name": "assessments_start_alignment",
+  "description": "Start the alignment conversation for one of your direct reports — against their own role, or against another role or level with as_role_id / as_level_ordinal. Discloses your ratings on that role's cells to the report and freezes both parties' ratings there.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "as_role_id": {
+        "type": "string"
+      },
+      "as_level_ordinal": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "assignment_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

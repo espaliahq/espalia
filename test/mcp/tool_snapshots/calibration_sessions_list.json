@@ -1,0 +1,22 @@
+{
+  "name": "calibration_sessions_list",
+  "description": "List calibration sessions you facilitate (admins see all), optionally filtered to one assessment cycle. Archived sessions are omitted unless include_archived is true.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "cycle_id": {
+        "type": "string"
+      },
+      "include_archived": {
+        "type": "boolean"
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

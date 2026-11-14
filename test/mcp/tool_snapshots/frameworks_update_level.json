@@ -1,0 +1,55 @@
+{
+  "name": "frameworks_update_level",
+  "description": "Update a level's title, code, or entry-level flag (owner/editor/lead only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "level_id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "code": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "is_entry": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "framework_id",
+      "level_id"
+    ],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "title"
+        ]
+      },
+      {
+        "required": [
+          "code"
+        ]
+      },
+      {
+        "required": [
+          "is_entry"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

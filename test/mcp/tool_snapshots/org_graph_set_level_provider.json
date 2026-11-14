@@ -1,0 +1,34 @@
+{
+  "name": "org_graph_set_level_provider",
+  "description": "Set who supplies an Org Graph structure level from today: \"espalia\", or the connected HRIS reading the level's units from field, which an HRIS needs. Only a level with no live units; to move a level that holds units, compare and hand it over with integrations_hris_level_handover. Levels an HRIS supplies sit above the ones Espalia holds.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "level_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "provider": {
+        "type": "string",
+        "enum": [
+          "hibob",
+          "espalia"
+        ]
+      },
+      "field": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "level_id",
+      "provider"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

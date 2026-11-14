@@ -1,0 +1,45 @@
+{
+  "name": "assessments_align",
+  "description": "Record the aligned (agreed) frequency for one capability × level. Pass as_role_id when aligning against another role (a started role lens); the cell must be one that role reads.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "frequency": {
+        "type": "string",
+        "enum": [
+          "none",
+          "some",
+          "occasional",
+          "consistent"
+        ]
+      },
+      "comment": {
+        "type": "string"
+      },
+      "as_role_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "capability_stable_id",
+      "level_ordinal",
+      "frequency"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "name": "integrations_hand_over_hris_level",
+  "description": "Hand an Org Graph structure level to an HRIS field, as integrations_hris_level_handover compared it. Pass the same matches and resolutions and that comparison's fingerprint; a changed HRIS or level refuses it. In one change it records the field as the level's source, gives each matched unit its value, succeeds or retires every other unit, and moves memberships to agree with the HRIS. When the comparison is over the brake, pass the memberships it ends and the units it retires as confirm_memberships_ended and confirm_units_retired, exactly as the comparison gave them.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "level_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "field_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "matches": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "resolutions": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "fingerprint": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "confirm_memberships_ended": {
+        "type": "integer"
+      },
+      "confirm_units_retired": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "level_id",
+      "field_id",
+      "matches",
+      "fingerprint"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

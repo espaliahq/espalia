@@ -1,0 +1,36 @@
+{
+  "name": "frameworks_suggest_delete",
+  "description": "Propose deleting a framework entity (capability or example) as a pending suggestion — nothing is removed until a reviewer approves. `rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "entity_type": {
+        "type": "string",
+        "enum": [
+          "role_illustration",
+          "capability"
+        ]
+      },
+      "entity_id": {
+        "type": "string"
+      },
+      "rationale": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "entity_type",
+      "entity_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

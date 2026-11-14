@@ -1,0 +1,35 @@
+{
+  "name": "frameworks_archive_illustration",
+  "description": "Archive an example (role illustration) — removed directly with approval rights in editing mode, else proposed as a suggestion.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "illustration_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "editing",
+          "suggesting"
+        ]
+      }
+    },
+    "required": [
+      "framework_id",
+      "illustration_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

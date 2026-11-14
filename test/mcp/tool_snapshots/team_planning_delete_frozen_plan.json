@@ -1,0 +1,27 @@
+{
+  "name": "team_planning_delete_frozen_plan",
+  "description": "Delete a frozen Team Planning plan, one with no editor left in the organisation, without opening it. It cannot be restored. Give the reason; it is kept with who deleted it. Refused, as an unknown plan, unless the plan is frozen and the caller a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false
+  }
+}

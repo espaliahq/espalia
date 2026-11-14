@@ -1,0 +1,59 @@
+{
+  "name": "frameworks_update_role",
+  "description": "Update a role's name, code, or track (owner/editor/lead only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "role_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "code": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "track": {
+        "type": "string",
+        "enum": [
+          "ic",
+          "management"
+        ]
+      }
+    },
+    "required": [
+      "framework_id",
+      "role_id"
+    ],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "name"
+        ]
+      },
+      {
+        "required": [
+          "code"
+        ]
+      },
+      {
+        "required": [
+          "track"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

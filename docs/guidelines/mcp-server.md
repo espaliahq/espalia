@@ -425,7 +425,7 @@ Two automated guards:
 - **`Operations::Registry` hygiene** — `test/operations/registry_test.rb`
   asserts no anonymous subclasses, every op has a description, valid
   category + approval, unique tool name.
-- **Tool registry snapshot** — `test/mcp/tool_registry_snapshot_test.rb`
+- **Tool registry snapshot**: `test/mcp/tool_registry_snapshot_test.rb` against one file per tool in `test/mcp/tool_snapshots/`; `UPDATE_SNAPSHOTS=1` rewrites them
   pins the full tool surface (name + description + JSON schema +
   annotations). Any add/remove/rename produces a diff in the PR that
   introduces it; intentional changes update the snapshot in the same
@@ -879,7 +879,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `test/operations/registry_test.rb` | Registry hygiene |
 | `test/operations/base_test.rb` | Operations DSL — parameters, `requires_any_of`, `requires_when` (+ `must_be:`), `forbids_when`, `dependent_required`, `allow_blank`, `schema:` normalisation |
 | `test/mcp/operation_to_tool_test.rb` | Schema conversion rules, incl. `anyOf`/`allOf`, `if`/`then`(/`not`), `dependentRequired`, `const`, `minLength`, and string-vs-symbol `schema:` fragments |
-| `test/mcp/tool_registry_snapshot_test.rb` | Tool surface snapshot (drift guard) |
+| `test/mcp/tool_registry_snapshot_test.rb` | Tool surface snapshot (drift guard), one file per tool in `test/mcp/tool_snapshots/` |
 | `test/integration/mcp_server_test.rb` | JSON-RPC unit coverage of tools/* and resources/* |
 | `test/integration/mcp_discovery_test.rb` | Well-known docs + DCR + WWW-Authenticate header |
 | `test/integration/mcp_in_app_approval_test.rb` | Pending approval lifecycle |

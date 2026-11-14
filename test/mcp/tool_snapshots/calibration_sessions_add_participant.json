@@ -1,0 +1,25 @@
+{
+  "name": "calibration_sessions_add_participant",
+  "description": "Add a participating rater to a draft calibration session (auto-removes them from the calibrant population if present).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id",
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "assessments_cancel_evidence_request",
+  "description": "Cancel a pending feedback / evidence request you created.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "request_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "request_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

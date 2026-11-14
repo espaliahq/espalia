@@ -1,0 +1,23 @@
+{
+  "name": "assessments_feedback_to_place",
+  "description": "List feedback waiting for you to place on a capability: items about you, and items about the people you place feedback for. scope \"team\" (the default) covers your direct reports and the assessments you hold a rating delegation for; \"org\" adds everyone deeper in your org. counts gives both sizes, so you can tell when more waits beyond your team. Each item carries its assignment_id; place one with assessments_add_evidence_link, or read its pending suggestions with assessments_evidence_suggestions_list.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "scope": {
+        "type": "string",
+        "enum": [
+          "team",
+          "org"
+        ]
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

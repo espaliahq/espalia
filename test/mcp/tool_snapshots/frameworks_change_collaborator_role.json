@@ -1,0 +1,107 @@
+{
+  "name": "frameworks_change_collaborator_role",
+  "description": "Change a collaborator's framework-wide role on a framework (e.g. viewer → editor). Only the framework-wide roles (owner/editor/collaborator/viewer) can be changed in place: to move a person to or from a scoped lead role, call frameworks_remove_collaborator for the old role then frameworks_add_collaborator for the new one.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "old_role": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "editor",
+          "collaborator",
+          "viewer"
+        ]
+      },
+      "new_role": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "editor",
+          "collaborator",
+          "viewer"
+        ]
+      },
+      "scope_type": {
+        "type": "string",
+        "enum": [
+          "role_family",
+          "role",
+          "capability_category",
+          "capability"
+        ]
+      },
+      "scope_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "person_id",
+      "old_role",
+      "new_role"
+    ],
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "new_role": {
+              "enum": [
+                "owner",
+                "editor",
+                "collaborator",
+                "viewer"
+              ]
+            }
+          },
+          "required": [
+            "new_role"
+          ]
+        },
+        "then": {
+          "not": {
+            "required": [
+              "scope_type"
+            ]
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "new_role": {
+              "enum": [
+                "owner",
+                "editor",
+                "collaborator",
+                "viewer"
+              ]
+            }
+          },
+          "required": [
+            "new_role"
+          ]
+        },
+        "then": {
+          "not": {
+            "required": [
+              "scope_id"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

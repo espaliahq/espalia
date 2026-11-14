@@ -1,0 +1,67 @@
+{
+  "name": "tenants_update_theme",
+  "description": "Update the active tenant's theme: default, bento, or custom with its own colour-role values (light and dark hex) and Google font. custom_theme merges per role; a blank value restores the default for that role. product_name is what this tenant calls the platform; blank restores the instance default. custom_domain is the tenant's own sign-in host (domain or subdomain); blank clears it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "theme": {
+        "type": "string",
+        "enum": [
+          "default",
+          "bento",
+          "custom"
+        ]
+      },
+      "custom_theme": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "object",
+            "properties": {
+              "light": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$|^$"
+              },
+              "dark": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$|^$"
+              }
+            },
+            "additionalProperties": false
+          },
+          "nav-surface": {
+            "type": "object",
+            "properties": {
+              "light": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$|^$"
+              },
+              "dark": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$|^$"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "font_family": {
+        "type": "string"
+      },
+      "product_name": {
+        "type": "string"
+      },
+      "custom_domain": {
+        "type": "string"
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

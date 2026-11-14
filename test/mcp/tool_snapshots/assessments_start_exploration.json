@@ -1,0 +1,42 @@
+{
+  "name": "assessments_start_exploration",
+  "description": "Declare that a person is exploring another role or level — an intent both they and their manager see, not a rating. Name the target like a lens: as_role_id (blank = their own role) and/or as_level_ordinal; it can't be the role and level they hold, and only one exploration per role is open at a time. The other party is notified.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "as_role_id": {
+        "type": "string"
+      },
+      "as_level_ordinal": {
+        "type": "integer"
+      },
+      "note": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id"
+    ],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "as_role_id"
+        ]
+      },
+      {
+        "required": [
+          "as_level_ordinal"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

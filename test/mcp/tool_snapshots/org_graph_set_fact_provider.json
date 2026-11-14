@@ -1,0 +1,50 @@
+{
+  "name": "org_graph_set_fact_provider",
+  "description": "Set who supplies one kind of person fact from today: \"espalia\", or the connected HRIS. Facts: employment_status, title, level, manager, cost_centre, site, employment. For an HRIS, fields names the HRIS field to read a part from (cost_centre: cost_centre; site: country); leave it out to keep the fields already chosen. Moving a fact to another provider clears its fields. Writes nothing when nothing changes.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "fact": {
+        "type": "string",
+        "enum": [
+          "employment_status",
+          "title",
+          "level",
+          "manager",
+          "cost_centre",
+          "site",
+          "employment"
+        ]
+      },
+      "provider": {
+        "type": "string",
+        "enum": [
+          "hibob",
+          "espalia"
+        ]
+      },
+      "fields": {
+        "type": "object",
+        "properties": {
+          "cost_centre": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "fact",
+      "provider"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "assessments_feedback_recipients",
+  "description": "Find colleagues you can give feedback to: people with a framework assignment, by name or email, or your manager, peers and reports when no query is given. Each row carries the assignment_id to pass to assessments_record_evidence; a peer cannot read the assessment itself.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer"
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

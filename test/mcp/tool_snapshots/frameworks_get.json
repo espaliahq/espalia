@@ -1,0 +1,21 @@
+{
+  "name": "frameworks_get",
+  "description": "Fetch one framework's top-level structure (role families, categories, child IDs and names) and every published version, newest first, with when and by whom it was published.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

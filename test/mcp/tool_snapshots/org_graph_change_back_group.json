@@ -1,0 +1,23 @@
+{
+  "name": "org_graph_change_back_group",
+  "description": "Change back every change made under one cause, by the cause_id of a group from org_graph_activity. Reverses it in every unit it touched, not just the one read, as new changes; history keeps both. Refused as a whole, with the reason, unless every part can be changed back.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "cause_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "cause_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

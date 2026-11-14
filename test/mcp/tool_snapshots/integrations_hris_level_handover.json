@@ -1,0 +1,38 @@
+{
+  "name": "integrations_hris_level_handover",
+  "description": "Compare an Org Graph structure level with an HRIS field before handing the level to the HRIS. Each unit gets a suggested value by name, never a match: pass the values a person confirmed in matches (unit id => value key), and for each unit left over a resolution (unit id => a matched unit's id to succeed into, or \"retire\"). Returns the units, the field's values, how many people differ, are blank, were added by hand or would join, the units still unresolved, the counts the brake weighs, and a fingerprint integrations_hand_over_hris_level needs. For a level the HRIS already supplies, says what handing it back would keep, with its fingerprint. Reads the HRIS live; writes nothing.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "level_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "field_id": {
+        "type": "string"
+      },
+      "matches": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "resolutions": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "level_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

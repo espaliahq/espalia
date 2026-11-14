@@ -1,0 +1,59 @@
+{
+  "name": "org_graph_remove_member",
+  "description": "End a person's membership of a unit in the Org Graph; effective_on (today by default) is their last day in it. A membership an HRIS supplies ends in the HRIS, not here.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "plan_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan whose change this applies. Refused unless you may apply that plan's changes"
+      },
+      "plan_change_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan change this applies; needs plan_id"
+      },
+      "cause_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "groups this with the plan's other changes, to change back together; needs plan_id"
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "unit_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "person_id",
+      "unit_id"
+    ],
+    "additionalProperties": false,
+    "dependentRequired": {
+      "plan_change_id": [
+        "plan_id"
+      ],
+      "cause_id": [
+        "plan_id"
+      ]
+    }
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

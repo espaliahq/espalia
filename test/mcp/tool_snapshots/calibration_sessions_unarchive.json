@@ -1,0 +1,21 @@
+{
+  "name": "calibration_sessions_unarchive",
+  "description": "Restore an archived calibration session to the default list (it stays closed). Only closed sessions can be archived or restored.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

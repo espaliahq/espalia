@@ -1,0 +1,43 @@
+{
+  "name": "frameworks_add_capability",
+  "description": "Add a capability to a category, binding it to one or more roles (owner/editor/lead only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "category_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "role_ids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "minItems": 1,
+        "description": "At least one role id to bind the capability to — a capability bound to no role is hidden from the role-filtered matrix"
+      }
+    },
+    "required": [
+      "framework_id",
+      "category_id",
+      "name",
+      "role_ids"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

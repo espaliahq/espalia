@@ -1,0 +1,25 @@
+{
+  "name": "frameworks_remove_capability_role_binding",
+  "description": "Remove a capability-role binding, un-scoping the capability from that role (owner/editor/lead only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "binding_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "binding_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

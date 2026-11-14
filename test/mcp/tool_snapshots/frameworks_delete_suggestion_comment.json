@@ -1,0 +1,28 @@
+{
+  "name": "frameworks_delete_suggestion_comment",
+  "description": "Delete a comment on a framework suggestion's thread (soft delete — preserves reply chains; author or tenant admin).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "comment_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "comment_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

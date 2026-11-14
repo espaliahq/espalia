@@ -1,0 +1,23 @@
+{
+  "name": "team_planning_remove_planner",
+  "description": "Stop a person being a planner, so they may no longer create Team Planning plans. They stay a member of the plans they are in. An admin's right can't be removed this way. Returns the list as team_planning_planners reads it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "person_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

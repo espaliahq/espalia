@@ -1,0 +1,41 @@
+{
+  "name": "frameworks_add_role",
+  "description": "Add a role to a role family (owner/editor/lead only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "role_family_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "code": {
+        "type": "string"
+      },
+      "track": {
+        "type": "string",
+        "enum": [
+          "ic",
+          "management"
+        ]
+      }
+    },
+    "required": [
+      "framework_id",
+      "role_family_id",
+      "name",
+      "code",
+      "track"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

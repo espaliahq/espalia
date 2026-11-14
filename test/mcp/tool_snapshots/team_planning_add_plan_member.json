@@ -1,0 +1,35 @@
+{
+  "name": "team_planning_add_plan_member",
+  "description": "Make an active person a member of a Team Planning plan as an editor or a viewer, or change a member's role. A plan keeps at least one editor. Refused, as an unknown plan, unless the caller is one of its editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "editor",
+          "viewer"
+        ]
+      }
+    },
+    "required": [
+      "plan_id",
+      "person_id",
+      "role"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

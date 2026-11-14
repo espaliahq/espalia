@@ -1,0 +1,21 @@
+{
+  "name": "calibration_sessions_archive",
+  "description": "Archive a closed calibration session — hides it from the default list; nothing is deleted and calibration_sessions_unarchive restores it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

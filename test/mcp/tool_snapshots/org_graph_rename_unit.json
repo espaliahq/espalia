@@ -1,0 +1,61 @@
+{
+  "name": "org_graph_rename_unit",
+  "description": "Rename a unit in the Org Graph, from effective_on (today by default). Only a unit Espalia holds can be renamed here; one an HRIS supplies is renamed in the HRIS. Refused unless the caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "plan_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan whose change this applies. Refused unless you may apply that plan's changes"
+      },
+      "plan_change_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan change this applies; needs plan_id"
+      },
+      "cause_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "groups this with the plan's other changes, to change back together; needs plan_id"
+      },
+      "unit_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "unit_id",
+      "name"
+    ],
+    "additionalProperties": false,
+    "dependentRequired": {
+      "plan_change_id": [
+        "plan_id"
+      ],
+      "cause_id": [
+        "plan_id"
+      ]
+    }
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

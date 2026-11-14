@@ -1,0 +1,56 @@
+{
+  "name": "tenants_add_pay_band",
+  "description": "Add a pay band for a framework level (level_id, from frameworks_get) in a location: a country, matched to the Org Graph's country ignoring case, or blank for any location. One band per level and location; use tenants_change_pay_band to change one. Currency is an ISO 4217 code and period is year, month or hour; figures are kept as entered, never converted or annualised. Figures are decimal strings with at most two decimal places, such as \"120000\". Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "level_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "location": {
+        "type": "string"
+      },
+      "currency": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "period": {
+        "type": "string",
+        "enum": [
+          "year",
+          "month",
+          "hour"
+        ]
+      },
+      "minimum": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "midpoint": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "maximum": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      }
+    },
+    "required": [
+      "level_id",
+      "currency",
+      "period",
+      "minimum",
+      "midpoint",
+      "maximum"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

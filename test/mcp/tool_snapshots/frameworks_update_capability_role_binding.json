@@ -1,0 +1,43 @@
+{
+  "name": "frameworks_update_capability_role_binding",
+  "description": "Update a capability-role binding's weight and/or individual tolerance (owner/editor/lead only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "binding_id": {
+        "type": "string"
+      },
+      "weight": {
+        "type": "number"
+      },
+      "individual_tolerance": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "framework_id",
+      "binding_id"
+    ],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "weight"
+        ]
+      },
+      {
+        "required": [
+          "individual_tolerance"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

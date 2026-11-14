@@ -1,0 +1,40 @@
+{
+  "name": "calibration_sessions_define",
+  "description": "Define a calibration session (draft) for an assessment cycle. You become the facilitator; seed the participating raters and the calibrant population (typically the participants' reports).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "cycle_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "participant_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "person_ids of the participating raters"
+      },
+      "calibrant_person_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "person_ids of the people being calibrated — never a participant or the facilitator"
+      }
+    },
+    "required": [
+      "cycle_id",
+      "name",
+      "participant_ids"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

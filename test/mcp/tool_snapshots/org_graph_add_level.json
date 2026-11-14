@@ -1,0 +1,28 @@
+{
+  "name": "org_graph_add_level",
+  "description": "Add a level to the bottom of the Org Graph's taxonomy, from effective_on (today by default). Espalia holds the new level; use org_graph_reorder_levels to move it up. Level names are unique, ignoring case. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

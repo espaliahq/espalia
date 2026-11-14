@@ -1,0 +1,25 @@
+{
+  "name": "team_planning_remove_scenario",
+  "description": "Remove a scenario from a Team Planning plan. It cannot be restored. Refused for the baseline, for a scenario others fork from (remove those first), or unless the caller is one of its editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false
+  }
+}

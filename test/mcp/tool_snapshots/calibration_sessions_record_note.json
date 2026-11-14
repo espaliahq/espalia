@@ -1,0 +1,31 @@
+{
+  "name": "calibration_sessions_record_note",
+  "description": "Record a free-text minute on a live calibration session, optionally anchored to a capability or person. `body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "body": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id",
+      "body"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "name": "frameworks_suggest_create",
+  "description": "Propose creating a framework entity (example, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode. `rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "entity_type": {
+        "type": "string",
+        "enum": [
+          "role_illustration",
+          "behavioural_expectation",
+          "capability",
+          "capability_category",
+          "role",
+          "role_family",
+          "level"
+        ]
+      },
+      "proposed_attributes": {
+        "type": "object",
+        "description": "Attributes for the new entity. Required keys by entity_type — role_illustration: role_id, description · behavioural_expectation: level_ordinal, description · capability: name · capability_category: name · role: name, code, track · role_family: name · level: ordinal, title, code.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "track": {
+            "type": "string",
+            "enum": [
+              "ic",
+              "management"
+            ]
+          },
+          "role_id": {
+            "type": "string"
+          },
+          "level_ordinal": {
+            "type": "integer"
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "is_entry": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "parent_id": {
+        "type": "string"
+      },
+      "rationale": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "editing",
+          "suggesting"
+        ]
+      }
+    },
+    "required": [
+      "framework_id",
+      "entity_type",
+      "proposed_attributes"
+    ],
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "entity_type": {
+              "enum": [
+                "role_illustration",
+                "behavioural_expectation",
+                "capability",
+                "role",
+                "level"
+              ]
+            }
+          },
+          "required": [
+            "entity_type"
+          ]
+        },
+        "then": {
+          "required": [
+            "parent_id"
+          ],
+          "properties": {
+            "parent_id": {
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "entity_type": {
+              "enum": [
+                "capability_category",
+                "role_family"
+              ]
+            }
+          },
+          "required": [
+            "entity_type"
+          ]
+        },
+        "then": {
+          "not": {
+            "required": [
+              "parent_id"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

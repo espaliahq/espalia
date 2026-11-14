@@ -1,0 +1,25 @@
+{
+  "name": "frameworks_capability_get",
+  "description": "Fetch one capability's full detail: bindings, expectations per level, examples (the illustrations key). Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "capability_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "capability_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "assessments_explorations_list",
+  "description": "List the explorations of other roles or levels declared on one assessment, newest first, with who declared them and, once closed, the outcome. Each carries the lens params that read the assessment against its target.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed",
+          "all"
+        ]
+      }
+    },
+    "required": [
+      "assignment_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

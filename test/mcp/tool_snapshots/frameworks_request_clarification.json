@@ -1,0 +1,52 @@
+{
+  "name": "frameworks_request_clarification",
+  "description": "Ask for clarification of a capability, one of its level expectations, or a role example (illustration) — opens a discussion, proposes nothing. `rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "capability_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "The capability to anchor on. Required unless illustration_id is given."
+      },
+      "illustration_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "An example (role illustration) to anchor on — the most specific target, and its level is taken from the owning expectation. Required unless capability_id is given."
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "rationale": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "rationale"
+    ],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "capability_id"
+        ]
+      },
+      {
+        "required": [
+          "illustration_id"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "name": "assessments_add_evidence_link",
+  "description": "Link an existing feedback / evidence item to an additional capability × level.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "evidence_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "valence": {
+        "type": "string",
+        "enum": [
+          "strongly_demonstrated",
+          "demonstrated",
+          "growth_area",
+          "significant_growth_area"
+        ]
+      },
+      "rationale": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "evidence_id",
+      "capability_stable_id",
+      "level_ordinal",
+      "valence"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

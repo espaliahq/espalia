@@ -1,0 +1,53 @@
+{
+  "name": "tenants_change_pay_band",
+  "description": "Change a pay band's currency, period and minimum, midpoint and maximum, by pay_band_id from tenants_pay_bands. All are required, as the band reads afterwards. Its level and location don't change: remove the band and add another for that. Every plan priced from it reprices. Figures are decimal strings with at most two decimal places, such as \"120000\". Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "pay_band_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "currency": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "period": {
+        "type": "string",
+        "enum": [
+          "year",
+          "month",
+          "hour"
+        ]
+      },
+      "minimum": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "midpoint": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "maximum": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      }
+    },
+    "required": [
+      "pay_band_id",
+      "currency",
+      "period",
+      "minimum",
+      "midpoint",
+      "maximum"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

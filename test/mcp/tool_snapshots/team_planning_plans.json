@@ -1,0 +1,15 @@
+{
+  "name": "team_planning_plans",
+  "description": "List the Team Planning plans the caller is a member of, with each one's name, base date and the caller's role in it (editor or viewer). Being a tenant admin or a planner adds no plans.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

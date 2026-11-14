@@ -1,0 +1,37 @@
+{
+  "name": "assessments_close_exploration",
+  "description": "Close an open exploration of another role with its outcome: pursue (work towards it), not_now (set it aside) or moved (they have moved into the role), plus an optional note.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "exploration_id": {
+        "type": "string"
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "pursue",
+          "not_now",
+          "moved"
+        ]
+      },
+      "note": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "exploration_id",
+      "outcome"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "assessments_revoke_manager_rating_delegation",
+  "description": "Revoke a manager-rating delegation for one of your reports.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "delegate_person_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "delegate_person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}

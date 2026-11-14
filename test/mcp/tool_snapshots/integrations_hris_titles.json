@@ -1,0 +1,19 @@
+{
+  "name": "integrations_hris_titles",
+  "description": "List the job titles active HRIS people hold, each with the framework role mapping it resolves to (nil = unmapped, so the sync skips those people) and the people the next sync would change. Also lists the framework's roles and their levels as mapping targets.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "unmapped_only": {
+        "type": "boolean"
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  }
+}

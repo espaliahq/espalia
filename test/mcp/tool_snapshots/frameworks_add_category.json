@@ -1,0 +1,31 @@
+{
+  "name": "frameworks_add_category",
+  "description": "Add a capability category to a framework (owner/editor/lead only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "ordinal": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "framework_id",
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  }
+}
