@@ -218,6 +218,29 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         screenshot("levels_moved_#{viewport}")
       end
 
+      should "remove a level no unit has ever held, after asking" do
+        squad_id = SecureRandom.uuid_v7
+        guild_id = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          structure.define_taxonomy([ { level_id: squad_id, name: "Squad" }, { level_id: guild_id, name: "Guild" } ],
+                                    effective_on: "2026-01-01")
+          structure.create_unit(SecureRandom.uuid_v7, "Payments", level_id: squad_id, effective_on: "2026-01-01")
+        end
+        visit tenant_org_graph_settings_path
+
+        assert_no_selector "#org-graph-level-remove-#{squad_id}"
+        click_button "org-graph-level-remove-#{guild_id}"
+        within("#org-graph-remove-level-#{guild_id}") do
+          assert_text "No unit has ever sat at this level, so nothing else changes."
+          screenshot("level_remove_asked_#{viewport}")
+        end
+        click_button_with_js_fallback("org-graph-level-remove-confirm-#{guild_id}", expect_text: "Guild is no longer a level.")
+        assert_equal %w[Squad], level_names
+        assert_no_sideways_overflow
+        screenshot("level_removed_#{viewport}")
+      end
+
       should "say plainly when forgetting has no key" do
         OrgGraph::Forgetting.stub(:key, nil) do
           visit tenant_org_graph_settings_path

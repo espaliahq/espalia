@@ -109,19 +109,58 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_select "#org-graph-level-down-#{@team_id}", count: 0
       assert_select "#org-graph-levels input#org-graph-new-level[name=name]"
     end
+
+    should "remove a level no unit has ever held" do
+      delete tenant_org_graph_settings_level_path(@squad_id)
+
+      assert_redirected_to tenant_org_graph_settings_path
+      assert_equal "Squad is no longer a level.", flash[:notice]
+      assert_equal %w[Tribe Team], level_names
+    end
+
+    should "name the units that keep a level in place" do
+      delete tenant_org_graph_settings_level_path(@team_id)
+
+      assert_equal "The level could not be removed: Team can't be removed, as it holds Payments", flash[:alert]
+      assert_equal %w[Tribe Squad Team], level_names
+    end
+
+    should "offer Remove only on a level no unit has ever held, and name the retired units of one that did" do
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        @guild_id = SecureRandom.uuid_v7
+        structure.add_level(@guild_id, "Guild", effective_on: Date.current)
+        unit_id = SecureRandom.uuid_v7
+        structure.create_unit(unit_id, "Atlas", level_id: @guild_id, effective_on: Date.current)
+        structure.retire_unit(unit_id, effective_on: Date.current)
+      end
+
+      get tenant_org_graph_settings_path
+
+      assert_select "#org-graph-level-remove-#{@squad_id}", text: "Remove"
+      assert_select "#org-graph-level-remove-#{@team_id}", count: 0
+      assert_select "#org-graph-level-remove-#{@guild_id}", count: 0
+      assert_select "#org-graph-level-#{@guild_id}", text: /held Atlas/
+    end
   end
 
   context "as an Org Graph editor" do
     setup { sign_in @editor_user }
 
-    should "refuse to add or move a level" do
+    should "refuse to add, move or remove a level, and offer none of them" do
       post tenant_org_graph_settings_levels_path, params: { name: "Guild" }
       assert_equal "You are not authorized to perform this action.", flash[:alert]
 
       patch tenant_org_graph_settings_level_order_path,
             params: { level_id: @squad_id, direction: "down" }
       assert_equal "You are not authorized to perform this action.", flash[:alert]
+
+      delete tenant_org_graph_settings_level_path(@squad_id)
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
       assert_equal %w[Tribe Squad Team], level_names
+
+      get tenant_org_graph_settings_path
+      assert_select "#org-graph-level-remove-#{@squad_id}", count: 0
     end
   end
 end
