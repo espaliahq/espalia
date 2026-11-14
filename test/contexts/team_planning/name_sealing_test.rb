@@ -9,7 +9,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
   FIXTURE_TENANT = "01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b"
   LIVE_PLAN = "01a1d95d-7d14-7bef-a3cd-04d39d0e4ee4"
   ACTOR = "01a1d95d-7cea-70f5-aef9-85f2e797741b"
-  NAMES = [ "Next year", "The year after", "Lean Q1", "Closing the office" ].freeze
+  NAMES = [ "Next year", "The year after", "Lean Q1", "Lean first quarter", "Closing the office" ].freeze
 
   Stored = TeamPlanning::NameSealing::StoredEvent
 
@@ -26,7 +26,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
         "name" => "Lean Q1", "starts_on" => "2026-11-14", "ends_on" => "2027-03-31", "forked_by_id" => ACTOR
       ))
       store(tenant, "TeamPlanning::Events::ScenarioRenamed", JSON.generate(
-        "plan_id" => LIVE_PLAN, "scenario_id" => scenario_id, "name" => "Lean Q1", "previous_name" => "Lean Q1",
+        "plan_id" => LIVE_PLAN, "scenario_id" => scenario_id, "name" => "Lean first quarter", "previous_name" => "Lean Q1",
         "renamed_by_id" => ACTOR
       ))
       store(tenant, "TeamPlanning::Events::PlanCreated", JSON.generate(
@@ -112,7 +112,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) do
       assert_equal "The year after", TeamPlanningPlan.find(LIVE_PLAN).name.reveal
       assert_predicate TeamPlanningPlan.find(@deleted_plan).name, :removed?
-      assert_equal [ "Baseline", "Lean Q1" ], TeamPlanningScenario.where(plan_id: LIVE_PLAN).sort_by { it.baseline? ? 0 : 1 }.map { it.name.reveal }
+      assert_equal [ "Baseline", "Lean first quarter" ], TeamPlanningScenario.where(plan_id: LIVE_PLAN).sort_by { it.baseline? ? 0 : 1 }.map { it.name.reveal }
     end
   end
 
