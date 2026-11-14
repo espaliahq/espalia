@@ -19,7 +19,7 @@ class Tenant::OrgFactConfirmationsController < ApplicationController
       )
     end
     redirect_back_with(notice: "Confirmed as still true.")
-  rescue *OrgUnitDrawer::FAILURES => e
+  rescue *OrgGraphDrawer::FAILURES => e
     redirect_back_with(alert: readable(e.message))
   end
 
