@@ -97,6 +97,15 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
     assert_equal [ @payments ], block(result, cards)[:continues_from_ids]
   end
 
+  should "keep a unit that absorbs another existing one as its own block, carrying on from it" do
+    call(Operations::TeamPlanning::SetUnitSuccession, plan_id: @plan_id, scenario_id: @q2, predecessor_ids: [ @growth ], successor_ids: [ @payments ])
+    result = timeline
+
+    assert_equal [ @growth, @growth, nil ], block(result, @growth)[:units].map { it&.dig(:unit_id) }
+    assert_equal [ @payments ] * 3, block(result, @payments)[:units].pluck(:unit_id)
+    assert_equal [ @growth ], block(result, @payments)[:continues_from_ids]
+  end
+
   should "keep one lane for a person in two places, with a bar for each and no move" do
     assign(@q1, @ada, { unit_id: @payments, allocation: 0.5 }, { unit_id: @growth, allocation: 0.5 })
     ada = lane(timeline, @ada.id)

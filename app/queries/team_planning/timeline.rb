@@ -121,13 +121,18 @@ class TeamPlanning::Timeline
 
     def successions = @maps.flat_map(&:successions).uniq(&:id)
 
-    # A unit that carries on from exactly one other joins that one's block.
+    # A unit that carries on from exactly one other joins that one's block,
+    # unless the two ever stand side by side: one absorbing a unit that
+    # already existed keeps its own.
     def block_ids
       parent = successions.select { it.predecessor_ids.one? && it.successor_ids.one? }
                           .to_h { [ it.successor_ids.first, it.predecessor_ids.first ] }
+                          .reject { |successor, predecessor| side_by_side?(successor, predecessor) }
       root = ->(id, seen = Set[]) { parent.key?(id) && seen.add?(id) ? root.call(parent[id], seen) : id }
       @maps.flat_map { it.units.map(&:id) }.uniq.index_with { root.call(it) }
     end
+
+    def side_by_side?(*unit_ids) = @maps.any? { |map| unit_ids.all? { |id| map.units.any? { it.id == id } } }
 
     def blocks(lanes)
       first_seen = {}
@@ -141,8 +146,7 @@ class TeamPlanning::Timeline
     end
 
     def continues_from(block_id)
-      successions.reject { it.predecessor_ids.one? && it.successor_ids.one? }
-                 .select { |succession| succession.successor_ids.any? { @block_of[it] == block_id } }
+      successions.select { |succession| succession.successor_ids.any? { @block_of[it] == block_id } }
                  .flat_map { |succession| succession.predecessor_ids.filter_map { @block_of[it] } }.uniq - [ block_id ]
     end
 
