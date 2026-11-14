@@ -3655,6 +3655,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_baseline",
+        "description" => "Get the baseline of a Team Planning plan the caller is in: the organisation on the plan's base date, as known at the end of the day before. Units carry their parent, level and owners; people carry their facts that day and each unit they hold, with allocation and role. People are named by id, and `names` maps every person id the map uses to a name; a forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "plan_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "team_planning_create_plan",
         "description" => "Create a Team Planning plan, a private draft of the organisation built on the Org Graph as it stood on base_on (today by default). Only its members see it, and its creator is its first editor. Refused unless the caller is a tenant admin or a planner, linked to a person.",
         "inputSchema" => {
@@ -3800,8 +3819,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_plan",
+        "description" => "Get one Team Planning plan the caller is a member of: its name, base date, the caller's role in it (editor or viewer), and whether it is frozen, which means no editor can still reach it, so its viewers read it and nobody changes it. Refused, as an unknown plan, unless the caller is a member.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "plan_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "team_planning_plan_members",
-        "description" => "List the members of a Team Planning plan the caller is in, each a person id and a role (editor or viewer). Refused, as an unknown plan, unless the caller is a member.",
+        "description" => "List the members of a Team Planning plan the caller is in, each a person id, their name and a role (editor or viewer). A forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
