@@ -69,10 +69,22 @@ class Hris::LevelMirror
     @units = {}
   end
 
+  # Plans from the units and members Espalia holds, so it refuses to start
+  # while either list is rebuilt.
+  #
   # @return [void]
+  # @raise [ProjectionVersion::Rebuilding]
   def call
     return if @levels.empty?
 
+    ProjectionVersion.unless_rebuilding(*PLANNED_FROM) { mirror }
+  end
+
+  PLANNED_FROM = [ OrgGraph::Projections::Structure::PROJECTION_NAME, OrgGraph::Projections::Members::PROJECTION_NAME ].freeze
+
+  private
+
+  def mirror
     taxonomy = OrgTaxonomyLevel.top_first.pluck(:id)
     plans = @levels.filter_map { |level| plan(level, taxonomy) }
     @plans = plans.index_by { it.level.id }
@@ -84,8 +96,6 @@ class Hris::LevelMirror
     retiring = [] unless write_memberships(plans, retiring)
     retire_units(plans, retiring)
   end
-
-  private
 
   LevelPlan = Struct.new(:level, :field, :above_id, :values, :held, :withheld, :live_keys, keyword_init: true)
 

@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 # Retire, merge and split from the unit drawer (#138): each one change under
 # one cause, with the caller as actor.
 class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
   include OrgGraphFixture
+  include RebuildLock
 
   setup do
     @tenant = create(:tenant)
@@ -55,6 +57,17 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
       assert_empty units_of(:dot)
       assert_equal @admin.person.id, event_store.read.of_type(OrgGraph::Events::UnitRetired).last.data[:retired_by_id]
       assert_includes caused_with(OrgGraph::Events::UnitRetired), "MembershipEnded"
+    end
+
+    should "refuse while the member list is rebuilt, saying to try again" do
+      error = while_rebuilding(@tenant, OrgGraph::Projections::Members) do
+        assert_raises(Operations::Base::ParameterError) do
+          call(Operations::OrgGraph::RetireUnit, unit_id: @org[:payments], effective_on: "2026-11-02")
+        end
+      end
+
+      assert_equal "The Org Graph is being rebuilt; try again in a minute.", error.message
+      assert_not unit(@org[:payments]).retired?
     end
 
     should "refuse a unit with live sub-units, naming them" do

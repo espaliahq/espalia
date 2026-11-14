@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../../support/rebuild_lock"
 
 class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
+  include RebuildLock
+
   setup do
     @tenant = create(:tenant, :with_hibob_config)
     ActsAsTenant.current_tenant = @tenant
@@ -1451,6 +1454,17 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       engineering = OrgUnit.live.find_by!(level_id: @team_level, external_ref: "work.department/Engineering")
       alice = Person.find_by!(external_id: "bob-001")
       assert OrgMembership.exists?(person_id: alice.id, unit_id: engineering.id, provider: "hibob")
+    end
+
+    should "count the level as skipped, never as an error, while the members are rebuilt" do
+      adapter = build_adapter(@fixture["employees"])
+      adapter.define_singleton_method(:fetch_field_catalogue) { [ Hris::Field.new(id: "work.department", name: "Department", kind: :text) ] }
+
+      result = while_rebuilding(@tenant, OrgGraph::Projections::Members) { adapter.sync_people }
+
+      assert_empty result[:errors]
+      assert_equal 1, result[:levels_skipped_while_rebuilding]
+      assert_not OrgUnit.exists?(level_id: @team_level)
     end
 
     should "mirror nothing when HiBob's field lists can't be read" do

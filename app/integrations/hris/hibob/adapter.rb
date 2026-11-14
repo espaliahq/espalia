@@ -50,7 +50,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #   :skipped_inactive, :assigned,
   #   :role_changed, :level_changed, :unchanged, :errors,
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
-  #   :skipped_no_title, :forgotten_skipped,
+  #   :skipped_no_title, :forgotten_skipped, :levels_skipped_while_rebuilding,
   #   :split_units (mirrored units whose people sit under different parents)
   def sync_people
     @sync_correlation_id = correlation_id.presence || SecureRandom.uuid_v7
@@ -319,6 +319,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       unchanged: 0,
       skipped_no_title: 0,
       forgotten_skipped: 0,
+      levels_skipped_while_rebuilding: 0,
       errors: [],
       split_units: [],
       unmapped_titles: Set.new,
@@ -433,7 +434,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   end
 
   # A failed catalogue read mirrors nothing, so no unit retires for want of
-  # its list.
+  # its list. A rebuild of the units or members mirrors nothing either, and
+  # the next sync mirrors as usual; it is counted apart from the errors, since
+  # every deploy that rebuilds would otherwise raise one.
   #
   # @param readings [Hash{Person => Hris::Hibob::ResponseMapper}] current people
   # @param result [Hash] running tally
@@ -451,6 +454,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     with_hris_event_context do
       Hris::LevelMirror.new(provider: provider_name, catalogue:, readings:, result:, levels: mirrored_levels).call
     end
+  rescue ProjectionVersion::Rebuilding
+    result[:levels_skipped_while_rebuilding] += mirrored_levels.size
   end
 
   # A person HiBob stops returning has left, dated by the sync that first
