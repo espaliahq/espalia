@@ -3590,10 +3590,29 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_add_planner",
+        "description" => "Make an active person with an account in this organisation a planner, so they may create Team Planning plans. It opens no plan they aren't a member of. Admins already may create plans. Returns the list as team_planning_planners reads it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "team_planning_create_plan",
-        "description" => "Create a Team Planning plan, a private draft of the organisation built on the Org Graph " \
-                         "as it stood on base_on (today by default). Only its members see it, and its creator is its first editor. " \
-                         "Refused unless the caller is a tenant admin or a planner, linked to a person.",
+        "description" => "Create a Team Planning plan, a private draft of the organisation built on the Org Graph as it stood on base_on (today by default). Only its members see it, and its creator is its first editor. Refused unless the caller is a tenant admin or a planner, linked to a person.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -3633,6 +3652,42 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "annotations" => {
           "readOnlyHint" => false,
           "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "team_planning_planners",
+        "description" => "List who may create Team Planning plans: the planners an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_remove_planner",
+        "description" => "Stop a person being a planner, so they may no longer create Team Planning plans. They stay a member of the plans they are in. An admin's right can't be removed this way. Returns the list as team_planning_planners reads it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
           "idempotentHint" => false
         }
       },
