@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # The tenant's reference currency and exchange rates, as the pay bands
-# screen lists them: by pair, each pair's latest rate first.
+# screen lists them: by pair, each pair's latest rate first (#205). A rate
+# keys on its pair and date, so the tools change neither. ExchangeRate.convert
+# is the one conversion, run at report time only.
 class Operations::Tenants::ExchangeRates < Operations::Base
   include Operations::Tenants::ExchangeRateSupport
 
