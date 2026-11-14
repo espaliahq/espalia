@@ -29,6 +29,7 @@ class TeamPlanning::Cost
   YEAR_DAYS = 365
   NO_UNIT = nil
   NO_COST_CENTRE = nil
+  NO_REFERENCE = "There is no reference currency to total in"
 
   # Why a seat is unpriced.
   REASONS = {
@@ -138,6 +139,12 @@ class TeamPlanning::Cost
     baseline = priced(resolved(@plan.id))
     Report.new(period: @period, reference_currency: @reference, bands_changed_at: bands.values.flatten.map(&:updated_at).max,
                scenario:, baseline:)
+  end
+
+  # @param reference_currency [String, nil]
+  # @return [Sum] no money, converted as an empty sum would be
+  def self.nothing(reference_currency)
+    reference_currency ? Sum.new(native: {}, converted: 0r, missing: []) : Sum.new(native: {}, converted: nil, missing: [ NO_REFERENCE ])
   end
 
   # @param one [Sum]
@@ -277,7 +284,7 @@ class TeamPlanning::Cost
   end
 
   def convert(native)
-    return [ nil, [ "There is no reference currency to total in" ] ] unless @reference
+    return [ nil, [ NO_REFERENCE ] ] unless @reference
 
     factors = native.keys.index_with { factor(it) }
     missing = factors.values.grep(String)

@@ -45,7 +45,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
     seats = { scenario: lines_in(report.scenario, unit_id), baseline: lines_in(report.baseline, unit_id) } if unit_id
     { plan_id: plan.id, scenario_id:, period: { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601 },
       reference_currency: report.reference_currency, bands_changed_at: report.bands_changed_at&.iso8601,
-      total: compared(report.scenario.total, report.baseline.total), units: units(report), cost_centres: cost_centres(report),
+      total: compared(report, report.scenario.total, report.baseline.total), units: units(report), cost_centres: cost_centres(report),
       unpriced: unpriced.map { unpriced(it) }, **({ unit_id:, seats: } if unit_id), names: names(report, unpriced, seats) }
   end
 
@@ -64,26 +64,24 @@ class Operations::TeamPlanning::Cost < Operations::Base
     names = (report.baseline.map.units + report.scenario.map.units).to_h { [ it.id, it.name ] }
     ids = (report.scenario.units.keys | report.baseline.units.keys | names.keys)
     ids.sort_by { [ it.nil? ? 1 : 0, names[it].to_s, it.to_s ] }.map do |unit_id|
-      row = { unit_id:, name: names[unit_id], **compared(report.scenario.units[unit_id], report.baseline.units[unit_id]) }
+      row = { unit_id:, name: names[unit_id], **compared(report, report.scenario.units[unit_id], report.baseline.units[unit_id]) }
       next row unless unit_id
 
-      row.merge(with_below: compared(report.scenario.units_with_below[unit_id], report.baseline.units_with_below[unit_id]))
+      row.merge(with_below: compared(report, report.scenario.units_with_below[unit_id], report.baseline.units_with_below[unit_id]))
     end
   end
 
   def cost_centres(report)
     (report.scenario.cost_centres.keys | report.baseline.cost_centres.keys).sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.map do |cost_centre|
-      { cost_centre:, **compared(report.scenario.cost_centres[cost_centre], report.baseline.cost_centres[cost_centre]) }
+      { cost_centre:, **compared(report, report.scenario.cost_centres[cost_centre], report.baseline.cost_centres[cost_centre]) }
     end
   end
 
-  def compared(scenario, baseline)
-    scenario ||= nothing
-    baseline ||= nothing
+  def compared(report, scenario, baseline)
+    scenario ||= ::TeamPlanning::Cost.nothing(report.reference_currency)
+    baseline ||= ::TeamPlanning::Cost.nothing(report.reference_currency)
     { scenario: sum(scenario), baseline: sum(baseline), difference: sum(::TeamPlanning::Cost.difference(scenario, baseline)) }
   end
-
-  def nothing = ::TeamPlanning::Cost::Sum.new(native: {}, converted: 0r, missing: [])
 
   def sum(sum) = { native: sum.native.transform_values { decimal(it) }, converted: sum.converted && decimal(sum.converted), missing: sum.missing }
 

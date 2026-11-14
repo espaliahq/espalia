@@ -79,6 +79,16 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal({ @ada.id => "Ada Quill", @cy.id => "Cy Quill" }, result[:names])
   end
 
+  should "leave every figure unconverted without a reference currency, a side with no seats included" do
+    ActsAsTenant.with_tenant(@tenant) { ReferenceCurrency.delete_all }
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @year, person_id: @ada.id, placements: [])
+    no_unit = cost[:units].find { it[:unit_id].nil? }
+
+    assert_equal [ "100000", {} ], [ no_unit[:scenario][:native]["EUR"], no_unit[:baseline][:native] ]
+    assert_equal [ [ nil, [ "There is no reference currency to total in" ] ] ] * 3,
+                 no_unit.values_at(:scenario, :baseline, :difference).map { it.values_at(:converted, :missing) }
+  end
+
   should "refuse a unit on neither map, the baseline as the scenario, and a caller outside the plan" do
     assert_equal "No such unit", assert_raises(Operations::Base::ParameterError) { cost(unit_id: SecureRandom.uuid_v7) }.message
     assert_match(/baseline has no period/, assert_raises(Operations::Base::ParameterError) { cost(scenario_id: @plan_id) }.message)
