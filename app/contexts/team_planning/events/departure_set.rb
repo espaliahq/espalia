@@ -64,6 +64,6 @@ class TeamPlanning::Events::DepartureSet < TeamPlanning::Events::Change
   # @param change [TeamPlanning::Events::DepartureSet]
   # @return [Hash, nil] the planned departure once the person has left, nil while they stay
   def self.read_org_graph(map, change)
-    change.data.slice(:leaves_in_id, :position_id) if map.left_ids.include?(change.data[:subject_id])
+    change.data.except(*FIELDS) if map.left_ids.include?(change.data[:subject_id])
   end
 end
