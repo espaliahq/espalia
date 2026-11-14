@@ -99,5 +99,5 @@ class TeamPlanning::Attention
 
   def gone(unit_id) = @retired.include?(unit_id) ? "a retired unit" : "a unit no longer in this scenario"
 
-  def fte(value) = value.round(2).to_s.delete_suffix(".0")
+  def fte(value) = value.round(4).to_s.delete_suffix(".0")
 end

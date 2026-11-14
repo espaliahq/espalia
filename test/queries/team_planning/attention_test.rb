@@ -44,6 +44,16 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ nil ], TeamPlanning::Attention.new(map(units: [ unit(ROOT, nil), orphan ]), {}).call.map(&:change)
   end
 
+  should "read a small overfill at the precision open FTE keeps" do
+    position = B::Position.new(id: SecureRandom.uuid_v7, role_id: nil, level_id: LEVEL, unit_id: LIVE, fte: 1.0, basis: "new",
+                               role_name: nil, level_name: nil)
+    person = B::Member.new(id: PERSON, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: 1,
+                           employment_type: nil,
+                           memberships: [ B::Membership.new(unit_id: LIVE, allocation: 1.004, role: nil, position_id: position.id) ])
+
+    assert_equal [ "Overfilled by 0.004 FTE" ], reasons(map(positions: [ position ], people: [ person ]))
+  end
+
   should "read why someone off the map can't be placed" do
     assert_equal [ "Placed, but has left" ], reasons(map(unresolved: [ B::Unresolved.new(person_id: PERSON, why: B::Unresolved::LEFT) ]))
   end
