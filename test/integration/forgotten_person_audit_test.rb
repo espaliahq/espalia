@@ -14,7 +14,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     "integrations_hris_field_preview" => "reads the live HRIS, which no longer holds a forgotten person",
     "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person",
     "team_planning_plan_members" => "returns person ids and roles, never a name, until story 1.4 brings names",
-    "team_planning_scenarios" => "returns scenario ids, periods and the names editors gave them, never a person"
+    "team_planning_scenarios" => "returns scenario ids, periods and names; a name is free text editors are asked to keep people out of, not shredded until #209"
   }.freeze
 
   setup do
