@@ -7,7 +7,8 @@ class Operations::Tenants::ChangeBudgetLine < Operations::Base
 
   description "Change a line of the tenant's approved budget, by budget_line_id from tenants_budget_lines. Give " \
               "every field as the line reads afterwards: a field left out is cleared. Every plan reads the budget " \
-              "live. #{Operations::Tenants::BudgetLineSupport::HELP} Refused unless the caller is a tenant admin."
+              "live. A role or level that has left the framework stays on the line while the change gives the same ids. " \
+              "#{Operations::Tenants::BudgetLineSupport::HELP} Refused unless the caller is a tenant admin."
   category :write
   approval :in_app
 

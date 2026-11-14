@@ -70,6 +70,17 @@ class Operations::Tenants::BudgetLinesTest < ActiveSupport::TestCase
                    "There is no such role in the framework" ], refusals
   end
 
+  should "keep a level that has left the framework while a change gives it again" do
+    added = add
+    ActsAsTenant.with_tenant(@tenant) { @level.destroy! }
+
+    changed = call(:ChangeBudgetLine, budget_line_id: added[:budget_line_id], **LINE, head_count: "3", level_id: added[:level_id])
+    assert_equal [ @level.level_id, "E2 Engineer II", "3.00" ], changed.values_at(:level_id, :level_name, :head_count)
+
+    error = assert_raises(Operations::Base::ParameterError) { add(level_id: added[:level_id]) }
+    assert_equal "There is no such level in the framework", error.message
+  end
+
   should "never repeat an amount or a head count in a refusal" do
     errors = [
       -> { add(amount: "99999.999") },

@@ -62,15 +62,28 @@ module Operations::Tenants::BudgetLineSupport
     return line.any_role! unless level_id || role_id
 
     if level_id
-      level = FrameworkState::Level.find_by(level_id:) or raise Operations::Base::ParameterError, "There is no such level in the framework"
+      level = FrameworkState::Level.find_by(level_id:)
+      return if level.nil? && kept_position?(line, level_id, role_id)
+      raise Operations::Base::ParameterError, "There is no such level in the framework" unless level
       raise Operations::Base::ParameterError, "That level belongs to another role" if role_id && role_id != level.role_id
 
       line.take_level(level)
     else
-      role = FrameworkState::Role.find_by(role_id:) or raise Operations::Base::ParameterError, "There is no such role in the framework"
+      role = FrameworkState::Role.find_by(role_id:)
+      return if role.nil? && kept_position?(line, level_id, role_id)
+      raise Operations::Base::ParameterError, "There is no such role in the framework" unless role
+
       line.level_id = line.level_name = nil
       line.take_role(role)
     end
+  end
+
+  # A line keeps the role and level it names after they leave the framework, so a change may give them again.
+  def kept_position?(line, level_id, role_id)
+    return false unless line.persisted?
+    return level_id == line.level_id && [ nil, line.role_id ].include?(role_id) if level_id
+
+    line.level_id.nil? && role_id == line.role_id
   end
 
   def decimal(name)

@@ -97,6 +97,18 @@ class Tenant::BudgetLinesControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ "existing", nil ], [ line.reload.origin, line.approved_on ]
     end
 
+    should "offer a level that has left the framework on its line's form, and keep it" do
+      line = stored_line(level_id: SecureRandom.uuid_v7, role_id: @role.role_id, role_name: "Software Engineer", level_name: "E9 Gone")
+
+      get edit_tenant_budget_line_path(line)
+      assert_select "#budget-line-position option[selected][value='level:#{line.level_id}']",
+                    text: "Software Engineer, E9 Gone (no longer in the framework)"
+
+      patch tenant_budget_line_path(line), params: line_params(position: "level:#{line.level_id}", head_count: "3")
+      assert_redirected_to tenant_budget_lines_path
+      assert_equal [ "E9 Gone", BigDecimal(3) ], [ line.reload.level_name, line.head_count ]
+    end
+
     should "show a refused change again with what was typed" do
       line = stored_line
 

@@ -56,11 +56,21 @@ module Views::Tenant::BudgetLines::LineFields
   end
 
   # One picker for both, as a line names a role, one of its levels, or neither.
+  # A line keeps the role and level it was approved for after they leave the framework, so its form offers them too.
+  def departed_option(chosen, values, roles)
+    offered = roles.flat_map { |role| [ "role:#{role.role_id}", *role.levels.map { "level:#{it.level_id}" } ] }
+    return if chosen.blank? || offered.include?(chosen) || values[:role].blank?
+
+    label = [ values[:role], values[:level_name] ].compact_blank.join(", ")
+    option(value: chosen, selected: true) { "#{label} (no longer in the framework)" }
+  end
+
   def position_select(values, roles)
     chosen = values[:position] || (values[:level_id] ? "level:#{values[:level_id]}" : values[:role_id] && "role:#{values[:role_id]}")
     select(id: "budget-line-position", name: "budget_line[position]", class: Components::Kit::Field::SELECT,
            aria: { describedby: "budget-line-position-hint" }) do
       option(value: "") { "Any role" }
+      departed_option(chosen, values, roles)
       roles.each do |role|
         optgroup(label: role.name) do
           option(value: "role:#{role.role_id}", selected: chosen == "role:#{role.role_id}") { "Any #{role.name} level" }
