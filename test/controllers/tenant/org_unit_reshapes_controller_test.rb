@@ -13,7 +13,11 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
     @tenant = create(:tenant)
     @org = build_org_graph(@tenant)
     @admin_user = create(:user)
-    ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin) }
+    @member_user = create(:user)
+    ActsAsTenant.with_tenant(@tenant) do
+      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
+      create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
+    end
     sign_in @admin_user
   end
 
@@ -180,6 +184,38 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
       assert_match "stage=review", response.location
       assert_equal "Move or retire Checkout's sub-units first: Payments", flash[:drawer_alert]
+    end
+  end
+
+  context "as a tenant member" do
+    setup do
+      sign_out @admin_user
+      sign_in @member_user
+    end
+
+    should "not open a retire, merge or split step" do
+      [ new_tenant_org_unit_retirement_path(@org[:payments]), new_tenant_org_unit_merge_path(@org[:payments]),
+        new_tenant_org_unit_split_path(@org[:payments]) ].each do |path|
+        get path
+
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+    end
+
+    should "not retire, merge or split a unit" do
+      post tenant_org_unit_retirement_path(@org[:payments]), params: { effective_on: "2026-11-02" }
+      assert_redirected_to root_path
+      post tenant_org_unit_merge_path(@org[:payments]), params: { into_unit_id: @org[:platform], effective_on: "2026-11-02" }
+      assert_redirected_to root_path
+      post tenant_org_unit_split_path(@org[:platform]),
+           params: { names: %w[Core Edge], placements: { @org[:ada].id => "Core" }, effective_on: "2026-11-02" }
+      assert_redirected_to root_path
+
+      assert_not unit(:payments).retired?
+      assert_not unit(:platform).retired?
+      assert_equal [ "Payments" ], units_of(:dot)
+      assert_equal [ "Platform" ], units_of(:ada)
     end
   end
 end
