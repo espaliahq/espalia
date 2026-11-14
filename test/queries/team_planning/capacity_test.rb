@@ -245,6 +245,16 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_equal [ @engineer.role_id, @e5.level_id ], [ place.role_id, place.level_id ]
   end
 
+  should "leave a planned level that names no ordinal unresolved, though the title's mapping fixes a level" do
+    config = @tenant.hris_config
+    config.role_mappings.first.level_ordinal = 5
+    @tenant.update!(hris_config: config)
+    as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @plan_id, subject_id: @ada.id, end_state: { level: "Senior" }) }
+
+    place = seat(capacity, @ada.id).places.sole.place
+    assert_equal [ @engineer.role_id, nil ], [ place.role_id, place.level_id ]
+  end
+
   should "keep a removed planned level unknown, though the title's mapping fixes a level" do
     config = @tenant.hris_config
     config.role_mappings.first.level_ordinal = 5
