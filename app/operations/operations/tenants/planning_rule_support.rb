@@ -1,7 +1,13 @@
 # frozen_string_literal: true
 
 # What the rule default tools share: the admin-only check and the payload
-# each returns.
+# each returns. A refusal never repeats a value, so a rule can't reach a log
+# through an error message
+# [#225](https://github.com/espaliahq/espalia/issues/225).
+#
+# Admins only, so a planner or an Org Graph editor is refused. The tools live
+# under Tenants, beside pay bands, because a default is a tenant setting that
+# sits outside any plan.
 module Operations::Tenants::PlanningRuleSupport
   include Operations::Tenants::EditorNames
 
