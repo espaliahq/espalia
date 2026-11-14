@@ -25,6 +25,15 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
       people.record_person(@ada.id, **ESPALIA, effective_on: since, employment_status: "employed", title: "Software Engineer",
                                                level: "5", fte: 0.8)
       people.set_membership(@ada.id, payments, **ESPALIA, effective_on: since, allocation: 1.0)
+      @designer = create(:framework_role, code: "D", name: "Product Designer")
+      @tenant.hris_config.role_mappings << HrisRoleMapping.new(hris_titles: [ "Product Designer" ], framework_role_code: "D")
+      @tenant.save!
+      create(:framework_level, role_id: @designer.role_id, ordinal: 3, title: "Designer")
+      @cy = create(:person, tenant: @tenant, name: "Cy Quill")
+      people.record_person(@cy.id, **ESPALIA, effective_on: since, employment_status: "employed", title: "Product Designer",
+                                              level: "3", fte: 1.0)
+      people.set_membership(@cy.id, payments, **ESPALIA, effective_on: since, allocation: 1.0)
+      @payments = payments
       @dee = create(:person, tenant: @tenant, name: "Dee Quill")
       people.record_person(@dee.id, **ESPALIA, effective_on: since, employment_status: "employed", title: "Juggler", fte: 1.0)
       people.set_membership(@dee.id, @growth, **ESPALIA, effective_on: since, allocation: 1.0)
@@ -35,7 +44,8 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
     @q1 = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, relation: "then", name: "Q1 hires",
                                                                  ends_on: (Date.current + 120).iso8601)[:scenario_id]
     call(Operations::TeamPlanning::SetRule, @planner, plan_id: @plan_id, scenario_id: @plan_id, rule: "capacity_model",
-                                                      value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+                                                      value: { roles: { @engineer.role_id => { model: "per_fte" },
+                                                                        @designer.role_id => { model: "units" } } })
     call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id,
                                                           level_id: @e5.level_id, unit_id: @growth, fte: 1, basis: "new")
   end
@@ -62,6 +72,25 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
           assert_text "0.8"
         end
         assert_selector "[data-map-position] [data-capacity-figure] summary", text: "1.0 FTE"
+        assert_no_sideways_overflow
+      end
+
+      should "total each model apart, and badge a planner's override in its working" do
+        call(Operations::TeamPlanning::SetCapacityOverride, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
+                                                                      unit_id: @payments, amount: "0.5")
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id, scenario: @q1)
+
+        within("[data-capacity-strip]") do
+          assert_selector "[data-capacity-total='per_fte']", text: "1.5 FTE"
+          assert_selector "[data-capacity-total='units']", text: "1.0u"
+        end
+        click_selector_with_js_fallback("[data-map-person='#{@ada.id}'] [data-capacity-figure] summary",
+                                        expect_text: "The model gives 0.8 FTE.")
+        within("[data-map-person='#{@ada.id}'] [data-capacity-figure] summary") do
+          assert_text "0.5 FTE"
+          assert_text "override"
+        end
         assert_no_sideways_overflow
       end
 
