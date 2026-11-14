@@ -78,7 +78,7 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
                  map[:units].map { it.slice(:id, :name, :owner_ids) }
     ada = map[:people].find { it[:id] == @ada.id }
     assert_equal [ "Engineer", @editor.person_id ], ada.values_at(:title, :manager_id)
-    assert_equal [ { unit_id: @payments, allocation: 1.0, role: "Lead" } ], ada[:memberships]
+    assert_equal [ { unit_id: @payments, allocation: 1.0, role: "Lead", position_id: nil } ], ada[:memberships]
     assert_equal({ @ada.id => "Ada Quill", @editor.person_id => "Edie Marsh" }, map[:names])
     assert_not_includes map[:people].to_json, "Ada Quill"
   end
