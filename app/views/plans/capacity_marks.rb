@@ -49,8 +49,10 @@ class Views::Plans::CapacityMarks
     @names = names
   end
 
-  # @return [Boolean] whether any place has a model chosen
-  def measured? = @scenario[:models].any?
+  # Today counts too, so a scenario that empties a model still shows the drop.
+  #
+  # @return [Boolean] whether any place, here or on Today, has a model chosen
+  def measured? = models.any?
 
   # @return [Boolean] whether the scenario shown is the baseline itself
   def baseline? = @scenario[:scenario_id] == @scenario[:plan_id]
@@ -105,23 +107,25 @@ class Views::Plans::CapacityMarks
 
   # @param model [String]
   # @return [String] what follows a figure in the model
-  def unit_of(model) = @scenario[:models].dig(model, :symbol) || model
+  def unit_of(model) = models.dig(model, :symbol) || model
 
   # @param model [String]
   # @return [String, nil]
-  def description_of(model) = @scenario[:models].dig(model, :description)
+  def description_of(model) = models.dig(model, :description)
 
   # @return [Hash{String => String}] who each working step names
   def subject_names = @scenario[:names]
 
   private
 
+  def models = @models ||= @baseline[:models].merge(@scenario[:models])
+
   def figure(priced, label) = Views::Plans::CapacityFigure.new(place: priced, marks: self, label:)
 
   def compare(scenario, baseline)
     scenario ||= {}
     baseline ||= {}
-    scenario.keys.sort.map do |model|
+    (scenario.keys | baseline.keys).sort.map do |model|
       amount = exact(scenario[model])
       Total.new(model:, unit: unit_of(model), amount:, change: amount - exact(baseline[model]))
     end

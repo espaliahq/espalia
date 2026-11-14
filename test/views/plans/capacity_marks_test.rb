@@ -41,6 +41,17 @@ class Views::Plans::CapacityMarksTest < ActiveSupport::TestCase
     assert_nil format.change(BigDecimal("0.04"), "u")
   end
 
+  should "keep a model and a unit that fall to nothing, so the drop shows" do
+    today = payload(PLAN, "2", [ [ UNITS.first, "2" ] ])
+    emptied = { plan_id: PLAN, scenario_id: SCENARIO, totals: {}, models: {}, seats: [], unclassified: [], names: {}, units: [] }
+    scenario = marks(emptied, today)
+
+    assert scenario.measured?
+    assert_equal [ [ BigDecimal(0), BigDecimal(-2), "u" ] ], scenario.totals.map { [ it.amount, it.change, it.unit ] }
+    unit = scenario.unit_marks.call({ id: UNITS.first }).sole
+    assert_includes unit.call, "(−2.0u vs Today)"
+  end
+
   should "know the baseline from its id, which is the plan's" do
     assert marks(payload(PLAN, "1", [])).baseline?
     assert_not marks(payload(SCENARIO, "1", [])).baseline?
