@@ -213,6 +213,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "reporting_feedback_export" => cycle,
         "system_whoami" => {},
         "team_planning_baseline" => { plan_id: @plan_id },
+        "team_planning_drift" => { plan_id: @plan_id },
         "team_planning_frozen_plans" => {},
         "team_planning_plan" => { plan_id: @plan_id },
         "team_planning_plan_members" => { plan_id: @plan_id },

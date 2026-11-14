@@ -93,8 +93,24 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
     assert_equal Person::FORMER_MEMBER, read(Operations::TeamPlanning::Baseline)[:names][stranger]
   end
 
+  should "give the drift since the base, each change with its dates and a name for everyone it names" do
+    travel_to Time.utc(2026, 3, 10, 9)
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        .change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-10")
+    end
+
+    drift = read(Operations::TeamPlanning::Drift)
+    assert_equal [ @plan_id, "2026-03-01", "2026-03-10" ], drift.values_at(:plan_id, :from, :to)
+    change = drift[:changes].sole
+    assert_equal [ "fact_changed", "2026-03-10", "2026-03-10T09:00:00Z", false, [] ],
+                 change.values_at(:kind, :effective_on, :learned_at, :from_plan, :meets)
+    assert_equal({ @ada.id => "Ada Quill" }, drift[:names])
+  end
+
   should "read as an unknown plan to anyone outside it, a tenant admin included" do
-    [ Operations::TeamPlanning::Plan, Operations::TeamPlanning::PlanMembers, Operations::TeamPlanning::Baseline ].each do |op|
+    [ Operations::TeamPlanning::Plan, Operations::TeamPlanning::PlanMembers, Operations::TeamPlanning::Baseline,
+      Operations::TeamPlanning::Drift ].each do |op|
       error = assert_raises(Operations::Base::ParameterError) { read(op, as: @admin) }
       assert_equal "No such plan", error.message
     end
