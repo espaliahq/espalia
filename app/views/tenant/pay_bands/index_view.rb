@@ -7,21 +7,25 @@ class Views::Tenant::PayBands::IndexView < Views::Base
   include Views::Tenant::OrgGraph::Settings::FormHelpers
   include Views::Tenant::PayBands::BandText
   include Views::Tenant::PayBands::FigureFields
+  include Views::Tenant::PayBands::RatesPanel
 
   GONE = "No longer in the framework"
 
   # @param bands [Array<Hash>] as Operations::Tenants::PayBands lists them
+  # @param rates [Hash] as Operations::Tenants::ExchangeRates reads them: the reference currency and the rates
   # @param roles [Array<FrameworkState::Role>] with their levels, for the level picker
   # @param countries [Array<String>] the countries the Org Graph holds
-  # @param draft [Hash] what a refused add form held, to show again
+  # @param drafts [Hash] what a refused form held, under :band, :rate or :reference, to show again
   # @param user [User]
   # @param current_tenant [Tenant]
   # @param tenants [Array<Tenant>]
-  def initialize(bands:, roles:, countries:, draft: {}, user:, current_tenant:, tenants: [])
+  def initialize(bands:, rates:, roles:, countries:, drafts: {}, user:, current_tenant:, tenants: [])
     @bands = bands
+    @rates = rates
     @roles = roles
     @countries = countries
-    @draft = draft
+    @drafts = drafts
+    @draft = drafts[:band] || {}
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -35,19 +39,24 @@ class Views::Tenant::PayBands::IndexView < Views::Base
         "Pay bands", tag: :h1,
         subtitle: "What each level pays, by country. Plans price positions from these. Only tenant admins see this page."
       )
-      div(class: "space-y-6") do
-        if @bands.empty?
-          render Components::Kit::EmptyState.new(title: "No pay bands yet", size: :page) do
-            plain "Add a band for a level below. A band with no location prices that level anywhere."
-          end
-        end
-        groups.each { |role_id, bands| role_card(role_id, bands) }
-        add_card
+      div(class: "grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start") do
+        div(class: "min-w-0 space-y-6") { bands_column }
+        rates_panel
       end
     end
   end
 
   private
+
+  def bands_column
+    if @bands.empty?
+      render Components::Kit::EmptyState.new(title: "No pay bands yet", size: :page) do
+        plain "Add a band for a level below. A band with no location prices that level anywhere."
+      end
+    end
+    groups.each { |role_id, bands| role_card(role_id, bands) }
+    add_card
+  end
 
   # Bands by role id, so two roles that share a name keep their own cards.
   def groups = @bands.group_by { it[:role_id] }

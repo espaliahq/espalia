@@ -3986,6 +3986,31 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "tenants_add_exchange_rate",
+        "description" => "Add an exchange rate: one unit of from_currency is worth rate units of to_currency from " \
+                         "applies_from (YYYY-MM-DD) until a later rate for the pair applies. Both are ISO 4217 codes. One " \
+                         "rate per pair and date, either way round; use tenants_change_exchange_rate to correct one. " \
+                         "A rate is a decimal string above zero with at most twelve decimal places, such as \"0.92\": " \
+                         "one unit of from_currency is worth that much to_currency. " \
+                         "Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "from_currency" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "to_currency" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "rate" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,12})?$" },
+            "applies_from" => { "type" => "string", "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+          },
+          "required" => %w[from_currency to_currency rate applies_from],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "tenants_add_pay_band",
         "description" => "Add a pay band for a framework level (level_id, from frameworks_get) in a location: a country, " \
                          "matched to the Org Graph's country ignoring case, or blank for any location. One band per level " \
@@ -4004,6 +4029,29 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "maximum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" }
           },
           "required" => %w[level_id currency period minimum midpoint maximum],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_change_exchange_rate",
+        "description" => "Correct an exchange rate, by exchange_rate_id from tenants_exchange_rates. Its pair and " \
+                         "applies_from don't change: remove the rate and add another for that. Every report that " \
+                         "converts on a date it covers changes with it. " \
+                         "A rate is a decimal string above zero with at most twelve decimal places, such as \"0.92\": " \
+                         "one unit of from_currency is worth that much to_currency. " \
+                         "Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "exchange_rate_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "rate" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,12})?$" }
+          },
+          "required" => %w[exchange_rate_id rate],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -4064,6 +4112,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "tenants_exchange_rates",
+        "description" => "Read the active tenant's reference currency (null until set), the one its reports total in, " \
+                         "and its exchange rates: each converts one unit of from_currency to rate units of to_currency " \
+                         "from applies_from on. Reports convert with the rate in force on the date, or the inverse of the " \
+                         "reverse pair's; a pair with no rate is an error, never 1.0. Nothing is stored converted. Give " \
+                         "exchange_rate_id to read one rate. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "exchange_rate_id" => { "type" => "string" } },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "tenants_forgetting_dry_run",
         "description" => "Count the leavers the active tenant would forget today, after checking the HRIS, " \
                          "and list their person ids. Erases nothing. reason, why you ask, is recorded and " \
@@ -4099,6 +4166,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "tenants_remove_exchange_rate",
+        "description" => "Remove an exchange rate, by exchange_rate_id from tenants_exchange_rates. Dates it covered then " \
+                         "use the latest remaining rate between the two currencies, either way round, or fail if none " \
+                         "applies. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "exchange_rate_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[exchange_rate_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "tenants_remove_pay_band",
         "description" => "Remove a pay band, by pay_band_id from tenants_pay_bands. Positions it priced fall back to the " \
                          "level's any-location band, or go unpriced. Refused unless the caller is a tenant admin.",
@@ -4113,6 +4199,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "annotations" => {
           "readOnlyHint" => false,
           "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_set_reference_currency",
+        "description" => "Set the active tenant's reference currency, an ISO 4217 code: the currency its reports total " \
+                         "in. Pay bands keep their own currencies; a report converts with tenants_exchange_rates' rates " \
+                         "and fails for a pair with none. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "currency" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[currency],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
           "idempotentHint" => false
         }
       },

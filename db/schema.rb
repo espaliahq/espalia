@@ -339,6 +339,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
     t.index ["tenant_id"], name: "index_evidence_requests_on_tenant_id"
   end
 
+  create_table "exchange_rates", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "from_currency", null: false
+    t.string "to_currency", null: false
+    t.decimal "rate", precision: 24, scale: 12, null: false
+    t.date "applies_from", null: false
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "tenant_id, LEAST(from_currency, to_currency), GREATEST(from_currency, to_currency), applies_from", name: "index_exchange_rates_on_pair_and_date", unique: true
+    t.index ["updated_by_id"], name: "index_exchange_rates_on_updated_by_id"
+    t.check_constraint "from_currency::text <> to_currency::text", name: "exchange_rates_two_currencies"
+    t.check_constraint "rate > 0::numeric", name: "exchange_rates_positive"
+  end
+
   create_table "feedback_drafts", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "token", null: false
@@ -1038,6 +1053,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
     t.index ["tenant_id"], name: "index_recorded_reporting_managers_on_tenant_id"
   end
 
+  create_table "reference_currencies", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "currency", null: false
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id"], name: "index_reference_currencies_on_tenant_id", unique: true
+    t.index ["updated_by_id"], name: "index_reference_currencies_on_updated_by_id"
+  end
+
   create_table "team_planning_plan_members", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "plan_id", null: false
@@ -1167,6 +1192,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
   add_foreign_key "evidence_requests", "people", column: "requested_by_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "tenants"
+  add_foreign_key "exchange_rates", "tenants"
+  add_foreign_key "exchange_rates", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "feedback_drafts", "tenants"
   add_foreign_key "feedback_exchange_acks", "tenants"
   add_foreign_key "feedback_exchange_imports", "tenants"
@@ -1226,6 +1253,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
   add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "plan_encryption_keys", "tenants"
   add_foreign_key "recorded_reporting_managers", "tenants"
+  add_foreign_key "reference_currencies", "tenants"
+  add_foreign_key "reference_currencies", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "team_planning_plan_members", "tenants"
   add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "team_planning_scenarios", "tenants"

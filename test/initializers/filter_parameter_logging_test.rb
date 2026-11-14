@@ -10,6 +10,12 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal({ "arguments" => { "midpoint" => "[FILTERED]" } }, filtered("arguments" => { "midpoint" => "120000" }))
   end
 
+  should "keep exchange rates out of the log, from the form and from a tool call" do
+    assert_equal({ "exchange_rate" => "[FILTERED]" }, filtered("exchange_rate" => { "rate" => "0.5" }))
+    assert_equal({ "arguments" => { "rate" => "[FILTERED]" } }, filtered("arguments" => { "rate" => "0.5" }))
+    assert_equal({ "exchange_rate_id" => "id", "frequency" => "often" }, filtered("exchange_rate_id" => "id", "frequency" => "often"))
+  end
+
   should "leave a band's id and other limits readable" do
     assert_equal({ "pay_band_id" => "id", "maximum_rows" => 3 }, filtered("pay_band_id" => "id", "maximum_rows" => 3))
   end

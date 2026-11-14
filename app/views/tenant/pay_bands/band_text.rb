@@ -5,6 +5,10 @@
 module Views::Tenant::PayBands::BandText
   PER = { "year" => "a year", "month" => "a month", "hour" => "an hour" }.freeze
 
+  # @param iso [String] a date, "2026-07-01"
+  # @return [String] "1 Jul 2026"
+  def self.day_text(iso) = Date.iso8601(iso).strftime("%-d %b %Y")
+
   private
 
   # @param band [Hash] as Operations::Tenants::PayBands lists it
@@ -23,6 +27,8 @@ module Views::Tenant::PayBands::BandText
     on = Time.zone.parse(band[:updated_at]).strftime("%-d %b %Y")
     band[:updated_by] ? "Changed by #{band[:updated_by]} on #{on}" : "Changed on #{on}"
   end
+
+  def day_text(iso) = Views::Tenant::PayBands::BandText.day_text(iso)
 
   # @param figure [String] a decimal string, "120000.00"
   # @return [String] "120,000", or "52.50" where there are cents

@@ -68,6 +68,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "org_graph_activity"
     assert_includes reached, "org_graph_person_get"
     assert_includes reached, "tenants_pay_bands"
+    assert_includes reached, "tenants_exchange_rates"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
 
     editors = Operations::OrgGraph::Editors.call(context: lead_context, params: {})
@@ -122,8 +123,10 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
 
     suggest_as_quinn
     place_quinn_in_the_org_graph
+    erased = User.find_by!(email: ERASED_EMAIL)
     PayBand.create!(level: @fx.e_levels.fetch(2), currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
-                    updated_by: User.find_by!(email: ERASED_EMAIL))
+                    updated_by: erased)
+    ExchangeRate.create!(from_currency: "NZD", to_currency: "AUD", rate: 1, applies_from: Date.current, updated_by: erased)
   end
 
   def place_quinn_in_the_org_graph
@@ -213,6 +216,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "team_planning_planners" => {},
         "team_planning_plans" => {},
         "tenants_pay_bands" => {},
+        "tenants_exchange_rates" => {},
         "tenants_forgetting_dry_run" => {}
       }
     end
