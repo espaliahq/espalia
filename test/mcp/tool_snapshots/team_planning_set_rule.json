@@ -1,0 +1,44 @@
+{
+  "name": "team_planning_set_rule",
+  "description": "Set one rule in a scenario of a Team Planning plan, by its name from tenants_planning_rules, for the whole plan or, with unit_id, for that unit and the units below it. value is an object in the shape that rule's value_schema gives, and replaces the value above it whole. Steps after the scenario, and its alternatives, inherit it unless they change it. To follow the parent again, use team_planning_clear_change with facet 'rule:<name>'. A refusal names what is wrong, never the value. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      },
+      "unit_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "Omit to set the rule for the whole plan."
+      },
+      "rule": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "value": {
+        "type": "object",
+        "description": "In the rule's value_schema"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "rule",
+      "value"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
