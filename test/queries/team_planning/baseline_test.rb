@@ -14,7 +14,7 @@ class TeamPlanning::BaselineTest < ActiveSupport::TestCase
     departments, squads = SecureRandom.uuid_v7, SecureRandom.uuid_v7
     @engineering, @payments, @platform = Array.new(3) { SecureRandom.uuid_v7 }
 
-    travel_to Time.zone.parse("2026-02-01 09:00")
+    travel_to Time.utc(2026, 2, 1, 9)
     as_tenant do
       @ada = create(:person, tenant: @tenant, name: "Ada Quill")
       @brook = create(:person, tenant: @tenant, name: "Brook Tamsin")
@@ -78,7 +78,7 @@ class TeamPlanning::BaselineTest < ActiveSupport::TestCase
   end
 
   should "leave out an edit the Org Graph learned on the base date, which arrives as drift" do
-    travel_to Time.zone.parse("2026-03-02 10:00")
+    travel_to Time.utc(2026, 3, 2, 10)
     as_tenant do
       @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: BASE_ON)
       @handler.set_membership(@grace.id, @platform, **ESPALIA, effective_on: BASE_ON)
@@ -90,9 +90,9 @@ class TeamPlanning::BaselineTest < ActiveSupport::TestCase
   end
 
   should "show the later of two changes to one fact taking effect on the base date, both known before it" do
-    travel_to Time.zone.parse("2026-02-10 09:00")
+    travel_to Time.utc(2026, 2, 10, 9)
     as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: BASE_ON) }
-    travel_to Time.zone.parse("2026-02-11 09:00")
+    travel_to Time.utc(2026, 2, 11, 9)
     as_tenant { @handler.change_title(@ada.id, "Staff Engineer", **ESPALIA, effective_on: BASE_ON) }
 
     assert_equal "Staff Engineer", person(baseline, @ada).title
