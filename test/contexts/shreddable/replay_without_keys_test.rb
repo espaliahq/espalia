@@ -14,7 +14,17 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     shreddable :note, by: :plan
   end
 
+  # Decides from the note, so replay would differ if it ever saw the value.
+  class Notebook
+    include Shreddable::AggregateRoot
+
+    on NoteWritten do |event|
+      (@notes ||= []) << [ event.data[:note].removed?, event.data[:note].to_s, event.data[:note].reveal ]
+    end
+  end
+
   AGGREGATES = {
+    %r{/PlanNotes-} => Notebook,
     %r{/Framework-} => Frameworks::Aggregate,
     %r{/PersonDev-} => PersonDevelopment::Aggregate,
     %r{/AssessmentCycle-} => AssessmentCycles::Aggregate,
@@ -28,6 +38,8 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     @tenant = create(:tenant)
     @event_store = Rails.configuration.event_store
     build_org_graph(@tenant)
+    @other_tenant = create(:tenant)
+    write_note(@other_tenant, SecureRandom.uuid_v7)
     ActsAsTenant.with_tenant(@tenant) do
       Frameworks::CommandHandler.new.create_framework(SecureRandom.uuid_v7, "Engineering Growth")
       enrol_in_role_lens_framework(create(:person, tenant: @tenant), build_role_lens_framework(tenant: @tenant), tenant: @tenant)
@@ -36,9 +48,15 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
       admin = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, tenant: @tenant, user:, person:, role: :admin), person:)
       @plan_id = SecureRandom.uuid_v7
       TeamPlanning::CommandHandler.new(actor: admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
-      @event_store.with_metadata(tenant_id: @tenant.id) do
-        @event_store.publish(NoteWritten.new(data: { plan_id: @plan_id, note: "Moving to the platform team" }),
-                             stream_name: "tenant-#{@tenant.id}/PlanNotes-#{@plan_id}")
+    end
+    write_note(@tenant, @plan_id)
+  end
+
+  def write_note(tenant, plan_id)
+    ActsAsTenant.with_tenant(tenant) do
+      @event_store.with_metadata(tenant_id: tenant.id) do
+        @event_store.publish(NoteWritten.new(data: { plan_id: plan_id, note: "Moving to the platform team" }),
+                             stream_name: "tenant-#{tenant.id}/PlanNotes-#{plan_id}")
       end
     end
   end
@@ -63,7 +81,7 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
 
   def destroy_every_key
     ActsAsTenant.with_tenant(@tenant) { PlanKeyStore.new.destroy_plan(@plan_id) }
-    assert_empty PlanEncryptionKey.unscoped.live
+    assert_empty PlanEncryptionKey.unscoped.live.where(tenant: @tenant)
   end
 
   should "replay every aggregate to the same state once every key is destroyed" do
@@ -79,5 +97,14 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     destroy_every_key
 
     assert_nothing_raised { Projections::GlobalReplayer.replay_all(tenant: @tenant) }
+  end
+
+  should "read the whole store under one tenant, as the replayers do, past another tenant's shreddable events" do
+    destroy_every_key
+
+    ActsAsTenant.with_tenant(@tenant) do
+      events = assert_nothing_raised { @event_store.read.of_type([ NoteWritten ]).to_a }
+      assert_equal [ @tenant.id, @other_tenant.id ].sort, events.map { it.metadata[:tenant_id] }.sort
+    end
   end
 end
