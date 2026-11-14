@@ -35,7 +35,11 @@ class ExchangeRate < ApplicationRecord
   # @param on [Date] the date the amount is for
   # @return [BigDecimal] unrounded
   # @raise [MissingRate] naming the pair and the date when no rate is in force
+  # @raise [ArgumentError] without a tenant, which would read every tenant's rates, or without a date
   def self.convert(amount, from:, to:, on:)
+    raise ArgumentError, "ExchangeRate.convert needs a current tenant" unless ActsAsTenant.current_tenant
+    raise ArgumentError, "ExchangeRate.convert needs the Date the amount is for" unless on.is_a?(Date)
+
     amount = BigDecimal(amount.to_s)
     from = Currency::NORMALIZE.call(from)
     to = Currency::NORMALIZE.call(to)

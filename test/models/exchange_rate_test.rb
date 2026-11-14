@@ -58,6 +58,14 @@ class ExchangeRateTest < ActiveSupport::TestCase
     assert_raises(ExchangeRate::MissingRate) { convert(100, to: "USD") }
   end
 
+  should "refuse to convert without a tenant or a date, rather than read every rate there is" do
+    rate.save!
+
+    ActsAsTenant.without_tenant { assert_raises(ArgumentError) { convert(100) } }
+    assert_raises(ArgumentError) { convert(100, on: nil) }
+    assert_raises(ArgumentError) { convert(100, on: "2026-07-01") }
+  end
+
   should "convert a currency to itself without a rate" do
     assert_equal BigDecimal("100"), convert(100, from: "aud", to: "AUD")
   end
