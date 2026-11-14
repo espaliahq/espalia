@@ -26,11 +26,15 @@ class Shreddable::Value
   #   hash with string keys
   # @raise [ArgumentError] for anything JSON would read back differently
   def initialize(value, removed: false)
-    unless removed || JSON.parse(JSON.generate(value)) == value
-      raise ArgumentError, "A shreddable value must read back the same from JSON: use string keys, and no symbols, dates or times"
+    unless removed
+      read_back = JSON.parse(JSON.generate(value))
+      unless read_back == value
+        raise ArgumentError, "A shreddable value must read back the same from JSON: use string keys, and no symbols, dates or times"
+      end
     end
 
-    @value = value
+    # A frozen copy, so nobody can change it after the check.
+    @value = removed ? nil : Ractor.make_shareable(read_back)
     @removed = removed
     freeze
   end

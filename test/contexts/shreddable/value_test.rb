@@ -33,6 +33,17 @@ class Shreddable::ValueTest < ActiveSupport::TestCase
     assert_equal @value, Shreddable::Value.wrap("Moving to the platform team")
   end
 
+  should "hold a frozen copy, so neither the caller nor a reader can change it" do
+    payload = { "amount" => 182_000, "split" => [ { "team" => "Platform" } ] }
+    value = Shreddable::Value.new(payload)
+    payload["split"] << { "team" => "Payments" }
+    payload[:currency] = "AUD"
+
+    assert_equal({ "amount" => 182_000, "split" => [ { "team" => "Platform" } ] }, value.reveal)
+    assert_raises(FrozenError) { value.reveal["currency"] = "AUD" }
+    assert_raises(FrozenError) { value.reveal["split"].first["team"] = "Payments" }
+  end
+
   should "refuse a value that would read back differently from JSON" do
     [ { amount: 182_000 }, :platform, Date.new(2026, 11, 14), [ { "at" => Time.current } ] ].each do |value|
       assert_raises(ArgumentError, value.inspect) { Shreddable::Value.new(value) }
