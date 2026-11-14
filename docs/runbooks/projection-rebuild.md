@@ -46,6 +46,18 @@ If you're not sure, run the projection's round-trip test locally (`test/support/
 
 The sync handlers in [config/initializers/rails_event_store.rb](../../config/initializers/rails_event_store.rb) marked with `MUST NOT be registered as a projection` (`PersonEnrollmentSync`, `AutoEnrollNewAssignments`) dispatch domain commands. Replaying them would re-fire enrollments against already-enrolled people and raise from the aggregate. The `Projections::Registry::REPLAYABLE` allowlist excludes them by design.
 
+## Writes that refuse during a rebuild
+
+A rebuild empties a projection's tables for each tenant, then replays them. A write that planned from those tables meanwhile would decide from an empty or half-built list. Retiring a unit once ended nobody's membership this way, because the member list it read was still being replayed ([#173](https://github.com/espaliahq/espalia/issues/173)).
+
+So the writers that plan from `org_graph/members` or `org_graph/structure` refuse while either one is rebuilt. They are: retiring a unit, applying a succession, the HRIS level mirror, and handing a level over or back. Each takes a shared advisory lock on the same key a rebuild holds exclusively (`ProjectionVersion.unless_rebuilding`), so:
+
+- a write during a rebuild refuses at once. A person sees "The Org Graph is being rebuilt; try again in a minute." over the web or MCP.
+- an HRIS sync during a rebuild skips its unit and membership writes and counts them as `levels_skipped_while_rebuilding`, never as an error. The next sync mirrors as usual.
+- a rebuild that starts during a write waits for the write to finish.
+
+**The guard covers only rebuilds that start after it ships.** A rebuild that runs in the same deploy as the guard, through `REBUILD_ON_DEPLOY`, runs while the old release still serves traffic, and the old release takes no lock. Rebuild `org_graph/members` or `org_graph/structure` in a quiet window until one deploy carrying the guard has gone out.
+
 ## Deploy choreography
 
 Because predeploy hard-fails on a stale projection, a `CODE_VERSION` bump can't ship until the rebuild has stamped the version row. Render's pre-deploy phase runs against the **new image**; the Shell tab and one-off jobs run against the **currently-deployed image**. Three viable paths:
@@ -223,4 +235,5 @@ If steps 3 + 4 suggest the rebuild will take longer than predeploy allows, use P
 | Replay runs forever | Very large stream history | Use Path B; consider chunking via `BatchEnumerator` |
 | Read model wrong after replay | Event payload differs across history; old events have old shape | Add an RES upcaster, then rebuild |
 | Live users see Turbo channel thrashing during rebuild | A side-effect handler (broadcast, ActionCable, job) missing `Projections::Replayer.replay_mode?` guard | Add the guard; redeploy before the next rebuild |
+| "The Org Graph is being rebuilt" while no rebuild runs | A process still holds the projection's lock: a rebuild left running, or a stuck console | Find the holder in `pg_locks` (`locktype = 'advisory'`) and end that session |
 | Predeploy fails after deploy looked clean | Version bumped in code but `projection_versions` not stamped | Use Path A or B above; do NOT use `mark_rebuilt` without verifying state |
