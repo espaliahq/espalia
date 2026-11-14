@@ -2624,6 +2624,34 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_add_level",
+        "description" => "Add a level to the bottom of the Org Graph's taxonomy, from effective_on (today by default). " \
+                         "Espalia holds the new level; use org_graph_reorder_levels to move it up. Level names are " \
+                         "unique, ignoring case. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "name" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_add_member",
         "description" => "Place a person in a live unit of the Org Graph, from effective_on (today by default), with " \
                          "an optional role and allocation (greater than 0, at most 1). A person can be in several " \
@@ -2963,6 +2991,38 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id", "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_reorder_levels",
+        "description" => "Change the order of the Org Graph's taxonomy levels, from effective_on (today by default). " \
+                         "level_ids lists every level once, top first. A level an HRIS provides keeps its place, as its " \
+                         "order comes from the HRIS, and sits above every level Espalia holds. Two levels that both hold " \
+                         "units keep their order, so no unit ends up above its parent's level. Refused unless the " \
+                         "caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "level_ids" => {
+              "type" => "array",
+              "items" => {
+                "type" => "string"
+              },
+              "description" => "every level_id in the taxonomy, top first"
+            }
+          },
+          "required" => [ "level_ids" ],
           "additionalProperties" => false
         },
         "annotations" => {
