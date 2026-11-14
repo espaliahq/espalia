@@ -29,7 +29,7 @@ class Operations::TeamPlanning::BudgetLines < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure }
     { plan_id: plan.id, scenario_id:, budget_lines: map.budget_lines.map { line_payload(it) },
-      orphaned: orphaned(plan, scenario_id, map.orphaned_line_ids) }
+      orphaned: map.orphaned_lines.map { |budget_line_id, kind| { budget_line_id:, kind: } } }
   end
 
   private
@@ -43,15 +43,5 @@ class Operations::TeamPlanning::BudgetLines < Operations::Base
       role_id: line.role_id, level_id: line.level_id, role: line.role_name, level_name: line.level_name,
       location: line.location.presence, cost_centre: line.cost_centre.presence
     }
-  end
-
-  def orphaned(plan, scenario_id, line_ids)
-    return [] if line_ids.empty?
-
-    changes = ::TeamPlanning::Repository.new.load_plan(plan.id).winning_changes(scenario_id)
-    line_ids.map do |line_id|
-      cut = changes[[ line_id, ::TeamPlanning::Events::BudgetLineSet.facet ]].is_a?(::TeamPlanning::Events::BudgetLineCut)
-      { budget_line_id: line_id, kind: cut ? "cut" : "set" }
-    end
   end
 end

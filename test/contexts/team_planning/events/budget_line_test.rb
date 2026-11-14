@@ -49,9 +49,9 @@ class TeamPlanning::Events::BudgetLineTest < ActiveSupport::TestCase
 
   should "read a change to a tenant line that has gone as orphaned, never dropped or added" do
     gone = map([])
-    assert_equal [ TENANT ], SET.apply_to(gone, { subject_id: TENANT, **SET.end_state(figures(tenant_line: true)) }).orphaned_line_ids
-    assert_equal [ TENANT ], CUT.apply_to(gone, { subject_id: TENANT, tenant_line: true }).orphaned_line_ids
-    assert_empty CUT.apply_to(gone, { subject_id: PLAN, tenant_line: false }).orphaned_line_ids
+    assert_equal({ TENANT => "set" }, SET.apply_to(gone, { subject_id: TENANT, **SET.end_state(figures(tenant_line: true)) }).orphaned_lines)
+    assert_equal({ TENANT => "cut" }, CUT.apply_to(gone, { subject_id: TENANT, tenant_line: true }).orphaned_lines)
+    assert_empty CUT.apply_to(gone, { subject_id: PLAN, tenant_line: false }).orphaned_lines
     assert_empty SET.apply_to(gone, { subject_id: TENANT, **SET.end_state(figures(tenant_line: true)) }).budget_lines
   end
 end

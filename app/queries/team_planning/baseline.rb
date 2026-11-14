@@ -34,11 +34,11 @@ class TeamPlanning::Baseline
   #   alternative of. A departure set in one of them marks the person leaving; one set earlier takes them off
   # @!attribute departed [Array<Departed>] the people a departure in an earlier step took off the map
   # @!attribute budget_lines [Array<BudgetLine>] the tenant's approved lines, read live, with the plan's changes on top
-  # @!attribute orphaned_line_ids [Array<String>] the tenant lines a change sets or cuts that the tenant has since removed
+  # @!attribute orphaned_lines [Hash{String => String}] each tenant line the tenant has since removed, by id, to "set" or "cut", whichever change came last
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
-                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_line_ids) do
+                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
-                   orphaned_line_ids: [], **) = super
+                   orphaned_lines: {}, **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in

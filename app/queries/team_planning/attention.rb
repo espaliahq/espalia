@@ -108,9 +108,8 @@ class TeamPlanning::Attention
 
   # The tenant removed a line the plan changed or cut, so the change stands on nothing.
   def budget_lines
-    @map.orphaned_line_ids.map do |line_id|
-      cut = @changes[[ line_id, BUDGET_LINE ]].is_a?(TeamPlanning::Events::BudgetLineCut)
-      item(line_id, BUDGET_LINE, "#{cut ? 'Cuts' : 'Changes'} a budget line the organisation has since removed")
+    @map.orphaned_lines.map do |line_id, kind|
+      item(line_id, BUDGET_LINE, "#{kind == 'cut' ? 'Cuts' : 'Changes'} a budget line the organisation has since removed")
     end
   end
 

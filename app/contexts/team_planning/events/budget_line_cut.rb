@@ -25,6 +25,6 @@ class TeamPlanning::Events::BudgetLineCut < TeamPlanning::Events::Change
     id = data[:subject_id]
     return map.with(budget_lines: map.budget_lines.reject { it.id == id }) if map.budget_lines.any? { it.id == id }
 
-    data[:tenant_line] ? map.with(orphaned_line_ids: map.orphaned_line_ids | [ id ]) : map
+    data[:tenant_line] ? map.with(orphaned_lines: map.orphaned_lines.merge(id => "cut")) : map
   end
 end
