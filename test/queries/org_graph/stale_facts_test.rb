@@ -48,4 +48,8 @@ class OrgGraph::StaleFactsTest < ActiveSupport::TestCase
 
     assert_nil stale.membership(@org[:ada].id, @org[:platform])
   end
+
+  should "know the facts behind every employment line the person drawer shows" do
+    assert_equal OrgGraph::PersonProfile::EMPLOYMENT.keys.sort, OrgGraph::StaleFacts::EMPLOYMENT.keys.sort
+  end
 end
