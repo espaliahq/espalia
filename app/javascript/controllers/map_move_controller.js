@@ -1,6 +1,7 @@
 // Drag a person or a position on the scenario map to move it. A person drops
-// on another unit, on Unassigned, or on a position to fill it; a position
-// drops on another unit. A drop clicks the dragged row's own "Move…" button
+// on another unit, on Unassigned, or on a position to fill it, and someone in
+// a position can drop on its own unit to hold a place there instead; a
+// position drops on another unit. A drop clicks the dragged row's own "Move…" button
 // with the destination in `data-move-to`, so the dialog that confirms the move
 // is the one the keyboard path opens.
 //
@@ -73,12 +74,13 @@ export default class extends BaseController {
 
   #accepts(target) {
     if (!this.dragged) return false
-    if (target.dataset.mapPosition) return this.dragged.dataset.mapDrag === "person"
+    const { mapDrag, mapMoveFrom, mapMoveFromPosition } = this.dragged.dataset
+    if (target.dataset.mapPosition) return mapDrag === "person" && target.dataset.mapPosition !== mapMoveFromPosition
 
     const unit = target.dataset.mapUnit
-    if (unit === this.dragged.dataset.mapMoveFrom) return false
+    if (unit === mapMoveFrom && !mapMoveFromPosition) return false
 
-    return this.dragged.dataset.mapDrag === "person" || unit !== UNASSIGNED
+    return mapDrag === "person" || unit !== UNASSIGNED
   }
 
   #destination(target) {

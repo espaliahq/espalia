@@ -225,7 +225,7 @@ class Views::Plans::ScenarioMap < Views::Base
   def person_data(person, place)
     return { map_person: person[:id] } unless @moving
 
-    { map_person: person[:id], map_move_from: from(place), map_drag: "person", action: "dragstart->map-move#start dragend->map-move#end" }
+    { map_person: person[:id], map_move_from: from(place), map_move_from_position: place&.dig(:position_id), map_drag: "person", action: "dragstart->map-move#start dragend->map-move#end" }
   end
 
   def move_button(person, place)

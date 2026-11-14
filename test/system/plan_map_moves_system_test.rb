@@ -133,6 +133,24 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
     within(position) { assert_text "Cy Loose · 100%" }
   end
 
+  should "let someone in a position drop on its own unit to hold a place there instead" do
+    call(Operations::TeamPlanning::SetAssignment, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @cy.id,
+                                                            placements: [ { position_id: @position, allocation: 1 } ])
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit map_plan_path(@plan_id, scenario: @q1)
+    within(position) { assert_text "Cy Loose · 100%" }
+    wait_for_stimulus "map-move"
+    drag("[data-map-person='#{@cy.id}']", "[data-map-unit='#{@payments}']")
+
+    within("#move-person-modal") do
+      assert_text "Moving Cy Loose in Q1 hires"
+      assert_equal @payments, find_field("To").value
+    end
+    click_button_with_js_fallback("Save move", expect_text: "Move saved.")
+    assert_no_selector "[data-map-occupant='#{@cy.id}']"
+    within(unit("Payments")) { assert_text "Cy Loose" }
+  end
+
   should "open the position dialog on the unit a position is dropped on" do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     visit map_plan_path(@plan_id, scenario: @q1)
