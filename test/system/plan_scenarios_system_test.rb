@@ -2,10 +2,10 @@
 
 require "application_system_test_case"
 
-# Fork, rename and switch scenarios from a plan's page (#271).
+# Fork, edit and switch scenarios from a plan's page (#271, #272).
 class PlanScenariosSystemTest < ApplicationSystemTestCase
   FORK = "##{Views::Plans::ScenarioDialogs::FORK_ID}".freeze
-  RENAME = "##{Views::Plans::ScenarioDialogs::RENAME_ID}".freeze
+  EDIT = "##{Views::Plans::ScenarioDialogs::EDIT_ID}".freeze
 
   setup do
     @tenant = create(:tenant)
@@ -75,40 +75,50 @@ class PlanScenariosSystemTest < ApplicationSystemTestCase
         end
       end
 
-      should "let an editor rename a scenario from its menu and from its map" do
+      should "let an editor rename and describe a scenario from its menu, and edit it from its map" do
         sign_in_as(@planner.user)
         visit plan_path(@plan_id)
         assert_selector "h1", text: "Pay review 2027"
-        row_action(@q1, Views::Plans::ScenarioDialogs::RENAME_ID)
+        row_action(@q1, Views::Plans::ScenarioDialogs::EDIT_ID)
 
-        within(RENAME) do
+        within(EDIT) do
           assert_equal "Q1 hires", find_field("Name").value
+          assert_equal "", find_field("Description").value
           js_fill_in "Name", with: "Lean Q1"
+          js_fill_in "Description", with: "Hire two seniors before Q3"
         end
-        click_button_with_js_fallback("Save", expect_text: "Renamed to Lean Q1.")
-        within("table") { assert_text "then Lean Q1" }
+        click_button_with_js_fallback("Save", expect_text: "Saved Lean Q1.")
+        within("table") do
+          assert_text "then Lean Q1"
+          assert_text "Hire two seniors before Q3"
+        end
 
         visit map_plan_path(@plan_id, scenario: @q1)
         assert_text "with this scenario's changes"
-        open_dialog("Rename…", RENAME)
-        within(RENAME) do
+        open_dialog("Edit…", EDIT)
+        within(EDIT) do
+          assert_equal "Hire two seniors before Q3", find_field("Description").value
           js_fill_in "Name", with: "Q1 hiring"
         end
-        click_button_with_js_fallback("Save", expect_text: "Renamed to Q1 hiring.")
+        click_button_with_js_fallback("Save", expect_text: "Saved Q1 hiring.")
         assert_current_path map_plan_path(@plan_id, scenario: @q1)
         assert_no_sideways_overflow
       end
 
-      should "show a viewer no way to fork or rename" do
+      should "show a viewer a scenario's description, and no way to fork or edit" do
+        ActsAsTenant.with_tenant(@tenant) do
+          call(Operations::TeamPlanning::DescribeScenario, @planner, plan_id: @plan_id, scenario_id: @q1, description: "Hire two seniors before Q3")
+        end
         sign_in_as(@viewer.user)
         visit plan_path(@plan_id)
         assert_selector "h1", text: "Pay review 2027"
         assert_no_button "New scenario"
         assert_no_selector "[aria-label^='Actions for']"
+        within("table") { assert_text "Hire two seniors before Q3" }
 
         visit map_plan_path(@plan_id, scenario: @q1)
         assert_text "with this scenario's changes"
-        assert_no_button "Rename…"
+        assert_no_button "Edit…"
       end
     end
   end

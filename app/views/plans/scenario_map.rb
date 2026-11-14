@@ -44,7 +44,7 @@ class Views::Plans::ScenarioMap < Views::Base
     div(class: "flex flex-wrap items-center gap-2") do
       scenario_pills
       scenario_select
-      rename_button if @can_edit && !baseline?(@map[:scenario_id])
+      edit_button if @can_edit && !baseline?(@map[:scenario_id])
     end
   end
 
@@ -79,14 +79,14 @@ class Views::Plans::ScenarioMap < Views::Base
     end
   end
 
-  def rename_button
+  def edit_button
     current = @scenarios.find { it[:scenario_id] == @map[:scenario_id] }
     return unless current
 
     render Components::Kit::Button.new(
       variant: :ghost, size: :sm,
-      data: Views::Plans::ScenarioDialogs.rename_trigger(plan_scenario_path(@map[:plan_id], current[:scenario_id]), current[:name])
-    ) { "Rename…" }
+      data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@map[:plan_id], current[:scenario_id]), current)
+    ) { "Edit…" }
   end
 
   def scenario_label(scenario) = baseline?(scenario[:scenario_id]) ? "Today" : scenario[:name]
