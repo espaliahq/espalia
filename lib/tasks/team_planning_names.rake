@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Seals plan and scenario names stored in clear before #209. Output is
+# Seals plan and scenario names stored in clear before [#209](https://github.com/espaliahq/espalia/issues/209). Output is
 # tenant ids and counts only, never a name.
 namespace :team_planning do
   namespace :names do
