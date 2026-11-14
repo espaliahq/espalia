@@ -9,8 +9,8 @@ class Operations::Tenants::BudgetLines < Operations::Base
               "(existing, replacement or new) and approved_on, amount with its currency and period (year or month) " \
               "as entered and never converted, head count, and the role, level, location and cost centre it was " \
               "approved for, where it names them. amount is null for a line with no amount, never zero. Give " \
-              "budget_line_id to read one line. Refused unless the caller is a tenant admin; a plan member reads " \
-              "lines through team_planning_budget_lines."
+              "budget_line_id to read one line. Refused unless the caller is a tenant admin; a plan member sees " \
+              "lines only through their own plan."
   category :read
   approval :none
 
