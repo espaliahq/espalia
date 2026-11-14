@@ -14,11 +14,10 @@
 # A plan whose base is still to come holds every change against today, so
 # nothing it plans reads conflicting before the plan starts.
 #
-# Only a kind that reads its end state off a map
-# ({TeamPlanning::Events::Change.readable?}) and that the Org Graph can move
-# ({TeamPlanning::Events::Change.subject_moved_by}) has a status. A plan-only
-# kind, such as a rule, would read pending forever, so it is left out. Today's
-# map holds the units the Org Graph retired and its successions, read through
+# Only a kind the Org Graph can show has a status
+# ({TeamPlanning::Events::Change.tracked?}). A plan-only kind, such as a rule,
+# would read pending forever, so it is left out. Today's map holds the units
+# the Org Graph retired and its successions, read through
 # {TeamPlanning::Events::Change.read_org_graph}, since a succession there has
 # an id the plan never saw.
 #
@@ -78,7 +77,7 @@ class TeamPlanning::Status
   private
 
   def tracked_changes
-    @aggregate.winning_changes(@scenario_id).select { |_, change| change.class.readable? && change.class.meets_org_graph? }
+    @aggregate.winning_changes(@scenario_id).select { |_, change| change.class.tracked? }
   end
 
   def entry(change, key, base:, now:)

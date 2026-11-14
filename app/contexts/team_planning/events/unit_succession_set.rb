@@ -51,13 +51,6 @@ class TeamPlanning::Events::UnitSuccessionSet < TeamPlanning::Events::Change
     sides.find { same_end_state?(it, planned) } || sides.find { it[:predecessor_ids].intersect?(planned[:predecessor_ids]) }
   end
 
-  # No Org Graph change names a planned succession, for the same reason, so
-  # drift never ties one to it; the status read finds it by its predecessors.
-  #
-  # @param _change [OrgGraph::ChangesBetween::Change]
-  # @return [nil]
-  def self.subject_moved_by(_change) = nil
-
   def self.ids!(values, what)
     ids = Array(values).map { TeamPlanning::Events::UnitSet.id_or_nil(it, what) }.compact.uniq.sort
     raise TeamPlanning::Error, "A succession needs at least one #{what}" if ids.empty?

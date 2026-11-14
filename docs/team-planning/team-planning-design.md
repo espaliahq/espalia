@@ -208,7 +208,8 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    If the Org Graph holds its facet, also give it `subject_moved_by(change)`, naming the
    subject an Org Graph change moves, and `read_from(map, subject_id:, facet:)`, reading
    its end state back off a map. Without the first it meets no drift; without both it has
-   no status. Test both in the drift and status tests, as their test-only kinds do.
+   no status, unless the Org Graph holds the subject under an id of its own and the kind
+   overrides `read_org_graph` to find it, as a succession does (`Change.tracked?`). Test both in the drift and status tests, as their test-only kinds do.
 2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
    and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
    resolver.
@@ -469,8 +470,8 @@ conflicting before the plan starts.
 
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
-Org Graph can move (it implements `subject_moved_by`) has a status: a unit set, a
-retirement, a succession and an assignment. A rule and a position are plan-only, so each
+Org Graph can move (it implements `subject_moved_by`) or find (it overrides
+`read_org_graph`) has a status: a unit set, a retirement, a succession and an assignment. A rule and a position are plan-only, so each
 would read pending forever.
 
 Today's map is `Baseline#map_on(today, history: true)`, which adds the units the Org Graph

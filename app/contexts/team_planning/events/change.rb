@@ -94,6 +94,10 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [Boolean] whether the Org Graph can move this kind's facet, so it has a status per change
   def self.meets_org_graph? = overrides?(:subject_moved_by)
 
+  # @return [Boolean] whether a change of this kind has a status: it reads its end state off a map,
+  #   and the Org Graph either moves its facet or holds its subject under an id of its own
+  def self.tracked? = readable? && (meets_org_graph? || overrides?(:read_org_graph))
+
   # @param facet [String] the second half of a change's {#key}
   # @return [Boolean] whether a change of this kind can have that key
   def self.holds?(facet) = facet == self.facet
