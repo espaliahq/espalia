@@ -66,7 +66,7 @@ class PlansSystemTest < ApplicationSystemTestCase
     assert_text "You're not in any plans yet"
     assert_no_text "Pay review 2027"
     visit plan_path(@plan_id)
-    assert_no_text "Pay review 2027"
+    [ "Pay review 2027", "Q1 hires", "Slower hiring", "Erin Editor" ].each { assert_no_text it }
   end
 
   private
