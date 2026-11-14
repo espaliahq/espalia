@@ -27,7 +27,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
           render Components::Kit::Badge.new("From #{provider_label(@unit)}, read-only", leading_icon: :lock)
         end
         p(class: "text-sm text-muted") { unit_summary }
-        render Components::Kit::Button.new(variant: :outline, size: :sm, href: edit_tenant_org_unit_path(@unit),
+        render Components::Kit::Button.new(variant: :outline, size: :sm, href: edit_tenant_org_unit_path(@unit, **@comparison.params),
                                            class: "sm:ml-auto") do
           icon(:pencil, class: "size-4")
           plain "Edit unit"
@@ -100,7 +100,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   def member_row(membership)
     person = membership.person
     li(class: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm") do
-      a(href: tenant_org_person_path(person, unit: @unit.id), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+      a(href: tenant_org_person_path(person, unit: @unit.id, **@comparison.params), class: "font-medium text-link hover:text-link-hover underline") { person.name }
       also = @overview.other_units_of(membership)
       span(class: "text-xs text-muted") { "also #{also.map(&:name).join(', ')}" } if also.any?
       span(class: "ml-auto flex items-baseline gap-3 text-muted") do

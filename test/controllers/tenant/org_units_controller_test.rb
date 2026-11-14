@@ -30,6 +30,28 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
   context "as a tenant admin" do
     setup { sign_in @admin_user }
 
+    context "with a window picked" do
+      setup { @window = { from: "2026-02-01", to: Date.current.iso8601, by: "learned" } }
+
+      should "keep the Units view compared behind the drawer, and the window in its links and forms" do
+        get edit_tenant_org_unit_path(@org[:checkout], **@window)
+
+        page = Nokogiri::HTML5(response.body)
+        assert_includes page.at_css("#org-graph-comparison").text, "What changed"
+        assert_equal tenant_org_graph_path(unit: @org[:checkout], **@window), drawer.at_css("a[aria-label='Close']")["href"]
+        assert drawer.at_css("a[href='#{tenant_org_person_path(@org[:brook], unit: @org[:checkout], back: "edit", **@window)}']")
+        drawer.css("form[method='post']").each do |form|
+          assert_equal @window.values, %w[from to by].map { form.at_css("input[name='#{it}']")&.[]("value") }, form["action"]
+        end
+      end
+
+      should "come back to the drawer with the window after a change" do
+        patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { name: "Core" }, **@window }
+
+        assert_redirected_to edit_tenant_org_unit_path(@org[:platform], **@window)
+      end
+    end
+
     should "open a unit's drawer over the Units view, with its details, owners and members" do
       get edit_tenant_org_unit_path(@org[:checkout])
 

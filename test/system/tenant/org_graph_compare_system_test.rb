@@ -63,6 +63,30 @@ class Tenant::OrgGraphCompareSystemTest < ApplicationSystemTestCase
       assert_text "learned #{I18n.l(@today, format: '%-d %b')}"
     end
 
+    should "stay compared through editing a unit, closing its drawer and changing the edit back" do
+      visit tenant_org_graph_path(unit: @org[:platform], from: (@today - 30).iso8601)
+      assert_text "What changed"
+
+      click_link_with_js_fallback "Edit unit", expect_selector: "#org-graph-drawer"
+      js_fill_in "org-unit-name", with: "Platform Core"
+      click_button_with_js_fallback "Rename", expect_text: "Renamed."
+      assert_selector "#org-graph-comparison", text: "What changed"
+      screenshot("compared_behind_drawer")
+
+      click_selector_with_js_fallback "#org-graph-drawer a[aria-label='Close']",
+                                      expect_selector: "body:not(:has(#org-graph-drawer)) #org-graph-unit"
+      assert_text "What changed"
+      within(tree_link(:platform)) { assert_text "was Platform" }
+
+      rename = ActsAsTenant.with_tenant(@tenant) { OrgUnitActivity.for_unit(@org[:platform]).first }
+      click_selector_with_js_fallback(
+        "##{Views::Tenant::OrgGraph::Sidebar::ID} form:has(input[name='entry_id'][value='#{rename.id}']) button",
+        expect_text: "Changed back."
+      )
+      assert_text "What changed"
+      assert_includes page.current_url, "from=#{(@today - 30).iso8601}"
+    end
+
     should "refuse an end date before the date compared with, and mark nothing" do
       visit tenant_org_graph_path(from: (@today - 5).iso8601, to: (@today - 10).iso8601)
 

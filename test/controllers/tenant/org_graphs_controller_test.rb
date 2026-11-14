@@ -189,6 +189,40 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
                       "Pick an end date after the date you compare with."
       assert_not page.css("nav[aria-labelledby='org-graph-tree-label'] a").any? { it["href"].include?("from=") }
     end
+
+    context "with a window picked" do
+      setup do
+        @org = build_org_graph(@tenant)
+        @window = { from: "2026-02-01", to: Date.current.iso8601, by: "learned" }
+      end
+
+      should "keep the window when a change is changed back" do
+        entry = ActsAsTenant.with_tenant(@tenant) { OrgUnitActivity.for_unit(@org[:platform]).first }
+
+        get tenant_org_graph_path(unit: @org[:platform], **@window)
+        form = Nokogiri::HTML5(response.body).at_css("form[action='#{change_back_tenant_org_graph_path}']")
+        assert_equal @window.values, %w[from to by].map { form.at_css("input[name='#{it}']")["value"] }
+
+        post change_back_tenant_org_graph_path, params: { entry_id: entry.id, unit: @org[:platform], **@window }
+
+        assert_redirected_to tenant_org_graph_path(unit: @org[:platform], **@window)
+      end
+
+      should "keep the window when paging the activity" do
+        get tenant_org_graph_path(unit: @org[:platform], activity_page: "2", **@window)
+
+        newer = Nokogiri::HTML5(response.body).at_css("nav[aria-label='Activity pages'] a")
+        assert_equal tenant_org_graph_path(unit: @org[:platform], activity_page: 1, **@window), newer["href"]
+      end
+
+      should "keep the window in the links to the unit drawer and a person's drawer" do
+        get tenant_org_graph_path(unit: @org[:checkout], **@window)
+
+        page = Nokogiri::HTML5(response.body)
+        assert page.at_css("a[href='#{edit_tenant_org_unit_path(@org[:checkout], **@window)}']")
+        assert page.at_css("a[href='#{tenant_org_person_path(@org[:brook], unit: @org[:checkout], **@window)}']")
+      end
+    end
   end
 
   context "as a non-admin member" do

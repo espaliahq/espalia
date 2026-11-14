@@ -5,6 +5,7 @@
 # reason, which for a refusal names who may make the change.
 module OrgUnitDrawer
   extend ActiveSupport::Concern
+  include OrgGraphComparison
 
   # What every drawer write can raise: a refusal, a bad parameter, or a guard
   # in the aggregate such as another provider holding the fact.
@@ -61,7 +62,7 @@ module OrgUnitDrawer
 
   def drawer_path
     on = effective_on unless effective_on == Date.current.iso8601
-    edit_tenant_org_unit_path(@unit, on:)
+    edit_tenant_org_unit_path(@unit, on:, **comparison_params)
   end
 
   def with_date(params) = effective_on ? params.merge(effective_on:) : params

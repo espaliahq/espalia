@@ -6,21 +6,19 @@
 # changed since (#139).
 #
 class Tenant::OrgGraphsController < ApplicationController
+  include OrgGraphComparison
+
   # GET /tenant/org_graph
   def show
     authorize :org_graph, :show_units?
     overview = OrgGraph::UnitsOverview.new(selected_unit_id: params[:unit])
-    comparison, error = comparison_asked_for
     render Views::Tenant::OrgGraph::ShowView.new(
       overview:,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants_for_user,
       sidebar: activity_sidebar(overview),
-      comparison_bar: Views::Tenant::OrgGraph::ComparisonBar.new(
-        comparison:, error:, values: params.permit(:from, :to, :by).to_h, unit_id: params[:unit].presence
-      ),
-      comparison: comparison || OrgGraph::Comparison::NONE
+      **comparison_slots(unit_id: params[:unit].presence)
     )
   end
 
@@ -39,22 +37,13 @@ class Tenant::OrgGraphsController < ApplicationController
 
   private
 
-  def activity_path = tenant_org_graph_path(unit: params[:unit], activity_page: params[:activity_page].presence)
+  def activity_path = tenant_org_graph_path(unit: params[:unit], activity_page: params[:activity_page].presence, **comparison_params)
 
   def activity_sidebar(overview)
     return unless overview.selected
 
     feed = OrgGraph::ActivityFeed.new(unit: overview.selected, actor: pundit_user, page: params[:activity_page] || 1)
     Views::Tenant::OrgGraph::ActivitySidebar.new(feed:)
-  end
-
-  # @return [Array(OrgGraph::DateComparison, nil), Array(nil, String)] the
-  #   comparison the dates ask for, or why they make none
-  def comparison_asked_for
-    window = OrgGraph::DateComparison.window(from: params[:from], to: params[:to], by: params[:by])
-    [ window && OrgGraph::DateComparison.new(context: pundit_user, window:), nil ]
-  rescue OrgGraph::DateComparison::InvalidWindow => e
-    [ nil, e.message ]
   end
 
   # @return [Array<Tenant>]

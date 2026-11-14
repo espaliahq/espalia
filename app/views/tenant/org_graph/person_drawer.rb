@@ -6,6 +6,7 @@
 # whichever is sent. Employment is read-only: it changes where it is held.
 class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
   include Phlex::Rails::Helpers::Routes
+  include Views::Tenant::OrgGraph::KeepsComparison
 
   DATE_ID = "org-person-effective-on"
   ESPALIA = ::OrgGraph::StructureAggregate::ESPALIA
@@ -236,6 +237,7 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
       input(type: "hidden", name: "effective_on", value: @effective_on)
       input(type: "hidden", name: "unit", value: @unit_id) if @unit_id
       input(type: "hidden", name: "back", value: @back) if @back
+      comparison_fields
       block.call
     end
   end
