@@ -481,6 +481,12 @@ The dates follow the events:
   though it never took effect. On a later date it is an ordinary change.
 - `PersonForgotten` changes nothing here. The rows hold ids, and the history stays.
 
+Two rules hold across history, `AsOf`, `ChangesBetween` and the live tables
+(`org_memberships`, the `people` columns). First, a fact dated before one already held
+fills in the days before it and leaves the later fact in force; on the same date, the
+fact learned last wins. Second, a membership counts on its end date and not the day
+after, and a move counts the person in the new unit only, from its date.
+
 Production already holds events of every type it reads, so the deploy that ships it needs
 `REBUILD_ON_DEPLOY=org_graph/history` to fill it. Without it, predeploy's `verify` stops
 the deploy.
