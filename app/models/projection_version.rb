@@ -14,6 +14,11 @@ require "zlib"
 #   * [docs/guidelines/event-sourcing.md](docs/guidelines/event-sourcing.md)
 #
 class ProjectionVersion < ApplicationRecord
+  # A write refused by {.unless_rebuilding}. Operations show its message.
+  class Rebuilding < StandardError
+    def initialize(message = "The Org Graph is being rebuilt; try again in a minute.") = super
+  end
+
   self.primary_key = :name
 
   validates :name,    presence: true
@@ -47,11 +52,68 @@ class ProjectionVersion < ApplicationRecord
   # @return [Object] the block's value
   def self.with_operation_lock(name)
     key = lock_key(name)
-    connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_lock(?)", key ]))
+    advisory("pg_advisory_lock", key)
     yield
   ensure
-    connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_unlock(?)", key ]))
+    advisory("pg_advisory_unlock", key)
   end
+
+  # {.with_operation_lock} on several projections at once, taken in name
+  # order, so two callers that each take several cannot deadlock.
+  #
+  # @param names [Array<String>]
+  # @yield while every lock is held
+  # @return [Object] the block's value
+  def self.with_operation_locks(names, &block)
+    names.sort.reverse.reduce(block) { |inner, name| -> { with_operation_lock(name, &inner) } }.call
+  end
+
+  # Runs a write that plans from these projections' tables, unless one of
+  # them is being rebuilt. A rebuild holds {.with_operation_lock} from its
+  # first reset to its final stamp, so its tables are empty or half replayed
+  # throughout; a write that read them then would decide from a wrong list.
+  # Shares the same key, so the write refuses at once, and a rebuild that
+  # starts meanwhile waits for it to finish.
+  #
+  # @param names [Array<String>] `PROJECTION_NAME`s
+  # @yield while no rebuild can start
+  # @return [Object] the block's value
+  # @raise [Rebuilding] when a rebuild holds any of them
+  def self.unless_rebuilding(*names)
+    held = []
+    names.each do |name|
+      key = lock_key(name)
+      raise Rebuilding unless advisory("pg_try_advisory_lock_shared", key)
+
+      held << key
+    end
+    yield
+  ensure
+    release_shared(held) if held
+  end
+
+  # A failed statement aborts the transaction around it, and an aborted
+  # transaction runs nothing more, an unlock included, until it ends. A caller
+  # that rescues the failure ends it with COMMIT, which Postgres runs as a
+  # rollback, so the unlock waits on either.
+  def self.release_shared(keys)
+    keys.each_with_index do |key, index|
+      advisory("pg_advisory_unlock_shared", key)
+    rescue ActiveRecord::StatementInvalid
+      remaining = keys.drop(index)
+      current_transaction.after_commit { release_shared(remaining) }
+      current_transaction.after_rollback { release_shared(remaining) }
+      break
+    end
+  end
+  private_class_method :release_shared
+
+  # Uncached: the query cache would answer a repeated lock or unlock without
+  # running it.
+  def self.advisory(function, key)
+    uncached { connection.select_value(sanitize_sql_array([ "SELECT #{function}(?)", key ])) }
+  end
+  private_class_method :advisory
 
   # @param name [String]
   # @return [Integer] a stable 32-bit key for the advisory lock
