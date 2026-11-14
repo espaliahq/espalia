@@ -71,7 +71,8 @@ class PlanKeyStore
   #   or before {#create}
   # @raise [Unavailable, ForeignTenant, InvalidIdentifier]
   def key_of(identifier, cipher: DEFAULT_CIPHER)
-    row = scope_for(parse(identifier)).live.find_by(cipher: cipher)
+    parts = parse(identifier)
+    row = PlanEncryptionKey.uncached { scope_for(parts).live.find_by(cipher: cipher) }
     row && encryption_key(row)
   end
 
@@ -173,7 +174,7 @@ class PlanKeyStore
   end
 
   def live_key(parts, cipher)
-    row = scope_for(parts).live.first or return
+    row = PlanEncryptionKey.uncached { scope_for(parts).live.first } or return
     raise ArgumentError, "This identifier already has a #{row.cipher} key" unless row.cipher == cipher
 
     encryption_key(row)

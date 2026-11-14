@@ -188,6 +188,21 @@ class PlanKeyStoreTest < ActiveSupport::TestCase
       assert_equal 1, names.uniq.size
     end
 
+    should "read a key destroyed elsewhere as gone, even with the query cache on" do
+      in_tenant do
+        @store.create(@person_key)
+        PlanEncryptionKey.cache do
+          assert @store.key_of(@person_key)
+          PlanEncryptionKey.connection.raw_connection.exec(
+            "UPDATE plan_encryption_keys SET key_material = NULL, destroyed_at = now(), " \
+            "destroyed_reason = 'person_forgotten'"
+          )
+
+          assert_nil @store.key_of(@person_key)
+        end
+      end
+    end
+
     should "roll back with the caller's transaction" do
       in_tenant do
         @store.create(@person_key)
