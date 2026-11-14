@@ -2797,6 +2797,30 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_person_get",
+        "description" => "Read one person as the Org Graph holds them: their memberships of live units (unit, role, " \
+                         "allocation, since, and the provider that holds each, \"espalia\" or an HRIS), their employment " \
+                         "facts in effect today (title, level, manager, cost centre, site, employment, start date), each " \
+                         "with its provider and since when, and their history newest first: each change with the day it " \
+                         "took effect, when the Org Graph learned it, its provider and who made it. A forgotten person " \
+                         "reads as \"Former member\". Admins only while the Org Graph is unfinished.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "org_graph_remove_member",
         "description" => "End a person's membership of a unit in the Org Graph; effective_on (today by default) is " \
                          "their last day in it. A membership an HRIS supplies ends in the HRIS, not here.",
