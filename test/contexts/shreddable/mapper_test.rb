@@ -167,4 +167,14 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
   should "refuse a declared field under a string key, which would store it in clear" do
     assert_raises(ArgumentError) { NoteWritten.new(data: { "plan_id" => @plan_id, "note" => "Moving to the platform team" }) }
   end
+
+  should "read a value as removed when its key is destroyed after another from the same read was revealed" do
+    publish(note_written)
+    publish(note_written(note: "Joining the data team"))
+    first, second = in_tenant { @event_store.read.stream(@stream).to_a }
+    first.data[:note].reveal
+    in_tenant { PlanKeyStore.new.destroy_plan(@plan_id) }
+
+    assert_predicate second.data[:note], :removed?
+  end
 end

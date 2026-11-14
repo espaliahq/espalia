@@ -83,9 +83,9 @@ tenant-<tenant_id>/plan-<plan_id>/person-<person_id>
 - **A destroyed key stays destroyed.** Its row keeps no key material, and `create`
   refuses a new key for a deleted plan or a forgotten person, including a plan that never
   held a key for them.
-- **It caches nothing**, so a destroyed key is gone for every reader at once. A read
-  that loads many events under the same few keys may memoise them for that read only;
-  a cache that outlives it would outlive a destroy too.
+- **It caches nothing**, so a destroyed key is gone for every reader at once. The mapper
+  keeps no memo either: a cache held by an event outlives its read, and would outlive a
+  destroy too.
 - **Without Active Record encryption keys**, reading or minting a key raises
   `PlanKeyStore::Unavailable` with a plain reason. Destroying keys needs no key
   material, so forgetting still works, and nothing outside plans is affected.
@@ -112,7 +112,8 @@ end
   the append. Outside a transaction the write raises.
 - **On read it gives back a sealed `Shreddable::Value`**, which looks up its key on the
   first `reveal` or `removed?`. It opens as removed once the key is gone, or if the
-  field is damaged. A read memoises keys for that read only. So an aggregate load, or a
+  field is damaged. Each value looks up its key as it opens, with no memo, so a value
+  opened after a destroy reads as removed. So an aggregate load, or a
   replayer passing over another tenant's events, never touches a key, and nothing reads
   differently where Active Record encryption has no keys until a line asks for the
   value. Revealing another tenant's value raises, as `PlanKeyStore#key_of` does. A nil

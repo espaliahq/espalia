@@ -41,8 +41,8 @@ class Shreddable::Mapper
   # @param records [Array<RubyEventStore::Record>]
   # @return [Array<RubyEventStore::Event>]
   def records_to_events(records)
-    keys = {}
-    key_of = ->(identifier, cipher) { keys.fetch(identifier) { keys[identifier] = @key_store.key_of(identifier, cipher:) } }
+    # No memo: a value opened after a destroy must read as removed.
+    key_of = ->(identifier, cipher) { @key_store.key_of(identifier, cipher:) }
     @inner.records_to_events(records).map { seal(it, key_of) }
   end
 
