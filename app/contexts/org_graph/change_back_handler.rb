@@ -13,12 +13,14 @@
 # another date, so the fact reads as if the change never happened.
 #
 class OrgGraph::ChangeBackHandler
+  include OrgGraph::Authorization
+
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
 
   # @param actor [AuthorizationContext, Object] as for {OrgGraph::CommandHandler}
   # @param repository [OrgGraph::Repository]
   def initialize(actor:, repository: OrgGraph::Repository.new)
-    @actor = actor
+    @actor = actor!(actor)
     @repository = repository
   end
 
@@ -46,7 +48,46 @@ class OrgGraph::ChangeBackHandler
     reverse(effective_on:, apart_from: cause_id, inverse_cause:) { OrgUnitActivity.caused_by(cause_id) }
   end
 
+  # Why {#change_back} would refuse the entry, read without taking a lock or
+  # writing, so a screen offers the button only where it would work. A refusal
+  # that depends on the write itself, such as a person who has since left,
+  # still surfaces only from {#change_back}.
+  #
+  # @param entry [OrgUnitActivity]
+  # @return [String, nil] the reason, or nil when it can be changed back
+  def refusal(entry)
+    refusal_for(OrgUnitActivity.where(event_id: entry.event_id).to_a)
+  end
+
+  # As {#refusal}, for {#change_back_group}.
+  #
+  # @param cause_id [String]
+  # @return [String, nil]
+  def group_refusal(cause_id)
+    refusal_for(OrgUnitActivity.caused_by(cause_id).to_a, apart_from: cause_id)
+  end
+
   private
+
+  def refusal_for(entries, apart_from: nil)
+    ensure_reversible!(entries, apart_from:)
+    entries.uniq(&:event_id).each { authorize_inverse!(it) }
+    nil
+  rescue Refused, RuntimeError => e
+    e.message
+  end
+
+  # The check the handler behind each undo_* makes.
+  def authorize_inverse!(entry)
+    case entry.event_type
+    when "MembershipSet", "MembershipEnded" then authorize_membership!(entry.person_id, entry.unit_id)
+    when "MembershipMoved"
+      from, to = entry.after ? [ entry.unit_id, entry.other_unit_id ] : [ entry.other_unit_id, entry.unit_id ]
+      authorize_move_membership!(entry.person_id, from, to)
+    when "UnitMoved" then authorize_move_unit!(entry.unit_id, entry.before["parent_id"])
+    else authorize_unit!(entry.unit_id)
+    end
+  end
 
   def reverse(effective_on:, apart_from: nil, inverse_cause: nil, &rows)
     ActiveRecord::Base.transaction do
@@ -109,9 +150,23 @@ class OrgGraph::ChangeBackHandler
   end
 
   def undo_membership_set(entry, options)
-    return undo_membership_ended(entry, options) if entry.before
+    return @people.end_membership(entry.person_id, entry.unit_id, provider: ESPALIA, **options) unless entry.before
 
-    @people.end_membership(entry.person_id, entry.unit_id, provider: ESPALIA, **options)
+    terms = (terms_replaced_by(entry) || entry.before).symbolize_keys.slice(:allocation, :role)
+    @people.set_membership(entry.person_id, entry.unit_id, **terms, provider: ESPALIA, **options)
+  end
+
+  # The entry's `before` is the change learned before it, which a backdated
+  # change sits ahead of. The terms it replaced are those history held for
+  # its own date until it was learned, whether they took effect earlier or
+  # on that same date.
+  def terms_replaced_by(entry)
+    OrgFactPeriod.where(learned_at: ...entry.learned_at)
+                 .where("superseded_at IS NULL OR superseded_at >= ?", entry.learned_at)
+                 .in_effect_on(entry.effective_on)
+                 .where(subject_type: OrgGraph::Projections::History::PERSON, subject_id: entry.person_id,
+                        fact: "membership", key: entry.unit_id)
+                 .pick(:value)
   end
 
   def undo_membership_ended(entry, options)

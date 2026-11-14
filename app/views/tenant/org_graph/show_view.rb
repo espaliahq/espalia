@@ -5,7 +5,9 @@
 #
 # A drawer and a sidebar each have a slot. The controller hands in whichever
 # a request opens, already wrapped in Drawer or Sidebar chrome, so each
-# screen story builds its own component and leaves this file alone.
+# screen story builds its own component and leaves this file alone. Compare
+# with a date (#139) hands in a bar for under the heading, and a comparison
+# the tree and the cards mark.
 class Views::Tenant::OrgGraph::ShowView < Views::Base
   # @param overview [OrgGraph::UnitsOverview]
   # @param user [User]
@@ -13,7 +15,11 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
   # @param tenants [Array<Tenant>]
   # @param drawer [Phlex::SGML, nil] a component that renders a Drawer
   # @param sidebar [Phlex::SGML, nil] a component that renders a Sidebar
-  def initialize(overview:, user:, current_tenant:, tenants: [], drawer: nil, sidebar: nil, confirmations: nil)
+  # @param comparison_bar [Phlex::SGML, nil] the comparison's controls and counts
+  # @param comparison [OrgGraph::Comparison]
+  # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members shown (#142)
+  def initialize(overview:, user:, current_tenant:, tenants: [], drawer: nil, sidebar: nil,
+                 comparison_bar: nil, comparison: OrgGraph::Comparison::NONE, confirmations: nil)
     @overview = overview
     @confirmations = confirmations
     @user = user
@@ -21,6 +27,8 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
     @tenants = tenants
     @drawer = drawer
     @sidebar = sidebar
+    @comparison_bar = comparison_bar
+    @comparison = comparison
   end
 
   def view_template
@@ -35,12 +43,15 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
           "Org Graph",
           subtitle: "Units and who is in each, as the Org Graph knows them today. Open a unit to change it."
         )
+        render @comparison_bar if @comparison_bar
 
         if @overview.any_units?
           div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
-            render Views::Tenant::OrgGraph::UnitTree.new(overview: @overview, tray_id: Views::Tenant::OrgGraph::Tray::ID)
+            render Views::Tenant::OrgGraph::UnitTree.new(overview: @overview, tray_id: Views::Tenant::OrgGraph::Tray::ID,
+                                                             comparison: @comparison)
             div(class: "flex-1 min-w-0 space-y-6") do
-              render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview, confirmations: @confirmations)
+              render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview, comparison: @comparison,
+                                                            confirmations: @confirmations)
               tray
             end
             render @sidebar if @sidebar

@@ -4,7 +4,9 @@
 # streams.
 #
 # Writes `org_memberships`, and nothing else writes it. A membership's row
-# goes when it ends; its history stays in the person's stream.
+# goes when it ends; its history stays in the person's stream. A membership
+# set with an earlier date than the row's can move `member_since` back but
+# keeps the later terms, as history does.
 #
 class OrgGraph::Projections::Members
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -12,7 +14,7 @@ class OrgGraph::Projections::Members
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   # @return [Array<Class>]
   def self.handled_events
@@ -51,6 +53,8 @@ class OrgGraph::Projections::Members
     membership = OrgMembership.find_or_initialize_by(data.slice(:person_id, :unit_id))
     effective_on = Date.iso8601(data[:effective_on])
     membership.member_since = [ membership.member_since, effective_on ].compact.min
+    return membership.save! if membership.effective_on && membership.effective_on > effective_on
+
     membership.update!(data.slice(:allocation, :role, :provider, :effective_on))
   end
 end
