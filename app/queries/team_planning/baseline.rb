@@ -23,7 +23,41 @@ class TeamPlanning::Baseline
   # @!attribute positions [Array<Position>] the open positions; the Org Graph has none, so only a plan adds them
   # @!attribute names [Hash{String => String}] person id => name, empty until joined
   # @!attribute rules [Rules] the rules the organisation follows
-  Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :positions, :names, :rules) do
+  # @!attribute unresolved [Array<Unresolved>] the people a plan places who aren't on the map
+  Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :positions, :names, :rules, :unresolved) do
+    def initialize(unresolved: [], **) = super
+
+    # Puts each position's people in its unit, and anyone left in no live
+    # unit in Unassigned. A placement in a closed position keeps its
+    # position but has no unit.
+    #
+    # @return [Map]
+    def settled
+      unit_of = positions.to_h { [ it.id, it.unit_id ] }
+      people = self.people.map do |person|
+        person.with(memberships: person.memberships.map { it.position_id ? it.with(unit_id: unit_of[it.position_id]) : it })
+      end
+      live = units.to_set(&:id)
+      with(people:, unassigned_ids: people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
+    end
+
+    # @param position_id [String]
+    # @return [Array<Array(Member, Membership)>] each person placed in the position, with the placement
+    def occupants(position_id)
+      people.flat_map { |person| person.memberships.select { it.position_id == position_id }.map { [ person, it ] } }
+    end
+
+    # The position's FTE less what its people fill: each one's allocation
+    # times their FTE, an unknown FTE counting as full time. Below 0 when
+    # the position is overfilled.
+    #
+    # @param position [Position]
+    # @return [Float]
+    def open_fte(position)
+      filled = occupants(position.id).sum { |person, placement| placement.allocation.to_f * (person.fte || 1).to_f }
+      (position.fte.to_f - filled).round(4)
+    end
+
     # @param person_id [String]
     # @return [String]
     def name_of(person_id) = names.fetch(person_id, Person::FORMER_MEMBER)
@@ -78,10 +112,31 @@ class TeamPlanning::Baseline
 
   # A person and their facts that day, with each place they hold.
   Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
-                       :memberships)
+                       :memberships) do
+    # The sum of the person's allocations. A total over 1 is never refused,
+    # so checks read it. nil means unknown: the HRIS gave a place no
+    # allocation. A check must not read unknown as under-allocated.
+    #
+    # @return [Float, nil]
+    def allocation_total
+      allocations = memberships.map(&:allocation)
+      allocations.sum(&:to_f).round(4) unless allocations.any?(&:nil?)
+    end
+  end
 
-  # A person's place in one unit.
-  Membership = Data.define(:unit_id, :allocation, :role)
+  # A person's place in a unit, or in a position. A position's place takes
+  # the position's unit when the map settles, and none once it closes.
+  # `allocation` is nil when the HRIS gave none.
+  Membership = Data.define(:unit_id, :allocation, :role, :position_id) do
+    def initialize(position_id: nil, **) = super
+  end
+
+  # Someone a plan places who isn't on the map, so the placement waits:
+  # `why` is "joined after the base date" (updating the plan's base date
+  # brings them in) or "has left".
+  Unresolved = Data.define(:person_id, :why)
+  Unresolved::JOINED_LATER = "joined after the base date"
+  Unresolved::LEFT = "has left"
 
   # An open position. Its role and level names are nil until joined, and stay
   # nil for a role or level the framework no longer has.
@@ -118,13 +173,13 @@ class TeamPlanning::Baseline
             rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {}))
   end
 
-  # Joins the names of everyone a map names (its people, their managers and
-  # the units' owners) and of each position's role and level.
+  # Joins the names of everyone a map names (its people, their managers, the
+  # units' owners and the people it can't place) and of each position's role and level.
   #
   # @param map [Map]
   # @return [Map]
   def named(map)
-    ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids)
+    ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids) + map.unresolved.map(&:person_id)
     map.with(names: ::Person.where(tenant_id: @plan.tenant_id, id: ids.compact.uniq).pluck(:id, :name).to_h,
              positions: named_positions(map.positions))
   end

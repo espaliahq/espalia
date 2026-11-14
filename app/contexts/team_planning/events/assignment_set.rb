@@ -1,0 +1,74 @@
+# frozen_string_literal: true
+
+# Every place a person holds in a scenario, set at once: a list of
+# placements, each in a position or a unit, with an allocation. The last one
+# wins, so a move never leaves a person half in the old place and half in the
+# new. An empty list leaves the person unassigned.
+#
+# A placement in a position takes the position's unit when the map settles,
+# so moving a position moves its people. A person the map doesn't have, such
+# as a new starter after the base date, is never placed, but never silently:
+# the map lists them as unresolved.
+#
+# @!attribute [r] data
+#   @return [Hash] event data
+#   @option data [String] :subject_id the person's id
+#   @option data [Array<Hash>] :placements each with `position_id` or `unit_id` (the other nil),
+#     an `allocation` above 0 and at most 1, and a `role`, nil when none is named
+#   Plus {TeamPlanning::Events::Change::FIELDS}.
+#
+class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
+  PLACES = %i[position_id unit_id].freeze
+
+  # @return [String]
+  def self.facet = "assignment"
+
+  # @param end_state [Hash] `{ placements: [{ position_id or unit_id, allocation, role }] }`
+  # @return [Hash] the ids downcased, each allocation a Float
+  # @raise [TeamPlanning::Error] for a placement in both a position and a unit, or neither, an
+  #   allocation outside (0, 1], or a place held twice. A total over 1 is never refused.
+  def self.end_state(end_state)
+    placements = end_state[:placements]
+    raise TeamPlanning::Error, "An assignment lists its placements, or none to leave the person unassigned" unless placements.is_a?(Array)
+
+    placements = placements.map { placement!(it) }
+    raise TeamPlanning::Error, "A person holds each position and unit once" if placements.map { it.slice(*PLACES) }.uniq.size < placements.size
+
+    { placements: }
+  end
+
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param data [Hash]
+  # @return [TeamPlanning::Baseline::Map] for a person the map doesn't have, the placement
+  #   waits in `unresolved`, its reason given when the resolution settles
+  def self.apply_to(map, data)
+    unless map.people.any? { it.id == data[:subject_id] }
+      return map if data[:placements].empty?
+
+      return map.with(unresolved: map.unresolved + [ TeamPlanning::Baseline::Unresolved.new(person_id: data[:subject_id], why: nil) ])
+    end
+
+    memberships = data[:placements].map { TeamPlanning::Baseline::Membership.new(**it.to_h.symbolize_keys) }
+    map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(memberships:) : it })
+  end
+
+  def self.placement!(placement)
+    raise TeamPlanning::Error, "A placement names a position or a unit" unless placement.is_a?(Hash)
+
+    placement = placement.symbolize_keys
+    places = PLACES.to_h { [ it, placement[it].to_s.strip.downcase.presence ] }
+    raise TeamPlanning::Error, "A placement is in a position or a unit, not both" if places.values.all?
+    raise TeamPlanning::Error, "A placement names a position or a unit" if places.values.none?
+
+    { **places, allocation: allocation!(placement[:allocation]), role: placement[:role].to_s.strip.presence }
+  end
+
+  def self.allocation!(value)
+    allocation = Float(value, exception: false)
+    return allocation if allocation&.positive? && allocation <= 1
+
+    raise TeamPlanning::Error, "An allocation is above 0 and at most 1"
+  end
+
+  private_class_method :placement!, :allocation!
+end
