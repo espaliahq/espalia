@@ -195,7 +195,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
     context "with a window picked" do
       setup do
         @org = build_org_graph(@tenant)
-        @window = { from: "2026-02-01", to: Date.current.iso8601, by: "learned" }
+        @window = { from: "2026-02-01", by: "learned" }
       end
 
       should "keep the window when a change is changed back" do
@@ -203,7 +203,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
 
         get tenant_org_graph_path(unit: @org[:platform], **@window)
         form = Nokogiri::HTML5(response.body).at_css("form[action='#{change_back_tenant_org_graph_path}']")
-        assert_equal @window.values, %w[from to by].map { form.at_css("input[name='#{it}']")["value"] }
+        assert_equal @window.values, @window.keys.map { form.at_css("input[name='#{it}']")["value"] }
 
         post change_back_tenant_org_graph_path, params: { entry_id: entry.id, unit: @org[:platform], **@window }
 

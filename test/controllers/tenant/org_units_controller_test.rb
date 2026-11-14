@@ -31,7 +31,7 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
     setup { sign_in @admin_user }
 
     context "with a window picked" do
-      setup { @window = { from: "2026-02-01", to: Date.current.iso8601, by: "learned" } }
+      setup { @window = { from: "2026-02-01", by: "learned" } }
 
       should "keep the Units view compared behind the drawer, and the window in its links and forms" do
         get edit_tenant_org_unit_path(@org[:checkout], **@window)
@@ -41,7 +41,7 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
         assert_equal tenant_org_graph_path(unit: @org[:checkout], **@window), drawer.at_css("a[aria-label='Close']")["href"]
         assert drawer.at_css("a[href='#{tenant_org_person_path(@org[:brook], unit: @org[:checkout], back: "edit", **@window)}']")
         drawer.css("form[method='post']").each do |form|
-          assert_equal @window.values, %w[from to by].map { form.at_css("input[name='#{it}']")&.[]("value") }, form["action"]
+          assert_equal @window.values, @window.keys.map { form.at_css("input[name='#{it}']")&.[]("value") }, form["action"]
         end
       end
 

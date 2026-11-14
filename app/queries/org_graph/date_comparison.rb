@@ -16,8 +16,10 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
   # @!attribute to [Date] the window's last day
   # @!attribute by [Symbol] :effective or :learned
   Window = Data.define(:from, :to, :by) do
+    # A window up to today leaves out its end, so a shared link keeps reaching today.
+    #
     # @return [Hash] the query parameters that ask for this window again
-    def params = { from: from.iso8601, to: to.iso8601, by: by.to_s }
+    def params = { from: from.iso8601, to: (to.iso8601 unless to == Date.current), by: by.to_s }.compact
   end
 
   # A request's dates and mode could not make a window.

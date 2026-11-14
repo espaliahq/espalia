@@ -39,7 +39,7 @@ class Tenant::OrgPeopleControllerTest < ActionDispatch::IntegrationTest
     setup { sign_in @admin_user }
 
     context "with a window picked" do
-      setup { @window = { from: "2026-02-01", to: Date.current.iso8601, by: "learned" } }
+      setup { @window = { from: "2026-02-01", by: "learned" } }
 
       should "keep the Units view compared behind the drawer, and the window when closing it" do
         get tenant_org_person_path(@org[:brook], unit: @org[:checkout], **@window)
@@ -54,7 +54,7 @@ class Tenant::OrgPeopleControllerTest < ActionDispatch::IntegrationTest
       should "carry the window through a change and back to the drawer" do
         get tenant_org_person_path(@org[:ezra], unit: @org[:platform], **@window)
         drawer.css("form[method='post']").each do |form|
-          assert_equal @window.values, %w[from to by].map { form.at_css("input[name='#{it}']")&.[]("value") }, form["action"]
+          assert_equal @window.values, @window.keys.map { form.at_css("input[name='#{it}']")&.[]("value") }, form["action"]
         end
 
         post tenant_org_person_memberships_path(@org[:ezra]), params: { unit_id: @org[:payments], unit: @org[:platform], **@window }
