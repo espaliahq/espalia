@@ -15,8 +15,9 @@ class Operations::TeamPlanning::Status < Operations::Base
               "reads the planned end state, 'pending' when today still reads what the plan's base held, " \
               "'conflicting' when it reads neither. A person's placements are one facet, so a placement list is " \
               "done only when the whole list matches. A change the Org Graph never holds, such as a rule, has no " \
-              "status: it would read pending forever. Subjects are named by id, and `names` maps each to a name; " \
-              "a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
+              "status: it would read pending forever. Subjects are named by id, and `names` maps each the Org Graph " \
+              "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \
+              "plan holds has none. Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
   approval :none
@@ -31,6 +32,6 @@ class Operations::TeamPlanning::Status < Operations::Base
     report = refusing_bad_plans { ::TeamPlanning::Status.new(context:, plan:, scenario_id:).call }
     { plan_id: plan.id, scenario_id:, on: report.on.iso8601,
       statuses: report.statuses.map { it.to_h.merge(status: it.status.to_s) },
-      names: report.statuses.map(&:subject_id).uniq.index_with { report.name_of(it) } }
+      names: report.names }
   end
 end

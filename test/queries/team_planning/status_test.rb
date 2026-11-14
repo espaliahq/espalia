@@ -147,11 +147,14 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_empty status.statuses
   end
 
-  should "name each subject last, people and units, and a forgotten person a former member" do
+  should "name each subject by its name today, a forgotten person a former member, and a subject only the plan holds not at all" do
+    hire = SecureRandom.uuid_v7
     plan(TitleSet, @ada.id, title: "Senior Engineer")
     plan(TitleSet, @brook.id, title: "Lead Engineer")
     plan(TitleSet, @payments, title: "Squad")
-    assert_equal [ "Ada Quill", "Brook Tamsin", "Payments" ], [ @ada.id, @brook.id, @payments ].map { status.name_of(it) }
+    plan(TitleSet, hire, title: "Engineer")
+    on(Time.utc(2026, 3, 10, 9)) { OrgGraph::StructureCommandHandler.new(actor: SYSTEM).rename_unit(@payments, "Payments Core", effective_on: "2026-03-10") }
+    assert_equal [ "Ada Quill", "Brook Tamsin", "Payments Core", nil ], [ @ada.id, @brook.id, @payments, hire ].map { status.name_of(it) }
 
     as_tenant { @brook.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
     assert_equal Person::FORMER_MEMBER, status.name_of(@brook.id)

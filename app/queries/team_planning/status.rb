@@ -22,11 +22,11 @@ class TeamPlanning::Status
 
   # @!attribute on [Date] today
   # @!attribute statuses [Array<Entry>] in the order the changes land
-  # @!attribute names [Hash{String => String}] subject id => name, for people and units
+  # @!attribute names [Hash{String => String}] subject id => name, for the people and units the Org Graph holds
   Report = Data.define(:on, :statuses, :names) do
     # @param subject_id [String]
-    # @return [String]
-    def name_of(subject_id) = names.fetch(subject_id, Person::FORMER_MEMBER)
+    # @return [String, nil] nil for a subject only the plan holds
+    def name_of(subject_id) = names[subject_id]
   end
 
   # @!attribute scenario_id [String] the scenario that made the change, the plan's id for the root
@@ -90,8 +90,9 @@ class TeamPlanning::Status
   # A stored end state and one read off a map can differ in key type alone.
   def same?(left, right) = left.as_json == right.as_json
 
+  # Today's name wins; the base names a unit since retired.
   def names_for(ids, *maps)
-    units = maps.flat_map(&:units).reverse.to_h { [ it.id, it.name ] }
+    units = maps.flat_map(&:units).to_h { [ it.id, it.name ] }
     people = ::Person.where(tenant_id: @plan.tenant_id, id: ids.uniq).pluck(:id, :name).to_h
     units.slice(*ids).merge(people)
   end
