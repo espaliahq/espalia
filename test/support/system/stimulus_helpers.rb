@@ -1025,16 +1025,16 @@ module StimulusHelpers
     return unless page.has_css?(trigger_selector, wait: 4)
 
     # Already open? Skip.
-    return if page.has_css?("#{cell_selector} [role='menu']:not(.hidden)")
+    return if page.has_css?("#{cell_selector} [role='menu']:not([hidden])")
 
     find(trigger_selector).click
-    return if page.has_css?("#{cell_selector} [role='menu']:not(.hidden)", wait: 2)
+    return if page.has_css?("#{cell_selector} [role='menu']:not([hidden])", wait: 2)
 
     clicked = dispatch_js_click(trigger_selector)
     misses = single_stage_misses(clicked, "matched no pill trigger for #{trigger_selector.inspect}")
 
     assert_after_recovery(misses) do
-      assert_selector "#{cell_selector} [role='menu']:not(.hidden)", wait: 4
+      assert_selector "#{cell_selector} [role='menu']:not([hidden])", wait: 4
     end
   end
 

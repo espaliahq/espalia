@@ -5,7 +5,7 @@
 //      data-action="keydown.esc@window->dropdown#close">
 //   <button data-action="dropdown#toggle"
 //           data-dropdown-target="trigger">Menu</button>
-//   <div data-dropdown-target="menu" class="hidden">
+//   <div data-dropdown-target="menu" hidden>
 //     <!-- menu items -->
 //   </div>
 // </div>
@@ -45,10 +45,10 @@ export default class extends BaseController {
 
   toggle() {
     this._toggling = true
-    const opening = this.menuTarget.classList.contains("hidden")
+    const opening = this.menuTarget.hidden
     if (this.fixedValue && opening) this.#positionFixed()
     // Synchronous: a hide deferred over frames lets a toggle read the menu as still open.
-    this.menuTarget.classList.toggle("hidden", !opening)
+    this.menuTarget.hidden = !opening
     if (this.fixedValue) {
       if (opening) {
         window.addEventListener("scroll", this._onAnyScroll, true)
@@ -64,7 +64,7 @@ export default class extends BaseController {
   }
 
   close() {
-    this.menuTarget.classList.add("hidden")
+    this.menuTarget.hidden = true
     window.removeEventListener("scroll", this._onAnyScroll, true)
     this.#setExpanded(false)
   }
@@ -77,7 +77,7 @@ export default class extends BaseController {
   // private
 
   #onModalOpen() {
-    if (this.menuTarget.classList.contains("hidden")) return
+    if (this.menuTarget.hidden) return
 
     this.close()
   }
@@ -89,7 +89,7 @@ export default class extends BaseController {
   // A scroll's event fires a frame late, so a scroll that brought the trigger
   // into view can arrive after the menu opened: close only once it has moved.
   #onAnyScroll(event) {
-    if (this.menuTarget.classList.contains("hidden")) return
+    if (this.menuTarget.hidden) return
     if (event && this.menuTarget.contains(event.target)) return
     if (!this.#triggerMoved()) return
     this.close()
@@ -121,7 +121,7 @@ export default class extends BaseController {
 
   #clampFixed() {
     const menu = this.menuTarget
-    if (menu.classList.contains("hidden")) return
+    if (menu.hidden) return
 
     // Horizontal re-clamp with the menu's REAL width — #positionFixed ran
     // before the menu was visible and guessed w-56.

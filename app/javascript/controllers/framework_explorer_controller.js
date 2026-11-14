@@ -199,13 +199,13 @@ export default class extends BaseController {
 
   // Is a modal or a menu currently open on top of the panes? Both own their
   // own dismissal, so a pane must not act on an Esc or an outside click while
-  // one is up. `:not(.hidden)` matters for the menu: a `Kit::Dropdown` renders
+  // one is up. `:not([hidden])` matters for the menu: a `Kit::Dropdown` renders
   // its menu closed-but-present, so a bare `[role='menu']` matches on every
   // edit-mode page and disarms the guard entirely (Hard-Won Lesson 37).
   #somethingElseIsOpen() {
     return Boolean(
       document.querySelector("[data-modal-target='overlay']:not(.hidden)") ||
-      document.querySelector("[role='menu']:not(.hidden)")
+      document.querySelector("[role='menu']:not([hidden])")
     )
   }
 

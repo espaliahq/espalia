@@ -101,11 +101,11 @@ export default class extends BaseController {
   }
 
   toggle() {
-    this.menuTarget.classList.toggle("hidden")
+    this.menuTarget.hidden = !this.menuTarget.hidden
   }
 
   clickOutside() {
-    this.menuTarget.classList.add("hidden")
+    this.menuTarget.hidden = true
   }
 }
 ```
