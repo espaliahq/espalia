@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../../support/rebuild_lock"
 
 class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
+  include RebuildLock
+
   setup do
     @tenant = create(:tenant, :with_hibob_config)
     ActsAsTenant.current_tenant = @tenant
@@ -1227,6 +1230,30 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal [ "Stale", nil, "inactive" ], @alice.reload.slice(:job_title, :manager_id, :status).values
       end
 
+      should "offboard someone HiBob reports gone while the units rebuild, though their row still reads active" do
+      employees = with_employee("bob-001") { |e| e["isActive"] = false }
+      result = while_rebuilding(@tenant, OrgGraph::Projections::Structure) { build_adapter(employees).sync_people }
+
+      assert_equal "active", @alice.reload.status, "the leaving waits for the rebuild"
+      assert_nil PersonFrameworkAssignment.find_by(person_id: @alice.id)
+      assert_equal 1, result[:offboarded]
+    end
+
+    should "assign nobody HiBob reports gone while the units rebuild, though their row still reads active" do
+        ActsAsTenant.with_tenant(@tenant) do
+          Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+            PersonDevelopment::CommandHandler.new.unassign_from_framework(@alice.id, FrameworkState::Framework.first.framework_id)
+          end
+        end
+        employees = with_employee("bob-001") { |e| e["isActive"] = false }
+
+        result = while_rebuilding(@tenant, OrgGraph::Projections::Structure) { build_adapter(employees).sync_people }
+
+        assert_equal "active", @alice.reload.status, "the leaving waits for the rebuild"
+        assert_nil PersonFrameworkAssignment.find_by(person_id: @alice.id)
+        assert_operator result[:skipped_inactive], :>=, 1
+      end
+
       should "write a new title through its event" do
         employees = with_employee("bob-001") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Staff Engineer" }
 
@@ -1568,6 +1595,33 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "a sync while the units are rebuilt" do
+    should "update the rows but write nothing to the Org Graph, counting the people apart from the errors" do
+      build_adapter(@fixture["employees"]).sync_people
+      employees = @fixture["employees"].reject { it["id"] == "bob-002" }
+      alice = employees.find { it["id"] == "bob-001" }
+      alice["work"]["title"] = alice["humanReadable"]["work"]["title"] = "Staff Engineer"
+
+      reading = HrisUnitParentProposal.create!(unit_id: SecureRandom.uuid_v7, parent_id: SecureRandom.uuid_v7, first_seen_on: Date.current)
+
+      result = while_rebuilding(@tenant, OrgGraph::Projections::Structure) { build_adapter(employees).sync_people }
+
+      assert_not HrisUnitParentProposal.exists?(reading.id), "a skipped sync breaks the run of two readings"
+      assert_empty result[:errors]
+      assert_equal 0, result[:org_graph_events]
+      assert_equal 3, result[:people_skipped_while_rebuilding], "two people returned and one absent"
+      assert_equal "Staff Engineer", Person.find_by!(external_id: "bob-001").job_title
+      assert_equal "inactive", Person.find_by!(external_id: "bob-002").status
+
+      replay(@tenant, OrgGraph::Projections::Structure)
+      after = build_adapter(employees).sync_people
+
+      assert_empty after[:errors]
+      assert_equal 0, after[:people_skipped_while_rebuilding]
+      assert_operator after[:org_graph_events], :>=, 2, "the title and the leaving are written once the rebuild ends"
+    end
+  end
+
   context "mirroring a structure level" do
     setup do
       @team_level = SecureRandom.uuid_v7
@@ -1585,6 +1639,20 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       engineering = OrgUnit.live.find_by!(level_id: @team_level, external_ref: "work.department/Engineering")
       alice = Person.find_by!(external_id: "bob-001")
       assert OrgMembership.exists?(person_id: alice.id, unit_id: engineering.id, provider: "hibob")
+    end
+
+    should "count the level as skipped, never as an error, while the members are rebuilt" do
+      adapter = build_adapter(@fixture["employees"])
+      adapter.define_singleton_method(:fetch_field_catalogue) { [ Hris::Field.new(id: "work.department", name: "Department", kind: :text) ] }
+
+      reading = HrisUnitParentProposal.create!(unit_id: SecureRandom.uuid_v7, parent_id: SecureRandom.uuid_v7, first_seen_on: Date.current)
+
+      result = while_rebuilding(@tenant, OrgGraph::Projections::Members) { adapter.sync_people }
+
+      assert_empty result[:errors]
+      assert_equal 1, result[:levels_skipped_while_rebuilding]
+      assert_not OrgUnit.exists?(level_id: @team_level)
+      assert_not HrisUnitParentProposal.exists?(reading.id), "a skipped sync breaks the run of two readings"
     end
 
     should "mirror nothing when HiBob's field lists can't be read" do

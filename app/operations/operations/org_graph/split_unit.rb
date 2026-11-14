@@ -31,10 +31,12 @@ class Operations::OrgGraph::SplitUnit < Operations::Base
     held_by_espalia!(unit)
     without_live_children!(unit)
     successors = successor_names.index_with { SecureRandom.uuid_v7 }
-    placements = placements_by_unit(unit, successors)
-    unplaced = active_memberships(unit).pluck(:person_id) - placements.keys
-
-    split(unit, successors, placements)
+    placements, unplaced = ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Members::PROJECTION_NAME) do
+      placements = placements_by_unit(unit, successors)
+      unplaced = active_memberships(unit).pluck(:person_id) - placements.keys
+      split(unit, successors, placements)
+      [ placements, unplaced ]
+    end
     { unit_id: unit.id, successors: successors.map { |name, id| { unit_id: id, name: name } },
       placed: placements.size, unplaced: unplaced.sort, effective_on: effective_on }
   rescue ArgumentError => e # the aggregate's guards, such as a member who moved out meanwhile

@@ -56,10 +56,81 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #   :skipped_inactive, :assigned,
   #   :role_changed, :level_changed, :unchanged, :errors,
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
-  #   :skipped_no_title, :forgotten_skipped,
+  #   :skipped_no_title, :forgotten_skipped, :levels_skipped_while_rebuilding,
+  #   :people_skipped_while_rebuilding,
   #   :split_units (mirrored units whose people sit under different parents)
   def sync_people
     @sync_correlation_id = correlation_id.presence || SecureRandom.uuid_v7
+    unless_structure_rebuilding do |writable|
+      @org_graph_writable = writable
+      @held_back_leaver_ids = []
+      sync_people_with_org_graph
+    end
+  end
+
+  # Asks HiBob for one field beside each person's id, so a preview never
+  # pulls the rest of their record.
+  #
+  # @param field_id [String]
+  # @param kind [Symbol] :list or :text
+  # @param alongside [String, nil] see {Hris::BaseAdapter#read_field}
+  # @return [Hash{String => Hris::FieldValue}]
+  def read_field(field_id, kind:, alongside: nil)
+    fields = [ "root.id", catalogue_id(field_id) ]
+    fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
+    employees = client.search_people(fields: fields.uniq, show_inactive: false)
+    employees.each_with_object({}) do |employee, values|
+      next if employee["id"].blank?
+
+      values[employee["id"].to_s] = Hris::Hibob::ResponseMapper.new(employee).field_value(field_id, kind:, alongside:)
+    end
+  end
+
+  # Fetches all employees from HiBob, handling pagination.
+  #
+  # @return [Array<Hash>] raw employee hashes
+  def fetch_employees
+    client.search_people(show_inactive: true)
+  end
+
+  # HiBob marks a leaver `isActive: false`; a hire yet to start is active.
+  # An empty response would protect nobody, so it raises instead.
+  #
+  # @return [Array<String>]
+  # @raise [Hris::Hibob::Errors::UnexpectedResponseError] when HiBob returns no one
+  def active_external_ids
+    employees = fetch_employees
+    unexpected!("returned no employees") if employees.blank?
+
+    employees.reject { it["isActive"] == false }.filter_map { it["id"].presence&.to_s }
+  end
+
+  # A bare custom-column id, the form stored before the picker, as its path.
+  #
+  # @param field_id [String, nil]
+  # @return [String, nil]
+  def catalogue_id(field_id)
+    Hris::Hibob::Client.field_path(field_id)
+  end
+
+  # Reads HiBob's field metadata and named lists into the catalogue.
+  #
+  # @return [Array<Hris::Field>]
+  # @raise [Hris::Hibob::Errors::Error] when either call fails or answers
+  #   with a body of the wrong shape
+  def fetch_field_catalogue
+    fields = client.get_fields
+    unexpected!("fields response is not a list") unless fields.is_a?(Array) && fields.all?(Hash)
+
+    lists = fields.any? { list_type?(it) } ? named_lists_by_id(client.get_named_lists) : {}
+    fields.filter_map { |field| catalogue_field(field, lists) }
+  end
+
+  private
+
+  # The passes of {#sync_people}; Passes 2b to 2d and the Org Graph half of
+  # Pass 3 run only while {#org_graph_writable?}.
+  def sync_people_with_org_graph
     employees = fetch_employees
     result = build_initial_result
 
@@ -145,66 +216,6 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
     result
   end
-
-  # Asks HiBob for one field beside each person's id, so a preview never
-  # pulls the rest of their record.
-  #
-  # @param field_id [String]
-  # @param kind [Symbol] :list or :text
-  # @param alongside [String, nil] see {Hris::BaseAdapter#read_field}
-  # @return [Hash{String => Hris::FieldValue}]
-  def read_field(field_id, kind:, alongside: nil)
-    fields = [ "root.id", catalogue_id(field_id) ]
-    fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
-    employees = client.search_people(fields: fields.uniq, show_inactive: false)
-    employees.each_with_object({}) do |employee, values|
-      next if employee["id"].blank?
-
-      values[employee["id"].to_s] = Hris::Hibob::ResponseMapper.new(employee).field_value(field_id, kind:, alongside:)
-    end
-  end
-
-  # Fetches all employees from HiBob, handling pagination.
-  #
-  # @return [Array<Hash>] raw employee hashes
-  def fetch_employees
-    client.search_people(show_inactive: true)
-  end
-
-  # HiBob marks a leaver `isActive: false`; a hire yet to start is active.
-  # An empty response would protect nobody, so it raises instead.
-  #
-  # @return [Array<String>]
-  # @raise [Hris::Hibob::Errors::UnexpectedResponseError] when HiBob returns no one
-  def active_external_ids
-    employees = fetch_employees
-    unexpected!("returned no employees") if employees.blank?
-
-    employees.reject { it["isActive"] == false }.filter_map { it["id"].presence&.to_s }
-  end
-
-  # A bare custom-column id, the form stored before the picker, as its path.
-  #
-  # @param field_id [String, nil]
-  # @return [String, nil]
-  def catalogue_id(field_id)
-    Hris::Hibob::Client.field_path(field_id)
-  end
-
-  # Reads HiBob's field metadata and named lists into the catalogue.
-  #
-  # @return [Array<Hris::Field>]
-  # @raise [Hris::Hibob::Errors::Error] when either call fails or answers
-  #   with a body of the wrong shape
-  def fetch_field_catalogue
-    fields = client.get_fields
-    unexpected!("fields response is not a list") unless fields.is_a?(Array) && fields.all?(Hash)
-
-    lists = fields.any? { list_type?(it) } ? named_lists_by_id(client.get_named_lists) : {}
-    fields.filter_map { |field| catalogue_field(field, lists) }
-  end
-
-  private
 
   # @param field [Hash] one entry of GET /company/people/fields
   # @param lists [Hash{String => Array<Hris::Field::Value>}]
@@ -305,7 +316,34 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #
   # @return [Array<OrgTaxonomyLevel>]
   def mirrored_levels
+    return [] unless org_graph_writable?
+
     @mirrored_levels ||= ActsAsTenant.with_tenant(tenant) { Hris::LevelMirror.levels(provider_name) }
+  end
+
+  # Every Org Graph write checks who provides a fact, and the mirror reads
+  # its levels, from tables `org_graph/structure` rebuilds. So a sync holds
+  # that projection's guard from before it reads them until it finishes, and
+  # a sync that starts during a rebuild writes nothing to the Org Graph: the
+  # people it skips are counted apart from the errors, and the next sync
+  # writes them. `writable` tells the block which.
+  #
+  # @yieldparam writable [Boolean]
+  def unless_structure_rebuilding
+    entered = false
+    ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Structure::PROJECTION_NAME) do
+      entered = true
+      return yield(true)
+    end
+  rescue ProjectionVersion::Rebuilding
+    raise if entered
+
+    yield(false)
+  end
+
+  # Outside a sync, as for a field preview, nothing is held back.
+  def org_graph_writable?
+    @org_graph_writable != false
   end
 
   # The fields the tenant's Org Graph mapping names for HiBob.
@@ -330,6 +368,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       unchanged: 0,
       skipped_no_title: 0,
       forgotten_skipped: 0,
+      levels_skipped_while_rebuilding: 0,
+      people_skipped_while_rebuilding: 0,
       errors: [],
       split_units: [],
       unmapped_titles: Set.new,
@@ -422,6 +462,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param managers [Hash{String => Person, nil}] each manager external id, resolved once
   # @param result [Hash] running tally
   def record_org_graph_differences(rows, managers, result)
+    return hold_back_org_graph_differences(rows, result) unless org_graph_writable?
+
     with_hris_event_context do
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       today = Date.current
@@ -450,12 +492,23 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     manager && manager != person ? { manager_id: manager.id } : {}
   end
 
+  # A cut-over tenant's status moves only through these events, so a leaver
+  # the rebuild held back still reads as active: Pass 3b offboards them, and
+  # Pass 5 must not assign them again.
+  def hold_back_org_graph_differences(rows, result)
+    @held_back_leaver_ids = rows.filter_map { |person, row| person.id if row[:status] == "inactive" }
+    result[:people_skipped_while_rebuilding] += rows.size
+  end
+
   # A failed catalogue read mirrors nothing, so no unit retires for want of
-  # its list.
+  # its list. A rebuild of the units or members mirrors nothing either, and
+  # the next sync mirrors as usual; it is counted apart from the errors, since
+  # every deploy that rebuilds would otherwise raise one.
   #
   # @param readings [Hash{Person => Hris::Hibob::ResponseMapper}] current people
   # @param result [Hash] running tally
   def mirror_structure_levels(readings, result)
+    return Hris::LevelMirror.forget_every_parent_reading unless org_graph_writable?
     return if mirrored_levels.empty?
 
     catalogue = begin
@@ -469,6 +522,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     with_hris_event_context do
       Hris::LevelMirror.new(provider: provider_name, catalogue:, readings:, result:, levels: mirrored_levels).call
     end
+  rescue ProjectionVersion::Rebuilding
+    Hris::LevelMirror.forget_every_parent_reading
+    result[:levels_skipped_while_rebuilding] += mirrored_levels.size
   end
 
   # A person HiBob stops returning has left, dated by the sync that first
@@ -477,6 +533,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param absent [ActiveRecord::Relation<Person>] from {#absent_people}
   # @param result [Hash] running tally
   def record_org_graph_absences(absent, result)
+    return result[:people_skipped_while_rebuilding] += absent.count unless org_graph_writable?
+
     with_hris_event_context do
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       today = Date.current
@@ -563,6 +621,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param stale_people [ActiveRecord::Relation<Person>]
   # @param result [Hash] running tally
   def deactivate_in_org_graph(stale_people, result)
+    return unless org_graph_writable? # Pass 2c counted them
+
     with_hris_event_context do
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       recorded = OrgGraph::Projections::PeopleColumns.recorded_person_ids(tenant).to_set
@@ -626,7 +686,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   def offboard_inactive(result, espalia_held_only: false)
     inactive = Person.inactive
     inactive = inactive.where(hris_source: nil) if espalia_held_only
-    inactive_ids = inactive.select(:id)
+    inactive_ids = inactive.or(Person.where(id: Array(@held_back_leaver_ids))).select(:id)
 
     open_enrollments = AssessmentCycleEnrollment.active
       .where(person_id: inactive_ids)
@@ -715,7 +775,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       resolution.rows(Person.where(id: touched_person_ids)).each do |row|
         # HiBob returns inactive employees too (show_inactive: true) —
         # they are offboarded by Pass 3b, never (re-)assigned here.
-        if row.status == Integrations::HrisPersonRow::STATUS_INACTIVE
+        if row.status == Integrations::HrisPersonRow::STATUS_INACTIVE || held_back_leaver?(row.person)
           result[:skipped_inactive] += 1
           next
         end
@@ -728,6 +788,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       end
     end
   end
+
+  def held_back_leaver?(person) = Array(@held_back_leaver_ids).include?(person.id)
 
   # Dispatches the command a resolved row calls for, or tallies why it can't.
   #

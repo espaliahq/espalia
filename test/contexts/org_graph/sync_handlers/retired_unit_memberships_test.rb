@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../../support/rebuild_lock"
 
 class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCase
+  include RebuildLock
+
   setup do
     @tenant = create(:tenant)
     @structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
@@ -167,6 +170,38 @@ class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCa
       assert_kind_of OrgGraph::Events::MembershipEnded, grace_ended
       assert_equal @payments, grace_ended.data[:unit_id]
       as_tenant { assert_equal [ @ada.id ], OrgUnit.find(@ledger).members.pluck(:id) }
+    end
+  end
+
+  context "while the member list is rebuilt" do
+    should "refuse the retirement, which then ends every member once the rebuild is done" do
+      while_rebuilding(@tenant, OrgGraph::Projections::Members) do
+        assert_raises(ProjectionVersion::Rebuilding) do
+          as_tenant { @structure.retire_unit(@payments, effective_on: "2026-06-30") }
+        end
+        assert_not(structure_events.any?(OrgGraph::Events::UnitRetired))
+        assert_not(person_events(@ada).any?(OrgGraph::Events::MembershipEnded))
+        replay(@tenant, OrgGraph::Projections::Members)
+      end
+
+      as_tenant { @structure.retire_unit(@payments, effective_on: "2026-06-30") }
+
+      [ @ada, @grace ].each { assert_kind_of OrgGraph::Events::MembershipEnded, person_events(it).last }
+      as_tenant { assert_not OrgMembership.exists?(unit_id: @payments) }
+    end
+
+    should "refuse a merge, which reads the members it places from that list" do
+      while_rebuilding(@tenant, OrgGraph::Projections::Members) do
+        assert_raises(ProjectionVersion::Rebuilding) do
+          as_tenant do
+            @structure.apply_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ @billing ],
+                                                              effective_on: "2026-07-01", placements: { @ada.id => @billing })
+          end
+        end
+      end
+
+      assert_not(structure_events.any?(OrgGraph::Events::UnitSucceeded))
+      assert_not(person_events(@ada).any?(OrgGraph::Events::MembershipMoved))
     end
   end
 
