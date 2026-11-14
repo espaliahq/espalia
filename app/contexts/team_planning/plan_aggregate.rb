@@ -161,6 +161,26 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
+  # Renames a scenario. The same name writes nothing.
+  #
+  # @param scenario_id [String]
+  # @param name [String]
+  # @param renamed_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown or
+  #   the baseline, or the name is blank or too long
+  def rename_scenario(scenario_id, name:, renamed_by_id:)
+    ensure_open!
+    scenario = @scenarios[live_scenario!(scenario_id)]
+    raise TeamPlanning::Error, "The baseline can't be renamed" unless scenario
+
+    name = require_name(name, "scenario")
+    return if name == scenario.name
+
+    apply(TeamPlanning::Events::ScenarioRenamed.new(data: {
+      plan_id: @plan_id, scenario_id: scenario_id, name: name, previous_name: scenario.name, renamed_by_id: renamed_by_id
+    }))
+  end
+
   # Moves a `then` scenario's end. Its start stays where the tree puts it, and
   # the steps after it start from the new end. The same end writes nothing.
   #
@@ -497,6 +517,11 @@ class TeamPlanning::PlanAggregate
     ends_on = Date.iso8601(data[:ends_on]) if data[:relation] == "then"
     @scenarios[data[:scenario_id]] = Scenario.new(id: data[:scenario_id], parent_id: data[:parent_id],
                                                   relation: data[:relation], ends_on:)
+  end
+
+  on TeamPlanning::Events::ScenarioRenamed do |event|
+    id = event.data[:scenario_id]
+    @scenarios[id] = @scenarios.fetch(id).with(name: event.data[:name])
   end
 
   on TeamPlanning::Events::ScenarioPeriodSet do |event|

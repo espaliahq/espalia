@@ -21,9 +21,11 @@ class Views::Plans::ShowView < Views::Base
   # @param actions [Array<Phlex::SGML>] buttons beside the plan's name
   # @param panels [Array<Phlex::SGML>] sidebar panels; the rules and the members when nil
   # @param drawer [Phlex::SGML, nil] a component that renders a drawer over the page
+  # @param can_edit [Boolean] whether the viewer may fork and rename scenarios
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
-                 body: nil, actions: [], panels: nil, drawer: nil)
+                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false)
     @plan = plan
+    @can_edit = can_edit
     @scenarios = scenarios
     @members = members
     @user = user
@@ -39,18 +41,19 @@ class Views::Plans::ShowView < Views::Base
 
   def view_template
     render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(class: "w-full px-4 sm:px-6 py-8") do
+      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal", action: "keydown.esc@window->modal#escape" } if @can_edit)) do
         header
         frozen_notice if @plan[:frozen]
         div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
           section(class: "flex-1 min-w-0", aria: { labelledby: "plan-main-heading" }) do
             tab_strip
-            render(@body || Views::Plans::ScenarioTable.new(plan_id: @plan[:plan_id], scenarios: @scenarios))
+            render(@body || Views::Plans::ScenarioTable.new(plan_id: @plan[:plan_id], scenarios: @scenarios, can_edit: @can_edit))
           end
           aside(class: "w-full lg:w-80 shrink-0 space-y-6", aria: { label: "About this plan" }) do
             (@panels || default_panels).each { render it }
           end
         end
+        render Views::Plans::ScenarioDialogs.new(plan_id: @plan[:plan_id], scenarios: @scenarios) if @can_edit
       end
       render @drawer if @drawer
     end
@@ -70,7 +73,18 @@ class Views::Plans::ShowView < Views::Base
           render Components::Kit::Badge.new("Based on the Org Graph on #{base_on.strftime("%-d %B %Y")}", tone: :warning)
         end
       end
-      div(class: "flex flex-wrap items-center gap-2") { @actions.each { render it } } if @actions.any?
+      if @actions.any? || @can_edit
+        div(class: "flex flex-wrap items-center gap-2") do
+          @actions.each { render it }
+          new_scenario_button if @can_edit
+        end
+      end
+    end
+  end
+
+  def new_scenario_button
+    render Components::Kit::Button.new(tone: :brand, data: Views::Plans::ScenarioDialogs.fork_trigger(Views::Plans::ScenarioDialogs.default_parent(@plan[:plan_id], @scenarios))) do
+      "New scenario"
     end
   end
 
