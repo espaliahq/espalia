@@ -27,7 +27,7 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
     @tenant = create(:tenant)
     @org = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    squads = SecureRandom.uuid_v7
+    @squads = squads = SecureRandom.uuid_v7
     @payments, @platform = Array.new(2) { SecureRandom.uuid_v7 }
 
     travel_to Time.utc(2026, 2, 1, 9)
@@ -110,6 +110,22 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
     report = drift
     assert_equal [ [ :moved, @brook.id ], [ :membership_changed, @ada.id ] ], kinds(report)
     assert_equal [ [], [ "placements" ] ], report.changes.map { it.meets.map(&:facet) }
+  end
+
+  should "meet a planned retirement when the Org Graph retires the unit, and no planned succession" do
+    as_tenant do
+      handler.set_change(@plan_id, TeamPlanning::Events::UnitRetired, scenario_id: @q1, subject_id: @platform,
+                                                                       end_state: { name: "Platform", parent_id: nil, level_id: @squads })
+      handler.set_change(@plan_id, TeamPlanning::Events::UnitSuccessionSet, scenario_id: @q1, subject_id: SecureRandom.uuid_v7,
+                                                                            end_state: { predecessor_ids: [ @platform ], successor_ids: [ @payments ] })
+    end
+    on(Time.utc(2026, 3, 10, 9)) do
+      OrgGraph::StructureCommandHandler.new(actor: SYSTEM).record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @platform ], successor_ids: [ @payments ],
+                                                                                                 effective_on: "2026-03-10", retire_predecessors: true)
+    end
+
+    met = drift.changes.flat_map(&:meets)
+    assert_equal [ [ @platform, "unit" ] ], met.map { [ it.subject_id, it.facet ] }
   end
 
   should "show a change the Org Graph learned before the base and no longer believes as withdrawn" do

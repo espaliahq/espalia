@@ -17,7 +17,10 @@
 # Only a kind that reads its end state off a map
 # ({TeamPlanning::Events::Change.readable?}) and that the Org Graph can move
 # ({TeamPlanning::Events::Change.subject_moved_by}) has a status. A plan-only
-# kind, such as a rule, would read pending forever, so it is left out.
+# kind, such as a rule, would read pending forever, so it is left out. Today's
+# map holds the units the Org Graph retired and its successions, read through
+# {TeamPlanning::Events::Change.read_org_graph}, since a succession there has
+# an id the plan never saw.
 #
 # Each kind compares with {TeamPlanning::Events::Change.shows?}, given the
 # map its planned state settles on, since the Org Graph can't say which
@@ -66,7 +69,7 @@ class TeamPlanning::Status
     changes = tracked_changes
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
-    now = @baseline.map_on(@today)
+    now = @baseline.map_on(@today, history: true)
     base = @today < @plan.base_on ? now : @baseline.structure
     statuses = changes.map { |key, change| entry(change, key, base:, now:) }
     Report.new(on: @today, statuses:, names: names_for(statuses.map(&:subject_id), base, now))
@@ -81,8 +84,8 @@ class TeamPlanning::Status
   def entry(change, key, base:, now:)
     kind = change.class
     subject_id, facet = key
-    today = kind.read_from(now, subject_id:, facet:)
-    before = [ [ kind.read_from(base, subject_id:, facet:), base ], *step_before(change, key, base) ]
+    today = kind.read_org_graph(now, change)
+    before = [ [ kind.read_org_graph(base, change), base ], *step_before(change, key, base) ]
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
               status: status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before))
   end
@@ -120,7 +123,7 @@ class TeamPlanning::Status
 
   # Today's name wins; the base names a unit since retired.
   def names_for(ids, *maps)
-    units = maps.flat_map(&:units).to_h { [ it.id, it.name ] }
+    units = maps.flat_map { it.units + it.retired_units }.to_h { [ it.id, it.name ] }
     people = ::Person.where(tenant_id: @plan.tenant_id, id: ids.uniq).pluck(:id, :name).to_h
     units.slice(*ids).merge(people)
   end

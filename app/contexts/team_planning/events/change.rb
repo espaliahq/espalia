@@ -66,6 +66,15 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [Boolean]
   def self.same_end_state?(left, right) = left.as_json == right.as_json
 
+  # What a map read off the Org Graph holds for a planned change, read as this
+  # kind reads its end state. A kind whose subject the Org Graph names with an
+  # id of its own says how to find it.
+  #
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param change [Change]
+  # @return [Hash, nil]
+  def self.read_org_graph(map, change) = read_from(map, subject_id: change.data[:subject_id], facet: change.key.last)
+
   # Whether the Org Graph reads as a planned end state shows it, for status per
   # change. A kind whose end state names something only the plan holds says how
   # the Org Graph would show it.

@@ -38,6 +38,26 @@ class TeamPlanning::Events::UnitSuccessionSet < TeamPlanning::Events::Change
     map.successions.find { it.id == subject_id }&.to_h&.slice(:predecessor_ids, :successor_ids)
   end
 
+  # The Org Graph mints its own succession ids, so a planned succession is
+  # found by its predecessors: the succession that has them all and the same
+  # successors, or else one that shares a predecessor.
+  #
+  # @param map [TeamPlanning::Baseline::Map] read off the Org Graph
+  # @param change [TeamPlanning::Events::UnitSuccessionSet]
+  # @return [Hash, nil] that succession's two sides
+  def self.read_org_graph(map, change)
+    planned = change.data.slice(:predecessor_ids, :successor_ids)
+    sides = map.successions.map { it.to_h.slice(:predecessor_ids, :successor_ids) }
+    sides.find { same_end_state?(it, planned) } || sides.find { it[:predecessor_ids].intersect?(planned[:predecessor_ids]) }
+  end
+
+  # No Org Graph change names a planned succession, for the same reason, so
+  # drift never ties one to it; the status read finds it by its predecessors.
+  #
+  # @param _change [OrgGraph::ChangesBetween::Change]
+  # @return [nil]
+  def self.subject_moved_by(_change) = nil
+
   def self.ids!(values, what)
     ids = Array(values).map { TeamPlanning::Events::UnitSet.id_or_nil(it, what) }.compact.uniq.sort
     raise TeamPlanning::Error, "A succession needs at least one #{what}" if ids.empty?
