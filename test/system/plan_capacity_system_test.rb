@@ -25,6 +25,9 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
       people.record_person(@ada.id, **ESPALIA, effective_on: since, employment_status: "employed", title: "Software Engineer",
                                                level: "5", fte: 0.8)
       people.set_membership(@ada.id, payments, **ESPALIA, effective_on: since, allocation: 1.0)
+      @dee = create(:person, tenant: @tenant, name: "Dee Quill")
+      people.record_person(@dee.id, **ESPALIA, effective_on: since, employment_status: "employed", title: "Juggler", fte: 1.0)
+      people.set_membership(@dee.id, @growth, **ESPALIA, effective_on: since, allocation: 1.0)
       @planner = account(team_planner: true, name: "Erin Editor")
     end
 
@@ -59,6 +62,16 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
           assert_text "0.8"
         end
         assert_selector "[data-map-position] [data-capacity-figure] summary", text: "1.0 FTE"
+        assert_no_sideways_overflow
+      end
+
+      should "list a place no model covers, with why, and mark its figure" do
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id)
+
+        within("[data-capacity-strip]") { assert_text "1 place counts for no capacity" }
+        click_selector_with_js_fallback("[data-capacity-unclassified] summary", expect_text: "Dee Quill: the person's title maps to no role")
+        within("[data-map-person='#{@dee.id}']") { assert_text "No capacity" }
         assert_no_sideways_overflow
       end
 
