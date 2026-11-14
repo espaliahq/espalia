@@ -26,6 +26,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     @alex = create(:person, tenant: @tenant, name: "Alex Example", manager: @lead)
     @quinn = create(:person, tenant: @tenant, name: ERASED_NAME, email: ERASED_EMAIL, manager: @lead)
     create(:person, tenant: @tenant, name: "Riley Report", manager: @quinn)
+    create(:tenant_user, tenant: @tenant, user: create(:user, email: ERASED_EMAIL), person: @quinn, org_graph_editor: true)
 
     @assignment, @cycle_id = enrol_in_role_lens_framework(@alex, @fx, tenant: @tenant)
     quinn_level = @fx.e_levels.fetch(2).level_id
@@ -64,6 +65,9 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "org_graph_activity"
     assert_includes reached, "org_graph_person_get"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
+
+    editors = Operations::OrgGraph::Editors.call(context: lead_context, params: {})
+    assert_equal [ @lead.id ], (editors[:editors] + editors[:admins]).map { it[:person_id] }, "org_graph_editors lists a forgotten editor"
 
     as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_by_tool.fetch("org_graph_as_of"))
     assert_equal [ @quinn.id ], as_of[:people].map { it[:id] }, "org_graph_as_of reads an empty Org Graph here"
@@ -137,6 +141,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
   def forget_quinn
     @quinn.update_columns(name: Person::FORMER_MEMBER, email: nil, external_id: nil, hris_raw_data: nil,
                           forgotten_at: Time.current)
+    TenantUser.where(person_id: @quinn.id).update_all(person_id: nil, user_id: nil, forgotten_at: Time.current)
   end
 
   def params_by_tool
