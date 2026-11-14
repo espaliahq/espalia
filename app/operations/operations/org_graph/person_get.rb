@@ -7,7 +7,9 @@ class Operations::OrgGraph::PersonGet < Operations::Base
               "allocation, since, and the provider that holds each, \"espalia\" or an HRIS), their employment " \
               "facts in effect today (title, level, manager, cost centre, site, employment, start date), each " \
               "with its provider and since when, and their history newest first: each change with the day it " \
-              "took effect, when the Org Graph learned it, its provider and who made it. A forgotten person " \
+              "took effect, when the Org Graph learned it, its provider and who made it. A membership or fact " \
+              "Espalia holds that nobody has changed or confirmed within the tenant's threshold carries " \
+              "stale: when it was last checked and by whom. A forgotten person " \
               "reads as \"Former member\". Admins only while the Org Graph is unfinished."
   category :read
   approval :none
@@ -22,18 +24,19 @@ class Operations::OrgGraph::PersonGet < Operations::Base
   # units and people rather than their JSON.
   #
   # @return [OrgGraph::PersonProfile, nil] nil until {#call} has run
-  attr_reader :profile
+  attr_reader :profile, :stale
 
   # @return [Hash] `{ person, memberships, employment, history }`
   def perform
     person = ::Person.find_by(id: params[:person_id].to_s.downcase) or
       raise Operations::Base::ParameterError, "person_id names no person in this tenant"
     @profile = ::OrgGraph::PersonProfile.new(person)
+    @stale = ::OrgGraph::StaleFacts.new(person_ids: [ person.id ])
 
     {
       person: { id: person.id, name: person.name, status: person.status, forgotten: person.forgotten? },
       memberships: profile.memberships.map { |membership| membership_payload(membership) },
-      employment: profile.employment.map { |fact| fact.to_h.slice(:fact, :label, :value, :provider, :since) },
+      employment: profile.employment.map { |fact| employment_payload(person, fact) },
       history: profile.history.map { |change| change_payload(change) }
     }
   end
@@ -42,7 +45,17 @@ class Operations::OrgGraph::PersonGet < Operations::Base
 
   def membership_payload(membership)
     { unit_id: membership.unit_id, unit_name: membership.unit.name, role: membership.role,
-      allocation: membership.allocation, since: membership.member_since, provider: membership.provider }
+      allocation: membership.allocation, since: membership.member_since, provider: membership.provider,
+      stale: stale_payload(stale.membership(membership.person_id, membership.unit_id)) }
+  end
+
+  def employment_payload(person, fact)
+    fact.to_h.slice(:fact, :label, :value, :provider, :since)
+        .merge(stale: stale_payload(stale.employment(person.id, fact.fact).first))
+  end
+
+  def stale_payload(age)
+    age && { last_checked_on: age.checked_at.to_date, checked_by: age.checked_by && { id: age.checked_by.id, name: age.checked_by.name } }
   end
 
   def change_payload(change)

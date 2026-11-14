@@ -20,7 +20,8 @@ class Tenant::OrgGraphsController < ApplicationController
       comparison_bar: Views::Tenant::OrgGraph::ComparisonBar.new(
         comparison:, error:, values: params.permit(:from, :to, :by).to_h, unit_id: params[:unit].presence
       ),
-      comparison: comparison || OrgGraph::Comparison::NONE
+      comparison: comparison || OrgGraph::Comparison::NONE,
+      confirmations: OrgGraphPolicy::Confirmations.for_cards(policy(:org_graph), overview)
     )
   end
 
