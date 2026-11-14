@@ -90,6 +90,40 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_equal "tenant", line(@engineers.id)[:source]
   end
 
+  should "bring back a line the plan added after a scenario cuts it" do
+    added = set(head_count: "2")[:budget_line_id]
+    cut(added, scenario_id: @q2)
+    assert_nil line(added)
+
+    assert_equal "plan", set(scenario_id: @q2, budget_line_id: added, head_count: "3")[:source]
+    assert_equal [ "plan", "3.00" ], line(added).values_at(:source, :head_count)
+  end
+
+  should "keep a level that has left the framework when a scenario sets its line again, after a set or a cut" do
+    level = as_tenant do
+      role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+      create(:framework_level, tenant: @tenant, role_id: role.role_id, code: "E2", title: "Engineer II")
+    end
+    as_tenant { @support.tap { it.take_level(level) }.save! }
+    added = set(head_count: "1", level_id: level.level_id)[:budget_line_id]
+    cut(@support.id)
+    as_tenant { level.destroy! }
+
+    [ added, @support.id ].each do |id|
+      set(scenario_id: @q2, budget_line_id: id, origin: "existing", head_count: "2", level_id: level.level_id)
+      assert_equal [ level.level_id, "E2 Engineer II" ], line(id).values_at(:level_id, :level_name)
+    end
+  end
+
+  should "keep a line the organisation removed orphaned when a scenario sets it again" do
+    set(budget_line_id: @engineers.id, head_count: "5")
+    as_tenant { @engineers.destroy! }
+
+    assert_equal "changed", set(scenario_id: @q2, budget_line_id: @engineers.id, head_count: "6")[:source]
+    assert_equal [ { budget_line_id: @engineers.id, kind: "set" } ], lines[:orphaned]
+    assert_equal [ @engineers.id ], attention.map { it[:subject_id] }
+  end
+
   should "keep a change to a line the organisation removed, listed as orphaned and flagged by Attention" do
     set(budget_line_id: @engineers.id, head_count: "5")
     cut(@support.id, scenario_id: @q2)

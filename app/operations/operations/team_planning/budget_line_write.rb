@@ -28,12 +28,22 @@ module Operations::TeamPlanning::BudgetLineWrite
     scenario_id
   end
 
-  # @return [Boolean] whether the id names one of the organisation's lines
-  def tenant_line?(line_id) = ::BudgetLine.exists?(id: line_id)
+  # Read before the lock, to shape the end state; {#held!} checks again under it.
+  #
+  # @return [TeamPlanning::Events::Change, nil] the set or cut the scenario resolves to for the line
+  def prior_change(line_id)
+    plan = refusing_bad_plans { ::TeamPlanning::Repository.new.load_plan(plan_id!) }
+    refusing_bad_plans { winning_change(plan, line_id, FACET) }
+  end
 
-  # Refuses a line the scenario doesn't hold: neither the organisation's nor one this plan set along its chain.
+  # A tenant line the organisation has since removed stays one, so it keeps reading as orphaned.
+  #
+  # @return [Boolean] whether the id names one of the organisation's lines
+  def tenant_line?(line_id, prior = nil) = prior&.data&.dig(:tenant_line) == true || ::BudgetLine.exists?(id: line_id)
+
+  # Refuses a line the scenario doesn't hold: neither the organisation's nor one this plan set or cut along its chain.
   def held!(plan, line_id)
-    return if tenant_line?(line_id) || winning_change(plan, line_id, FACET).is_a?(::TeamPlanning::Events::BudgetLineSet)
+    return if tenant_line?(line_id) || winning_change(plan, line_id, FACET)
 
     raise Operations::Base::ParameterError, "This scenario has no such budget line"
   end
