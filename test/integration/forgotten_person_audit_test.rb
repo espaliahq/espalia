@@ -76,6 +76,18 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes changes[:changes].map { it[:person_id] }, @quinn.id, "org_graph_changes_between reads an empty Org Graph here"
   end
 
+  # The baseline has no Operation until story 1.4, so the registry walk can't reach it.
+  should "show a forgotten person as a former member in a plan's baseline" do
+    plan_id = SecureRandom.uuid_v7
+    TeamPlanning::CommandHandler.new(actor: lead_context).create_plan(plan_id, name: "Next year", base_on: Date.current + 1)
+    map = TeamPlanning::Baseline.new(context: lead_context, plan: TeamPlanningPlan.find(plan_id)).call
+
+    assert_equal [ @quinn.id ], map.people.map(&:id), "the baseline reads an empty Org Graph here"
+    assert_equal [ @quinn.id ], map.units.sole.owner_ids
+    assert_equal Person::FORMER_MEMBER, map.name_of(@quinn.id)
+    assert_not_includes map.names.values, ERASED_NAME
+  end
+
   private
 
   def pd = PersonDevelopment::CommandHandler.new
