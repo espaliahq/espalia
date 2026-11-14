@@ -87,6 +87,9 @@ class TeamPlanning::CapacityModel
   # @raise [TeamPlanning::Error] naming what is wrong, never a value
   def self.check(params) = params
 
+  # @return [Hash{String => String}] what each of the model's {Figure#notes} keys says
+  def self.notes = {}
+
   # A seat in two places may be priced by two models, so a model prices one
   # place, its allocation included.
   #

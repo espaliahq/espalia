@@ -24,6 +24,11 @@ class TeamPlanning::CapacityModels::Units::Graph
 
   DISTANCES = %w[direct skip deeper].freeze
 
+  NOTES = {
+    "unattributed_several_managers" => "The nearest unit with a manager seat has more than one, so this open seat counts against nobody",
+    "unattributed_no_manager" => "No unit above this open seat has a manager seat, so it counts against nobody"
+  }.freeze
+
   # @param map [TeamPlanning::Baseline::Map]
   # @param facts [TeamPlanning::CapacityModel::Facts]
   # @param manager_role_ids [Array<String>]

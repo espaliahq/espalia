@@ -49,6 +49,9 @@ class TeamPlanning::CapacityModels::Units < TeamPlanning::CapacityModel
   # @return [String]
   def self.description = "Units on a curve by level, less what managing the seat's reports costs"
 
+  # @return [Hash{String => String}]
+  def self.notes = Graph::NOTES
+
   # @param params [Hash] with string keys
   # @return [Hash]
   # @raise [TeamPlanning::Error] naming the key at fault, never its value
