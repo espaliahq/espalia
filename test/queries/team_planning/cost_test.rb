@@ -178,13 +178,30 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal [ 100_000r ], amounts(scenario, seat)
   end
 
-  should "hold a backfill for the whole step when any leaver it backfills has no date" do
+  should "have a backfill replace a leaver with no date before one with a date" do
     seat = open_position(basis: "backfill")
     operation(Operations::TeamPlanning::SetAssignment, person_id: @dee.id, placements: [])
     operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, position_id: seat, leaves_on: "2026-07-01")
     operation(Operations::TeamPlanning::SetDeparture, person_id: @dee.id, position_id: seat)
 
-    assert_equal BASE_ON..Date.new(2026, 12, 31), lines(cost.scenario, seat).sole.held
+    assert_equal [ [ 1r, BASE_ON..Date.new(2026, 12, 31) ] ], lines(cost.scenario, seat).map { [ it.fte, it.held ] }
+  end
+
+  should "open each leaver's part of a backfill the day after that leaver goes" do
+    seat = open_position(basis: "backfill")
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, position_id: seat, leaves_on: "2026-09-30")
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @brook.id, position_id: seat, leaves_on: "2026-06-30")
+
+    assert_equal [ [ 0.8r, Date.new(2026, 7, 1)..Date.new(2026, 12, 31) ], [ 0.2r, Date.new(2026, 10, 1)..Date.new(2026, 12, 31) ] ],
+                 lines(cost.scenario, seat).map { [ it.fte, it.held ] }
+  end
+
+  should "hold all step the part of a backfill no leaver opens" do
+    seat = open_position(basis: "backfill")
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @brook.id, position_id: seat, leaves_on: "2026-07-01")
+
+    assert_equal [ [ 0.8r, Date.new(2026, 7, 2)..Date.new(2026, 12, 31) ], [ 0.2r, BASE_ON..Date.new(2026, 12, 31) ] ],
+                 lines(cost.scenario, seat).map { [ it.fte, it.held ] }
   end
 
   should "never hold a backfill before its step starts, when a moved period leaves the leaving date behind it" do

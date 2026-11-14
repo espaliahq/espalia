@@ -206,10 +206,11 @@ class TeamPlanning::Cost
       open = exact(position.fte) - filled[position.id]
       next unless open.positive?
 
-      line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id, cost_centre: NO_COST_CENTRE,
-           level_id: position.level_id, level_source: nil, country: nil, fte: open, fraction: 1r,
-           held: backfill_held(leavers.fetch(position.id, [])), reason: nil)
-    end
+      openings(open, leavers.fetch(position.id, [])).map do |fte, held|
+        line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id, cost_centre: NO_COST_CENTRE,
+             level_id: position.level_id, level_source: nil, country: nil, fte:, fraction: 1r, held:, reason: nil)
+      end
+    end.flatten
   end
 
   def line(country:, reason:, **seat)
@@ -245,14 +246,28 @@ class TeamPlanning::Cost
     last && (@period.begin..[ last, @period.end ].min)
   end
 
-  # A leaver with no date costs nothing in the step, so their backfill holds
-  # all of it, whatever the other leavers' dates.
-  def backfill_held(leavers)
-    dates = leavers.map { TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) }
-    return @period if dates.empty? || dates.any?(&:nil?)
-    return nil if dates.max >= @period.end
+  # A backfill opens a leaver's FTE the day after they leave, or for the
+  # whole step when they have no date, as they then cost none of it. The
+  # earliest leaver is replaced first, and FTE no leaver opens is held all
+  # step like any open seat. Each opening is its own line, so no seat is
+  # ever held by a leaver and their backfill at once.
+  def openings(open, leavers)
+    dated = leavers.map { [ fte_of(it) || 1r, TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) ] }
+    held = dated.sort_by { |_, last| last || Date.new(0) }.filter_map do |fte, last|
+      fte = [ fte, open ].min
+      next unless fte.positive?
 
-    [ dates.max + 1, @period.begin ].max..@period.end
+      open -= fte
+      [ fte, backfill_held(last) ]
+    end
+    open.positive? ? held << [ open, @period ] : held
+  end
+
+  def backfill_held(last)
+    return @period unless last
+    return nil if last >= @period.end
+
+    [ last + 1, @period.begin ].max..@period.end
   end
 
   def fte_of(member)

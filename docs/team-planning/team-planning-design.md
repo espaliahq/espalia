@@ -472,7 +472,9 @@ every seat only for a unit the caller names.
   seat, so units and cost centres sum to the plan's total.
 - **A leaver and their backfill** split one seat at the leaving date and never overlap:
   the leaver costs up to it, the backfill from the next day. A leaver with no date costs
-  nothing in the period, and their backfill holds the whole of it.
+  nothing in the period, and their backfill holds the whole of it. A backfill for several
+  leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
+  period any FTE no leaver opens.
 - **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
   until positions carry a cost-centre label. No cost centre is a bucket of its own,
   counted like any other.
