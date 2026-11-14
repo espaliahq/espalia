@@ -3,6 +3,10 @@
 # What the pay band tools share: the admin-only check, reading a figure, and
 # the payload each returns. A refusal never repeats a figure, so a band can't
 # reach a log through an error message.
+#
+# Admins only, so even an Org Graph editor is refused
+# [#191](https://github.com/espaliahq/espalia/issues/191). A band keys on a
+# framework level and a country, blank for any.
 module Operations::Tenants::PayBandSupport
   include Operations::Tenants::EditorNames
 

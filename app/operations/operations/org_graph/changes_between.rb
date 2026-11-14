@@ -6,6 +6,8 @@
 #
 # Incremental disclosure: defaults to `summary` (a count per kind). Pass
 # `mode: "full"` for every change.
+#
+# The read behind [#130](https://github.com/espaliahq/espalia/issues/130).
 class Operations::OrgGraph::ChangesBetween < Operations::Base
   include Operations::OrgGraph::DateParameter
 

@@ -2,6 +2,8 @@
 
 # The person drawer's read (#132): one person's teams, employment facts and
 # history, as the Org Graph holds them.
+#
+# A forgotten person reads as "Former member".
 class Operations::OrgGraph::PersonGet < Operations::Base
   description "Read one person as the Org Graph holds them: their memberships of live units (unit, role, " \
               "allocation, since, and the provider that holds each, \"espalia\" or an HRIS), their employment " \
