@@ -1,9 +1,13 @@
 {
   "name": "team_planning_set_rule",
-  "description": "Set one rule in a scenario of a Team Planning plan, by its name from tenants_planning_rules, for the whole plan or, with unit_id, for that unit and the units below it. value is an object in the shape that rule's value_schema gives, and replaces the value above it whole. Steps after the scenario, and its alternatives, inherit it unless they change it. To follow the parent again, use team_planning_clear_change with facet 'rule:<name>'. A refusal names what is wrong, never the value. Refused unless the caller is one of the plan's editors.",
+  "description": "Set one rule in a scenario of a Team Planning plan, by its name from tenants_planning_rules, for the whole plan or, with unit_id, for that unit and the units below it. value is an object in the shape that rule's value_schema gives, and replaces the value above it whole. Steps after the scenario, and its alternatives, inherit it unless they change it. To follow the parent again, use team_planning_clear_change with facet 'rule:<name>'. A refusal names what is wrong, never the value. Refused unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
+      },
       "plan_id": {
         "type": "string"
       },

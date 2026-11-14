@@ -10,6 +10,14 @@
 # What the plan holds privately reads as `{ value: }`, or `{ removed: true }`
 # once its key is gone, under `planned_level`, `plan_data` and `placeholder`.
 module Operations::TeamPlanning::MapPayload
+  # @param value [Shreddable::Value, nil]
+  # @return [Hash, nil] `{ value: }`, or `{ removed: true }` once its key is gone
+  def self.sealed(value)
+    return nil if value.nil?
+
+    value.removed? ? { removed: true } : { value: value.reveal }
+  end
+
   private
 
   # @param map [TeamPlanning::Baseline::Map] with names joined
@@ -49,9 +57,5 @@ module Operations::TeamPlanning::MapPayload
 
   def names_for(map) = map.person_ids.index_with { map.name_of(it) }
 
-  def sealed_payload(value)
-    return nil if value.nil?
-
-    value.removed? ? { removed: true } : { value: value.reveal }
-  end
+  def sealed_payload(value) = Operations::TeamPlanning::MapPayload.sealed(value)
 end

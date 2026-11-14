@@ -13,10 +13,10 @@ class TeamPlanning::ChangeEntryTest < ActiveSupport::TestCase
   end
 
   should "keep a shreddable value out of the entry, naming its field instead" do
-    entry = TeamPlanning::ChangeEntry.from(change(title: "Lead", note: Shreddable::Value.wrap("Ask about pay")))
+    entry = TeamPlanning::ChangeEntry.from(change(title: "Lead", aside: Shreddable::Value.wrap("Ask about pay")))
 
     assert_equal({ title: "Lead" }, entry.end_state)
-    assert_equal [ "note" ], entry.sealed_fields
+    assert_equal [ "aside" ], entry.sealed_fields
     assert_nothing_raised { entry.end_state.to_json }
   end
 

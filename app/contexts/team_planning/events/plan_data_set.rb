@@ -20,6 +20,7 @@ class TeamPlanning::Events::PlanDataSet < TeamPlanning::Events::Change
   extend TeamPlanning::Events::SealedChange
 
   shreddable :value, by: :person, person: :subject_id
+  about_a_person
 
   # The fields a plan can hold for a person, each with how its value is checked.
   FIELDS = {

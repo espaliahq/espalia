@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_193905) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_194123) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1094,6 +1094,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_193905) do
     t.datetime "undone_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "note"
+    t.uuid "noted_event_id"
     t.index ["scenario_id", "position"], name: "idx_on_scenario_id_position_e9b21b3bad", unique: true
     t.index ["tenant_id", "plan_id"], name: "index_team_planning_history_entries_on_tenant_id_and_plan_id"
   end
@@ -1114,6 +1116,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_193905) do
     t.datetime "set_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "note"
     t.index ["scenario_id", "subject_id", "facet"], name: "idx_on_scenario_id_subject_id_facet_ac0f7b0215", unique: true
     t.index ["tenant_id", "plan_id", "scenario_id"], name: "idx_on_tenant_id_plan_id_scenario_id_59115d760f"
   end
