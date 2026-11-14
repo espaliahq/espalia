@@ -252,6 +252,8 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       assert_nothing_raised { Note.where([ "plan_id::text <> ?", "note" ]).to_a }
       assert_nothing_raised { Note.where.not([ "plan_id::text = ?", "note" ]).to_a }
       assert_nothing_raised { Note.exists?([ "plan_id::text = ?", "note" ]) }
+      assert_nothing_raised { Note.rewhere([ "plan_id::text = ?", "note" ]).to_a }
+      assert_nothing_raised { Note.select(:plan_id).group(:plan_id).having([ "min(plan_id::text) <> ?", "note" ]).to_a }
     end
   end
 end
