@@ -1001,6 +1001,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_080000) do
     t.index ["tenant_id"], name: "index_recorded_reporting_managers_on_tenant_id"
   end
 
+  create_table "team_planning_plans", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "name", null: false
+    t.date "base_on", null: false
+    t.uuid "created_by_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "created_by_id"], name: "index_team_planning_plans_on_tenant_id_and_created_by_id"
+  end
+
   create_table "tenant_users", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "person_id"
@@ -1150,6 +1160,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_080000) do
   add_foreign_key "person_development_comments", "tenants"
   add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "recorded_reporting_managers", "tenants"
+  add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
   add_foreign_key "tenant_users", "users"
