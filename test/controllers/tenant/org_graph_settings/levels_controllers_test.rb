@@ -125,6 +125,24 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_equal %w[Tribe Squad Team], level_names
     end
 
+    should "refuse a level an HRIS provides, and one that is already gone" do
+      region_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).define_taxonomy(
+          [ { level_id: region_id, name: "Region", provider: "hibob" }, { level_id: @tribe_id, name: "Tribe" },
+            { level_id: @squad_id, name: "Squad" }, { level_id: @team_id, name: "Team" } ], effective_on: Date.current
+        )
+      end
+
+      delete tenant_org_graph_settings_level_path(region_id)
+      assert_equal "The level could not be removed: Region comes from HiBob; hand it back to Espalia before removing it",
+                   flash[:alert]
+
+      delete tenant_org_graph_settings_level_path(SecureRandom.uuid_v7)
+      assert_equal "The level could not be removed: Level is not in the taxonomy", flash[:alert]
+      assert_equal %w[Region Tribe Squad Team], level_names
+    end
+
     should "offer Remove only on a level no unit has ever held, and name the retired units of one that did" do
       ActsAsTenant.with_tenant(@tenant) do
         structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)

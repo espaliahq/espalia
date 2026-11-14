@@ -20,7 +20,7 @@ class Tenant::OrgGraphSettings::LevelsController < ApplicationController
     authorize :org_graph, :edit_taxonomy?
 
     result = Operations::OrgGraph::RemoveLevel.call(context: pundit_user, params: { level_id: params[:id].to_s })
-    back_with_notice "#{result[:name]} is no longer a level."
+    back_with_notice "#{result[:name] || 'The level'} is no longer a level."
   rescue Operations::Base::ParameterError => e
     back_with_refusal "The level could not be removed", e
   end
