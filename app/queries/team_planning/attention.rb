@@ -57,7 +57,7 @@ class TeamPlanning::Attention
         elsif !@live.include?(place.unit_id)
           item(person.id, ASSIGNMENT, "Placed in #{gone(place.unit_id)}", broken_by: [ place.unit_id, UNIT ])
         end
-      end.uniq
+      end.uniq(&:reason)
     end
   end
 
@@ -86,8 +86,10 @@ class TeamPlanning::Attention
   def successions
     @map.successions.flat_map do |succession|
       gone_before = succession.predecessor_ids.reject { @live.include?(it) || @retired.include?(it) }
+      still_live = succession.predecessor_ids.select { @live.include?(it) }
       gone_after = succession.successor_ids.reject { @live.include?(it) }
       [ (item(succession.id, SUCCESSION, "It carries on from a unit no longer in this scenario", broken_by: [ gone_before.first, UNIT ]) if gone_before.any?),
+        (item(succession.id, SUCCESSION, "It carries on from a unit that is still live", broken_by: [ still_live.first, UNIT ]) if still_live.any?),
         (item(succession.id, SUCCESSION, "It is carried on by #{gone(gone_after.first)}", broken_by: [ gone_after.first, UNIT ]) if gone_after.any?) ].compact
     end
   end

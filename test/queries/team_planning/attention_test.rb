@@ -27,6 +27,19 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                  reasons(map(successions: [ broken ]))
   end
 
+  should "mark a succession whose predecessor is live again" do
+    assert_equal [ "It carries on from a unit that is still live" ],
+                 reasons(map(successions: [ B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [ LIVE ], successor_ids: [ ROOT ]) ]))
+  end
+
+  should "mark someone once for each reason, however many of their places it covers" do
+    places = [ RETIRED, RETIRED ].map { B::Membership.new(unit_id: it, allocation: 0.5, role: nil) }
+    person = B::Member.new(id: PERSON, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: 1,
+                           employment_type: nil, memberships: places + [ B::Membership.new(unit_id: GONE, allocation: 0.5, role: nil) ])
+
+    assert_equal [ "Placed in a retired unit", "Placed in a unit no longer in this scenario" ], reasons(map(people: [ person ]))
+  end
+
   should "tell a retired unit from one no longer in the scenario" do
     units = [ unit(ROOT, nil), unit(LIVE, GONE) ]
     person = B::Member.new(id: PERSON, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: 1,
