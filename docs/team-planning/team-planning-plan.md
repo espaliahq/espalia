@@ -255,7 +255,7 @@ on main yet.
 | # | Story | Needs |
 |---|---|---|
 | 3.1 | Scenarios: `ScenarioForked` with parent, `then` or `instead` and period, `ScenarioPeriodSet`, `ScenarioRemoved`. Periods along a path are contiguous | 1.1 |
-| 3.2 | Resolution: the base, then each scenario's changes down the chain, last change per subject and facet. End-state changes to different facets retry on a version conflict | 3.1, 1.3 |
+| 3.2 | Resolution: the base, then each scenario's changes down the chain, last change per subject and facet. The plan's lock serialises writes, so changes to different facets both land | 3.1, 1.3 |
 | 3.3 | Rules: `RuleSet` with tenant defaults, resolved down the chain like any change | 3.2 |
 | 3.4 | Unit changes: `UnitSet`, `UnitRetired`, `UnitSuccessionSet`, with ids the plan mints | 3.2 |
 | 3.5 | Positions: `PositionSet` (role and level from the framework, unit, FTE, backfill or new) and `PositionClosed` | 3.2 |

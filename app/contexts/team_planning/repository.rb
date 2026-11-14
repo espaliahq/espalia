@@ -31,6 +31,17 @@ class TeamPlanning::Repository
     plan
   end
 
+  # Loads a plan to read, taking no lock and storing nothing.
+  #
+  # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate]
+  # @raise [ArgumentError] if no tenant context is available
+  def load_plan(plan_id)
+    raise ArgumentError, "No tenant context available" unless ActsAsTenant.current_tenant
+
+    @repository.load(TeamPlanning::PlanAggregate.new, EventStreamNaming.plan_stream(plan_id))
+  end
+
   private
 
   # The expected version catches a write only between load and store; the
