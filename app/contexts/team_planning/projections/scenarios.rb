@@ -6,7 +6,7 @@
 # baseline row comes with `PlanCreated`; a deleted plan's scenarios go with
 # it. A fork carries its own period. Only a `then` scenario's end is held, so
 # when one moves the plan's starts, and its alternatives' ends, are worked out
-# again.
+# again. Names and descriptions are held sealed, as the events hold them.
 #
 class TeamPlanning::Projections::Scenarios
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -19,7 +19,8 @@ class TeamPlanning::Projections::Scenarios
   # @return [Array<Class>]
   def self.handled_events
     [ TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanDeleted, TeamPlanning::Events::ScenarioForked,
-      TeamPlanning::Events::ScenarioRenamed, TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved ]
+      TeamPlanning::Events::ScenarioRenamed, TeamPlanning::Events::ScenarioDescribed,
+      TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -41,6 +42,8 @@ class TeamPlanning::Projections::Scenarios
         write(data[:scenario_id], event, **data.slice(:plan_id, :parent_id, :relation, :name, :starts_on, :ends_on, :forked_by_id))
       when TeamPlanning::Events::ScenarioRenamed
         TeamPlanningScenario.where(id: data[:scenario_id]).update_all(name: data[:name], updated_at: event.timestamp)
+      when TeamPlanning::Events::ScenarioDescribed
+        TeamPlanningScenario.where(id: data[:scenario_id]).update_all(description: sealed_description(event), updated_at: event.timestamp)
       when TeamPlanning::Events::ScenarioPeriodSet
         follow_tree(data[:plan_id], event, moved: data[:scenario_id], ends_on: Date.iso8601(data[:ends_on]))
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningScenario.where(id: data[:scenario_id]).delete_all
@@ -49,6 +52,13 @@ class TeamPlanning::Projections::Scenarios
   end
 
   private
+
+  # The column keeps the event's sealed form, so destroying the plan's key
+  # forgets every copy at once.
+  def sealed_description(event)
+    TeamPlanningScenario.seal_column(:description, event.data[:description],
+                                     tenant_id: event.metadata[:tenant_id], plan_id: event.data[:plan_id])
+  end
 
   def write(id, event, **attributes)
     row = TeamPlanningScenario.find_or_initialize_by(id:)

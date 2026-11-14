@@ -73,7 +73,11 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
       user = create(:user)
       admin = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, tenant: @tenant, user:, person:, role: :admin), person:)
       @plan_id = SecureRandom.uuid_v7
-      TeamPlanning::CommandHandler.new(actor: admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
+      planning = TeamPlanning::CommandHandler.new(actor: admin)
+      planning.create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
+      q1 = SecureRandom.uuid_v7
+      planning.fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+      planning.describe_scenario(@plan_id, q1, description: "Hire two seniors before Q3")
     end
     write_note(@tenant, @plan_id)
   end

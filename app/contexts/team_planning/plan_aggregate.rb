@@ -28,6 +28,9 @@ class TeamPlanning::PlanAggregate
   )
 
   NAME_LIMIT = 120
+  DESCRIPTION_LIMIT = 500
+  # A description the caller couldn't read, so {#describe_scenario} writes.
+  UNKNOWN = Object.new.freeze
   ROLES = %w[editor viewer].freeze
   RELATIONS = %w[then instead].freeze
 
@@ -178,6 +181,32 @@ class TeamPlanning::PlanAggregate
 
     apply(TeamPlanning::Events::ScenarioRenamed.new(data: {
       plan_id: @plan_id, scenario_id: scenario_id, name: name, previous_name: scenario.name, renamed_by_id: renamed_by_id
+    }))
+  end
+
+  # Says what a scenario is for, or clears it with a blank. The aggregate
+  # never sees a description once written, so the caller says what the
+  # scenario holds now, read from a projection, and the same text writes
+  # nothing. {UNKNOWN}, when the caller can't be sure, always writes.
+  #
+  # @param scenario_id [String]
+  # @param description [String, nil]
+  # @param described_by_id [String]
+  # @param current [String, nil, Object] the description now, or {UNKNOWN}
+  # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown or
+  #   the baseline, or the description too long
+  def describe_scenario(scenario_id, description:, described_by_id:, current: UNKNOWN)
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline can't be described" unless @scenarios[live_scenario!(scenario_id)]
+
+    description = description.to_s.strip.presence
+    if description && description.length > DESCRIPTION_LIMIT
+      raise TeamPlanning::Error, "A scenario's description can be at most #{DESCRIPTION_LIMIT} characters"
+    end
+    return if description == current
+
+    apply(TeamPlanning::Events::ScenarioDescribed.new(data: {
+      plan_id: @plan_id, scenario_id: scenario_id, description: description, described_by_id: described_by_id
     }))
   end
 
@@ -522,6 +551,9 @@ class TeamPlanning::PlanAggregate
   on TeamPlanning::Events::ScenarioRenamed do |event|
     id = event.data[:scenario_id]
     @scenarios[id] = @scenarios.fetch(id).with(name: event.data[:name])
+  end
+
+  on TeamPlanning::Events::ScenarioDescribed do |_event|
   end
 
   on TeamPlanning::Events::ScenarioPeriodSet do |event|
