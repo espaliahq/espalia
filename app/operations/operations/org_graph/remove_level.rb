@@ -9,6 +9,7 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
               "level no unit has ever held, retired units included, can go; the refusal names the units. " \
               "A level an HRIS provides is handed back to Espalia first. Refused unless the caller is a " \
               "tenant admin."
+  category :destructive
   approval :in_app
 
   parameter :level_id, String, required: true, allow_blank: false

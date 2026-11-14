@@ -3045,7 +3045,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         },
         "annotations" => {
           "readOnlyHint" => false,
-          "destructiveHint" => false,
+          "destructiveHint" => true,
           "idempotentHint" => false
         }
       },
