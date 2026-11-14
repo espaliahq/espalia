@@ -278,7 +278,8 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
 
   def reshape_link(text, href, tone: :neutral)
     render Components::Kit::Button.new(variant: :outline, tone:, size: :sm, compact: true, href:,
-                                       aria_label: "#{text} #{@unit.name}") { text }
+                                       aria_label: "#{text} #{@unit.name}",
+                                       data: { action: "effective-date#carry" }) { text }
   end
 
   # -- Shared ----------------------------------------------------------------

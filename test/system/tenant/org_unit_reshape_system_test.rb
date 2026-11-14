@@ -77,7 +77,10 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
       assert_equal [ "Platform" ], units_of(:dot)
 
       visit edit_tenant_org_unit_path(@org[:checkout])
+      tomorrow = Date.tomorrow.iso8601
+      js_fill_in "Changes take effect", with: tomorrow
       click_link_with_js_fallback "Retire", expect_text: "ends 2 memberships"
+      assert_field "Takes effect", with: tomorrow
       assert_no_sideways_overflow
       screenshot("retire_phone")
       click_button_with_js_fallback "Retire Checkout", expect_text: "Retired Checkout. 2 memberships ended."
