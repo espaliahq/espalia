@@ -58,7 +58,12 @@ module Shreddable::Column
     [ ActiveRecord::Relation, ActiveRecord::AssociationRelation, ActiveRecord::Associations::CollectionProxy ].each do
       relation_delegate_class(it).prepend(Guard)
     end
-    before_save :seal_shreddable_columns
+    # On create, after ApplicationRecord assigns the id, which `plan: :id` needs.
+    before_create :seal_shreddable_columns
+    before_update :seal_shreddable_columns
+    # A clear value stays until the write commits, so a rollback, which
+    # also rolls back a key just minted, leaves it to seal again.
+    after_commit { @shreddable_pending = {} }
   end
 
   class_methods do
@@ -117,6 +122,7 @@ module Shreddable::Column
   # @return [Hash, nil]
   def self.seal(value, identifier)
     return if value.nil?
+    return value if stored?(value)
     return value.envelope || REMOVED if value.is_a?(Shreddable::Value::Sealed)
     return REMOVED if value.is_a?(Shreddable::Value) && value.removed?
 
@@ -152,11 +158,23 @@ module Shreddable::Column
   end
   private_class_method :names_in
 
+  # @return [self]
+  def reload(*)
+    @shreddable_pending = {}
+    super
+  end
+
   private
+
+  def initialize_dup(other)
+    super
+    @shreddable_pending = @shreddable_pending&.dup
+  end
 
   def assign_shreddable(field, value)
     @shreddable_pending ||= {}
-    if value.nil? || value.is_a?(Shreddable::Value::Sealed) || (value.is_a?(Shreddable::Value) && value.removed?)
+    if value.nil? || Shreddable::Column.stored?(value) || value.is_a?(Shreddable::Value::Sealed) ||
+       (value.is_a?(Shreddable::Value) && value.removed?)
       @shreddable_pending.delete(field)
       write_attribute(field, Shreddable::Column.seal(value, nil))
     else
@@ -184,6 +202,5 @@ module Shreddable::Column
     (@shreddable_pending || {}).each do |field, value|
       write_attribute(field, Shreddable::Column.seal(value, -> { self.class.shreddable_identifier(field, attributes.symbolize_keys) }))
     end
-    @shreddable_pending = {}
   end
 end

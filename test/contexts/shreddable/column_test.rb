@@ -129,6 +129,44 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       assert_not_includes stored, "Staying"
     end
 
+    should "seal a clear value again after a rollback, under a key that survived" do
+      ActsAsTenant.with_tenant(@tenant) do
+        row = Note.new(tenant_id: @tenant.id, plan_id: @plan_id, note: NOTE)
+        Note.transaction(requires_new: true) do
+          row.save!
+          raise ActiveRecord::Rollback
+        end
+        row.save!
+      end
+
+      assert_equal NOTE, note.reveal
+    end
+
+    should "copy a value already in its stored form, and forget a clear one on reload or in a copy" do
+      write_note
+      ActsAsTenant.with_tenant(@tenant) do
+        row = Note.find_by!(plan_id: @plan_id)
+        copy = Note.create!(tenant_id: @tenant.id, plan_id: @plan_id, note: row.read_attribute(:note))
+        assert_equal NOTE, copy.note.reveal
+
+        twin = row.dup
+        twin.note = "Staying put"
+        assert_equal NOTE, row.note.reveal
+
+        row.note = "Staying put"
+        assert_equal NOTE, row.reload.note.reveal
+      end
+    end
+
+    should "seal under the id ApplicationRecord gives a new row" do
+      ids = Class.new(Note) { shreddable_column :note, by: :plan, plan: :id }
+      ids.define_singleton_method(:name) { "PlanNamedById" }
+      row = ActsAsTenant.with_tenant(@tenant) { ids.create!(tenant_id: @tenant.id, plan_id: @plan_id, note: NOTE) }
+
+      assert_equal PlanKeyStore.plan_identifier(@tenant.id, row.id), JSON.parse(stored)["identifier"]
+      assert_equal NOTE, ActsAsTenant.with_tenant(@tenant) { ids.find(row.id).note.reveal }
+    end
+
     should "refuse to order, match, group or pluck it" do
       [
         -> { Note.order(:note) },
