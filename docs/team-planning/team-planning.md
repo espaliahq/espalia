@@ -1,6 +1,7 @@
 # Team Planning — module description
 
-> Status: proposal. Nothing here is built. This page says what the module is for and what
+> Status: proposal. Only pay bands are built ([#191](https://github.com/espaliahq/espalia/issues/191)):
+> tenant admins keep them under Admin, Pay bands. This page says what the module is for and what
 > it can do, so the design that follows has something to answer to. It names no
 > organisation, person or figure. [The index](README.md) lists the mockups and the plan.
 >
@@ -185,7 +186,9 @@ The team map is where a plan is edited, not only where it is read.
 ### Cost a scenario
 
 Positions are priced from pay bands per role, level and location, with on-costs, in the
-band's own currency. Conversion to a reference currency happens once, at report time.
+band's own currency. A band belongs to a framework level, which names its role, and to
+one country or to any country; it holds a minimum, midpoint and maximum for a year, a
+month or an hour, exactly as entered. Conversion to a reference currency happens once, at report time.
 A position costs for the part of the period it exists, so a hire planned for the third
 quarter costs half a year. Costs roll up by unit and by cost centre, and every scenario
 shows its difference from the baseline.
