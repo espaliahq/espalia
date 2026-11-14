@@ -177,4 +177,16 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
 
     assert_predicate second.data[:note], :removed?
   end
+
+  should "load a value that opened as removed back from Marshal as removed" do
+    publish(note_written)
+    note = read_back.data[:note]
+    in_tenant { PlanKeyStore.new.destroy_plan(@plan_id) }
+    loaded = Marshal.load(Marshal.dump(note))
+
+    assert_predicate loaded, :removed?
+    assert_nil loaded.reveal
+    assert_equal "[removed]", loaded.to_s
+    assert_equal Shreddable::Value.removed.hash, loaded.hash
+  end
 end

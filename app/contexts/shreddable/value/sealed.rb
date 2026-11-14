@@ -29,6 +29,14 @@ class Shreddable::Value::Sealed < Shreddable::Value
   # Printing never opens the value.
   def to_s = @opened ? @opened.to_s : "[shreddable]"
 
+  # A value that opened as removed loads back as removed, without its ciphertext.
+  #
+  # @return [void]
+  def marshal_load(_)
+    @opened = Shreddable::Value.removed
+    freeze
+  end
+
   def hash = opened.hash
 
   private
