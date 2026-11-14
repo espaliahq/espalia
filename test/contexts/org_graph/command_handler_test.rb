@@ -53,6 +53,18 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
   end
 
   context "#sync_person" do
+    should "read who supplies the facts once, however many it checks" do
+      repository = OrgGraph::Repository.new
+      reads = 0
+      repository.define_singleton_method(:fact_providers) { reads += 1; super() }
+      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, repository:)
+
+      handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+      handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Lead")
+
+      assert_equal 2, reads
+    end
+
     should "record a new person, then write only what changed" do
       first = @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
       repeat = @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
@@ -205,6 +217,16 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ 1, 0 ], [ first, again ]
       assert_instance_of OrgGraph::Events::PersonLeft, stream_events.last
       assert_equal "2026-11-02", stream_events.last.data[:effective_on]
+    end
+
+    should "write its leaving under the handler's cause, as every other command does" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
+      cause_id = SecureRandom.uuid_v7
+
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id:)
+                              .record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+
+      assert_equal cause_id, stream_events.last.metadata[:correlation_id]
     end
 
     should "leave a future starter who disappears before their start date" do
@@ -404,6 +426,35 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
         @handler.sync_person(hand_added.id, **PROVENANCE, employment_status: "employed", title: "Engineer")
       end
       assert_raises(RuntimeError, match: "espalia supplies title;") { @handler.change_title(hand_added.id, "Engineer", **PROVENANCE) }
+    end
+
+    context "while a Structure rebuild has emptied the fact providers" do
+      setup do
+        @structure.set_fact_provider("employment_status", "espalia", effective_on: "2026-11-01")
+        OrgGraph::Projections::Structure.reset!(tenant: @tenant)
+      end
+
+      should "still refuse a fact from a provider that doesn't hold it, writing nothing" do
+        written = stream_events.size
+
+        assert_raises(RuntimeError, match: "hibob supplies title; change it there") do
+          @handler.change_title(@person_id, "Designer", **HELD_BY_ESPALIA)
+        end
+        assert_raises(RuntimeError, match: "hibob supplies site") do
+          @handler.apply_facts(@person_id, **HELD_BY_ESPALIA, site: "Sydney", country: "Australia")
+        end
+        assert_raises(RuntimeError, match: "espalia supplies employment_status") do
+          @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left")
+        end
+        assert_equal written, stream_events.size
+      end
+
+      should "still take each fact from whoever holds it" do
+        @handler.change_title(@person_id, "Designer", **PROVENANCE)
+        @handler.leave(@person_id, **HELD_BY_ESPALIA)
+
+        assert_equal %w[TitleChanged PersonLeft], stream_events.last(2).map { it.event_type.demodulize }
+      end
     end
 
     should "take a membership only from its unit's provider" do
