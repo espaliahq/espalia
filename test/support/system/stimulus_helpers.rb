@@ -77,7 +77,8 @@ module StimulusHelpers
   JS
 
   # Records, in the page's ms clock, when the signal text enters or leaves the
-  # page and when Turbo submits and renders, for a failed guarded click to
+  # page, as an element, a text node or an edit to one, and whether it arrived
+  # where it could be seen, and when Turbo submits and renders, for a failed guarded click to
   # report (#241). Observes <html>, which survives Turbo swapping <body>; a
   # full page load wipes it, and the report says so. The observer stops after
   # a minute, well past any guarded click's waits, so a click that landed
@@ -87,17 +88,25 @@ module StimulusHelpers
     const text = arguments[0];
     window.__signalTimeline = [];
     const note = what => window.__signalTimeline?.push([Date.now(), what]);
-    const holds = n => n.nodeType === 1 && (n.textContent || "").includes(text);
+    const holds = n => [1, 3].includes(n.nodeType) && (n.textContent || "").includes(text);
+    const where = n => n.nodeType === 1 ? `<${n.localName}>` : `text in <${n.parentElement?.localName}>`;
+    const shown = n => (n.nodeType === 1 ? n : n.parentElement)?.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+    const added = n => note(`signal added${shown(n) ? "" : " out of sight"} in ${where(n)}`);
     window.__signalTimelineObserver?.disconnect();
     window.__signalTimelineObserver = null;
     if (text) {
       const observer = window.__signalTimelineObserver = new MutationObserver(records => {
         for (const r of records) {
-          for (const n of r.addedNodes) if (holds(n)) note(`signal added in <${n.localName}>`);
-          for (const n of r.removedNodes) if (holds(n)) note(`signal removed with <${n.localName}>`);
+          if (r.type === "characterData") {
+            const was = (r.oldValue || "").includes(text);
+            if (holds(r.target) && !was) added(r.target);
+            if (was && !holds(r.target)) note(`signal removed from ${where(r.target)}`);
+          }
+          for (const n of r.addedNodes) if (holds(n)) added(n);
+          for (const n of r.removedNodes) if (holds(n)) note(`signal removed with ${n.nodeType === 1 ? where(n) : `text in <${r.target.localName}>`}`);
         }
       });
-      observer.observe(document.documentElement, { childList: true, subtree: true });
+      observer.observe(document.documentElement, { childList: true, characterData: true, characterDataOldValue: true, subtree: true });
       setTimeout(() => observer.disconnect(), 60000);
     }
     if (!window.__signalTimelineTurbo) {
