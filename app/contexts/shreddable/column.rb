@@ -73,7 +73,7 @@ module Shreddable::Column
     # @param person [Symbol] the column that holds the person's id
     # @raise [ArgumentError] for an unknown key
     def shreddable_column(field, by:, plan: :plan_id, person: :person_id)
-      raise ArgumentError, "by: must be one of #{Shreddable::KEYS.join(', ')}" unless Shreddable::KEYS.include?(by)
+      Shreddable.check_key!(by)
 
       shreddable_columns[field.to_sym] = { by:, plan:, person: }
       attribute field, Shreddable::Column::Type.new
@@ -106,10 +106,7 @@ module Shreddable::Column
     # @return [String] the identifier of the key that should seal the field
     def shreddable_identifier(field, row)
       rule = shreddable_columns.fetch(field)
-      plan_id = row[rule[:plan]]
-      return PlanKeyStore.plan_identifier(row[:tenant_id], plan_id) if rule[:by] == :plan
-
-      PlanKeyStore.person_identifier(row[:tenant_id], plan_id, row[rule[:person]])
+      Shreddable.identifier(rule, row[:tenant_id], row[rule[:plan]], row[rule[:person]])
     end
   end
 
@@ -117,6 +114,9 @@ module Shreddable::Column
   # @return [Boolean] whether the value is in the stored form
   def self.stored?(value) = value.is_a?(Hash) && STORED_KEYS.include?(value.keys.map(&:to_s).sort)
 
+  # A value the mapper just encrypted under the row's key keeps the mapper's
+  # stored form, so a live write and a rebuild store the same bytes.
+  #
   # @param value [Shreddable::Value, Object, nil]
   # @param identifier [#call] gives the identifier of the row's key
   # @return [Hash, nil]
@@ -129,11 +129,10 @@ module Shreddable::Column
     raise ArgumentError, "Seal a shreddable value inside a transaction" unless PlanEncryptionKey.connection.transaction_open?
 
     id = identifier.call
-    key = PlanKeyStore.new.create(id)
-    iv = key.random_iv
-    clear = value.is_a?(Shreddable::Value) ? value.reveal : Shreddable::Value.new(value).reveal
-    { "cipher" => key.cipher, "ciphertext" => Base64.strict_encode64(key.encrypt(JSON.generate(clear), iv)),
-      "identifier" => id, "iv" => Base64.strict_encode64(iv) }
+    sealed = value.is_a?(Shreddable::Value) && Shreddable::SEALED[value]
+    return sealed if sealed && sealed["identifier"] == id
+
+    Shreddable.encrypt(Shreddable::Value.wrap(value).reveal, id, PlanKeyStore.new.create(id))
   end
 
   # @raise [Refused] if any argument names a shreddable column

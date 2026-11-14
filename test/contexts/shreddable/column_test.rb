@@ -101,11 +101,12 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
 
     should "rebuild by copying the event's sealed value, without looking up a key" do
       write_note
-      sealed = @event_store.read.of_type([ NoteWritten ]).last.data[:note].envelope
+      live = stored
 
       PlanKeyStore.stub(:new, NoKeys.new) { rebuild }
 
-      assert_equal sealed, JSON.parse(stored)
+      assert_equal live, stored, "a rebuild stored other bytes than the live write"
+      assert_equal @event_store.read.of_type([ NoteWritten ]).last.data[:note].envelope, JSON.parse(stored)
       assert_equal NOTE, note.reveal
     end
 

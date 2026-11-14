@@ -62,9 +62,10 @@ class Shreddable::Mapper
     description = fields.to_h do |field|
       identifier = event.class.shreddable_identifier(tenant_id, data, field)
       key = keys[identifier] ||= @key_store.create(identifier)
-      iv = key.random_iv
-      data[field] = encode(key.encrypt(JSON.generate(reveal(data[field])), iv))
-      [ field, { cipher: key.cipher, iv: encode(iv), identifier: identifier } ]
+      sealed = Shreddable.encrypt(reveal(data[field]), identifier, key)
+      Shreddable::SEALED[data[field]] = sealed if data[field].is_a?(Shreddable::Value)
+      data[field] = sealed["ciphertext"]
+      [ field, { cipher: sealed["cipher"], iv: sealed["iv"], identifier: identifier } ]
     end
     Encrypted.new(event_id: event.event_id, event_type: event.event_type,
                   metadata: event.metadata.to_h.merge(shreddable: description), data: data)
@@ -91,6 +92,4 @@ class Shreddable::Mapper
                                   iv: meta[:iv], identifier: meta.fetch(:identifier),
                                   cipher: meta.fetch(:cipher), key_of: key_of)
   end
-
-  def encode(bytes) = Base64.strict_encode64(bytes)
 end
