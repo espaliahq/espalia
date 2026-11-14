@@ -37,4 +37,11 @@ class TeamPlanning::RuleKinds::CapacityTest < ActiveSupport::TestCase
     error = assert_raises(TeamPlanning::Error) { Kind.check({ "roles" => { "em" => { "model" => "per_fte", "params" => { "rate" => "secret-91000" } } } }) }
     assert_no_match "secret", error.message
   end
+
+  should "refuse two keys that name one role once downcased, rather than keep either" do
+    error = assert_raises(TeamPlanning::Error) do
+      Kind.check({ "roles" => { "EM" => { "model" => "per_fte" }, " em" => { "model" => "per_fte" } } })
+    end
+    assert_match "twice", error.message
+  end
 end

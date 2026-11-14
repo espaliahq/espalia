@@ -3,7 +3,8 @@
 # Which capacity model ({TeamPlanning::CapacityModel}) each role family uses,
 # with its parameters, and which roles use another. A role's choice beats its
 # family's. Read at a seat's unit, so a unit can choose differently for its
-# subtree.
+# subtree; like every rule, a unit's value replaces the one above it whole, so
+# it restates the families it keeps.
 #
 # The default chooses nothing, so every seat stays unclassified until a
 # tenant or plan says how to count it, rather than being guessed at.
@@ -53,6 +54,7 @@ class TeamPlanning::RuleKinds::Capacity < TeamPlanning::RuleKind
 
   def self.choices!(scope, choices)
     raise TeamPlanning::Error, "A capacity_model rule's #{scope} must be an object" unless choices.is_a?(Hash)
+    raise TeamPlanning::Error, "A capacity_model rule names one of its #{scope} twice" unless choices.keys.map { it.to_s.strip.downcase }.uniq.size == choices.size
 
     choices.to_h do |id, choice|
       raise TeamPlanning::Error, "Each of #{scope} must name a model" unless choice.is_a?(Hash) && choice["model"].present?
