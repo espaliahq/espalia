@@ -32,7 +32,8 @@ class TeamPlanning::Projections::Plans
       case event
       when TeamPlanning::Events::PlanCreated
         TeamPlanningPlan.find_or_initialize_by(id: data[:plan_id])
-          .update!(name: data[:name], base_on: data[:base_on], created_by_id: data[:created_by_id])
+          .update!(name: data[:name], base_on: data[:base_on], created_by_id: data[:created_by_id],
+                   created_at: event.timestamp, updated_at: event.timestamp)
       when TeamPlanning::Events::PlanRenamed
         TeamPlanningPlan.where(id: data[:plan_id]).update_all(name: data[:name], updated_at: event.timestamp)
       when TeamPlanning::Events::PlanDeleted

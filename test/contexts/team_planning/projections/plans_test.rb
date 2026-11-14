@@ -36,6 +36,18 @@ class TeamPlanning::Projections::PlansTest < ActiveSupport::TestCase
     assert_not TeamPlanningPlan.exists?(plan_id)
   end
 
+  should "date the row from its events, so a rebuild keeps the dates" do
+    plan_id = SecureRandom.uuid_v7
+    travel_to(Time.zone.parse("2026-11-01 09:00")) { @handler.create_plan(plan_id, name: "Next year", base_on: "2026-11-01") }
+    travel_to(Time.zone.parse("2026-11-03 09:00")) { @handler.rename_plan(plan_id, "Next financial year") }
+
+    TeamPlanning::Projections::Plans.reset!(tenant: @tenant)
+    Projections::Replayer.replay(projection_class: TeamPlanning::Projections::Plans, tenant: @tenant)
+
+    plan = TeamPlanningPlan.find(plan_id)
+    assert_equal [ Time.zone.parse("2026-11-01 09:00"), Time.zone.parse("2026-11-03 09:00") ], [ plan.created_at, plan.updated_at ]
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       kept, renamed, deleted = Array.new(3) { SecureRandom.uuid_v7 }
