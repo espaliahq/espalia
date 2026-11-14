@@ -24,8 +24,10 @@ class Views::Tenant::OrgGraph::UnitTree < Views::Base
       tree_list(@overview.roots)
       a(
         href: "##{@tray_id}",
-        class: "mt-2 flex items-center justify-between rounded-md px-2 py-1.5 text-sm font-medium " \
-               "text-warning hover:bg-default-hover"
+        class: [
+          "mt-2 flex items-center justify-between rounded-md px-2 py-1.5 text-sm font-medium hover:bg-default-hover",
+          @overview.unplaced.any? ? "text-warning" : "text-default"
+        ]
       ) do
         span { "In no team" }
         span(class: "tabular-nums") { @overview.unplaced.size.to_s }
