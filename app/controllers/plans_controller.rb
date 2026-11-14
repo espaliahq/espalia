@@ -41,15 +41,33 @@ class PlansController < ApplicationController
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?))
   end
 
+  # GET /planning/:id/timeline?scenario=:scenario_id&step=:index
+  #
+  # One path from the baseline to `scenario` along the calendar ([#298](https://github.com/espaliahq/espalia/issues/298)).
+  # With no scenario it follows the first "then" at each step to a leaf. A
+  # phone shows one step at a time, `step` from the left.
+  def timeline
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = params[:scenario].presence || Views::Plans::Timeline.first_leaf(scenarios, plan[:plan_id])
+    timeline = read(Operations::TeamPlanning::Timeline, scenario_id:)
+    render plan_page(plan, scenarios:, open_tab: :timeline,
+                           body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i))
+  end
+
   private
 
   def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil)
+    members = read(Operations::TeamPlanning::PlanMembers)[:members]
     Views::Plans::ShowView.new(
       plan:,
       scenarios:,
-      members: read(Operations::TeamPlanning::PlanMembers)[:members],
+      members:,
+      see_pay: see_pay(members),
       tabs: [ Views::Plans::ShowView::Tab.new(key: :scenarios, label: "Scenarios", href: plan_path(plan[:plan_id])),
-              Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])) ],
+              Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])),
+              Views::Plans::ShowView::Tab.new(key: :timeline, label: "Timeline", href: timeline_plan_path(plan[:plan_id])) ],
       open_tab:,
       body:,
       can_edit: can_edit?,
@@ -76,6 +94,12 @@ class PlansController < ApplicationController
   end
 
   def policy_for(record) = PlanPolicy.new(pundit_user, record)
+
+  def see_pay(members)
+    { can_manage_see_pay: policy_for(@plan_record).manage_see_pay?,
+      reachable_ids: PlanPolicy.reachable_ids(members.pluck(:person_id)),
+      locked_out: PlanPolicy.locked_out?(@plan_record) && !PlanPolicy.frozen?(@plan_record) }
+  end
 
   def can_edit?
     return @can_edit if defined?(@can_edit)

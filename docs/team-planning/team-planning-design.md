@@ -142,9 +142,10 @@ along the resolution chain, and joins names last.
 ### The timeline as built
 
 `TeamPlanning::Timeline` (the `team_planning_timeline` tool) reads one timeline path and
-stores nothing. It resolves each step as the map does, then lays the steps out as columns.
-The tab ([#289](https://github.com/espaliahq/espalia/issues/289)) draws what it returns and
-decides none of these rules:
+stores nothing ([#289](https://github.com/espaliahq/espalia/issues/289)). It resolves each
+step as the map does, then lays the steps out as columns. The Timeline tab
+([#298](https://github.com/espaliahq/espalia/issues/298)) draws what it returns and decides
+none of these rules:
 
 - **Blocks.** A unit is one block across the columns it lives in, so a rename changes the
   label, not the block. A unit that succeeds exactly one other continues that block. A split
@@ -166,6 +167,17 @@ decides none of these rules:
 
 The baseline is read once and every step resolves over it, so each column sees the same Org
 Graph and the read costs one Org Graph query whatever the path's length.
+
+The tab shows one path at a time. With no scenario named, it follows the first `then` at
+each step to a leaf, and the page says which path it shows and how many others run through
+the plan. Each step lists its alternatives as "or instead" links, and the last step its
+`then` steps, so a viewer switches path by following one. A wide screen draws a grid: a
+column per step, a heading per block, and a row per lane, with each bar spanning the steps
+it holds. A phone shows one step at a time, picked from a row of steps that marks the
+current one. Since the neighbouring steps are out of sight there, each bar says where its
+person came from when they arrive and where they go when they leave. A path with nobody on
+it still shows its steps, so its alternatives stay in reach. Read-only for now: editing in
+time is 9.3.
 
 ### Unit changes as built
 
@@ -532,6 +544,41 @@ when a band was last added, changed or removed (`bands_changed_at`). The tenant 
 time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
 to a rate, reprices plans too but does not move the stamp.
 
+### The see-pay right as built
+
+A member holds the see-pay right or not
+([#300](https://github.com/espaliahq/espalia/issues/300)). Two plan events carry it,
+`SeePayGranted` and `SeePayWithdrawn`, each naming who made the change. `PlanPolicy#see_pay?`
+answers for the caller, and every read of band ranges or actual pay asks it. Today that is
+`team_planning_cost`, which gives a holder each band's minimum and maximum beside its
+midpoint and everyone else the midpoint, and says which in `pay_view` (`band_ranges` or
+`band_midpoints`). Totals are the same in both, since midpoints price every seat until
+actual pay arrives in 5.6. An agent over MCP gets the view of the person it acts for.
+
+- **Who changes it.** Only a holder grants or withdraws, and only for a member. The creator
+  holds it from the start, and plans from before the right have their creator only.
+  Removing a member withdraws it; adding them back does not restore it. Only a member still
+  active and remembered can be given it.
+- **No lock-out.** The last holder cannot withdraw from themselves or be removed. The stream
+  counts holders and the command handler counts the reachable ones, so a holder who left or
+  was forgotten doesn't count as the one who remains.
+- **Recovery.** A plan whose holders have all left or been forgotten is locked out of pay.
+  A tenant admin can restore it, unread, with `team_planning_restore_see_pay`. Each reachable
+  editor gets the right, recorded as the admin's grant with `recovery: true`, and the tool
+  returns only `{ plan_id, restored: true }`. The admin never opens the plan, so being a tenant
+  admin still opens no one else's plan. A plan that isn't locked out, or that the admin
+  can't see, refuses with the same "No such plan". A frozen plan is refused too, since its
+  editors are gone and a tenant admin can already delete it.
+- **Shown.** `team_planning_plan_members` and the plan's members panel show who holds the
+  right, who gave it and when, and whether a tenant admin restored it. A holder can then
+  withdraw a restored right from the others. On a locked-out plan the panel tells members
+  to ask a tenant admin.
+- **Forgetting.** A forgotten holder keeps the right as a former member, as they keep their
+  membership, and no longer counts as a holder who can act.
+
+The `team_planning/plan_members` projection carries the right, so its version moved to 2
+and it needs a rebuild on deploy.
+
 ### Clearing and pinning
 
 `ChangeCleared` hands one facet of one subject back to the scenario's parent. The aggregate
@@ -859,18 +906,27 @@ Two consequences of [the aggregate guard](shreddable-fields-design.md):
 
 ## The headcount budget
 
-The budget stays in the plan. A budget line approved for a person already employed is close to that
-person's pay, so it belongs with the plan's other sensitive values, under the plan's key
-and deleted with it.
+The organisation's approved budget is tenant configuration, like pay bands: a `budget_lines`
+table that only tenant admins hold, on the Budget page or through the `tenants_*_budget_line`
+tools. Every plan reads it live as its root's default. A plan member sees a line only
+through their plan's read, and the tenant tools refuse everyone else with no detail. What a
+plan changes stays in the plan: a budget line approved for a person already employed is close
+to that person's pay, so a plan's own lines and changes belong with its other sensitive
+values, under the plan's key and deleted with it
+([#302](https://github.com/espaliahq/espalia/issues/302)).
 
 - **Headcount budget only.** A budget line is permission to spend on people: a period, an
   amount or a head count or both, and optionally the role, level, location and cost
   centre it was approved for. Cost centre is the label the Org Graph carries for a
   person, used for grouping. Accounts, ledger codes and every other financial or
   accounting identifier are out of scope.
-- **Budget lines are plan data.** `BudgetLineSet` and `BudgetLineCut` in a plan's root scenario
-  are its approved budget. A descendant changes them like anything else. The amount is
-  shreddable under the plan's key.
+- **A plan changes the budget with plan data.** `BudgetLineSet` and `BudgetLineCut` add,
+  change or cut a line in a scenario, and a descendant changes them like anything else. The
+  amount is shreddable under the plan's key. Removing a tenant line a plan has changed or cut
+  leaves the plan's change orphaned, and Attention flags it rather than dropping it.
+- **Money keeps its currency.** An amount keeps its own currency and period, a year or a
+  month, as a pay band's does, and is never converted. A line with a head count and no amount
+  has no amount, never zero.
 - **On-cost models.** What a position costs beyond base pay is calculated by an on-cost
   model: a flat rate, rates by country, or itemised components. Models are chosen and
   set like capacity models, with a tenant default that a plan or scenario can change.
@@ -1072,7 +1128,8 @@ values leave the read models.
 ## Permissions
 
 - A plan is private to its members, each an editor or a viewer.
-- Seeing pay is a separate permission. Without it a member sees band midpoints.
+- Seeing pay is a separate permission. Without it a member sees band midpoints. See
+  [The see-pay right as built](#the-see-pay-right-as-built).
 - Approving, and applying changes to the Org Graph, are each their own permission.
 - Every read and write is an Operation, so the web and an MCP client pass the same
   checks.

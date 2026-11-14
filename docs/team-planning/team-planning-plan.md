@@ -300,7 +300,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
-| 6.1 | Budget lines: `BudgetLineSet` and `BudgetLineCut`, amounts shreddable, the tenant's approved budget as the root's default | 2.2, 3.3 |
+| 6.1 | Budget lines: the tenant's approved budget as a table and Budget page held by tenant admins ([#302](https://github.com/espaliahq/espalia/issues/302)), read live as the root's default; `BudgetLineSet` and `BudgetLineCut`, amounts shreddable | 2.2, 3.3 |
 | 6.2 | Cost centre rules: an ordered list of matchers. A filled position takes its person's cost centre from `AsOf::Person`. Adds the position's own cost-centre label, which 5.4 left out | 3.3, 3.5 |
 | 6.3 | Funding: the most specific matching budget line, draw order, and `PositionFundingSet` for trades | 6.1, 6.2, 5.4 |
 | 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated | 6.3 |
@@ -364,7 +364,7 @@ edits the change, then approves again.
 | # | Story | Needs |
 |---|---|---|
 | 9.1 | Timeline projection: one path from the baseline to a leaf, with lanes and moves | 3.6 |
-| 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives | 9.1 |
+| 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.1 |
 | 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later | 9.2, 3.12 |
 | 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit | 9.1 |
 | 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |

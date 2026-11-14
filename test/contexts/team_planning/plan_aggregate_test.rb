@@ -117,6 +117,7 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
 
     should "let an editor step down once there is another" do
       @plan.add_member(@other_id, role: "editor", added_by_id: @creator_id)
+      @plan.grant_see_pay(@other_id, granted_by_id: @creator_id)
       @plan.remove_member(@creator_id, removed_by_id: @creator_id)
 
       assert_not @plan.member?(@creator_id)
@@ -132,6 +133,86 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
     should "take no members once deleted" do
       @plan.delete(deleted_by_id: @creator_id)
       assert_raises(TeamPlanning::Error) { @plan.add_member(@other_id, role: "viewer", added_by_id: @creator_id) }
+    end
+  end
+
+  context "the see-pay right" do
+    setup do
+      create_plan
+      @other_id = SecureRandom.uuid_v7
+      @plan.add_member(@other_id, role: "viewer", added_by_id: @creator_id)
+    end
+
+    should "start with the creator alone" do
+      assert @plan.sees_pay?(@creator_id)
+      assert_not @plan.sees_pay?(@other_id)
+      assert_equal [ @creator_id ], @plan.pay_holder_ids
+    end
+
+    should "grant it once, naming who did, and write nothing for a second grant" do
+      @plan.grant_see_pay(@other_id, granted_by_id: @creator_id)
+      @plan.grant_see_pay(@other_id, granted_by_id: @creator_id)
+
+      granted = @plan.unpublished_events.grep(TeamPlanning::Events::SeePayGranted)
+      assert_equal [ { plan_id: @plan_id, person_id: @other_id, granted_by_id: @creator_id } ], granted.map(&:data)
+      assert @plan.sees_pay?(@other_id)
+    end
+
+    should "mark a grant made in recovery" do
+      @plan.grant_see_pay(@other_id, granted_by_id: SecureRandom.uuid_v7, recovery: true)
+      assert @plan.unpublished_events.to_a.last.data[:recovery]
+    end
+
+    should "refuse someone who isn't a member" do
+      error = assert_raises(TeamPlanning::Error) { @plan.grant_see_pay(SecureRandom.uuid_v7, granted_by_id: @creator_id) }
+      assert_equal "They aren't a member of this plan", error.message
+    end
+
+    should "withdraw it, and write nothing from someone who doesn't hold it" do
+      @plan.withdraw_see_pay(@other_id, withdrawn_by_id: @creator_id)
+      @plan.grant_see_pay(@other_id, granted_by_id: @creator_id)
+      @plan.withdraw_see_pay(@other_id, withdrawn_by_id: @creator_id)
+
+      withdrawn = @plan.unpublished_events.grep(TeamPlanning::Events::SeePayWithdrawn)
+      assert_equal [ { plan_id: @plan_id, person_id: @other_id, withdrawn_by_id: @creator_id } ], withdrawn.map(&:data)
+      assert_not @plan.sees_pay?(@other_id)
+    end
+
+    should "keep its last holder: they can neither give it up nor leave" do
+      @plan.add_member(@other_id, role: "editor", added_by_id: @creator_id)
+      [ -> { @plan.withdraw_see_pay(@creator_id, withdrawn_by_id: @creator_id) },
+        -> { @plan.remove_member(@creator_id, removed_by_id: @creator_id) } ].each do |command|
+        assert_match "A plan needs someone who can see pay", assert_raises(TeamPlanning::Error, &command).message
+      end
+      assert @plan.sees_pay?(@creator_id)
+    end
+
+    should "let a holder go once another holds it" do
+      @plan.grant_see_pay(@other_id, granted_by_id: @creator_id)
+      @plan.withdraw_see_pay(@creator_id, withdrawn_by_id: @creator_id)
+      assert_equal [ @other_id ], @plan.pay_holder_ids
+    end
+
+    should "lose it with membership, and not get it back on rejoining" do
+      second_id = SecureRandom.uuid_v7
+      @plan.add_member(second_id, role: "viewer", added_by_id: @creator_id)
+      @plan.grant_see_pay(second_id, granted_by_id: @creator_id)
+      @plan.remove_member(second_id, removed_by_id: @creator_id)
+      @plan.add_member(second_id, role: "viewer", added_by_id: @creator_id)
+
+      assert_not @plan.sees_pay?(second_id)
+    end
+
+    should "replay the same holders from the stream" do
+      @plan.grant_see_pay(@other_id, granted_by_id: @creator_id)
+      replayed = TeamPlanning::PlanAggregate.new
+      @plan.unpublished_events.each { replayed.apply(it) }
+      assert_equal @plan.pay_holder_ids.sort, replayed.pay_holder_ids.sort
+    end
+
+    should "take no grants once deleted" do
+      @plan.delete(deleted_by_id: @creator_id)
+      assert_raises(TeamPlanning::Error) { @plan.grant_see_pay(@other_id, granted_by_id: @creator_id) }
     end
   end
 

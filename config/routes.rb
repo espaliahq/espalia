@@ -97,6 +97,7 @@ Rails.application.routes.draw do
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
     resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ]
+    resources :budget_lines, only: [ :index, :create, :edit, :update, :destroy ]
     resources :exchange_rates, only: [ :create, :edit, :update, :destroy ]
     resource :reference_currency, only: [ :update ]
 
@@ -405,12 +406,16 @@ Rails.application.routes.draw do
   # Team Planning (#226): the plans a person is in, and one plan's page.
   resources :plans, only: [ :index, :show, :create ], path: "planning" do
     get :map, on: :member
+    # One path along the calendar ([#298](https://github.com/espaliahq/espalia/issues/298)).
+    get :timeline, on: :member
     # Fork and rename a scenario (#271).
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"
     # Move a position to another unit on the scenario map; the id is the position's.
     resources :positions, only: [ :update ], controller: "plans/positions"
+    # Grant and withdraw the see-pay right ([#300](https://github.com/espaliahq/espalia/issues/300)); the id is the member's.
+    resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.
