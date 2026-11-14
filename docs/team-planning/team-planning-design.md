@@ -549,11 +549,12 @@ to a rate, reprices plans too but does not move the stamp.
 A member holds the see-pay right or not
 ([#300](https://github.com/espaliahq/espalia/issues/300)). Two plan events carry it,
 `SeePayGranted` and `SeePayWithdrawn`, each naming who made the change. `PlanPolicy#see_pay?`
-answers for the caller, and every read of band ranges or actual pay asks it. Today that is
-`team_planning_cost`, which gives a holder each band's minimum and maximum beside its
-midpoint and everyone else the midpoint, and says which in `pay_view` (`band_ranges` or
-`band_midpoints`). Totals are the same in both, since midpoints price every seat until
-actual pay arrives in 5.6. An agent over MCP gets the view of the person it acts for.
+answers for the caller, and every read of band ranges or actual pay asks it.
+`team_planning_cost` gives a holder each band's minimum and maximum beside its midpoint, and
+prices from [actual pay](#actual-pay-as-built) where the plan holds it. Everyone else gets
+midpoints throughout. `pay_view` names which (`actual_pay` or `band_midpoints`), and the two
+views total differently once a plan holds pay. An agent over MCP gets the view of the person
+it acts for.
 
 - **Who changes it.** Only a holder grants or withdraws, and only for a member. The creator
   holds it from the start, and plans from before the right have their creator only.
@@ -578,6 +579,40 @@ actual pay arrives in 5.6. An agent over MCP gets the view of the person it acts
 
 The `team_planning/plan_members` projection carries the right, so its version moved to 2
 and it needs a rebuild on deploy.
+
+
+### Actual pay as built
+
+A plan can hold what a person is paid
+([#317](https://github.com/espaliahq/espalia/issues/317)). It is a `PlanDataSet` on facet
+`data:pay`, sealed under the person's key in the plan, whose value is
+`{ amount, currency, period, basis }`. The amount is base pay, so cost adds the unit's
+on-cost on top.
+
+- **The basis is required, with no default.** `full_time` means a full-time figure, which
+  the person's FTE scales. `actual` means what they are paid, already pro-rated, which FTE
+  leaves alone. Many HR exports pro-rate a part-timer's pay, so guessing either way would
+  misprice someone. An hourly amount is a rate, so its basis is always `full_time`. The
+  upload in 5.7 asks for the basis once per file.
+- **Writing needs an editor with the see-pay right.** `team_planning_set_actual_pay` is its
+  own tool, and `team_planning_set_plan_value` refuses `pay`. Clearing, pinning, noting,
+  undoing and redoing a `data:pay` change need the right too. The refusal says only that pay
+  needs the see-pay right, which status already tells any member: they can see that a
+  `data:pay` change exists, never its value. The tool's approval is `:mcp_client`, since an
+  `:in_app` approval would store its arguments in clear until confirmed.
+- **Pricing.** For a holder, a person with held pay is priced from it: made yearly (a month
+  is 1/12, an hour takes the `working_hours` rule), scaled by FTE only for `full_time`, by
+  the days held out of 365, plus on-cost. Held pay needs no level or band. The seat's
+  `pay_source` says `actual` or `band_midpoint`, `basis` says which basis, and
+  `actual_pay_seats` counts the seats priced from pay, for holders only.
+- **Forgotten pay is unpriced.** Pay the plan lost with the person's key leaves the seat
+  unpriced as `pay_unknown`. The midpoint never stands in, since a total that silently
+  swapped forgotten pay for a midpoint would look complete when it isn't.
+- **Where it never goes.** The scenario map carries `plan_data.pay` only for holders. History
+  and overrides show its end state as `{ field: "pay" }`, the value sealed out. `pay` and
+  `amount` are filtered from the log. `test/integration/team_planning_pay_privacy_test.rb`
+  walks every plan read as a viewer and as an editor without the right, then checks the
+  log, the read models and the event store for the amount in clear.
 
 ### Clearing and pinning
 
