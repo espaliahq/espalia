@@ -200,7 +200,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   end
 
   def stale_flag(membership)
-    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "unit", unit: @unit.id })
+    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "unit", unit: @unit.id, effective_on: @effective_on })
   end
 
   def terms(membership)
