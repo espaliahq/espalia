@@ -32,6 +32,6 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, scenario_id:, **map_payload(map) }
+    { plan_id: plan.id, scenario_id:, **map_payload(map, plan:) }
   end
 end

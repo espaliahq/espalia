@@ -23,6 +23,11 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal({ "budget_line_id" => "id" }, filtered("budget_line_id" => "id"))
   end
 
+  should "keep actual pay out of the log, from a form and from a tool call" do
+    assert_equal({ "pay" => "[FILTERED]" }, filtered("pay" => { "amount" => "92000", "basis" => "actual" }))
+    assert_equal({ "arguments" => { "amount" => "[FILTERED]", "currency" => "AUD" } }, filtered("arguments" => { "amount" => "92000", "currency" => "AUD" }))
+  end
+
   should "leave a band's id and other limits readable" do
     assert_equal({ "pay_band_id" => "id", "maximum_rows" => 3 }, filtered("pay_band_id" => "id", "maximum_rows" => 3))
   end
