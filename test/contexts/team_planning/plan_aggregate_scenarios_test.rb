@@ -27,7 +27,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       q1 = fork(name: "  Q1   plan ", ends_on: "2027-03-31")
 
       assert_kind_of TeamPlanning::Events::ScenarioForked, last_event
-      assert_equal({ plan_id: @plan_id, scenario_id: q1, parent_id: @plan_id, relation: "then", name: "Q1 plan",
+      assert_equal({ plan_id: @plan_id, scenario_id: q1, parent_id: @plan_id, relation: "then", name: Shreddable::Value.new("Q1 plan"),
                      starts_on: "2027-01-01", ends_on: "2027-03-31", forked_by_id: @editor_id }, last_event.data)
       assert_equal %w[2027-01-01 2027-03-31], period(q1)
     end

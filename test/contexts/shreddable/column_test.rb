@@ -140,6 +140,14 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       assert_not_includes stored, "Staying"
     end
 
+    should "seal a value stored in clear before the field was shreddable as removed, once its key is gone" do
+      destroy_key
+
+      sealed = Note.transaction { Note.seal_column(:note, NOTE, tenant_id: @tenant.id, plan_id: @plan_id) }
+
+      assert_equal Shreddable::Column::REMOVED, sealed
+    end
+
     should "seal a clear value again after a rollback, under a key that survived" do
       ActsAsTenant.with_tenant(@tenant) do
         row = Note.new(tenant_id: @tenant.id, plan_id: @plan_id, note: NOTE)

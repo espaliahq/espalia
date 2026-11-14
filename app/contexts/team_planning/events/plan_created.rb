@@ -6,9 +6,11 @@
 # @!attribute [r] data
 #   @return [Hash] event data
 #   @option data [String] :plan_id
-#   @option data [String] :name
+#   @option data [Shreddable::Value] :name under the plan's key
 #   @option data [String] :base_on ISO 8601 date the plan stands on
 #   @option data [String] :created_by_id person_id of the plan's creator
 #
 class TeamPlanning::Events::PlanCreated < RubyEventStore::Event
+  extend Shreddable
+  shreddable :name, by: :plan
 end

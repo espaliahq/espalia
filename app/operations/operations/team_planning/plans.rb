@@ -9,9 +9,12 @@ class Operations::TeamPlanning::Plans < Operations::Base
   category :read
   approval :none
 
-  # @return [Hash] `{ plans: [{ plan_id, name, base_on, role }] }`
+  # @return [Hash] `{ plans: [{ plan_id, name, base_on, role }] }`; a removed name is nil
   def perform
-    plans = PlanPolicy::Scope.new(context, TeamPlanningPlan).resolve.includes(:members).order(:name, :id)
-    { plans: plans.map { { plan_id: it.id, name: it.name, base_on: it.base_on.iso8601, role: it.role_of(context.person.id) } } }
+    plans = PlanPolicy::Scope.new(context, TeamPlanningPlan).resolve.includes(:members).map do
+      { plan_id: it.id, name: it.name&.reveal, base_on: it.base_on.iso8601, role: it.role_of(context.person.id) }
+    end
+    # A name is sealed, so the caller's own few plans sort here, not in SQL.
+    { plans: plans.sort_by { [ it[:name].to_s, it[:plan_id] ] } }
   end
 end

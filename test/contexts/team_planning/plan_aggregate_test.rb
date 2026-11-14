@@ -19,7 +19,7 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
 
       event = @plan.unpublished_events.sole
       assert_kind_of TeamPlanning::Events::PlanCreated, event
-      assert_equal({ plan_id: @plan_id, name: "Next year", base_on: "2026-11-14", created_by_id: @creator_id }, event.data)
+      assert_equal({ plan_id: @plan_id, name: Shreddable::Value.new("Next year"), base_on: "2026-11-14", created_by_id: @creator_id }, event.data)
       assert_equal Date.new(2026, 11, 14), @plan.base_on
       assert_equal @creator_id, @plan.created_by_id
     end
@@ -51,8 +51,8 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
 
       event = @plan.unpublished_events.to_a.last
       assert_kind_of TeamPlanning::Events::PlanRenamed, event
-      assert_equal "Next year", event.data[:previous_name]
-      assert_equal "Two-year plan", event.data[:name]
+      assert_equal "Next year", event.data[:previous_name].reveal
+      assert_equal "Two-year plan", event.data[:name].reveal
     end
 
     should "write nothing for the same name" do
