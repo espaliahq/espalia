@@ -49,7 +49,7 @@ class Operations::TeamPlanning::Capacity < Operations::Base
   private
 
   def models(report)
-    used = report.seats.flat_map { |seat| seat.places.filter_map(&:model) }.uniq.sort
+    used = report.seats.flat_map { |seat| seat.places.filter_map(&:model) }.uniq.select { ::TeamPlanning::CapacityModels.registered?(it) }.sort
     used.to_h { |name| model = ::TeamPlanning::CapacityModels.fetch(name); [ name, { symbol: model.symbol, description: model.description } ] }
   end
 

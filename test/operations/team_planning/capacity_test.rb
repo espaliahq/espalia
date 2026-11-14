@@ -84,6 +84,27 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_match "counts against nobody", open_seat[:notes].first[:text]
   end
 
+  should "leave a model no longer registered out of models, its place unclassified" do
+    model = Class.new(TeamPlanning::CapacityModel) do
+      def self.model_name = "test_gone"
+      def self.description = "Gone soon"
+    end
+    TeamPlanning::CapacityModels.register(model)
+    ActsAsTenant.with_tenant(@tenant) do
+      TeamPlanning::CommandHandler.new(actor: AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)).set_change(
+        @plan_id, TeamPlanning::Events::RuleSet, scenario_id: @plan_id, subject_id: @plan_id,
+                                                 end_state: { rule: "capacity_model", value: { families: { @family.role_family_id => { model: "test_gone" } } } }
+      )
+    end
+    TeamPlanning::CapacityModels.unregister(model)
+    result = capacity
+
+    assert_empty result[:models]
+    assert_equal [ "unknown_model" ], result[:unclassified].pluck(:reason)
+  ensure
+    TeamPlanning::CapacityModels.unregister(model) if TeamPlanning::CapacityModels.registered?("test_gone")
+  end
+
   should "list every seat as unclassified, with why, until a model is chosen" do
     result = capacity
 
