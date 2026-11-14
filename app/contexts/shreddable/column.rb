@@ -37,27 +37,37 @@ module Shreddable::Column
     end
   end
 
-  # Refuses queries that order, match or read a shreddable column.
+  # Refuses the query methods that would order, match or read a shreddable
+  # column. Raw SQL, through `find_by_sql` or `select`, isn't checked.
   module Guard
-    %i[order reorder group pluck pick in_order_of].each do |name|
+    %i[order reorder group regroup pluck pick in_order_of].each do |name|
       define_method(name) do |*args, **kwargs, &block|
-        Shreddable::Column.refuse!(model, args + kwargs.keys, name)
+        Shreddable::Column.refuse!(model, args + [ kwargs ], name)
         super(*args, **kwargs, &block)
       end
     end
 
     # Only the condition is checked: the values bound into it are data.
-    def where(*args, **kwargs)
-      condition = args.first.is_a?(Hash) ? args.first.keys : args.first(1)
-      Shreddable::Column.refuse!(model, condition + kwargs.keys, :where)
-      super
+    %i[where rewhere having exists?].each do |name|
+      define_method(name) do |*args, **kwargs, &block|
+        Shreddable::Column.refuse!(model, args.first(1) + [ kwargs ], name)
+        super(*args, **kwargs, &block)
+      end
     end
   end
 
-  included do
-    [ ActiveRecord::Relation, ActiveRecord::AssociationRelation, ActiveRecord::Associations::CollectionProxy ].each do
-      relation_delegate_class(it).prepend(Guard)
+  # Guards `where.not`, which builds its condition apart from `where`.
+  module WhereChainGuard
+    def not(*args, **kwargs)
+      model = @scope.model
+      Shreddable::Column.refuse!(model, args.first(1) + [ kwargs ], :where) if model.respond_to?(:shreddable_columns)
+      super
     end
+  end
+  ActiveRecord::QueryMethods::WhereChain.prepend(WhereChainGuard)
+
+  included do
+    guard_shreddable_relations
     # On create, after ApplicationRecord assigns the id, which `plan: :id` needs.
     before_create :seal_shreddable_columns
     before_update :seal_shreddable_columns
@@ -75,16 +85,35 @@ module Shreddable::Column
     def shreddable_column(field, by:, plan: :plan_id, person: :person_id)
       Shreddable.check_key!(by)
 
-      shreddable_columns[field.to_sym] = { by:, plan:, person: }
+      own_shreddable_columns[field.to_sym] = { by:, plan:, person: }
       attribute field, Shreddable::Column::Type.new
 
       define_method(field) { shreddable_value(field) }
       define_method(:"#{field}=") { |value| assign_shreddable(field, value) }
     end
 
-    # @return [Hash{Symbol => Hash}]
+    # @return [Hash{Symbol => Hash}] each column this class or a parent declares
     def shreddable_columns
-      @shreddable_columns ||= {}
+      inherited = superclass.respond_to?(:shreddable_columns) ? superclass.shreddable_columns : {}
+      inherited.merge(own_shreddable_columns)
+    end
+
+    # @return [Hash{Symbol => Hash}]
+    def own_shreddable_columns
+      @own_shreddable_columns ||= {}
+    end
+
+    # A subclass gets relation classes of its own, so it needs the guard too.
+    def inherited(subclass)
+      super
+      subclass.guard_shreddable_relations
+    end
+
+    # @api private
+    def guard_shreddable_relations
+      [ ActiveRecord::Relation, ActiveRecord::AssociationRelation, ActiveRecord::Associations::CollectionProxy ].each do
+        relation_delegate_class(it).prepend(Guard)
+      end
     end
 
     # The stored form of a value, for writes that skip the model, such as
@@ -148,9 +177,11 @@ module Shreddable::Column
   def self.names_in(arg)
     case arg
     when Symbol, String then [ arg ]
-    when Hash then arg.keys
+    # A table's name can nest its columns: `where(notes: { note: x })`.
+    when Hash then arg.flat_map { |key, value| [ key ] + (value.is_a?(Hash) ? names_in(value) : []) }
     when Array then arg.flat_map { names_in(it) }
-    when Arel::Nodes::Node, Arel::Attributes::Attribute then [ arg.to_sql ] if arg.respond_to?(:to_sql)
+    when Arel::Attributes::Attribute then [ arg.name ]
+    when Arel::Nodes::Node then [ arg.to_sql ]
     end
   rescue StandardError
     [ arg.to_s ]

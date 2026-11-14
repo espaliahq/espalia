@@ -159,6 +159,14 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep its declaration in a subclass" do
+      write_note
+      special = Class.new(Note)
+      row = ActsAsTenant.with_tenant(@tenant) { special.find_by!(plan_id: @plan_id) }
+
+      assert_equal NOTE, ActsAsTenant.with_tenant(@tenant) { row.note.reveal }
+    end
+
     should "seal under the id ApplicationRecord gives a new row" do
       ids = Class.new(Note) { shreddable_column :note, by: :plan, plan: :id }
       ids.define_singleton_method(:name) { "PlanNamedById" }
@@ -179,8 +187,17 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
         -> { Note.group(:note) },
         -> { Note.pluck(:note) },
         -> { Note.pick(:note) },
-        -> { Note.where(plan_id: @plan_id).order(:note) }
-      ].each { assert_raises(Shreddable::Column::Refused, &it) }
+        -> { Note.where(plan_id: @plan_id).order(:note) },
+        -> { Note.order(Note.arel_table[:note]) },
+        -> { Note.order(Note.arel_table[:note].desc) },
+        -> { Note.where(shreddable_column_test_notes: { note: NOTE }) },
+        -> { Note.where.not("note IS NULL") },
+        -> { Note.rewhere("note IS NULL") },
+        -> { Note.group(:plan_id).having("count(note) > 0") },
+        -> { Note.regroup(:note) },
+        -> { Note.exists?([ "note->>'iv' = ?", NOTE ]) },
+        -> { Class.new(Note).order(:note) }
+      ].each_with_index { |query, i| assert_raises(Shreddable::Column::Refused, "query #{i}", &query) }
     end
 
     should "refuse a value in clear on a write that skips the model" do
