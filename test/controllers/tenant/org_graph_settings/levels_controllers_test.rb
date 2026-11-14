@@ -158,7 +158,8 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_select "#org-graph-level-remove-#{@squad_id}", text: "Remove"
       assert_select "#org-graph-level-remove-#{@team_id}", count: 0
       assert_select "#org-graph-level-remove-#{@guild_id}", count: 0
-      assert_select "#org-graph-level-#{@guild_id}", text: /held Atlas/
+      assert_select "#org-graph-level-#{@guild_id}", text: /0 units · held Atlas/
+      assert_select "#org-graph-level-#{@team_id}", text: /From Espalia · holds Payments/
     end
   end
 

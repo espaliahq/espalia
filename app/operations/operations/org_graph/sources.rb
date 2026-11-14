@@ -7,13 +7,13 @@
 class Operations::OrgGraph::Sources < Operations::Base
   description "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact " \
               "with its provider and the fields an HRIS reads it from, each structure level (top first) " \
-              "with its provider, field, number of live units, how many retired units it held (by distinct " \
-              "name, the first three named) and whether it can be removed, and the staleness threshold with how " \
+              "with its provider, field, how many live units it holds and how many retired units it held " \
+              "(by distinct name, the first three of each named) and whether it can be removed, and the staleness threshold with how " \
               "many facts Espalia holds are stale, by fact. Admins and Org Graph editors only."
   category :read
   approval :none
 
-  RETIRED_NAMES_SHOWN = 3
+  NAMES_SHOWN = 3
 
   # @raise [Pundit::NotAuthorizedError] unless the caller may change the Org Graph's structure
   def policy_check
@@ -50,14 +50,15 @@ class Operations::OrgGraph::Sources < Operations::Base
   end
 
   def levels_payload
-    live = OrgUnit.live.group(:level_id).count
-    retired = retired_by_level
+    live = names_by_level(OrgUnit.live)
+    retired = names_by_level(OrgUnit.where.not(retired_on: nil))
     levels = OrgTaxonomyLevel.top_first.to_a
     levels.map do |level|
-      count, names = retired.fetch(level.id, [ 0, [] ])
+      live_count, live_names = live.fetch(level.id, [ 0, [] ])
+      retired_count, retired_names = retired.fetch(level.id, [ 0, [] ])
       { id: level.id, name: level.name, provider: level.provider, field: level.provider_field,
-        live_units: live.fetch(level.id, 0), retired_units: count, retired_unit_names: names,
-        removable: removable?(level, live.fetch(level.id, 0) + count, levels.size) }
+        live_units: live_count, live_unit_names: live_names, retired_units: retired_count,
+        retired_unit_names: retired_names, removable: removable?(level, live_count + retired_count, levels.size) }
     end
   end
 
@@ -67,12 +68,16 @@ class Operations::OrgGraph::Sources < Operations::Base
     level.provider == ::OrgGraph::StructureAggregate::ESPALIA && units_ever.zero? && level_count > 1
   end
 
+  # Live units' names are unique, so the count is the number of live units;
+  # retired ones can share a name and are counted by name.
+  #
+  # @param units [ActiveRecord::Relation<OrgUnit>]
   # @return [Hash{String => Array(Integer, Array<String>)}] per level, how many
-  #   distinct names its retired units had and the first few, alphabetically
-  def retired_by_level
-    OrgUnit.where.not(retired_on: nil).group(:level_id)
-           .pluck(:level_id, Arel.sql("count(DISTINCT name)"),
-                  Arel.sql("(array_agg(DISTINCT name ORDER BY name))[1:#{RETIRED_NAMES_SHOWN}]"))
-           .to_h { |level_id, count, names| [ level_id, [ count, names ] ] }
+  #   distinct names its units have and the first few, alphabetically
+  def names_by_level(units)
+    units.group(:level_id)
+         .pluck(:level_id, Arel.sql("count(DISTINCT name)"),
+                Arel.sql("(array_agg(DISTINCT name ORDER BY name))[1:#{NAMES_SHOWN}]"))
+         .to_h { |level_id, count, names| [ level_id, [ count, names ] ] }
   end
 end

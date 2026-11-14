@@ -146,16 +146,16 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   def summary(level)
-    parts = [ "From #{provider_label(level[:provider])}", units(level[:live_units]) ]
-    parts << "held #{retired_names(level)}" if level[:retired_units].positive?
+    held_now = level[:live_units].positive? ? "holds #{unit_names(level[:live_unit_names], level[:live_units])}" : "0 units"
+    parts = [ "From #{provider_label(level[:provider])}", held_now ]
+    parts << "held #{unit_names(level[:retired_unit_names], level[:retired_units])}" if level[:retired_units].positive?
     parts.join(" · ")
   end
 
-  def retired_names(level)
-    names = level[:retired_unit_names]
-    return names.to_sentence if level[:retired_units] <= names.size
+  def unit_names(names, count)
+    return names.to_sentence if count <= names.size
 
-    "#{names.first(2).join(', ')} and #{level[:retired_units] - 2} more"
+    "#{names.first(2).join(', ')} and #{count - 2} more"
   end
 
   def add_form
@@ -168,8 +168,6 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
       end
     end
   end
-
-  def units(count) = "#{count} #{count == 1 ? 'unit' : 'units'}"
 
   def provider_label(provider)
     return "Espalia" if provider == ESPALIA

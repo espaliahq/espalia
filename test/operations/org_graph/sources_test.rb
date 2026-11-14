@@ -42,6 +42,7 @@ class Operations::OrgGraph::SourcesTest < ActiveSupport::TestCase
       assert_equal %w[Department Region Team], levels.pluck(:name)
       assert_equal %w[hibob espalia espalia], levels.pluck(:provider)
       assert_equal [ 0, 0, 1 ], levels.pluck(:live_units)
+      assert_equal [ [], [], %w[Payments] ], levels.pluck(:live_unit_names)
     end
 
     should "name the retired units each level held, so the panel knows which it can't remove" do
