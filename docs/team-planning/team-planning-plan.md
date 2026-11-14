@@ -288,7 +288,7 @@ on main yet.
 | 5.1 | Pay bands as tenant configuration: role and level from the framework, location, currency. Held by tenant admins | none |
 | 5.2 | On-cost models (flat, by country, itemised) as rules with a tenant default | 5.1, 3.3 |
 | 5.3 | Exchange rates and a reference currency, applied once at report time | 5.1 |
-| 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline | 5.2, 5.3, 3.5 |
+| 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? | 5.2, 5.3, 3.5 |
 | 5.5 | The see-pay right per plan member. Without it, band midpoints only | 5.4, 1.2 |
 | 5.6 | Plan-held pay: `PlanDataSet` for a person's actual cost, shreddable under their key | 5.5, 2.2 |
 | 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Never written to the Org Graph | 5.6 |

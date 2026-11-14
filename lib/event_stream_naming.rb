@@ -19,6 +19,9 @@
 #   EventStreamNaming.org_structure_stream
 #   # => "tenant-<tenant-uuid>/OrgStructure"
 #
+#   EventStreamNaming.plan_stream("plan-uuid")
+#   # => "tenant-<tenant-uuid>/Plan-plan-uuid"
+#
 module EventStreamNaming
   # Returns the stream name for a Framework aggregate.
   #
@@ -80,6 +83,17 @@ module EventStreamNaming
   # @raise [ArgumentError] if no tenant context is available
   def self.org_structure_stream(tenant: ActsAsTenant.current_tenant)
     "#{tenant_prefix(tenant)}/OrgStructure"
+  end
+
+  # Returns the stream name for a Team Planning plan: one stream per plan,
+  # holding its scenarios and every change made in them.
+  #
+  # @param plan_id [String] the plan's UUID
+  # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
+  # @return [String] the tenant-namespaced stream name
+  # @raise [ArgumentError] if no tenant context is available
+  def self.plan_stream(plan_id, tenant: ActsAsTenant.current_tenant)
+    "#{tenant_prefix(tenant)}/Plan-#{plan_id}"
   end
 
   # Extracts the tenant ID from a stream name.

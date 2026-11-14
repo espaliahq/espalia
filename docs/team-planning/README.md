@@ -1,6 +1,7 @@
 # Team Planning and the Org Graph
 
-> Status: the Org Graph is built. Team Planning is planned and not yet built.
+> Status: the Org Graph is built. Team Planning is being built: story 1.1 gives each plan
+> its own stream, in `app/contexts/team_planning/`.
 
 Team Planning lets an organisation explore how its teams could be shaped: who works on
 what, at what cost and with how much capacity, across scenarios. It reads the
