@@ -117,4 +117,29 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
   should "refuse to write a removed value again" do
     assert_raises(ArgumentError) { publish(note_written(note: Shreddable::Value.removed)) }
   end
+
+  should "look up no key until a value is revealed" do
+    publish(note_written)
+    event = read_back
+
+    assert_no_queries(include_schema: false) { assert_equal "[shreddable]", event.data[:note].to_s }
+    assert_equal "Moving to the platform team", event.data[:note].reveal
+  end
+
+  should "read another tenant's records without touching their keys, and refuse to reveal them" do
+    publish(note_written)
+    other = create(:tenant)
+    event = ActsAsTenant.with_tenant(other) { @event_store.read.stream(@stream).to_a.sole }
+
+    ActsAsTenant.with_tenant(other) do
+      assert_raises(PlanKeyStore::ForeignTenant) { event.data[:note].reveal }
+    end
+  end
+
+  should "open a damaged field as removed" do
+    damaged = Shreddable::Value::Sealed.new(ciphertext: "not base64!", iv: "AAAA", identifier: "x", cipher: "aes-256-gcm",
+                                            key_of: ->(*) { flunk "no key lookup for a damaged field" })
+
+    assert_predicate damaged, :removed?
+  end
 end

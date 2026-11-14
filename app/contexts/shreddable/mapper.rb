@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Wraps the event store's mapper so shreddable fields are written encrypted
-# and read back decrypted, or as removed once their key is gone.
+# and read back sealed: each opens on its first reveal, decrypted, or as
+# removed once its key is gone.
 #
 # An event that declares nothing passes to the inner mapper untouched, with no
 # query and no key lookup.
@@ -40,7 +41,8 @@ class Shreddable::Mapper
   # @return [Array<RubyEventStore::Event>]
   def records_to_events(records)
     keys = {}
-    @inner.records_to_events(records).map { decrypt(it, keys) }
+    key_of = ->(identifier, cipher) { keys.fetch(identifier) { keys[identifier] = @key_store.key_of(identifier, cipher:) } }
+    @inner.records_to_events(records).map { seal(it, key_of) }
   end
 
   private
@@ -69,28 +71,21 @@ class Shreddable::Mapper
     value.is_a?(Shreddable::Value) ? value.reveal : value
   end
 
-  def decrypt(event, keys)
+  def seal(event, key_of)
     description = event.metadata[:shreddable] or return event
 
     data = event.data.dup
     description.each do |field, meta|
-      data[field] = decrypt_field(data[field], meta, keys) unless data[field].nil?
+      data[field] = sealed(data[field], meta, key_of) unless data[field].nil?
     end
     event.class.new(event_id: event.event_id, metadata: event.metadata.to_h.except(:shreddable), data: data)
   end
 
-  def decrypt_field(stored, meta, keys)
-    ciphertext = stored.is_a?(Shreddable::Value) ? stored.reveal : stored
-    identifier = meta.fetch(:identifier)
-    key = keys.fetch(identifier) { keys[identifier] = @key_store.key_of(identifier, cipher: meta.fetch(:cipher)) }
-    return Shreddable::Value.removed unless key
-
-    Shreddable::Value.new(JSON.parse(key.decrypt(decode(ciphertext), decode(meta.fetch(:iv)))))
-  rescue OpenSSL::Cipher::CipherError
-    Shreddable::Value.removed
+  def sealed(stored, meta, key_of)
+    Shreddable::Value::Sealed.new(ciphertext: stored.is_a?(Shreddable::Value) ? stored.reveal : stored,
+                                  iv: meta[:iv], identifier: meta.fetch(:identifier),
+                                  cipher: meta.fetch(:cipher), key_of: key_of)
   end
 
   def encode(bytes) = Base64.strict_encode64(bytes)
-
-  def decode(text) = Base64.strict_decode64(text)
 end
