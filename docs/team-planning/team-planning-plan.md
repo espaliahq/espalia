@@ -18,7 +18,7 @@ it uses. The ones planning leans on most:
 
 | Need | Built as |
 |---|---|
-| The organisation on a date (R4) | `OrgGraph::AsOf`: people, live units and memberships as known on a date, with each person's cost centre, site, country, FTE and employment type, and each membership's allocation and role |
+| The organisation on a date (R4) | `OrgGraph::AsOf`: people, live units and memberships as known on a date, with the retired units, successions and leavers apart, with each person's cost centre, site, country, FTE and employment type, and each membership's allocation and role |
 | What changed between two dates (R4) | `OrgGraph::ChangesBetween`, by effective or learned date. A change carries its `event_id`, not its plan or cause |
 | History with both times | The history projection, `org_fact_periods` |
 | Who holds a fact (R5) | `OrgFactProvider`, and the refusal in `CommandHandler#ensure_provides!` |
@@ -97,7 +97,8 @@ flowchart LR
     s310[3.10 Undo and history]
     s311[3.11 Fork on the plan page]
     s312[3.12 Edit on the map]
-    s313[3.13 Notes, descriptions]
+    s313a[3.13a Scenario descriptions]
+    s313b[3.13b Notes on changes]
     s314[3.14 Plan-held data]
   end
   subgraph P4[P4 Keep up with reality]
@@ -171,12 +172,12 @@ flowchart LR
   s12 & s13 --> s14
   s14 --> s15 & s16
   s21 --> s22 & s24
-  s22 --> s23 & s25 & s313 & s314 & s56 & s61
+  s22 --> s23 & s25 & s313a & s313b & s314 & s56 & s61
   s33 --> s61
   s31 --> s32 & s311
   s15 --> s311
   s13 --> s32
-  s32 --> s33 & s34 & s35 & s39 & s310 & s313 & s41 & s43 & s82
+  s32 --> s33 & s34 & s35 & s39 & s310 & s313a & s313b & s41 & s43 & s82
   s35 --> s36
   s36 --> s37 & s312 & s314 & s91 & s111 & s113
   s34 & s36 --> s38
@@ -235,20 +236,20 @@ because a binding budget guardrail needs them.
 | 1.3 | Baseline reader: the root scenario resolved over `OrgGraph::AsOf` on the plan's base date, joined to names, with "Former member" for anyone forgotten | 1.1 |
 | 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes | 1.2, 1.3 |
 | 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
-| 1.6 | Read-only map of the baseline: units, people with their allocation and role from `AsOf::Membership`, and the Unassigned bucket | 1.4 |
+| 1.6 | Read-only map of any scenario, the baseline by default: units, people with their allocation and role, open positions, and the Unassigned bucket, read through `team_planning_scenario_map` | 1.4 |
 
 ### P2 Shreddable plan fields
 
-Built from [the shreddable fields design](shreddable-fields-design.md). Nothing of it is
-on main yet.
+Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
 | 2.1 | Key store: a key per plan, and one per person within a plan, to encrypt a field, decrypt it, and destroy the key | none |
 | 2.2 | Shreddable fields on events, and the aggregate guard: an aggregate never decides on a shreddable value | 2.1 |
-| 2.3 | Projections rebuild with keys destroyed, showing a value as removed | 2.2 |
+| 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form | 2.2 |
 | 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
 | 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6) | 2.2 |
+| [#209](https://github.com/espaliahq/espalia/issues/209) | Plan and scenario names are sealed under the plan's key, and the names written before are sealed in place, the one rewrite of stored events | 2.3 |
 
 ### P3 Scenarios and changes
 
@@ -266,7 +267,8 @@ on main yet.
 | 3.10 | `ChangeUndone` and `ChangeRedone`, and a scenario's history with who made each change | 3.2 |
 | 3.11 | Fork, rename and switch scenarios from the plan page | 3.1, 1.5 |
 | 3.12 | Edit on the map: drag a person or position, drop on the Unassigned bucket, set allocation as they land | 3.6, 1.6 |
-| 3.13 | Notes on changes and `ScenarioDescribed`, shreddable under the plan key | 3.2, 2.2 |
+| 3.13a | `ScenarioDescribed`: what a scenario is for, shreddable under the plan key ([#272](https://github.com/espaliahq/espalia/issues/272)) | 3.2, 2.2 |
+| 3.13b | Notes on changes, shreddable under the plan key. Settle one sealed note on the `Change` base first ([#273](https://github.com/espaliahq/espalia/issues/273)) | 3.2, 2.2 |
 | 3.14 | `PlanDataSet` for a corrected level or FTE and a placeholder hire, and `LevelSet` for a planned promotion, each shreddable under the person's key | 3.6, 2.2 |
 
 ### P4 Keep up with reality
@@ -288,7 +290,7 @@ on main yet.
 | 5.1 | Pay bands as tenant configuration: role and level from the framework, location, currency. Held by tenant admins | none |
 | 5.2 | On-cost models (flat, by country, itemised) as rules with a tenant default | 5.1, 3.3 |
 | 5.3 | Exchange rates and a reference currency, applied once at report time | 5.1 |
-| 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? | 5.2, 5.3, 3.5 |
+| 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). | 5.2, 5.3, 3.5, 3.7 |
 | 5.5 | The see-pay right per plan member. Without it, band midpoints only | 5.4, 1.2 |
 | 5.6 | Plan-held pay: `PlanDataSet` for a person's actual cost, shreddable under their key | 5.5, 2.2 |
 | 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Never written to the Org Graph | 5.6 |

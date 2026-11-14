@@ -403,7 +403,11 @@ Rails.application.routes.draw do
   end
 
   # Team Planning (#226): the plans a person is in, and one plan's page.
-  resources :plans, only: [ :index, :show, :create ], path: "planning"
+  resources :plans, only: [ :index, :show, :create ], path: "planning" do
+    get :map, on: :member
+    # Fork and rename a scenario (#271).
+    resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
+  end
 
   # Calibration sessions — facilitator-run rating-calibration forums.
   # See docs/architecture/calibration-sessions.md.

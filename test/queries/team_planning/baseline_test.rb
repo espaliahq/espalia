@@ -99,6 +99,23 @@ class TeamPlanning::BaselineTest < ActiveSupport::TestCase
     assert_empty map.names
   end
 
+  should "carry the units the Org Graph retired, and its successions, only when a reader asks for its history" do
+    succession = SecureRandom.uuid_v7
+    as_tenant do
+      @structure.record_succession(succession, predecessor_ids: [ @payments ], successor_ids: [ @platform ],
+                                               effective_on: BASE_ON - 10, retire_predecessors: true)
+    end
+    baseline = as_tenant { TeamPlanning::Baseline.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)) }
+
+    plain = as_tenant { baseline.map_on(BASE_ON) }
+    assert_equal [ [], [] ], [ plain.retired_units, plain.successions ]
+    full = as_tenant { baseline.map_on(BASE_ON, history: true) }
+    assert_equal plain.units, full.units
+    assert_equal [ @payments ], full.retired_units.map(&:id)
+    assert_equal [ TeamPlanning::Baseline::Succession.new(id: succession, predecessor_ids: [ @payments ], successor_ids: [ @platform ]) ],
+                 full.successions
+  end
+
   should "show the later of two changes to one fact taking effect on the base date, both known before it" do
     travel_to Time.utc(2026, 2, 10, 9)
     as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: BASE_ON) }
@@ -114,6 +131,9 @@ class TeamPlanning::BaselineTest < ActiveSupport::TestCase
     map = baseline
     assert_nil person(map, @brook)
     assert_equal [ @grace.id ], map.unassigned_ids
+    assert_empty map.left_ids
+    reader = as_tenant { TeamPlanning::Baseline.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)) }
+    assert_equal [ @brook.id ], as_tenant { reader.map_on(BASE_ON, history: true) }.left_ids
   end
 
   should "show a forgotten person as a former member" do

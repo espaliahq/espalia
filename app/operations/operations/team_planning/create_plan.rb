@@ -27,7 +27,7 @@ class Operations::TeamPlanning::CreatePlan < Operations::Base
   def perform
     plan_id = SecureRandom.uuid_v7
     plan = refusing_bad_plans { handler.create_plan(plan_id, name: params[:name], base_on: base_on) }
-    { plan_id: plan_id, name: plan.name, base_on: plan.base_on.iso8601 }
+    { plan_id: plan_id, name: params[:name].squish, base_on: plan.base_on.iso8601 }
   end
 
   private
