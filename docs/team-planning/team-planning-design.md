@@ -305,7 +305,7 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. The kinds so far are `capacity_model` (7.1) and `on_cost` (5.2), both below; 8.1 brings more.
+object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2) and `working_hours` (5.4), all below; 8.1 brings more.
 
 `RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
 that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
@@ -349,6 +349,10 @@ costs base pay alone until a tenant or plan chooses. Read at a seat's unit, a un
 price its subtree differently. 5.4 prices positions with
 `TeamPlanning::RuleKinds::OnCost.on_cost_of`. Rates are tenant configuration, as pay bands
 are, not a person's data, so the rule is not shreddable.
+
+The `working_hours` rule says how many hours a full-time seat works in a year, so an
+hourly pay band can price a year. Its default is 40 hours a week for 52 weeks: 2,080.
+A month band is twelve months; a year band is itself.
 
 ### Capacity as built
 
