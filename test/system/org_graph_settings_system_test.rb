@@ -195,6 +195,29 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         end
       end
 
+      should "add a level and move it into place" do
+        squad_id = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          structure.define_taxonomy([ { level_id: squad_id, name: "Squad" } ], effective_on: "2026-01-01")
+          structure.create_unit(SecureRandom.uuid_v7, "Payments", level_id: squad_id, effective_on: "2026-01-01")
+        end
+        visit tenant_org_graph_settings_path
+
+        js_fill_in "Name of the new level", with: "Guild"
+        click_button_with_js_fallback("Add a level", expect_text: "Guild is now the bottom level.")
+        assert_equal %w[Squad Guild], level_names
+        guild_id = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.find_by!(name: "Guild").id }
+        assert_no_sideways_overflow
+        screenshot("levels_added_#{viewport}")
+
+        click_button_with_js_fallback("org-graph-level-up-#{guild_id}", expect_text: "Guild moved up.")
+        assert_equal %w[Guild Squad], level_names
+        within("#org-graph-level-#{guild_id}") { assert_no_button "Move Guild up" }
+        assert_no_stolen_taps
+        screenshot("levels_moved_#{viewport}")
+      end
+
       should "say plainly when forgetting has no key" do
         OrgGraph::Forgetting.stub(:key, nil) do
           visit tenant_org_graph_settings_path
@@ -209,6 +232,8 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  def level_names = all("#org-graph-levels li[id^='org-graph-level-'] p.font-medium").map(&:text)
 
   def connect_hibob
     hibob = FactoryBot.build(:tenant, :with_hibob_config)
