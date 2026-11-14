@@ -42,7 +42,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
 
   def tools
     @tools ||= Operations::Registry.all
-      .map { |op| JSON.parse(Mcp::OperationToTool.call(op).to_json) }
+      .map { |op| JSON.parse(Mcp::OperationToTool.call(op).to_json).merge("approval" => op.approval.to_s) }
       .index_by { |tool| tool.fetch("name") }
   end
 

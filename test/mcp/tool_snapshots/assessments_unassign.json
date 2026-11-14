@@ -20,5 +20,6 @@
     "readOnlyHint": false,
     "destructiveHint": true,
     "idempotentHint": false
-  }
+  },
+  "approval": "in_app"
 }

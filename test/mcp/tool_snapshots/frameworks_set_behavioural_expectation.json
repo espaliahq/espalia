@@ -36,5 +36,6 @@
     "readOnlyHint": false,
     "destructiveHint": false,
     "idempotentHint": false
-  }
+  },
+  "approval": "mcp_client"
 }

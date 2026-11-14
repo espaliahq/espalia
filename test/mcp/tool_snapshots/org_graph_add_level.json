@@ -24,5 +24,6 @@
     "readOnlyHint": false,
     "destructiveHint": false,
     "idempotentHint": false
-  }
+  },
+  "approval": "in_app"
 }

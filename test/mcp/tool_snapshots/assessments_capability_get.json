@@ -33,5 +33,6 @@
     "readOnlyHint": true,
     "destructiveHint": false,
     "idempotentHint": true
-  }
+  },
+  "approval": "none"
 }

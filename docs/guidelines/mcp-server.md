@@ -427,7 +427,7 @@ Two automated guards:
   category + approval, unique tool name.
 - **Tool registry snapshot**: `test/mcp/tool_registry_snapshot_test.rb` against one file per tool in `test/mcp/tool_snapshots/`; `UPDATE_SNAPSHOTS=1` rewrites them. It
   pins the full tool surface (name + description + JSON schema +
-  annotations). Any add/remove/rename produces a diff in the PR that
+  annotations + approval). Any add/remove/rename produces a diff in the PR that
   introduces it; intentional changes update the snapshot in the same
   commit.
 
