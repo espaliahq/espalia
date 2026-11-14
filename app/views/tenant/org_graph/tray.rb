@@ -14,15 +14,18 @@ class Views::Tenant::OrgGraph::Tray < Views::Base
   end
 
   def view_template
-    render Components::Kit::Card.new(variant: :inset, density: :compact, edge: "border-warning", id: ID,
+    anyone = @people.any?
+    render Components::Kit::Card.new(variant: :inset, density: :compact, edge: ("border-warning" if anyone), id: ID,
                                      aria: { labelledby: "#{ID}-heading" }) do |card|
       card.body do
-        h3(id: "#{ID}-heading", class: "pt-3 font-semibold text-warning") { "In no team, #{@people.size}" }
-        if @people.empty?
-          p(class: "mt-1 text-sm text-muted") { "Everyone active is in a team." }
-        else
+        h3(id: "#{ID}-heading", class: [ "pt-3 font-semibold", anyone ? "text-warning" : "text-default" ]) do
+          "In no team, #{@people.size}"
+        end
+        if anyone
           p(class: "mt-1 text-sm text-muted") { "Active people the Org Graph holds in no live unit." }
           ul(class: "mt-3 flex flex-wrap gap-2") { @people.each { |person| unplaced_person(person) } }
+        else
+          p(class: "mt-1 text-sm text-muted") { "Everyone active is in a team." }
         end
       end
     end

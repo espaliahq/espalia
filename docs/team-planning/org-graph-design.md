@@ -300,7 +300,17 @@ The feed starts from the Org Graph's first event, so a deploy that adds it rebui
 (`REBUILD_ON_DEPLOY=org_graph/unit_activity`) wherever Org Graph events exist. Without that
 history a membership's earlier terms would be missing.
 
-The sidebar that shows this is 5.4.
+The sidebar that shows this is 5.4 ([#137](https://github.com/espaliahq/espalia/issues/137)). It sits beside the opened
+unit on a wide screen and below it on a phone, 25 groups a page. A group of one reads as
+its part, naming the person it moved; a larger group gives a summary and opens to its
+parts. Each says who made it, or which provider supplied it, when it took effect and when
+the Org Graph learned it, with any plan reference. "Change it back" appears only where it
+would work for the reader: `ChangeBackHandler#refusal` and `#group_refusal` run the same
+rules and the same rights the change-back enforces, without locks or writes, and the entry
+shows the reason instead. A group that touched other units says how many it changes back.
+A refusal only the write can find, such as a person who has since left, still comes back
+as a flash. The same feed is `org_graph_activity` over MCP, and `org_graph_change_back` and
+`org_graph_change_back_group` write the inverses.
 
 ### Keeping a fact current
 
