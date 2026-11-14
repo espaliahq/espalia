@@ -36,6 +36,7 @@ class HrisSyncJob < ApplicationJob
       "deactivated=#{result[:deactivated]} org_graph_events=#{result[:org_graph_events]} " \
       "forgotten_skipped=#{result[:forgotten_skipped]} " \
       "levels_skipped_while_rebuilding=#{result[:levels_skipped_while_rebuilding]} " \
+      "people_skipped_while_rebuilding=#{result[:people_skipped_while_rebuilding]} " \
       "errors=#{result[:errors].size}"
     )
     log_skipped_assignments(tenant, result)

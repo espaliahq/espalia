@@ -1437,6 +1437,30 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "a sync while the units are rebuilt" do
+    should "update the rows but write nothing to the Org Graph, counting the people apart from the errors" do
+      build_adapter(@fixture["employees"]).sync_people
+      employees = @fixture["employees"].reject { it["id"] == "bob-002" }
+      alice = employees.find { it["id"] == "bob-001" }
+      alice["work"]["title"] = alice["humanReadable"]["work"]["title"] = "Staff Engineer"
+
+      result = while_rebuilding(@tenant, OrgGraph::Projections::Structure) { build_adapter(employees).sync_people }
+
+      assert_empty result[:errors]
+      assert_equal 0, result[:org_graph_events]
+      assert_equal 3, result[:people_skipped_while_rebuilding], "two people returned and one absent"
+      assert_equal "Staff Engineer", Person.find_by!(external_id: "bob-001").job_title
+      assert_equal "inactive", Person.find_by!(external_id: "bob-002").status
+
+      replay(@tenant, OrgGraph::Projections::Structure)
+      after = build_adapter(employees).sync_people
+
+      assert_empty after[:errors]
+      assert_equal 0, after[:people_skipped_while_rebuilding]
+      assert_operator after[:org_graph_events], :>=, 2, "the title and the leaving are written once the rebuild ends"
+    end
+  end
+
   context "mirroring a structure level" do
     setup do
       @team_level = SecureRandom.uuid_v7
