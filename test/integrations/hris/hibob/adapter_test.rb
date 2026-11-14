@@ -648,12 +648,12 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       adapter = Hris::Hibob::Adapter.new(@tenant)
       client = Minitest::Mock.new
       employees = [
-        { "id" => "3141", "work" => { "customColumns" => { "column_team" => "7" } },
+        { "id" => "3141", "email" => "pi@example.com", "displayName" => "Pi", "work" => { "customColumns" => { "column_team" => "7" } },
           "humanReadable" => { "work" => { "customColumns" => { "column_team" => "Payments" } } } },
-        { "id" => "2718" },
+        { "id" => "2718", "email" => "e@example.com", "displayName" => "E" },
         { "work" => { "customColumns" => { "column_team" => "9" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.customColumns.column_team], show_inactive: true)
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.customColumns.column_team], show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
       values = adapter.read_field("column_team", kind: :list)
@@ -667,10 +667,11 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       adapter = Hris::Hibob::Adapter.new(@tenant)
       client = Minitest::Mock.new
       employees = [
-        { "id" => "3141", "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
-        { "id" => "2718", "work" => { "customColumns" => { "column_country" => "Australia" } } }
+        { "id" => "3141", "email" => "pi@example.com", "displayName" => "Pi",
+          "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
+        { "id" => "2718", "email" => "e@example.com", "displayName" => "E", "work" => { "customColumns" => { "column_country" => "Australia" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.customColumns.column_country work.site],
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.customColumns.column_country work.site],
         show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
@@ -683,8 +684,9 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
 
     should "read everyone the sync keeps, such as a person on leave, and leave out a leaver" do
       employees = [
-        { "id" => "3141", "isActive" => true, "internal" => { "status" => "Inactive" }, "work" => { "department" => "Sales" } },
-        { "id" => "2718", "isActive" => false, "work" => { "department" => "Sales" } }
+        { "id" => "3141", "email" => "pi@example.com", "isActive" => true, "internal" => { "status" => "Inactive" },
+          "work" => { "department" => "Sales" } },
+        { "id" => "2718", "email" => "e@example.com", "isActive" => false, "work" => { "department" => "Sales" } }
       ]
 
       assert_equal [ "3141" ], read_department(employees).keys
@@ -778,8 +780,8 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     should "read a forgotten person only once they are back at work" do
       forget_row("3141")
       forget_row("2718")
-      employees = [ { "id" => "3141", "work" => { "startDate" => (Date.current - 1).iso8601 } },
-                    { "id" => "2718", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
+      employees = [ { "id" => "3141", "email" => "pi@example.com", "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "2718", "email" => "e@example.com", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
 
       assert_equal [ "3141" ], read_department(employees).keys
     end
@@ -1865,12 +1867,12 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     person
   end
 
-  # @param employees [Array<Hash>] what HiBob answers
+  # @param employees [Array<Hash>] what HiBob answers, each named unless it says otherwise
   # @return [Hash{String => Hris::FieldValue}] the department read for each
   def read_department(employees)
     adapter = Hris::Hibob::Adapter.new(@tenant)
     client = Minitest::Mock.new
-    client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.department],
+    client.expect(:search_people, employees.map { { "displayName" => "Person #{it['id']}" }.merge(it) }, fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
       show_inactive: true)
     adapter.instance_variable_set(:@client, client)
     adapter.read_field("work.department", kind: :text).tap { client.verify }

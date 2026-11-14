@@ -68,25 +68,24 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
   end
 
-  # Asks HiBob for one field beside the id of each person the sync's first
-  # pass keeps, so a preview counts whom the mirror then places and never
-  # pulls the rest of anyone's record. HiBob's own active filter would drop
-  # people on leave and hires yet to start, so it reads everyone and leaves
-  # out whom the sync won't place: a leaver, a leaver rehired but yet to start
-  # (the Org Graph holds them as left until then), a forgotten person not back
-  # at work, and a newcomer whose email belongs to a row with another HRIS id.
+  # Asks HiBob for one field beside the id of each person the sync places,
+  # and never pulls the rest of anyone's record. HiBob's own active filter
+  # would drop people on leave and hires yet to start, so it reads everyone
+  # and runs the sync's own first pass over them without writing.
   #
   # @param field_id [String]
   # @param kind [Symbol] :list or :text
   # @param alongside [String, nil] see {Hris::BaseAdapter#read_field}
   # @return [Hash{String => Hris::FieldValue}]
   def read_field(field_id, kind:, alongside: nil)
-    fields = [ *READ_FIELD_IDENTITY, catalogue_id(field_id) ]
-    fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
-    employees = client.search_people(fields: fields.uniq, show_inactive: true).select { it["id"].present? }
-    # A leaver still claims and frees emails in the sync's walk, so they leave only after it.
-    kept = ActsAsTenant.with_tenant(tenant) { employees.select(&upserted(employees)) }.reject { it["isActive"] == false }
-    kept.to_h { [ it["id"].to_s, Hris::Hibob::ResponseMapper.new(it).field_value(field_id, kind:, alongside:) ] }
+    placed_values(field_id, kind:, alongside:).to_h { |external_id, _, value| [ external_id, value ] }
+  end
+
+  # The row each value lands on, adopted by email or not, as Pass 1 decides it.
+  #
+  # @see Hris::BaseAdapter#read_field_rows
+  def read_field_rows(field_id, kind:, alongside: nil)
+    placed_values(field_id, kind:, alongside:).map { |_, person_id, value| [ person_id, value ] }
   end
 
   # Fetches all employees from HiBob, handling pagination.
@@ -152,32 +151,15 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           ensure_forgotten_recognisable!
 
           # Pass 1: Upsert all employees
-          employees.each do |raw_employee|
-            mapper = Hris::Hibob::ResponseMapper.new(
-              raw_employee,
-              level_field_id: config.level_field_id,
-              mapped_fields:
-            )
-            # Dev-only PII guard — pass-through outside development.
-            attrs = Hris::DevNameWhimsifier.call(mapper.call)
+          first_pass(employees, result, projected:) do |mapper, attrs, person|
             manager_ext_id = mapper.manager_external_id
-
-            person = upsert_person(attrs, result, projected:, started_on: mapper.org_graph_facts[:started_on])
-            if person
-              external_id_map[attrs[:external_id]] = person
-              manager_links[person] = manager_ext_id if manager_ext_id.present?
-              touched_person_ids << person.id
-              org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
-                                          manager_supplied: mapper.manager_supplied?,
-                                          status: attrs[:status] }.compact.merge(mapper.org_graph_facts)
-              mirror_readings[person] = mapper unless attrs[:status] == "inactive"
-            end
-          rescue => e
-            result[:errors] << {
-              external_id: raw_employee["id"],
-              email: raw_employee["email"],
-              error: e.message
-            }
+            external_id_map[attrs[:external_id]] = person
+            manager_links[person] = manager_ext_id if manager_ext_id.present?
+            touched_person_ids << person.id
+            org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
+                                        manager_supplied: mapper.manager_supplied?,
+                                        status: attrs[:status] }.compact.merge(mapper.org_graph_facts)
+            mirror_readings[person] = mapper unless attrs[:status] == "inactive"
           end
 
           # Pass 2: Resolve manager relationships, unless the Org Graph writes them (Pass 2b)
@@ -220,45 +202,56 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     result
   end
 
-  # What {#read_field} asks for to tell whom the sync keeps.
-  READ_FIELD_IDENTITY = %w[root.id root.isActive root.email work.startDate].freeze
+  # What {#read_field} asks for to tell whom the sync keeps: Pass 1 refuses a newcomer with no name.
+  READ_FIELD_IDENTITY = %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate].freeze
 
-  # The rule {#upsert_person} applies to a current person, read for many at once.
+  # Pass 1: each employee's row, matched by HRIS id, adopted by email or
+  # created, in response order. A dry run (`write: false`) saves nothing but
+  # decides the same way, so the field preview counts whom the sync places.
   #
-  # @param employees [Array<Hash>]
-  # @return [Proc] true for an employee the sync's first pass keeps
-  def upserted(employees)
-    rows = Person.where(external_id: employees.map { it["id"].to_s }).pluck(:external_id, :id, :email)
-    held = rows.to_h { |external_id, id, _| [ external_id, id ] }
-    held_emails = rows.to_h { |external_id, _, email| [ external_id, email ] }
-    emails = employees.filter_map { it["email"]&.downcase&.strip.presence }
-    # Each email's row, by HRIS id; nil for a row without one, which a newcomer adopts.
-    owners = Person.where(email: [ *emails, *held_emails.values ].compact).pluck(:email, :external_id).to_h
-    adoptable = Person.where(forgotten_at: nil, external_id: nil, email: emails).pluck(:email, :id).to_h
-    left = OrgLeaver.where(person_id: [ *held.values, *adoptable.values ]).pluck(:person_id).to_set
-    lambda do |employee|
-      external_id = employee["id"].to_s
-      email = employee["email"]&.downcase&.strip.presence
-      attrs = { status: employee["isActive"] == false ? "inactive" : "active" }
-      started_on = Hris::Hibob::ResponseMapper.new(employee).started_on
-      if held.key?(external_id)
-        # The sync writes each row's new email in response order, freeing the old one.
-        # The unique index refuses an email another row holds, and the sync skips the person.
-        if email && email != held_emails[external_id]
-          next false if owners.key?(email)
+  # @param employees [Array<Hash>] HiBob's response
+  # @param result [Hash] running tally
+  # @param projected [Boolean] whether the tenant is cut over to the Org Graph
+  # @param write [Boolean]
+  # @yieldparam mapper [Hris::Hibob::ResponseMapper]
+  # @yieldparam attrs [Hash] the Person attributes the row was given
+  # @yieldparam person [Person] the row, unsaved for a newcomer in a dry run
+  def first_pass(employees, result, projected:, write: true)
+    claims = Hris::Hibob::EmailClaims.new
+    employees.each do |raw_employee|
+      mapper = Hris::Hibob::ResponseMapper.new(raw_employee, level_field_id: config.level_field_id, mapped_fields:)
+      # Dev-only PII guard — pass-through outside development.
+      attrs = Hris::DevNameWhimsifier.call(mapper.call)
+      person = upsert_person(attrs, result, claims:, write:, projected:, started_on: mapper.org_graph_facts[:started_on])
+      yield mapper, attrs, person if person
+    rescue => e
+      result[:errors] << { external_id: raw_employee["id"], email: raw_employee["email"], error: e.message }
+    end
+  end
 
-          owners.delete(held_emails[external_id])
-          owners[email] = external_id
-        end
-        # The Org Graph takes a leaver back once HiBob has them employed, on the sync date if no start date is given.
-        next !left.include?(held[external_id]) || employed?(attrs, started_on)
+  # Each person Pass 1 keeps whom the Org Graph then places, with their row
+  # and the field's value: a leaver still claims and frees emails in the walk,
+  # so they leave only after it, and so does a leaver rehired but yet to start.
+  #
+  # @return [Array<(String, String, Hris::FieldValue)>] external id, row id
+  #   (nil for a newcomer) and value
+  def placed_values(field_id, kind:, alongside:)
+    fields = [ *READ_FIELD_IDENTITY, catalogue_id(field_id) ]
+    fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
+    employees = client.search_people(fields: fields.uniq, show_inactive: true).select { it["id"].present? }
+    ActsAsTenant.with_tenant(tenant) do
+      ensure_forgotten_recognisable!
+      kept = []
+      first_pass(employees, build_initial_result, projected: tenant.org_graph_people_projected?, write: false) do |mapper, attrs, person|
+        kept << [ mapper, attrs, person ] unless attrs[:status] == "inactive"
       end
-      next false if forgotten_person(external_id) && !back_at_work?(attrs, started_on)
-      next false if owners[email]
+      left = OrgLeaver.where(person_id: kept.filter_map { it.last.id }).pluck(:person_id).to_set
+      kept.filter_map do |mapper, attrs, person|
+        # The Org Graph takes a leaver back once HiBob has them employed, on the sync date if no start date is given.
+        next if left.include?(person.id) && !employed?(attrs, mapper.started_on)
 
-      # The sync creates people in response order, so the first to claim an email keeps it.
-      owners[email] = external_id if email
-      !left.include?(adoptable[email]) || employed?(attrs, started_on)
+        [ attrs[:external_id].to_s, person.id, mapper.field_value(field_id, kind:, alongside:) ]
+      end
     end
   end
 
@@ -443,10 +436,12 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #
   # @param attrs [Hash] Person-compatible attributes
   # @param result [Hash] running tally of sync results
+  # @param claims [Hris::Hibob::EmailClaims] who holds each email so far in this walk
+  # @param write [Boolean] false to decide without saving, for a preview
   # @param projected [Boolean] whether the tenant is cut over to the Org Graph
   # @param started_on [String, nil] HiBob's start date, ISO 8601
   # @return [Person, nil] the created or updated person, nil when skipped or invalid
-  def upsert_person(attrs, result, projected: false, started_on: nil)
+  def upsert_person(attrs, result, claims:, write: true, projected: false, started_on: nil)
     person = Person.find_by(external_id: attrs[:external_id])
     forgotten = forgotten_person(attrs[:external_id]) unless person
     if forgotten && !back_at_work?(attrs, started_on)
@@ -454,28 +449,28 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       return nil
     end
     unless person
-      person = Person.where(forgotten_at: nil).find_by(email: attrs[:email]) if attrs[:email].present?
-      if person&.external_id.present?
+      holder = claims.holder(attrs[:email])
+      if holder&.external_id.present?
         result[:errors] << {
           external_id: attrs[:external_id],
           email: attrs[:email],
-          error: "Email belongs to a person with another HRIS id (#{person.external_id}); not merged"
+          error: "Email belongs to a person with another HRIS id (#{holder.external_id}); not merged"
         }
         return nil
       end
+      person = Person.where(forgotten_at: nil).find_by(id: holder.person_id) if holder
     end
     person ||= Person.new
     is_new = person.new_record?
+    held_email = person.email
 
     person.assign_attributes(attrs.except(:hris_raw_data, *(PROJECTED_ATTRS if projected && !is_new)))
     person.hris_raw_data = without_forgotten_manager(attrs[:hris_raw_data])
     person.hris_source = "hibob"
 
     if person.changed? || is_new
-      saved = Person.transaction do
-        forgotten&.update_columns(forgotten_external_id_digest: nil)
-        person.save || raise(ActiveRecord::Rollback)
-      end
+      person.errors.add(:email, :taken) if claims.taken?(person)
+      saved = person.errors.empty? && (write ? save_person(person, forgotten) : person.valid?)
       if saved
         is_new ? result[:created] += 1 : result[:updated] += 1
       else
@@ -488,7 +483,16 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       end
     end
 
+    claims.move(person, from: held_email)
     person
+  end
+
+  # A person back at work takes the forgotten row's digest in the same transaction.
+  def save_person(person, forgotten)
+    Person.transaction do
+      forgotten&.update_columns(forgotten_external_id_digest: nil)
+      person.save || raise(ActiveRecord::Rollback)
+    end
   end
 
   # Pass 2b: records a person the Org Graph has not seen, with the facts as
