@@ -117,10 +117,10 @@ class PlanKeyStore
     PlanEncryptionKey.transaction do
       lock(:plan, tenant.id, plan_id)
       destroyed = tombstone(PlanEncryptionKey.where(tenant: tenant, plan_id: plan_id), "plan_deleted")
-      PlanEncryptionKey.insert_all(
+      PlanEncryptionKey.upsert_all(
         [ { id: SecureRandom.uuid_v7, tenant_id: tenant.id, plan_id: plan_id, person_id: nil, cipher: DEFAULT_CIPHER,
             destroyed_at: Time.current, destroyed_reason: "plan_deleted" } ],
-        unique_by: :index_plan_keys_one_per_plan
+        unique_by: :index_plan_keys_one_per_plan, update_only: %i[destroyed_reason]
       )
       destroyed
     end

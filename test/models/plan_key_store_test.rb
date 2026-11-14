@@ -140,6 +140,17 @@ class PlanKeyStoreTest < ActiveSupport::TestCase
       assert_equal "7", PlanEncryptionKey.unscoped.sole.id[14], "the tombstone's id is a UUID v7"
     end
 
+    should "mark the plan deleted when its own key was already forgotten" do
+      in_tenant do
+        @store.create(@plan_key)
+        @store.forget(@plan_key)
+        @store.destroy_plan(@plan_id)
+
+        assert_raises(PlanKeyStore::Destroyed) { @store.create(@person_key) }
+      end
+      assert_equal %w[plan_deleted], PlanEncryptionKey.unscoped.pluck(:destroyed_reason)
+    end
+
     should "need a current tenant" do
       assert_raises(ArgumentError) { @store.destroy_plan(@plan_id) }
     end
