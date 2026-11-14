@@ -120,6 +120,17 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       end
     end
 
+    should "read as removed once the row moves to another plan, even if read before" do
+      write_note
+      ActsAsTenant.with_tenant(@tenant) do
+        row = Note.find_by!(plan_id: @plan_id)
+        row.note
+        row.plan_id = SecureRandom.uuid_v7
+
+        assert_predicate row.note, :removed?
+      end
+    end
+
     should "read as removed when it holds another row's sealed value" do
       write_note
       other_plan_id = SecureRandom.uuid_v7

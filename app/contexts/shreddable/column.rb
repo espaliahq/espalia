@@ -236,16 +236,17 @@ module Shreddable::Column
     return if stored.nil?
     return Shreddable::Value.removed unless stored["ciphertext"]
 
-    # One sealed value per stored value, so reading it twice looks up its key once.
-    read = (@shreddable_read ||= {})[field]
-    return read.last if read&.first.equal?(stored)
-
+    # One sealed value per stored value and row key, so reading it twice
+    # looks up its key once.
     own = self.class.shreddable_identifier(field, self)
+    read = (@shreddable_read ||= {})[field]
+    return read.last if read&.first.equal?(stored) && read[1] == own
+
     sealed = Shreddable::Value::Sealed.new(
       ciphertext: stored["ciphertext"], iv: stored["iv"], identifier: stored["identifier"], cipher: stored["cipher"],
       key_of: ->(identifier, cipher) { PlanKeyStore.new.key_of(identifier, cipher:) if identifier == own }
     )
-    @shreddable_read[field] = [ stored, sealed ]
+    @shreddable_read[field] = [ stored, own, sealed ]
     sealed
   end
 
