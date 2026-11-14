@@ -1,0 +1,27 @@
+{
+  "name": "team_planning_status",
+  "description": "Get the status of each planned change in a scenario of a Team Planning plan the caller is in, held against the Org Graph today (a UTC day, as known now). There is one status per subject and facet the scenario resolves, from its own changes and those it inherits from the scenarios it follows; scenario_id says which scenario made it (the plan_id is the baseline). 'done' when today reads the planned end state, 'pending' when today still reads what the plan's base held, 'conflicting' when it reads neither. A person's placements are one facet, so a placement list is done only when the whole list matches. A change the Org Graph never holds, such as a rule, has no status: it would read pending forever. Subjects are named by id, and `names` maps each to a name; a forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

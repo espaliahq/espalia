@@ -6,6 +6,18 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
   ESPALIA = { provider: "espalia" }.freeze
   BASE_ON = Date.new(2026, 3, 2)
 
+  # A test-only kind the Org Graph can move, as 3.4 to 3.7's will be.
+  class TitleSet < TeamPlanning::Events::Change
+    def self.facet = "title"
+    def self.apply_to(map, _data) = map
+    def self.subject_moved_by(change) = change.person_id
+
+    def self.read_from(map, subject_id:, facet: self.facet)
+      person = map.people.find { it.id == subject_id }
+      { title: person.title } if person
+    end
+  end
+
   setup do
     @tenant = create(:tenant)
     handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
@@ -117,6 +129,31 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
     end
 
     assert_equal Person::FORMER_MEMBER, read(Operations::TeamPlanning::Drift)[:names][stranger]
+  end
+
+  should "give each planned change's status against today, with a name for every subject" do
+    ActsAsTenant.with_tenant(@tenant) do
+      TeamPlanning::CommandHandler.new(actor: AuthorizationContext.new(user: @editor.user, tenant_user: @editor, person: @editor.person))
+        .set_change(@plan_id, TitleSet, scenario_id: @plan_id, subject_id: @ada.id, end_state: { title: "Senior Engineer" })
+    end
+    travel_to Time.utc(2026, 3, 10, 9)
+
+    status = call(Operations::TeamPlanning::Status, as: @viewer, plan_id: @plan_id, scenario_id: @plan_id)
+    assert_equal [ @plan_id, @plan_id, "2026-03-10" ], status.values_at(:plan_id, :scenario_id, :on)
+    assert_equal [ @plan_id, @ada.id, "title", "pending" ], status[:statuses].sole.values_at(:scenario_id, :subject_id, :facet, :status)
+    assert_equal({ @ada.id => "Ada Quill" }, status[:names])
+  end
+
+  should "refuse a scenario the plan doesn't have, and a plan to anyone outside it" do
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::Status, as: @viewer, plan_id: @plan_id, scenario_id: SecureRandom.uuid_v7)
+    end
+    assert_match(/scenario/i, error.message)
+
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::Status, as: @admin, plan_id: @plan_id, scenario_id: @plan_id)
+    end
+    assert_equal "No such plan", error.message
   end
 
   should "read as an unknown plan to anyone outside it, a tenant admin included" do
