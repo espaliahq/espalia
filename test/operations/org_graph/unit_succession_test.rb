@@ -171,5 +171,18 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
       assert_not unit(@org[:platform]).retired?
       assert_equal 4, ActsAsTenant.with_tenant(@tenant) { OrgUnit.count }
     end
+
+    should "refuse a split with placements while the member list is rebuilt, saying to try again" do
+      error = while_rebuilding(@tenant, OrgGraph::Projections::Members) do
+        assert_raises(Operations::Base::ParameterError) do
+          call(Operations::OrgGraph::SplitUnit, unit_id: @org[:platform], successor_names: [ "Core", "Edge" ],
+                                                placements: { @org[:ada].id => "Core" }, effective_on: "2026-11-02")
+        end
+      end
+
+      assert_equal "The Org Graph is being rebuilt; try again in a minute.", error.message
+      assert_not unit(@org[:platform]).retired?
+      assert_equal 4, ActsAsTenant.with_tenant(@tenant) { OrgUnit.count }
+    end
   end
 end
