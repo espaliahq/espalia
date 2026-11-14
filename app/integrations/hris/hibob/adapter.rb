@@ -206,17 +206,23 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param employees [Array<Hash>]
   # @return [Proc] true for an employee the sync's first pass keeps
   def upserted(employees)
-    held = Person.where(external_id: employees.map { it["id"].to_s }).pluck(:external_id, :id).to_h
+    rows = Person.where(external_id: employees.map { it["id"].to_s }).pluck(:external_id, :id, :email)
+    held = rows.to_h { |external_id, id, _| [ external_id, id ] }
+    held_emails = rows.to_h { |external_id, _, email| [ external_id, email ] }
     left = OrgLeaver.where(person_id: held.values).pluck(:person_id).to_set
     emails = employees.filter_map { it["email"]&.downcase&.strip.presence }
     taken = Person.where(forgotten_at: nil, email: emails).where.not(external_id: nil).pluck(:email).to_set
     lambda do |employee|
       external_id = employee["id"].to_s
-      # The Org Graph takes a leaver back only once their new start date comes.
-      next !left.include?(held[external_id]) || back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on) if held.key?(external_id)
-      next false if forgotten_person(external_id) && !back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on)
-
       email = employee["email"]&.downcase&.strip.presence
+      if held.key?(external_id)
+        # The sync writes each row's new email in response order, freeing the old one.
+        taken.delete(held_emails[external_id])
+        taken << email if email
+        # The Org Graph takes a leaver back only once their new start date comes.
+        next !left.include?(held[external_id]) || back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on)
+      end
+      next false if forgotten_person(external_id) && !back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on)
       next false if taken.include?(email)
 
       # The sync creates people in response order, so the first to claim an email keeps it.

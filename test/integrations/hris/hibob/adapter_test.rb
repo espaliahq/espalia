@@ -700,6 +700,15 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "3141" ], read_department(employees).keys
     end
 
+    should "follow an email a held person moves to, in the order the sync writes it" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
+      employees = [ { "id" => "1618", "email" => "new@example.com" },
+                    { "id" => "3141", "email" => "old@example.com" },
+                    { "id" => "2718", "email" => "new@example.com" } ]
+
+      assert_equal %w[1618 3141], read_department(employees).keys
+    end
+
     should "read a rehired leaver only once their new start date comes" do
       %w[3141 2718].each do |external_id|
         person = create(:person, tenant: @tenant, hris_source: "hibob", external_id:)
