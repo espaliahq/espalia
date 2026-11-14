@@ -17,9 +17,11 @@ class TeamPlanning::Attention
   # @!attribute subject_id [String] the person, unit, position or succession
   # @!attribute facet [String] the facet of the subject that no longer fits
   # @!attribute reason [String] a sentence a planner can read
-  # @!attribute change [TeamPlanning::Events::Change, nil] the subject's own
-  #   winning change, or else the change that broke it; nil only when the
-  #   baseline itself doesn't fit
+  # @!attribute change [TeamPlanning::Events::Change, nil] the later to land
+  #   of the subject's own winning change and the change that broke it, so a
+  #   child's placement under an ancestor's retirement names the placement,
+  #   and a later retirement under an earlier placement names the retirement;
+  #   nil only when no change explains it
   Item = Data.define(:subject_id, :facet, :reason, :change)
 
   CHECKS = %i[placements positions units unresolved successions].freeze
@@ -33,6 +35,7 @@ class TeamPlanning::Attention
   def initialize(map, changes)
     @map = map
     @changes = changes
+    @order = changes.keys.each_with_index.to_h
     @live = map.units.to_set(&:id)
     @retired = map.retired_units.to_set(&:id)
   end
@@ -84,14 +87,14 @@ class TeamPlanning::Attention
     @map.successions.flat_map do |succession|
       gone_before = succession.predecessor_ids.reject { @live.include?(it) || @retired.include?(it) }
       gone_after = succession.successor_ids.reject { @live.include?(it) }
-      [ ("It carries on from a unit no longer in this scenario" if gone_before.any?),
-        ("It is carried on by #{gone(gone_after.first)}" if gone_after.any?) ].compact
-        .map { item(succession.id, SUCCESSION, it, broken_by: [ (gone_before + gone_after).first, UNIT ]) }
+      [ (item(succession.id, SUCCESSION, "It carries on from a unit no longer in this scenario", broken_by: [ gone_before.first, UNIT ]) if gone_before.any?),
+        (item(succession.id, SUCCESSION, "It is carried on by #{gone(gone_after.first)}", broken_by: [ gone_after.first, UNIT ]) if gone_after.any?) ].compact
     end
   end
 
   def item(subject_id, facet, reason, broken_by: nil)
-    Item.new(subject_id:, facet:, reason:, change: @changes[[ subject_id, facet ]] || @changes[broken_by])
+    keys = [ [ subject_id, facet ], broken_by ].select { @order.key?(it) }
+    Item.new(subject_id:, facet:, reason:, change: keys.max_by { @order[it] }&.then { @changes[it] })
   end
 
   def gone(unit_id) = @retired.include?(unit_id) ? "a retired unit" : "a unit no longer in this scenario"

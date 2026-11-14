@@ -78,6 +78,13 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_empty items(@q1)
   end
 
+  should "name a later step's retirement over the earlier step's placement it broke" do
+    assign(@q1, @ada, { unit_id: @growth, allocation: 1 })
+    write(Operations::TeamPlanning::RetireUnit, @q2, unit_id: @growth)
+
+    assert_equal({ kind: "UnitRetired", scenario_id: @q2 }, change_of(@ada.id).except(:event_id))
+  end
+
   should "name the retirement for someone no scenario moved" do
     write(Operations::TeamPlanning::RetireUnit, @q1, unit_id: @payments)
 
