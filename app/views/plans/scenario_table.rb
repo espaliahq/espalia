@@ -9,6 +9,9 @@ class Views::Plans::ScenarioTable < Views::Base
   # A column a later story adds: a heading, and how to draw its cell.
   Column = Data.define(:heading, :cell)
 
+  # Columns beside the name show from `sm` up; below it they stack under the name.
+  WIDE = "hidden sm:table-cell"
+
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param base_on [Date] the plan's base date
   # @param extra_columns [Array<Column>]
@@ -26,9 +29,9 @@ class Views::Plans::ScenarioTable < Views::Base
             thead do
               tr(class: "border-b border-default text-left text-muted") do
                 th(scope: "col", class: "px-4 py-2 font-medium") { "Scenario" }
-                th(scope: "col", class: "px-4 py-2 font-medium") { "When" }
-                @extra_columns.each { |column| th(scope: "col", class: "px-4 py-2 font-medium") { column.heading } }
-                th(scope: "col", class: "px-4 py-2 font-medium") { "State" }
+                th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { "Period" }
+                @extra_columns.each { |column| th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { column.heading } }
+                th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { "State" }
               end
             end
             tbody(class: "divide-y divide-subtle") { ordered.each { |scenario, depth| row(scenario, depth) } }
@@ -49,20 +52,27 @@ class Views::Plans::ScenarioTable < Views::Base
             span(class: "text-muted font-normal") { "#{scenario[:relation]} " } if scenario[:relation]
             plain(baseline ? "Baseline" : scenario[:name])
           end
-          p(class: "text-muted") { "The Org Graph on #{@base_on.strftime("%-d %B %Y")}. Nothing set by this plan." } if baseline
+          p(class: "text-muted") { "The Org Graph. Nothing set by this plan." } if baseline
+          div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
+            span { period(scenario) }
+            state(baseline)
+          end
         end
       end
-      td(class: "px-4 py-3 align-top text-muted whitespace-nowrap") { period(scenario) }
-      @extra_columns.each { |column| td(class: "px-4 py-3 align-top") { column.cell.call(scenario) } }
-      td(class: "px-4 py-3 align-top") do
-        render Components::Kit::Badge.new(baseline ? "Read only" : "Draft", tone: baseline ? :neutral : :info)
-      end
+      td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period(scenario) }
+      @extra_columns.each { |column| td(class: "#{WIDE} px-4 py-3 align-top") { column.cell.call(scenario) } }
+      td(class: "#{WIDE} px-4 py-3 align-top") { state(baseline) }
     end
+  end
+
+  def state(baseline)
+    render Components::Kit::Badge.new(baseline ? "Read only" : "Draft", tone: baseline ? :neutral : :info)
   end
 
   def period(scenario)
     starts = Date.iso8601(scenario[:starts_on])
-    return "From #{starts.strftime("%-d %B %Y")}" unless scenario[:ends_on]
+    return "As of #{starts.strftime("%-d %b %Y")}" if scenario[:parent_id].nil?
+    return "From #{starts.strftime("%b %Y")}" unless scenario[:ends_on]
 
     ends = Date.iso8601(scenario[:ends_on])
     first = starts.year == ends.year ? starts.strftime("%b") : starts.strftime("%b %Y")
