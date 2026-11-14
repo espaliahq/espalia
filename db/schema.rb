@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_070000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -915,6 +915,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_070000) do
     t.index ["tenant_id", "provider", "external_ref"], name: "index_org_units_on_live_external_ref", unique: true, where: "((external_ref IS NOT NULL) AND (retired_on IS NULL))"
   end
 
+  create_table "pay_bands", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "level_id", null: false
+    t.string "role_name", null: false
+    t.string "level_name", null: false
+    t.string "location", default: "", null: false
+    t.string "location_key", default: "", null: false
+    t.string "currency", null: false
+    t.string "period", null: false
+    t.decimal "minimum", precision: 14, scale: 2, null: false
+    t.decimal "midpoint", precision: 14, scale: 2, null: false
+    t.decimal "maximum", precision: 14, scale: 2, null: false
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "level_id", "location_key"], name: "index_pay_bands_on_tenant_id_and_level_id_and_location_key", unique: true
+    t.index ["updated_by_id"], name: "index_pay_bands_on_updated_by_id"
+    t.check_constraint "minimum <= midpoint AND midpoint <= maximum", name: "pay_bands_ordered"
+    t.check_constraint "minimum >= 0::numeric", name: "pay_bands_not_negative"
+  end
+
   create_table "people", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "department"
@@ -1001,6 +1022,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_070000) do
     t.index ["tenant_id"], name: "index_recorded_reporting_managers_on_tenant_id"
   end
 
+  create_table "team_planning_plan_members", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.uuid "person_id", null: false
+    t.string "role", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["plan_id", "person_id"], name: "index_team_planning_plan_members_on_plan_id_and_person_id", unique: true
+    t.index ["tenant_id", "person_id"], name: "index_team_planning_plan_members_on_tenant_id_and_person_id"
+  end
+
   create_table "team_planning_plans", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "name", null: false
@@ -1021,6 +1053,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_070000) do
     t.uuid "user_id"
     t.boolean "org_graph_editor", default: false, null: false
     t.datetime "forgotten_at"
+    t.boolean "team_planner", default: false, null: false
     t.index ["person_id"], name: "index_tenant_users_on_person_id"
     t.index ["tenant_id", "user_id"], name: "index_tenant_users_on_tenant_id_and_user_id", unique: true
     t.index ["tenant_id"], name: "index_tenant_users_on_tenant_id"
@@ -1150,6 +1183,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_070000) do
   add_foreign_key "org_unit_owners", "tenants"
   add_foreign_key "org_unit_successions", "tenants"
   add_foreign_key "org_units", "tenants"
+  add_foreign_key "pay_bands", "tenants"
+  add_foreign_key "pay_bands", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
   add_foreign_key "person_development_comments", "people", column: "author_id", on_delete: :restrict
@@ -1159,6 +1194,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_070000) do
   add_foreign_key "person_development_comments", "tenants"
   add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "recorded_reporting_managers", "tenants"
+  add_foreign_key "team_planning_plan_members", "tenants"
   add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"

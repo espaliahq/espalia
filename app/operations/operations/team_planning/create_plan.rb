@@ -7,15 +7,15 @@ class Operations::TeamPlanning::CreatePlan < Operations::Base
   include Operations::OrgGraph::DateParameter
 
   description "Create a Team Planning plan, a private draft of the organisation built on the Org Graph " \
-              "as it stood on base_on (today by default). Only its creator sees it. Refused unless the " \
-              "caller is a tenant admin linked to a person."
+              "as it stood on base_on (today by default). Only its members see it, and its creator is its first editor. " \
+              "Refused unless the caller is a tenant admin or a planner, linked to a person."
   category :write
   approval :mcp_client
 
   parameter :name, String, required: true, allow_blank: false
   parameter :base_on, String, allow_blank: false, schema: DATE_SCHEMA
 
-  # Only a tenant admin may create a plan; the handler checks it again.
+  # Only a tenant admin or a planner may create a plan; the handler checks it again.
   def policy_check
     authorize TeamPlanningPlan, :create?, policy_class: PlanPolicy
   end

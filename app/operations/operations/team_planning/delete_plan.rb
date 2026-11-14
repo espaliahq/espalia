@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Deletes a plan. Only its creator may, and a deleted plan stays deleted.
+# Deletes a plan. Only an editor may, and a deleted plan stays deleted.
 class Operations::TeamPlanning::DeletePlan < Operations::Base
   include Operations::TeamPlanning::PlanWrite
 
-  description "Delete a Team Planning plan. It cannot be restored. Refused unless the caller created the plan."
+  description "Delete a Team Planning plan. It cannot be restored. Refused unless the caller is one of its editors."
   category :destructive
 
   parameter :plan_id, String, required: true

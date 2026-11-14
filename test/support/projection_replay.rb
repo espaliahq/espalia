@@ -139,6 +139,9 @@ module ProjectionReplayHelpers
       when "TeamPlanning::Projections::Plans"
         # The PK is the event's plan id — assert it survives reset! + replay.
         { plans: rows(TeamPlanningPlan, stable_id: true) }
+      when "TeamPlanning::Projections::PlanMembers"
+        # The PK derives from the plan and the person — assert it survives reset! + replay.
+        { members: rows(TeamPlanningPlanMember, stable_id: true) }
 
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"

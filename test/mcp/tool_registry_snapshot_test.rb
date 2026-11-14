@@ -3606,10 +3606,57 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_add_plan_member",
+        "description" => "Make an active person a member of a Team Planning plan as an editor or a viewer, or change a member's role. A plan keeps at least one editor. Refused, as an unknown plan, unless the caller is one of its editors.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "role" => {
+              "type" => "string",
+              "enum" => [ "editor", "viewer" ]
+            }
+          },
+          "required" => [ "plan_id", "person_id", "role" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "team_planning_add_planner",
+        "description" => "Make an active person with an account in this organisation a planner, so they may create Team Planning plans. It opens no plan they aren't a member of. Admins already may create plans. Returns the list as team_planning_planners reads it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "team_planning_create_plan",
-        "description" => "Create a Team Planning plan, a private draft of the organisation built on the Org Graph " \
-                         "as it stood on base_on (today by default). Only its creator sees it. Refused unless the " \
-                         "caller is a tenant admin linked to a person.",
+        "description" => "Create a Team Planning plan, a private draft of the organisation built on the Org Graph as it stood on base_on (today by default). Only its members see it, and its creator is its first editor. Refused unless the caller is a tenant admin or a planner, linked to a person.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -3634,8 +3681,32 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_delete_frozen_plan",
+        "description" => "Delete a frozen Team Planning plan, one with no editor left in the organisation, without opening it. It cannot be restored. Give the reason; it is kept with who deleted it. Refused, as an unknown plan, unless the plan is frozen and the caller a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "reason" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "plan_id", "reason" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "team_planning_delete_plan",
-        "description" => "Delete a Team Planning plan. It cannot be restored. Refused unless the caller created the plan.",
+        "description" => "Delete a Team Planning plan. It cannot be restored. Refused unless the caller is one of its editors.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -3653,8 +3724,117 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_frozen_plans",
+        "description" => "List the Team Planning plans that are frozen because none of their editors is still in the organisation. Each is a plan id, the day it froze (null when no leaving date is known) and the number of viewers who can still read it; never its name, contents or members. Tenant admins only, who may then delete one.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_plan_members",
+        "description" => "List the members of a Team Planning plan the caller is in, each a person id and a role (editor or viewer). Refused, as an unknown plan, unless the caller is a member.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "plan_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_planners",
+        "description" => "List who may create Team Planning plans: the planners an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_plans",
+        "description" => "List the Team Planning plans the caller is a member of, with each one's name, base date and the caller's role in it (editor or viewer). Being a tenant admin or a planner adds no plans.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_remove_plan_member",
+        "description" => "Take a member off a Team Planning plan. An editor may remove anyone, and any member may remove themselves, except its last editor. Refused, as an unknown plan, unless the caller may.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "plan_id", "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "team_planning_remove_planner",
+        "description" => "Stop a person being a planner, so they may no longer create Team Planning plans. They stay a member of the plans they are in. An admin's right can't be removed this way. Returns the list as team_planning_planners reads it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "team_planning_rename_plan",
-        "description" => "Rename a Team Planning plan. Refused unless the caller created the plan.",
+        "description" => "Rename a Team Planning plan. Refused unless the caller is one of its editors.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -3668,6 +3848,58 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "plan_id", "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_add_pay_band",
+        "description" => "Add a pay band for a framework level (level_id, from frameworks_get) in a location: a country, " \
+                         "matched to the Org Graph's country ignoring case, or blank for any location. One band per level " \
+                         "and location; use tenants_change_pay_band to change one. Currency is an ISO 4217 code and period " \
+                         "is year, month or hour; figures are kept as entered, never converted or annualised. Figures are decimal strings with at most two decimal places, such as \"120000\". " \
+                         "Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "level_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "location" => { "type" => "string" },
+            "currency" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "period" => { "type" => "string", "enum" => %w[year month hour] },
+            "minimum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" },
+            "midpoint" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" },
+            "maximum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" }
+          },
+          "required" => %w[level_id currency period minimum midpoint maximum],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_change_pay_band",
+        "description" => "Change a pay band's currency, period and minimum, midpoint and maximum, by pay_band_id from " \
+                         "tenants_pay_bands. All are required, as the band reads afterwards. Its level and location don't " \
+                         "change: remove the band and add another for that. Every plan priced from it reprices. Figures are decimal strings with at most two decimal places, such as \"120000\". " \
+                         "Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "pay_band_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "currency" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "period" => { "type" => "string", "enum" => %w[year month hour] },
+            "minimum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" },
+            "midpoint" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" },
+            "maximum" => { "type" => "string", "pattern" => "^\\d{1,12}(\\.\\d{1,2})?$" }
+          },
+          "required" => %w[pay_band_id currency period minimum midpoint maximum],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -3717,6 +3949,42 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "tenants_pay_bands",
+        "description" => "List the active tenant's pay bands: each band's framework level, location (null for any location), " \
+                         "currency, period (year, month or hour) and minimum, midpoint and maximum as decimal strings, as " \
+                         "entered and never converted. in_framework is false for a band whose level has left the framework. " \
+                         "Give pay_band_id to read one band. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "pay_band_id" => { "type" => "string" } },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "tenants_remove_pay_band",
+        "description" => "Remove a pay band, by pay_band_id from tenants_pay_bands. Positions it priced fall back to the " \
+                         "level's any-location band, or go unpriced. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "pay_band_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[pay_band_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => true,
+          "idempotentHint" => false
         }
       },
       {

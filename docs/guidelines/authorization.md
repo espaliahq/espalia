@@ -209,6 +209,32 @@ skipping the check. Pass `SYSTEM` only where no person drives the write.
 an admin triggers it, since provisioning a person for an account is the
 system's act and must never fail a member's sign-in.
 
+### Team Planning Permissions
+
+`PlanPolicy` says who may reach a plan. A plan holds pay and notes, so only its
+members may: no other role opens one.
+
+| Action | Who |
+|--------|-----|
+| Create a plan (`create?`) | A tenant admin, or a planner (`TenantUser#team_planner`, granted by an admin through `team_planning_add_planner`) |
+| Open a plan, list its members, leave it (`show?`, `leave?`) | Its editors and viewers |
+| Rename or delete it, add, re-role or remove its members (`update?`, `destroy?`, `manage_members?`) | Its editors |
+| List frozen plans, delete one unread (`manage_frozen?`, `destroy_frozen?`) | A tenant admin, and only while the plan is frozen |
+
+A member must be an active, unforgotten person, so a leaver or a forgotten
+member loses their plans at once. A plan always keeps an editor: the aggregate
+refuses to lose its last one, and the handler refuses to lose its last editor
+who is still in the organisation. A plan whose editors have all left or been
+forgotten is **frozen**: its viewers still read it and nobody changes it. A
+tenant admin sees only its id, the day it froze and its viewer count, and may
+delete it with a reason that `PlanDeleted` keeps.
+
+To anyone outside a plan it reads as an unknown id, and `PlanPolicy::Scope`
+lists only the caller's own plans. `test/integration/team_planning_privacy_test.rb`
+walks every Team Planning tool as a tenant admin, an Org Graph editor, a
+planner, a global admin and a plain member, and a new tool joins the walk on
+its own.
+
 ## Policy Conventions
 
 ### File locations
