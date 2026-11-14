@@ -86,7 +86,7 @@ Every change event has the same shape:
 | Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
-| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet`, `DepartureSet` (person, linked position), `LevelSet` (person, level: a planned promotion) |
+| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
 | Budget | `BudgetLineSet`, `BudgetLineCut`, `PositionFundingSet` (position draws on budget lines) |
 | Plan data | `PlanDataSet` (subject, field, value) |
 | Rules | `RuleSet` (configuration, capacity model, budget strictness, guardrail, assumption) |
@@ -194,6 +194,46 @@ parent's list no longer reaches it.
   `unresolved` with `why`: "joined after the base date", which updating the plan to today
   (4.2) fixes, or "has left", for a leaver by the base date or a forgotten person. 3.8
   marks them and the changes tab shows them.
+
+### Reporting lines as built
+
+`ReportingLineSet` ([#256](https://github.com/espaliahq/espalia/issues/256)) has the facet
+`reporting_line`, and its subject is a person. Its end state points at a person
+(`manager_id`) or at a position (`manager_position_id`), never both, or at neither for no
+manager.
+
+- **A graph of its own.** The baseline line is the Org Graph's manager fact. Lines are never
+  read from units, so placing someone never moves their line.
+- **A manager being hired.** A team whose manager is being hired reports to the open manager
+  position, so it isn't credited to whoever the HRIS still lists. `Map#reports_of(id)` gives
+  the people pointed at a person or a position: for a vacant seat, the span 7.2 charges it for.
+- **Loops.** The write refuses a line that closes a loop in the scenario as it resolves then.
+  An ancestor's later edit can still make one, so `Map#managers_above` stops at a repeat and
+  4.6 marks it. It also stops at a position, which has no line of its own.
+- **Fit is read.** A line to a closed position or to someone who has left still resolves.
+
+### Departures as built
+
+`DepartureSet` ([#256](https://github.com/espaliahq/espalia/issues/256)) has the facet
+`departure`, and its subject is a person. It names the backfill position, or none when the
+seat isn't backfilled, and the step the person leaves in. `DepartureWithdrawn` shares the
+facet, so a later step or an alternative can have the person stay.
+
+- **Leaving, then gone.** In the step that sets the departure, and in its alternatives, the
+  person stays on the map marked as leaving. In the steps after it they are in the map's
+  `departed`, out of the people, Unassigned and every total. `Resolution` gives the map the
+  step's scenario ids, `apply_to` only marks the person, and `Map#settled` decides.
+- **The step is stored.** A pin replays a change under the pinning scenario, so the end state
+  names the step the person leaves in, and a pin in a later step keeps them gone.
+- **The backfill.** The leaver never counts as filling it. The link lives only on the
+  departure, so withdrawing, clearing or undoing it drops the link. A position reads as a
+  backfill for the people whose departures name it, through `Map#backfills`, and as a
+  backfill for nobody when none does.
+- **Planned, not Org Graph leavers.** Someone the Org Graph has leave by the base date is off
+  the map from the start, and the plan shows where it still places them (decision 6 in the
+  plan). A departure is the plan's own statement.
+- **The step is the date for now.** Costing part of a period (5.4) adds an optional leaving
+  date within the step.
 
 ### Adding a change kind
 

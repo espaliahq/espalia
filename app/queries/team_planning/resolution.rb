@@ -26,16 +26,28 @@ class TeamPlanning::Resolution
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call = @baseline.named(structure)
 
+  # @param aggregate [TeamPlanning::PlanAggregate] the plan as loaded; a write
+  #   passes the one it holds under the lock
   # @return [TeamPlanning::Baseline::Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def structure
-    winning = @repository.load_plan(@plan.id).winning_changes(@scenario_id).values
-    resolved = winning.reduce(@baseline.structure) { |map, change| change.class.apply_to(map, change.data) }
+  def structure(aggregate = @repository.load_plan(@plan.id))
+    winning = aggregate.winning_changes(@scenario_id).values
+    base = @baseline.structure.with(step_ids: step_of(aggregate))
+    resolved = winning.reduce(base) { |map, change| change.class.apply_to(map, change.data) }
     explained(resolved.settled)
   end
 
   private
+
+  # The scenario and those it is an alternative of: the chain after the step
+  # before it on the timeline. The scenarios that step replaced come earlier
+  # in the chain, so they drop off too.
+  def step_of(aggregate)
+    chain = aggregate.resolution_chain(@scenario_id)
+    before = aggregate.timeline_path(@scenario_id)[-2]
+    before ? chain.drop(chain.index(before) + 1) : chain
+  end
 
   # A person off the map either left by the base date, or was forgotten, or
   # joined after it.
