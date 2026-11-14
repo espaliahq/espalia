@@ -77,7 +77,7 @@ class TeamPlanning::Status
     kind = change.class
     subject_id, facet = key
     today = kind.read_from(now, subject_id:, facet:)
-    before = [ kind.read_from(base, subject_id:, facet:), *step_before(change, key) ]
+    before = [ kind.read_from(base, subject_id:, facet:), *step_before(change, key, base) ]
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
               status: status_of(kind, today, end_state_of(change), before))
   end
@@ -90,16 +90,20 @@ class TeamPlanning::Status
 
   def end_state_of(change) = change.data.except(*TeamPlanning::Events::Change::FIELDS)
 
-  # What the step before the change's own step plans for its key, if it plans anything. An
+  # What the step before the change's own step plans for its key, if it plans anything, read
+  # as the change's own kind reads it: a retirement before a restoration reads as no unit. An
   # alternative takes its parent's place on the timeline, so a change it
   # inherits lands at the alternative's step.
-  def step_before(change, key)
+  def step_before(change, key, base)
     path = @aggregate.timeline_path(@scenario_id)
     chain = @aggregate.resolution_chain(@scenario_id)
     step = chain.drop(chain.index(change.data[:scenario_id])).find { path.include?(it) }
     index = path.index(step)
     earlier = @aggregate.winning_changes(path[index - 1])[key] if index.positive?
-    earlier ? [ end_state_of(earlier) ] : []
+    return [] unless earlier
+
+    subject_id, facet = key
+    [ change.class.read_from(earlier.class.apply_to(base, earlier.data), subject_id:, facet:) ]
   end
 
   # Today's name wins; the base names a unit since retired.

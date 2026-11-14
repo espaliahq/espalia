@@ -164,6 +164,15 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :conflicting, statuses(status)[[ @payments, "unit" ]]
   end
 
+  should "read a unit the plan restores pending while the Org Graph has retired it, as the step before plans" do
+    plan(TeamPlanning::Events::UnitRetired, @payments, name: "Payments", parent_id: nil, level_id: @squads)
+    q2 = as_tenant { fork("Q2", parent_id: @q1, relation: "then", ends_on: "2026-09-30") }
+    plan(TeamPlanning::Events::UnitSet, @payments, q2, name: "Payments", parent_id: nil, level_id: @squads)
+    on(Time.utc(2026, 3, 10, 9)) { OrgGraph::StructureCommandHandler.new(actor: SYSTEM).retire_unit(@payments, effective_on: "2026-03-10") }
+
+    assert_equal :pending, statuses(status(q2))[[ @payments, "unit" ]]
+  end
+
   should "leave out a kind the Org Graph never moves, which would read pending forever" do
     plan(NoteSet, @ada.id, text: "Ask about the move")
 
