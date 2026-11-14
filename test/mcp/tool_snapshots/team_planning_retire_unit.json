@@ -1,0 +1,31 @@
+{
+  "name": "team_planning_retire_unit",
+  "description": "Retire a live unit in a scenario of a Team Planning plan. Its people keep their place until an assignment moves them. A unit with live sub-units is refused: move or retire them first. Setting the unit again with team_planning_set_unit brings it back. scenario_id defaults to the baseline, whose id is the plan's. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "unit_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "unit_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
