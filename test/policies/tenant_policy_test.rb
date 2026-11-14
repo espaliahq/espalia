@@ -21,6 +21,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.manage_org_graph_editors?
       assert_not policy.forget_person?
       assert_not policy.export_feedback?
+      assert_not policy.manage_pay_bands?
     end
   end
 
@@ -41,6 +42,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.manage_org_graph_editors?
       assert_not policy.forget_person?
       assert_not policy.export_feedback?
+      assert_not policy.manage_pay_bands?
     end
   end
 
@@ -55,6 +57,10 @@ class TenantPolicyTest < ActiveSupport::TestCase
 
     should "deny choosing who else may edit the Org Graph" do
       assert_not policy.manage_org_graph_editors?
+    end
+
+    should "deny keeping pay bands" do
+      assert_not policy.manage_pay_bands?
     end
   end
 
@@ -74,6 +80,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.update_retention_period?
       assert policy.manage_org_graph_editors?
       assert policy.forget_person?
+      assert policy.manage_pay_bands?
     end
 
     should "deny the feedback export without a linked person to attribute it to" do
@@ -101,6 +108,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.update_retention_period?
       assert policy.manage_org_graph_editors?
       assert policy.forget_person?
+      assert policy.manage_pay_bands?
     end
 
     should "deny the feedback export, which needs a person to attribute it to" do
