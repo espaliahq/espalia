@@ -69,15 +69,25 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
     end
   end
 
-  should "shut a member out the moment they leave or are forgotten" do
+  should "shut a member out the moment they leave" do
     @viewer.person.update!(status: "inactive")
-    assert_raises(Operations::Base::ParameterError) do
-      Operations::TeamPlanning::PlanMembers.call(context: context_for(@viewer), params: { plan_id: @plan_id })
-    end
-    assert_empty Operations::TeamPlanning::Plans.call(context: context_for(@viewer), params: {})[:plans]
+    assert_shut_out(@viewer)
+  end
+
+  should "shut a member out the moment they are forgotten, though still active" do
+    @viewer.person.update_columns(forgotten_at: Time.current, name: "Former member")
+    assert_equal "active", @viewer.person.reload.status
+    assert_shut_out(@viewer)
   end
 
   private
+
+  def assert_shut_out(account)
+    assert_raises(Operations::Base::ParameterError) do
+      Operations::TeamPlanning::PlanMembers.call(context: context_for(account), params: { plan_id: @plan_id })
+    end
+    assert_empty Operations::TeamPlanning::Plans.call(context: context_for(account), params: {})[:plans]
+  end
 
   def outsiders
     person = -> { create(:person, tenant: @tenant) }

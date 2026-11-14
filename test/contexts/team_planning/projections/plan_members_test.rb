@@ -11,6 +11,7 @@ class TeamPlanning::Projections::PlanMembersTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = @tenant
     @person = create(:person, tenant: @tenant)
     @colleague = create(:person, tenant: @tenant)
+    create(:tenant_user, tenant: @tenant, person: @colleague)
     user = create(:user)
     tenant_user = create(:tenant_user, tenant: @tenant, user:, person: @person, role: :admin)
     @handler = TeamPlanning::CommandHandler.new(actor: AuthorizationContext.new(user:, tenant_user:, person: @person))

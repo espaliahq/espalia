@@ -60,6 +60,7 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
     setup do
       handler(@admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
       @colleague = create(:person, tenant: @tenant)
+      create(:tenant_user, tenant: @tenant, person: @colleague)
     end
 
     should "let an editor add a viewer, who may then leave" do
@@ -85,8 +86,22 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
     should "admit only someone active and remembered" do
       gone = create(:person, tenant: @tenant, status: "inactive")
       error = assert_raises(TeamPlanning::Error) { handler(@admin).add_member(@plan_id, gone.id, role: "viewer") }
-      assert_equal "Only someone active in this organisation can join a plan", error.message
+      assert_equal "Only someone active in this organisation, with an account here, can join a plan", error.message
       assert_raises(TeamPlanning::Error) { handler(@admin).add_member(@plan_id, SecureRandom.uuid_v7, role: "viewer") }
+    end
+
+    should "refuse someone with no account here, who could never open the plan" do
+      stranger = create(:person, tenant: @tenant)
+      error = assert_raises(TeamPlanning::Error) { handler(@admin).add_member(@plan_id, stranger.id, role: "editor") }
+      assert_match "with an account here", error.message
+    end
+
+    should "not let the last editor leave the plan to an editor whose account has gone" do
+      handler(@admin).add_member(@plan_id, @colleague.id, role: "editor")
+      TenantUser.where(person: @colleague).update_all(forgotten_at: Time.current)
+
+      error = assert_raises(TeamPlanning::Error) { handler(@admin).remove_member(@plan_id, @admin.person.id) }
+      assert_match "A plan needs an editor", error.message
     end
 
     should "not let the last reachable editor hand the plan to an editor who has left" do

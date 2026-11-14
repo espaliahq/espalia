@@ -74,15 +74,22 @@ class PlanPolicy < ApplicationPolicy
   # @return [Boolean]
   def self.frozen?(plan) = reachable_ids(plan.editor_ids).empty?
 
-  # Whether someone can still be in a plan: active, and not forgotten.
+  # Whether the caller can still be in a plan: active, and not forgotten.
+  # Their tenant account is checked by `tenant_member?` beside each use.
   #
   # @param person [Person, nil]
   # @return [Boolean]
   def self.reachable?(person) = person.present? && person.status == "active" && !person.forgotten?
 
+  # Those who can still open a plan: active, not forgotten, and holding an
+  # account in this tenant. Someone without an account could join and never
+  # get in, so they would keep a plan from freezing while nobody could edit it.
+  #
   # @param person_ids [Array<String>]
-  # @return [Set<String>] those of them who can still be in a plan
-  def self.reachable_ids(person_ids) = Person.active.remembered.where(id: person_ids).pluck(:id).to_set
+  # @return [Set<String>]
+  def self.reachable_ids(person_ids)
+    Person.active.remembered.where(id: person_ids).where(id: TenantUser.select(:person_id)).pluck(:id).to_set
+  end
 
   private
 
