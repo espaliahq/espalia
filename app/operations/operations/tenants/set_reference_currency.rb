@@ -16,6 +16,7 @@ class Operations::Tenants::SetReferenceCurrency < Operations::Base
   def perform
     reference = ReferenceCurrency.current || ReferenceCurrency.new
     reference.currency = params[:currency]
+    reference.currency_will_change!
     reference_payload(save_setting!(reference))
   end
 end
