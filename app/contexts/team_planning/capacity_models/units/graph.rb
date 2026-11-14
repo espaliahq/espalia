@@ -149,7 +149,7 @@ class TeamPlanning::CapacityModels::Units::Graph
 
   def attach_unmanaged
     @unmanaged.each do |person|
-      unit_id = person.memberships.min_by { [ -it.allocation.to_r, it.unit_id.to_s ] }&.unit_id
+      unit_id = TeamPlanning::Baseline::Membership.shares(person.memberships).min_by { |membership, share, _| [ -share, membership.unit_id.to_s ] }&.first&.unit_id
       manager, = nearest_manager(unit_id, except: person.id)
       @attached[manager] << person.id if manager && !@people.key?(manager) && !manages?(person.id, manager)
     end

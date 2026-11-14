@@ -222,6 +222,17 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
     assert_not(%w[o1 o2 pair].any? { graph.manager?(it) })
   end
 
+  should "attach an unmanaged person through their largest share, reading an unrecorded one as what the others leave" do
+    [ nil, 0.8 ].each do |studio_share|
+      memberships = [ Baseline::Membership.new(unit_id: "studio", allocation: studio_share, role: nil),
+                      Baseline::Membership.new(unit_id: "team", allocation: 0.2, role: nil) ]
+      @people = @people.reject { it.id == "h" } << member("h", "studio").with(memberships:)
+      graph = Units::Graph.new(map:, facts:, manager_role_ids: [])
+
+      assert_includes graph.span("v").map(&:id), "h", "studio share #{studio_share.inspect}"
+    end
+  end
+
   should "send a line to a closed position to nobody, though someone still fills it" do
     @people += [ member("o", "squad", position_id: "gone"), member("r", "squad", manager_position_id: "gone") ]
     graph = Units::Graph.new(map:, facts:, manager_role_ids: [])

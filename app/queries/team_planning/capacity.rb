@@ -98,7 +98,7 @@ class TeamPlanning::Capacity
     fte = member.fte.nil? ? 1r : exact(member.fte)
     own = titles.target(member.title, Integer(member.level, exception: false))
     placements = member.memberships.presence || [ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]
-    places, reasons = allocations(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
+    places, reasons = TeamPlanning::Baseline::Membership.shares(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
     reasons = reasons.map { "leaving" } if member.leaving?
     (@own_levels ||= {})[member.id] = own.level&.level_id
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known: !member.fte.nil?, places:), reasons ]
@@ -114,14 +114,6 @@ class TeamPlanning::Capacity
     else
       [ Model::Place.new(**base, role_id: own.role&.role_id, level_id: own.level&.level_id), (TITLE_REASONS[own.status] unless own.role) ]
     end
-  end
-
-  # An allocation the HRIS didn't give shares what the seat's other places leave.
-  def allocations(placements)
-    known = placements.reject { it.allocation.nil? }.sum(0r) { exact(it.allocation) }
-    unknown = placements.count { it.allocation.nil? }
-    share = unknown.zero? ? 0r : [ 1r - known, 0r ].max / unknown
-    placements.map { [ it, it.allocation.nil? ? share : exact(it.allocation), !it.allocation.nil? ] }
   end
 
   # A position counts only for the FTE its occupants leave open, so a filled

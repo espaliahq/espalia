@@ -209,6 +209,18 @@ class TeamPlanning::Baseline
   # the position's unit when the map settles, and none once it closes.
   # `allocation` is nil when the HRIS gave none.
   Membership = Data.define(:unit_id, :allocation, :role, :position_id) do
+    # An allocation the HRIS didn't give shares what the person's other
+    # memberships leave.
+    #
+    # @param memberships [Array<Membership>]
+    # @return [Array<(Membership, Rational, Boolean)>] each membership, its share, and whether it was recorded
+    def self.shares(memberships)
+      known = memberships.reject { it.allocation.nil? }.sum(0r) { Rational(it.allocation.to_s) }
+      unknown = memberships.count { it.allocation.nil? }
+      rest = unknown.zero? ? 0r : [ 1r - known, 0r ].max / unknown
+      memberships.map { [ it, it.allocation.nil? ? rest : Rational(it.allocation.to_s), !it.allocation.nil? ] }
+    end
+
     def initialize(position_id: nil, **) = super
   end
 
