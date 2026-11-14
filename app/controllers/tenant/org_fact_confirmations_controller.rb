@@ -29,12 +29,9 @@ class Tenant::OrgFactConfirmationsController < ApplicationController
     if params[:return_to] == "units"
       redirect_to tenant_org_graph_path(unit: unit_param, **comparison_params), notice:, alert:
     elsif params[:return_to] == "unit" && unit_param
-      redirect_to edit_tenant_org_unit_path(unit_param, on: drawer_on), notice:, flash: { drawer_alert: alert }.compact
+      redirect_to edit_tenant_org_unit_path(unit_param, on: drawer_on, **comparison_params), notice:, flash: { drawer_alert: alert }.compact
     else
       redirect_to drawer_path, notice:, flash: { drawer_alert: alert }.compact
     end
   end
-
-  # The comparison open in the Units view, kept so Still true doesn't close it.
-  def comparison_params = params.permit(:from, :to, :by).to_h.compact_blank.symbolize_keys
 end
