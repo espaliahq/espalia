@@ -109,7 +109,8 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
                level_id: SecureRandom.uuid_v7, unit_id: SecureRandom.uuid_v7, fte: 1, basis: "new", predecessor_ids: [ UNIT_ID ],
                successor_ids: [ UNIT_ID ],
                placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap",
-               level: "4", label: "Payments lead", field: "fte", value: "1" }
+               level: "4", label: "Payments lead", field: "fte", value: "1",
+               from_unit_id: "unassigned", to_unit_id: "unassigned" }
     values.slice(*operation.parameters.keys)
   end
 

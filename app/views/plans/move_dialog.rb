@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The scenario map's "Move" dialog (#285), one per map, for an editor on a
+# The scenario map's "Move" dialog ([#285](https://github.com/espaliahq/espalia/issues/285)), one per map, for an editor on a
 # scenario other than Today. Each person row's "Move…" button opens it, and a
 # drop on a unit clicks that same button with the unit in `data-move-to`, so
 # drag and keyboard share one path. The `move-form` controller fills it from
@@ -14,12 +14,21 @@ class Views::Plans::MoveDialog < Views::Base
   # @param url [String] the person's assignment path
   # @param name [String] the person's name
   # @param from [String] the unit their place is in, or "unassigned"
-  # @param place [Hash, nil] the place moved: its position, allocation and role
+  # @param place [Hash, nil] the place moved: its position and role
+  # @param share [Rational, nil] what the place counts for; the new place starts at it
   # @return [Hash]
-  def self.trigger(url:, name:, from:, place:)
+  def self.trigger(url:, name:, from:, place:, share: nil)
     { action: "click->modal#open", modal_target_id: ID, move_action: url, move_name: name, move_from: from,
-      move_from_position: place&.dig(:position_id).to_s, move_role: place&.dig(:role).to_s,
-      move_allocation: place&.dig(:allocation) ? (place[:allocation].to_f * 100).round : 100 }
+      move_from_position: place&.dig(:position_id).to_s, move_role: place&.dig(:role).to_s, move_allocation: percent(share) }
+  end
+
+  # @param share [Rational, nil]
+  # @return [String] the share as a percent, or 100 when there is none to keep
+  def self.percent(share)
+    return "100" unless share&.positive?
+
+    value = (share * 100).to_f.round(1)
+    (value % 1).zero? ? value.to_i.to_s : value.to_s
   end
 
   # @param scenario_id [String]
@@ -57,7 +66,7 @@ class Views::Plans::MoveDialog < Views::Base
       field("move-to", "To") { to_select }
       div(class: "grid grid-cols-2 gap-3", data: { move_form_target: "placeFields" }) do
         field("move-allocation", "Allocation (%)") do
-          input(id: "move-allocation", type: "number", name: "move[allocation]", min: 1, max: 100, step: 1, required: true,
+          input(id: "move-allocation", type: "number", name: "move[allocation]", min: "0.1", max: 100, step: "any", required: true,
                 class: Components::Kit::Field::INPUT, data: { move_form_target: "allocation" })
         end
         field("move-role", "Role") do

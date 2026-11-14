@@ -90,6 +90,25 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
     within(unit("Growth")) { assert_text "Cy Loose" }
   end
 
+  should "start the allocation of a place the HRIS gave none at the share it counts for" do
+    ActsAsTenant.with_tenant(@tenant) do
+      bea = create(:person, tenant: @tenant, name: "Bea Split")
+      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      since = (Date.current - 30).iso8601
+      handler.record_person(bea.id, **ESPALIA, effective_on: since, employment_status: "employed")
+      handler.set_membership(bea.id, @payments, **ESPALIA, effective_on: since, allocation: 0.6)
+      handler.set_membership(bea.id, @growth, **ESPALIA, effective_on: since)
+    end
+
+    visit map_plan_path(@plan_id, scenario: @q1)
+    wait_for_stimulus "move-form"
+    within(unit("Growth")) { find("button[aria-label='Move Bea Split']").execute_script("this.click()") }
+    within("#move-person-modal") do
+      assert_text "Moving Bea Split in Q1 hires"
+      assert_field "Allocation (%)", with: "40"
+    end
+  end
+
   should "offer no handles on Today" do
     visit map_plan_path(@plan_id)
     assert_text "Pick or fork a scenario to move people."

@@ -8,7 +8,7 @@
 //     <section data-map-unit="<unit id>" data-action="dragover->map-move#over dragleave->map-move#leave drop->map-move#drop">
 //       <li data-map-person="<person id>" draggable="true" data-map-move-from="<unit id>"
 //           data-action="dragstart->map-move#start dragend->map-move#end">
-//         <button data-modal-target-id="move-person-modal" …>Move…</button>
+//         <button data-modal-target-id="move-person-modal" …>Move…</button>   (the row's other dialogs are ignored)
 //       </li>
 //     </section>
 //   </div>
@@ -46,7 +46,7 @@ export default class extends BaseController {
     if (!this.#accepts(unit)) return
 
     event.preventDefault()
-    const trigger = this.dragged.querySelector("[data-modal-target-id]")
+    const trigger = this.dragged.querySelector("[data-modal-target-id='move-person-modal']")
     this.end()
     trigger.dataset.moveTo = unit.dataset.mapUnit
     trigger.click()

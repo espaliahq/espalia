@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Moves a person's place from the scenario map (#285), through the same
+# Moves a person's place from the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)), through the same
 # Operation as the `team_planning_move_place` tool. A plan someone isn't in is
 # a 404, as on the plan's page; a viewer is refused, and so is Today.
 class Plans::AssignmentsController < ApplicationController

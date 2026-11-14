@@ -407,7 +407,7 @@ Rails.application.routes.draw do
     get :map, on: :member
     # Fork and rename a scenario (#271).
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
-    # Move a person's place on the scenario map (#285); the id is the person's.
+    # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"
   end
 

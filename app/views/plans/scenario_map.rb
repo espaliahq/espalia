@@ -8,7 +8,7 @@
 # `person_marks` each take a callable that returns components for a unit's
 # heading or a person's row: capacity (#255), items needing attention (#257),
 # a leaving mark and reporting lines (#256). An editor on a scenario other
-# than Today can move people (#285): units take drops, and each person row is
+# than Today can move people ([#285](https://github.com/espaliahq/espalia/issues/285)): units take drops, and each person row is
 # draggable with a "Move…" button that opens {Views::Plans::MoveDialog}.
 class Views::Plans::ScenarioMap < Views::Base
   NONE = ->(_) { [] }
@@ -221,8 +221,17 @@ class Views::Plans::ScenarioMap < Views::Base
     render Components::Kit::Button.new(
       variant: :ghost, size: :sm, aria_label: "Move #{name(person[:id])}",
       data: Views::Plans::MoveDialog.trigger(url: plan_assignment_path(@map[:plan_id], person[:id]), name: name(person[:id]),
-                                             from: from(place), place:)
+                                             from: from(place), place:, share: share(person, place))
     ) { "Move…" }
+  end
+
+  # What the place counts for: its allocation, or for a place the HRIS gave
+  # none, the share MovePlace would write for it.
+  def share(person, place)
+    index = place && person[:memberships].index { it.equal?(place) }
+    return unless index
+
+    TeamPlanning::Baseline::Membership.shares(person[:memberships].map { TeamPlanning::Baseline::Membership.new(**it) })[index].second
   end
 
   def from(place) = place ? place[:unit_id] : Views::Plans::MoveDialog::UNASSIGNED
