@@ -169,6 +169,15 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
     assert_not person_in(@plan_id, @ada)[:leaving]
   end
 
+  should "take a leaver off the map in the step after an alternative that inherited the departure" do
+    depart(@q1, @cy)
+    after_lean = fork(parent_id: @lean, relation: "then", name: "Q2 after lean", ends_on: "2026-09-30")
+
+    assert person_in(@lean, @cy)[:leaving]
+    assert_nil person_in(after_lean, @cy)
+    assert_equal [ @cy.id ], map(after_lean)[:departed].map { it[:person_id] }
+  end
+
   should "let a later step have the leaver stay, and the backfill name nobody" do
     seat = open_position(@q1)
     depart(@q1, @ada, position_id: seat)

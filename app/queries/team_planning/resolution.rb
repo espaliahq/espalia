@@ -40,9 +40,14 @@ class TeamPlanning::Resolution
 
   private
 
-  # The scenario and those it is an alternative of: the chain less the steps
-  # before it on the timeline.
-  def step_of(aggregate) = aggregate.resolution_chain(@scenario_id) - aggregate.timeline_path(@scenario_id)[0...-1]
+  # The scenario and those it is an alternative of: the chain after the step
+  # before it on the timeline. The scenarios that step replaced come earlier
+  # in the chain, so they drop off too.
+  def step_of(aggregate)
+    chain = aggregate.resolution_chain(@scenario_id)
+    before = aggregate.timeline_path(@scenario_id)[-2]
+    before ? chain.drop(chain.index(before) + 1) : chain
+  end
 
   # A person off the map either left by the base date, or was forgotten, or
   # joined after it.
