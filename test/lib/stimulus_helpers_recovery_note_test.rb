@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require Rails.root.join("test/support/system/signal_timeline")
 require Rails.root.join("test/support/system/stimulus_helpers")
 
 # Unit tests for +assert_after_recovery+, the shared record-then-enrich
@@ -211,6 +212,20 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
 
       assert_match(/neither stage acted/, note)
       assert_match(/outside any <form>/, note)
+    end
+  end
+
+  context "#arm_signal_timeline" do
+    should "leave a timeline that says the page could not be read, when the page raises anything" do
+      host = Host.new
+      broken = Object.new
+      def broken.evaluate_script(*) = raise(Selenium::WebDriver::Error::UnexpectedAlertOpenError, "alert open")
+      host.define_singleton_method(:page) { broken }
+
+      timeline = host.send(:arm_signal_timeline, "Saved")
+      timeline.mark("click")
+
+      assert_match(/the page could not be read/, timeline.report)
     end
   end
 end
