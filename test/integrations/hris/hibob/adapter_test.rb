@@ -650,7 +650,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         { "id" => "2718" },
         { "work" => { "customColumns" => { "column_team" => "9" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id work.customColumns.column_team], show_inactive: false)
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive work.customColumns.column_team], show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
       values = adapter.read_field("column_team", kind: :list)
@@ -667,14 +667,28 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         { "id" => "3141", "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
         { "id" => "2718", "work" => { "customColumns" => { "column_country" => "Australia" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id work.customColumns.column_country work.site],
-        show_inactive: false)
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive work.customColumns.column_country work.site],
+        show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
       values = adapter.read_field("column_country", kind: :text, alongside: "site")
 
       assert_equal({ "3141" => Hris::FieldValue.new(state: :value, label: "Australia"),
                      "2718" => Hris::FieldValue.withheld }, values)
+      client.verify
+    end
+
+    should "read everyone the sync keeps, such as a person on leave, and leave out a leaver" do
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      employees = [
+        { "id" => "3141", "isActive" => true, "internal" => { "status" => "Inactive" }, "work" => { "department" => "Sales" } },
+        { "id" => "2718", "isActive" => false, "work" => { "department" => "Sales" } }
+      ]
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive work.department], show_inactive: true)
+      adapter.instance_variable_set(:@client, client)
+
+      assert_equal [ "3141" ], adapter.read_field("work.department", kind: :text).keys
       client.verify
     end
   end

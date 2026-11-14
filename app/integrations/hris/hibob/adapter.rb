@@ -136,18 +136,20 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   end
 
   # Asks HiBob for one field beside each person's id, so a preview never
-  # pulls the rest of their record.
+  # pulls the rest of their record. It reads current people as the sync does,
+  # by `isActive`: HiBob's own active filter also drops people on leave and
+  # hires yet to start, whom the sync keeps.
   #
   # @param field_id [String]
   # @param kind [Symbol] :list or :text
   # @param alongside [String, nil] see {Hris::BaseAdapter#read_field}
   # @return [Hash{String => Hris::FieldValue}]
   def read_field(field_id, kind:, alongside: nil)
-    fields = [ "root.id", catalogue_id(field_id) ]
+    fields = [ "root.id", "root.isActive", catalogue_id(field_id) ]
     fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
-    employees = client.search_people(fields: fields.uniq, show_inactive: false)
+    employees = client.search_people(fields: fields.uniq, show_inactive: true)
     employees.each_with_object({}) do |employee, values|
-      next if employee["id"].blank?
+      next if employee["id"].blank? || employee["isActive"] == false
 
       values[employee["id"].to_s] = Hris::Hibob::ResponseMapper.new(employee).field_value(field_id, kind:, alongside:)
     end
