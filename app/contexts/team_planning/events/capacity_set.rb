@@ -2,8 +2,9 @@
 
 # A planner's figure for what someone delivers in one place, in place of the
 # one their capacity model works out. The figure is the plan's judgement
-# about that person, so it seals under their key in the plan, and forgetting
-# them leaves the place priced as unknown, never as the model would price it.
+# about that person, so it and its note seal under their key in the plan, and
+# forgetting them leaves the place priced as unknown, never as the model would
+# price it.
 #
 # Each place is its own facet, so clearing one override keeps the others.
 #
@@ -20,6 +21,7 @@ class TeamPlanning::Events::CapacitySet < TeamPlanning::Events::Change
   extend TeamPlanning::Events::SealedChange
 
   shreddable :amount, by: :person, person: :subject_id
+  about_a_person
 
   PLACES = TeamPlanning::Events::AssignmentSet::PLACES
   PLACE_ID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/

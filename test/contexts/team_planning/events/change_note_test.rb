@@ -6,13 +6,13 @@ require "test_helper"
 # when the subject is a person, the plan's key otherwise. So forgetting the
 # person takes their notes with the rest, and deleting the plan takes every note.
 class TeamPlanning::ChangeNoteTest < ActiveSupport::TestCase
-  class CapacitySet < TeamPlanning::Events::Change
+  class HoursSet < TeamPlanning::Events::Change
     extend Shreddable
     extend TeamPlanning::Events::SealedChange
 
-    shreddable :fte, by: :person, person: :subject_id
+    shreddable :hours, by: :person, person: :subject_id
 
-    def self.facet = "capacity"
+    def self.facet = "hours"
   end
 
   class HeadcountCap < TeamPlanning::RuleKind
@@ -22,7 +22,7 @@ class TeamPlanning::ChangeNoteTest < ActiveSupport::TestCase
   end
 
   CAP = "rule:test_headcount_cap"
-  PERSON_KINDS = %w[AssignmentSet DepartureSet DepartureWithdrawn LevelSet PlanDataSet ReportingLineSet].freeze
+  PERSON_KINDS = %w[AssignmentSet CapacitySet DepartureSet DepartureWithdrawn LevelSet PlanDataSet ReportingLineSet].freeze
 
   setup do
     TeamPlanning::RuleKinds.register(HeadcountCap)
@@ -127,6 +127,20 @@ class TeamPlanning::ChangeNoteTest < ActiveSupport::TestCase
     end
   end
 
+  should "seal a capacity override's note, and a rewrite of it, under the person's key" do
+    @handler.set_change(@plan_id, TeamPlanning::Events::CapacitySet, scenario_id: @plan_id, subject_id: @bo.id,
+                                                                     end_state: { unit_id: SecureRandom.uuid_v7, amount: "0.5" }, note: "Mentoring two hires")
+    capacity_set = events.grep(TeamPlanning::Events::CapacitySet).sole
+    @handler.note_change(@plan_id, scenario_id: @plan_id, event_id: capacity_set.event_id, note: "Mentoring three hires")
+
+    assert_equal person_key(@bo), identifier_of(capacity_set)
+    assert_equal person_key(@bo), identifier_of(noted(capacity_set))
+    PlanKeyStore.new.destroy_person(@bo.id)
+
+    assert events.grep(TeamPlanning::Events::CapacitySet).sole.data[:note].removed?
+    assert override_note(@plan_id, capacity_set.key.last).removed?
+  end
+
   should "keep the note out of the end state a sealed change compares" do
     end_state = level_set.data.except(*TeamPlanning::Events::Change::FIELDS)
 
@@ -135,8 +149,8 @@ class TeamPlanning::ChangeNoteTest < ActiveSupport::TestCase
   end
 
   should "give a new sealed kind the note with nothing declared, under the plan's key" do
-    assert_equal({ note: :plan, fte: :person }, CapacitySet.shreddable_fields.transform_values { it[:by] })
-    assert CapacitySet.seals_end_state?
+    assert_equal({ note: :plan, hours: :person }, HoursSet.shreddable_fields.transform_values { it[:by] })
+    assert HoursSet.seals_end_state?
     assert_not TeamPlanning::Events::DepartureSet.seals_end_state?
   end
 

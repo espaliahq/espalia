@@ -558,8 +558,8 @@ change and pin may carry a `note`, the planner's reason, such as why someone mov
 **The note follows the key of the change's subject.**
 
 - **A note on a change to a person seals under that person's key in the plan.** A kind
-  whose subject is a person declares `about_a_person`: `AssignmentSet`, `DepartureSet`,
-  `DepartureWithdrawn`, `LevelSet`, `PlanDataSet` and `ReportingLineSet`. Forgetting the
+  whose subject is a person declares `about_a_person`: `AssignmentSet`, `CapacitySet`,
+  `DepartureSet`, `DepartureWithdrawn`, `LevelSet`, `PlanDataSet` and `ReportingLineSet`. Forgetting the
   person removes the note with the level, the pay and the rest. An assignment of a
   placeholder hire seals under the placeholder's id, a key only deleting the plan
   destroys.
