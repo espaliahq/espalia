@@ -1,11 +1,11 @@
 # Team Planning and the Org Graph
 
-> Status: proposal. Nothing here is built.
+> Status: the Org Graph is built. Team Planning is planned and not yet built.
 
 Team Planning lets an organisation explore how its teams could be shaped: who works on
 what, at what cost and with how much capacity, across scenarios. It reads the
-organisation as it is known from the Org Graph, which Espalia does not have yet. The Org
-Graph is built first.
+organisation as it is known from the Org Graph, which was built first and now provides
+every reader and command planning needs.
 
 ## Read in this order
 

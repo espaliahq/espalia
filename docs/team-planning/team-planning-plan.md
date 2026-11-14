@@ -172,6 +172,7 @@ flowchart LR
   s14 --> s15 & s16
   s21 --> s22 & s24
   s22 --> s23 & s25 & s313 & s314 & s56 & s61
+  s33 --> s61
   s31 --> s32 & s311
   s15 --> s311
   s13 --> s32
@@ -208,7 +209,7 @@ flowchart LR
   s43 --> s87
   s91 --> s92 & s94
   s92 & s312 --> s93
-  s92 & s58 & s74 --> s95
+  s92 & s58 & s64 & s74 --> s95
   s33 & s54 --> s101
   s101 --> s102 & s103 & s106 & s107
   s101 & s72 --> s104
@@ -327,9 +328,23 @@ on main yet.
 | 8.7 | `StepClosed`: the next step stands on the Org Graph, pending changes show as carried over, and the closed step reads planned against actual through `AsOf` on its end date | 4.3 |
 
 **One transaction.** 8.4 builds the person and structure handlers with the approval's
-id as `cause_id`, and passes `plan_id` and `plan_change_id` on every command:
-`set_membership`, `move_membership`, `create_unit`, `rename_unit`, `move_unit`,
-`retire_unit` and `apply_succession`. `PlanApproved`, every Org Graph event and every
+id as `cause_id`, and passes `plan_id` and `plan_change_id` on every command. Each kind
+of change has one command:
+
+| Change | Org Graph command |
+|---|---|
+| `UnitSet` | `create_unit`, `rename_unit` or `move_unit` |
+| `UnitRetired` | `retire_unit` |
+| `UnitSuccessionSet` | `apply_succession` |
+| `AssignmentSet` | `set_membership`, `move_membership` or `end_membership` |
+| `ReportingLineSet` | `change_manager` |
+| `DepartureSet` | `leave` |
+| `LevelSet` | `change_level` |
+
+A change goes to a command only when Espalia holds its fact in `OrgFactProvider`. A
+reporting line, a departure or a level the HRIS supplies goes on the change list (8.5)
+instead. A position has no Org Graph fact: it stays in the plan, and a departure's
+linked backfill stays open there. `PlanApproved`, every Org Graph event and every
 `ChangeApplied` commit in one database transaction. The plan stream and the Org Graph
 share an event store, so they land together or not at all. In the activity feed the
 approval reads as one entry.
@@ -350,7 +365,7 @@ edits the change, then approves again.
 | 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives | 9.1 |
 | 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later | 9.2, 3.12 |
 | 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit | 9.1 |
-| 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 7.4 |
+| 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |
 
 ### P10 Forecasts
 
