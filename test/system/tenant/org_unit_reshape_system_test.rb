@@ -67,6 +67,18 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
   context "at phone width" do
     setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
 
+    should "keep the date chosen in the split review when going back to change who goes where" do
+      sign_in_as(@admin_user)
+      visit new_tenant_org_unit_split_path(@org[:platform], names: %w[Core Edge], stage: "review")
+      assert_selector "#org-unit-split-unplaced"
+
+      tomorrow = Date.tomorrow.iso8601
+      js_fill_in "Takes effect", with: tomorrow
+      click_link_with_js_fallback "Change who goes where", expect_text: "Choose a new unit for each person."
+      click_button_with_js_fallback "Review the split", expect_selector: "#org-unit-split-unplaced"
+      assert_field "Takes effect", with: tomorrow
+    end
+
     should "merge one unit into another, and retire an empty one" do
       sign_in_as(@admin_user)
       visit edit_tenant_org_unit_path(@org[:payments])

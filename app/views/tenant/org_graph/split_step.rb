@@ -128,13 +128,14 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
     p(class: "text-sm text-default") { "#{@unit.name} retires, and its people go here:" }
     @names.each { |name| successor_summary(name) }
     unplaced_summary
-    step_form(tenant_org_unit_split_path(@unit), class: "space-y-4") do
+    step_form(tenant_org_unit_split_path(@unit), class: "space-y-4", data: { controller: "effective-date" }) do
       carry_names
       carry_placements
       date_field
       div(class: "flex flex-wrap items-center gap-3") do
         submit("Split #{@unit.name}", tone: :danger)
-        a(href: stage_path("place"), class: "text-sm text-link hover:underline") { "Change who goes where" }
+        a(href: stage_path("place"), class: "text-sm text-link hover:underline",
+          data: { action: "effective-date#carry" }) { "Change who goes where" }
       end
     end
   end

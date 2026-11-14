@@ -85,7 +85,7 @@ class Views::Tenant::OrgGraph::UnitStep < Views::Base
     div do
       label(for: DATE_ID, class: "block text-sm font-medium text-default") { "Takes effect" }
       input(type: "date", id: DATE_ID, name: "effective_on", value: @effective_on, required: true,
-            class: "#{Components::Kit::Field::INPUT} mt-1 sm:w-48")
+            data: { effective_date_target: "date" }, class: "#{Components::Kit::Field::INPUT} mt-1 sm:w-48")
     end
   end
 
