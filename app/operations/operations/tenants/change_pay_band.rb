@@ -26,7 +26,7 @@ class Operations::Tenants::ChangePayBand < Operations::Base
       level = FrameworkState::Level.find_by(level_id: band.level_id)
       band.level = level if level
       band.assign_attributes(currency: params[:currency], period: params[:period], **figures)
-      band_payload(save_band!(band))
+      band_payload(save_setting!(band))
     end
   rescue ActiveRecord::RecordNotFound
     raise Operations::Base::ParameterError, "There is no such pay band"

@@ -25,15 +25,15 @@ module Operations::Tenants::PayBandSupport
     end
   end
 
-  # @param band [PayBand]
-  # @raise [Operations::Base::ParameterError] naming what is wrong, never a figure
-  def save_band!(band)
-    band.updated_by = context.user
-    return band if band.save
+  # @param record [PayBand, ExchangeRate, ReferenceCurrency]
+  # @raise [Operations::Base::ParameterError] naming what is wrong, never a figure or a rate
+  def save_setting!(record)
+    record.updated_by = context.user
+    return record if record.save
 
-    raise Operations::Base::ParameterError, band.errors.full_messages.to_sentence
+    raise Operations::Base::ParameterError, record.errors.full_messages.to_sentence
   rescue ActiveRecord::RecordNotUnique
-    raise Operations::Base::ParameterError, band.duplicate_message
+    raise Operations::Base::ParameterError, record.try(:duplicate_message) || "Someone else set it at the same moment; try again"
   end
 
   # Names a band by its level as the framework has it now, or as it was

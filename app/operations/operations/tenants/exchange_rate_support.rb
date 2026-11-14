@@ -22,17 +22,6 @@ module Operations::Tenants::ExchangeRateSupport
     BigDecimal(value)
   end
 
-  # @param record [ExchangeRate, ReferenceCurrency]
-  # @raise [Operations::Base::ParameterError] naming what is wrong, never a rate
-  def save_setting!(record)
-    record.updated_by = context.user
-    return record if record.save
-
-    raise Operations::Base::ParameterError, record.errors.full_messages.to_sentence
-  rescue ActiveRecord::RecordNotUnique
-    raise Operations::Base::ParameterError, record.try(:duplicate_message) || "Someone else set it at the same moment; try again"
-  end
-
   # @param rate [ExchangeRate]
   # @return [Hash]
   def rate_payload(rate, names: editor_names([ rate ]))
