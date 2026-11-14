@@ -409,6 +409,11 @@ second rebases and regenerates it. Nothing else is shared.
 The second wave opens when 1.1 lands: 1.2, 1.3 and 3.1 can run together, and 2.2 joins
 when 2.1 lands.
 
+When 3.2 lands, the change kinds can run as parallel lanes: 3.3, 3.4, 3.5, 3.6 and 3.7.
+Each kind subclasses `TeamPlanning::Events::Change`, and the plan aggregate routes every
+subclass to one handler, so no lane touches the aggregate. Each adds its own event, its
+end state and how it lands on a resolved map.
+
 ## Decisions
 
 Tal decided all seven on 14 Nov 2026, each as recommended.
