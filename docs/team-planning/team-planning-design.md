@@ -88,7 +88,7 @@ Every change event has the same shape:
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
 | People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
 | Budget | `BudgetLineSet`, `BudgetLineCut`, `PositionFundingSet` (position draws on budget lines) |
-| Plan data | `PlanDataSet` (subject, field, value) |
+| Plan data | `PlanDataSet` (person, field, value), `PlaceholderSet` (a hire the HRIS doesn't know: label, level, FTE) |
 | Rules | `RuleSet` (configuration, capacity model, budget strictness, guardrail, assumption) |
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
@@ -632,6 +632,24 @@ Two consequences of [the aggregate guard](shreddable-fields-design.md):
   guardrails are shown and not enforced.
 - "Unchanged, so do nothing" cannot be checked in the aggregate for these fields. The
   Operation checks it against a projection.
+
+**As built in 3.14** ([#270](https://github.com/espaliahq/espalia/issues/270)):
+
+- **A placeholder hire is its own kind, `PlaceholderSet`.** A key is chosen per event
+  class, and a placeholder is not a person, so its label, level and FTE seal under the
+  plan's key. `PlanDataSet` holds a person's corrected level or FTE, one facet per field,
+  and `LevelSet` a planned promotion, both under the person's key. Forgetting someone
+  shreds their two and leaves every placeholder as it was.
+- **Reads unseal from the stored events.** The aggregate keeps redacted copies, so
+  Resolution and Status re-read the winning sealed changes by event id
+  (`TeamPlanning::Repository#sealed`). No sealed read model was needed.
+- **Precedence:** a planned promotion, then a corrected level, then the Org Graph's.
+- **A shredded value reads as unknown.** `Member#planned_or_own` gives `:unknown`, the map
+  shows `{ removed: true }`, capacity counts the FTE as not known (at 1) and gives no
+  target for the level, and a change's status reads `unknown`. Nothing raises, and
+  nothing falls back to the Org Graph's value.
+- **A sealed value can't be pinned yet.** `ChangePinned` copies an end state, and a sealed
+  one can't be copied in clear, so pinning one is refused with a reason.
 
 ## The headcount budget
 

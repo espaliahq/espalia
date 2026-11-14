@@ -13,7 +13,7 @@ class Operations::TeamPlanning::Status < Operations::Base
               "facet the scenario resolves, from its own changes and those it inherits from the scenarios it " \
               "follows; scenario_id says which scenario made it (the plan_id is the baseline). 'done' when today " \
               "reads the planned end state, 'pending' when today still reads what the plan's base held or what " \
-              "the step before plans, 'conflicting' when it reads none of these; before the plan's base date " \
+              "the step before plans, 'conflicting' when it reads none of these, 'unknown' when the plan's value was private and has since been removed; before the plan's base date " \
               "nothing reads conflicting. A person's placements are one facet, so a placement list is " \
               "done only when the whole list matches. The Org Graph can't say which position someone fills, only " \
               "where they are, so a placement in a position is done once the person is in the position's unit at " \

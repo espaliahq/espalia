@@ -72,11 +72,12 @@ class Integrations::HrisTitleResolution
   #
   # @param title [String, nil]
   # @param hris_level_ordinal [Integer, nil] the HRIS level, used when the mapping fixes none
+  # @param planned_ordinal [Integer, nil] a level a plan sets, which wins over the mapping's
   # @return [Target]
-  def target(title, hris_level_ordinal)
+  def target(title, hris_level_ordinal, planned_ordinal: nil)
     mapping = title.present? ? title_lookup[HrisRoleMapping.normalize_title(title)] : nil
     role = mapping && roles_by_code[mapping.framework_role_code]
-    ordinal = mapping && (mapping.level_ordinal || hris_level_ordinal)
+    ordinal = mapping && (planned_ordinal || mapping.level_ordinal || hris_level_ordinal)
     level = role && ordinal && levels_by_role_and_ordinal[[ role.role_id, ordinal ]]
     Target.new(title:, mapping:, role:, level:, ordinal:)
   end
