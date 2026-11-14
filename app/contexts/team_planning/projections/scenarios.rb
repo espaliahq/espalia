@@ -21,7 +21,7 @@ class TeamPlanning::Projections::Scenarios
   # @return [Array<Class>]
   def self.handled_events
     [ TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanDeleted, TeamPlanning::Events::ScenarioForked,
-      TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved ]
+      TeamPlanning::Events::ScenarioRenamed, TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -41,6 +41,8 @@ class TeamPlanning::Projections::Scenarios
       when TeamPlanning::Events::PlanDeleted then TeamPlanningScenario.where(plan_id: data[:plan_id]).delete_all
       when TeamPlanning::Events::ScenarioForked
         write(data[:scenario_id], event, **data.slice(:plan_id, :parent_id, :relation, :name, :starts_on, :ends_on, :forked_by_id))
+      when TeamPlanning::Events::ScenarioRenamed
+        TeamPlanningScenario.where(id: data[:scenario_id]).update_all(name: data[:name], updated_at: event.timestamp)
       when TeamPlanning::Events::ScenarioPeriodSet
         follow_tree(data[:plan_id], event, moved: data[:scenario_id], ends_on: Date.iso8601(data[:ends_on]))
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningScenario.where(id: data[:scenario_id]).delete_all

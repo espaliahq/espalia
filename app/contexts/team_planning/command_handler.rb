@@ -130,6 +130,19 @@ class TeamPlanning::CommandHandler
 
   # @param plan_id [String]
   # @param scenario_id [String]
+  # @param name [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#rename_scenario
+  def rename_scenario(plan_id, scenario_id, name:)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.rename_scenario(scenario_id, name:, renamed_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
+  # @param scenario_id [String]
   # @param ends_on [Date, String]
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor

@@ -67,6 +67,14 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
                    refusal(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: @lean, ends_on: "2027-04-30")
     end
 
+    should "rename a scenario, and refuse the baseline" do
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, name: "First quarter" },
+                   call(Operations::TeamPlanning::RenameScenario, plan_id: @plan_id, scenario_id: @q1, name: " First quarter "))
+      assert_equal "First quarter", call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].second[:name]
+      assert_equal "The baseline can't be renamed", refusal(Operations::TeamPlanning::RenameScenario, scenario_id: @plan_id, name: "Now")
+      assert_equal "name can't be blank", refusal(Operations::TeamPlanning::RenameScenario, scenario_id: @q1, name: "")
+    end
+
     should "remove a leaf, and refuse a scenario others fork from" do
       assert_equal "1 scenario forks from Q1: remove it first",
                    refusal(Operations::TeamPlanning::RemoveScenario, scenario_id: @q1)
@@ -78,6 +86,7 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
     should "read as missing to an admin outside the plan" do
       [ [ Operations::TeamPlanning::Scenarios, {} ],
         [ Operations::TeamPlanning::ForkScenario, { parent_id: @q1, relation: "instead", name: "Mine" } ],
+        [ Operations::TeamPlanning::RenameScenario, { scenario_id: @q1, name: "Mine" } ],
         [ Operations::TeamPlanning::SetScenarioPeriod, { scenario_id: @q1, ends_on: "2027-04-30" } ],
         [ Operations::TeamPlanning::RemoveScenario, { scenario_id: @lean } ] ].each do |operation, params|
         assert_equal "No such plan", refusal(operation, as: @other_admin, **params), operation.name
