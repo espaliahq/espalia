@@ -9,18 +9,20 @@
 # to, since the neighbouring steps are out of sight.
 class Views::Plans::Timeline < Views::Base
   UNASSIGNED = "Unassigned"
+  UNNAMED = "Unnamed step"
 
   # The leaf a path from `from_id` reaches by taking the first "then" at each step.
   #
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
   # @param from_id [String]
   # @return [String]
-  def self.first_leaf(scenarios, from_id)
-    thens = scenarios.select { it[:relation] == "then" }.group_by { it[:parent_id] }
+  def self.first_leaf(scenarios, from_id, thens: then_index(scenarios))
     id = from_id
     id = thens[id].first[:scenario_id] while thens[id]
     id
   end
+
+  def self.then_index(scenarios) = scenarios.select { it[:relation] == "then" }.group_by { it[:parent_id] }
 
   # @param timeline [Hash] from `team_planning_timeline`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
@@ -29,6 +31,7 @@ class Views::Plans::Timeline < Views::Base
     @timeline = timeline
     @scenarios = scenarios.index_by { it[:scenario_id] }
     @all_scenarios = scenarios
+    @thens = self.class.then_index(scenarios)
     @step = step.clamp(0, columns.size - 1)
   end
 
@@ -64,6 +67,7 @@ class Views::Plans::Timeline < Views::Base
     end
   end
 
+  # An alternative stands in the same step, so a phone stays on it.
   def alternatives(index)
     ids = columns[index][:alternative_ids]
     return if ids.empty?
@@ -72,14 +76,14 @@ class Views::Plans::Timeline < Views::Base
       span(class: "text-muted") { "or instead " }
       ids.each_with_index do |id, i|
         plain ", " if i.positive?
-        path_link(id)
+        path_link(id, step: index)
       end
     end
   end
 
-  def path_link(id)
-    a(href: timeline_plan_path(@timeline[:plan_id], scenario: self.class.first_leaf(@all_scenarios, id)),
-      class: "text-link hover:text-link-hover underline") { @scenarios.dig(id, :name).presence || "an unnamed step" }
+  def path_link(id, step: nil)
+    a(href: timeline_plan_path(@timeline[:plan_id], scenario: self.class.first_leaf(@all_scenarios, id, thens: @thens), step:),
+      class: "text-link hover:text-link-hover underline") { scenario_name(id) }
   end
 
   # -- Wide: a grid, a column per step -------------------------------------
@@ -261,12 +265,12 @@ class Views::Plans::Timeline < Views::Base
   def arrival(lane, bar)
     return if bar[:from].zero?
 
-    move = lane[:moves].find { it[:after] == bar[:from] - 1 && joined?(it, bar) }
+    move = lane[:moves].find { it[:person_id] == bar[:subject_id] && it[:after] == bar[:from] - 1 && joined?(it, bar) }
     "from #{units_named(bar[:from] - 1, move[:left_unit_ids])}" if move
   end
 
   def onward(lane, bar)
-    move = lane[:moves].find { it[:after] == bar[:to] && left?(it, bar) }
+    move = lane[:moves].find { it[:person_id] == bar[:subject_id] && it[:after] == bar[:to] && left?(it, bar) }
     "to #{units_named(bar[:to] + 1, move[:joined_unit_ids])}" if move
   end
 
@@ -318,24 +322,19 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def step_name(index)
-    return "Today" if columns[index][:scenario_id] == @timeline[:plan_id]
-
-    columns[index][:name].presence || "Step #{index + 1}"
+    id = columns[index][:scenario_id]
+    id == @timeline[:plan_id] ? "Today" : scenario_name(id)
   end
 
-  def period(index)
-    column = columns[index]
-    return "As of #{date(column[:starts_on])}" unless column[:ends_on]
+  def scenario_name(id) = @scenarios.dig(id, :name).presence || UNNAMED
 
-    "#{date(column[:starts_on])} to #{date(column[:ends_on])}"
-  end
-
-  def date(iso) = Date.iso8601(iso).strftime("%-d %b %Y")
+  def period(index) = Views::Plans::ScenarioTable.period(@scenarios.fetch(columns[index][:scenario_id]))
 
   def name(person_id) = @timeline[:names].fetch(person_id, Person::FORMER_MEMBER)
 
-  # Paths end at each scenario with nothing after it; this one ends at one of them.
+  # Paths end at each scenario with nothing after it. The one shown counts
+  # among them only when it ends at one.
   def other_paths
-    @other_paths ||= @all_scenarios.count { |s| @all_scenarios.none? { it[:relation] == "then" && it[:parent_id] == s[:scenario_id] } } - 1
+    @other_paths ||= @all_scenarios.count { !@thens.key?(it[:scenario_id]) } - (@timeline[:next_ids].empty? ? 1 : 0)
   end
 end
