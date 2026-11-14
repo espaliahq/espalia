@@ -58,11 +58,12 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_response :not_found
     end
 
-    should "open the timeline on the path to the first leaf" do
+    should "open the timeline on the path to the first leaf, its steps shown though nobody is placed yet" do
       get timeline_plan_path(@plan_id)
       assert_response :success
-      assert_includes response.body, "Showing the path to"
-      assert_includes response.body, "Q1 hires"
+      assert_includes response.body, "No one is placed on this path yet."
+      assert_select "[data-timeline-step]", 2
+      assert_select "[data-timeline-step='1']", text: /Q1 hires/
     end
   end
 

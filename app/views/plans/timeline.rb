@@ -35,12 +35,9 @@ class Views::Plans::Timeline < Views::Base
   def view_template
     div(class: "space-y-4") do
       path_line
-      if lanes_by_id.empty?
-        p(class: "text-sm text-muted") { "No one is placed on this path yet." }
-      else
-        wide_grid
-        phone_step
-      end
+      p(class: "text-sm text-muted") { "No one is placed on this path yet." } if lanes_by_id.empty?
+      wide_grid
+      phone_step
     end
   end
 
@@ -82,7 +79,7 @@ class Views::Plans::Timeline < Views::Base
 
   def path_link(id)
     a(href: timeline_plan_path(@timeline[:plan_id], scenario: self.class.first_leaf(@all_scenarios, id)),
-      class: "text-link hover:text-link-hover underline") { @scenarios.dig(id, :name) }
+      class: "text-link hover:text-link-hover underline") { @scenarios.dig(id, :name).presence || "an unnamed step" }
   end
 
   # -- Wide: a grid, a column per step -------------------------------------
@@ -314,8 +311,9 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def step_name(index)
-    id = columns[index][:scenario_id]
-    id == @timeline[:plan_id] ? "Today" : columns[index][:name]
+    return "Today" if columns[index][:scenario_id] == @timeline[:plan_id]
+
+    columns[index][:name].presence || "Step #{index + 1}"
   end
 
   def period(index)
