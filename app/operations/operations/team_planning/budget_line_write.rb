@@ -6,22 +6,16 @@
 module Operations::TeamPlanning::BudgetLineWrite
   extend ActiveSupport::Concern
   include Operations::TeamPlanning::ChangeWrite
+  include Operations::TeamPlanning::PlanRead
 
   BASELINE = "The baseline holds the organisation's approved budget as it is: change a line in a scenario"
   FACET = ::TeamPlanning::Events::BudgetLineSet.facet
 
   private
 
-  # The handler checks again under the lock; this keeps every other refusal behind it.
-  def editable_plan!
-    plan = ::TeamPlanningPlan.find_by(id: plan_id!)
-    return plan if plan && PlanPolicy.new(context, plan).update?
-
-    raise Operations::Base::ParameterError, "No such plan"
-  end
-
+  # The handler checks the plan again under the lock; checking first keeps every other refusal behind it.
   def scenario!
-    editable_plan!
+    plan!(:update?)
     scenario_id = scenario_id!(:scenario_id)
     raise Operations::Base::ParameterError, BASELINE if scenario_id == plan_id!
 
