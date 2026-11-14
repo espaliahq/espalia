@@ -38,7 +38,7 @@ class Views::Plans::Timeline < Views::Base
   def view_template
     div(class: "space-y-4") do
       path_line
-      p(class: "text-sm text-muted") { "No one is placed on this path yet." } if lanes_by_id.empty?
+      render Components::Kit::EmptyState.new(title: "No one is placed on this path yet.", size: :panel) if lanes_by_id.empty?
       wide_grid
       phone_step
     end
@@ -161,10 +161,11 @@ class Views::Plans::Timeline < Views::Base
   def phone_step
     div(class: "space-y-4 md:hidden", data: { timeline_phone: "" }) do
       step_picker
-      div(class: "rounded-lg border border-default bg-default p-3") do
-        h3(class: "font-semibold text-default") { step_name(@step) }
-        p(class: "text-sm text-muted") { period(@step) }
-        alternatives(@step)
+      render Components::Kit::Card.new(title: step_name(@step), density: :compact) do |card|
+        card.body do
+          p(class: "text-sm text-muted") { period(@step) }
+          alternatives(@step)
+        end
       end
       @timeline[:blocks].each { phone_block(it) }
       phone_unassigned
@@ -205,10 +206,9 @@ class Views::Plans::Timeline < Views::Base
     phone_section(UNASSIGNED) { lane_ids.each { |id| phone_lane(id) { |bar| bar[:unit_id].nil? && covers?(bar) } } }
   end
 
-  def phone_section(title, &)
-    section(class: "rounded-lg border border-default bg-default") do
-      h3(class: "border-b border-default bg-subtle px-3 py-2 font-semibold text-default") { title }
-      ul(class: "divide-y divide-subtle", &)
+  def phone_section(title, &block)
+    render Components::Kit::Card.new(title:, variant: :flush, density: :compact) do |card|
+      card.body { ul(class: "divide-y divide-subtle border-t border-default", &block) }
     end
   end
 
