@@ -83,14 +83,14 @@ export default class extends BaseController {
 
 Common behaviors:
 - `useClickOutside` — close dropdowns/modals on outside click
-- `useTransition` — animated show/hide with CSS transition classes
+- `useTransition` — animated show/hide with CSS transition classes. Its `leave()` hides the element only once the transition ends, frames later, so don't use it for anything other code reads as open or closed (a menu, a popover): a toggle in that gap reads it wrongly.
 - `useDebounce` / `useThrottle` — rate-limit actions
 - `useIntersection` — lazy loading / infinite scroll
 - `useHover` — hover interactions
 
 ```javascript
 import BaseController from "controllers/base_controller"
-import { useClickOutside, useTransition } from "stimulus-use"
+import { useClickOutside } from "stimulus-use"
 
 export default class extends BaseController {
   static targets = ["menu"]
@@ -98,15 +98,14 @@ export default class extends BaseController {
   connect() {
     super.connect()
     useClickOutside(this)
-    useTransition(this, { element: this.menuTarget })
   }
 
   toggle() {
-    this.toggleTransition()
+    this.menuTarget.classList.toggle("hidden")
   }
 
   clickOutside() {
-    this.leave()
+    this.menuTarget.classList.add("hidden")
   }
 }
 ```

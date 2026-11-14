@@ -203,8 +203,11 @@ class PlanScenariosSystemTest < ApplicationSystemTestCase
     JS
 
     assert_selector "#{row} [data-action='dropdown#toggle'][aria-expanded='true']"
-    sleep 0.2 # past the two animation frames the old close took to hide the menu
-    assert_selector "#{row} [data-dropdown-target='menu']", visible: true, wait: 0
+    hidden_after_frames = page.evaluate_async_script(<<~JS, find("#{row} [data-dropdown-target='menu']", visible: :all))
+      const [menu, done] = arguments
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(menu.classList.contains("hidden")))))
+    JS
+    assert_not hidden_after_frames, "the menu hid a few frames after it opened"
   end
 
   private

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Reusable dropdown menu component powered by a Stimulus controller
-# with `useClickOutside` and `useTransition` from stimulus-use.
+# with `useClickOutside` from stimulus-use. The menu shows and hides at once.
 #
 # Uses a slot pattern: call `trigger` for the clickable element and
 # `menu` for the dropdown panel.
@@ -34,8 +34,8 @@
 #   # viewport instead, so it can escape scroll panes.
 class Components::Kit::Dropdown < Components::Base
   ALIGNMENT_CLASSES = {
-    right: "right-0 origin-top-right",
-    left: "left-0 origin-top-left"
+    right: "right-0",
+    left: "left-0"
   }.freeze
 
   # Highlighted and current items take the neutral fills, never brand (#543)

@@ -47,9 +47,7 @@ export default class extends BaseController {
     this._toggling = true
     const opening = this.menuTarget.classList.contains("hidden")
     if (this.fixedValue && opening) this.#positionFixed()
-    // Shown and hidden in the same task, never over animation frames: a menu
-    // still visible two frames after it closed reads as open, and a toggle
-    // in that gap reopened it just before the late hide landed (#295).
+    // Synchronous: a hide deferred over frames lets a toggle read the menu as still open.
     this.menuTarget.classList.toggle("hidden", !opening)
     if (this.fixedValue) {
       if (opening) {
