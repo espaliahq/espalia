@@ -30,17 +30,7 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def structure
-    map = @baseline.structure
-    winning_changes.reduce(map) { |resolved, change| change.class.apply_to(resolved, change.data) }
-  end
-
-  private
-
-  def winning_changes
-    plan = @repository.load_plan(@plan.id)
-    plan.resolution_chain(@scenario_id)
-      .flat_map { plan.changes_in(it) }
-      .each_with_object({}) { |change, latest| latest.delete(change.key); latest[change.key] = change }
-      .values
+    winning = @repository.load_plan(@plan.id).winning_changes(@scenario_id).values
+    winning.reduce(@baseline.structure) { |resolved, change| change.class.apply_to(resolved, change.data) }
   end
 end

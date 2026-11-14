@@ -103,7 +103,8 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
   def params_for(operation)
     values = { plan_id: @plan_id, name: "Taken over", person_id: @viewer.person.id, role: "editor", reason: "Curious",
                base_on: "2026-11-14", scenario_id: @scenario_id, parent_id: @scenario_id, relation: "instead",
-               ends_on: "2027-04-30" }
+               ends_on: "2027-04-30", position_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
+               level_id: SecureRandom.uuid_v7, unit_id: SecureRandom.uuid_v7, fte: 1, basis: "new" }
     values.slice(*operation.parameters.keys)
   end
 
