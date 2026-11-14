@@ -8,7 +8,8 @@ class TeamPlanning::Events::UnitChangesTest < ActiveSupport::TestCase
 
   def map(units: [], retired: [])
     TeamPlanning::Baseline::Map.new(base_on: Date.new(2027, 1, 1), known_on: Date.new(2027, 1, 1), units:,
-                                    retired_units: retired, successions: [], people: [], unassigned_ids: [], names: {}, rules: nil)
+                                    retired_units: retired, successions: [], people: [], unassigned_ids: [], positions: [], names: {},
+                                    rules: nil)
   end
 
   def unit(id, name = "Payments") = UNIT.new(id:, name:, parent_id: PARENT, level_id: LEVEL, owner_ids: [ OTHER ])

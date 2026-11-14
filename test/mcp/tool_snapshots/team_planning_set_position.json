@@ -1,0 +1,59 @@
+{
+  "name": "team_planning_set_position",
+  "description": "Open a position in a scenario of a Team Planning plan, or change or reopen one by passing its position_id. A position is a framework role and one of that role's levels (the level pay bands key on), in a unit, at an FTE above 0 and at most 1. basis 'backfill' is committed budget; 'new' is planned. Give every field each time: the scenario's position becomes exactly this. Steps after the scenario, and its alternatives, inherit it unless they change it. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      },
+      "position_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "Omit to open a new position."
+      },
+      "role_id": {
+        "type": "string"
+      },
+      "level_id": {
+        "type": "string"
+      },
+      "unit_id": {
+        "type": "string"
+      },
+      "fte": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1
+      },
+      "basis": {
+        "type": "string",
+        "enum": [
+          "backfill",
+          "new"
+        ]
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "role_id",
+      "level_id",
+      "unit_id",
+      "fte",
+      "basis"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

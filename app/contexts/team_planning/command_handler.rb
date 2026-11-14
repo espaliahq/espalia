@@ -159,12 +159,13 @@ class TeamPlanning::CommandHandler
   # @param subject_id [String]
   # @param end_state [Hash] the kind's own fields
   # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the plan's lock, once the actor may edit it
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
   # @see TeamPlanning::PlanAggregate#set_change
-  def set_change(plan_id, kind, scenario_id:, subject_id:, end_state: {})
+  def set_change(plan_id, kind, scenario_id:, subject_id:, end_state: {}, &check)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.set_change(kind, scenario_id:, subject_id:, set_by_id: actor_id!, end_state:)
+      plan.set_change(kind, scenario_id:, subject_id:, set_by_id: actor_id!, end_state:, &check)
     end
   end
 
