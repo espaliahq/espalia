@@ -278,7 +278,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 4.1 | Drift report from `OrgGraph::ChangesBetween` by learned date since the base, each change with what it does to the plan | 3.2 |
 | 4.2 | Update to today: `PlanRebased` moves the base. Nothing else is rewritten | 4.1 |
 | 4.3 | Status per change, done, pending or conflicting, by comparing its end state with `OrgGraph::AsOf` today | 3.2 |
-| 4.4 | Changes tab: drift and planned changes, each with its source of truth from `OrgFactProvider`. An Org Graph change that came from this plan is matched through its event's `plan_id` | 4.1, 4.3 |
+| 4.4 | Changes tab: drift and planned changes, each with its source of truth from `OrgFactProvider`. An Org Graph change that came from this plan is matched through its event's `plan_id`. [Design: The changes tab as built](team-planning-design.md#the-changes-tab-as-built) | 4.1, 4.3 |
 | 4.5 | Reconcile a conflict: keep the plan (pin) or follow reality (clear) | 4.4, 3.9 |
 | 4.6 | Checks projection: over- or under-allocated, placed nowhere, placed but left, no manager, a manager sharing no unit | 3.7, 4.3 |
 | 4.7 | Checks tab, with guardrail checks marked | 4.6 |

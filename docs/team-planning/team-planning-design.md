@@ -831,6 +831,21 @@ last and from today, so a forgotten person reads "Former member", a renamed unit
 name, and a subject only the plan holds has none. `Raised` will join these once
 `ChangeRaised` exists. `team_planning_status` gives the same read over MCP.
 
+### The changes tab as built
+
+The Changes tab ([#287](https://github.com/espaliahq/espalia/issues/287)) draws three reads
+and decides none of their rules: the drift, the status of one scenario's changes, and what
+in that scenario needs attention. A picker chooses the scenario, as pills on a wide screen
+and a list on a phone. Each drift change links the scenarios whose plan it meets.
+
+Drift and status each give a change's `sources`, from `TeamPlanning::SourceOfTruth`: who
+supplies what the change moves, so the place someone goes to make it happen. A person fact
+comes from its `OrgFactProvider`, or from Espalia where nobody chose one. A level, a manager
+and a departure move a person fact. A membership, a unit and a succession come from the
+providers of the units they touch, as a unit mirrored from an HRIS takes its members from
+the sync. A unit only the plan holds is Espalia's. Drift's `names` cover units as well as
+people, so a move reads "from Payments to Growth".
+
 ## Plan-held data
 
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not
