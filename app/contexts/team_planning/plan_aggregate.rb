@@ -43,6 +43,8 @@ class TeamPlanning::PlanAggregate
     @scenarios = {}
     @removed_scenario_ids = Set.new
     @logs = {}
+    @undone = Set.new
+    @reversals = {}
   end
 
   # Opens the plan.
@@ -236,9 +238,9 @@ class TeamPlanning::PlanAggregate
   def log_of(scenario_id) = @logs.fetch(scenario_id, []).dup
 
   # @param scenario_id [String]
-  # @return [Array<TeamPlanning::Events::Change>] the scenario's changes in effect, oldest first: its log without what it cleared
+  # @return [Array<TeamPlanning::Events::Change>] the scenario's changes in effect, oldest first: its log without what it cleared or undid
   def changes_in(scenario_id)
-    @logs.fetch(scenario_id, []).each_with_object([]) do |entry, in_effect|
+    @logs.fetch(scenario_id, []).reject { undone?(it.event_id) }.each_with_object([]) do |entry, in_effect|
       if entry.is_a?(TeamPlanning::Events::ChangeCleared)
         key = entry.data.values_at(:subject_id, :facet)
         in_effect.reject! { it.key == key }
@@ -246,6 +248,76 @@ class TeamPlanning::PlanAggregate
         in_effect << entry
       end
     end
+  end
+
+  # @param event_id [String] an entry of a scenario's log
+  # @return [Boolean] whether that entry stands undone
+  def undone?(event_id) = @undone.include?(event_id)
+
+  # Takes back one entry of a scenario's log: a change, a pin or a clear. The
+  # scenario then resolves as if it had not been made.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param event_id [String] the entry's event id
+  # @param undone_by_id [String] person_id of the actor
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown,
+  #   the entry not in its log or already undone, or a later entry in effect
+  #   changes the same subject and facet
+  def undo_change(scenario_id:, event_id:, undone_by_id:)
+    ensure_open!
+    entry = log_entry!(live_scenario!(scenario_id), event_id)
+    raise TeamPlanning::Error, "That change is already undone" if undone?(event_id)
+
+    ensure_nothing_later!(scenario_id, entry, "undo")
+    subject_id, facet = key_of(entry)
+    apply(TeamPlanning::Events::ChangeUndone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, undone_event_id: event_id, undone_by_id: }))
+  end
+
+  # Restores an undone entry of a scenario's log, in its place.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param event_id [String] the entry's event id
+  # @param redone_by_id [String] person_id of the actor
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown,
+  #   the entry not in its log or not undone, or a later entry in effect
+  #   changes the same subject and facet
+  def redo_change(scenario_id:, event_id:, redone_by_id:)
+    ensure_open!
+    entry = log_entry!(live_scenario!(scenario_id), event_id)
+    raise TeamPlanning::Error, "That change isn't undone, so there is nothing to redo" unless undone?(event_id)
+
+    ensure_nothing_later!(scenario_id, entry, "redo")
+    subject_id, facet = key_of(entry)
+    apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id: }))
+  end
+
+  # What an Undo button takes back for one person: their latest entry in the
+  # scenario that is in effect and that nothing later replaced.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param person_id [String]
+  # @return [String, nil] its event id
+  def last_undoable_by(scenario_id, person_id)
+    log = @logs.fetch(live_scenario!(scenario_id), [])
+    log.reverse_each.find { !undone?(it.event_id) && actor_of(it) == person_id && later_in_effect(log, it).nil? }&.event_id
+  end
+
+  # What a Redo button restores for one person: the change of their latest
+  # undo in the scenario that still stands and can be redone.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param person_id [String]
+  # @return [String, nil] the undone entry's event id
+  def last_redoable_by(scenario_id, person_id)
+    log = @logs.fetch(live_scenario!(scenario_id), [])
+    @reversals.fetch(scenario_id, []).reverse_each do |undo|
+      next unless undo.data[:undone_by_id] == person_id
+
+      event_id = undo.data[:undone_event_id]
+      entry = log.find { it.event_id == event_id }
+      return event_id if undone?(event_id) && entry && later_in_effect(log, entry).nil?
+    end
+    nil
   end
 
   # Stops a scenario overriding one facet of one subject, so it follows its
@@ -443,9 +515,19 @@ class TeamPlanning::PlanAggregate
                                 data[:end_state], event_id: event.event_id))
   end
 
+  on TeamPlanning::Events::ChangeUndone do |event|
+    @undone << event.data[:undone_event_id]
+    (@reversals[event.data[:scenario_id]] ||= []) << event
+  end
+
+  on TeamPlanning::Events::ChangeRedone do |event|
+    @undone.delete(event.data[:redone_event_id])
+  end
+
   on TeamPlanning::Events::ScenarioRemoved do |event|
     @scenarios.delete(event.data[:scenario_id])
     @logs.delete(event.data[:scenario_id])
+    @reversals.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
@@ -469,6 +551,29 @@ class TeamPlanning::PlanAggregate
   # A pin resolves as a change of the kind it keeps.
   def pinned_change(kind, fields, end_state, event_id: SecureRandom.uuid)
     kind.new(event_id:, data: { **fields, **end_state.to_h.symbolize_keys })
+  end
+
+  def log_entry!(scenario_id, event_id)
+    @logs.fetch(scenario_id, []).find { it.event_id == event_id } or
+      raise TeamPlanning::Error, "#{name_of(scenario_id)} has no such change"
+  end
+
+  def key_of(entry)
+    entry.is_a?(TeamPlanning::Events::ChangeCleared) ? entry.data.values_at(:subject_id, :facet) : entry.key
+  end
+
+  def actor_of(entry) = entry.data[:set_by_id] || entry.data[:cleared_by_id]
+
+  def later_in_effect(log, entry)
+    log.drop(log.index(entry) + 1).reverse_each.find { !undone?(it.event_id) && key_of(it) == key_of(entry) }
+  end
+
+  # Taking back or restoring an entry under a later one would change nothing
+  # anyone can see, or bring back a value two steps old.
+  def ensure_nothing_later!(scenario_id, entry, action)
+    later = later_in_effect(@logs.fetch(scenario_id), entry) or return
+
+    raise TeamPlanning::Error, "A later change to this replaced it (#{later.event_id}): undo that first, then #{action} this"
   end
 
   def record_change(event)
