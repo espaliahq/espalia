@@ -383,6 +383,19 @@ title, a title mapped to no role, a role not in the framework, a position since 
 model chosen, or a model no longer registered. A place in a unit gone from the map counts
 for the scenario but under no unit.
 
+**A planner's override** (7.3, `CapacitySet`) replaces one place's figure: a person's
+capacity in a position, or straight in a unit, as a number in that place's model's units.
+Each place is its own facet, `capacity:<position or unit id>`, so clearing one keeps the
+others. The model still prices the place: its figure rides along as `calculated`, and the
+working ends with an "=" step naming it, so a reader sees what the planner replaced. An
+override applies only to a place a model prices, so it never turns an unclassified place
+or a leaver into a count; such a place keeps its reason and is marked `overridden`, so the
+override stays visible. The amount is the plan's judgement about a named person, so it
+seals under their key like a planned level. Once they are forgotten the place counts
+nowhere, with the reason "override_unknown", and never falls back to the model's figure.
+The write refuses only a malformed override; one on a place the person doesn't hold in the
+step is an Attention item.
+
 A model gets the whole map with each seat, and `Facts`: each seat's level ordinal, its
 roles and an open seat's FTE. Totals are kept per model, per unit and for the scenario, and never
 summed across models. Figures stay exact; `team_planning_capacity` sends them as decimal
