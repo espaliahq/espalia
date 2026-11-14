@@ -831,6 +831,27 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "1618" ], adapter.read_field("work.department", kind: :text).keys
     end
 
+    should "read a department of any size in the same number of queries" do
+      counts = [ 1, 6 ].map do |size|
+        employees = Array.new(size) { { "id" => "q#{size}-#{it}", "email" => "q#{size}-#{it}@example.com" } }
+        employees.each { create(:person, tenant: @tenant, hris_source: "hibob", external_id: it["id"], email: it["email"], name: "Person #{it['id']}") }
+        queries = 0
+        counting = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" || payload[:sql].match?(/\A\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)/) }
+        ActiveSupport::Notifications.subscribed(counting, "sql.active_record") do
+          adapter = Hris::Hibob::Adapter.new(@tenant)
+          client = Minitest::Mock.new
+          client.expect(:search_people, employees.map { it.merge("displayName" => "Person #{it['id']}") },
+            fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
+            show_inactive: true)
+          adapter.instance_variable_set(:@client, client)
+          adapter.read_field("work.department", kind: :text)
+        end
+        queries
+      end
+
+      assert_equal counts.first, counts.last
+    end
+
     should "put each value on the row the sync writes it to, adopted by email or held by id" do
       held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
       adopted = create(:person, tenant: @tenant, email: "adopt@example.com")

@@ -13,6 +13,17 @@ class Hris::Hibob::EmailClaims
     @claims = {}
   end
 
+  # Reads who holds each email in one query, before the walk asks.
+  #
+  # @param emails [Array<String, nil>]
+  # @return [self]
+  def preload(emails)
+    wanted = emails.compact_blank.uniq - @claims.keys
+    Person.where(email: wanted).pluck(:email, :id, :external_id).each { |email, *claim| @claims[email] = Claim.new(*claim) }
+    wanted.each { @claims[it] = nil unless @claims.key?(it) }
+    self
+  end
+
   # @param email [String, nil]
   # @return [Claim, nil] whoever holds the email now, nil once it is freed
   def holder(email)

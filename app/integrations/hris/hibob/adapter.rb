@@ -217,12 +217,13 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @yieldparam attrs [Hash] the Person attributes the row was given
   # @yieldparam person [Person] the row, unsaved for a newcomer in a dry run
   def first_pass(employees, result, projected:, write: true)
-    claims = Hris::Hibob::EmailClaims.new
+    rows = Person.where(external_id: employees.filter_map { it["id"].presence&.to_s }).index_by(&:external_id)
+    claims = Hris::Hibob::EmailClaims.new.preload([ *employees.map { it["email"]&.downcase&.strip }, *rows.values.map(&:email) ])
     employees.each do |raw_employee|
       mapper = Hris::Hibob::ResponseMapper.new(raw_employee, level_field_id: config.level_field_id, mapped_fields:)
       # Dev-only PII guard — pass-through outside development.
       attrs = Hris::DevNameWhimsifier.call(mapper.call)
-      person = upsert_person(attrs, result, claims:, write:, projected:, started_on: mapper.org_graph_facts[:started_on])
+      person = upsert_person(attrs, result, claims:, rows:, write:, projected:, started_on: mapper.org_graph_facts[:started_on])
       yield mapper, attrs, person if person
     rescue OrgGraph::Forgetting::KeyMissing
       raise
@@ -438,12 +439,14 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param attrs [Hash] Person-compatible attributes
   # @param result [Hash] running tally of sync results
   # @param claims [Hris::Hibob::EmailClaims] who holds each email so far in this walk
+  # @param rows [Hash{String => Person}] each row by HRIS id so far in this walk
   # @param write [Boolean] false to decide without saving, for a preview
   # @param projected [Boolean] whether the tenant is cut over to the Org Graph
   # @param started_on [String, nil] HiBob's start date, ISO 8601
   # @return [Person, nil] the created or updated person, nil when skipped or invalid
-  def upsert_person(attrs, result, claims:, write: true, projected: false, started_on: nil)
-    person = Person.find_by(external_id: attrs[:external_id])
+  def upsert_person(attrs, result, claims:, rows:, write: true, projected: false, started_on: nil)
+    external_id = attrs[:external_id].to_s
+    person = external_id.present? ? rows[external_id] : Person.find_by(external_id: attrs[:external_id])
     forgotten = forgotten_person(attrs[:external_id]) unless person
     if forgotten && !back_at_work?(attrs, started_on)
       result[:forgotten_skipped] += 1
@@ -486,6 +489,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
 
     claims.move(person, from: held_email)
+    rows[external_id] = person if external_id.present?
     person
   end
 
