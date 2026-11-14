@@ -3243,7 +3243,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "org_graph_sources",
-        "description" => "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact with its provider and the fields an HRIS reads it from, each structure level (top first) with its provider, field, number of live units and the names of the retired units it held (a level that has ever held a unit can't be removed), and the staleness threshold with how many facts Espalia holds are stale, by fact. Admins and Org Graph editors only.",
+        "description" => "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact with its provider and the fields an HRIS reads it from, each structure level (top first) with its provider, field, number of live units, how many retired units it held (by distinct name, the first three named) and whether it can be removed, and the staleness threshold with how many facts Espalia holds are stale, by fact. Admins and Org Graph editors only.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},

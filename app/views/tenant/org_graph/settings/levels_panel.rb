@@ -26,7 +26,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   # @param hris [Hash] provider, label and connected, as Operations::OrgGraph::Sources reads them
-  # @param levels [Array<Hash>] id, name, provider, field, live_units and retired_unit_names, top first
+  # @param levels [Array<Hash>] each level as Operations::OrgGraph::Sources reads it, top first
   # @param can_edit_taxonomy [Boolean] whether the viewer may add, move and remove levels
   def initialize(hris:, levels:, can_edit_taxonomy: false)
     @hris = hris
@@ -65,7 +65,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
         div(id: "org-graph-level-actions-#{level[:id]}", class: "flex shrink-0 items-center gap-2") do
           hand_back_form(level) if level[:live_units].zero? && level[:provider] != ESPALIA
           move_buttons(level, index) if @can_edit_taxonomy && movable?(index)
-          remove_dialog(level) if @can_edit_taxonomy && removable?(level)
+          remove_dialog(level) if @can_edit_taxonomy && level[:removable]
         end
       end
       next unless connected?
@@ -123,12 +123,6 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
     end
   end
 
-  # A unit keeps its level for life, so a level that has held one, even one
-  # since retired, stays to explain that unit's history.
-  def removable?(level)
-    level[:provider] == ESPALIA && level[:live_units].zero? && level[:retired_unit_names].empty?
-  end
-
   def remove_dialog(level)
     render Components::Kit::Modal.new(id: "org-graph-remove-level-#{level[:id]}", title: "Remove #{level[:name]}?",
                                       size: :sm) do |modal|
@@ -153,14 +147,15 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
 
   def summary(level)
     parts = [ "From #{provider_label(level[:provider])}", units(level[:live_units]) ]
-    parts << "held #{retired_names(level[:retired_unit_names])}" if level[:retired_unit_names].any?
+    parts << "held #{retired_names(level)}" if level[:retired_units].positive?
     parts.join(" · ")
   end
 
-  def retired_names(names)
-    return names.to_sentence if names.size <= 3
+  def retired_names(level)
+    names = level[:retired_unit_names]
+    return names.to_sentence if level[:retired_units] <= names.size
 
-    "#{names.first(2).join(', ')} and #{names.size - 2} more"
+    "#{names.first(2).join(', ')} and #{level[:retired_units] - 2} more"
   end
 
   def add_form

@@ -46,14 +46,34 @@ class Operations::OrgGraph::SourcesTest < ActiveSupport::TestCase
 
     should "name the retired units each level held, so the panel knows which it can't remove" do
       ActsAsTenant.with_tenant(@tenant) do
-        [ "Billing", "Atlas" ].each do |name|
+        [ "Billing", "Atlas", "Billing", "Cobalt", "Delta" ].each do |name|
           unit_id = SecureRandom.uuid_v7
           @structure.create_unit(unit_id, name, level_id: @empty, effective_on: "2026-01-01")
           @structure.retire_unit(unit_id, effective_on: "2026-02-01")
         end
       end
 
-      assert_equal [ [], %w[Atlas Billing], [] ], call[:levels].pluck(:retired_unit_names)
+      levels = call[:levels]
+      assert_equal [ 0, 4, 0 ], levels.pluck(:retired_units)
+      assert_equal [ [], %w[Atlas Billing Cobalt], [] ], levels.pluck(:retired_unit_names)
+    end
+
+    should "call a level removable only when Espalia holds it, no unit ever held it and another level stays" do
+      assert_equal [ false, true, false ], call[:levels].pluck(:removable)
+    end
+
+    should "keep the only level" do
+      tenant = create(:tenant)
+      levels = ActsAsTenant.with_tenant(tenant) do
+        admin = create(:tenant_user, tenant:, role: :admin)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .define_taxonomy([ { level_id: SecureRandom.uuid_v7, name: "Team" } ],
+                                                          effective_on: "2026-01-01")
+        Operations::OrgGraph::Sources.call(context: AuthorizationContext.new(user: admin.user, tenant_user: admin, person: nil),
+                                           params: {})[:levels]
+      end
+
+      assert_equal [ false ], levels.pluck(:removable)
     end
 
     should "say which HRIS is connected, and count stale facts against the threshold" do
