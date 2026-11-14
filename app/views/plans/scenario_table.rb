@@ -12,9 +12,11 @@ class Views::Plans::ScenarioTable < Views::Base
   # Columns beside the name show from `sm` up; below it they stack under the name.
   WIDE = "hidden sm:table-cell"
 
+  # @param plan_id [String]
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param extra_columns [Array<Column>]
-  def initialize(scenarios:, extra_columns: [])
+  def initialize(plan_id:, scenarios:, extra_columns: [])
+    @plan_id = plan_id
     @scenarios = scenarios
     @extra_columns = extra_columns
   end
@@ -48,7 +50,9 @@ class Views::Plans::ScenarioTable < Views::Base
         div(style: ("padding-left: #{depth * 1.25}rem" if depth.positive?)) do
           p(class: "font-medium text-default") do
             span(class: "text-muted font-normal") { "#{scenario[:relation]} " } if scenario[:relation]
-            plain(baseline ? "Today" : scenario[:name])
+            a(href: map_plan_path(@plan_id, scenario: (scenario[:scenario_id] unless baseline)), class: "text-link underline") do
+              baseline ? "Today" : scenario[:name]
+            end
           end
           p(class: "text-muted") { "The Org Graph. Nothing set by this plan." } if baseline
           div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
