@@ -28,6 +28,12 @@ class OrgGraphPolicy < ApplicationPolicy
   # @return [Boolean]
   def show_units? = tenant_admin?
 
+  # The settings screen: sources, levels, freshness, forgetting and who may
+  # edit. Each panel's write keeps its own predicate.
+  #
+  # @return [Boolean]
+  def edit_settings? = tenant_admin?
+
   # The taxonomy, the providers, units at the root, and people's facts.
   #
   # @return [Boolean]

@@ -15,15 +15,19 @@ class Views::Integrations::HrisFieldPreviewFrame < Views::Base
   # @param preview [Hash, nil] the payload of {Operations::Integrations::HrisFieldPreview}
   # @param problem [String, nil] why the field could not be read
   # @param src [String, nil] the frame's own path, given only for the lazy placeholder
-  def initialize(target:, preview: nil, problem: nil, src: nil)
+  # @param frame_id [String] another id, for a page that shows more than one preview
+  # @param heading_level [Symbol] :h3 inside a panel whose own title is an h2
+  def initialize(target:, preview: nil, problem: nil, src: nil, frame_id: FRAME_ID, heading_level: :h2) # rubocop:disable Metrics/ParameterLists
     @target = target
     @preview = preview
     @problem = problem
     @src = src
+    @frame_id = frame_id
+    @heading_level = heading_level
   end
 
   def view_template
-    turbo_frame_tag(FRAME_ID, src: @src, loading: ("lazy" if @src)) do
+    turbo_frame_tag(@frame_id, src: @src, loading: ("lazy" if @src)) do
       if @preview
         summary
       else
@@ -38,7 +42,7 @@ class Views::Integrations::HrisFieldPreviewFrame < Views::Base
 
   def summary
     div(class: "space-y-4") do
-      h2(class: "text-base font-semibold text-default [overflow-wrap:anywhere]") do
+      send(@heading_level, class: "text-base font-semibold text-default [overflow-wrap:anywhere]") do
         plain "#{@preview.dig(:field, :name)} as the #{TARGET_NAMES.fetch(@target, @target)}"
       end
       p(class: "text-sm text-muted") do
