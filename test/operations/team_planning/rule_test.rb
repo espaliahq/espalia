@@ -51,10 +51,14 @@ class Operations::TeamPlanning::RuleTest < ActiveSupport::TestCase
                  [ on_cost(unit_id: @engineering), on_cost(unit_id: @payments), on_cost ]
   end
 
-  should "read the plan-wide value at a unit gone from the scenario" do
+  should "read the plan-wide value at a unit retired in the scenario, and refuse an id it never held" do
     call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, rule: "on_cost", value: FLAT)
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments, rule: "on_cost", value: BY_COUNTRY)
+    call(Operations::TeamPlanning::RetireUnit, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments)
 
-    assert_equal FLAT, on_cost(unit_id: SecureRandom.uuid_v7)
+    assert_equal FLAT, on_cost(unit_id: @payments)
+    assert_equal "There is no such unit in this scenario",
+                 assert_raises(Operations::Base::ParameterError) { on_cost(unit_id: SecureRandom.uuid_v7) }.message
   end
 
   should "refuse an unknown rule and anyone outside the plan" do

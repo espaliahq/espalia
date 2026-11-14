@@ -5,6 +5,7 @@
 # story adds a kind, never a tool.
 class Operations::TeamPlanning::SetRule < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
+  include Operations::TeamPlanning::PlanRead
 
   RULE = ::TeamPlanning::Events::RuleSet
 
@@ -26,8 +27,21 @@ class Operations::TeamPlanning::SetRule < Operations::Base
   # @return [Hash] `{ plan_id, scenario_id, subject_id, rule, value }`, the value as the rule stored it
   def perform
     subject_id = params[:unit_id].nil? ? plan_id! : uuid!(:unit_id)
-    set_change!(RULE, subject_id:, end_state: { rule: params[:rule], value: params[:value] })
+    stored = nil
+    set_change!(RULE, subject_id:, end_state: { rule: params[:rule], value: params[:value] }) do
+      live_unit!(subject_id) unless subject_id == plan_id!
+      stored = RULE.end_state(rule: params[:rule], value: params[:value])
+    end
 
-    { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), subject_id:, **RULE.end_state(rule: params[:rule], value: params[:value]) }
+    { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), subject_id:, **stored }
+  end
+
+  private
+
+  def live_unit!(unit_id)
+    map = ::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id: scenario_id!(:scenario_id)).structure
+    return if map.units.any? { it.id == unit_id }
+
+    raise Operations::Base::ParameterError, "There is no such live unit in this scenario"
   end
 end

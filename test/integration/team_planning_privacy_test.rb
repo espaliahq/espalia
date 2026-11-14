@@ -110,6 +110,7 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
                successor_ids: [ UNIT_ID ],
                placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap",
                rule: "capacity_model", value: {} }
+    values.delete(:unit_id) if operation.category == :read
     values.slice(*operation.parameters.keys)
   end
 

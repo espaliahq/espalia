@@ -92,6 +92,14 @@ class Operations::TeamPlanning::SetRuleTest < ActiveSupport::TestCase
     assert_equal "A cap must be a whole number of people", refused.message
   end
 
+  should "refuse a unit that isn't live in the scenario, writing nothing" do
+    before = stream_size
+    refused = assert_raises(Operations::Base::ParameterError) { set_cap(@q1, { cap: 3 }, unit_id: SecureRandom.uuid_v7) }
+
+    assert_equal "There is no such live unit in this scenario", refused.message
+    assert_equal before, stream_size
+  end
+
   should "refuse a viewer and an outsider as an unknown plan, writing nothing" do
     before = stream_size
     [ @viewer, @outsider ].each do |who|
