@@ -97,6 +97,7 @@ Rails.application.routes.draw do
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
     resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ]
+    resources :budget_lines, only: [ :index, :create, :edit, :update, :destroy ]
     resources :exchange_rates, only: [ :create, :edit, :update, :destroy ]
     resource :reference_currency, only: [ :update ]
 
