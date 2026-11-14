@@ -763,6 +763,15 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "3141" ], read_department(employees).keys
     end
 
+    should "read a leaver back at work with no start date, as the sync returns them on its own date" do
+      held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "3141")
+      OrgLeaver.create!(tenant: @tenant, person: held, left_on: Date.current - 30)
+      OrgLeaver.create!(tenant: @tenant, person: create(:person, tenant: @tenant, email: "back@example.com"), left_on: Date.current - 30)
+      employees = [ { "id" => "3141" }, { "id" => "2718", "email" => "back@example.com" } ]
+
+      assert_equal %w[3141 2718], read_department(employees).keys
+    end
+
     should "read a forgotten person only once they are back at work" do
       forget_row("3141")
       forget_row("2718")

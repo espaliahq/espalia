@@ -228,15 +228,15 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           owners.delete(held_emails[external_id])
           owners[email] = external_id
         end
-        # The Org Graph takes a leaver back only once their new start date comes, as for a row adopted by email.
-        next !left.include?(held[external_id]) || back_at_work?(attrs, started_on)
+        # The Org Graph takes a leaver back once HiBob has them employed, on the sync date if no start date is given.
+        next !left.include?(held[external_id]) || employed?(attrs, started_on)
       end
       next false if forgotten_person(external_id) && !back_at_work?(attrs, started_on)
       next false if owners[email]
 
       # The sync creates people in response order, so the first to claim an email keeps it.
       owners[email] = external_id if email
-      !left.include?(adoptable[email]) || back_at_work?(attrs, started_on)
+      !left.include?(adoptable[email]) || employed?(attrs, started_on)
     end
   end
 
@@ -555,7 +555,11 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # are back at work: neither a leaver, a hire yet to start, nor one with no
   # start date is recorded.
   def back_at_work?(attrs, started_on)
-    started_on.present? && org_graph_status(attrs[:status], started_on, Date.current) == "employed"
+    started_on.present? && employed?(attrs, started_on)
+  end
+
+  def employed?(attrs, started_on)
+    org_graph_status(attrs[:status], started_on, Date.current) == "employed"
   end
 
   # HiBob marks a hire active before they start, so a start date still ahead
