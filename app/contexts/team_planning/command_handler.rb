@@ -172,7 +172,7 @@ class TeamPlanning::CommandHandler
   # @param scenario_id [String]
   # @param subject_id [String]
   # @param end_state [Hash] the kind's own fields
-  # @param note [String, nil] why, sealed under the plan's key
+  # @param note [String, nil] why, sealed under the subject's key
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @yieldparam plan [TeamPlanning::PlanAggregate] under the plan's lock, once the actor may edit it
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
@@ -232,7 +232,7 @@ class TeamPlanning::CommandHandler
   # @param scenario_id [String]
   # @param subject_id [String]
   # @param facet [String]
-  # @param note [String, nil] why the scenario keeps it, sealed under the plan's key
+  # @param note [String, nil] why the scenario keeps it, sealed under the subject's key
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if nothing can be pinned
   # @see TeamPlanning::PlanAggregate#pin_change

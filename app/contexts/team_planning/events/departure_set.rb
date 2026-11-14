@@ -18,6 +18,8 @@
 #   Plus {TeamPlanning::Events::Change::FIELDS}.
 #
 class TeamPlanning::Events::DepartureSet < TeamPlanning::Events::Change
+  about_a_person
+
   # @return [String]
   def self.facet = "departure"
 

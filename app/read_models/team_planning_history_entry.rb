@@ -7,7 +7,7 @@
 # and nothing else writes it. Its id is the event's, so a rebuild keeps it.
 # An undo and a redo carry the subject and facet of the entry they reverse,
 # and an entry that stands undone says who undid it. A change or pin keeps
-# the note it was made with, sealed under the plan's key, and a note entry
+# the note it was made with, sealed under its subject's key, and a note entry
 # keeps each rewrite of it, naming the change in `noted_event_id`.
 #
 class TeamPlanningHistoryEntry < ApplicationRecord
@@ -15,7 +15,7 @@ class TeamPlanningHistoryEntry < ApplicationRecord
 
   ACTIONS = %w[set pin clear undo redo note].freeze
 
-  shreddable_column :note, by: :plan
+  shreddable_column :note, by: :person, person: TeamPlanning::ChangeKinds::NOTED_PERSON
 
   acts_as_tenant :tenant
 

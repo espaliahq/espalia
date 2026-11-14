@@ -2,7 +2,7 @@
 
 # Writes, rewrites or clears the note on a change or pin
 # [#273](https://github.com/espaliahq/espalia/issues/273). The note seals
-# under the plan's key, and the history records each edit with who made it.
+# under its subject's key, and the history records each edit with who made it.
 class Operations::TeamPlanning::NoteChange < Operations::Base
   include Operations::TeamPlanning::PlanWrite
 
@@ -11,7 +11,8 @@ class Operations::TeamPlanning::NoteChange < Operations::Base
               "clear it. A note never changes what the scenario resolves to, can't be undone, and follows its " \
               "change through undo and redo. Refused for a change since undone, cleared or replaced in its " \
               "scenario, for a note over #{::TeamPlanning::PlanAggregate::NOTE_LIMIT} characters, or unless the " \
-              "caller is an editor. Keep personal details out: deleting the plan erases every note, forgetting a person does not."
+              "caller is an editor. A note on a change to a person goes when they are forgotten. Any other note, such as " \
+              "one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
   category :write
   approval :mcp_client
 

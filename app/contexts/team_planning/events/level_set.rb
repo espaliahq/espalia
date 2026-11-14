@@ -15,6 +15,7 @@ class TeamPlanning::Events::LevelSet < TeamPlanning::Events::Change
   extend TeamPlanning::Events::SealedChange
 
   shreddable :level, by: :person, person: :subject_id
+  about_a_person
 
   # @return [String]
   def self.facet = "level"

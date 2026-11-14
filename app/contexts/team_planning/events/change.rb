@@ -14,8 +14,8 @@
 #   @option data [String] :scenario_id
 #   @option data [String] :subject_id an Org Graph id, or one the plan minted
 #   @option data [String] :set_by_id person_id of the actor
-#   @option data [Shreddable::Value, nil] :note why the planner made it, sealed under the plan's key;
-#     absent when there is none. It is no part of the end state, so it never decides how a change
+#   @option data [Shreddable::Value, nil] :note why the planner made it, sealed under its subject's key:
+#     the person's in the plan for a kind {.about_a_person}, else the plan's; absent when there is none. It is no part of the end state, so it never decides how a change
 #     resolves, compares or reads against the Org Graph.
 #   The kind adds its end state alongside these.
 #
@@ -99,6 +99,15 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
 
   # @return [Boolean] whether this kind seals a field of its end state, beyond the note any change may carry
   def self.seals_end_state? = (shreddable_fields.keys - FIELDS).any?
+
+  # Declares this kind's subject a person, so its note seals under that
+  # person's key in the plan and goes when they are forgotten.
+  #
+  # @return [void]
+  def self.about_a_person = shreddable(:note, by: :person, person: :subject_id)
+
+  # @return [Boolean] whether this kind's subject is a person
+  def self.about_a_person? = shreddable_fields.dig(:note, :by) == :person
 
   # @return [Boolean] whether this kind names its facet and says how it lands
   def self.complete? = %i[facet apply_to].all? { overrides?(it) }

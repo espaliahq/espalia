@@ -3,7 +3,7 @@
 # What the tools that set a scenario change share: the write, with the tool's
 # own checks run under the plan's lock once the caller may edit it, and the
 # change already winning for a subject there. Each also takes a `note`, why
-# the change is in the plan, sealed under the plan's key
+# the change is in the plan, sealed under its subject's key
 # [#273](https://github.com/espaliahq/espalia/issues/273).
 module Operations::TeamPlanning::ChangeWrite
   extend ActiveSupport::Concern
@@ -13,7 +13,8 @@ module Operations::TeamPlanning::ChangeWrite
     parameter :note, String, schema: {
       description: "Why this is in the plan, such as the business reason for a move. Optional, at most " \
                    "#{::TeamPlanning::PlanAggregate::NOTE_LIMIT} characters; it never changes what the scenario " \
-                   "resolves to. Keep personal details out: deleting the plan erases the note, forgetting a person does not."
+                   "resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one " \
+                   "on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
     }
     prose_fields :note
   end

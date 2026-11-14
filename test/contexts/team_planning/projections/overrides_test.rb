@@ -149,9 +149,13 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
       set_cap(@lean, 4)
       @handler.undo_change(@plan_id, scenario_id: @lean)
       assert_equal "Lean keeps the old cap", TeamPlanningOverride.find_by!(scenario_id: @lean).note.reveal
+      @handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @q1, subject_id: @person.id,
+                                                                    end_state: { level: "4" }, note: "Ready since the launch")
+      level_id = TeamPlanningOverride.find_by!(scenario_id: @q1, facet: "level").event_id
+      @handler.note_change(@plan_id, scenario_id: @q1, event_id: level_id, note: "Ready, and asked for it")
 
       before = snapshot_read_models(TeamPlanning::Projections::Overrides, @tenant)
-      assert_equal 2, before[:overrides].size
+      assert_equal 3, before[:overrides].size
 
       TeamPlanning::Projections::Overrides.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningOverride.count

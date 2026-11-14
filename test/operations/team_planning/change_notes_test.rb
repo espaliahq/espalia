@@ -58,7 +58,7 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
 
   def without_scenario(rows) = rows.map { it.except(:scenario_id, :change_id) }
 
-  should "store the note with the change, sealed under the plan's key, and keep it out of the end state" do
+  should "store the note with the change, sealed under the person's key, and keep it out of the end state" do
     plan_both("Ready since the platform launch")
 
     level = changes_in(@noted).find { it.is_a?(TeamPlanning::Events::LevelSet) }
@@ -142,6 +142,17 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
       assert_equal [ { person_id: @editor.person_id, name: @editor.person.name } ] * 2, [ rewritten, cleared ].map { it[:by] }
       assert_equal [ "2026-02-01T10:00:00Z", "2026-02-01T11:00:00Z" ], [ rewritten, cleared ].map { it[:at] }
       assert_not override.key?(:note)
+    end
+
+    should "keep every entry in the history once the person is forgotten, with who wrote each and when, the note removed" do
+      travel 1.hour
+      note("Ready, and asked for it")
+      as_tenant { PlanKeyStore.new.destroy_person(@ada.id) }
+
+      assert_equal [ [ "set", { removed: true } ], [ "note", { removed: true } ] ], history.map { it.values_at(:action, :note) }
+      assert_equal [ { person_id: @editor.person_id, name: @editor.person.name } ] * 2, history.map { it[:by] }
+      assert_equal [ "2026-02-01T09:00:00Z", "2026-02-01T10:00:00Z" ], history.map { it[:at] }
+      assert_equal({ removed: true }, override[:note])
     end
 
     should "follow its change through undo and redo, and never be undone itself" do

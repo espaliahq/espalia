@@ -6,7 +6,7 @@
     "properties": {
       "note": {
         "type": "string",
-        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. Keep personal details out: deleting the plan erases the note, forgetting a person does not."
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
       },
       "plan_id": {
         "type": "string"

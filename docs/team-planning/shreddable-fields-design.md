@@ -23,8 +23,8 @@ benefit from it.
 | Reference | `person_id`, `manager_id` | In clear. An opaque id. |
 | Clear | A level, a team, an FTE | In clear. |
 | Shreddable by person | A reason for leaving, pay held by the Org Graph | Encrypted under that person's key. |
-| Shreddable by plan | A note on a change, a scenario description, a budget amount | Encrypted under that plan's key. |
-| Shreddable by person within a plan | Their uploaded pay, a corrected level, a planned promotion | Encrypted under that person's key in that plan. |
+| Shreddable by plan | A note on a unit change, a scenario description, a budget amount | Encrypted under that plan's key. |
+| Shreddable by person within a plan | Their uploaded pay, a corrected level, a planned promotion, a note on a change to them | Encrypted under that person's key in that plan. |
 
 A field has exactly one key. Data a plan holds about a person is under that person's key
 in the plan. It goes when the plan goes, as every key in the plan does. It also goes
@@ -103,8 +103,15 @@ class TeamPlanning::Events::NoteWritten < RubyEventStore::Event
   extend Shreddable
   shreddable :note, by: :plan        # the plan's own key
   shreddable :pay, by: :person       # the key of data[:person_id] in the plan
+  # the key of the person the data names, or the plan's when it names none
+  shreddable :reason, by: :person, person: ->(data) { data[:subject_id] if data[:about] == "person" }
 end
 ```
+
+`person:` names the data key that holds the person's id, or is a callable that takes the
+data and gives the id. A callable that gives nil seals under the plan's key. A read model
+column takes the same `person:`, called with the row, so a row can follow the key its
+event chose.
 
 - **`Shreddable::Mapper` wraps the event store's mapper.** On write it mints the key if
   needed, encrypts each declared field with AES-256-GCM and stores the ciphertext in
@@ -137,10 +144,17 @@ end
   that names a declared field with a string key is refused rather than stored in clear.
 - **Fields compose across a hierarchy, each under its own key.** Every Team Planning
   change inherits `shreddable :note, by: :plan` from the `Change` base, and a kind adds its
-  own: `LevelSet` seals its level under the person's key and its note under the plan's,
-  so forgetting the person leaves the note readable. A field that every change holds
-  belongs in `Change::FIELDS`, which keeps it out of the end state a kind compares
-  ([Notes](team-planning-design.md#notes)).
+  own. A subclass may redeclare a field to change its key: a kind whose subject is a
+  person declares `about_a_person`, which redeclares the note under that person's key, so
+  `LevelSet` seals both its level and its note under the person's key and forgetting them
+  removes both. A field that every change holds belongs in `Change::FIELDS`, which keeps
+  it out of the end state a kind compares ([Notes](team-planning-design.md#notes)).
+- **A field held apart from its kind chooses its key from the data.** `ChangePinned`,
+  `ChangeNoted` and the two read models' note columns don't know the change's class, so
+  they use the callable `TeamPlanning::ChangeKinds::NOTED_PERSON`: the subject, when the
+  kinds that hold the facet are about a person, else nil for the plan's key. The note
+  follows the key of the change's subject wherever it is stored, and a row computes the
+  same identifier its event chose, so a rebuild copies the same bytes.
 - **The event store browser at `/res` reads through `Shreddable::DisplayMapper`**, which
   shows each shreddable field as `[shreddable]`.
 - **Every aggregate includes `Shreddable::AggregateRoot`** in place of `AggregateRoot`. Its
@@ -283,7 +297,10 @@ so each projection decides for itself.
 ## Limits
 
 - **One field, one key.** A note that names a second person is protected only by the key
-  it was written under.
+  it was written under. A note on a unit, a position or a rule is under the plan's key, so
+  forgetting a person it names leaves it readable. That is the accepted limit of free text
+  ([#110](https://github.com/espaliahq/espalia/issues/110)), and the note tools tell
+  planners to keep personal details out of it.
 - **Encryption is not access control.** A reason still needs its own permission to view.
   Capturing reasons is opt-in per tenant, because some are special-category data.
 - **Shreddable fields cannot be queried, in the event store or in a read model.** Query

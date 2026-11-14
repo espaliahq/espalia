@@ -96,9 +96,12 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
       @handler.note_change(@plan_id, scenario_id: @q1, event_id: history(@q1).first.id, note: "Until the spring")
       @handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
       @handler.redo_change(@plan_id, scenario_id: @q1)
+      @handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @q1, subject_id: @person.id,
+                                                                    end_state: { level: "4" }, note: "Ready since the launch")
+      @handler.note_change(@plan_id, scenario_id: @q1, event_id: history(@q1).last.id, note: "Ready, and asked for it")
 
       before = snapshot_read_models(TeamPlanning::Projections::History, @tenant)
-      assert_equal 6, before[:history].size
+      assert_equal 8, before[:history].size
 
       TeamPlanning::Projections::History.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningHistoryEntry.count

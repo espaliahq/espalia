@@ -12,11 +12,11 @@
 #   @option data [String] :subject_id of the change it notes
 #   @option data [String] :facet of that change, the second half of its key
 #   @option data [String] :noted_event_id the event id of the change or pin
-#   @option data [Shreddable::Value, nil] :note sealed under the plan's key; nil clears it
+#   @option data [Shreddable::Value, nil] :note sealed under the subject's key, as its change's is; nil clears it
 #   @option data [String] :noted_by_id person_id of the actor
 #
 class TeamPlanning::Events::ChangeNoted < RubyEventStore::Event
   extend Shreddable
 
-  shreddable :note, by: :plan
+  shreddable :note, by: :person, person: TeamPlanning::ChangeKinds::NOTED_PERSON
 end
