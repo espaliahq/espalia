@@ -181,6 +181,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "org_graph_editors" => {},
         "org_graph_person_get" => { person_id: @quinn.id },
         "org_graph_sources" => {},
+        "org_graph_stale_facts" => { person_ids: [ @quinn.id ] },
         "org_graph_units" => {},
         "reporting_capability_attainment" => cycle,
         "reporting_cycle_cohort" => { **cycle, mode: "full" },
