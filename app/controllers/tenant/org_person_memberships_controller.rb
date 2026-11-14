@@ -41,12 +41,4 @@ class Tenant::OrgPersonMembershipsController < ApplicationController
   private
 
   def unit_name(unit_id) = OrgUnit.find_by(id: unit_id)&.name || "the team"
-
-  # The form asks for a percentage; the Org Graph stores a fraction.
-  def allocation
-    percent = params[:allocation].presence or return
-    Float(percent) / 100
-  rescue ArgumentError
-    raise Operations::Base::ParameterError, "Allocation must be a number, got #{percent.inspect}"
-  end
 end
