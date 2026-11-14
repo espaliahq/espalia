@@ -142,9 +142,10 @@ along the resolution chain, and joins names last.
 ### The timeline as built
 
 `TeamPlanning::Timeline` (the `team_planning_timeline` tool) reads one timeline path and
-stores nothing. It resolves each step as the map does, then lays the steps out as columns.
-The tab ([#289](https://github.com/espaliahq/espalia/issues/289)) draws what it returns and
-decides none of these rules:
+stores nothing ([#289](https://github.com/espaliahq/espalia/issues/289)). It resolves each
+step as the map does, then lays the steps out as columns. The Timeline tab
+([#298](https://github.com/espaliahq/espalia/issues/298)) draws what it returns and decides
+none of these rules:
 
 - **Blocks.** A unit is one block across the columns it lives in, so a rename changes the
   label, not the block. A unit that succeeds exactly one other continues that block. A split
@@ -166,6 +167,17 @@ decides none of these rules:
 
 The baseline is read once and every step resolves over it, so each column sees the same Org
 Graph and the read costs one Org Graph query whatever the path's length.
+
+The tab shows one path at a time. With no scenario named, it follows the first `then` at
+each step to a leaf, and the page says which path it shows and how many others run through
+the plan. Each step lists its alternatives as "or instead" links, and the last step its
+`then` steps, so a viewer switches path by following one. A wide screen draws a grid: a
+column per step, a heading per block, and a row per lane, with each bar spanning the steps
+it holds. A phone shows one step at a time, picked from a row of steps that marks the
+current one. Since the neighbouring steps are out of sight there, each bar says where its
+person came from when they arrive and where they go when they leave. A path with nobody on
+it still shows its steps, so its alternatives stay in reach. Read-only for now: editing in
+time is 9.3.
 
 ### Unit changes as built
 
