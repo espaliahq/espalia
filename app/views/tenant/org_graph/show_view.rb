@@ -17,9 +17,11 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
   # @param sidebar [Phlex::SGML, nil] a component that renders a Sidebar
   # @param comparison_bar [Phlex::SGML, nil] the comparison's controls and counts
   # @param comparison [OrgGraph::Comparison]
+  # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members shown (#142)
   def initialize(overview:, user:, current_tenant:, tenants: [], drawer: nil, sidebar: nil,
-                 comparison_bar: nil, comparison: OrgGraph::Comparison::NONE)
+                 comparison_bar: nil, comparison: OrgGraph::Comparison::NONE, confirmations: nil)
     @overview = overview
+    @confirmations = confirmations
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -52,7 +54,8 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
             render Views::Tenant::OrgGraph::UnitTree.new(overview: @overview, tray_id: Views::Tenant::OrgGraph::Tray::ID,
                                                              comparison: @comparison)
             div(class: "flex-1 min-w-0 space-y-6") do
-              render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview, comparison: @comparison)
+              render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview, comparison: @comparison,
+                                                            confirmations: @confirmations)
               tray
             end
             render @sidebar if @sidebar

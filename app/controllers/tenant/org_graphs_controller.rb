@@ -18,6 +18,7 @@ class Tenant::OrgGraphsController < ApplicationController
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants_for_user,
       sidebar: activity_sidebar(overview),
+      confirmations: OrgGraphPolicy::Confirmations.for_cards(policy(:org_graph), overview),
       **comparison_slots(unit_id: params[:unit].presence)
     )
   end

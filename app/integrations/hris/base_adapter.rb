@@ -41,6 +41,19 @@ class Hris::BaseAdapter
     end
   end
 
+  # The termination date in the HRIS record a person's row last stored.
+  #
+  # @param person [Person]
+  # @return [String, nil] ISO date
+  def self.terminated_on(person)
+    raw = person.hris_raw_data
+    return unless raw.is_a?(Hash)
+
+    case person.hris_source
+    when "hibob" then Hris::Hibob::ResponseMapper.terminated_on(raw)
+    end
+  end
+
   # @param tenant [Tenant] the tenant whose HRIS data to sync
   # @param correlation_id [String, nil] id correlating every event this
   #   sync run produces — typically the enqueuing job's id. Falls back to

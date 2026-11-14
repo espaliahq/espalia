@@ -151,6 +151,96 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
     assert @cutover.run(apply: true).applied
   end
 
+  context "a leaver recorded from their row" do
+    setup do
+      as_tenant do
+        @tenant.org_graph_config.retention_years = 7
+        @tenant.save!
+        @by_hand.update!(external_id: "bob-3", hris_source: "hibob",
+                         hris_raw_data: { "id" => "bob-3", "internal" => { "terminationDate" => "2019-03-15" } })
+      end
+    end
+
+    should "leave on the termination date their stored HRIS record holds" do
+      report = @cutover.run(apply: true)
+
+      recorded = stream(@by_hand).sole
+      assert_equal [ "left", "2019-03-15", "hris_termination_date" ],
+                   recorded.data.values_at(:employment_status, :left_on, :left_on_source)
+      assert_equal({ "hris_termination_date" => 1 }, report.left_on_sources)
+      as_tenant { assert_equal Date.new(2019, 3, 15), OrgLeaver.find_by(person_id: @by_hand.id).left_on }
+    end
+
+    should "fall due for forgetting one retention period after the termination date" do
+      @cutover.run(apply: true)
+      forgetting = OrgGraph::Forgetting.new(@tenant.reload, hris: nil)
+
+      assert_empty forgetting.dry_run(on: Date.new(2026, 3, 14)).person_ids
+      assert_equal [ @by_hand.id ], forgetting.dry_run(on: Date.new(2026, 3, 15)).person_ids
+    end
+
+    should "leave on the row's last update when the record holds no termination date" do
+      as_tenant { @by_hand.update_columns(hris_raw_data: { "id" => "bob-3" }, updated_at: Time.zone.parse("2025-06-30 10:00")) }
+
+      report = @cutover.run(apply: true)
+
+      assert_equal [ "2025-06-30", "row_updated" ], stream(@by_hand).sole.data.values_at(:left_on, :left_on_source)
+      assert_equal({ "row_updated" => 1 }, report.left_on_sources)
+    end
+
+    should "pass over a termination date after the cut-over" do
+      as_tenant do
+        @by_hand.update_columns(hris_raw_data: { "internal" => { "terminationDate" => (Date.current + 30).iso8601 } },
+                                updated_at: Time.zone.parse("2025-06-30 10:00"))
+      end
+
+      @cutover.run(apply: true)
+
+      assert_equal [ "2025-06-30", "row_updated" ], stream(@by_hand).sole.data.values_at(:left_on, :left_on_source)
+    end
+
+    should "count leavers by source, best evidence first" do
+      as_tenant do
+        create(:person, tenant: @tenant, status: "inactive", hris_raw_data: nil)
+        create(:person, tenant: @tenant, status: "inactive", hris_raw_data: nil).update_columns(updated_at: Time.zone.parse("2025-06-30 10:00"))
+      end
+
+      report = @cutover.run(apply: false)
+
+      assert_equal [ [ "hris_termination_date", 1 ], [ "row_updated", 1 ], [ "first_recorded", 1 ] ], report.left_on_sources.to_a
+    end
+
+    should "leave on the cut-over date with no evidence, and count them" do
+      as_tenant { @by_hand.update!(hris_raw_data: nil) }
+
+      report = @cutover.run(apply: true)
+
+      assert_equal [ Date.current.iso8601, "first_recorded" ], stream(@by_hand).sole.data.values_at(:left_on, :left_on_source)
+      assert_equal({ "first_recorded" => 1 }, report.left_on_sources)
+      as_tenant { assert_equal Date.current, OrgLeaver.find_by(person_id: @by_hand.id).left_on }
+    end
+
+    should "show the same counts on a dry run and write nothing" do
+      report = @cutover.run(apply: false)
+
+      assert_equal({ "hris_termination_date" => 1 }, report.left_on_sources)
+      assert_empty stream(@by_hand)
+      as_tenant { assert_not OrgLeaver.exists?(person_id: @by_hand.id) }
+    end
+
+    should "leave an active person recorded from their row without a leaving date" do
+      as_tenant { @by_hand.update!(status: "active") }
+
+      report = @cutover.run(apply: true)
+
+      recorded = stream(@by_hand).sole
+      assert_equal "employed", recorded.data[:employment_status]
+      assert_nil recorded.data[:left_on]
+      assert_not recorded.data.key?(:left_on_source)
+      assert_empty report.left_on_sources
+    end
+  end
+
   private
 
   # The lock a sync holds, from a session outside the test's transaction.

@@ -77,13 +77,22 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
-    should "refuse to reorder the levels in use" do
+    should "refuse to reorder the levels in use, naming the two" do
       create_unit(@department, "Engineering", level: "Department")
       create_unit(@team, "Payments", level: "Team", parent_id: @department)
 
-      assert_raises(RuntimeError) do
+      error = assert_raises(RuntimeError) do
         as_tenant { @handler.define_taxonomy(levels(%w[Team Department Squad]), effective_on: @today) }
       end
+      assert_equal "Department and Team both hold units, so Department must stay above Team", error.message
+    end
+
+    should "let a level in use pass an empty one" do
+      create_unit(@team, "Payments", level: "Team")
+
+      as_tenant { @handler.define_taxonomy(levels(%w[Team Department Squad]), effective_on: @today) }
+
+      assert_equal %w[Team Department Squad], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
     end
 
     should "refuse duplicate or blank level names" do
@@ -93,6 +102,33 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_raises(ArgumentError) do
         as_tenant { @handler.define_taxonomy(levels([ " " ]), effective_on: @today) }
       end
+    end
+  end
+
+  context "#add_level and #reorder_levels" do
+    should "add a level below the others, keeping one added meanwhile" do
+      guild, chapter = Array.new(2) { SecureRandom.uuid_v7 }
+      as_tenant do
+        @handler.add_level(guild, "Guild", effective_on: @today)
+        @handler.add_level(chapter, "Chapter", effective_on: @today)
+      end
+
+      assert_equal %w[Department Team Squad Guild Chapter], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
+      assert_raises(ArgumentError) { as_tenant { @handler.add_level(guild, "Tribe", effective_on: @today) } }
+    end
+
+    should "reorder only the levels the stream holds, refusing a list that misses one" do
+      guild = SecureRandom.uuid_v7
+      stale = level_ids_top_first
+      as_tenant { @handler.add_level(guild, "Guild", effective_on: @today) }
+
+      error = assert_raises(ArgumentError) do
+        as_tenant { @handler.reorder_levels(stale.reverse, effective_on: @today) }
+      end
+      assert_equal "Name every level in the taxonomy once, top first", error.message
+
+      as_tenant { @handler.reorder_levels([ guild, *stale.reverse ], effective_on: @today, defined_by_id: @actor) }
+      assert_equal %w[Guild Squad Team Department], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
     end
   end
 
@@ -884,6 +920,8 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
   end
 
   private
+
+  def level_ids_top_first = as_tenant { OrgTaxonomyLevel.top_first.pluck(:id) }
 
   def as_tenant(&block)
     ActsAsTenant.with_tenant(@tenant, &block)

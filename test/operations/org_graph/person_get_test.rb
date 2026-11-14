@@ -28,10 +28,17 @@ class Operations::OrgGraph::PersonGetTest < ActiveSupport::TestCase
     assert_equal({ id: @org[:brook].id, name: "Brook Tamsin", status: "active", forgotten: false }, result[:person])
     checkout = result[:memberships].first
     assert_equal({ unit_id: @org[:checkout], unit_name: "Checkout", role: "Tech lead", allocation: 0.5,
-                   provider: "espalia" }, checkout.except(:since))
+                   provider: "espalia", stale: nil }, checkout.except(:since))
     assert_equal [ "started" ], result[:employment].map { |fact| fact[:fact] }
     assert_includes result[:history].map { |change| change[:summary] }, "Joined Platform at 50%"
     assert result[:history].all? { |change| change[:learned_at].is_a?(String) && change.key?(:actor) }
+  end
+
+  should "say when a membership was last checked once it goes stale" do
+    travel 91.days
+    checkout = call(person_id: @org[:brook].id)[:memberships].first
+
+    assert_equal({ last_checked_on: 91.days.ago.to_date, checked_by: nil }, checkout[:stale])
   end
 
   should "read a forgotten person as a former member" do

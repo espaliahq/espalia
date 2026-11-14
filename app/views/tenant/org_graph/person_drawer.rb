@@ -4,6 +4,7 @@
 # history of both. Teams the viewer may change carry their own forms, which
 # post on their own and come back here; the date at the top applies to
 # whichever is sent. Employment is read-only: it changes where it is held.
+# A membership or fact nobody has checked lately carries a stale flag (#142).
 class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Views::Tenant::OrgGraph::KeepsComparison
@@ -14,16 +15,19 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
   # @param profile [OrgGraph::PersonProfile]
   # @param overview [OrgGraph::UnitsOverview] for unit depth in the choices
   # @param rights [OrgGraphPolicy::PersonRights]
+  # @param confirmations [OrgGraphPolicy::Confirmations]
   # @param effective_on [String] ISO date the forms send
   # @param close_href [String] where closing the drawer goes
   # @param unit_id [String, nil] the unit open behind the drawer
   # @param back [String, nil] "edit" when opened from the unit drawer
   # @param alert [String, nil] why the last change was refused
-  def initialize(profile:, overview:, rights:, effective_on:, close_href:, unit_id: nil, back: nil, alert: nil)
+  def initialize(profile:, overview:, rights:, confirmations:, effective_on:, close_href:, unit_id: nil, back: nil,
+                 alert: nil)
     @profile = profile
     @person = profile.person
     @overview = overview
     @rights = rights
+    @confirmations = confirmations
     @effective_on = effective_on
     @close_href = close_href
     @unit_id = unit_id
@@ -99,6 +103,8 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
         end
       end
       p(class: "text-xs text-muted") { team_note(membership) }
+      stale_flag(@confirmations.membership(membership), "membership of #{unit.name}",
+                 confirm: @confirmations.membership?(membership))
       team_actions(membership) if @rights.membership?(membership)
     end
   end
@@ -112,7 +118,10 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
     since = "Since #{day(membership.member_since)}." if membership.member_since
     change = @profile.last_change_to(membership.unit_id)
     set_by = "Set by #{change.actor.name} on #{day(change.learned_at.to_date)}." if change&.actor
-    held = "Change it in #{HrisConfig.provider_label(membership.provider)}." unless membership.provider == ESPALIA
+    unless membership.provider == ESPALIA
+      provider = HrisConfig.provider_label(membership.provider)
+      held = "Change it in #{provider}, which confirms it every sync."
+    end
     [ since, set_by, held ].compact.join(" ")
   end
 
@@ -178,7 +187,7 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
         dl(class: "divide-y divide-subtle text-sm") do
           facts.each { |fact| employment_row(fact) }
         end
-        p(class: "text-xs text-muted") { "Read-only here. Change each fact where it is held." }
+        p(class: "text-xs text-muted") { employment_note(facts) }
       end
     end
   end
@@ -189,8 +198,14 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
       dd(class: "min-w-0") do
         p(class: "text-default") { fact.value }
         p(class: "text-xs text-muted") { "#{HrisConfig.provider_label(fact.provider)}, since #{day(fact.since)}" }
+        stale_flag(@confirmations.employment(@person, fact.fact), fact.label.downcase, confirm: @confirmations.facts?(@person))
       end
     end
+  end
+
+  def employment_note(facts)
+    hris = "An HRIS confirms the facts it holds every sync, so they never go stale." if facts.any? { |fact| fact.provider != ESPALIA }
+    [ "Read-only here. Change each fact where it is held.", hris ].compact.join(" ")
   end
 
   # -- History ---------------------------------------------------------------
@@ -227,6 +242,12 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
   end
 
   # -- Shared ----------------------------------------------------------------
+
+  def stale_flag(ages, subject, confirm:)
+    render Views::Tenant::OrgGraph::StaleFlag.new(
+      ages:, person: @person, subject:, confirm:, back_to: { unit: @unit_id, back: @back, effective_on: @effective_on }
+    )
+  end
 
   def day(date) = date.strftime("%-d %b %Y")
 

@@ -26,9 +26,13 @@ module OrgGraph::Authorization
 
   def system? = @actor.equal?(SYSTEM)
 
+  def authorize_taxonomy!
+    authorize!(:edit_taxonomy?) { "Only a tenant admin can change the taxonomy's levels" }
+  end
+
   def authorize_structure!
     authorize!(:edit_structure?) do
-      "Only a tenant admin or an Org Graph editor can change the taxonomy, its providers or people's facts"
+      "Only a tenant admin or an Org Graph editor can change the providers or people's facts"
     end
   end
 

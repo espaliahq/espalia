@@ -13,9 +13,11 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   # @param unit [OrgUnit]
   # @param overview [OrgGraph::UnitsOverview] opened at the unit
   # @param rights [OrgGraphPolicy::UnitRights]
+  # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members (#142)
   # @param effective_on [String] ISO date the forms send
   # @param alert [String, nil] why the last change was refused
-  def initialize(unit:, overview:, rights:, effective_on:, alert: nil)
+  def initialize(unit:, overview:, rights:, effective_on:, alert: nil, confirmations: nil)
+    @confirmations = confirmations
     @unit = unit
     @overview = overview
     @rights = rights
@@ -193,8 +195,13 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
           render Components::Kit::Badge.new("From #{HrisConfig.provider_label(membership.provider)}", leading_icon: :lock)
         end
       end
+      stale_flag(membership) if @confirmations
       member_actions(membership) if @rights.member?(membership)
     end
+  end
+
+  def stale_flag(membership)
+    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "unit", unit: @unit.id, effective_on: @effective_on })
   end
 
   def terms(membership)

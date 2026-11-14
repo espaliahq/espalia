@@ -9,8 +9,10 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
 
   # @param overview [OrgGraph::UnitsOverview] with a selected unit
   # @param comparison [OrgGraph::Comparison] marks what changed in the window
-  def initialize(overview:, comparison: OrgGraph::Comparison::NONE)
+  # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members shown (#142)
+  def initialize(overview:, comparison: OrgGraph::Comparison::NONE, confirmations: nil)
     @overview = overview
+    @confirmations = confirmations
     @unit = overview.selected
     @comparison = comparison
   end
@@ -109,7 +111,12 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
         span(class: "tabular-nums") { "#{(membership.allocation * 100).round}%" } if membership.allocation
         hris_level(person)
       end
+      stale_flag(membership) if @confirmations
     end
+  end
+
+  def stale_flag(membership)
+    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "units", unit: @unit.id, **@comparison.params })
   end
 
   def people_changes(unit)
