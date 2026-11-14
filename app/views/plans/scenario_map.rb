@@ -4,33 +4,39 @@
 # its people by role and its open positions, then the people in no unit. It
 # reads `team_planning_scenario_map`, so it shows any scenario as resolved.
 #
-# Other lanes add to it rather than reshape it. `unit_marks` and
-# `person_marks` each take a callable that returns components for a unit's
-# heading or a person's row: capacity (#255), items needing attention (#257),
+# Other lanes add to it rather than reshape it. `unit_marks`, `person_marks`
+# and `position_marks` each take a callable that returns components for a
+# unit's heading, a person's row or an open position's row, and `summary`
+# draws under the date line: capacity (#255), items needing attention (#257),
 # a leaving mark and reporting lines (#256). An editor on a scenario other
 # than Today can move people ([#285](https://github.com/espaliahq/espalia/issues/285)): units take drops, and each person row is
 # draggable with a "Move…" button that opens {Views::Plans::MoveDialog}.
 class Views::Plans::ScenarioMap < Views::Base
-  NONE = ->(_) { [] }
+  NONE = ->(*) { [] }
 
   # @param map [Hash] from `team_planning_scenario_map`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param unit_marks [#call] unit hash => components beside the unit's name
-  # @param person_marks [#call] person hash => components beside the person's name
+  # @param person_marks [#call] (person hash, place hash or nil) => components beside the person's name
+  # @param position_marks [#call] position hash => components beside the position's label
+  # @param summary [Phlex::SGML, nil] drawn under the date line, such as the capacity strip
   # @param can_edit [Boolean] whether the caller edits the plan: renaming the scenario shown, and moving people on it
-  def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, can_edit: false)
+  def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, position_marks: NONE, summary: nil, can_edit: false)
     @can_edit = can_edit
     @map = map
     @moving = can_edit && !baseline?(map[:scenario_id])
     @scenarios = scenarios
     @unit_marks = unit_marks
     @person_marks = person_marks
+    @position_marks = position_marks
+    @summary = summary
   end
 
   def view_template
     div(class: "space-y-4") do
       scenario_picker
       p(class: "text-sm text-muted") { as_of_line }
+      render @summary if @summary
       unresolved_notice if @map[:unresolved].any?
       div(class: "grid gap-4 md:grid-cols-2 2xl:grid-cols-3", data: ({ controller: "map-move" } if @moving)) do
         ordered_units.each { |unit, path| unit_card(unit, path) }
@@ -202,7 +208,7 @@ class Views::Plans::ScenarioMap < Views::Base
        class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1 text-sm#{' cursor-grab' if @moving}") do
       span(class: "w-10 shrink-0 tabular-nums text-muted") { allocation(place) } if place
       span(class: "min-w-0 font-medium text-default break-words") { name(person[:id]) }
-      @person_marks.call(person).each { render it }
+      @person_marks.call(person, place).each { render it }
       span(class: "ml-auto flex items-center gap-2 text-muted") do
         span(class: "hidden sm:inline") { person[:title] } if person[:title].present?
         render Components::Kit::Badge.new(person[:level], size: :sm) if person[:level].present?
@@ -241,6 +247,7 @@ class Views::Plans::ScenarioMap < Views::Base
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-dashed border-default px-2 py-1 text-sm") do
         span(class: "font-medium text-default") { position_label(position) }
         open_fte_note(position[:open_fte])
+        @position_marks.call(position).each { render it }
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
         position.fetch(:occupants, []).sort_by { name(it[:person_id]) }.each do |occupant|
           span(data: { map_occupant: occupant[:person_id] }, class: "text-muted") { "#{name(occupant[:person_id])} · #{allocation(occupant)}" }
