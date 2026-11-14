@@ -406,6 +406,8 @@ Rails.application.routes.draw do
   # Team Planning (#226): the plans a person is in, and one plan's page.
   resources :plans, only: [ :index, :show, :create ], path: "planning" do
     get :map, on: :member
+    # One path along the calendar ([#298](https://github.com/espaliahq/espalia/issues/298)).
+    get :timeline, on: :member
     # Fork and rename a scenario (#271).
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
