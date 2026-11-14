@@ -77,6 +77,10 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
 
     as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_by_tool.fetch("org_graph_as_of"))
     assert_equal [ @quinn.id ], as_of[:people].map { it[:id] }, "org_graph_as_of reads an empty Org Graph here"
+    baseline = Operations::TeamPlanning::Baseline.call(context: lead_context, params: { plan_id: @plan_id })
+    assert_equal [ @quinn.id ], baseline[:people].map { it[:id] }, "team_planning_baseline reads an empty Org Graph here"
+    assert_equal [ @quinn.id ], baseline[:units].sole[:owner_ids]
+    assert_equal Person::FORMER_MEMBER, baseline[:names].fetch(@quinn.id)
     changes = Operations::OrgGraph::ChangesBetween.call(context: lead_context, params: params_by_tool.fetch("org_graph_changes_between"))
     assert_includes changes[:changes].map { it[:person_id] }, @quinn.id, "org_graph_changes_between reads an empty Org Graph here"
   end
