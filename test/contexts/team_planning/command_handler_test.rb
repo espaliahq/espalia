@@ -152,6 +152,104 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "the see-pay right" do
+    setup do
+      @creator = create(:person, tenant: @tenant)
+      @owner = context_for(@creator, team_planner: true)
+      handler(@owner).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
+      @colleague = create(:person, tenant: @tenant)
+      @colleague_context = context_for(@colleague)
+      handler(@owner).add_member(@plan_id, @colleague.id, role: "editor")
+    end
+
+    should "let a holder grant it and take it back, naming themselves" do
+      handler(@owner).grant_see_pay(@plan_id, @colleague.id)
+      plan = handler(@owner).withdraw_see_pay(@plan_id, @colleague.id)
+
+      granted, withdrawn = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).to_a.last(2)
+      assert_equal @creator.id, granted.data[:granted_by_id]
+      assert_equal @creator.id, withdrawn.data[:withdrawn_by_id]
+      assert_not plan.sees_pay?(@colleague.id)
+    end
+
+    should "refuse an editor who doesn't hold it, as a missing plan" do
+      viewer = create(:person, tenant: @tenant)
+      context_for(viewer)
+      handler(@owner).add_member(@plan_id, viewer.id, role: "viewer")
+
+      [ -> { handler(@colleague_context).grant_see_pay(@plan_id, @colleague.id) },
+        -> { handler(@colleague_context).grant_see_pay(@plan_id, viewer.id) },
+        -> { handler(@colleague_context).withdraw_see_pay(@plan_id, @creator.id) } ].each do |command|
+        assert_equal "No such plan", assert_raises(TeamPlanning::Error, &command).message
+      end
+    end
+
+    should "refuse to give it to a member who has left" do
+      @colleague.update!(status: "inactive")
+      error = assert_raises(TeamPlanning::Error) { handler(@owner).grant_see_pay(@plan_id, @colleague.id) }
+      assert_match "still active", error.message
+    end
+
+    should "keep the last holder who can still open the plan, whoever else holds it" do
+      other_editor = create(:person, tenant: @tenant)
+      context_for(other_editor)
+      handler(@owner).add_member(@plan_id, other_editor.id, role: "editor")
+      handler(@owner).grant_see_pay(@plan_id, @colleague.id)
+      @colleague.update!(status: "inactive")
+
+      [ -> { handler(@owner).withdraw_see_pay(@plan_id, @creator.id) },
+        -> { handler(@owner).remove_member(@plan_id, @creator.id) } ].each do |command|
+        assert_match "A plan needs someone who can see pay", assert_raises(TeamPlanning::Error, &command).message
+      end
+    end
+
+    context "a plan locked out of pay" do
+      setup { @creator.update!(status: "inactive") }
+
+      should "be restored by a tenant admin to its reachable editors, each grant the admin's" do
+        result = handler(@admin).restore_see_pay(@plan_id)
+
+        assert result.sees_pay?(@colleague.id)
+        event = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).to_a.last
+        assert_kind_of TeamPlanning::Events::SeePayGranted, event
+        assert_equal({ plan_id: @plan_id, person_id: @colleague.id, granted_by_id: @admin.person.id, recovery: true }, event.data)
+      end
+
+      should "let a holder restored that way withdraw it from the others" do
+        third = create(:person, tenant: @tenant)
+        context_for(third)
+        handler(@colleague_context).add_member(@plan_id, third.id, role: "editor")
+        handler(@admin).restore_see_pay(@plan_id)
+
+        assert_not handler(@colleague_context).withdraw_see_pay(@plan_id, third.id).sees_pay?(third.id)
+      end
+
+      should "refuse anyone but a tenant admin, in the same words" do
+        error = assert_raises(TeamPlanning::Error) { handler(@colleague_context).restore_see_pay(@plan_id) }
+        assert_equal "No such plan", error.message
+      end
+
+      should "refuse a frozen plan, which has no editor to restore it to" do
+        @colleague.update!(status: "inactive")
+        error = assert_raises(TeamPlanning::Error) { handler(@admin).restore_see_pay(@plan_id) }
+        assert_equal "No such plan", error.message
+      end
+    end
+
+    should "refuse a plan that isn't locked out exactly as one that doesn't exist, or was deleted" do
+      gone = SecureRandom.uuid_v7
+      handler(@owner).create_plan(gone, name: "Gone", base_on: "2026-11-14")
+      @creator.update!(status: "inactive")
+      handler(@admin).delete_frozen_plan(gone, reason: "Its editor left")
+      @creator.update!(status: "active")
+
+      refusals = [ @plan_id, SecureRandom.uuid_v7, gone ].map do |plan_id|
+        assert_raises(TeamPlanning::Error) { handler(@admin).restore_see_pay(plan_id) }.message
+      end
+      assert_equal [ "No such plan" ] * 3, refusals
+    end
+  end
+
   context "a deleted plan's keys" do
     setup do
       handler(@admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")

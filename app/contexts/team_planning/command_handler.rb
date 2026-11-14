@@ -107,7 +107,65 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(person_id == @actor.person&.id ? :leave? : :manage_members?, plan)
       ensure_reachable_editor_remains!(plan, person_id)
+      ensure_reachable_holder_remains!(plan, person_id)
       plan.remove_member(person_id, removed_by_id: actor_id!)
+    end
+  end
+
+  # Gives a member the see-pay right. Only a member who holds it may.
+  #
+  # @param plan_id [String]
+  # @param person_id [String] a member still active in the tenant
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor holds the
+  #   right; or if the person isn't a member who can still open the plan
+  # @see TeamPlanning::PlanAggregate#grant_see_pay
+  def grant_see_pay(plan_id, person_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:manage_see_pay?, plan)
+      if plan.member?(person_id) && PlanPolicy.reachable_ids([ person_id ]).empty?
+        raise TeamPlanning::Error, "Only a member still active in this organisation can be given the right"
+      end
+
+      plan.grant_see_pay(person_id, granted_by_id: actor_id!)
+    end
+  end
+
+  # Takes the see-pay right from a member, or lets a holder give it up.
+  #
+  # @param plan_id [String]
+  # @param person_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor holds the
+  #   right; or if nobody else who can still open the plan would hold it
+  # @see TeamPlanning::PlanAggregate#withdraw_see_pay
+  def withdraw_see_pay(plan_id, person_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:manage_see_pay?, plan)
+      ensure_reachable_holder_remains!(plan, person_id)
+      plan.withdraw_see_pay(person_id, withdrawn_by_id: actor_id!)
+    end
+  end
+
+  # Gives the see-pay right to every editor who can still open a plan locked
+  # out of pay, for a tenant admin who never opens it. Each grant names the
+  # admin and is marked as a recovery.
+  #
+  # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" for a plan that isn't locked
+  #   out, one with no editor left, a deleted or missing one, and a caller who
+  #   isn't a tenant admin alike, so it reveals nothing about the plan
+  def restore_see_pay(plan_id)
+    @repository.with_plan(plan_id) do |plan|
+      raise TeamPlanning::Error, "No such plan" if plan.deleted?
+
+      authorize_plan!(:restore_see_pay?, plan)
+
+      admin_id = actor_id!
+      PlanPolicy.reachable_ids(plan.editor_ids).sort.each do |editor_id|
+        plan.grant_see_pay(editor_id, granted_by_id: admin_id, recovery: true)
+      end
     end
   end
 
@@ -358,6 +416,15 @@ class TeamPlanning::CommandHandler
     return if PlanPolicy.reachable_ids(plan.editor_ids - [ person_id ]).any?
 
     raise TeamPlanning::Error, "A plan needs an editor: make someone else an editor first"
+  end
+
+  # The stream counts a holder who has since left; this counts only those who
+  # can still open the plan, so pay never ends up with nobody who can grant it.
+  def ensure_reachable_holder_remains!(plan, person_id)
+    return unless plan.sees_pay?(person_id)
+    return if PlanPolicy.reachable_ids(plan.pay_holder_ids - [ person_id ]).any?
+
+    raise TeamPlanning::Error, "A plan needs someone who can see pay: give the right to someone else first"
   end
 
   # A plan is private to its members, so to anyone else it reads as missing:
