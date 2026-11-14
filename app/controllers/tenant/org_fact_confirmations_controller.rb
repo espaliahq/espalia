@@ -26,10 +26,12 @@ class Tenant::OrgFactConfirmationsController < ApplicationController
   private
 
   def redirect_back_with(notice: nil, alert: nil)
-    case params[:return_to]
-    when "units" then redirect_to tenant_org_graph_path(unit: unit_param), notice:, alert:
-    when "unit" then redirect_to edit_tenant_org_unit_path(unit_param), notice:, flash: { drawer_alert: alert }.compact
-    else redirect_to drawer_path, notice:, flash: { drawer_alert: alert }.compact
+    if params[:return_to] == "units"
+      redirect_to tenant_org_graph_path(unit: unit_param), notice:, alert:
+    elsif params[:return_to] == "unit" && unit_param
+      redirect_to edit_tenant_org_unit_path(unit_param), notice:, flash: { drawer_alert: alert }.compact
+    else
+      redirect_to drawer_path, notice:, flash: { drawer_alert: alert }.compact
     end
   end
 end

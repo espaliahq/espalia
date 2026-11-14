@@ -75,4 +75,13 @@ class Tenant::OrgFactConfirmationsControllerTest < ActionDispatch::IntegrationTe
     assert_redirected_to edit_tenant_org_unit_path(@org[:checkout])
     assert flash[:drawer_alert].present?
   end
+
+  should "go back to the person drawer when asked for the unit drawer with no unit" do
+    travel 91.days
+
+    post tenant_org_person_confirmations_path(@org[:cyril]),
+         params: { facts: [ "membership" ], unit_id: @org[:checkout], return_to: "unit" }
+
+    assert_redirected_to tenant_org_person_path(@org[:cyril])
+  end
 end
