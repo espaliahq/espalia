@@ -57,6 +57,21 @@ class PlansSystemTest < ApplicationSystemTestCase
         assert_text "Private to 1 member. You're an editor."
         assert_no_sideways_overflow
       end
+
+      should "tell a viewer their plan is frozen once its only editor is forgotten" do
+        ActsAsTenant.with_tenant(@tenant) do
+          @planner.person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+        end
+        sign_in_as(@viewer.user)
+        visit plan_path(@plan_id)
+
+        assert_text "This plan is frozen"
+        within("aside") do
+          assert_text "Former member"
+          assert_no_text "Erin Editor"
+        end
+        assert_no_sideways_overflow
+      end
     end
   end
 
