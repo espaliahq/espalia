@@ -16,7 +16,9 @@ class Views::Plans::ScenarioMap < Views::Base
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param unit_marks [#call] unit hash => components beside the unit's name
   # @param person_marks [#call] person hash => components beside the person's name
-  def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE)
+  # @param can_edit [Boolean] whether to offer renaming the scenario shown
+  def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, can_edit: false)
+    @can_edit = can_edit
     @map = map
     @scenarios = scenarios
     @unit_marks = unit_marks
@@ -39,7 +41,15 @@ class Views::Plans::ScenarioMap < Views::Base
   private
 
   def scenario_picker
-    nav(aria: { label: "Scenario" }, class: "flex flex-wrap items-center gap-2 text-sm") do
+    div(class: "flex flex-wrap items-center gap-2") do
+      scenario_pills
+      scenario_select
+      rename_button if @can_edit && !baseline?(@map[:scenario_id])
+    end
+  end
+
+  def scenario_pills
+    nav(aria: { label: "Scenario" }, class: "hidden sm:flex flex-wrap items-center gap-2 text-sm") do
       span(class: "text-muted") { "Showing" }
       @scenarios.each do |scenario|
         current = scenario[:scenario_id] == @map[:scenario_id]
@@ -50,6 +60,33 @@ class Views::Plans::ScenarioMap < Views::Base
         end
       end
     end
+  end
+
+  # A phone has no room for a pill per scenario, so it picks from a list.
+  def scenario_select
+    form(action: map_plan_path(@map[:plan_id]), method: "get", class: "flex min-w-0 flex-1 items-center gap-2 text-sm sm:hidden",
+         data: { controller: "auto-submit" }) do
+      label(for: "map-scenario", class: "text-muted") { "Showing" }
+      select(id: "map-scenario", name: "scenario", class: "min-w-0 flex-1 #{Components::Kit::Field::SELECT}",
+             data: { action: "change->auto-submit#submit" }) do
+        Views::Plans::ScenarioTable.tree(@scenarios).each do |scenario, depth|
+          option(value: scenario[:scenario_id], selected: scenario[:scenario_id] == @map[:scenario_id]) do
+            "#{'· ' * depth}#{scenario_label(scenario)}"
+          end
+        end
+      end
+      noscript { render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit) { "Show" } }
+    end
+  end
+
+  def rename_button
+    current = @scenarios.find { it[:scenario_id] == @map[:scenario_id] }
+    return unless current
+
+    render Components::Kit::Button.new(
+      variant: :ghost, size: :sm,
+      data: Views::Plans::ScenarioDialogs.rename_trigger(plan_scenario_path(@map[:plan_id], current[:scenario_id]), current[:name])
+    ) { "Rename…" }
   end
 
   def scenario_label(scenario) = baseline?(scenario[:scenario_id]) ? "Today" : scenario[:name]

@@ -14,7 +14,7 @@ class Operations::TeamPlanning::RenamePlan < Operations::Base
   # @return [Hash] `{ plan_id, name }`
   def perform
     plan_id = plan_id!
-    plan = refusing_bad_plans { handler.rename_plan(plan_id, params[:name]) }
-    { plan_id: plan_id, name: plan.name }
+    refusing_bad_plans { handler.rename_plan(plan_id, params[:name]) }
+    { plan_id: plan_id, name: params[:name].squish }
   end
 end

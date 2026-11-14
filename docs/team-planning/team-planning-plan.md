@@ -97,7 +97,8 @@ flowchart LR
     s310[3.10 Undo and history]
     s311[3.11 Fork on the plan page]
     s312[3.12 Edit on the map]
-    s313[3.13 Notes, descriptions]
+    s313a[3.13a Scenario descriptions]
+    s313b[3.13b Notes on changes]
     s314[3.14 Plan-held data]
   end
   subgraph P4[P4 Keep up with reality]
@@ -171,12 +172,12 @@ flowchart LR
   s12 & s13 --> s14
   s14 --> s15 & s16
   s21 --> s22 & s24
-  s22 --> s23 & s25 & s313 & s314 & s56 & s61
+  s22 --> s23 & s25 & s313a & s313b & s314 & s56 & s61
   s33 --> s61
   s31 --> s32 & s311
   s15 --> s311
   s13 --> s32
-  s32 --> s33 & s34 & s35 & s39 & s310 & s313 & s41 & s43 & s82
+  s32 --> s33 & s34 & s35 & s39 & s310 & s313a & s313b & s41 & s43 & s82
   s35 --> s36
   s36 --> s37 & s312 & s314 & s91 & s111 & s113
   s34 & s36 --> s38
@@ -248,6 +249,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form | 2.2 |
 | 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
 | 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6) | 2.2 |
+| [#209](https://github.com/espaliahq/espalia/issues/209) | Plan and scenario names are sealed under the plan's key, and the names written before are sealed in place, the one rewrite of stored events | 2.3 |
 
 ### P3 Scenarios and changes
 
@@ -265,7 +267,8 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 3.10 | `ChangeUndone` and `ChangeRedone`, and a scenario's history with who made each change | 3.2 |
 | 3.11 | Fork, rename and switch scenarios from the plan page | 3.1, 1.5 |
 | 3.12 | Edit on the map: drag a person or position, drop on the Unassigned bucket, set allocation as they land | 3.6, 1.6 |
-| 3.13 | Notes on changes and `ScenarioDescribed`, shreddable under the plan key | 3.2, 2.2 |
+| 3.13a | `ScenarioDescribed`: what a scenario is for, shreddable under the plan key ([#272](https://github.com/espaliahq/espalia/issues/272)) | 3.2, 2.2 |
+| 3.13b | Notes on changes, shreddable under the plan key. Settle one sealed note on the `Change` base first ([#273](https://github.com/espaliahq/espalia/issues/273)) | 3.2, 2.2 |
 | 3.14 | `PlanDataSet` for a corrected level or FTE and a placeholder hire, and `LevelSet` for a planned promotion, each shreddable under the person's key | 3.6, 2.2 |
 
 ### P4 Keep up with reality

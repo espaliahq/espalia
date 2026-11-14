@@ -95,7 +95,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
 
     should "start a plan and land on it" do
       post plans_path, params: { plan: { name: "Reorg 2027", base_on: "2026-11-01" } }
-      plan = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find_by!(name: "Reorg 2027") }
+      plan = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.order(:created_at).last }
+      assert_equal "Reorg 2027", plan.name.reveal
       assert_redirected_to plan_path(plan.id)
     end
 

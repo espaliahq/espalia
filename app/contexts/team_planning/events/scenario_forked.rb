@@ -11,10 +11,12 @@
 #   @option data [String] :scenario_id UUID minted by the caller
 #   @option data [String] :parent_id a scenario in the plan; the plan_id names the root
 #   @option data [String] :relation "then" or "instead"
-#   @option data [String] :name
+#   @option data [Shreddable::Value] :name under the plan's key
 #   @option data [String] :starts_on YYYY-MM-DD, as the tree implied at the fork
 #   @option data [String] :ends_on YYYY-MM-DD
 #   @option data [String] :forked_by_id person_id of the actor
 #
 class TeamPlanning::Events::ScenarioForked < RubyEventStore::Event
+  extend Shreddable
+  shreddable :name, by: :plan
 end

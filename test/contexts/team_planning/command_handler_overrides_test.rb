@@ -143,9 +143,9 @@ class TeamPlanning::CommandHandlerOverridesTest < ActiveSupport::TestCase
   should "refuse to clear what the scenario doesn't change, to pin the baseline or what it already changes, and a facet no kind holds" do
     set_cap(@lean, 5)
 
-    assert_equal "Q1 doesn't change this, so there is nothing to clear", refusal { clear(@q1) }
+    assert_equal "This scenario doesn't change this, so there is nothing to clear", refusal { clear(@q1) }
     assert_equal "The baseline inherits nothing to pin", refusal { pin(@plan_id) }
-    assert_equal "Lean Q1 already changes this: clear it to follow its parent, or set it", refusal { pin(@lean) }
+    assert_equal "This scenario already changes this: clear it to follow its parent, or set it", refusal { pin(@lean) }
     assert_equal "No kind of change holds salary", refusal { pin(@q1, facet: "salary") }
     assert_equal "The baseline doesn't hold this", refusal { pin(@q1, subject_id: SecureRandom.uuid_v7) }
   end

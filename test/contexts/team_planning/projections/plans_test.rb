@@ -23,7 +23,7 @@ class TeamPlanning::Projections::PlansTest < ActiveSupport::TestCase
     @handler.rename_plan(plan_id, "Next financial year")
 
     plan = TeamPlanningPlan.find(plan_id)
-    assert_equal "Next financial year", plan.name
+    assert_equal "Next financial year", plan.name.reveal
     assert_equal Date.new(2026, 11, 14), plan.base_on
     assert_equal @person.id, plan.created_by_id
   end

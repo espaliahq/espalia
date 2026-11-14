@@ -23,7 +23,7 @@ class PlansController < ApplicationController
   # GET /planning/:id
   def show
     plan = read(Operations::TeamPlanning::Plan)
-    authorize TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     render plan_page(plan, open_tab: :scenarios)
   end
 
@@ -33,12 +33,12 @@ class PlansController < ApplicationController
   # the plan's, is the default.
   def map
     plan = read(Operations::TeamPlanning::Plan)
-    authorize TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
     render plan_page(plan, scenarios:, open_tab: :map,
-                           body: Views::Plans::ScenarioMap.new(map:, scenarios:))
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?))
   end
 
   private
@@ -52,6 +52,7 @@ class PlansController < ApplicationController
               Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])) ],
       open_tab:,
       body:,
+      can_edit: can_edit?,
       **layout
     )
   end
@@ -75,6 +76,12 @@ class PlansController < ApplicationController
   end
 
   def policy_for(record) = PlanPolicy.new(pundit_user, record)
+
+  def can_edit?
+    return @can_edit if defined?(@can_edit)
+
+    @can_edit = policy_for(@plan_record).update?
+  end
 
   def layout
     { user: current_user, current_tenant: ActsAsTenant.current_tenant,

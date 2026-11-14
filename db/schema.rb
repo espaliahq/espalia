@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_142700) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1131,7 +1131,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
 
   create_table "team_planning_plans", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
-    t.string "name", null: false
+    t.jsonb "name", null: false
     t.date "base_on", null: false
     t.uuid "created_by_id", null: false
     t.datetime "created_at", null: false
@@ -1144,7 +1144,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
     t.uuid "plan_id", null: false
     t.uuid "parent_id"
     t.string "relation"
-    t.string "name", null: false
+    t.jsonb "name"
     t.date "starts_on", null: false
     t.date "ends_on"
     t.uuid "forked_by_id"

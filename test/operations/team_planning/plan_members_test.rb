@@ -34,6 +34,16 @@ class Operations::TeamPlanning::PlanMembersTest < ActiveSupport::TestCase
     assert_equal [ "Admin's own" ], call(Operations::TeamPlanning::Plans, as: @admin)[:plans].pluck(:name)
   end
 
+  should "list a person's plans by name, case aside, with a removed name last" do
+    gone = call(Operations::TeamPlanning::CreatePlan, as: @editor, name: "Aardvark plan")[:plan_id]
+    call(Operations::TeamPlanning::CreatePlan, as: @editor, name: "Zebra plan")
+    call(Operations::TeamPlanning::CreatePlan, as: @editor, name: "apple plan")
+    ActsAsTenant.with_tenant(@tenant) { PlanKeyStore.new.forget(PlanKeyStore.plan_identifier(@tenant.id, gone)) }
+
+    assert_equal [ "apple plan", "Next year", "Zebra plan", nil ],
+                 call(Operations::TeamPlanning::Plans, as: @editor)[:plans].pluck(:name)
+  end
+
   should "let an editor add a member and change their role, and the member see who is in it" do
     assert_equal({ plan_id: @plan_id, person_id: @colleague.person_id, role: "viewer" }, add(@colleague.person_id, "viewer"))
     add(@colleague.person_id, "editor")

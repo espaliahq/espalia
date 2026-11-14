@@ -52,7 +52,7 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     AssessmentCycles::CalibrationSessionAggregate => ->(session, _) { session.rename("Renamed", renamed_by_id: ACTOR_ID) },
     OrgGraph::PersonAggregate => ->(person, _) { person.set_membership(ACTOR_ID, provider: "espalia", effective_on: EFFECTIVE_ON) },
     OrgGraph::StructureAggregate => ->(structure, _) { structure.add_level(ACTOR_ID, "Band", effective_on: EFFECTIVE_ON) },
-    TeamPlanning::PlanAggregate => ->(plan, _) { plan.rename("Renamed", renamed_by_id: ACTOR_ID) }
+    TeamPlanning::PlanAggregate => ->(plan, _) { plan.rename("Renamed", current: "Plan", renamed_by_id: ACTOR_ID) }
   }.freeze
 
   setup do

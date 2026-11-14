@@ -54,7 +54,7 @@ class Operations::TeamPlanning::PlanWritesTest < ActiveSupport::TestCase
       result = call(Operations::TeamPlanning::RenamePlan, plan_id: @plan_id, name: "Second half")
 
       assert_equal({ plan_id: @plan_id, name: "Second half" }, result)
-      assert_equal "Second half", plan(@plan_id).name
+      assert_equal "Second half", plan(@plan_id).name.reveal
     end
 
     should "read as missing to another admin" do
@@ -92,7 +92,7 @@ class Operations::TeamPlanning::PlanWritesTest < ActiveSupport::TestCase
       error = assert_raises(Operations::Base::ParameterError) do
         call(Operations::TeamPlanning::RenamePlan, plan_id: @plan_id, name: "Back again")
       end
-      assert_equal "Next year has been deleted", error.message
+      assert_equal "This plan has been deleted", error.message
     end
 
     should "read as missing to another admin" do
