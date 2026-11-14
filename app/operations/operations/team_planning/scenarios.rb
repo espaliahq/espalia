@@ -22,7 +22,7 @@ class Operations::TeamPlanning::Scenarios < Operations::Base
     plan = plan!
     rows = TeamPlanningScenario.where(plan_id: plan.id).order(:created_at, :id).partition(&:baseline?).flatten
     scenarios = rows.map do |row|
-      { scenario_id: row.id, parent_id: row.parent_id, relation: row.relation, name: row.name,
+      { scenario_id: row.id, parent_id: row.parent_id, relation: row.relation, name: row.name&.reveal,
         starts_on: row.starts_on.iso8601, ends_on: row.ends_on&.iso8601 }
     end
     { plan_id: plan.id, scenarios: }

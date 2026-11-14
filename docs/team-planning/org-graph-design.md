@@ -447,7 +447,11 @@ Graph could no longer say what it knew before. From it:
   time zone yet, so for a tenant in Sydney the day ends at 10 or 11 in the morning local
   time, and a fact learned that afternoon counts as known the next day. People come back as
   ids, and callers join names, so a forgotten person reads as a former member. MCP clients
-  read it through `org_graph_as_of`.
+  read it through `org_graph_as_of`. Beside the live units, the class gives the units
+  retired by that day, as each last stood, and the successions recorded, each held apart,
+  and the ids of the people who had left by then, whom the roster drops. Team Planning's
+  status read uses them; `org_graph_as_of` leaves them out, and
+  `org_graph_changes_between` reports retirements and successions over MCP.
 - `OrgGraph::ChangesBetween` lists what changed between two days as typed changes: joined
   and left; a person's fact changed; a membership started, ended or changed; a move from
   one unit to another; a unit created, renamed, moved, retired or succeeded; an owner added

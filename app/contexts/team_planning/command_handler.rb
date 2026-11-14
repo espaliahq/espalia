@@ -42,7 +42,7 @@ class TeamPlanning::CommandHandler
   def rename_plan(plan_id, name)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.rename(name, renamed_by_id: actor_id!)
+      plan.rename(name, current: TeamPlanningPlan.find_by(id: plan_id)&.name&.reveal, renamed_by_id: actor_id!)
     end
   end
 
@@ -125,6 +125,20 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       plan.fork_scenario(scenario_id, parent_id:, relation:, name:, ends_on:, starts_on:, forked_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param name [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#rename_scenario
+  def rename_scenario(plan_id, scenario_id, name:)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      current = TeamPlanningScenario.find_by(id: scenario_id, plan_id:)&.name&.reveal
+      plan.rename_scenario(scenario_id, name:, current:, renamed_by_id: actor_id!)
     end
   end
 

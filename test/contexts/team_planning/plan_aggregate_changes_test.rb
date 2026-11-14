@@ -79,7 +79,7 @@ class TeamPlanning::PlanAggregateChangesTest < ActiveSupport::TestCase
     end
 
     @plan.delete(deleted_by_id: @editor_id)
-    assert_equal "Next year has been deleted", refusal { set(@q1, "Senior Engineer") }
+    assert_equal "This plan has been deleted", refusal { set(@q1, "Senior Engineer") }
   end
 
   should "forget a removed scenario's changes, and rebuild the rest from the events" do

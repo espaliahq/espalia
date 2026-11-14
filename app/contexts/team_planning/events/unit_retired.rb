@@ -24,6 +24,18 @@ class TeamPlanning::Events::UnitRetired < TeamPlanning::Events::Change
     map.retired_units.find { it.id == subject_id }&.to_h&.slice(:name, :parent_id, :level_id)
   end
 
+  # A unit the Org Graph has retired shows a planned retirement, whatever name it last held.
+  #
+  # @param read [Hash, nil]
+  # @param planned [Hash, nil]
+  # @param map [TeamPlanning::Baseline::Map]
+  # @return [Boolean]
+  def self.shows?(read, planned, map:) = read.nil? == planned.nil?
+
+  # @param change [OrgGraph::ChangesBetween::Change]
+  # @return [String, nil] the unit an Org Graph change creates, renames, moves or retires
+  def self.subject_moved_by(change) = TeamPlanning::Events::UnitSet.subject_moved_by(change)
+
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
   # @return [TeamPlanning::Baseline::Map] with the unit among the retired, as it stood

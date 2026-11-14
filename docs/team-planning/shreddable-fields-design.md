@@ -201,6 +201,38 @@ streams from every context built through the real handlers.
   It catches a handler that bypasses the base class.
 - **Projections.** Rebuild with every key forgotten and expect nothing to raise.
 
+### 4. A read model holds the sealed form
+
+A read model that copies a shreddable value declares the column with
+`Shreddable::Column`: `shreddable_column :name, by: :plan, plan: :id`. The jsonb column
+holds what the event store holds: the ciphertext, the IV, the cipher and the key's
+identifier. It reads back as a sealed value that opens on `reveal`.
+
+- **Destroying a key reaches every copy at once.** There is no scrub to run, no list of
+  columns to keep complete, and no window between the destroy and the scrub. That holds
+  even for a projection that lags or fails.
+- **A rebuild needs no key.** The projection copies the sealed value from the event as it
+  is, so a rebuild after the key is gone writes a value that opens as removed.
+- **A live write copies the same bytes.** A sync projection receives the value in clear
+  from the publish. The column stores the form the mapper just wrote for it, so a live
+  write and a rebuild store the same bytes. A value the mapper never sealed is encrypted
+  under the row's key, inside the transaction. `seal_column` does the same for a write
+  that skips the model.
+- **The identifier must be the row's own.** A sealed value copied into another plan's row
+  opens as removed. A live value written there is sealed again under that row's key, so
+  it reads in clear until a rebuild copies the event's sealed form and it opens as
+  removed. A projection that copies a value across plans therefore can't rebuild what it
+  wrote live. None does: each copies into the row of the plan the event names.
+- **The column can't be ordered, filtered, grouped or plucked.** The query methods raise,
+  and the column's type refuses any value in clear, so `update_all` and `insert_all`
+  can't store one. Raw SQL isn't checked.
+- **`Components::Shared::ShreddableText`** shows the value, or "Removed".
+
+The cost is a key lookup each time a read shows the value. The other option was a
+column in clear, scrubbed by every key destruction through a registry of such columns.
+It reads faster, but a column someone forgets to register keeps the value for good.
+`test/contexts/shreddable/column_test.rb` proves this with a test event and projection.
+
 ## Forgetting
 
 Deleting a key is not enough. Read models, caches and exports hold decrypted copies.
@@ -208,7 +240,8 @@ Deleting a key is not enough. Read models, caches and exports hold decrypted cop
 1. An event says what was forgotten: `PersonForgotten`, `PlanDeleted`.
 2. The key is deleted.
 3. Projections handle the event and scrub what they hold. A full rebuild gives the same
-   result, which is why the projection spec matters.
+   result, which is why the projection spec matters. A shreddable column has nothing to
+   scrub: it opens as removed the moment step 2 commits.
 
 Steps 1 and 2 are one database transaction. Keys and events live in the same database,
 so there is no moment when the event exists and the key still does. A crash leaves both
@@ -243,7 +276,8 @@ so each projection decides for itself.
   it was written under.
 - **Encryption is not access control.** A reason still needs its own permission to view.
   Capturing reasons is opt-in per tenant, because some are special-category data.
-- **Shreddable fields cannot be queried in the event store.** Query a projection.
+- **Shreddable fields cannot be queried, in the event store or in a read model.** Query
+  another column of a projection.
 - **The key store is critical.** Losing it loses the data.
 - **Backups bound how soon forgetting is complete.** Keys live in the application
   database, so a backup holds both a key and the values it protects. A value is
@@ -265,8 +299,49 @@ so each projection decides for itself.
   lists live keys for people the Org Graph has forgotten. A full restore brings back
   the person's row as it was, so nothing detects that.
 - **Events already written stay in clear.** A field cannot be made shreddable after the
-  fact without rewriting history. Covering existing evidence and comments is a separate
-  migration with its own design.
+  fact without rewriting history. Plan and scenario names are the one exception, below.
+  Covering existing evidence and comments is a separate migration with its own design.
+
+## The one rewrite
+
+Plan and scenario names were written in clear before
+[#209](https://github.com/espaliahq/espalia/issues/209) made them shreddable. A name like
+"Closing the Leeds office" says what a plan is for, so deleting the plan has to take the
+name with it. Left in clear, every name written before [#209](https://github.com/espaliahq/espalia/issues/209) would outlive its plan.
+
+`TeamPlanning::NameSealing` seals those names in place. It is the only rewrite of stored
+events Espalia sanctions. Don't take it as precedent: the event store is append-only, and
+everything else here depends on that. It was acceptable once because:
+
+- **It touched little.** Four event types, `PlanCreated`, `PlanRenamed`,
+  `ScenarioForked` and `ScenarioRenamed`, all in one context, and only the name fields
+  within them. No deployed build ever wrote a `ScenarioRenamed`: renaming shipped broken
+  and was fixed with its names sealed. The type is listed so a stray one can't stay in clear.
+- **It changes nothing a reader relies on.** Each record keeps its id, type, stream,
+  order and timestamps, and every byte but the name fields and the `shreddable` entries
+  in its metadata. A test compares the rest byte for byte.
+- **It reads back as a new write would.** The names are sealed by the same mapper, under
+  the plan's key. A deleted plan's names are sealed under a key nobody keeps, so they
+  read as removed. A plan deleted before deletion destroyed keys gets its tombstone
+  first.
+- **It is explicit.** `team_planning:names:dry_run` prints counts and changes nothing;
+  `team_planning:names:seal` runs per tenant in one transaction, then rebuilds the plans
+  and scenarios read models. A second run changes nothing. It never runs from a
+  migration.
+
+Run it once, after the deploy that ships [#209](https://github.com/espaliahq/espalia/issues/209),
+while no one is renaming a plan or scenario. The task takes no lock a rename waits on, so a
+rename during its rebuild can leave the old name in the plans or scenarios read model. A
+scenario rename reads the current name from that read model, so it can also record no
+previous name, or skip a rename it took for a repeat. A second run won't repair that, as it
+finds nothing in clear and skips the rebuild; rebuild `team_planning/plans` and
+`team_planning/scenarios` instead. A skipped rename wrote no event, so no rebuild brings it
+back: rename that scenario again.
+
+```bash
+bin/rails team_planning:names:dry_run
+bin/rails team_planning:names:seal
+```
 
 ## Order of work
 

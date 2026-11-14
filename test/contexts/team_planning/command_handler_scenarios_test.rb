@@ -15,16 +15,18 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
 
   teardown { ActsAsTenant.current_tenant = nil }
 
-  should "let an editor fork, move and remove a scenario in the plan's stream, naming who did each" do
+  should "let an editor fork, rename, move and remove a scenario in the plan's stream, naming who did each" do
     q1 = SecureRandom.uuid_v7
     handler(@editor).fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+    handler(@editor).rename_scenario(@plan_id, q1, name: "First quarter")
     handler(@editor).set_scenario_period(@plan_id, q1, ends_on: "2027-02-28")
     handler(@editor).remove_scenario(@plan_id, q1)
 
-    events = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).to_a.last(3)
-    assert_equal [ TeamPlanning::Events::ScenarioForked, TeamPlanning::Events::ScenarioPeriodSet,
-                   TeamPlanning::Events::ScenarioRemoved ], events.map(&:class)
-    assert_equal [ @editor.person.id ] * 3, events.map { it.data.values_at(:forked_by_id, :set_by_id, :removed_by_id).compact.sole }
+    events = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).to_a.last(4)
+    assert_equal [ TeamPlanning::Events::ScenarioForked, TeamPlanning::Events::ScenarioRenamed,
+                   TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved ], events.map(&:class)
+    assert_equal [ @editor.person.id ] * 4,
+                 events.map { it.data.values_at(:forked_by_id, :renamed_by_id, :set_by_id, :removed_by_id).compact.sole }
     assert(events.all? { it.metadata[:tenant_id] == @tenant.id })
   end
 
@@ -34,6 +36,7 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
     outsider = context_for(create(:person, tenant: @tenant), role: :admin)
     commands = lambda do |actor|
       [ -> { handler(actor).fork_scenario(@plan_id, SecureRandom.uuid_v7, parent_id: q1, relation: "instead", name: "Mine") },
+        -> { handler(actor).rename_scenario(@plan_id, q1, name: "Mine") },
         -> { handler(actor).set_scenario_period(@plan_id, q1, ends_on: "2027-04-30") },
         -> { handler(actor).remove_scenario(@plan_id, q1) } ]
     end
@@ -52,7 +55,7 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
     error = assert_raises(TeamPlanning::Error) do
       handler(@editor).fork_scenario(@plan_id, SecureRandom.uuid_v7, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
     end
-    assert_equal "Next year has been deleted", error.message
+    assert_equal "This plan has been deleted", error.message
   end
 
   private

@@ -80,7 +80,7 @@ class TeamPlanning::PlanAggregateOverridesTest < ActiveSupport::TestCase
   should "refuse to clear a facet the scenario doesn't change, even when its parent does" do
     set(@q1, "Senior Engineer")
 
-    assert_equal "Lean doesn't change this, so there is nothing to clear", refusal { clear(@lean) }
+    assert_equal "This scenario doesn't change this, so there is nothing to clear", refusal { clear(@lean) }
     assert_equal "This plan has no such scenario", refusal { clear(SecureRandom.uuid_v7) }
   end
 
@@ -118,7 +118,7 @@ class TeamPlanning::PlanAggregateOverridesTest < ActiveSupport::TestCase
     set(@lean, "Lead Engineer")
 
     assert_equal "The baseline inherits nothing to pin", refusal { pin(@plan_id, "Engineer") }
-    assert_equal "Lean already changes this: clear it to follow its parent, or set it", refusal { pin(@lean, "Engineer") }
+    assert_equal "This scenario already changes this: clear it to follow its parent, or set it", refusal { pin(@lean, "Engineer") }
     assert_raises(ArgumentError) do
       @plan.pin_change(TitleSet, scenario_id: @q1, subject_id: "ada", facet: "level", end_state: { title: "x" }, pinned_by_id: @editor_id)
     end

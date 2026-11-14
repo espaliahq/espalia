@@ -5,8 +5,14 @@ require "test_helper"
 class Views::Plans::ScenarioTableTest < ActiveSupport::TestCase
   def periods(*scenarios)
     baseline = { scenario_id: "plan", parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-14", ends_on: nil }
-    html = Views::Plans::ScenarioTable.new(scenarios: [ baseline, *scenarios ]).call
+    html = render_view(Views::Plans::ScenarioTable.new(plan_id: "plan", scenarios: [ baseline, *scenarios ]))
     Nokogiri::HTML5.fragment(html).css("tbody tr").map { it.css("td")[1].text.strip }
+  end
+
+  def render_view(view)
+    controller = ApplicationController.new
+    controller.request = ActionDispatch::TestRequest.create
+    controller.view_context.render(view)
   end
 
   def step(starts_on, ends_on) = { scenario_id: SecureRandom.uuid, parent_id: "plan", relation: "then", name: "Step", starts_on:, ends_on: }
@@ -30,5 +36,14 @@ class Views::Plans::ScenarioTableTest < ActiveSupport::TestCase
     should "say when an open-ended scenario starts" do
       assert_equal "From 1 Apr 2027", periods(step("2027-04-01", nil)).last
     end
+  end
+
+  should "draw a visible kebab on each row's menu, sized to stay inside the table" do
+    baseline = { scenario_id: "plan", parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-14", ends_on: nil }
+    html = Nokogiri::HTML5.fragment(render_view(Views::Plans::ScenarioTable.new(plan_id: "plan", scenarios: [ baseline ], can_edit: true)))
+    trigger = html.at_css("[aria-label='Actions for Today']")
+
+    assert trigger.at_css("svg use"), "the trigger has no glyph"
+    assert_not_includes trigger["class"], Components::Kit::Button::HIT_AREA, "the 44px tap box spills out of the scrolling table"
   end
 end
