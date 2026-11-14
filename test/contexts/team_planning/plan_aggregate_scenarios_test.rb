@@ -190,6 +190,13 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       assert_equal({ plan_id: @plan_id, scenario_id: @q1, described_by_id: @editor_id }, last_event.data.except(:description))
     end
 
+    should "count a submitted line break as one character, as the form does" do
+      text = "#{"a" * 249}\r\n#{"b" * 250}"
+      @plan.describe_scenario(@q1, description: text, described_by_id: @editor_id)
+
+      assert_equal "#{"a" * 249}\n#{"b" * 250}", last_event.data[:description].reveal
+    end
+
     should "clear a description with a blank" do
       @plan.describe_scenario(@q1, description: " ", described_by_id: @editor_id, current: "Hire two seniors")
 

@@ -28,7 +28,7 @@ class Operations::TeamPlanning::DescribeScenario < Operations::Base
     refusing_bad_plans do
       handler.describe_scenario(plan_id, scenario_id, description: params[:description], current: -> { current(scenario_id) })
     end
-    { plan_id:, scenario_id:, description: params[:description].to_s.strip.presence }
+    { plan_id:, scenario_id:, description: ::TeamPlanning::PlanAggregate.normalise_description(params[:description]) }
   end
 
   private
