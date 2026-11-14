@@ -78,6 +78,20 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
                                      .find { it[:id] == @ada.id }[:capacity_overrides][@unit_id])
   end
 
+  should "leave the model's overload and notes behind on the calculated figure" do
+    model = TeamPlanning::CapacityModels.fetch("per_fte")
+    floored = Class.new do
+      define_method(:notes) { model.notes }
+      define_method(:capacity_of) do |*, **|
+        TeamPlanning::CapacityModel::Figure.new(amount: 0r, working: [], overloaded: true, excess: 1r, notes: [ "unattributed_no_manager" ])
+      end
+    end.new
+    override("0.8")
+
+    place = TeamPlanning::CapacityModels.stub(:fetch, floored) { place_of_ada }
+    assert_equal [ "0.8", "0", false, "0", [] ], place.values_at(:capacity, :calculated, :overloaded, :excess, :notes)
+  end
+
   should "let an alternative override its parent's override, and clear one back to the model" do
     override("0.8")
     alternative = fork(parent_id: @q1, relation: "instead", name: "Lean Q1")

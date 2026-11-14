@@ -178,7 +178,7 @@ class TeamPlanning::Capacity
     calculated = priced.figure
     amount = exact(override.reveal)
     step = Model::Step.new(label: "Planner's override, in place of #{calculated.amount.to_f.round(2)}", amount:, op: "=")
-    priced.with(figure: calculated.with(amount:, working: calculated.working + [ step ]), calculated:)
+    priced.with(figure: Model::Figure.new(amount:, working: calculated.working + [ step ]), calculated:)
   end
 
   # A unit gone from the map takes its rules with it, so its places follow
