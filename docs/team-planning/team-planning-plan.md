@@ -1,6 +1,6 @@
 # Team Planning implementation plan
 
-> Status: proposal. Nothing here is built. Read [the module description](team-planning.md)
+> Status: approved on 14 Nov 2026. Nothing here is built yet. Read [the module description](team-planning.md)
 > and [the data design](team-planning-design.md) first. This page orders the work. It has
 > no sizes: nobody has estimated it.
 
@@ -36,17 +36,17 @@ passes a plan reference to the handlers, so 8.3 adds that path.
 
 | # | Epic | Needs | A user can | Mockup |
 |---|---|---|---|---|
-| P1 | A plan over today | none | Open a private plan, name its members, and see the organisation on a date as a map | [05](mockups/05-plan-and-scenarios.png), [01](mockups/01-map.png) |
-| P2 | Shreddable plan fields | none | Trust that deleting a plan, or forgetting a person, makes what a plan held unreadable | none |
-| P3 | Scenarios and changes | P1 | Fork scenarios and reshape teams on the map: units, positions, placements, reporting lines, departures | [01](mockups/01-map.png), [02](mockups/02-person-and-position-sheet.png) |
-| P4 | Keep up with reality | P3 | See what moved in the Org Graph, update the plan to today, and see each change as done, pending or conflicting | [07](mockups/07-keep-up-with-reality.png), [03](mockups/03-checks.png) |
-| P5 | Cost | P3 | Price a scenario from pay bands, or from actual pay uploaded into the plan | [02](mockups/02-person-and-position-sheet.png) |
-| P6 | Budget | P5 | See approved, funded, remaining and unfunded, by cost centre and budget line | [06](mockups/06-budget.png) |
-| P7 | Capacity | P3 | See what each team can deliver, with each person's working | [01](mockups/01-map.png) |
-| P8 | Approval and carrying out | P4, P6 | Approve a scenario, apply what Espalia holds, and hand over the rest as a change list | [08](mockups/08-split-approve-carry-out.png) |
-| P9 | Timeline | P3 | Read a path of scenarios along the calendar, with the headcount walk | [04](mockups/04-timeline.png) |
-| P10 | Forecasts | P5 | See attrition, hiring dates and ramp as forecast rows, kept apart from what was decided | [06](mockups/06-budget.png) |
-| P11 | Capabilities in the plan | P3 | See each team's depth and each person's fit for an open position | [02](mockups/02-person-and-position-sheet.png) |
+| [P1](https://github.com/espaliahq/espalia/issues/179) | A plan over today | none | Open a private plan, name its members, and see the organisation on a date as a map | [05](mockups/05-plan-and-scenarios.png), [01](mockups/01-map.png) |
+| [P2](https://github.com/espaliahq/espalia/issues/180) | Shreddable plan fields | none | Trust that deleting a plan, or forgetting a person, makes what a plan held unreadable | none |
+| [P3](https://github.com/espaliahq/espalia/issues/181) | Scenarios and changes | P1 | Fork scenarios and reshape teams on the map: units, positions, placements, reporting lines, departures | [01](mockups/01-map.png), [02](mockups/02-person-and-position-sheet.png) |
+| [P4](https://github.com/espaliahq/espalia/issues/182) | Keep up with reality | P3 | See what moved in the Org Graph, update the plan to today, and see each change as done, pending or conflicting | [07](mockups/07-keep-up-with-reality.png), [03](mockups/03-checks.png) |
+| [P5](https://github.com/espaliahq/espalia/issues/183) | Cost | P3 | Price a scenario from pay bands, or from actual pay uploaded into the plan | [02](mockups/02-person-and-position-sheet.png) |
+| [P6](https://github.com/espaliahq/espalia/issues/184) | Budget | P5 | See approved, funded, remaining and unfunded, by cost centre and budget line | [06](mockups/06-budget.png) |
+| [P7](https://github.com/espaliahq/espalia/issues/185) | Capacity | P3 | See what each team can deliver, with each person's working | [01](mockups/01-map.png) |
+| [P8](https://github.com/espaliahq/espalia/issues/186) | Approval and carrying out | P4, P6 | Approve a scenario, apply what Espalia holds, and hand over the rest as a change list | [08](mockups/08-split-approve-carry-out.png) |
+| [P9](https://github.com/espaliahq/espalia/issues/187) | Timeline | P3 | Read a path of scenarios along the calendar, with the headcount walk | [04](mockups/04-timeline.png) |
+| [P10](https://github.com/espaliahq/espalia/issues/188) | Forecasts | P5 | See attrition, hiring dates and ramp as forecast rows, kept apart from what was decided | [06](mockups/06-budget.png) |
+| [P11](https://github.com/espaliahq/espalia/issues/189) | Capabilities in the plan | P3 | See each team's depth and each person's fit for an open position | [02](mockups/02-person-and-position-sheet.png) |
 
 ### The first release: planning without money
 
@@ -230,7 +230,7 @@ because a binding budget guardrail needs them.
 | # | Story | Needs |
 |---|---|---|
 | 1.1 | Plan stream `tenant-{id}/Plan-{plan_id}` through `EventStreamNaming`: `PlanCreated` with name and base date, `PlanRenamed`, `PlanDeleted` | none |
-| 1.2 | Members as editor or viewer, `PlanMemberAdded` and `PlanMemberRemoved`, and a `PlanPolicy` under which a tenant admin does not open someone else's plan. Who may create a plan follows decision 7 | 1.1 |
+| 1.2 | Members as editor or viewer, `PlanMemberAdded` and `PlanMemberRemoved`, and a `PlanPolicy` under which a tenant admin does not open someone else's plan. A planner role, given by a tenant admin, may create a plan (decision 7) | 1.1 |
 | 1.3 | Baseline reader: the root scenario resolved over `OrgGraph::AsOf` on the plan's base date, joined to names, with "Former member" for anyone forgotten | 1.1 |
 | 1.4 | Operations: list, create, get, rename and delete a plan, its members, and the baseline map | 1.2, 1.3 |
 | 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
@@ -394,48 +394,42 @@ second rebases and regenerates it. Nothing else is shared.
 The second wave opens when 1.1 lands: 1.2, 1.3 and 3.1 can run together, and 2.2 joins
 when 2.1 lands.
 
-## Open decisions
+## Decisions
 
-Each can be answered in a line.
+Tal decided all seven on 14 Nov 2026, each as recommended.
 
-1. **Pay and benchmarks.** Options: (a) bands entered by tenant admins, with actual pay
-   uploaded into one plan from a file; (b) actual pay from an HRIS or payroll
-   integration; (c) a market benchmark feed. Recommendation: (a). Band midpoints are
-   visible to every plan member. Band ranges and actual pay are visible only to members
-   given the see-pay right. Uploaded pay lives in that plan alone and is never written to
-   the Org Graph. Blocks 5.1, 5.5 and 5.7.
-2. **How a plan's changes are stored.** Options: (a) events of the plan's own, each an
-   end state for one subject, as designed; (b) a diff computed against `AsOf`.
-   Recommendation: (a). A diff holds no intent, no note and no author, and cannot tell a
-   change the Org Graph now matches from one that was never made. Blocks 3.2.
-3. **What a plan stands on.** Options: (a) a date, as `AsOf` reads today; (b) an instant,
-   which needs a new reader. Recommendation: (a), read as known at the end of the day
-   before the base date. The consequence: `AsOf` reads a date as known at its end, so a
+1. **Pay and benchmarks.** Decided: tenant admins enter pay bands, and actual pay can be
+   uploaded into one plan from a file. Band midpoints are visible to every plan member.
+   Band ranges and actual pay are visible only to members given the see-pay right.
+   Uploaded pay lives in that plan alone and is never written to the Org Graph. An HRIS
+   or payroll integration and a market benchmark feed wait. Shapes 5.1, 5.5 and 5.7.
+2. **How a plan's changes are stored.** Decided: as events of the plan's own, each an end
+   state for one subject, as designed. A diff against `AsOf` holds no intent, no note and
+   no author, and cannot tell a change the Org Graph now matches from one never made.
+   Shapes 3.2.
+3. **What a plan stands on.** Decided: a date, as `AsOf` reads today, read as known at
+   the end of the day before the base date. `AsOf` reads a date as known at its end, so a
    plan standing on today would move under its users as edits land later today, and two
-   edits on that day would show only the last. Standing on the day before closes the
-   base. Edits made on the base date then arrive as drift, because 4.1 lists changes by
-   learned date from the day before, and `ChangesBetween` excludes its start and includes
-   its end. Two edits that day are two rows in the drift report, and the plan reads the
-   later one once it updates to today. Blocks 1.3 and 4.1.
-4. **What approval requires.** Options: (a) the may-approve right alone; (b) the
-   may-approve right and edit rights in the Org Graph on every unit and membership the
-   scenario changes (`edit_unit?`, `edit_membership?`, `record_succession?`); (c) a
-   second person's sign-off. Recommendation: (b), a scenario approved whole, tenant
-   guardrails binding, and a refusal failing the whole approval. Blocks 8.1 and 8.4.
-5. **Keeping forecast apart.** Options: (a) forecasts are read models only, never events;
-   (b) forecast rows stored as events so they can be edited. Recommendation: (a). A
-   planner who disagrees changes the assumption, and a forecast can then never be
-   approved by accident. Blocks 10.1.
-6. **People who leave or are forgotten mid-plan.** Options: (a) forgetting a person
-   destroys their key in every plan at once, erasing every value a plan held about them;
-   they stay in each plan's history as a former member with no identity; (b) keep what
-   plans held until each plan is deleted, as the data design says today. Recommendation:
-   (a). Option (b) contradicts the forgetting epic. Someone who leaves stays in the plan
-   and shows as conflicting wherever the plan still places them. If (a) is chosen, the
-   data design's "Erasure inside a live plan" section changes to match. Blocks 2.1 and
-   2.5.
-7. **Who may create a plan.** Options: (a) any tenant member; (b) people a tenant admin
-   gives a planner role; (c) tenant admins only. Recommendation: (b). Blocks 1.2.
+   edits that day would show only the last. Standing on the day before closes the base.
+   Edits made on the base date arrive as drift, because 4.1 lists changes by learned date
+   from the day before, and `ChangesBetween` excludes its start and includes its end. Two
+   edits that day are two rows in the drift report, and the plan reads the later one once
+   it updates to today. Shapes 1.3 and 4.1.
+4. **What approval requires.** Decided: the may-approve right, plus edit rights in the
+   Org Graph on every unit and membership the scenario changes (`edit_unit?`,
+   `edit_membership?`, `record_succession?`). A scenario is approved whole, tenant
+   guardrails bind, and a refusal fails the whole approval. Shapes 8.1 and 8.4.
+5. **Keeping forecast apart.** Decided: forecasts are read models only, never events. A
+   planner who disagrees changes the assumption, so a forecast can never be approved by
+   accident. Shapes 10.1.
+6. **People who leave or are forgotten mid-plan.** Decided: forgetting a person destroys
+   their key in every plan at once, so every value a plan held about them becomes
+   unreadable. They stay in each plan's history as a former member with no identity.
+   Someone who leaves stays in the plan and shows as conflicting wherever the plan still
+   places them. The data design's "Erasure inside a live plan" section says the same.
+   Shapes 2.1 and 2.5.
+7. **Who may create a plan.** Decided: people a tenant admin gives a planner role. Shapes
+   1.2.
 
 ## Out of the first version
 

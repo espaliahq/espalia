@@ -388,9 +388,10 @@ yet. Three properties of the events keep it possible, and must not be given up:
 
 ## Decided, with a known cost
 
-**Erasure inside a live plan.** A person the Org Graph has forgotten stays in a plan as
-an anonymous id, with whatever the plan held about them, until the plan is deleted. The
-plan is private and the Org Graph's identifiers are gone, so this is accepted.
+**Erasure inside a live plan.** When the Org Graph forgets a person, a handler on
+`PersonForgotten` destroys that person's key in every plan at once. Every value a plan
+held about them, such as their pay, a corrected level or a planned promotion, becomes
+unreadable. They stay in each plan's history as a former member with no identity.
 
 One thing can still name them: a note. A note is free text under the plan's key, so one
 that mentions the person stays readable to the plan's members until the plan is
