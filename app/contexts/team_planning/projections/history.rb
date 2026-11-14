@@ -2,7 +2,8 @@
 
 # Synchronous projection of each scenario's history: every change, pin and
 # clear it made, and every undo and redo of one, in the order made, read
-# through {TeamPlanning::ChangeEntry}.
+# through {TeamPlanning::ChangeEntry}. The baseline's history also holds
+# each update to today.
 #
 # Writes `team_planning_history_entries`, and nothing else writes it. An undo
 # marks the entry it reverses as undone and a redo lifts the mark; both stay
@@ -25,7 +26,8 @@ class TeamPlanning::Projections::History
   def self.handled_events
     TeamPlanning::ChangeKinds.all + [
       TeamPlanning::Events::ChangePinned, TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangeUndone,
-      TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanDeleted
+      TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::PlanRebased, TeamPlanning::Events::ScenarioRemoved,
+      TeamPlanning::Events::PlanDeleted
     ]
   end
 

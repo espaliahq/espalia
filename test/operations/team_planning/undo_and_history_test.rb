@@ -15,7 +15,7 @@ class Operations::TeamPlanning::UndoAndHistoryTest < ActiveSupport::TestCase
   setup do
     TeamPlanning::RuleKinds.register(HeadcountCap)
     @tenant = create(:tenant)
-    departments = SecureRandom.uuid_v7
+    departments = @departments = SecureRandom.uuid_v7
     @engineering = SecureRandom.uuid_v7
 
     travel_to Time.utc(2026, 2, 1, 9)
@@ -115,6 +115,35 @@ class Operations::TeamPlanning::UndoAndHistoryTest < ActiveSupport::TestCase
       assert_equal [ 1, true, [ 8, 9 ] ], [ first[:page], first[:next_page], first[:entries].map { it.dig(:end_state, "value", "cap") } ]
       assert_equal [ 2, false, [ 10 ] ], [ second[:page], second[:next_page], second[:entries].map { it.dig(:end_state, "value", "cap") } ]
     end
+  end
+
+  should "undo a unit's retirement and then its creation, a step at a time" do
+    unit_id = call(:SetUnit, plan_id: @plan_id, scenario_id: @lean, name: "Payments", top_level: true, level_id: @departments)[:unit_id]
+    call(:RetireUnit, plan_id: @plan_id, scenario_id: @lean, unit_id:)
+    units = -> { call(:ScenarioMap, plan_id: @plan_id, scenario_id: @lean)[:units].pluck(:name) }
+    assert_not_includes units.call, "Payments"
+
+    undo_change(@lean)
+    assert_includes units.call, "Payments"
+    assert_equal [ "unit_set" ], call(:Overrides, plan_id: @plan_id, scenario_id: @lean)[:overrides].pluck(:kind)
+
+    undo_change(@lean)
+    assert_not_includes units.call, "Payments"
+    assert_empty call(:Overrides, plan_id: @plan_id, scenario_id: @lean)[:overrides]
+    assert_equal [ %w[set unit_set], %w[set unit_retired], [ "undo", nil ], [ "undo", nil ] ], history(@lean).map { it.values_at(:action, :kind) }
+  end
+
+  should "undo an assignment, keeping its placements in the history" do
+    person_id = @viewer.person_id
+    placements = [ { unit_id: @engineering, allocation: 0.5 } ]
+    call(:SetAssignment, plan_id: @plan_id, scenario_id: @lean, person_id:, placements:)
+    resolved = -> { call(:ScenarioMap, plan_id: @plan_id, scenario_id: @lean).values_at(:people, :unresolved).flatten.to_s }
+    assert_includes resolved.call, person_id
+
+    undo_change(@lean)
+    assert_not_includes resolved.call, person_id
+    assert_equal [ { "unit_id" => @engineering, "position_id" => nil, "allocation" => 0.5, "role" => nil } ],
+                 history(@lean).first.dig(:end_state, "placements")
   end
 
   should "name a pin's source in the history" do
