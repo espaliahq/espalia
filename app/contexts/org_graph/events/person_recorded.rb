@@ -13,6 +13,9 @@
 #   @option data [String] :employment_status "pending" (not yet started), "employed" or "left"
 #   @option data [String, nil] :started_on ISO date the person started
 #   @option data [String, nil] :left_on ISO date the person left
+#   @option data [String] :left_on_source where a leaving date worked out from
+#     the person's row came from (see {OrgGraph::PersonAggregate::LEFT_ON_SOURCES});
+#     absent when the provider supplied the date
 #   @option data [String, nil] :title job title as the provider names it
 #   @option data [String, nil] :level level as the provider names it, before any framework mapping
 #   @option data [String, nil] :manager_id person_id of their manager

@@ -18,6 +18,7 @@ namespace :org_graph do
 
       puts "recorded from their row: #{report.recorded.size}"
       report.recorded.each { |id| puts "  #{id}" }
+      report.left_on_sources.each { |source, count| puts "leavers dated by #{source.tr('_', ' ')}: #{count}" }
       puts "could not be recorded: #{report.failed.size}"
       report.failed.each { |id, reason| puts "  #{id}: #{reason}" }
       report.differences.each do |column, ids|
