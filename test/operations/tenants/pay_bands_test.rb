@@ -137,6 +137,20 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     end
   end
 
+  should "write every field of a change, even onto a band changed since it was read" do
+    added = add
+    stale = ActsAsTenant.with_tenant(@tenant) { PayBand.find(added[:pay_band_id]) }
+    ActsAsTenant.with_tenant(@tenant) { PayBand.find(added[:pay_band_id]).update!(currency: "NZD") }
+
+    PayBand.stub(:find_by, stale) do
+      call(:ChangePayBand, pay_band_id: added[:pay_band_id], currency: "AUD", period: "month",
+                           minimum: "10", midpoint: "15", maximum: "20")
+    end
+
+    stored = ActsAsTenant.with_tenant(@tenant) { PayBand.find(added[:pay_band_id]) }
+    assert_equal [ "AUD", "month", BigDecimal("15") ], [ stored.currency, stored.period, stored.midpoint ]
+  end
+
   should "refuse a band this tenant doesn't hold" do
     assert_raises(Operations::Base::ParameterError) { call(:RemovePayBand, pay_band_id: SecureRandom.uuid_v7) }
   end
