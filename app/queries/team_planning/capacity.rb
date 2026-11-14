@@ -30,7 +30,7 @@ class TeamPlanning::Capacity
     "unmapped_title" => "The person's title maps to no role",
     "unknown_role" => "The role isn't in the framework",
     "closed_position" => "The position this place is in has closed",
-    "leaving" => "The person leaves in this step, and their backfill carries the seat",
+    "leaving" => "The person leaves in this step, so a backfill position carries the seat if the plan gives one",
     "no_level" => "The level resolves to none, so the model has nothing to price",
     "no_model" => "No capacity model is chosen for the role or its family",
     "unknown_model" => "The chosen capacity model isn't available"
