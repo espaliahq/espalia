@@ -35,7 +35,7 @@ class Operations::Tenants::BudgetLinesTest < ActiveSupport::TestCase
     assert_equal [ "new", "2026-10-01", "Ada Admin" ], added.values_at(:origin, :approved_on, :updated_by)
     assert_equal [ added[:budget_line_id] ], call(:BudgetLines)[:budget_lines].pluck(:budget_line_id)
 
-    changed = call(:ChangeBudgetLine, budget_line_id: added[:budget_line_id], **LINE, origin: "replacement",
+    changed = call(:ChangeBudgetLine, budget_line_id: added[:budget_line_id], **LINE.except(:approved_on), origin: "replacement",
                                       amount: "9000.5", currency: "nzd", period: "month", role_id: @role.role_id)
     assert_equal [ "9000.50", "NZD", "month", "replacement" ], changed.values_at(:amount, :currency, :period, :origin)
     assert_equal [ @role.role_id, nil, nil, nil ], changed.values_at(:role_id, :level_id, :approved_on, :location)
@@ -89,6 +89,17 @@ class Operations::Tenants::BudgetLinesTest < ActiveSupport::TestCase
       error = assert_raises(Operations::Base::ParameterError) { add(amount:) }
       assert_equal "amount must be a number with at most two decimal places", error.message
     end
+  end
+
+  should "refuse an amount with no currency or period, and an approval date for a seat already held" do
+    refusals = [
+      -> { add(currency: nil) },
+      -> { add(period: nil) },
+      -> { add(origin: "existing") }
+    ].map { assert_raises(Operations::Base::ParameterError, &it).message }
+
+    assert_equal [ "An amount needs a currency", "An amount needs a period, year or month",
+                   "approved_on applies to a new position only" ], refusals
   end
 
   should "refuse a date that isn't one" do

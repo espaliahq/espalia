@@ -32,6 +32,10 @@ module Operations::Tenants::BudgetLineSupport
     operation.parameter :level_id, String
     operation.parameter :location, String
     operation.parameter :cost_centre, String
+    operation.dependent_required :amount, requires: :currency, message: "An amount needs a currency"
+    operation.dependent_required :amount, requires: :period, message: "An amount needs a period, year or month"
+    operation.forbids_when :approved_on, if: :origin, in: %w[existing replacement],
+                                         message: "approved_on applies to a new position only"
   end
 
   # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin

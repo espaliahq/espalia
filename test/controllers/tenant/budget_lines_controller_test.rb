@@ -88,6 +88,15 @@ class Tenant::BudgetLinesControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ "AUD", "year", @role.role_id, nil, "" ], [ line.currency, line.period, line.role_id, line.level_id, line.cost_centre ]
     end
 
+    should "drop an approval date left on screen when the origin is no longer a new position" do
+      line = stored_line(origin: "new", approved_on: "2026-10-01")
+
+      patch tenant_budget_line_path(line), params: line_params(origin: "existing")
+
+      assert_redirected_to tenant_budget_lines_path
+      assert_equal [ "existing", nil ], [ line.reload.origin, line.approved_on ]
+    end
+
     should "show a refused change again with what was typed" do
       line = stored_line
 

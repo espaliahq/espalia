@@ -81,8 +81,10 @@ class Tenant::BudgetLinesController < ApplicationController
   end
 
   # The form's one position picker names a role or a level, "role:<id>" or "level:<id>".
+  # Approved on stays on screen whatever the origin, and its hint says it counts for a new position only.
   def operation_params
     values = line_params
+    values.delete(:approved_on) unless values[:origin] == "new"
     kind, id = values.delete(:position).to_s.split(":", 2)
     values.merge(role_id: (id if kind == "role"), level_id: (id if kind == "level")).compact_blank
   end
