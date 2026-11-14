@@ -41,7 +41,7 @@ class Views::Plans::ShowView < Views::Base
 
   def view_template
     render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal" } if @can_edit)) do
+      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal", action: "keydown.esc@window->modal#escape" } if @can_edit)) do
         header
         frozen_notice if @plan[:frozen]
         div(class: "mt-6 flex flex-col lg:flex-row gap-6") do

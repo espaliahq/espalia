@@ -139,6 +139,26 @@ class PlanScenariosSystemTest < ApplicationSystemTestCase
     assert_no_sideways_overflow
   end
 
+  should "close the dialogs on Esc, asking first once the new scenario has a name" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    sign_in_as(@planner.user)
+    visit plan_path(@plan_id)
+    assert_selector "h1", text: "Pay review 2027"
+    open_dialog("New scenario", FORK)
+    press_escape(scope: FORK)
+    assert_no_selector FORK, visible: true
+
+    open_dialog("New scenario", FORK)
+    js_fill_in "Name", with: "Lean Q1"
+    page.execute_script("window.confirm = () => false")
+    press_escape(scope: FORK)
+    assert_selector FORK, visible: true
+
+    page.execute_script("window.confirm = () => true")
+    press_escape(scope: FORK)
+    assert_no_selector FORK, visible: true
+  end
+
   private
 
   def open_dialog(button, dialog)
