@@ -35,12 +35,19 @@ module Shreddable
   def shreddable(*fields, by:, person: :person_id)
     raise ArgumentError, "by: must be one of #{KEYS.join(', ')}" unless KEYS.include?(by)
 
-    fields.each { shreddable_fields[it.to_sym] = { by:, person: } }
+    fields.each { own_shreddable_fields[it.to_sym] = { by:, person: } }
   end
 
-  # @return [Hash{Symbol => Hash}] each declared field, with its key
+  # @return [Hash{Symbol => Hash}] each field this class or a parent declares,
+  #   with its key
   def shreddable_fields
-    @shreddable_fields ||= {}
+    inherited = superclass.respond_to?(:shreddable_fields) ? superclass.shreddable_fields : {}
+    inherited.merge(own_shreddable_fields)
+  end
+
+  # @return [Hash{Symbol => Hash}]
+  def own_shreddable_fields
+    @own_shreddable_fields ||= {}
   end
 
   # @param tenant_id [String]
@@ -77,9 +84,16 @@ module Shreddable
   end
 
   # @return [Array<Symbol>] the declared fields the data holds a value for
+  # @raise [ArgumentError] for a declared field under a string key, which
+  #   would otherwise be stored in clear
   def self.present_fields(event_class, data)
     return [] unless event_class.respond_to?(:shreddable_fields) && data.is_a?(Hash)
 
-    event_class.shreddable_fields.keys.reject { data[it].nil? }
+    declared = event_class.shreddable_fields.keys
+    if (clear = declared.map(&:to_s) & data.keys).any?
+      raise ArgumentError, "Shreddable fields need symbol keys: #{clear.join(', ')}"
+    end
+
+    declared.reject { data[it].nil? }
   end
 end

@@ -11,6 +11,8 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
 
   class Copied < RubyEventStore::Event; end
 
+  class SalaryNoteWritten < NoteWritten; end
+
   setup do
     @tenant = create(:tenant)
     @person = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
@@ -153,5 +155,16 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
     PlanEncryptionKey.connection.stub(:transaction_open?, false) do
       assert_nothing_raised { publish(Copied.new(data: { plan_id: @plan_id })) }
     end
+  end
+
+  should "encrypt the fields a parent class declares" do
+    publish(SalaryNoteWritten.new(data: { plan_id: @plan_id, person_id: @person.id, note: "Moving to the platform team" }))
+
+    assert_not_includes stored_row["data"].to_s, "platform team"
+    assert_equal "Moving to the platform team", read_back.data[:note].reveal
+  end
+
+  should "refuse a declared field under a string key, which would store it in clear" do
+    assert_raises(ArgumentError) { NoteWritten.new(data: { "plan_id" => @plan_id, "note" => "Moving to the platform team" }) }
   end
 end
