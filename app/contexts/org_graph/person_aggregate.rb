@@ -20,7 +20,7 @@ class OrgGraph::PersonAggregate
   EMPLOYMENT_STATUSES = %w[pending employed left].freeze
   FORGETTING_REASONS = %w[retention request].freeze
   # Where a leaving date worked out from a row came from, best evidence first.
-  LEFT_ON_SOURCES = %w[hris_termination_date row_updated cut_over].freeze
+  LEFT_ON_SOURCES = %w[hris_termination_date row_updated first_recorded].freeze
   FACT_KEYS = %i[title level manager_id cost_centre site country fte employment_type].freeze
   private_constant :FACT_KEYS
   # The kind of fact each keyword writes, as the provider settings name them

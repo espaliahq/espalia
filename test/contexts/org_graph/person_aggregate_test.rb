@@ -44,12 +44,16 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
     end
 
     should "hold only named operational facts, never an identifier" do
-      allowed = %i[person_id provider effective_on employment_status started_on left_on] + %i[
+      allowed = %i[person_id provider effective_on employment_status started_on left_on left_on_source] + %i[
         title level manager_id cost_centre site country fte employment_type
       ]
 
       kinds = every_kind_of_event.each { |event| assert_empty event.data.keys - allowed, event.class.name }.map(&:class)
       assert_equal 11, kinds.uniq.size
+
+      leaver = OrgGraph::PersonAggregate.new
+      leaver.record(@person_id, **PROVENANCE, employment_status: "left", left_on: "2026-10-31", left_on_source: "row_updated")
+      assert_empty leaver.unpublished_events.sole.data.keys - allowed
     end
   end
 
@@ -126,7 +130,7 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       assert_raises(RuntimeError, match: /leaving date source/) do
         record(employment_status: "left", left_on: "2025-12-01", left_on_source: "guess")
       end
-      assert_raises(RuntimeError, match: /needs a leaving date/) { record(employment_status: "left", left_on_source: "cut_over") }
+      assert_raises(RuntimeError, match: /needs a leaving date/) { record(employment_status: "left", left_on_source: "first_recorded") }
     end
 
     should "refuse a person as their own manager" do

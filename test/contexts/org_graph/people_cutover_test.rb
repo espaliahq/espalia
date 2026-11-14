@@ -199,13 +199,24 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
       assert_equal [ "2025-06-30", "row_updated" ], stream(@by_hand).sole.data.values_at(:left_on, :left_on_source)
     end
 
+    should "count leavers by source, best evidence first" do
+      as_tenant do
+        create(:person, tenant: @tenant, status: "inactive", hris_raw_data: nil)
+        create(:person, tenant: @tenant, status: "inactive", hris_raw_data: nil).update_columns(updated_at: Time.zone.parse("2025-06-30 10:00"))
+      end
+
+      report = @cutover.run(apply: false)
+
+      assert_equal [ [ "hris_termination_date", 1 ], [ "row_updated", 1 ], [ "first_recorded", 1 ] ], report.left_on_sources.to_a
+    end
+
     should "leave on the cut-over date with no evidence, and count them" do
       as_tenant { @by_hand.update!(hris_raw_data: nil) }
 
       report = @cutover.run(apply: true)
 
-      assert_equal [ Date.current.iso8601, "cut_over" ], stream(@by_hand).sole.data.values_at(:left_on, :left_on_source)
-      assert_equal({ "cut_over" => 1 }, report.left_on_sources)
+      assert_equal [ Date.current.iso8601, "first_recorded" ], stream(@by_hand).sole.data.values_at(:left_on, :left_on_source)
+      assert_equal({ "first_recorded" => 1 }, report.left_on_sources)
       as_tenant { assert_equal Date.current, OrgLeaver.find_by(person_id: @by_hand.id).left_on }
     end
 

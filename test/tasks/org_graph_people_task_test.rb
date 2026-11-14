@@ -27,7 +27,7 @@ class OrgGraphPeopleTaskTest < ActiveSupport::TestCase
 
     output = capture_io { Rake::Task["org_graph:people:cut_over"].invoke(@tenant.id) }.first
 
-    assert_includes output, "leavers dated by cut over: 1"
+    assert_includes output, "leavers dated by first recorded: 1"
   end
 
   should "cut over with APPLY=1, and revert" do
