@@ -19,9 +19,11 @@ class Operations::OrgGraph::MoveMember < Operations::Base
     from = live_unit!(:from_unit_id)
     to = live_unit!(:unit_id)
     raise Operations::Base::ParameterError, "#{person.name} is already in #{to.name}" if from == to
-    ensure_held_by_espalia!(person, from)
 
-    person_handler.move_membership(person.id, from.id, to.id, effective_on: effective_on)
+    with_membership(person, from) do |provider|
+      ensure_held_by_espalia!(person, from, provider)
+      person_handler.move_membership(person.id, from.id, to.id, effective_on: effective_on)
+    end
     { person_id: person.id, from_unit_id: from.id, unit_id: to.id, effective_on: effective_on }
   end
 
@@ -29,9 +31,9 @@ class Operations::OrgGraph::MoveMember < Operations::Base
 
   # The command handler can't refuse this: the HRIS mirror moves its own
   # memberships through the same command.
-  def ensure_held_by_espalia!(person, unit)
-    provider = OrgMembership.find_by(person_id: person.id, unit_id: unit.id)&.provider
-    return if provider.nil? || provider == ::OrgGraph::StructureAggregate::ESPALIA
+  def ensure_held_by_espalia!(person, unit, provider)
+    raise Operations::Base::ParameterError, "#{person.name} isn't in #{unit.name}" unless provider
+    return if provider == ::OrgGraph::StructureAggregate::ESPALIA
 
     raise Operations::Base::ParameterError,
           "#{HrisConfig.provider_label(provider)} supplies #{person.name}'s place in #{unit.name}; move it there"

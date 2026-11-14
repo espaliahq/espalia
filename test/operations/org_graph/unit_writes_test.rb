@@ -176,6 +176,44 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
       assert membership(:ada, :engineering)
     end
 
+    context "while a Members rebuild has emptied the member list" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                  .set_membership(@org[:ada].id, @org[:engineering], provider: "hibob", effective_on: "2026-01-05")
+        end
+        OrgGraph::Projections::Members.reset!(tenant: @tenant)
+      end
+
+      should "still refuse moving a membership the HRIS supplies" do
+        error = assert_raises(Operations::Base::ParameterError) do
+          call(Operations::OrgGraph::MoveMember, person_id: @org[:ada].id, from_unit_id: @org[:engineering],
+                                                 unit_id: @org[:platform])
+        end
+
+        assert_equal "HiBob supplies Ada Quill's place in Engineering; move it there", error.message
+      end
+
+      should "refuse moving someone out of a unit they aren't in" do
+        error = assert_raises(Operations::Base::ParameterError) do
+          call(Operations::OrgGraph::MoveMember, person_id: @org[:ezra].id, from_unit_id: @org[:payments],
+                                                 unit_id: @org[:platform])
+        end
+
+        assert_equal "Ezra Pell isn't in Payments", error.message
+      end
+
+      should "still refuse someone already in the unit, keeping their terms" do
+        assert_raises(Operations::Base::ParameterError, match: "Brook Tamsin is already in Checkout") do
+          call(Operations::OrgGraph::AddMember, unit_id: @org[:checkout], person_id: @org[:brook].id)
+        end
+
+        stream = ActsAsTenant.with_tenant(@tenant) { EventStreamNaming.person_stream(@org[:brook].id) }
+        sets = Rails.configuration.event_store.read.stream(stream).of_type(OrgGraph::Events::MembershipSet).to_a
+        assert_equal 1, sets.count { it.data[:unit_id] == @org[:checkout] }
+      end
+    end
+
     should "remove a member" do
       call(Operations::OrgGraph::RemoveMember, person_id: @org[:cyril].id, unit_id: @org[:checkout])
 
