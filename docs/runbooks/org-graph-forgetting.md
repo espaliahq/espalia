@@ -56,17 +56,17 @@ bin/rails "org_graph:forgetting:forget[<tenant id>,<person id>,<admin's tenant u
 
 ## If a run fails
 
-Each person is one transaction: the row, the membership, the notifications, the event and the projections that handle it. A run that dies partway leaves each person either forgotten or untouched, and the next run takes whoever is still due. No checkpoint is needed.
+Each person is one transaction: the row, the membership, the notifications, their key in every plan, the event and the projections that handle it. A run that dies partway leaves each person either forgotten or untouched, and the next run takes whoever is still due. No checkpoint is needed.
 
 - **The HRIS can't be reached**: nobody in that tenant is forgotten that day. The error is reported and the other tenants carry on.
 - **The key is missing**: the job fails before touching any tenant.
 
 ## Restoring from a backup
 
-**A restore can undo forgetting.** It brings back the name, email and external id of everyone forgotten after the backup was taken, and removes their `PersonForgotten`. It also brings back their keys in every plan, so what plans held about them reads again until they are forgotten again.
+**A restore can undo forgetting.** It brings back the name, email and external id of everyone forgotten after the backup was taken, and removes their `PersonForgotten`. It also brings back their keys in every plan, so what plans held about them reads again until they are forgotten again, which for those below means asking again.
 
 - **People forgotten because their period ended** are forgotten again by the next scheduled run, since their leaving dates are in the restored events. That happens only if the tenant's schedule is on.
-- **People forgotten on request before their due date are not forgotten again** after a restore until their own period ends. Nothing in the app records the request outside the database you restored.
+- **People forgotten on request before their due date are not forgotten again** after a restore until their own period ends, and nor are their plan keys destroyed. Nothing in the app records the request outside the database you restored.
 
 So the real time to forget includes the backup retention period. Each deployment should state it. After a restore, tell the tenant admins which requests may need making again.
 
