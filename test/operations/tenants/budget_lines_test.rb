@@ -36,7 +36,7 @@ class Operations::Tenants::BudgetLinesTest < ActiveSupport::TestCase
     assert_equal [ added[:budget_line_id] ], call(:BudgetLines)[:budget_lines].pluck(:budget_line_id)
 
     changed = call(:ChangeBudgetLine, budget_line_id: added[:budget_line_id], **LINE, origin: "replacement",
-                                      amount: "9,000.5", currency: "nzd", period: "month", role_id: @role.role_id)
+                                      amount: "9000.5", currency: "nzd", period: "month", role_id: @role.role_id)
     assert_equal [ "9000.50", "NZD", "month", "replacement" ], changed.values_at(:amount, :currency, :period, :origin)
     assert_equal [ @role.role_id, nil, nil, nil ], changed.values_at(:role_id, :level_id, :approved_on, :location)
 
@@ -82,6 +82,13 @@ class Operations::Tenants::BudgetLinesTest < ActiveSupport::TestCase
     errors.each { |message| assert_no_match(/999|888|777|666|120/, message) }
     assert_equal "A budget line can't end before it starts", errors[3]
     assert_equal "A budget line needs an amount, a head count or both", errors[4]
+  end
+
+  should "refuse a comma, which the page strips only from a grouped figure" do
+    [ "52,50", "1,2,3", "120,000" ].each do |amount|
+      error = assert_raises(Operations::Base::ParameterError) { add(amount:) }
+      assert_equal "amount must be a number with at most two decimal places", error.message
+    end
   end
 
   should "refuse a date that isn't one" do

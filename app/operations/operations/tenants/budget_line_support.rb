@@ -70,7 +70,7 @@ module Operations::Tenants::BudgetLineSupport
   end
 
   def decimal(name)
-    value = params[name].to_s.strip.delete(",")
+    value = params[name].to_s.strip
     return nil if value.empty?
     raise Operations::Base::ParameterError, "#{name} must be a number with at most two decimal places" unless value.match?(FIGURE)
 
