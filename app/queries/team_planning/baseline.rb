@@ -18,6 +18,8 @@ class TeamPlanning::Baseline
   # @!attribute base_on [Date] the day it shows
   # @!attribute known_on [Date] read as known at the end of this day
   # @!attribute units [Array<Unit>] the live units, by name
+  # @!attribute retired_units [Array<Unit>] units a scenario retired; the baseline has none
+  # @!attribute successions [Array<Succession>] links a scenario made; the baseline has none
   # @!attribute people [Array<Member>] the people employed that day, by id
   # @!attribute unassigned_ids [Array<String>] the people in no live unit
   # @!attribute positions [Array<Position>] the open positions; the Org Graph has none, so only a plan adds them
@@ -27,9 +29,9 @@ class TeamPlanning::Baseline
   # @!attribute step_ids [Array<String>] the scenarios of the step on screen: it and those it is an
   #   alternative of. A departure set in one of them marks the person leaving; one set earlier takes them off
   # @!attribute departed [Array<Departed>] the people a departure in an earlier step took off the map
-  Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :positions, :names, :rules, :unresolved,
-                    :step_ids, :departed) do
-    def initialize(unresolved: [], step_ids: [], departed: [], **) = super
+  Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
+                    :rules, :unresolved, :step_ids, :departed) do
+    def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -173,6 +175,9 @@ class TeamPlanning::Baseline
 
   # A live unit. `parent_id` is nil at the root.
   Unit = Data.define(:id, :name, :parent_id, :level_id, :owner_ids)
+
+  # Units that carry on from others: a split, a merge or a replacement.
+  Succession = Data.define(:id, :predecessor_ids, :successor_ids)
 
   # A person and their facts that day, with each place they hold. Their
   # line points at `manager_id` (the Org Graph's manager fact, or a plan's

@@ -1,0 +1,27 @@
+{
+  "name": "team_planning_units",
+  "description": "List the units of a scenario in a Team Planning plan the caller is in, resolved: the baseline's units with the scenario's changes and its ancestors' applied. units are live, by name, each with its parent_id and level_id; retired_units are those a scenario retired; successions say which units carry on from which. scenario_id defaults to the baseline, whose id is the plan's. Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
