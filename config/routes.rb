@@ -200,7 +200,10 @@ Rails.application.routes.draw do
   end
   # RailsEventStore browser for debugging event streams (global admins only)
   authenticate :user, ->(u) { u.global_admin? } do
-    mount RailsEventStore::Browser => "/res"
+    mount RubyEventStore::Browser::App.for(
+      event_store_locator: -> { Rails.configuration.event_store_browser },
+      views_root: Rails.root.join("app/views/ruby_event_store_browser")
+    ) => "/res"
   end
 
   mount Lookbook::Engine, at: "/lookbook" if Rails.env.development?
