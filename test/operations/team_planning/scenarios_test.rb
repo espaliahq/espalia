@@ -63,12 +63,12 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
     should "move a step's end and say the period it now has" do
       assert_equal({ plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-04-30" },
                    call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-04-30"))
-      assert_equal "Lean Q1 is an alternative: it takes its period from Q1",
+      assert_equal "This scenario is an alternative: it takes its period from its parent",
                    refusal(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: @lean, ends_on: "2027-04-30")
     end
 
     should "remove a leaf, and refuse a scenario others fork from" do
-      assert_equal "1 scenario forks from Q1: remove it first",
+      assert_equal "1 scenario forks from this one: remove it first",
                    refusal(Operations::TeamPlanning::RemoveScenario, scenario_id: @q1)
       assert_equal({ plan_id: @plan_id, scenario_id: @lean, removed: true },
                    call(Operations::TeamPlanning::RemoveScenario, plan_id: @plan_id, scenario_id: @lean))
