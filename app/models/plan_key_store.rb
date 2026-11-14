@@ -84,9 +84,10 @@ class PlanKeyStore
   # @raise [Unavailable, ForeignTenant, InvalidIdentifier]
   def create(identifier, cipher: DEFAULT_CIPHER)
     parts = parse(identifier)
-    refuse_destroyed!(parts)
     existing = scope_for(parts).live.find_by(cipher: cipher)
     return encryption_key(existing) if existing
+
+    refuse_destroyed!(parts)
 
     row = PlanEncryptionKey.create!(**parts, cipher: cipher, key_material: Base64.strict_encode64(random_key(cipher)))
     encryption_key(row)
@@ -148,11 +149,12 @@ class PlanKeyStore
 
   def refuse_destroyed!(parts)
     plan_key = scope_for(parts.merge(person_id: nil))
-    raise Destroyed, "The plan was deleted" if plan_key.destroyed.exists?
+    raise Destroyed, "The plan was deleted" if plan_key.destroyed.exists?(destroyed_reason: "plan_deleted")
     return unless parts[:person_id]
 
     person_destroyed = ActsAsTenant.without_tenant do
-      PlanEncryptionKey.destroyed.where(tenant_id: parts[:tenant_id], person_id: parts[:person_id]).exists? ||
+      PlanEncryptionKey.destroyed.exists?(tenant_id: parts[:tenant_id], person_id: parts[:person_id],
+                                          destroyed_reason: "person_forgotten") ||
         Person.unscoped.where(tenant_id: parts[:tenant_id], id: parts[:person_id]).where.not(forgotten_at: nil).exists?
     end
     raise Destroyed, "The person was forgotten" if person_destroyed

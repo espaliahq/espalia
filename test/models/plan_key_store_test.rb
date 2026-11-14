@@ -107,6 +107,16 @@ class PlanKeyStoreTest < ActiveSupport::TestCase
       assert_equal %w[plan_deleted], PlanEncryptionKey.unscoped.distinct.pluck(:destroyed_reason)
     end
 
+    should "leave the same person's key in another plan alone" do
+      other_plan_key = PlanKeyStore.person_identifier(@tenant.id, SecureRandom.uuid, @person.id)
+      in_tenant do
+        @store.create(@person_key)
+        @store.destroy_plan(@plan_id)
+
+        assert @store.create(other_plan_key)
+      end
+    end
+
     should "tombstone a plan that never minted a key" do
       in_tenant { @store.destroy_plan(@plan_id) }
 
@@ -164,6 +174,17 @@ class PlanKeyStoreTest < ActiveSupport::TestCase
         assert_equal 1, @store.forget(@person_key)
         assert_nil @store.key_of(@person_key)
         assert @store.key_of(@plan_key)
+        assert_raises(PlanKeyStore::Destroyed) { @store.create(@person_key) }
+      end
+    end
+
+    should "leave the plan open to new person keys after its own key goes" do
+      in_tenant do
+        @store.create(@plan_key)
+        @store.forget(@plan_key)
+
+        assert @store.create(@person_key)
+        assert_raises(PlanKeyStore::Destroyed) { @store.create(@plan_key) }
       end
     end
   end
