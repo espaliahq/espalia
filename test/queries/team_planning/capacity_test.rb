@@ -66,6 +66,12 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     end
   end
 
+  def operation(operation, **params)
+    as_tenant { operation.call(context: context_for(@planner), params: { plan_id: @plan_id, scenario_id: @plan_id, **params }) }
+  end
+
+  def place_in(person, placements) = operation(Operations::TeamPlanning::SetAssignment, person_id: person.id, placements:)
+
   def capacity(as: @planner)
     as_tenant { TeamPlanning::Capacity.new(context: context_for(as), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id).call }
   end
@@ -119,6 +125,63 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_equal "position", seat(report, on_map).seat.kind
     assert_equal 1r, seat(report, elsewhere).places.first.figure.amount
     assert_equal({ "per_fte" => Rational(43, 10) }, report.totals)
+  end
+
+  should "price a place in a position as the position's work, and the position for only what its people leave open" do
+    choose(families: { @engineering_family.role_family_id => per_fte })
+    position_id = open_position(fte: 1)
+    place_in(@cy, [ { position_id:, allocation: 0.5 }, { unit_id: @payments, allocation: 0.5 } ])
+    report = capacity
+
+    cy = seat(report, @cy.id)
+    in_position, in_unit = cy.places.partition { it.place.position_id }.map(&:first)
+    assert_equal [ @engineer.role_id, @e5.level_id, @payments ], [ in_position.place.role_id, in_position.place.level_id, in_position.unit_id ]
+    assert_equal Rational(1, 2), in_position.figure.amount
+    assert_equal "unmapped_title", in_unit.reason
+    assert_equal Rational(1, 2), seat(report, position_id).seat.fte
+  end
+
+  should "leave a position filled to its FTE out of the seats, so it is never counted twice" do
+    choose(families: { @engineering_family.role_family_id => per_fte })
+    position_id = open_position(fte: 1)
+    place_in(@cy, [ { position_id:, allocation: 1 } ])
+
+    assert_nil seat(capacity, position_id)
+    assert_equal({ "per_fte" => Rational(19, 5) }, capacity.totals)
+  end
+
+  should "list a place in a closed position as unclassified" do
+    choose(families: { @engineering_family.role_family_id => per_fte })
+    position_id = open_position
+    place_in(@cy, [ { position_id:, allocation: 1 } ])
+    operation(Operations::TeamPlanning::ClosePosition, position_id:)
+
+    assert_equal [ [ nil, "closed_position" ] ], seat(capacity, @cy.id).places.map { [ it.unit_id, it.reason ] }
+  end
+
+  should "share what a person's recorded allocations leave among the places the HRIS gave none, and say so" do
+    choose(families: { @engineering_family.role_family_id => per_fte })
+    as_tenant do
+      people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+      people.set_membership(@dee.id, @engineering, **ESPALIA, allocation: 0.4)
+      people.set_membership(@dee.id, @payments, **ESPALIA)
+    end
+    dee = seat(capacity, @dee.id)
+
+    assert_equal [ Rational(2, 5), Rational(3, 5) ], dee.places.sort_by { it.unit_id == @engineering ? 0 : 1 }.map { it.place.allocation }
+    unknown = dee.places.find { it.unit_id == @payments }
+    assert_not unknown.place.allocation_known
+    assert_equal "Share not recorded, split from what the other places leave", unknown.figure.working.second.label
+    assert_equal 1r, dee.places.sum { it.figure.amount }
+  end
+
+  should "count a place in a unit gone from the map for the plan, under no unit" do
+    choose(families: { @engineering_family.role_family_id => per_fte })
+    gone = SecureRandom.uuid_v7
+    open_position(unit_id: gone)
+
+    assert_nil capacity.units[gone]
+    assert_equal({ "per_fte" => Rational(19, 5) }, capacity.totals)
   end
 
   should "count an unrecorded FTE as 1 and say so in the working" do

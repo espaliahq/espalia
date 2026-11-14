@@ -47,7 +47,7 @@ class TeamPlanning::CapacityModelsTest < ActiveSupport::TestCase
   end
 
   should "price a place at one unit per FTE, exactly, scaled by its share of the seat" do
-    place = Model::Place.new(unit_id: "u1", allocation: Rational("0.6"), role_id: "r", level_id: nil)
+    place = Model::Place.new(unit_id: "u1", allocation: Rational("0.6"), allocation_known: true, role_id: "r", level_id: nil, position_id: nil)
     seat = Model::Seat.new(id: "p1", kind: "person", fte: Rational("0.5"), fte_known: true, places: [ place ])
 
     figure = TeamPlanning::CapacityModels::PerFte.capacity_of(seat, place:, params: {}, map: nil)
@@ -58,7 +58,7 @@ class TeamPlanning::CapacityModelsTest < ActiveSupport::TestCase
   end
 
   should "say in the working when an FTE wasn't recorded" do
-    place = Model::Place.new(unit_id: nil, allocation: 1r, role_id: "r", level_id: nil)
+    place = Model::Place.new(unit_id: nil, allocation: 1r, allocation_known: true, role_id: "r", level_id: nil, position_id: nil)
     seat = Model::Seat.new(id: "p1", kind: "person", fte: 1r, fte_known: false, places: [ place ])
 
     assert_equal "FTE not recorded, counted as 1", TeamPlanning::CapacityModels::PerFte.capacity_of(seat, place:, params: {}, map: nil).working.first.label

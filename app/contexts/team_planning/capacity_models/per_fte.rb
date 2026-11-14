@@ -25,7 +25,8 @@ class TeamPlanning::CapacityModels::PerFte < TeamPlanning::CapacityModel
     amount = seat.fte * place.allocation
     Figure.new(amount:, working: [
       Step.new(label: seat.fte_known ? "FTE" : "FTE not recorded, counted as 1", amount: seat.fte),
-      Step.new(label: "Share of the seat in this place", amount: place.allocation),
+      Step.new(label: place.allocation_known ? "Share of the seat in this place" : "Share not recorded, split from what the other places leave",
+               amount: place.allocation),
       Step.new(label: "Units, at 1 per FTE", amount:)
     ])
   end

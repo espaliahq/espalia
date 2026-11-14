@@ -25,9 +25,13 @@
 class TeamPlanning::CapacityModel
   # A person, or an open position, where capacity is counted.
   #
+  # A position's seat is what its occupants leave open, so a position is
+  # never counted twice. A model finds the reporting lines around a seat on
+  # the map, by its id.
+  #
   # @!attribute id [String] the person's or the position's id
   # @!attribute kind [String] "person" or "position"
-  # @!attribute fte [Rational]
+  # @!attribute fte [Rational] a position's open FTE
   # @!attribute fte_known [Boolean] false when the person has no FTE recorded and counts as one
   # @!attribute places [Array<Place>]
   Seat = Data.define(:id, :kind, :fte, :fte_known, :places)
@@ -37,9 +41,11 @@ class TeamPlanning::CapacityModel
   #
   # @!attribute unit_id [String, nil] nil for a person in no unit
   # @!attribute allocation [Rational] the share of the seat this place holds
+  # @!attribute allocation_known [Boolean] false when the HRIS gave none, and the place shares what the seat's other places leave
   # @!attribute role_id [String]
   # @!attribute level_id [String, nil] nil when the level resolves to none
-  Place = Data.define(:unit_id, :allocation, :role_id, :level_id)
+  # @!attribute position_id [String, nil] the position whose work this is, if any
+  Place = Data.define(:unit_id, :allocation, :allocation_known, :role_id, :level_id, :position_id)
 
   # @!attribute label [String] what the step counts, for a person's card
   # @!attribute amount [Rational]

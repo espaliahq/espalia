@@ -9,14 +9,17 @@ class Operations::TeamPlanning::Capacity < Operations::Base
 
   SIGNIFICANT_DIGITS = 20
 
-  description "Get the capacity of a scenario of a Team Planning plan the caller is in. Each person and open " \
-              "position is a seat; each place it holds (a unit and its share of the seat) is priced by the " \
-              "capacity model its role chooses, through the capacity_model planning rule (a role's choice beats " \
-              "its family's). A person's role and level come from their title and level on the map; a " \
-              "position's from the position. Each figure carries its working. Totals are per model, per unit " \
-              "and for the scenario, never summed across models. A place no model covers counts nowhere and is " \
-              "listed in `unclassified` with its reason. Figures are decimal strings. People are named by id, " \
-              "and `names` maps each to a name. Refused, as an unknown plan, unless the caller is a member."
+  description "Get the capacity of a scenario of a Team Planning plan the caller is in. Each person is a seat, and " \
+              "so is each position for the FTE its occupants leave open. Each place a seat holds (a unit or a " \
+              "position, and its share of the seat) is priced by the capacity model its role chooses through the " \
+              "capacity_model planning rule, a role's choice beating its family's. A place in a position takes the " \
+              "position's role and level; a person placed straight in a unit takes those their title and level map " \
+              "to. An allocation the HRIS didn't give (allocation_known false) shares what the seat's other places " \
+              "leave. Each figure carries its working. Totals are per model, per unit and for the scenario, never " \
+              "summed across models; a place in a unit gone from the map counts for the scenario only. A place no " \
+              "model covers counts nowhere and is listed in `unclassified` with its reason. Figures are decimal " \
+              "strings. People are named by id, and `names` maps each to a name. Refused, as an unknown plan, " \
+              "unless the caller is a member."
   category :read
   approval :none
 
@@ -46,15 +49,16 @@ class Operations::TeamPlanning::Capacity < Operations::Base
   end
 
   def place(priced)
-    { unit_id: priced.unit_id, allocation: priced.place && decimal(priced.place.allocation),
-      role_id: priced.place&.role_id, level_id: priced.place&.level_id, model: priced.model, chosen_for: priced.chosen_for,
-      capacity: priced.figure && decimal(priced.figure.amount),
+    place = priced.place
+    { unit_id: place.unit_id, position_id: place.position_id, allocation: decimal(place.allocation),
+      allocation_known: place.allocation_known, role_id: place.role_id, level_id: place.level_id,
+      model: priced.model, chosen_for: priced.chosen_for, capacity: priced.figure && decimal(priced.figure.amount),
       working: priced.figure&.working&.map { { label: it.label, amount: decimal(it.amount) } },
       reason: priced.reason, reason_text: ::TeamPlanning::Capacity::REASONS[priced.reason] }
   end
 
   def unclassified(seat, place)
-    { seat_id: seat.seat.id, kind: seat.seat.kind, unit_id: place.unit_id, reason: place.reason,
+    { seat_id: seat.seat.id, kind: seat.seat.kind, unit_id: place.unit_id, allocation: decimal(place.place.allocation), reason: place.reason,
       reason_text: ::TeamPlanning::Capacity::REASONS.fetch(place.reason) }
   end
 
