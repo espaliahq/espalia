@@ -76,6 +76,7 @@ class Operations::TeamPlanning::MovePositionTest < ActiveSupport::TestCase
                    call(Operations::TeamPlanning::MovePosition, plan_id: @plan_id, scenario_id: @q1, position_id: SecureRandom.uuid_v7, to_unit_id: @growth)
                  }.message
     assert_equal "This scenario has no such unit", refusal(to_unit_id: SecureRandom.uuid_v7)
+    assert_equal "The position is already in that unit", refusal(to_unit_id: @payments)
     assert_equal @payments, map[:positions].find { it[:position_id] == @position }[:unit_id]
   end
 end
