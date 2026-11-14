@@ -18,7 +18,7 @@ class Operations::TeamPlanning::Baseline < Operations::Base
 
   parameter :plan_id, String, required: true
 
-  # @return [Hash] `{ plan_id, base_on, known_on, units, people, unassigned_ids, positions, unresolved, names }`
+  # @return [Hash] `{ plan_id, base_on, known_on, units, people, unassigned_ids, positions, unresolved, departed, names }`
   def perform
     plan = plan!
     { plan_id: plan.id, **map_payload(::TeamPlanning::Baseline.new(context:, plan:).call) }

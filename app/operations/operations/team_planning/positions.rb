@@ -4,7 +4,9 @@
 # with role and level names from the framework and a budget of committed
 # (backfill) or planned (new) [#228](https://github.com/espaliahq/espalia/issues/228).
 # Each names its occupants and its open FTE
-# [#229](https://github.com/espaliahq/espalia/issues/229), so the
+# [#229](https://github.com/espaliahq/espalia/issues/229), and the people
+# whose departure it backfills
+# [#256](https://github.com/espaliahq/espalia/issues/256), so the
 # forgotten-person audit walks it.
 class Operations::TeamPlanning::Positions < Operations::Base
   include Operations::TeamPlanning::PlanRead
@@ -15,7 +17,8 @@ class Operations::TeamPlanning::Positions < Operations::Base
               "(with names from the framework; a name is null once the framework drops it), unit, FTE, basis and " \
               "budget: 'committed' for a backfill, 'planned' for a new position. occupants lists each person placed " \
               "in it, with allocation and role; open_fte is its FTE less each occupant's allocation times their " \
-              "FTE, below 0 when overfilled. `names` maps every person id to a name; a forgotten person reads as " \
+              "FTE, below 0 when overfilled. backfill_for_ids lists the people whose departure it backfills: " \
+              "empty for a backfill nobody is named for. `names` maps every person id to a name; a forgotten person reads as " \
               "\"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
@@ -29,7 +32,8 @@ class Operations::TeamPlanning::Positions < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).call }
     positions = positions_payload(map)
-    names = positions.flat_map { it[:occupants] }.to_h { [ it[:person_id], map.name_of(it[:person_id]) ] }
+    ids = positions.flat_map { it[:occupants].pluck(:person_id) + it[:backfill_for_ids] }
+    names = ids.to_h { [ it, map.name_of(it) ] }
     { plan_id: plan.id, scenario_id:, positions:, names: }
   end
 end
