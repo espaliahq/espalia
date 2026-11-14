@@ -58,6 +58,14 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [String, nil] the subject's id, nil when it moves none
   def self.subject_moved_by(change) = nil
 
+  # Whether two end states of this kind are the same, as when one is read
+  # off a map and the other was planned. They can differ in key type alone.
+  #
+  # @param left [Hash, nil]
+  # @param right [Hash, nil]
+  # @return [Boolean]
+  def self.same_end_state?(left, right) = left.as_json == right.as_json
+
   # @return [Boolean] whether this kind names its facet and says how it lands
   def self.complete? = %i[facet apply_to].all? { overrides?(it) }
 

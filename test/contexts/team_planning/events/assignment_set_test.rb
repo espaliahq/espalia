@@ -27,7 +27,7 @@ class TeamPlanning::Events::AssignmentSetTest < ActiveSupport::TestCase
     assert_equal map, TeamPlanning::Events::AssignmentSet.apply_to(map, { subject_id: "p1", placements: [] })
   end
 
-  should "read a person's placements back as the end state that set them, in place order, and nothing for someone the map hasn't" do
+  should "read a person's placements back as the end state that set them, and nothing for someone the map hasn't" do
     person = TeamPlanning::Baseline::Member.new(id: "p1", title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil,
                                                 fte: nil, employment_type: nil, memberships: [])
     map = TeamPlanning::Baseline::Map.new(base_on: Date.current, known_on: Date.current, units: [], people: [ person ], unassigned_ids: [],
@@ -36,7 +36,15 @@ class TeamPlanning::Events::AssignmentSetTest < ActiveSupport::TestCase
     placed = TeamPlanning::Events::AssignmentSet.apply_to(map, { subject_id: "p1", **state })
 
     assert_equal state, TeamPlanning::Events::AssignmentSet.read_from(placed, subject_id: "p1")
-    assert_equal [ UNIT.downcase, "0190a1b2-0000-7000-8000-000000000009" ], state[:placements].map { it[:unit_id] }
     assert_nil TeamPlanning::Events::AssignmentSet.read_from(map, subject_id: "p2")
+  end
+
+  should "hold two placement lists in another order the same, and a different allocation not" do
+    one = { unit_id: UNIT.downcase, allocation: 0.5, role: nil, position_id: nil }
+    two = { unit_id: "0190a1b2-0000-7000-8000-000000000009", allocation: 0.5, role: nil, position_id: nil }
+
+    assert TeamPlanning::Events::AssignmentSet.same_end_state?({ placements: [ one, two ] }, { "placements" => [ two, one ] })
+    assert_not TeamPlanning::Events::AssignmentSet.same_end_state?({ placements: [ one, two ] }, { placements: [ one, two.merge(allocation: 1.0) ] })
+    assert_not TeamPlanning::Events::AssignmentSet.same_end_state?(nil, { placements: [] })
   end
 end

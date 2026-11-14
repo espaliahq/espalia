@@ -79,13 +79,13 @@ class TeamPlanning::Status
     today = kind.read_from(now, subject_id:, facet:)
     before = [ kind.read_from(base, subject_id:, facet:), *step_before(change, key) ]
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
-              status: status_of(today, end_state_of(change), before))
+              status: status_of(kind, today, end_state_of(change), before))
   end
 
-  def status_of(today, planned, before)
-    return :done if same?(today, planned)
+  def status_of(kind, today, planned, before)
+    return :done if kind.same_end_state?(today, planned)
 
-    before.any? { same?(today, it) } ? :pending : :conflicting
+    before.any? { kind.same_end_state?(today, it) } ? :pending : :conflicting
   end
 
   def end_state_of(change) = change.data.except(*TeamPlanning::Events::Change::FIELDS)
@@ -101,9 +101,6 @@ class TeamPlanning::Status
     earlier = @aggregate.winning_changes(path[index - 1])[key] if index.positive?
     earlier ? [ end_state_of(earlier) ] : []
   end
-
-  # A stored end state and one read off a map can differ in key type alone.
-  def same?(left, right) = left.as_json == right.as_json
 
   # Today's name wins; the base names a unit since retired.
   def names_for(ids, *maps)
