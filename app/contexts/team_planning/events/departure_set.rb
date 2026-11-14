@@ -57,10 +57,13 @@ class TeamPlanning::Events::DepartureSet < TeamPlanning::Events::Change
   # @return [String, nil] the person, when the Org Graph has them leave
   def self.subject_moved_by(change) = (change.person_id if change.kind == :left)
 
-  # Left out of status per change for now: the Org Graph drops a leaver from
-  # its map, so reading today can't tell someone gone from someone staying,
-  # and every departure would read pending after the person had left.
+  # The Org Graph knows only that someone left, not the step or the backfill,
+  # so a leaver reads as the plan has them leave.
   #
-  # @return [Boolean]
-  def self.meets_org_graph? = false
+  # @param map [TeamPlanning::Baseline::Map] read off the Org Graph
+  # @param change [TeamPlanning::Events::DepartureSet]
+  # @return [Hash, nil] the planned departure once the person has left, nil while they stay
+  def self.read_org_graph(map, change)
+    change.data.except(*FIELDS) if map.left_ids.include?(change.data[:subject_id])
+  end
 end

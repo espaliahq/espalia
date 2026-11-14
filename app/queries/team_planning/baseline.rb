@@ -23,6 +23,8 @@ class TeamPlanning::Baseline
   # @!attribute successions [Array<Succession>] links a scenario made; the baseline has none, and a
   #   map read with `history: true` has those the Org Graph recorded by its day
   # @!attribute people [Array<Member>] the people employed that day, by id
+  # @!attribute left_ids [Array<String>] people who had left; the baseline has none, and a map read
+  #   with `history: true` has those the Org Graph had leave by its day
   # @!attribute unassigned_ids [Array<String>] the people in no live unit
   # @!attribute positions [Array<Position>] the open positions; the Org Graph has none, so only a plan adds them
   # @!attribute names [Hash{String => String}] person id => name, empty until joined
@@ -32,8 +34,8 @@ class TeamPlanning::Baseline
   #   alternative of. A departure set in one of them marks the person leaving; one set earlier takes them off
   # @!attribute departed [Array<Departed>] the people a departure in an earlier step took off the map
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
-                    :rules, :unresolved, :step_ids, :departed) do
-    def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], **) = super
+                    :rules, :unresolved, :step_ids, :departed, :left_ids) do
+    def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -291,13 +293,13 @@ class TeamPlanning::Baseline
   # The organisation on another day, in the shape {#structure} gives, so a
   # reader can hold the plan up against it.
   #
-  # A plan's own map holds only the units and successions a scenario made, so
-  # the Org Graph's are left out unless a reader asks for them.
+  # A plan's own map holds only the units, successions and leavers a scenario
+  # made, so the Org Graph's are left out unless a reader asks for them.
   #
   # @param date [Date]
   # @param known_on [Date, nil] nil for what the Org Graph knows now
-  # @param history [Boolean] whether to carry the units the Org Graph retired, and the
-  #   successions it recorded, by that day
+  # @param history [Boolean] whether to carry the units the Org Graph retired, the
+  #   successions it recorded and the people it had leave, by that day
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   def map_on(date, known_on: nil, history: false)
@@ -313,7 +315,7 @@ class TeamPlanning::Baseline
     return map unless history
 
     map.with(retired_units: snapshot.retired_units.map { Unit.new(**it.to_h.slice(*Unit.members)) },
-             successions: snapshot.successions.map { Succession.new(**it.to_h) })
+             successions: snapshot.successions.map { Succession.new(**it.to_h) }, left_ids: snapshot.left_ids)
   end
 
   # Joins the names of everyone the map names ({Map#person_ids}) and of each

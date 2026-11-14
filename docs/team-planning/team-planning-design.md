@@ -529,14 +529,16 @@ conflicting before the plan starts.
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
 Org Graph can move (it implements `subject_moved_by`) or find (it overrides
-`read_org_graph`) has a status: a unit set, a retirement, a succession, an assignment and
-a reporting line. A rule and a position are plan-only, so each would read pending
-forever. Nor does a departure have one: the as-of read drops a leaver, so today's map
-can't tell someone gone from someone staying.
+`read_org_graph`) has a status: a unit set, a retirement, a succession, an assignment, a
+reporting line and a departure. A rule and a position are plan-only, so each would read
+pending forever.
 
 Today's map is `Baseline#map_on(today, history: true)`, which adds the units the Org Graph
-has retired and the successions it holds, from `OrgGraph::AsOf`'s `retired_units` and
-`successions`. The plain map and the baseline leave both out, as a plan keeps its own. A
+has retired, the successions it holds and the people who have left, from `OrgGraph::AsOf`'s
+`retired_units`, `successions` and `left_ids`. The plain map and the baseline leave all three
+out, as a plan keeps its own. A departure reads done once the Org Graph has the person
+leave, and pending while they stay. The Org Graph knows only that they left, not the step
+or the backfill, so a leaver reads as the plan has them leave. A
 retirement reads done once the Org Graph has retired the unit, whatever it last looked
 like, and pending while the unit is live. The Org Graph mints its own succession ids, so
 a kind reads its end state off today's map through `Change.read_org_graph`, which a

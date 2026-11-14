@@ -291,10 +291,20 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :conflicting, statuses(status)[[ @brook.id, "reporting_line" ]]
   end
 
-  should "leave out a departure, which today's Org Graph can't tell from someone staying" do
+  should "read a planned departure pending while the person stays, and done once the Org Graph has them leave" do
     plan(TeamPlanning::Events::DepartureSet, @brook.id, leaves_in_id: @q1)
+    assert_equal :pending, statuses(status)[[ @brook.id, "departure" ]]
 
-    assert_empty status.statuses
+    on(Time.utc(2026, 3, 10, 9)) { @org.leave(@brook.id, **ESPALIA, effective_on: "2026-03-10") }
+    assert_equal :done, statuses(status)[[ @brook.id, "departure" ]]
+  end
+
+  should "read a planned departure pending again once the Org Graph has the leaver back" do
+    plan(TeamPlanning::Events::DepartureSet, @brook.id, leaves_in_id: @q1)
+    on(Time.utc(2026, 3, 10, 9)) { @org.leave(@brook.id, **ESPALIA, effective_on: "2026-03-10") }
+    on(Time.utc(2026, 3, 20, 9)) { @org.return_to_work(@brook.id, **ESPALIA, effective_on: "2026-03-20") }
+
+    assert_equal :pending, statuses(status)[[ @brook.id, "departure" ]]
   end
 
   should "leave out a kind the Org Graph never moves, which would read pending forever" do

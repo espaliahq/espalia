@@ -90,9 +90,11 @@ class OrgGraph::AsOfTest < ActiveSupport::TestCase
   should "drop a leaver from the day after their leaving date, with their memberships and ownership" do
     as_tenant { @handler.leave(@ada.id, **ESPALIA, effective_on: "2026-04-30") }
 
-    assert_equal [ @ada.id ], as_of("2026-04-30").people.map(&:id)
+    april = as_of("2026-04-30")
+    assert_equal [ [ @ada.id ], [] ], [ april.people.map(&:id), april.left_ids ]
     may = as_of("2026-05-01")
     assert_empty may.people
+    assert_equal [ @ada.id ], may.left_ids
     assert_empty may.memberships
     assert_empty may.units.find { it.id == @payments }.owner_ids
   end
