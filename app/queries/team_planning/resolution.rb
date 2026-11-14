@@ -29,13 +29,22 @@ class TeamPlanning::Resolution
   # @return [TeamPlanning::Baseline::Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def structure
-    winning = @repository.load_plan(@plan.id).winning_changes(@scenario_id).values
-    resolved = winning.reduce(@baseline.structure) { |map, change| change.class.apply_to(map, change.data) }
-    explained(resolved.settled)
-  end
+  def structure = resolved.first
+
+  # @return [Array<TeamPlanning::Attention::Item>] what no longer fits, each with the change it belongs to
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def attention = TeamPlanning::Attention.new(*resolved).call
 
   private
+
+  def resolved
+    @resolved ||= begin
+      winning = @repository.load_plan(@plan.id).winning_changes(@scenario_id)
+      map = winning.values.reduce(@baseline.structure) { |resolved, change| change.class.apply_to(resolved, change.data) }
+      [ explained(map.settled), winning ]
+    end
+  end
 
   # A person off the map either left by the base date, or was forgotten, or
   # joined after it.
