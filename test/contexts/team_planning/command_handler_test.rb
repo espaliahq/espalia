@@ -62,10 +62,12 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanRenamed, TeamPlanning::Events::PlanDeleted ], types
     end
 
-    should "refuse another tenant admin" do
+    should "read as missing to another tenant admin, as an unknown id does" do
       other_admin = context_for(create(:person, tenant: @tenant), role: :admin)
-      assert_raises(Pundit::NotAuthorizedError) { handler(other_admin).rename_plan(@plan_id, "Theirs") }
-      assert_raises(Pundit::NotAuthorizedError) { handler(other_admin).delete_plan(@plan_id) }
+      [ -> { handler(other_admin).rename_plan(@plan_id, "Theirs") }, -> { handler(other_admin).delete_plan(@plan_id) },
+        -> { handler(@admin).rename_plan(SecureRandom.uuid_v7, "Ghost") } ].each do |command|
+        assert_equal "No such plan", assert_raises(TeamPlanning::Error, &command).message
+      end
     end
 
     should "read a plan from another tenant as missing" do

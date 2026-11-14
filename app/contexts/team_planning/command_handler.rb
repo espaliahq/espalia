@@ -34,6 +34,7 @@ class TeamPlanning::CommandHandler
 
   # @param plan_id [String]
   # @param name [String]
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor created it
   # @see TeamPlanning::PlanAggregate#rename
   def rename_plan(plan_id, name)
     @repository.with_plan(plan_id) do |plan|
@@ -43,6 +44,7 @@ class TeamPlanning::CommandHandler
   end
 
   # @param plan_id [String]
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor created it
   # @see TeamPlanning::PlanAggregate#delete
   def delete_plan(plan_id)
     @repository.with_plan(plan_id) do |plan|
@@ -53,12 +55,12 @@ class TeamPlanning::CommandHandler
 
   private
 
-  # A plan nobody created reads as missing to everyone, so the refusal for it
-  # can't tell a caller which plan ids exist.
+  # A plan is private to its creator, so to anyone else it reads as missing:
+  # the refusal can't tell a caller which plan ids exist.
   def authorize_plan!(predicate, plan)
-    raise TeamPlanning::Error, "No such plan" unless plan.exists?
+    return if plan.exists? && PlanPolicy.new(@actor, plan).public_send(predicate)
 
-    authorize!(predicate, plan) { "Only the plan's creator can change it" }
+    raise TeamPlanning::Error, "No such plan"
   end
 
   def authorize!(predicate, record)

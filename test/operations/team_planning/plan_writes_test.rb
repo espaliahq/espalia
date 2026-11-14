@@ -55,10 +55,11 @@ class Operations::TeamPlanning::PlanWritesTest < ActiveSupport::TestCase
       assert_equal "Second half", plan(@plan_id).name
     end
 
-    should "refuse another admin" do
-      assert_raises(Pundit::NotAuthorizedError) do
+    should "read as missing to another admin" do
+      error = assert_raises(Operations::Base::ParameterError) do
         call(Operations::TeamPlanning::RenamePlan, as: @other_admin, plan_id: @plan_id, name: "Mine now")
       end
+      assert_equal "No such plan", error.message
     end
 
     should "say when no plan has that id" do
@@ -92,10 +93,11 @@ class Operations::TeamPlanning::PlanWritesTest < ActiveSupport::TestCase
       assert_equal "Next year has been deleted", error.message
     end
 
-    should "refuse another admin" do
-      assert_raises(Pundit::NotAuthorizedError) do
+    should "read as missing to another admin" do
+      assert_raises(Operations::Base::ParameterError) do
         call(Operations::TeamPlanning::DeletePlan, as: @other_admin, plan_id: @plan_id)
       end
+      assert plan(@plan_id)
     end
   end
 end
