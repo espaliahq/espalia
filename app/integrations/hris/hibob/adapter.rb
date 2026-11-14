@@ -684,9 +684,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #
   # @param result [Hash] running tally
   def offboard_inactive(result, espalia_held_only: false)
-    inactive = Person.inactive
-    inactive = inactive.where(hris_source: nil) if espalia_held_only
-    inactive_ids = inactive.or(Person.where(id: Array(@held_back_leaver_ids))).select(:id)
+    inactive_ids = (espalia_held_only ? Person.inactive.where(hris_source: nil) : inactive_or_held_back).select(:id)
 
     open_enrollments = AssessmentCycleEnrollment.active
       .where(person_id: inactive_ids)
@@ -788,6 +786,10 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       end
     end
   end
+
+  # A fed tenant's held-back leaver waits for the next sync's PersonLeft, as
+  # the feed follows the Org Graph, which still has them employed.
+  def inactive_or_held_back = Person.inactive.or(Person.where(id: Array(@held_back_leaver_ids)))
 
   def held_back_leaver?(person) = Array(@held_back_leaver_ids).include?(person.id)
 

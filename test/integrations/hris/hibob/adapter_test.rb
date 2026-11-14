@@ -1566,11 +1566,18 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal @bob.id, PersonDevelopment::CommandHandler.new.load(@alice.id, @framework.framework_id).manager_id
     end
 
-    should "still offboard someone HiBob reports gone while the units rebuild" do
+    should "leave someone HiBob reports gone while the units rebuild to the next sync's leaving" do
       employees = with_employee("bob-001") { |e| e["isActive"] = false }
-      result = while_rebuilding(@tenant, OrgGraph::Projections::Structure) { build_adapter(employees).sync_people }
+      held_back = while_rebuilding(@tenant, OrgGraph::Projections::Structure) { build_adapter(employees).sync_people }
 
-      assert_equal 1, result[:offboarded]
+      assert_equal 0, held_back[:offboarded]
+      assert_empty OrgGraph::PersonDevelopmentSweepJob.perform_now(@tenant.reload)
+      assert ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.exists?(person_id: @alice.id) }
+
+      replay(@tenant, OrgGraph::Projections::Structure)
+      left = build_adapter(employees).sync_people
+
+      assert_equal({ withdraw: 1, unassign: 1 }, left[:person_development])
       assert_not ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.exists?(person_id: @alice.id) }
     end
 
