@@ -209,10 +209,11 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     rows = Person.where(external_id: employees.map { it["id"].to_s }).pluck(:external_id, :id, :email)
     held = rows.to_h { |external_id, id, _| [ external_id, id ] }
     held_emails = rows.to_h { |external_id, _, email| [ external_id, email ] }
-    left = OrgLeaver.where(person_id: held.values).pluck(:person_id).to_set
     emails = employees.filter_map { it["email"]&.downcase&.strip.presence }
     # Each email's row, by HRIS id; nil for a row without one, which a newcomer adopts.
     owners = Person.where(email: [ *emails, *held_emails.values ].compact).pluck(:email, :external_id).to_h
+    adoptable = Person.where(forgotten_at: nil, external_id: nil, email: emails).pluck(:email, :id).to_h
+    left = OrgLeaver.where(person_id: [ *held.values, *adoptable.values ]).pluck(:person_id).to_set
     lambda do |employee|
       external_id = employee["id"].to_s
       email = employee["email"]&.downcase&.strip.presence
@@ -227,7 +228,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           owners.delete(held_emails[external_id])
           owners[email] = external_id
         end
-        # The Org Graph takes a leaver back only once their new start date comes.
+        # The Org Graph takes a leaver back only once their new start date comes, as for a row adopted by email.
         next !left.include?(held[external_id]) || back_at_work?(attrs, started_on)
       end
       next false if forgotten_person(external_id) && !back_at_work?(attrs, started_on)
@@ -235,7 +236,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
       # The sync creates people in response order, so the first to claim an email keeps it.
       owners[email] = external_id if email
-      true
+      !left.include?(adoptable[email]) || back_at_work?(attrs, started_on)
     end
   end
 

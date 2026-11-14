@@ -752,6 +752,17 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "3141" ], read_department(employees).keys
     end
 
+    should "read a leaver the sync adopts by email only once their new start date comes" do
+      %w[back@example.com ahead@example.com].each do |email|
+        OrgLeaver.create!(tenant: @tenant, person: create(:person, tenant: @tenant, email:), left_on: Date.current - 30)
+      end
+      employees = [ { "id" => "3141", "email" => "back@example.com", "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "2718", "email" => "ahead@example.com", "work" => { "startDate" => (Date.current + 7).iso8601 } },
+                    { "id" => "1618", "email" => "ahead@example.com" } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
     should "read a forgotten person only once they are back at work" do
       forget_row("3141")
       forget_row("2718")
