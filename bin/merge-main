@@ -3,7 +3,7 @@
 # sides' migrations when the merge leaves it conflicted (two PRs that both migrate
 # always clash on its `version:` line). Any other conflict is left for you.
 #
-# The rebuild uses its own throwaway database, so the dev and test databases,
+# Each run rebuilds on its own throwaway database, so the dev and test databases,
 # and any agent using them, are untouched. Run `bin/rails db:migrate` afterwards.
 set -euo pipefail
 
@@ -47,7 +47,8 @@ restore_conflict() {
 trap restore_conflict ERR
 
 echo "Rebuilding db/schema.rb from main's schema plus this branch's migrations…"
-export RAILS_ENV=test DATABASE_URL=postgresql:///growth_os_merge_main
+export RAILS_ENV=test DATABASE_URL="postgresql:///growth_os_merge_main_$$"
+trap 'bin/rails db:drop >/dev/null 2>&1 || true' EXIT
 git show origin/main:db/schema.rb > db/schema.rb
 
 # Loading a schema marks every migration file older than its version as run,
@@ -62,7 +63,6 @@ if [[ -n "$ours" ]]; then
   OURS="$ours" bin/rails runner 'ENV["OURS"].split(",").each { |v| ActiveRecord::Base.connection_pool.schema_migration.delete_version(v) }'
 fi
 bin/rails db:migrate db:schema:dump
-bin/rails db:drop
 trap - ERR
 
 git add db/schema.rb
