@@ -548,6 +548,18 @@ when a band was last added, changed or removed (`bands_changed_at`). The tenant 
 time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
 to a rate, reprices plans too but does not move the stamp.
 
+#### Cost on screen
+
+A scenario's map opens with a Cost strip: its total, the difference from Today over the
+same days, the period and what it is priced at, what sits in no unit on the map, and a
+list of the seats left out. Each unit card shows its own places' cost beside its name.
+The units and the no-unit figure add up to the strip's total, and the Scenarios table's
+Cost column shows that same total. Today's row reads "No period of its own", and Today's
+map shows no cost. The strip and column appear only once a band prices something, and a
+scenario that can't be priced keeps its map and reads "Can't be priced" in the table.
+Figures round to three significant figures (`Views::Plans::CostMarks::Format`); no band
+minimum or maximum shows on either page.
+
 ### The see-pay right as built
 
 A member holds the see-pay right or not
