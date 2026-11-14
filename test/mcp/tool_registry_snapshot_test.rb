@@ -3743,7 +3743,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "plan_id", "relation", "name" ],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "if" => {
+            "properties" => {
+              "relation" => {
+                "const" => "then"
+              }
+            },
+            "required" => [ "relation" ]
+          },
+          "then" => {
+            "required" => [ "ends_on" ],
+            "properties" => {
+              "ends_on" => {
+                "minLength" => 1,
+                "pattern" => "\\S"
+              }
+            }
+          }
         },
         "annotations" => {
           "readOnlyHint" => false,

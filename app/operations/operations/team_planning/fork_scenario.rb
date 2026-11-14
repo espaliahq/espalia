@@ -21,6 +21,7 @@ class Operations::TeamPlanning::ForkScenario < Operations::Base
     schema: { description: "What the scenario is, such as 'Lean Q1'. Don't put a person's name in it." }
   parameter :starts_on, String, allow_blank: false, schema: DATE_SCHEMA
   parameter :ends_on, String, allow_blank: false, schema: DATE_SCHEMA
+  requires_when :ends_on, if: :relation, equals: "then", message: "Say when this step ends"
 
   # @return [Hash] `{ plan_id, scenario_id, parent_id, relation, name, starts_on, ends_on }`
   def perform
