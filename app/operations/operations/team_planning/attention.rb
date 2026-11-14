@@ -25,13 +25,17 @@ class Operations::TeamPlanning::Attention < Operations::Base
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
-    resolution = ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:)
-    items, map = refusing_bad_plans { [ resolution.attention, resolution.call ] }
-    people = items.select { it.facet == ::TeamPlanning::Attention::ASSIGNMENT }.map(&:subject_id).uniq
-    { plan_id: plan.id, scenario_id:, items: items.map { item_row(it) }, names: people.to_h { [ it, map.name_of(it) ] } }
+    items = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).attention }
+    { plan_id: plan.id, scenario_id:, items: items.map { item_row(it) }, names: names_of(plan, items) }
   end
 
   private
+
+  def names_of(plan, items)
+    ids = items.select { it.facet == ::TeamPlanning::Attention::ASSIGNMENT }.map(&:subject_id).uniq
+    known = ::Person.where(tenant_id: plan.tenant_id, id: ids).pluck(:id, :name).to_h
+    ids.to_h { [ it, known.fetch(it, Person::FORMER_MEMBER) ] }
+  end
 
   def item_row(item)
     change = item.change && { kind: item.change.class.name.demodulize, scenario_id: item.change.data[:scenario_id],

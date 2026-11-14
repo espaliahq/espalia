@@ -39,11 +39,9 @@ class TeamPlanning::Resolution
   private
 
   def resolved
-    @resolved ||= begin
-      winning = @repository.load_plan(@plan.id).winning_changes(@scenario_id)
-      map = winning.values.reduce(@baseline.structure) { |resolved, change| change.class.apply_to(resolved, change.data) }
-      [ explained(map.settled), winning ]
-    end
+    winning = @repository.load_plan(@plan.id).winning_changes(@scenario_id)
+    map = winning.values.reduce(@baseline.structure) { |resolved, change| change.class.apply_to(resolved, change.data) }
+    [ explained(map.settled), winning ]
   end
 
   # A person off the map either left by the base date, or was forgotten, or
