@@ -24,7 +24,7 @@ module RebuildLock
     begin
       # Closing alone frees the lock only once the backend exits, after we return.
       rebuild.exec("SELECT pg_advisory_unlock_all()") if rebuild && !rebuild.finished?
-    rescue PG::Error => e
+    rescue StandardError => e
       raise unless failure
 
       warn "RebuildLock: unlock failed after #{failure.class}: #{e.message}"

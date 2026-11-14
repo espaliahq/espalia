@@ -34,6 +34,13 @@ class RebuildLockTest < ActiveSupport::TestCase
     assert_equal "the test's failure", error.message
   end
 
+  should "keep the test's own failure when the unlock fails with something other than a PG error" do
+    error = assert_raises(RuntimeError) do
+      with_failing_unlock(IOError) { while_rebuilding(create(:tenant)) { raise "the test's failure" } }
+    end
+    assert_equal "the test's failure", error.message
+  end
+
   should "raise a failed unlock when nothing else failed" do
     assert_raises(PG::ConnectionBad) { with_failing_unlock { while_rebuilding(create(:tenant)) { } } }
   end
@@ -48,10 +55,10 @@ class RebuildLockTest < ActiveSupport::TestCase
 
   private
 
-  def with_failing_unlock(&)
+  def with_failing_unlock(error = PG::ConnectionBad, &)
     failing_unlock = Module.new do
       define_method(:exec) do |sql, &block|
-        raise PG::ConnectionBad, "server closed the connection" if sql.include?("unlock_all")
+        raise error, "server closed the connection" if sql.include?("unlock_all")
 
         super(sql, &block)
       end
