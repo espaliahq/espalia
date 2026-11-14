@@ -87,12 +87,15 @@ class PlanKeyStore
     existing = scope_for(parts).live.find_by(cipher: cipher)
     return encryption_key(existing) if existing
 
-    refuse_destroyed!(parts)
+    PlanEncryptionKey.transaction do
+      lock(:plan, parts[:tenant_id], parts[:plan_id])
+      lock(:person, parts[:tenant_id], parts[:person_id]) if parts[:person_id]
+      existing = scope_for(parts).live.find_by(cipher: cipher)
+      return encryption_key(existing) if existing
 
-    row = PlanEncryptionKey.create!(**parts, cipher: cipher, key_material: Base64.strict_encode64(random_key(cipher)))
-    encryption_key(row)
-  rescue ActiveRecord::RecordNotUnique
-    key_of(identifier, cipher: cipher) || raise(Destroyed, "This key was destroyed")
+      refuse_destroyed!(parts)
+      encryption_key(insert_key(parts, cipher))
+    end
   end
 
   # Destroys one key.
@@ -111,13 +114,16 @@ class PlanKeyStore
   # @return [Integer] keys destroyed
   def destroy_plan(plan_id)
     tenant = current_tenant!
-    destroyed = tombstone(PlanEncryptionKey.where(tenant: tenant, plan_id: plan_id), "plan_deleted")
-    PlanEncryptionKey.insert_all(
-      [ { tenant_id: tenant.id, plan_id: plan_id, person_id: nil, cipher: DEFAULT_CIPHER, destroyed_at: Time.current,
-         destroyed_reason: "plan_deleted" } ],
-      unique_by: :index_plan_keys_one_per_plan
-    )
-    destroyed
+    PlanEncryptionKey.transaction do
+      lock(:plan, tenant.id, plan_id)
+      destroyed = tombstone(PlanEncryptionKey.where(tenant: tenant, plan_id: plan_id), "plan_deleted")
+      PlanEncryptionKey.insert_all(
+        [ { tenant_id: tenant.id, plan_id: plan_id, person_id: nil, cipher: DEFAULT_CIPHER,
+            destroyed_at: Time.current, destroyed_reason: "plan_deleted" } ],
+        unique_by: :index_plan_keys_one_per_plan
+      )
+      destroyed
+    end
   end
 
   # Destroys a forgotten person's key in every plan of the current tenant.
@@ -127,7 +133,11 @@ class PlanKeyStore
   # @param person_id [String]
   # @return [Integer] keys destroyed
   def destroy_person(person_id)
-    tombstone(PlanEncryptionKey.where(tenant: current_tenant!, person_id: person_id), "person_forgotten")
+    tenant = current_tenant!
+    PlanEncryptionKey.transaction do
+      lock(:person, tenant.id, person_id)
+      tombstone(PlanEncryptionKey.where(tenant: tenant, person_id: person_id), "person_forgotten")
+    end
   end
 
   private
@@ -147,7 +157,25 @@ class PlanKeyStore
     ActsAsTenant.without_tenant { PlanEncryptionKey.where(**parts) }
   end
 
+  # A create and a destroy for the same plan or person take turns, so a key
+  # can't be minted between a destroy's check and its commit. The lock lasts
+  # until the caller's transaction ends.
+  def lock(kind, tenant_id, id)
+    key = "plan-keys/#{kind}/#{tenant_id}/#{id}"
+    PlanEncryptionKey.connection.execute(
+      PlanEncryptionKey.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key ])
+    )
+  end
+
+  def insert_key(parts, cipher)
+    PlanEncryptionKey.transaction(requires_new: true) do
+      PlanEncryptionKey.create!(**parts, cipher: cipher, key_material: Base64.strict_encode64(random_key(cipher)))
+    end
+  end
+
   def refuse_destroyed!(parts)
+    raise Destroyed, "This key was destroyed" if scope_for(parts).tombstones.exists?
+
     plan_key = scope_for(parts.merge(person_id: nil))
     raise Destroyed, "The plan was deleted" if plan_key.tombstones.exists?(destroyed_reason: "plan_deleted")
     return unless parts[:person_id]
