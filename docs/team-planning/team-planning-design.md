@@ -152,8 +152,9 @@ anyone `PlanPolicy#show?` refuses. It returns a `Map`:
 - **Unassigned**: the people in no live unit.
 
 `structure` returns the map by id with no names, so scenario resolution (3.2) can apply
-a plan's changes before anything is named. `call` joins the names last, from `people`,
-so anyone forgotten reads "Former member". The forgotten-person audit walks it.
+a plan's changes before anything is named. `call` joins the names last from the
+`people` table, for the people, their managers and the units' owners, so anyone forgotten
+reads "Former member". The forgotten-person audit walks it.
 
 ## Status is derived, never stored
 
