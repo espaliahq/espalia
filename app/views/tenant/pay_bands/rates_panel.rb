@@ -81,7 +81,8 @@ module Views::Tenant::PayBands::RatesPanel
       end
       modal.body do
         p(class: "text-sm text-default") do
-          "A report dated on or after #{rate_day(rate)} uses the pair's earlier rate, or stops if there is none."
+          "Reports dated from #{rate_day(rate)} use the latest remaining rate between the two currencies, " \
+            "either way round, and stop if none applies."
         end
         settings_form(tenant_exchange_rate_path(id), method: :delete, class: "mt-4 flex justify-end gap-2") do
           render Components::Kit::Button.new(variant: :outline, tone: :neutral, data: { action: "modal#close" }) { "Cancel" }

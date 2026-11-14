@@ -3842,9 +3842,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "tenants_remove_exchange_rate",
-        "description" => "Remove an exchange rate, by exchange_rate_id from tenants_exchange_rates. Dates it covered " \
-                         "convert at the pair's earlier rate, or fail until another is added. Refused unless the caller " \
-                         "is a tenant admin.",
+        "description" => "Remove an exchange rate, by exchange_rate_id from tenants_exchange_rates. Dates it covered then " \
+                         "use the latest remaining rate between the two currencies, either way round, or fail if none " \
+                         "applies. Refused unless the caller is a tenant admin.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

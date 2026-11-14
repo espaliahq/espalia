@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# Removes a rate. Dates it covered convert at the pair's earlier rate, or fail.
+# Removes a rate. Dates it covered fall to the latest remaining rate for the pair, or fail.
 class Operations::Tenants::RemoveExchangeRate < Operations::Base
   include Operations::Tenants::ExchangeRateSupport
 
-  description "Remove an exchange rate, by exchange_rate_id from tenants_exchange_rates. Dates it covered " \
-              "convert at the pair's earlier rate, or fail until another is added. Refused unless the caller " \
-              "is a tenant admin."
+  description "Remove an exchange rate, by exchange_rate_id from tenants_exchange_rates. Dates it covered then " \
+              "use the latest remaining rate between the two currencies, either way round, or fail if none " \
+              "applies. Refused unless the caller is a tenant admin."
   category :destructive
   approval :in_app
 
