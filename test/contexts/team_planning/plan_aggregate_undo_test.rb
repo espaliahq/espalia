@@ -56,27 +56,30 @@ class TeamPlanning::PlanAggregateUndoTest < ActiveSupport::TestCase
   def refusal(&) = assert_raises(TeamPlanning::Error, &).message
 
   should "take back a change, bringing back the one before it, and restore it on redo" do
-    set(@lean, "Senior Engineer")
+    earlier = set(@lean, "Senior Engineer")
     latest = set(@lean, "Lead Engineer")
 
     undo_change(@lean, latest)
-    assert_equal({ plan_id: @plan_id, scenario_id: @lean, subject_id: "lin", facet: "title", undone_event_id: latest, undone_by_id: @ada_id }, last_event.data)
+    assert_equal({ plan_id: @plan_id, scenario_id: @lean, subject_id: "lin", facet: "title", undone_event_id: latest, undone_by_id: @ada_id,
+                   in_effect_event_id: earlier }, last_event.data)
     assert_equal [ "Senior Engineer" ], titles(@lean)
     assert @plan.undone?(latest)
 
     redo_change(@lean, latest)
-    assert_equal({ plan_id: @plan_id, scenario_id: @lean, subject_id: "lin", facet: "title", redone_event_id: latest, redone_by_id: @ada_id }, last_event.data)
+    assert_equal({ plan_id: @plan_id, scenario_id: @lean, subject_id: "lin", facet: "title", redone_event_id: latest, redone_by_id: @ada_id,
+                   in_effect_event_id: latest }, last_event.data)
     assert_equal [ "Senior Engineer", "Lead Engineer" ], titles(@lean)
   end
 
   should "bring a cleared override back when the clear is undone" do
     set(@q1, "Senior Engineer")
-    set(@lean, "Lead Engineer")
+    lead = set(@lean, "Lead Engineer")
     cleared = clear(@lean)
     assert_empty titles(@lean)
 
     undo_change(@lean, cleared)
     assert_equal [ "Lead Engineer" ], titles(@lean)
+    assert_equal lead, last_event.data[:in_effect_event_id]
   end
 
   should "hand a pinned facet back to the parent when the pin is undone" do
@@ -87,6 +90,7 @@ class TeamPlanning::PlanAggregateUndoTest < ActiveSupport::TestCase
 
     undo_change(@lean, pinned)
     assert_empty titles(@lean)
+    assert_nil last_event.data[:in_effect_event_id]
     assert_equal "Staff Engineer", @plan.inherited_change(@lean, %w[lin title]).last.data[:title]
   end
 

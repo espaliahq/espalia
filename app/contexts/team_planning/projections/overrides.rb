@@ -6,9 +6,9 @@
 #
 # Writes `team_planning_overrides`, and nothing else writes it. A clear
 # removes the row, as does a removed scenario or a deleted plan; the stream
-# keeps them all. An undo or redo puts back whatever is then in effect for
-# its subject and facet, read from the stream as it stood at that event. It
-# reads each event through {TeamPlanning::ChangeEntry} and hears every kind
+# keeps them all. An undo or redo puts back the change or pin its event names
+# as then in effect for its subject and facet, or removes the row. It reads
+# each event through {TeamPlanning::ChangeEntry} and hears every kind
 # in {TeamPlanning::ChangeKinds}.
 #
 class TeamPlanning::Projections::Overrides
@@ -33,7 +33,7 @@ class TeamPlanning::Projections::Overrides
     ActsAsTenant.with_tenant(tenant) { TeamPlanningOverride.where(tenant_id: tenant.id).delete_all }
   end
 
-  # @param event_store [RubyEventStore::Client] where an undo or redo reads its plan's stream
+  # @param event_store [RubyEventStore::Client] where an undo or redo reads the change it puts back
   def initialize(event_store: Rails.configuration.event_store)
     @event_store = event_store
   end
@@ -65,16 +65,9 @@ class TeamPlanning::Projections::Overrides
   end
 
   def restore(entry, event)
-    in_effect = plan_as_of(event).changes_in(entry.scenario_id).reverse_each.find { it.key == [ entry.subject_id, entry.facet ] }
-    return TeamPlanningOverride.where(entry.to_h.slice(:scenario_id, :subject_id, :facet)).delete_all unless in_effect
+    in_effect_event_id = event.data[:in_effect_event_id] or
+      return TeamPlanningOverride.where(entry.to_h.slice(:scenario_id, :subject_id, :facet)).delete_all
 
-    write(TeamPlanning::ChangeEntry.from(@event_store.read.event(in_effect.event_id)))
-  end
-
-  def plan_as_of(event)
-    plan = TeamPlanning::PlanAggregate.new
-    stream = EventStreamNaming.plan_stream(event.data[:plan_id])
-    (@event_store.read.stream(stream).to(event.event_id).to_a + [ event ]).each { plan.apply(it) }
-    plan
+    write(TeamPlanning::ChangeEntry.from(@event_store.read.event(in_effect_event_id)))
   end
 end

@@ -239,16 +239,7 @@ class TeamPlanning::PlanAggregate
 
   # @param scenario_id [String]
   # @return [Array<TeamPlanning::Events::Change>] the scenario's changes in effect, oldest first: its log without what it cleared or undid
-  def changes_in(scenario_id)
-    @logs.fetch(scenario_id, []).reject { undone?(it.event_id) }.each_with_object([]) do |entry, in_effect|
-      if entry.is_a?(TeamPlanning::Events::ChangeCleared)
-        key = entry.data.values_at(:subject_id, :facet)
-        in_effect.reject! { it.key == key }
-      else
-        in_effect << entry
-      end
-    end
-  end
+  def changes_in(scenario_id) = in_effect(scenario_id, @undone)
 
   # @param event_id [String] an entry of a scenario's log
   # @return [Boolean] whether that entry stands undone
@@ -270,7 +261,8 @@ class TeamPlanning::PlanAggregate
 
     ensure_nothing_later!(scenario_id, entry, "undo")
     subject_id, facet = key_of(entry)
-    apply(TeamPlanning::Events::ChangeUndone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, undone_event_id: event_id, undone_by_id: }))
+    in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone | [ event_id ])
+    apply(TeamPlanning::Events::ChangeUndone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, undone_event_id: event_id, undone_by_id:, in_effect_event_id: }))
   end
 
   # Restores an undone entry of a scenario's log, in its place.
@@ -288,7 +280,8 @@ class TeamPlanning::PlanAggregate
 
     ensure_nothing_later!(scenario_id, entry, "redo")
     subject_id, facet = key_of(entry)
-    apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id: }))
+    in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone - [ event_id ])
+    apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id:, in_effect_event_id: }))
   end
 
   # What an Undo button takes back for one person: their latest entry in the
@@ -538,6 +531,21 @@ class TeamPlanning::PlanAggregate
   end
 
   private
+
+  def in_effect(scenario_id, undone)
+    @logs.fetch(scenario_id, []).reject { undone.include?(it.event_id) }.each_with_object([]) do |entry, in_effect|
+      if entry.is_a?(TeamPlanning::Events::ChangeCleared)
+        key = entry.data.values_at(:subject_id, :facet)
+        in_effect.reject! { it.key == key }
+      else
+        in_effect << entry
+      end
+    end
+  end
+
+  # What an undo or redo leaves in effect for one key, so the overrides
+  # projection can write it without replaying the stream.
+  def in_effect_at(scenario_id, key, undone) = in_effect(scenario_id, undone).reverse_each.find { it.key == key }&.event_id
 
   # Checked on the caller's fields and on the kind's, so a kind that filters
   # its input can't let a caller's plan_id through unrefused.
