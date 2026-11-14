@@ -40,7 +40,7 @@ class PlansController < ApplicationController
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
-    marks = capacity_marks(plan, scenario_id, names: map[:names])
+    marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
     render plan_page(plan, scenarios:, open_tab: :map,
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?, **capacity_hooks(marks)))
   end
@@ -49,10 +49,10 @@ class PlansController < ApplicationController
 
   # Every scenario is measured against the baseline, as cost is, so its
   # capacity and Today's are read side by side.
-  def capacity_marks(plan, scenario_id, names: {})
+  def capacity_marks(plan, scenario_id, names: {}, live_unit_ids: nil)
     @capacity ||= {}
     scenario, baseline = [ scenario_id, plan[:plan_id] ].map { @capacity[it] ||= read(Operations::TeamPlanning::Capacity, scenario_id: it) }
-    Views::Plans::CapacityMarks.new(scenario:, baseline:, names: scenario[:names].merge(names))
+    Views::Plans::CapacityMarks.new(scenario:, baseline:, names: scenario[:names].merge(names), live_unit_ids:)
   end
 
   def capacity_hooks(marks)

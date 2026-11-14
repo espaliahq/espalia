@@ -43,10 +43,13 @@ class Views::Plans::CapacityMarks
   # @param scenario [Hash] `team_planning_capacity` for the scenario shown
   # @param baseline [Hash] `team_planning_capacity` for the plan's baseline
   # @param names [Hash{String => String}] person id => name, from the map
-  def initialize(scenario:, baseline:, names:)
+  # @param live_unit_ids [Array<String>, nil] the units the map shows, so an
+  #   unassigned row finds a place left in a retired unit
+  def initialize(scenario:, baseline:, names:, live_unit_ids: nil)
     @scenario = scenario
     @baseline = baseline
     @names = names
+    @live_unit_ids = live_unit_ids&.to_set
   end
 
   # Today counts too, so a scenario that empties a model still shows the drop.
@@ -140,14 +143,18 @@ class Views::Plans::CapacityMarks
   def seats = @seats ||= @scenario[:seats].index_by { it[:seat_id] }
 
   # A place in a position is the position's; anyone else's is their unit's.
+  # The map lists someone as unassigned when no unit they're in is live, so
+  # their row takes a place in no unit or in one the map no longer shows.
   def place_of(person_id, place)
     seat = seats[person_id]
     return unless seat && measured?
 
     seat[:places].find do |priced|
-      place ? priced[:position_id] == place[:position_id] && (place[:position_id] || priced[:unit_id] == place[:unit_id]) : priced[:unit_id].nil?
+      place ? priced[:position_id] == place[:position_id] && (place[:position_id] || priced[:unit_id] == place[:unit_id]) : off_the_map?(priced)
     end
   end
+
+  def off_the_map?(priced) = priced[:unit_id].nil? || (priced[:position_id].nil? && @live_unit_ids&.exclude?(priced[:unit_id]))
 
   def exact(value) = value.nil? ? BigDecimal(0) : BigDecimal(value)
 end
