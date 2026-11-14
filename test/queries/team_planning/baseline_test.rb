@@ -131,6 +131,9 @@ class TeamPlanning::BaselineTest < ActiveSupport::TestCase
     map = baseline
     assert_nil person(map, @brook)
     assert_equal [ @grace.id ], map.unassigned_ids
+    assert_empty map.left_ids
+    reader = as_tenant { TeamPlanning::Baseline.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)) }
+    assert_equal [ @brook.id ], as_tenant { reader.map_on(BASE_ON, history: true) }.left_ids
   end
 
   should "show a forgotten person as a former member" do

@@ -13,7 +13,8 @@
 #
 # Memberships and owners are kept only where both ends are in the snapshot:
 # a person on the roster, in a live unit. The units retired by the day, and
-# the successions recorded by then, are held apart from the live units.
+# the successions recorded by then, are held apart from the live units, and
+# the people who had left by the day from the roster.
 # Leaving writes no ownership event, so a leaver who owned a unit drops out of
 # its owners here.
 #
@@ -34,7 +35,8 @@ class OrgGraph::AsOf
   # @!attribute memberships [Array<Membership>]
   # @!attribute retired_units [Array<Unit>] the units retired by that day, as they last stood, by name
   # @!attribute successions [Array<Succession>] the successions recorded by that day, by id
-  Snapshot = Data.define(:date, :known_on, :people, :units, :memberships, :retired_units, :successions)
+  # @!attribute left_ids [Array<String>] the people who had left by that day, by id
+  Snapshot = Data.define(:date, :known_on, :people, :units, :memberships, :retired_units, :successions, :left_ids)
 
   # One person's facts that day, and who supplied each, keyed by fact
   # ("title", "site", "employment", …).
@@ -70,7 +72,8 @@ class OrgGraph::AsOf
     live = units.fetch("live", [])
     memberships = memberships_from(rows.fetch(OrgGraph::Projections::History::PERSON, []), person_ids, live.to_set(&:id))
     Snapshot.new(date: @date, known_on: @known_on, people:, units: live, memberships:, retired_units: units.fetch("retired", []),
-                 successions: successions_from(rows.fetch(OrgGraph::Projections::History::SUCCESSION, [])))
+                 successions: successions_from(rows.fetch(OrgGraph::Projections::History::SUCCESSION, [])),
+                 left_ids: left_from(rows.fetch(OrgGraph::Projections::History::PERSON, [])))
   end
 
   Row = Data.define(:subject_type, :subject_id, :fact, :key, :value, :provider)
@@ -112,6 +115,10 @@ class OrgGraph::AsOf
       [ value.("status", "status"), Unit.new(id:, name: value.("name", "name"), parent_id: value.("parent", "parent_id"),
                                              level_id: value.("level", "level_id"), owner_ids:) ]
     end.group_by(&:first).transform_values { |pairs| pairs.map(&:last).sort_by { [ it.name.to_s, it.id ] } }
+  end
+
+  def left_from(rows)
+    rows.select { it.fact == "employment_status" && it.value&.fetch("employment_status", nil) == "left" }.map(&:subject_id).uniq.sort
   end
 
   def successions_from(rows)
