@@ -134,6 +134,19 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
                                                                   effective_on: "2026-02-01")
       assert_equal %w[Department Team Squad], OrgTaxonomyLevel.top_first.pluck(:name)
     end
+
+    should "leave removing a level to a tenant admin" do
+      squad = SecureRandom.uuid_v7
+      structure(context_for(@lead, role: :admin)).add_level(squad, "Squad", effective_on: "2026-02-01")
+
+      error = assert_raises(OrgGraph::Authorization::Refused) do
+        structure(context_for(@other, org_graph_editor: true)).remove_level(squad, effective_on: "2026-02-01")
+      end
+
+      assert_equal "Only a tenant admin can change the taxonomy's levels", error.message
+      structure(context_for(@lead, role: :admin)).remove_level(squad, effective_on: "2026-02-01")
+      assert_equal %w[Department Team], OrgTaxonomyLevel.top_first.pluck(:name)
+    end
   end
 
   context "as an owner of a unit above" do

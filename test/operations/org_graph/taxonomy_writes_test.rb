@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# Adding a level and reordering the levels (#127), so the settings screen and
+# Adding, reordering and removing levels (#127, #148), so the settings screen and
 # MCP change the taxonomy through the same commands.
 class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
   include OrgGraphFixture
@@ -100,6 +100,63 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         call(Operations::OrgGraph::ReorderLevels, as: @editor, level_ids: [ @department, @team, @guild, @squad ])
       end
       assert_equal %w[Department Team Squad Guild], level_names
+    end
+  end
+
+  context "RemoveLevel" do
+    setup do
+      @guild = call(Operations::OrgGraph::AddLevel, name: "Guild")[:level_id]
+      @department, @team, @squad = level_ids.first(3)
+    end
+
+    should "remove a level no unit has held, with the caller as actor" do
+      result = call(Operations::OrgGraph::RemoveLevel, level_id: @guild, effective_on: "2026-11-01")
+
+      assert_equal %w[Department Team Squad], level_names
+      assert_equal({ level_id: @guild, name: "Guild", effective_on: "2026-11-01" }, result.except(:levels))
+      assert_equal %w[Department Team Squad], result[:levels].pluck(:name)
+      event = Rails.configuration.event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).last
+      assert_equal @admin.person.id, event.data[:defined_by_id]
+    end
+
+    should "keep a level that holds units, naming them" do
+      error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @team) }
+
+      assert_equal "Team can't be removed, as it holds Checkout and Platform", error.message
+      assert_includes level_names, "Team"
+    end
+
+    should "keep a level whose only unit is retired, naming it" do
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .retire_unit(@org[:payments], effective_on: Date.current)
+      end
+
+      error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @squad) }
+
+      assert_equal "Squad can't be removed, as it held Payments", error.message
+      assert_includes level_names, "Squad"
+    end
+
+    should "keep a level an HRIS provides until it is handed back, naming the provider" do
+      error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @department) }
+
+      assert_equal "Department comes from HiBob; hand it back to Espalia before removing it", error.message
+    end
+
+    should "refuse a level that isn't in the taxonomy" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::RemoveLevel, level_id: SecureRandom.uuid_v7)
+      end
+
+      assert_equal "Level is not in the taxonomy", error.message
+    end
+
+    should "leave the taxonomy to a tenant admin" do
+      [ @editor, @member ].each do |caller|
+        assert_raises(Pundit::NotAuthorizedError) { call(Operations::OrgGraph::RemoveLevel, as: caller, level_id: @guild) }
+      end
+      assert_includes level_names, "Guild"
     end
   end
 end

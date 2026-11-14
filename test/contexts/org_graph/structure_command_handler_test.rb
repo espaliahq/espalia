@@ -59,16 +59,17 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       error = assert_raises(RuntimeError) do
         as_tenant { @handler.define_taxonomy(levels(%w[Department Team]), effective_on: @today) }
       end
-      assert_match "holds units", error.message
+      assert_equal "Squad can't be removed, as it holds Checkout", error.message
     end
 
     should "refuse to drop a level a retired unit held" do
       create_unit(@squad, "Checkout", level: "Squad")
       as_tenant { @handler.retire_unit(@squad, effective_on: @today) }
 
-      assert_raises(RuntimeError) do
+      error = assert_raises(RuntimeError) do
         as_tenant { @handler.define_taxonomy(levels(%w[Department Team]), effective_on: @today) }
       end
+      assert_equal "Squad can't be removed, as it held Checkout", error.message
     end
 
     should "refuse a level id that isn't a UUID" do
@@ -129,6 +130,38 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
       as_tenant { @handler.reorder_levels([ guild, *stale.reverse ], effective_on: @today, defined_by_id: @actor) }
       assert_equal %w[Guild Squad Team Department], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
+    end
+  end
+
+  context "#remove_level" do
+    should "remove a level no unit has held, and refuse one already gone" do
+      guild = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.add_level(guild, "Guild", effective_on: @today)
+        @handler.remove_level(guild, effective_on: @today, defined_by_id: @actor)
+      end
+
+      assert_equal %w[Department Team Squad], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
+      assert_equal @actor, structure_events.last.data[:defined_by_id]
+      assert_raises(ArgumentError) { as_tenant { @handler.remove_level(guild, effective_on: @today) } }
+    end
+
+    should "keep a level an HRIS provides until it is handed back" do
+      department = level_ids_top_first.first
+      as_tenant { @handler.set_level_provider(department, "hibob", effective_on: @today, field: "department") }
+
+      error = assert_raises(RuntimeError) { as_tenant { @handler.remove_level(department, effective_on: @today) } }
+      assert_equal "Department comes from hibob; hand it back to Espalia before removing it", error.message
+    end
+
+    should "carry the plan that removed a level" do
+      guild, plan_id, plan_change_id = Array.new(3) { SecureRandom.uuid_v7 }
+      as_tenant do
+        @handler.add_level(guild, "Guild", effective_on: @today)
+        @handler.remove_level(guild, effective_on: @today, plan_id:, plan_change_id:)
+      end
+
+      assert_equal [ plan_id, plan_change_id ], structure_events.last.data.values_at(:plan_id, :plan_change_id)
     end
   end
 
