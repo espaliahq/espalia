@@ -48,6 +48,14 @@ class TeamPlanning::OnCostTest < ActiveSupport::TestCase
     assert_equal "Equipment is a fixed amount in EUR, and this seat is priced in NZD", refused.message
   end
 
+  should "take an exact Rational, and refuse one no short decimal holds" do
+    assert_equal "12.5", TeamPlanning::RuleKinds.check("on_cost", { model: "flat", params: { percent: Rational(25, 2) } })["params"]["percent"]
+    assert_equal "1200.5",
+                 TeamPlanning::RuleKinds.check("on_cost", { model: "itemised", params: { items: [ { name: "Kit", amount: Rational(2401, 2), currency: "EUR" } ] } })
+                   .dig("params", "items", 0, "amount")
+    assert_equal "A flat on-cost's percent must be a percentage, such as 12.5", refusal({ model: "flat", params: { percent: Rational(1, 3) } })
+  end
+
   should "refuse a malformed model without repeating a figure" do
     assert_equal "No such on-cost model", refusal({ model: "guess", params: {} })
     assert_equal "An on_cost rule must give its model's params", refusal({ model: "flat" })

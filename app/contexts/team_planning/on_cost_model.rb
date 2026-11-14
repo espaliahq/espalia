@@ -62,7 +62,12 @@ class TeamPlanning::OnCostModel
 
   # @param value [String, Numeric]
   # @return [String] a number as typed, or a Numeric as plain decimal digits
-  def self.decimal_text(value) = value.is_a?(Numeric) ? BigDecimal(value.to_s).to_s("F").delete_suffix(".0") : value.to_s.strip
+  def self.decimal_text(value)
+    return value.to_s.strip unless value.is_a?(Numeric)
+
+    decimal = value.is_a?(Rational) ? BigDecimal(value, 30) : BigDecimal(value.to_s)
+    decimal.to_s("F").delete_suffix(".0")
+  end
 
   # @param percent [String] as {.percent!} stored it
   # @return [Rational] the fraction of the base
