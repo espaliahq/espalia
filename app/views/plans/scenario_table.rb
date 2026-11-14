@@ -13,11 +13,9 @@ class Views::Plans::ScenarioTable < Views::Base
   WIDE = "hidden sm:table-cell"
 
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
-  # @param base_on [Date] the plan's base date
   # @param extra_columns [Array<Column>]
-  def initialize(scenarios:, base_on:, extra_columns: [])
+  def initialize(scenarios:, extra_columns: [])
     @scenarios = scenarios
-    @base_on = base_on
     @extra_columns = extra_columns
   end
 

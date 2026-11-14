@@ -45,7 +45,7 @@ class Views::Plans::ShowView < Views::Base
         div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
           section(class: "flex-1 min-w-0", aria: { labelledby: "plan-main-heading" }) do
             tab_strip
-            render(@body || Views::Plans::ScenarioTable.new(scenarios: @scenarios, base_on: base_on))
+            render(@body || Views::Plans::ScenarioTable.new(scenarios: @scenarios))
           end
           aside(class: "w-full lg:w-80 shrink-0 space-y-6", aria: { label: "About this plan" }) do
             (@panels || default_panels).each { render it }

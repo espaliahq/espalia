@@ -5,7 +5,7 @@ require "test_helper"
 class Views::Plans::ScenarioTableTest < ActiveSupport::TestCase
   def periods(*scenarios)
     baseline = { scenario_id: "plan", parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-14", ends_on: nil }
-    html = Views::Plans::ScenarioTable.new(scenarios: [ baseline, *scenarios ], base_on: Date.new(2026, 11, 14)).call
+    html = Views::Plans::ScenarioTable.new(scenarios: [ baseline, *scenarios ]).call
     Nokogiri::HTML5.fragment(html).css("tbody tr").map { it.css("td")[1].text.strip }
   end
 
