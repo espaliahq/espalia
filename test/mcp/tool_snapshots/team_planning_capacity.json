@@ -1,0 +1,27 @@
+{
+  "name": "team_planning_capacity",
+  "description": "Get the capacity of a scenario of a Team Planning plan the caller is in. Each person and open position is a seat; each place it holds (a unit and its share of the seat) is priced by the capacity model its role chooses, through the capacity_model planning rule (a role's choice beats its family's). A person's role and level come from their title and level on the map; a position's from the position. Each figure carries its working. Totals are per model, per unit and for the scenario, never summed across models. A place no model covers counts nowhere and is listed in `unclassified` with its reason. Figures are decimal strings. People are named by id, and `names` maps each to a name. Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
