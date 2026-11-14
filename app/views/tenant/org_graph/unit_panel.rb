@@ -115,7 +115,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   end
 
   def stale_flag(membership)
-    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "units", unit: @unit.id })
+    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "units", unit: @unit.id, **@comparison.params })
   end
 
   def people_changes(unit)

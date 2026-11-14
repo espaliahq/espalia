@@ -58,6 +58,19 @@ class Tenant::OrgFactConfirmationsControllerTest < ActionDispatch::IntegrationTe
     assert_not_includes flags, "Cyril Moss's membership of Checkout"
   end
 
+  should "keep the Units view's comparison open across Still true" do
+    travel 91.days
+    window = { from: 30.days.ago.to_date.iso8601, to: Date.current.iso8601, by: "learned" }
+
+    get tenant_org_graph_path(unit: @org[:checkout], **window)
+    form = page.at_css("[data-stale-flag=\"Cyril Moss's membership of Checkout\"] form")
+    assert_equal window.stringify_keys, form.css("input[name=from], input[name=to], input[name=by]").to_h { [ it["name"], it["value"] ] }
+
+    post tenant_org_person_confirmations_path(@org[:cyril]),
+         params: { facts: [ "membership" ], unit_id: @org[:checkout], return_to: "units", unit: @org[:checkout], **window }
+    assert_redirected_to tenant_org_graph_path(unit: @org[:checkout], **window)
+  end
+
   should "confirm a pair of facts together and go back to the person drawer" do
     travel 91.days
 
