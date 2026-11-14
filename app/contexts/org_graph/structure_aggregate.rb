@@ -71,8 +71,7 @@ class OrgGraph::StructureAggregate
 
     in_use = live_units.map(&:level_id).uniq
 
-    kept_order = level_ids(@levels) & in_use
-    raise "Levels in use must keep their order" unless level_ids(levels) & in_use == kept_order
+    ensure_levels_in_use_keep_order!(levels, in_use)
 
     ensure_hris_levels_on_top!(level_ids(levels), new_providers)
 
@@ -618,6 +617,16 @@ class OrgGraph::StructureAggregate
 
   # Levels an HRIS provides sit above every level Espalia holds, so the levels
   # top first run from HRIS ones to Espalia's and never back.
+  def ensure_levels_in_use_keep_order!(levels, in_use)
+    kept_order = level_ids(@levels) & in_use
+    new_order = level_ids(levels) & in_use
+    moved, passed = new_order.zip(kept_order).find { |new_id, old_id| new_id != old_id }
+    return unless moved
+
+    name = ->(id) { levels.find { |level| level[:level_id] == id }[:name] }
+    raise "#{name[passed]} and #{name[moved]} both hold units, so #{name[passed]} must stay above #{name[moved]}"
+  end
+
   def ensure_hris_levels_on_top!(ids, changes = {})
     providers = ids.map { |id| changes.fetch(id) { level_provider(id) } }
     first_espalia = providers.index(ESPALIA) || providers.size

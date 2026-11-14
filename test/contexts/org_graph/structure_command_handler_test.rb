@@ -77,13 +77,22 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
-    should "refuse to reorder the levels in use" do
+    should "refuse to reorder the levels in use, naming the two" do
       create_unit(@department, "Engineering", level: "Department")
       create_unit(@team, "Payments", level: "Team", parent_id: @department)
 
-      assert_raises(RuntimeError) do
+      error = assert_raises(RuntimeError) do
         as_tenant { @handler.define_taxonomy(levels(%w[Team Department Squad]), effective_on: @today) }
       end
+      assert_equal "Department and Team both hold units, so Department must stay above Team", error.message
+    end
+
+    should "let a level in use pass an empty one" do
+      create_unit(@team, "Payments", level: "Team")
+
+      as_tenant { @handler.define_taxonomy(levels(%w[Team Department Squad]), effective_on: @today) }
+
+      assert_equal %w[Team Department Squad], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
     end
 
     should "refuse duplicate or blank level names" do
