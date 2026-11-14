@@ -37,6 +37,20 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [TeamPlanning::Baseline::Map] the map with this end state in place
   def self.apply_to(map, data) = raise(NotImplementedError, "#{name} must say how it lands on a map")
 
+  # Reads this kind's end state for one subject back off a map, so a caller
+  # can keep what a map already holds. The caller chooses the map: a pin
+  # ([#239](https://github.com/espaliahq/espalia/issues/239)) reads the
+  # parent's resolved map, and status per change
+  # ([#235](https://github.com/espaliahq/espalia/issues/235)) a map built from
+  # today's Org Graph. Applying an end state and reading it
+  # back gives the same end state.
+  #
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param subject_id [String]
+  # @param facet [String] the second half of the change's {#key}
+  # @return [Hash, nil] the end state as {.end_state} stores it, or nil when the map doesn't hold the subject
+  def self.read_from(map, subject_id:, facet: self.facet) = raise(NotImplementedError, "#{name} can't read its end state off a map")
+
   # The subject whose facet of this kind an Org Graph change moves, for the
   # drift report. A kind that meets no Org Graph change keeps the default.
   #
@@ -45,7 +59,17 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   def self.subject_moved_by(change) = nil
 
   # @return [Boolean] whether this kind names its facet and says how it lands
-  def self.complete? = %i[facet apply_to].all? { method(it).owner != TeamPlanning::Events::Change.singleton_class }
+  def self.complete? = %i[facet apply_to].all? { overrides?(it) }
+
+  # @return [Boolean] whether this kind can read its end state off a map
+  def self.readable? = overrides?(:read_from)
+
+  # @param facet [String] the second half of a change's {#key}
+  # @return [Boolean] whether a change of this kind can have that key
+  def self.holds?(facet) = facet == self.facet
+
+  def self.overrides?(method_name) = method(method_name).owner != TeamPlanning::Events::Change.singleton_class
+  private_class_method :overrides?
 
   # @return [Array(String, String)] what the last change wins over
   def key = [ data[:subject_id], self.class.facet ]

@@ -105,7 +105,7 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
                base_on: "2026-11-14", scenario_id: @scenario_id, parent_id: @scenario_id, relation: "instead",
                ends_on: "2027-04-30", position_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
                level_id: SecureRandom.uuid_v7, unit_id: SecureRandom.uuid_v7, fte: 1, basis: "new",
-               placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ] }
+               placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap" }
     values.slice(*operation.parameters.keys)
   end
 

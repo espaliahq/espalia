@@ -42,7 +42,7 @@ class TeamPlanning::PlanAggregate
     @members = {}
     @scenarios = {}
     @removed_scenario_ids = Set.new
-    @changes = {}
+    @logs = {}
   end
 
   # Opens the plan.
@@ -228,9 +228,95 @@ class TeamPlanning::PlanAggregate
     apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }))
   end
 
+  # Every change, pin and clear a scenario made, in order. A pin is the change
+  # it stands for, under the pin's event id.
+  #
   # @param scenario_id [String]
-  # @return [Array<TeamPlanning::Events::Change>] the scenario's own changes, oldest first
-  def changes_in(scenario_id) = @changes.fetch(scenario_id, []).dup
+  # @return [Array<TeamPlanning::Events::Change, TeamPlanning::Events::ChangeCleared>]
+  def log_of(scenario_id) = @logs.fetch(scenario_id, []).dup
+
+  # @param scenario_id [String]
+  # @return [Array<TeamPlanning::Events::Change>] the scenario's changes in effect, oldest first: its log without what it cleared
+  def changes_in(scenario_id)
+    @logs.fetch(scenario_id, []).each_with_object([]) do |entry, in_effect|
+      if entry.is_a?(TeamPlanning::Events::ChangeCleared)
+        key = entry.data.values_at(:subject_id, :facet)
+        in_effect.reject! { it.key == key }
+      else
+        in_effect << entry
+      end
+    end
+  end
+
+  # Stops a scenario overriding one facet of one subject, so it follows its
+  # parent there again. The changes it made stay in the stream.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param subject_id [String]
+  # @param facet [String] the second half of the change's key
+  # @param cleared_by_id [String] person_id of the actor
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, or it doesn't change that facet
+  def clear_change(scenario_id:, subject_id:, facet:, cleared_by_id:)
+    ensure_open!
+    ensure_overrides!(live_scenario!(scenario_id), [ subject_id, facet ])
+
+    apply(TeamPlanning::Events::ChangeCleared.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, cleared_by_id: }))
+  end
+
+  # The change a scenario inherits for a key: the last one along its parent's
+  # resolution chain.
+  #
+  # @param scenario_id [String] a live scenario
+  # @param key [Array(String, String)] a subject and a facet
+  # @return [Array(String, TeamPlanning::Events::Change), nil] the scenario that made it and the change; nil when it comes from the baseline
+  def inherited_change(scenario_id, key)
+    parent_id = @scenarios.fetch(live_scenario!(scenario_id)) { return nil }.parent_id
+    resolution_chain(parent_id).reverse_each do |id|
+      change = changes_in(id).reverse_each.find { it.key == key }
+      return [ id, change ] if change
+    end
+    nil
+  end
+
+  # Takes the end state a scenario inherits for one facet of one subject as its
+  # own change, so a later change in its parent doesn't reach it.
+  #
+  # @param kind [Class<TeamPlanning::Events::Change>]
+  # @param scenario_id [String] a live scenario
+  # @param subject_id [String]
+  # @param facet [String] the second half of the change's key
+  # @param end_state [Hash] what the scenario inherits, as the kind stores it
+  # @param pinned_by_id [String] person_id of the actor
+  # @param pinned_from [Array(String, String), nil] the scenario and event id of the change it keeps; nil for the baseline
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the root, or it already changes that facet
+  # @raise [ArgumentError] for a kind that is not a change, or an end state that doesn't make that key
+  def pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from: nil)
+    raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change && kind.complete?
+
+    ensure_pinnable!(scenario_id, [ subject_id, facet ])
+    end_state = own_fields!(end_state.to_h.symbolize_keys)
+    pinned = pinned_change(kind, { plan_id: @plan_id, scenario_id:, subject_id:, set_by_id: pinned_by_id }, end_state)
+    raise ArgumentError, "That end state doesn't make a #{facet} change" unless pinned.key == [ subject_id, facet ]
+
+    from_scenario_id, from_event_id = pinned_from
+    apply(TeamPlanning::Events::ChangePinned.new(data: {
+      plan_id: @plan_id, scenario_id:, subject_id:, facet:, kind: kind.name, end_state: end_state.to_h,
+      pinned_from_scenario_id: from_scenario_id, pinned_from_event_id: from_event_id, pinned_by_id:
+    }))
+  end
+
+  # Refuses a pin before anyone works out what it would keep.
+  #
+  # @param scenario_id [String]
+  # @param key [Array(String, String)] a subject and a facet
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the root, or it already changes that facet
+  def ensure_pinnable!(scenario_id, key)
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline inherits nothing to pin" if live_scenario!(scenario_id) == @plan_id
+    return unless own_change?(scenario_id, key)
+
+    raise TeamPlanning::Error, "#{name_of(scenario_id)} already changes this: clear it to follow its parent, or set it"
+  end
 
   # The change that wins for each subject and facet along the scenario's
   # resolution chain: the last one made, nearest the scenario.
@@ -346,9 +432,20 @@ class TeamPlanning::PlanAggregate
     @scenarios[id] = @scenarios.fetch(id).with(ends_on: Date.iso8601(event.data[:ends_on]))
   end
 
+  on TeamPlanning::Events::ChangeCleared do |event|
+    record_change(event)
+  end
+
+  on TeamPlanning::Events::ChangePinned do |event|
+    data = event.data
+    record_change(pinned_change(data[:kind].constantize, { plan_id: data[:plan_id], scenario_id: data[:scenario_id],
+                                                           subject_id: data[:subject_id], set_by_id: data[:pinned_by_id] },
+                                data[:end_state], event_id: event.event_id))
+  end
+
   on TeamPlanning::Events::ScenarioRemoved do |event|
     @scenarios.delete(event.data[:scenario_id])
-    @changes.delete(event.data[:scenario_id])
+    @logs.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
@@ -363,8 +460,19 @@ class TeamPlanning::PlanAggregate
     fields
   end
 
+  def own_change?(scenario_id, key) = changes_in(scenario_id).any? { it.key == key }
+
+  def ensure_overrides!(scenario_id, key)
+    raise TeamPlanning::Error, "#{name_of(scenario_id)} doesn't change this, so there is nothing to clear" unless own_change?(scenario_id, key)
+  end
+
+  # A pin resolves as a change of the kind it keeps.
+  def pinned_change(kind, fields, end_state, event_id: SecureRandom.uuid)
+    kind.new(event_id:, data: { **fields, **end_state.to_h.symbolize_keys })
+  end
+
   def record_change(event)
-    (@changes[event.data[:scenario_id]] ||= []) << event
+    (@logs[event.data[:scenario_id]] ||= []) << event
   end
 
   def ensure_editor_remains!(person_id)

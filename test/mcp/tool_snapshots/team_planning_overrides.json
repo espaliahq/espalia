@@ -1,0 +1,26 @@
+{
+  "name": "team_planning_overrides",
+  "description": "List what a scenario of a Team Planning plan the caller is in overrides: each subject and facet it sets or pinned, its end state, who set it and when. Each also shows what the scenario would inherit without it: the nearest ancestor scenario that changes it, or the baseline. A pin names where its value came from (a null scenario_id: read off its parent's organisation, as a rule above the subject or the baseline gave it), and parent_moved whether its parent would now give it something else. A forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

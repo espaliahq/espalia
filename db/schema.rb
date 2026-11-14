@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_120011) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_120047) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1072,6 +1072,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120011) do
     t.datetime "updated_at", null: false
     t.index ["tenant_id"], name: "index_reference_currencies_on_tenant_id", unique: true
     t.index ["updated_by_id"], name: "index_reference_currencies_on_updated_by_id"
+  end
+
+  create_table "team_planning_overrides", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.uuid "scenario_id", null: false
+    t.string "subject_id", null: false
+    t.string "facet", null: false
+    t.string "kind", null: false
+    t.jsonb "end_state", default: {}, null: false
+    t.boolean "pinned", default: false, null: false
+    t.uuid "pinned_from_scenario_id"
+    t.uuid "pinned_from_event_id"
+    t.uuid "event_id", null: false
+    t.uuid "set_by_id"
+    t.datetime "set_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["scenario_id", "subject_id", "facet"], name: "idx_on_scenario_id_subject_id_facet_ac0f7b0215", unique: true
+    t.index ["tenant_id", "plan_id", "scenario_id"], name: "idx_on_tenant_id_plan_id_scenario_id_59115d760f"
   end
 
   create_table "team_planning_plan_members", id: :uuid, default: nil, force: :cascade do |t|
