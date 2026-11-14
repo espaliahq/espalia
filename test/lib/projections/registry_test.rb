@@ -26,6 +26,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           team_planning/plans
           team_planning/plan_members
           team_planning/scenarios
+          team_planning/overrides
         ].sort,
         Projections::Registry.names.sort
       )
