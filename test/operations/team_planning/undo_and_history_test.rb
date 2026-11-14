@@ -103,6 +103,20 @@ class Operations::TeamPlanning::UndoAndHistoryTest < ActiveSupport::TestCase
     assert_equal [ "undo", set[:event_id] ], undone.values_at(:action, :reverses_event_id)
   end
 
+  should "page the history, oldest first" do
+    set_cap(@q1, 8)
+    set_cap(@q1, 9)
+    set_cap(@q1, 10)
+
+    Operations::TeamPlanning::History.stub(:per_page, 2) do
+      first = call(:History, plan_id: @plan_id, scenario_id: @q1)
+      second = call(:History, plan_id: @plan_id, scenario_id: @q1, page: 2)
+
+      assert_equal [ 1, true, [ 8, 9 ] ], [ first[:page], first[:next_page], first[:entries].map { it.dig(:end_state, "value", "cap") } ]
+      assert_equal [ 2, false, [ 10 ] ], [ second[:page], second[:next_page], second[:entries].map { it.dig(:end_state, "value", "cap") } ]
+    end
+  end
+
   should "name a pin's source in the history" do
     set_cap(@q1, 8)
     as_tenant { handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP) }

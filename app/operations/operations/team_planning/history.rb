@@ -6,7 +6,14 @@
 class Operations::TeamPlanning::History < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
-  description "List the history of a scenario of a Team Planning plan the caller is in, oldest first: every " \
+  # Rows a page holds.
+  PER_PAGE = 100
+
+  # @return [Integer] rows a page holds; a seam for tests
+  def self.per_page = PER_PAGE
+
+  description "List the history of a scenario of a Team Planning plan the caller is in, oldest first, " \
+              "#{PER_PAGE} entries a page, with next_page true when another follows: every " \
               "change it set, pin and clear it made, and every undo and redo of one, with who did it and when. " \
               "action is set, pin, clear, undo or redo; an undo or redo names the entry it reverses in " \
               "reverses_event_id. An entry that stands undone says who undid it. A value that can be erased is " \
@@ -17,8 +24,9 @@ class Operations::TeamPlanning::History < Operations::Base
 
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true
+  parameter :page, Integer, required: false
 
-  # @return [Hash] `{ plan_id, scenario_id, entries: [...] }`
+  # @return [Hash] `{ plan_id, scenario_id, page, next_page, entries: [...] }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
@@ -26,9 +34,14 @@ class Operations::TeamPlanning::History < Operations::Base
       raise Operations::Base::ParameterError, "This plan has no such scenario"
     end
 
-    entries = TeamPlanningHistoryEntry.where(plan_id: plan.id, scenario_id:).order(:position).to_a
+    page = params[:page].to_i.clamp(1..)
+    per_page = self.class.per_page
+    entries = TeamPlanningHistoryEntry.where(plan_id: plan.id, scenario_id:).order(:position)
+                                      .offset((page - 1) * per_page).limit(per_page + 1).to_a
+    next_page = entries.size > per_page
+    entries = entries.first(per_page)
     names = Person.where(id: entries.flat_map { [ it.actor_id, it.undone_by_id ] }.compact.uniq).pluck(:id, :name).to_h
-    { plan_id: plan.id, scenario_id:, entries: entries.map { entry(it, names) } }
+    { plan_id: plan.id, scenario_id:, page:, next_page:, entries: entries.map { entry(it, names) } }
   end
 
   private
