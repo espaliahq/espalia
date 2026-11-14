@@ -47,6 +47,11 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ "Placed in a retired unit", "Placed in a unit no longer in this scenario" ], reasons(map(people: [ person ]))
   end
 
+  should "list one subject's reasons in order, whatever order their places come in" do
+    assert_equal [ "Placed in a retired unit", "Placed in a unit no longer in this scenario" ],
+                 reasons(map(people: [ member(places: [ [ GONE, 0.5 ], [ RETIRED, 0.5 ] ]) ]))
+  end
+
   should "tell a retired unit from one no longer in the scenario" do
     units = [ unit(ROOT, nil), unit(LIVE, GONE) ]
     person = B::Member.new(id: PERSON, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: 1,
