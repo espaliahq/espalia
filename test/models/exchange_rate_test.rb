@@ -32,6 +32,7 @@ class ExchangeRateTest < ActiveSupport::TestCase
                  [ %w[NZD AUD], %w[AUD NZD], %w[AUD AUD] ].map { |from, to| ExchangeRate.factor(from:, to:, on: JULY) }
     refused = assert_raises(ExchangeRate::MissingRate) { ExchangeRate.factor(from: "NZD", to: "EUR", on: JULY) }
     assert_equal "There is no exchange rate from NZD to EUR in force on 2026-07-01", refused.message
+    assert_raises(ArgumentError) { ExchangeRate.factor(from: "NZD", to: "AUD", on: "2026-07-01") }
   end
 
   should "use the rate in force on the date, so each period converts at its own" do
