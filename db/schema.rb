@@ -348,7 +348,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
     t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["tenant_id", "from_currency", "to_currency", "applies_from"], name: "index_exchange_rates_on_pair_and_date", unique: true
+    t.index "tenant_id, LEAST(from_currency, to_currency), GREATEST(from_currency, to_currency), applies_from", name: "index_exchange_rates_on_pair_and_date", unique: true
     t.index ["updated_by_id"], name: "index_exchange_rates_on_updated_by_id"
     t.check_constraint "from_currency::text <> to_currency::text", name: "exchange_rates_two_currencies"
     t.check_constraint "rate > 0::numeric", name: "exchange_rates_positive"

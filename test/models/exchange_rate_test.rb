@@ -33,14 +33,12 @@ class ExchangeRateTest < ActiveSupport::TestCase
     assert_equal BigDecimal("60"), convert(100, on: JULY.next_month)
   end
 
-  should "prefer whichever direction applies from later, and the pair's own should two adds race to one date" do
+  should "prefer whichever direction applies from later, and let the database refuse both on one date" do
     rate.save!
     rate(from: "AUD", to: "NZD", rate: "4", applies_from: JULY.next_month).save!
 
     assert_equal BigDecimal("25"), convert(100, on: JULY.next_month)
-
-    rate(rate: "0.2", applies_from: JULY.next_month).save!(validate: false)
-    assert_equal BigDecimal("20"), convert(100, on: JULY.next_month)
+    assert_raises(ActiveRecord::RecordNotUnique) { rate(rate: "0.2", applies_from: JULY.next_month).save!(validate: false) }
   end
 
   should "name the pair and the date when no rate is in force, never converting at 1.0" do

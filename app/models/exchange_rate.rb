@@ -51,11 +51,11 @@ class ExchangeRate < ApplicationRecord
     rate.from_currency == from ? amount * rate.rate : amount / rate.rate
   end
 
-  # @return [ExchangeRate, nil] the latest-dated rate for the pair either way, the pair's own on a tie
+  # @return [ExchangeRate, nil] the latest-dated rate for the pair either way round
   def self.in_force(from, to, on)
     where(from_currency: from, to_currency: to).or(where(from_currency: to, to_currency: from))
       .where(applies_from: ..on)
-      .order(applies_from: :desc, from_currency: from < to ? :asc : :desc)
+      .order(applies_from: :desc)
       .first
   end
   private_class_method :in_force

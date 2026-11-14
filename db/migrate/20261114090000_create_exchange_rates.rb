@@ -19,8 +19,8 @@ class CreateExchangeRates < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :exchange_rates, %i[tenant_id from_currency to_currency applies_from], unique: true,
-                                                                                      name: "index_exchange_rates_on_pair_and_date"
+    add_index :exchange_rates, "tenant_id, LEAST(from_currency, to_currency), GREATEST(from_currency, to_currency), applies_from",
+              unique: true, name: "index_exchange_rates_on_pair_and_date"
     add_check_constraint :exchange_rates, "rate > 0", name: "exchange_rates_positive"
     add_check_constraint :exchange_rates, "from_currency <> to_currency", name: "exchange_rates_two_currencies"
   end
