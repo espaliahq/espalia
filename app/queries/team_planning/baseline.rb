@@ -21,10 +21,55 @@ class TeamPlanning::Baseline
   # @!attribute people [Array<Member>] the people employed that day, by id
   # @!attribute unassigned_ids [Array<String>] the people in no live unit
   # @!attribute names [Hash{String => String}] person id => name, empty until joined
-  Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :names) do
+  # @!attribute rules [Rules] the rules the organisation follows
+  Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :names, :rules) do
     # @param person_id [String]
     # @return [String]
     def name_of(person_id) = names.fetch(person_id, Person::FORMER_MEMBER)
+
+    # A unit follows the nearest unit at or above it that sets the rule, then
+    # the plan-wide value. A unit gone from the map takes its rules with it.
+    #
+    # @param rule [String] a {TeamPlanning::RuleKind.rule_name}
+    # @param unit_id [String, nil] nil for the whole plan
+    # @return [Hash]
+    # @raise [TeamPlanning::Error] for an unknown rule, or a unit not on the map
+    def rule(rule, unit_id: nil) = rules.value_of(rule.to_s, along: unit_id ? units_up_from(unit_id) : [])
+
+    private
+
+    def units_up_from(unit_id)
+      by_id = units.index_by(&:id)
+      raise TeamPlanning::Error, "No such unit" unless by_id.key?(unit_id)
+
+      chain = [ unit_id ]
+      while (parent_id = by_id[chain.last].parent_id) && by_id.key?(parent_id) && chain.exclude?(parent_id)
+        chain << parent_id
+      end
+      chain
+    end
+  end
+
+  # The rules a map follows: each rule's value before the plan sets it, then
+  # what the plan's scenarios set, by subject (the plan's id or a unit's).
+  #
+  # @!attribute plan_id [String] the subject that sets a rule plan-wide
+  # @!attribute defaults [Hash{String => Hash}] by rule
+  # @!attribute by_subject [Hash{String => Hash{String => Hash}}] subject id => rule => value
+  Rules = Data.define(:plan_id, :defaults, :by_subject) do
+    # @return [Rules] with the value in place
+    def with_rule(subject_id, rule, value) = with(by_subject: by_subject.merge(subject_id => by_subject.fetch(subject_id, {}).merge(rule => value)))
+
+    # @param rule [String]
+    # @param along [Array<String>] unit ids, nearest first
+    # @return [Hash]
+    # @raise [TeamPlanning::Error] for a rule no kind names
+    def value_of(rule, along:)
+      raise TeamPlanning::Error, "No such rule" unless defaults.key?(rule)
+
+      setter = (along + [ plan_id ]).find { by_subject.fetch(it, {}).key?(rule) }
+      setter ? by_subject[setter][rule] : defaults[rule]
+    end
   end
 
   # A live unit. `parent_id` is nil at the root.
@@ -57,7 +102,8 @@ class TeamPlanning::Baseline
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
-    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {})
+    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {},
+            rules: Rules.new(plan_id: @plan.id, defaults: TeamPlanning::RuleKinds.defaults, by_subject: {}))
   end
 
   # Joins the names of everyone a map names: its people, their managers and
