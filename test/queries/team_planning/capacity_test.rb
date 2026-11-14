@@ -229,9 +229,79 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_equal [ "no_model" ], seat(capacity, @brook.id).places.map(&:reason).uniq
   end
 
+  should "price in units, charging a manager for their reports before splitting the seat, with a working that reaches each figure" do
+    as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).change_manager(@ada.id, @brook.id, **ESPALIA) }
+    choose(families: { @engineering_family.role_family_id => { model: "units" } })
+    report = capacity
+
+    brook = seat(report, @brook.id)
+    assert_equal [ Rational(1, 2), Rational(1, 2) ], brook.places.map { it.figure.amount }
+    assert_equal [ [ "Report, direct, L5", @ada.id ] ], brook.places.first.figure.working.filter_map { [ it.label, it.subject_id ] if it.subject_id }
+    assert_equal Rational("1.45"), seat(report, @ada.id).places.first.figure.amount
+    assert_equal({ "units" => Rational("3.9") }, report.totals)
+  end
+
+  should "price a place in a position at the position's level, though the person's own level differs" do
+    choose(families: { @engineering_family.role_family_id => { model: "units" } })
+    e3 = as_tenant { create(:framework_level, role_id: @engineer.role_id, ordinal: 3, title: "SWE") }
+    position_id = open_position(level: e3, fte: 1)
+    place_in(@ada, [ { position_id:, allocation: 1 } ])
+
+    place = seat(capacity, @ada.id).places.first
+    assert_equal [ nil, Rational("1.0") ], [ place.reason, place.figure.amount ]
+  end
+
+  should "price a leaver as nothing, and charge their reports to the position backfilling them" do
+    choose(families: { @engineering_family.role_family_id => { model: "units" } })
+    as_tenant do
+      people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+      people.change_manager(@dee.id, @ada.id, **ESPALIA)
+      people.change_manager(@brook.id, @cy.id, **ESPALIA)
+    end
+    backfill = open_position(unit_id: @engineering)
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, position_id: backfill)
+    report = capacity
+
+    assert_equal [ "leaving" ], seat(report, @ada.id).places.map(&:reason)
+    working = seat(report, backfill).places.first.figure.working
+    assert_equal [ @dee.id ], working.filter_map(&:subject_id)
+    assert_equal "Fixed cost of managing at L5", working.second.label
+  end
+
   should "refuse someone who isn't on the plan" do
     stranger = as_tenant { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
 
     assert_raises(Pundit::NotAuthorizedError) { capacity(as: stranger) }
+  end
+
+  should "place a planned level, though the title's mapping fixes a level" do
+    config = @tenant.hris_config
+    config.role_mappings.first.level_ordinal = 4
+    @tenant.update!(hris_config: config)
+    as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @plan_id, subject_id: @ada.id, end_state: { level: "5" }) }
+
+    place = seat(capacity, @ada.id).places.sole.place
+    assert_equal [ @engineer.role_id, @e5.level_id ], [ place.role_id, place.level_id ]
+  end
+
+  should "leave a planned level that names no ordinal unresolved, though the title's mapping fixes a level" do
+    config = @tenant.hris_config
+    config.role_mappings.first.level_ordinal = 5
+    @tenant.update!(hris_config: config)
+    as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @plan_id, subject_id: @ada.id, end_state: { level: "Senior" }) }
+
+    place = seat(capacity, @ada.id).places.sole.place
+    assert_equal [ @engineer.role_id, nil ], [ place.role_id, place.level_id ]
+  end
+
+  should "keep a removed planned level unknown, though the title's mapping fixes a level" do
+    config = @tenant.hris_config
+    config.role_mappings.first.level_ordinal = 5
+    @tenant.update!(hris_config: config)
+    as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @plan_id, subject_id: @ada.id, end_state: { level: "6" }) }
+    as_tenant { PlanKeyStore.new.destroy_person(@ada.id) }
+
+    place = seat(capacity, @ada.id).places.sole.place
+    assert_equal [ @engineer.role_id, nil ], [ place.role_id, place.level_id ]
   end
 end

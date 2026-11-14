@@ -4,7 +4,7 @@
 # story that adds a model names its class in {BUILT_IN}; a deployment adds
 # its own with {.register}.
 class TeamPlanning::CapacityModels
-  BUILT_IN = %w[TeamPlanning::CapacityModels::PerFte].freeze
+  BUILT_IN = %w[TeamPlanning::CapacityModels::PerFte TeamPlanning::CapacityModels::Units].freeze
   NAME = /\A[a-z][a-z0-9_]*\z/
 
   @registered = []
