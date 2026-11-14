@@ -91,6 +91,12 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `team_planning/plans` v2 and `team_planning/scenarios` v2 (sealed names, [#209](https://github.com/espaliahq/espalia/issues/209))
+
+Path A: `REBUILD_ON_DEPLOY=team_planning/plans,team_planning/scenarios`, removed once the deploy is live. The migration turns both `name` columns into jsonb and marks every name removed; the rebuild seals each name under its plan's key. A baseline scenario stores no name and reads "Baseline". While it runs, plan lists read as empty.
+
+Names written before #209 sit in the event store in clear. After the deploy, run `bin/rails team_planning:names:dry_run` for the counts, then `bin/rails team_planning:names:seal`. It seals them in place and rebuilds both projections per tenant itself. See "The one rewrite" in [shreddable-fields-design.md](../team-planning/shreddable-fields-design.md). Rolling back past this deploy is unsafe once the task has run: an older release reads a sealed name as Base64.
+
 #### Recorded: `org_graph/members` v3 (withdrawn changes leave the member list, [#165](https://github.com/espaliahq/espalia/issues/165))
 
 Path A: `REBUILD_ON_DEPLOY=org_graph/members`, removed once the deploy is live. The rebuild changes only memberships whose history holds a change-back dated on the day of the change it reverses. Such a membership now reads as though the change never happened: its terms are the ones history shows for today, its `effective_on` is the date of the last change that still stands, and a changed-back ending keeps `member_since` from before the ending. Row ids derive from the person and the unit, so they stay put. Every other row is unchanged. The projection reads only person streams, so the window scales with each tenant's membership history; while it runs, member lists read as empty.

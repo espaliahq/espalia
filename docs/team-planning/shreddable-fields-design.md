@@ -296,8 +296,39 @@ so each projection decides for itself.
   lists live keys for people the Org Graph has forgotten. A full restore brings back
   the person's row as it was, so nothing detects that.
 - **Events already written stay in clear.** A field cannot be made shreddable after the
-  fact without rewriting history. Covering existing evidence and comments is a separate
-  migration with its own design.
+  fact without rewriting history. Plan and scenario names are the one exception, below.
+  Covering existing evidence and comments is a separate migration with its own design.
+
+## The one rewrite
+
+Plan and scenario names were written in clear before
+[#209](https://github.com/espaliahq/espalia/issues/209) made them shreddable. A name like
+"Closing the Leeds office" says what a plan is for, so deleting the plan has to take the
+name with it. Left in clear, every name written before #209 would outlive its plan.
+
+`TeamPlanning::NameSealing` seals those names in place. It is the only rewrite of stored
+events Espalia sanctions. Don't take it as precedent: the event store is append-only, and
+everything else here depends on that. It was acceptable once because:
+
+- **It touched little.** Three event types, `PlanCreated`, `PlanRenamed` and
+  `ScenarioForked`, all in one context, and only the name fields within them.
+- **It changes nothing a reader relies on.** Each record keeps its id, type, stream,
+  order and timestamps, and every byte but the name fields and the `shreddable` entries
+  in its metadata. A test compares the rest byte for byte.
+- **It reads back as a new write would.** The names are sealed by the same mapper, under
+  the plan's key. A deleted plan's names are sealed under a key nobody keeps, so they
+  read as removed.
+- **It is explicit.** `team_planning:names:dry_run` prints counts and changes nothing;
+  `team_planning:names:seal` runs per tenant in one transaction, then rebuilds the plans
+  and scenarios read models. A second run changes nothing. It never runs from a
+  migration.
+
+Run it once, after the deploy that ships #209:
+
+```bash
+bin/rails team_planning:names:dry_run
+bin/rails team_planning:names:seal
+```
 
 ## Order of work
 
