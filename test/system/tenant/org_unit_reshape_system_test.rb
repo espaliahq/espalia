@@ -36,7 +36,7 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
       select "Core", from: "Ada Quill"
       click_button_with_js_fallback "Review the split", expect_selector: "#org-unit-split-unplaced"
       screenshot("split_review")
-      within("#org-unit-split-unplaced") { assert_text "Brook Tamsin" }
+      within("#org-unit-split-staying li", text: "Brook Tamsin") { assert_text "stays in Checkout" }
       within("ul[aria-label='Moving to Core']") { assert_text "Ada Quill" }
 
       click_button_with_js_fallback "Split Platform", expect_text: "Split Platform into Core and Edge."

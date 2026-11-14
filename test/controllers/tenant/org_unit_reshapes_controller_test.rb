@@ -138,9 +138,15 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ "No team", "Core", "Edge" ], labels("select#org-unit-split-place-#{@org[:ada].id} option")
 
       get new_tenant_org_unit_split_path(@org[:platform]),
+          params: { stage: "review", names: %w[Core Edge], placements: { @org[:ada].id => "", @org[:brook].id => "Edge" } }
+      assert_equal [ "Ada Quill" ], labels("ul[aria-label='Will be in no team'] li span:first-child")
+
+      get new_tenant_org_unit_split_path(@org[:platform]),
           params: { stage: "review", names: %w[Core Edge], placements: { @org[:ada].id => "Core", @org[:brook].id => "" } }
       assert_equal [ "Ada Quill" ], labels("ul[aria-label='Moving to Core'] li span:first-child")
-      assert_equal [ "Brook Tamsin" ], labels("ul[aria-label='Will be in no team'] li span:first-child")
+      assert_empty drawer.css("ul[aria-label='Will be in no team'] li")
+      assert_equal [ "Brook Tamsin stays in Checkout" ],
+                   drawer.css("ul[aria-label='Leaving Platform only'] li").map { it.css("span").map(&:text).join(" ") }
 
       post tenant_org_unit_split_path(@org[:platform]),
            params: { names: %w[Core Edge], placements: { @org[:ada].id => "Core" }, effective_on: "2026-11-02" }
@@ -150,6 +156,13 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
       assert unit(:platform).retired?
       assert_equal [ "Core" ], units_of(:ada)
       assert_equal [ "Checkout" ], units_of(:brook)
+    end
+
+    should "keep everyone's placement when going back to change the names" do
+      get new_tenant_org_unit_split_path(@org[:platform]),
+          params: { stage: "names", names: %w[Core Edge], placements: { @org[:ada].id => "Edge" } }
+
+      assert_equal "Edge", drawer.at_css("input[name='placements[#{@org[:ada].id}]']")&.[]("value")
     end
 
     should "keep asking for names until there are two different ones" do

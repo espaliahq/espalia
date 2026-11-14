@@ -63,6 +63,7 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
     end
     step_form(new_tenant_org_unit_split_path(@unit), method: "get", class: "space-y-4") do
       carry_date
+      carry_placements
       input(type: "hidden", name: "stage", value: "place")
       NAME_SLOTS.times do |index|
         name_id = "org-unit-split-name-#{index}"
@@ -129,7 +130,7 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
     unplaced_summary
     step_form(tenant_org_unit_split_path(@unit), class: "space-y-4") do
       carry_names
-      @placements.each { |person_id, name| input(type: "hidden", name: "placements[#{person_id}]", value: name) }
+      carry_placements
       date_field
       div(class: "flex flex-wrap items-center gap-3") do
         submit("Split #{@unit.name}", tone: :danger)
@@ -149,18 +150,40 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
     end
   end
 
+  # Everyone left unplaced loses their membership here. Only those with no
+  # other live unit end up in no team; the rest stay where else they are.
   def unplaced_summary
     unplaced = memberships.reject { |membership| @names.include?(@placements[membership.person.id]) }
+    staying, teamless = unplaced.partition { |membership| @overview.other_units_of(membership).any? }
     section(id: "org-unit-split-unplaced", class: "space-y-2", aria: { label: "Will be in no team" }) do
-      h3(class: "text-sm font-semibold #{unplaced.any? ? 'text-warning' : 'text-default'}") do
+      h3(class: "text-sm font-semibold #{teamless.any? ? 'text-warning' : 'text-default'}") do
         plain "Will be in no team "
-        span(class: "font-normal text-muted") { "(#{people(unplaced.size)})" }
+        span(class: "font-normal text-muted") { "(#{people(teamless.size)})" }
       end
-      if unplaced.any?
-        p(class: "text-sm text-muted") { "Their membership of #{@unit.name} ends." }
-        people_list(unplaced, label: "Will be in no team")
-      else
+      if teamless.any?
+        p(class: "text-sm text-muted") { "Their membership of #{@unit.name} ends, and they have no other unit." }
+        people_list(teamless, label: "Will be in no team")
+      elsif staying.empty?
         p(class: "text-sm text-muted") { "Everyone has a new unit." }
+      end
+    end
+    staying_summary(staying) if staying.any?
+  end
+
+  def staying_summary(staying)
+    section(id: "org-unit-split-staying", class: "space-y-2", aria: { label: "Leaving #{@unit.name} only" }) do
+      h3(class: "text-sm font-semibold text-default") do
+        plain "Leaving #{@unit.name} only "
+        span(class: "font-normal text-muted") { "(#{people(staying.size)})" }
+      end
+      p(class: "text-sm text-muted") { "Their membership of #{@unit.name} ends. They stay in their other units." }
+      ul(class: "divide-y divide-subtle rounded-md border border-default", aria: { label: "Leaving #{@unit.name} only" }) do
+        staying.each do |membership|
+          li(class: "flex flex-wrap items-baseline gap-x-3 px-3 py-2 text-sm") do
+            span(class: "font-medium text-default") { membership.person.name }
+            span(class: "text-muted") { "stays in #{@overview.other_units_of(membership).map(&:name).to_sentence}" }
+          end
+        end
       end
     end
   end
@@ -170,6 +193,8 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
   def carry_date = input(type: "hidden", name: "on", value: @effective_on)
 
   def carry_names = @names.each { |name| input(type: "hidden", name: "names[]", value: name) }
+
+  def carry_placements = @placements.each { |person_id, name| input(type: "hidden", name: "placements[#{person_id}]", value: name) }
 
   def stage_path(stage)
     new_tenant_org_unit_split_path(@unit, on: @effective_on, names: @names, placements: @placements, stage:, **compared)
