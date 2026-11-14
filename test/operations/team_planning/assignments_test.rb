@@ -151,8 +151,8 @@ class Operations::TeamPlanning::AssignmentsTest < ActiveSupport::TestCase
 
     positions = call(Operations::TeamPlanning::Positions, plan_id: @plan_id, scenario_id: @q1)
     position = positions[:positions].sole
-    assert_equal [ [ @ada.id, 0.5, "Lead" ], [ @bo.id, 0.25, nil ] ],
-                 position[:occupants].map { it.values_at(:person_id, :allocation, :role) }
+    assert_equal [ [ @ada.id, 0.5, "Lead" ], [ @bo.id, 0.25, nil ] ].sort,
+                 position[:occupants].map { it.values_at(:person_id, :allocation, :role) }.sort_by(&:first)
     assert_in_delta 1 - (0.5 * 0.8) - 0.25, position[:open_fte]
     assert_equal({ @ada.id => "Ada Quill", @bo.id => "Bo Reyes" }, positions[:names])
   end

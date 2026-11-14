@@ -126,14 +126,15 @@ everything can be changed for the sake of the plan without touching the source.
 - **Units** are structure. A tenant names its own levels (stream, squad, team, tribe) and
   nests them.
 - **Positions** are demand. A position is a role at a level in a unit, with an FTE. A position is
-  filled or open, and an open position records why it exists: a **backfill** for someone who
-  left, or new headcount.
+  filled or open, and an open position says why it exists: a **backfill**, or new headcount. A
+  backfill names the person it replaces through their departure, which links it.
 - **Budget** is permission to spend. It is its own thing, not a property of a position. See
   *Stay within the approved budget*.
 - **Assignments** join a person to a position with an allocation. One person can hold parts of
   several positions.
-- **Reporting lines** are a graph over people. They are never inferred from the unit
-  tree, and a scenario can override them.
+- **Reporting lines** are a graph over people and manager positions. A report points at a
+  person, or at an open manager position while the manager is being hired. Lines are never
+  inferred from the unit tree, and a scenario can override them.
 
 A position's role and level are the framework's roles and levels. That one link gives a position
 its price band, its capacity and its capability expectations.

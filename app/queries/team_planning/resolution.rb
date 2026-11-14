@@ -26,10 +26,12 @@ class TeamPlanning::Resolution
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call = @baseline.named(structure)
 
+  # @param aggregate [TeamPlanning::PlanAggregate] the plan as loaded; a write
+  #   passes the one it holds under the lock
   # @return [TeamPlanning::Baseline::Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def structure = resolved.first
+  def structure(aggregate = @repository.load_plan(@plan.id)) = resolved(aggregate).first
 
   # @return [Array<TeamPlanning::Attention::Item>] what no longer fits, each with the change it belongs to
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
@@ -38,10 +40,20 @@ class TeamPlanning::Resolution
 
   private
 
-  def resolved
-    winning = @repository.load_plan(@plan.id).winning_changes(@scenario_id)
-    map = winning.values.reduce(@baseline.structure) { |resolved, change| change.class.apply_to(resolved, change.data) }
+  def resolved(aggregate = @repository.load_plan(@plan.id))
+    winning = aggregate.winning_changes(@scenario_id)
+    base = @baseline.structure.with(step_ids: step_of(aggregate))
+    map = winning.values.reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
     [ explained(map.settled), winning ]
+  end
+
+  # The scenario and those it is an alternative of: the chain after the step
+  # before it on the timeline. The scenarios that step replaced come earlier
+  # in the chain, so they drop off too.
+  def step_of(aggregate)
+    chain = aggregate.resolution_chain(@scenario_id)
+    before = aggregate.timeline_path(@scenario_id)[-2]
+    before ? chain.drop(chain.index(before) + 1) : chain
   end
 
   # A person off the map either left by the base date, or was forgotten, or
