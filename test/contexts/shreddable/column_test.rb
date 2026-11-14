@@ -142,6 +142,22 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       assert_equal NOTE, note.reveal
     end
 
+    should "seal a live value written into another plan's row under that row's key, which a rebuild can't repeat" do
+      event = NoteWritten.new(data: { plan_id: @plan_id, note: NOTE })
+      other_plan_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Note.transaction do
+          @event_store.with_metadata(tenant_id: @tenant.id) do
+            @event_store.publish(event, stream_name: "tenant-#{@tenant.id}/PlanNotes-#{@plan_id}")
+          end
+          Note.create!(tenant_id: @tenant.id, plan_id: other_plan_id, note: event.data[:note])
+        end
+      end
+
+      assert_equal NOTE, note(other_plan_id).reveal
+      assert_equal PlanKeyStore.plan_identifier(@tenant.id, other_plan_id), JSON.parse(stored(other_plan_id))["identifier"]
+    end
+
     should "seal a value for a write that skips the model" do
       write_note
       row = ActsAsTenant.with_tenant(@tenant) { Note.find_by!(plan_id: @plan_id) }
