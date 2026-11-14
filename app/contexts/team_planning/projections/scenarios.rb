@@ -44,7 +44,8 @@ class TeamPlanning::Projections::Scenarios
       when TeamPlanning::Events::ScenarioPeriodSet
         follow_tree(data[:plan_id], event) { it[data[:scenario_id]]&.ends_on = Date.iso8601(data[:ends_on]) }
       when TeamPlanning::Events::PlanRebased
-        follow_tree(data[:plan_id], event) { it[data[:plan_id]]&.starts_on = Date.iso8601(data[:base_on]) }
+        write(data[:plan_id], event, plan_id: data[:plan_id], name: BASELINE_NAME, starts_on: data[:base_on])
+        follow_tree(data[:plan_id], event) { it[data[:plan_id]].starts_on = Date.iso8601(data[:base_on]) }
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningScenario.where(id: data[:scenario_id]).delete_all
       end
     end
