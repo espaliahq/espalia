@@ -334,8 +334,20 @@ keeps it so, so each one shows its age.
   leaver's facts are never listed, nor a membership of a retired unit. Changing one half
   of a pair, such as a site, leaves the other half's age alone.
 
-The flags and confirm buttons are 5.5. Units' own facts, their names and parents, have no
-confirmation yet.
+- **A stale fact shows a quiet flag** ([#142](https://github.com/espaliahq/espalia/issues/142)):
+  "Not confirmed since" a date, and who last checked it. It shows in the Units view's member
+  rows, the unit drawer's member list and the person drawer's teams and employment.
+  `OrgGraph::StaleFacts` reads them for the people on screen, and nothing shows when
+  nothing is stale.
+- **"Still true" confirms a fact as of today.** Whoever may change a membership may confirm
+  it; a person's own facts take an admin or Org Graph editor (`OrgGraphPolicy::Confirmations`).
+  A pair, such as site and country, is confirmed together. MCP confirms through
+  `org_graph_confirm_fact`, and `org_graph_person_get` says which facts are stale.
+- **An HRIS-held fact is never flagged**, since each sync confirms it. The person drawer
+  says so.
+
+Units' own facts, their names and parents, have no confirmation yet, and the person's
+history doesn't show confirmations.
 
 ### What happens to `people`
 
@@ -452,6 +464,9 @@ Graph could no longer say what it knew before. From it:
   mode. `OrgGraph::DateComparison` marks units new, renamed, moved or succeeded in today's
   tree, lists who joined, left or moved on each unit's card, counts each kind and lists the
   units retired in the window. The window lives in the URL, so a comparison can be shared.
+  Every link, form and redirect on the Units view and its drawers carries it
+  (`OrgGraphComparison`, `Views::Tenant::OrgGraph::KeepsComparison`), so no action there
+  drops it; only Clear does.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what
 was known last Tuesday, even if a backdated correction arrived since. The correction

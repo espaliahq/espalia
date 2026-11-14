@@ -2846,6 +2846,55 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_confirm_fact",
+        "description" => "Confirm that a fact Espalia holds about a person is still true, so it is no longer stale. " \
+                         "A membership names its unit in unit_id; any other fact is the person's own. " \
+                         "A fact an HRIS supplies is confirmed by each sync and can't be confirmed here. " \
+                         "A confirmation is dated the day it is made.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_id" => {
+              "type" => "string"
+            },
+            "fact" => {
+              "type" => "string",
+              "enum" => %w[title level manager_id cost_centre site country fte employment_type membership]
+            },
+            "unit_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id", "fact" ],
+          "additionalProperties" => false,
+          "allOf" => [
+            {
+              "if" => { "properties" => { "fact" => { "const" => "membership" } }, "required" => [ "fact" ] },
+              "then" => {
+                "required" => [ "unit_id" ],
+                "properties" => { "unit_id" => { "minLength" => 1, "pattern" => "\\S" } }
+              }
+            },
+            {
+              "if" => {
+                "properties" => {
+                  "fact" => { "enum" => %w[title level manager_id cost_centre site country fte employment_type] }
+                },
+                "required" => [ "fact" ]
+              },
+              "then" => { "not" => { "required" => [ "unit_id" ] } }
+            }
+          ]
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_editors",
         "description" => "List who may change the whole Org Graph: the Org Graph editors an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
         "inputSchema" => {
@@ -2930,7 +2979,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
                          "allocation, since, and the provider that holds each, \"espalia\" or an HRIS), their employment " \
                          "facts in effect today (title, level, manager, cost centre, site, employment, start date), each " \
                          "with its provider and since when, and their history newest first: each change with the day it " \
-                         "took effect, when the Org Graph learned it, its provider and who made it. A forgotten person " \
+                         "took effect, when the Org Graph learned it, its provider and who made it. A membership or fact " \
+                         "Espalia holds that nobody has changed or confirmed within the tenant's threshold carries " \
+                         "stale: when it was last checked and by whom. A forgotten person " \
                          "reads as \"Former member\". Admins only while the Org Graph is unfinished.",
         "inputSchema" => {
           "type" => "object",
@@ -3167,6 +3218,31 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "type" => "object",
           "properties" => {},
           "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_stale_facts",
+        "description" => "List which of the given people's memberships and facts are stale: Espalia holds them and nobody " \
+                         "has changed or confirmed them within the tenant's threshold. Each row has the person id, the " \
+                         "fact (\"membership\", or a fact such as \"site\" or \"title\"), the unit id for a membership, the " \
+                         "day it was last checked and the id of whoever checked it. Oldest first. A fact an HRIS holds is " \
+                         "never stale, since each sync confirms it. Admins only while the Org Graph is unfinished.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_ids" => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "person_ids to look at"
+            }
+          },
+          "required" => [ "person_ids" ],
           "additionalProperties" => false
         },
         "annotations" => {

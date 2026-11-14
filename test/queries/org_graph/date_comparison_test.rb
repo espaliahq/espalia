@@ -82,7 +82,8 @@ class OrgGraph::DateComparisonTest < ActiveSupport::TestCase
     assert_equal({ "Joined" => 1, "Left" => 1, "Moved" => 1, "New units" => 1, "Renamed" => 1, "Units moved" => 1,
                    "Retired" => 0, "Succeeded" => 0 }, comparison.counts.to_h)
     assert_equal "Since 1 Oct", comparison.window_label
-    assert_equal({ from: "2026-10-01", to: "2026-11-13", by: "effective" }, comparison.params)
+    assert_equal({ from: "2026-10-01", by: "effective" }, comparison.params, "a window up to today keeps reaching today")
+    assert_equal({ from: "2026-10-01", to: "2026-11-01", by: "effective" }, compare("2026-10-01", "2026-11-01").params)
   end
 
   should "list who joined, left and moved through each unit, by the date each took effect" do

@@ -5,11 +5,14 @@
 class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Views::Tenant::OrgGraph::Formatting
+  include Views::Tenant::OrgGraph::KeepsComparison
 
   # @param overview [OrgGraph::UnitsOverview] with a selected unit
   # @param comparison [OrgGraph::Comparison] marks what changed in the window
-  def initialize(overview:, comparison: OrgGraph::Comparison::NONE)
+  # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members shown (#142)
+  def initialize(overview:, comparison: OrgGraph::Comparison::NONE, confirmations: nil)
     @overview = overview
+    @confirmations = confirmations
     @unit = overview.selected
     @comparison = comparison
   end
@@ -27,7 +30,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
           render Components::Kit::Badge.new("From #{provider_label(@unit)}, read-only", leading_icon: :lock)
         end
         p(class: "text-sm text-muted") { unit_summary }
-        render Components::Kit::Button.new(variant: :outline, size: :sm, href: edit_tenant_org_unit_path(@unit),
+        render Components::Kit::Button.new(variant: :outline, size: :sm, href: edit_tenant_org_unit_path(@unit, **compared),
                                            class: "sm:ml-auto") do
           icon(:pencil, class: "size-4")
           plain "Edit unit"
@@ -100,7 +103,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   def member_row(membership)
     person = membership.person
     li(class: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm") do
-      a(href: tenant_org_person_path(person, unit: @unit.id), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+      a(href: tenant_org_person_path(person, unit: @unit.id, **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
       also = @overview.other_units_of(membership)
       span(class: "text-xs text-muted") { "also #{also.map(&:name).join(', ')}" } if also.any?
       span(class: "ml-auto flex items-baseline gap-3 text-muted") do
@@ -108,7 +111,12 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
         span(class: "tabular-nums") { "#{(membership.allocation * 100).round}%" } if membership.allocation
         hris_level(person)
       end
+      stale_flag(membership) if @confirmations
     end
+  end
+
+  def stale_flag(membership)
+    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "units", unit: @unit.id })
   end
 
   def people_changes(unit)
@@ -144,7 +152,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
       plain "Beneath: "
       children.each_with_index do |child, index|
         plain ", " if index.positive?
-        a(href: tenant_org_graph_path(unit: child.id, **@comparison.params), class: "text-link hover:text-link-hover underline") do
+        a(href: tenant_org_graph_path(unit: child.id, **compared), class: "text-link hover:text-link-hover underline") do
           "#{child.name} #{@overview.headcount(child)}"
         end
       end
