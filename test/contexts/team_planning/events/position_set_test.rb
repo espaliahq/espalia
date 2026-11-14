@@ -10,8 +10,8 @@ class TeamPlanning::Events::PositionSetTest < ActiveSupport::TestCase
 
   def refusal(**fields) = assert_raises(TeamPlanning::Error) { end_state(**fields) }.message
 
-  should "store the ids downcased and the FTE as a number" do
-    assert_equal({ **IDS.transform_values(&:downcase), fte: 0.5, basis: "new" }, end_state)
+  should "store the ids and basis downcased and the FTE as a number" do
+    assert_equal({ **IDS.transform_values(&:downcase), fte: 0.5, basis: "backfill" }, end_state(basis: " Backfill "))
   end
 
   should "refuse a missing id, an FTE outside (0, 1] and an unknown basis" do

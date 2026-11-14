@@ -48,7 +48,8 @@ class TeamPlanning::Events::PositionSet < TeamPlanning::Events::Change
   end
 
   def self.basis!(value)
-    return value if BASES.include?(value)
+    basis = value.to_s.strip.downcase
+    return basis if BASES.include?(basis)
 
     raise TeamPlanning::Error, "A position is a #{BASES.join(" or a ")} one"
   end
