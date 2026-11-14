@@ -68,7 +68,8 @@ class PlansController < ApplicationController
 
     [ Views::Plans::ScenarioTable::Column.new(
       heading: "Capacity",
-      cell: ->(scenario) { Views::Plans::CapacityUnitTotal.new(totals: marks[scenario[:scenario_id]].totals, baseline: marks[scenario[:scenario_id]].baseline?) }
+      cell: ->(scenario) { Views::Plans::CapacityUnitTotal.new(totals: marks[scenario[:scenario_id]].totals, baseline: marks[scenario[:scenario_id]].baseline?,
+                                                                empty: "None counted") }
     ) ]
   end
 

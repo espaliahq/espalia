@@ -90,6 +90,17 @@ class Plans::CapacityTest < ActionDispatch::IntegrationTest
     assert_equal "3.8 FTE", row.at_css("span").text
   end
 
+  should "say a scenario counts nothing in the table, beside one that counts" do
+    call(Operations::TeamPlanning::SetRule, @planner, plan_id: @plan_id, scenario_id: @q1, rule: "capacity_model",
+                                                      value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    table = page_for(plan_path(@plan_id))
+
+    today = table.at_css("tr[data-scenario-id='#{@plan_id}']")
+    assert_equal [ "Capacity:None counted" ], today.css("div.sm\\:hidden").map { it.text.squish }.grep(/Capacity/)
+    assert_equal "None counted", today.at_css("td.sm\\:table-cell span.text-muted").text
+    assert table.at_css("tr[data-scenario-id='#{@q1}'] [data-capacity-total='per_fte']")
+  end
+
   should "show an open position's figure as a filled place's is shown, each with its working" do
     choose_per_fte
     hire_into_growth

@@ -7,12 +7,15 @@ class Views::Plans::CapacityUnitTotal < Views::Base
 
   # @param totals [Array<Views::Plans::CapacityMarks::Total>]
   # @param baseline [Boolean] whether the map shows Today, so there is no change to show
-  def initialize(totals:, baseline:)
+  # @param empty [String, nil] what to say when there are no totals; nil draws nothing
+  def initialize(totals:, baseline:, empty: nil)
     @totals = totals
     @baseline = baseline
+    @empty = empty
   end
 
   def view_template
+    return span(class: "text-sm text-muted") { @empty } if @totals.empty? && @empty
     return if @totals.empty?
 
     span(data: { capacity_unit: "" }, class: "flex flex-wrap items-baseline gap-x-2 text-sm tabular-nums") do
