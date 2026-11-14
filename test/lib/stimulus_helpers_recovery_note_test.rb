@@ -44,6 +44,28 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
       assert_match(/the JS recovery found no <a> matching "Save"/, error.message)
     end
 
+    should "append diagnostics after the original message, even with no miss" do
+      error = assert_raises(Minitest::Assertion) do
+        subject.send(:assert_after_recovery, [], diagnostics: -> { "signal timeline: ..." }) do
+          raise Minitest::Assertion, "expected to find text \"Saved\""
+        end
+      end
+
+      assert_match(/\Aexpected to find text "Saved"/, error.message)
+      assert_match(/signal timeline: \.\.\./, error.message)
+    end
+
+    should "keep the original failure when the diagnostics raise" do
+      error = assert_raises(Minitest::Assertion) do
+        subject.send(:assert_after_recovery, [], diagnostics: -> { raise IOError, "window closed" }) do
+          raise Minitest::Assertion, "expected to find text \"Saved\""
+        end
+      end
+
+      assert_match(/\Aexpected to find text "Saved"/, error.message)
+      assert_match(/diagnostics could not be gathered: IOError: window closed/, error.message)
+    end
+
     should "run the signal ladder when given no block" do
       host = Class.new(Host) do
         attr_reader :asserted

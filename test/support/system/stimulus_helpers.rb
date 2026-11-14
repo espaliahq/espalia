@@ -76,23 +76,30 @@ module StimulusHelpers
     const btn = matches.length === 1 ? matches[0] : null;
   JS
 
-  # Records, in wall-clock ms, when the signal text enters or leaves the page
-  # and when Turbo submits and renders, for a failed guarded click to report
-  # (#241). Observes <html>, which survives Turbo swapping <body>; a full page
-  # load wipes it, and the report says so.
+  # Records, in the page's ms clock, when the signal text enters or leaves the
+  # page and when Turbo submits and renders, for a failed guarded click to
+  # report (#241). Observes <html>, which survives Turbo swapping <body>; a
+  # full page load wipes it, and the report says so. The observer stops after
+  # a minute, well past any guarded click's waits, so a click that landed
+  # leaves nothing running. Returns the page's clock, so the report can line
+  # it up with Ruby's.
   SIGNAL_TIMELINE_JS = <<~JS
     const text = arguments[0];
     window.__signalTimeline = [];
     const note = what => window.__signalTimeline?.push([Date.now(), what]);
     const holds = n => n.nodeType === 1 && (n.textContent || "").includes(text);
     window.__signalTimelineObserver?.disconnect();
-    window.__signalTimelineObserver = new MutationObserver(records => {
-      for (const r of records) {
-        for (const n of r.addedNodes) if (holds(n)) note(`signal added in <${n.localName}>`);
-        for (const n of r.removedNodes) if (holds(n)) note(`signal removed with <${n.localName}>`);
-      }
-    });
-    window.__signalTimelineObserver.observe(document.documentElement, { childList: true, subtree: true });
+    window.__signalTimelineObserver = null;
+    if (text) {
+      const observer = window.__signalTimelineObserver = new MutationObserver(records => {
+        for (const r of records) {
+          for (const n of r.addedNodes) if (holds(n)) note(`signal added in <${n.localName}>`);
+          for (const n of r.removedNodes) if (holds(n)) note(`signal removed with <${n.localName}>`);
+        }
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      setTimeout(() => observer.disconnect(), 60000);
+    }
     if (!window.__signalTimelineTurbo) {
       window.__signalTimelineTurbo = true;
       ["turbo:submit-start", "turbo:submit-end", "turbo:before-render", "turbo:render", "turbo:load"].forEach(type =>
@@ -101,7 +108,7 @@ module StimulusHelpers
           window.__signalTimeline?.push([Date.now(), status ? `${type} ${status}` : type]);
         }));
     }
-    return true;
+    return Date.now();
   JS
 
   # Waits until the named Stimulus controller has connected.
@@ -1078,10 +1085,20 @@ module StimulusHelpers
       assert_no_text expect_no_text, wait: Capybara.default_max_wait_time
     end
   rescue Minitest::Assertion => e
-    notes = misses + Array(diagnostics&.call)
+    notes = misses + recovery_diagnostics(diagnostics)
     raise if notes.empty?
 
     raise e.class, "#{e.message}\n\n#{notes.join("\n")}", e.backtrace
+  end
+
+  # Diagnostics for a failed click, never at the cost of the failure itself.
+  #
+  # @param diagnostics [#call, nil]
+  # @return [Array<String>]
+  def recovery_diagnostics(diagnostics)
+    Array(diagnostics&.call)
+  rescue StandardError => e
+    [ "(diagnostics could not be gathered: #{e.class}: #{e.message.lines.first&.strip})" ]
   end
 
   # Starts recording when a guarded click's signal text comes and goes.
@@ -1089,8 +1106,10 @@ module StimulusHelpers
   # @param expect_text [String, nil] the signal; nil records Turbo events only
   # @return [SignalTimeline]
   def arm_signal_timeline(expect_text)
-    evaluate_recovery_script("(() => { #{SIGNAL_TIMELINE_JS} })()", expect_text.to_s)
-    SignalTimeline.new(-> { evaluate_recovery_script("window.__signalTimeline || null") })
+    sent = SignalTimeline.now
+    page_clock = evaluate_recovery_script("(() => { #{SIGNAL_TIMELINE_JS} })()", expect_text.to_s)
+    page_offset = ((sent + SignalTimeline.now) / 2) - page_clock if page_clock.is_a?(Numeric)
+    SignalTimeline.new(-> { evaluate_recovery_script("window.__signalTimeline || null") }, page_offset:)
   end
 
   # A miss phrase, carrying the prefix every note shares so a reader (or a
