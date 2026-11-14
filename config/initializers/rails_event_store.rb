@@ -212,6 +212,14 @@ Rails.configuration.to_prepare do
     to: OrgGraph::SyncHandlers::RetiredUnitMemberships.handled_events
   )
 
+  # DeletedPlanKeys destroys a deleted plan's keys in the transaction that
+  # wrote PlanDeleted. It changes the key store, so it MUST NOT be registered
+  # as a projection.
+  event_store.subscribe(
+    TeamPlanning::SyncHandlers::DeletedPlanKeys.new,
+    to: TeamPlanning::SyncHandlers::DeletedPlanKeys.handled_events
+  )
+
   # LeaverMemberships ends a leaver's memberships in their own stream.
   # Dispatches OrgGraph person commands, so it MUST NOT be registered as a
   # projection.
