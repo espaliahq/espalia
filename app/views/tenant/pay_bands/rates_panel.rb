@@ -118,7 +118,7 @@ module Views::Tenant::PayBands::RatesPanel
   def currency_input(id, label_text, name, value)
     field(id, label_text) do
       input(id:, name: "exchange_rate[#{name}]", type: "text", required: true, maxlength: 3, value:, autocomplete: "off",
-            placeholder: "AUD", class: "#{Components::Kit::Field::INPUT} uppercase")
+            class: "#{Components::Kit::Field::INPUT} uppercase")
     end
   end
 
