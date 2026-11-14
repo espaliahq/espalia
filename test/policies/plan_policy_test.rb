@@ -79,6 +79,12 @@ class PlanPolicyTest < ActiveSupport::TestCase
       assert_not PlanPolicy.new(context_for(person, org_graph_editor: true), nil).create?
       assert_not PlanPolicy.new(context_for(person), nil).create?
     end
+
+    should "refuse an admin or a planner who has left, whose plan nobody could open" do
+      person = create(:person, tenant: @tenant, status: "inactive")
+      assert_not PlanPolicy.new(context_for(person, role: :admin), nil).create?
+      assert_not PlanPolicy.new(context_for(person, team_planner: true), nil).create?
+    end
   end
 
   context "a frozen plan" do

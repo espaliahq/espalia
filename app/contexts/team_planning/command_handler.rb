@@ -27,9 +27,10 @@ class TeamPlanning::CommandHandler
   # @raise [Pundit::NotAuthorizedError] unless the actor may create a plan
   # @see TeamPlanning::PlanAggregate#create
   def create_plan(plan_id, name:, base_on:)
+    created_by_id = actor_id!
     authorize!(:create?, nil) { "Only a tenant admin or a planner can create a plan" }
     @repository.with_plan(plan_id) do |plan|
-      plan.create(plan_id, name: name, base_on: base_on, created_by_id: actor_id!)
+      plan.create(plan_id, name: name, base_on: base_on, created_by_id: created_by_id)
     end
   end
 
@@ -86,9 +87,7 @@ class TeamPlanning::CommandHandler
   def add_member(plan_id, person_id, role:)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:manage_members?, plan)
-      unless Person.active.remembered.exists?(id: person_id)
-        raise TeamPlanning::Error, "Only someone active in this organisation can join a plan"
-      end
+      ensure_can_join!(plan, person_id, role)
 
       ensure_reachable_editor_remains!(plan, person_id) if role.to_s == "viewer"
       plan.add_member(person_id, role: role, added_by_id: actor_id!)
@@ -114,11 +113,20 @@ class TeamPlanning::CommandHandler
 
   private
 
+  # Someone who has left may still be made a viewer of a plan they are in, so
+  # an editor can step a former co-editor down; nobody gone joins or edits.
+  def ensure_can_join!(plan, person_id, role)
+    return if PlanPolicy.reachable_ids([ person_id ]).any?
+    return if role.to_s == "viewer" && plan.member?(person_id)
+
+    raise TeamPlanning::Error, "Only someone active in this organisation can join a plan"
+  end
+
   # The stream counts an editor who has since left; this counts only those
   # who can still open the plan, so nobody hands it to someone gone.
   def ensure_reachable_editor_remains!(plan, person_id)
     return unless plan.role_of(person_id) == "editor"
-    return if Person.active.remembered.exists?(id: plan.editor_ids - [ person_id ])
+    return if PlanPolicy.reachable_ids(plan.editor_ids - [ person_id ]).any?
 
     raise TeamPlanning::Error, "A plan needs an editor: make someone else an editor first"
   end

@@ -99,6 +99,14 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
       end
       handler(@admin).remove_member(@plan_id, @colleague.id)
     end
+
+    should "let an editor step a co-editor who has left down to viewer, but not back up" do
+      handler(@admin).add_member(@plan_id, @colleague.id, role: "editor")
+      @colleague.update!(status: "inactive")
+
+      assert_equal "viewer", handler(@admin).add_member(@plan_id, @colleague.id, role: "viewer").role_of(@colleague.id)
+      assert_raises(TeamPlanning::Error) { handler(@admin).add_member(@plan_id, @colleague.id, role: "editor") }
+    end
   end
 
   context "#delete_frozen_plan" do

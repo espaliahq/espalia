@@ -28,10 +28,9 @@ class PlanPolicy < ApplicationPolicy
 
     # @return [ActiveRecord::Relation<TeamPlanningPlan>]
     def resolve
-      person = @context.person
-      return @scope.none unless @context.tenant_user && person&.status == "active" && !person.forgotten?
+      return @scope.none unless @context.tenant_user && PlanPolicy.reachable?(@context.person)
 
-      @scope.where(id: TeamPlanningPlanMember.where(person_id: person.id).select(:plan_id))
+      @scope.where(id: TeamPlanningPlanMember.where(person_id: @context.person.id).select(:plan_id))
     end
   end
 
@@ -40,7 +39,7 @@ class PlanPolicy < ApplicationPolicy
   def index? = tenant_member?
 
   # @return [Boolean]
-  def create? = tenant_member? && (tenant_admin? || context.team_planner?)
+  def create? = tenant_member? && self.class.reachable?(person) && (tenant_admin? || context.team_planner?)
 
   # @return [Boolean]
   def show? = role.present?
@@ -73,7 +72,17 @@ class PlanPolicy < ApplicationPolicy
   #
   # @param plan [#editor_ids]
   # @return [Boolean]
-  def self.frozen?(plan) = Person.active.remembered.where(id: plan.editor_ids).none?
+  def self.frozen?(plan) = reachable_ids(plan.editor_ids).empty?
+
+  # Whether someone can still be in a plan: active, and not forgotten.
+  #
+  # @param person [Person, nil]
+  # @return [Boolean]
+  def self.reachable?(person) = person.present? && person.status == "active" && !person.forgotten?
+
+  # @param person_ids [Array<String>]
+  # @return [Set<String>] those of them who can still be in a plan
+  def self.reachable_ids(person_ids) = Person.active.remembered.where(id: person_ids).pluck(:id).to_set
 
   private
 
@@ -82,11 +91,6 @@ class PlanPolicy < ApplicationPolicy
   def role
     return @role if defined?(@role)
 
-    @role = (record.role_of(context.person.id) if record && tenant_member? && reachable_person?)
-  end
-
-  def reachable_person?
-    person = context.person
-    person.present? && person.status == "active" && !person.forgotten?
+    @role = (record.role_of(person.id) if record && tenant_member? && self.class.reachable?(person))
   end
 end
