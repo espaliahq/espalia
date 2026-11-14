@@ -131,11 +131,14 @@ class Views::Plans::Timeline < Views::Base
   end
 
   # A leaver and their backfill share the step the leaver goes in, so a bar
-  # that overlaps one before it takes a row of its own.
+  # that overlaps one before it takes a row of its own. So does a new role,
+  # since a row shows one.
   def wide_lane(lane_id, &in_block)
     lane = lanes_by_id.fetch(lane_id)
     rows = lane[:bars].select(&in_block).each_with_object([]) do |bar, packed|
-      row = packed.find { |bars| bars.none? { it[:to] >= bar[:from] && bar[:to] >= it[:from] } }
+      row = packed.find do |bars|
+        lane_label(bars.first) == lane_label(bar) && bars.none? { it[:to] >= bar[:from] && bar[:to] >= it[:from] }
+      end
       row ? row << bar : packed << [ bar ]
     end
     rows.each do |bars|

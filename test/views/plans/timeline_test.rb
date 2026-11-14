@@ -31,6 +31,16 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
     { kind: "person", subject_id: ADA, from:, to:, unit_id:, position_id: nil, allocation: 1.0, role:, replaces_id: nil }
   end
 
+  def wide_labels(html) = html.css("[data-timeline-grid] div.uppercase").map(&:text) - [ "Step" ]
+
+  context "a person whose role changes in one unit" do
+    should "label each role on a row of its own" do
+      html = render_timeline(bars: [ bar(0, 0, role: "ENG"), bar(1, 1, role: "PM") ])
+
+      assert_equal %w[ENG PM], wide_labels(html)
+    end
+  end
+
   context "a person who moves to Unassigned" do
     setup do
       @html = render_timeline(bars: [ bar(0, 0), bar(1, 1, unit_id: nil) ], unassigned: true,
