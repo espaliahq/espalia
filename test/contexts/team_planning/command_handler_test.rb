@@ -167,6 +167,7 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
       assert_nil key_store.key_of(@plan_key)
       assert_nil key_store.key_of(@person_key)
       assert_raises(PlanKeyStore::Destroyed) { key_store.create(@plan_key) }
+      assert_raises(PlanKeyStore::Destroyed) { key_store.create(@person_key) }
       assert key_store.key_of(@other_plan_key)
     end
 
@@ -185,22 +186,20 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
       assert_raises(TeamPlanning::Error) { handler(outsider).delete_plan(@plan_id) }
 
       assert key_store.key_of(@plan_key)
+      assert key_store.key_of(@person_key)
     end
 
-    should "survive a delete whose event fails to write, since both share one transaction" do
-      failing_store = Class.new(SimpleDelegator) do
-        def publish(*, **) = raise(RubyEventStore::WrongExpectedEventVersion)
-      end.new(event_store)
-      repository = TeamPlanning::Repository.new(event_store: failing_store)
+    should "leave no PlanDeleted when destroying them fails, since both share one transaction" do
+      failing = Object.new.tap { it.define_singleton_method(:destroy_plan) { |_| raise PlanKeyStore::Unavailable } }
 
-      assert_raises(RubyEventStore::WrongExpectedEventVersion) do
-        ActiveRecord::Base.transaction(requires_new: true) do
-          TeamPlanning::CommandHandler.new(actor: @admin, repository:).delete_plan(@plan_id)
+      assert_raises(PlanKeyStore::Unavailable) do
+        PlanKeyStore.stub(:new, failing) do
+          ActiveRecord::Base.transaction(requires_new: true) { handler(@admin).delete_plan(@plan_id) }
         end
       end
 
-      assert key_store.key_of(@plan_key)
-      assert key_store.key_of(@person_key)
+      assert_equal [ TeamPlanning::Events::PlanCreated ],
+                   event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).map(&:class)
     end
   end
 
