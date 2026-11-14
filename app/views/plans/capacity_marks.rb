@@ -50,9 +50,11 @@ class Views::Plans::CapacityMarks
   end
 
   # Today counts too, so a scenario that empties a model still shows the drop.
+  # A model no longer registered is missing from `models`, but its place
+  # still had one chosen, and the strip lists it as unclassified.
   #
   # @return [Boolean] whether any place, here or on Today, has a model chosen
-  def measured? = models.any?
+  def measured? = models.any? || [ @scenario, @baseline ].any? { chosen?(it) }
 
   # @return [Boolean] whether the scenario shown is the baseline itself
   def baseline? = @scenario[:scenario_id] == @scenario[:plan_id]
@@ -117,6 +119,8 @@ class Views::Plans::CapacityMarks
   def subject_names = @scenario[:names]
 
   private
+
+  def chosen?(payload) = payload[:seats].any? { |seat| seat[:places].any? { it[:model] } }
 
   def models = @models ||= @baseline[:models].merge(@scenario[:models])
 

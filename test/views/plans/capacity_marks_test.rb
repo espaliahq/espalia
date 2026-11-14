@@ -52,6 +52,15 @@ class Views::Plans::CapacityMarksTest < ActiveSupport::TestCase
     assert_includes unit.call, "(−2.0u vs Today)"
   end
 
+  should "count a place whose model is no longer registered, so its unclassified line shows" do
+    gone = { plan_id: PLAN, scenario_id: SCENARIO, totals: {}, models: {}, unclassified: [], names: {}, units: [],
+             seats: [ { seat_id: "person-1", places: [ { model: "gone", reason: "unknown_model" } ] } ] }
+    nothing = gone.merge(scenario_id: PLAN, seats: [])
+
+    assert marks(gone, nothing).measured?
+    assert_not marks(nothing.merge(scenario_id: SCENARIO), nothing).measured?
+  end
+
   should "know the baseline from its id, which is the plan's" do
     assert marks(payload(PLAN, "1", [])).baseline?
     assert_not marks(payload(SCENARIO, "1", [])).baseline?
