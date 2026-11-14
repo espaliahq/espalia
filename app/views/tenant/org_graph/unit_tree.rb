@@ -5,6 +5,7 @@
 class Views::Tenant::OrgGraph::UnitTree < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Views::Tenant::OrgGraph::Formatting
+  include Views::Tenant::OrgGraph::KeepsComparison
 
   # @param overview [OrgGraph::UnitsOverview]
   # @param tray_id [String] the tray's element id, for the In no team link
@@ -54,7 +55,7 @@ class Views::Tenant::OrgGraph::UnitTree < Views::Base
   def tree_link(unit)
     selected = unit.id == @overview.selected&.id
     a(
-      href: tenant_org_graph_path(unit: unit.id, **@comparison.params),
+      href: tenant_org_graph_path(unit: unit.id, **compared),
       class: [
         "block rounded-md px-2 py-1.5 text-sm",
         selected ? "bg-neutral-muted font-semibold text-default" : "text-default hover:bg-default-hover"

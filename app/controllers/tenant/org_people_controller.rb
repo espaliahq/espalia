@@ -27,7 +27,8 @@ class Tenant::OrgPeopleController < ApplicationController
         back: back_param,
         close_href: close_path,
         alert: flash[:drawer_alert]
-      )
+      ),
+      **comparison_slots(unit_id: unit_param)
     )
   end
 

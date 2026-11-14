@@ -464,6 +464,9 @@ Graph could no longer say what it knew before. From it:
   mode. `OrgGraph::DateComparison` marks units new, renamed, moved or succeeded in today's
   tree, lists who joined, left or moved on each unit's card, counts each kind and lists the
   units retired in the window. The window lives in the URL, so a comparison can be shared.
+  Every link, form and redirect on the Units view and its drawers carries it
+  (`OrgGraphComparison`, `Views::Tenant::OrgGraph::KeepsComparison`), so no action there
+  drops it; only Clear does.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what
 was known last Tuesday, even if a backdated correction arrived since. The correction

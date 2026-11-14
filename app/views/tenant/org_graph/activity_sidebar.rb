@@ -7,6 +7,7 @@
 # they may not.
 class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   include Phlex::Rails::Helpers::Routes
+  include Views::Tenant::OrgGraph::KeepsComparison
 
   UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
@@ -123,6 +124,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "unit", value: @feed.unit.id)
       input(type: "hidden", name: "activity_page", value: @feed.page) if @feed.page > 1
+      comparison_fields
       if entry_id
         input(type: "hidden", name: "entry_id", value: entry_id)
       else
@@ -146,7 +148,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   end
 
   def page_link(label, page, css: "")
-    a(href: tenant_org_graph_path(unit: @feed.unit.id, activity_page: page),
+    a(href: tenant_org_graph_path(unit: @feed.unit.id, activity_page: page, **compared),
       class: "#{css} text-link hover:text-link-hover underline") { label }
   end
 
