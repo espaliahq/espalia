@@ -9,17 +9,22 @@ class MigrationVersionsTest < ActiveSupport::TestCase
   # Versions up to here predate the rule and stay as they are.
   LAST_HAND_TYPED = "20261114120000"
 
+  # The minutes and seconds lanes have typed: 0000-0009, 0100, 0200, 0300…
+  HAND_TYPED = /(000\d|0\d00)\z/
+
   should "take a generated version for each new migration" do
-    hand_typed = versions.select { |v| v > LAST_HAND_TYPED && v.end_with?("0000", "0001", "0002") }
+    hand_typed = versions.select { |v| v > LAST_HAND_TYPED && (v.match?(HAND_TYPED) || v > in_a_day) }
 
     assert_empty hand_typed, <<~MSG
-      #{hand_typed.join(', ')} looks typed by hand, at the top of an hour, where other lanes
-      pick the same version. Create migrations with `bin/rails g migration <Name>` so the
-      version is the time to the second.
+      #{hand_typed.join(', ')} looks typed by hand: a round time, or one in the future, where
+      other lanes pick the same version. Create migrations with `bin/rails g migration <Name>`.
+      If the generator chose it, run it again a minute later.
     MSG
   end
 
   private
+
+  def in_a_day = 1.day.from_now.utc.strftime("%Y%m%d%H%M%S")
 
   def versions
     Dir[Rails.root.join("db/migrate/*.rb")].map { |path| File.basename(path)[/\A\d+/] }
