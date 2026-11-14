@@ -58,6 +58,15 @@ class TeamPlanning::OnCostTest < ActiveSupport::TestCase
     end
   end
 
+  should "refuse an infinite or undefined number as it refuses any other" do
+    [ Float::INFINITY, -Float::INFINITY, Float::NAN ].each do |unbounded|
+      assert_equal "A flat on-cost's percent must be a percentage, such as 12.5", refusal({ model: "flat", params: { percent: unbounded } })
+      assert_raises(TeamPlanning::Error) do
+        TeamPlanning::RuleKinds.check("on_cost", { model: "itemised", params: { items: [ { name: "Kit", amount: unbounded, currency: "EUR" } ] } })
+      end
+    end
+  end
+
   should "refuse a malformed model without repeating a figure" do
     assert_equal "No such on-cost model", refusal({ model: "guess", params: {} })
     assert_equal "An on_cost rule must give its model's params", refusal({ model: "flat" })

@@ -66,7 +66,7 @@ class TeamPlanning::OnCostModel
     return value.to_s.strip unless value.is_a?(Numeric)
 
     decimal = value.is_a?(Rational) ? BigDecimal(value, 30) : BigDecimal(value.to_s)
-    return value.to_s unless decimal.to_r == value
+    return value.to_s unless decimal.finite? && decimal.to_r == value
 
     decimal.to_s("F").delete_suffix(".0")
   end
