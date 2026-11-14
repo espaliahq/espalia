@@ -592,6 +592,7 @@ class TeamPlanning::PlanAggregate
     @scenarios.delete(event.data[:scenario_id])
     @logs.delete(event.data[:scenario_id])
     @redo_stacks.delete(event.data[:scenario_id])
+    @carried.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
