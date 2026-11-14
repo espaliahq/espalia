@@ -112,7 +112,7 @@ class TeamPlanning::CapacityModels::Units::Graph
   # A position manages through the one person in it, or as itself while
   # nobody is. Shared or closed, it manages nobody.
   def seat_of(position_id, occupants)
-    return unless position_id
+    return unless @positions.key?(position_id)
 
     filled = occupants.fetch(position_id, []).map(&:first).reject(&:leaving?).map(&:id).uniq
     return filled.first if filled.one?

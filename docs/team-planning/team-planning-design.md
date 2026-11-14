@@ -397,7 +397,7 @@ flatters a scenario.
   role in `manager_role_ids`.
 - **A line to a position** goes to the one person in it, and to the open seat only while
   nobody is. A position two people share sends it to neither, and the report reads as
-  unmanaged. Otherwise a part-filled position would take every report and leave the person
+  unmanaged. So does a closed position, though someone still fills it. Otherwise a part-filled position would take every report and leave the person
   in it managing nobody, and a shared one would need a split the map can't give.
 - **An open position**, a manager's included, counts against the nearest unit, walking up
   from its own, holding exactly one other manager seat: a filled one as a future direct

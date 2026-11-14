@@ -222,6 +222,14 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
     assert_not(%w[o1 o2 pair].any? { graph.manager?(it) })
   end
 
+  should "send a line to a closed position to nobody, though someone still fills it" do
+    @people += [ member("o", "squad", position_id: "gone"), member("r", "squad", manager_position_id: "gone") ]
+    graph = Units::Graph.new(map:, facts:, manager_role_ids: [])
+
+    assert_not graph.manager?("o")
+    assert_empty graph.span("o")
+  end
+
   should "never make the head of the tree a report of a vacant manager seat beneath them" do
     @people << member("ceo", "root")
     @people.map! { it.id == "m" ? it.with(manager_id: "ceo") : it }
