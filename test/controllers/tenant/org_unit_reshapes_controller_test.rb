@@ -204,14 +204,20 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "not retire, merge or split a unit" do
-      post tenant_org_unit_retirement_path(@org[:payments]), params: { effective_on: "2026-11-02" }
-      assert_redirected_to root_path
-      post tenant_org_unit_merge_path(@org[:payments]), params: { into_unit_id: @org[:platform], effective_on: "2026-11-02" }
-      assert_redirected_to root_path
-      post tenant_org_unit_split_path(@org[:platform]),
-           params: { names: %w[Core Edge], placements: { @org[:ada].id => "Core" }, effective_on: "2026-11-02" }
-      assert_redirected_to root_path
+      unit_count = ActsAsTenant.with_tenant(@tenant) { OrgUnit.count }
+      [
+        [ tenant_org_unit_retirement_path(@org[:payments]), { effective_on: "2026-11-02" } ],
+        [ tenant_org_unit_merge_path(@org[:payments]), { into_unit_id: @org[:platform], effective_on: "2026-11-02" } ],
+        [ tenant_org_unit_split_path(@org[:platform]),
+          { names: %w[Core Edge], placements: { @org[:ada].id => "Core" }, effective_on: "2026-11-02" } ]
+      ].each do |path, params|
+        post(path, params:)
 
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+
+      assert_equal unit_count, ActsAsTenant.with_tenant(@tenant) { OrgUnit.count }
       assert_not unit(:payments).retired?
       assert_not unit(:platform).retired?
       assert_equal [ "Payments" ], units_of(:dot)
