@@ -60,6 +60,30 @@ class OrgGraphPolicy::UnitRights
     end
   end
 
+  # Retire, merge or split. An HRIS that mirrors the unit holds its shape.
+  #
+  # @return [Boolean]
+  def reshape? = @unit.held_by_espalia? && @policy.edit_unit?(@unit)
+
+  # @return [Boolean]
+  def split? = reshape? && @policy.create_unit?(@unit.parent)
+
+  # @return [Boolean]
+  def merge? = reshape? && merge_targets.any?
+
+  # The units it may merge into: any other live unit outside its subtree
+  # that Espalia holds and the viewer may edit.
+  #
+  # @return [Array<OrgUnit>] in tree order
+  def merge_targets
+    @merge_targets ||= begin
+      subtree = [ @unit, *@overview.descendants_of(@unit) ]
+      @overview.in_tree_order.select do |unit|
+        subtree.exclude?(unit) && unit.held_by_espalia? && @policy.edit_unit?(unit)
+      end
+    end
+  end
+
   private
 
   def above?(unit) = level_index(unit) < level_index(@unit)

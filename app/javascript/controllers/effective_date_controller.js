@@ -5,7 +5,10 @@
 // <div data-controller="effective-date" data-action="submit->effective-date#stamp">
 //   <input type="date" data-effective-date-target="date">
 //   <form>… <input type="hidden" name="effective_on"> …</form>
+//   <a href="…?on=…" data-action="effective-date#carry">…</a>
 // </div>
+//
+// A link that opens a dated step carries the date in its `on` param instead.
 
 import BaseController from "controllers/base_controller"
 
@@ -20,5 +23,11 @@ export default class extends BaseController {
     }
     const field = event.target.querySelector("input[name='effective_on']")
     if (field) field.value = this.dateTarget.value
+  }
+
+  carry(event) {
+    const url = new URL(event.currentTarget.href)
+    url.searchParams.set("on", this.dateTarget.value)
+    event.currentTarget.href = url.toString()
   }
 }

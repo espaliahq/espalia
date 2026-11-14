@@ -39,6 +39,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
         details
         owners
         members
+        reshape
       end
     end
   end
@@ -251,6 +252,34 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
       end
       submit("Add to #{@unit.name}", variant: :outline)
     end
+  end
+
+  # -- Retire, merge and split (#138) ---------------------------------------
+
+  def reshape
+    return unless !@unit.held_by_espalia? || @rights.reshape?
+
+    section(aria: { labelledby: "org-unit-reshape" }, class: "space-y-3 border-t border-default pt-4") do
+      h3(id: "org-unit-reshape", class: "text-sm font-semibold text-default") { "Split, merge or retire" }
+      if !@unit.held_by_espalia?
+        p(class: "flex items-center gap-1.5 text-sm text-muted") do
+          icon(:lock, class: "size-4 shrink-0")
+          plain "#{provider_label(@unit)} holds #{@unit.name}, so split, merge or retire it there."
+        end
+      elsif @rights.reshape?
+        div(class: "flex flex-wrap gap-2") do
+          reshape_link("Split", new_tenant_org_unit_split_path(@unit, on: @effective_on, **compared)) if @rights.split?
+          reshape_link("Merge", new_tenant_org_unit_merge_path(@unit, on: @effective_on, **compared))
+          reshape_link("Retire", new_tenant_org_unit_retirement_path(@unit, on: @effective_on, **compared), tone: :danger)
+        end
+      end
+    end
+  end
+
+  def reshape_link(text, href, tone: :neutral)
+    render Components::Kit::Button.new(variant: :outline, tone:, size: :sm, compact: true, href:,
+                                       aria_label: "#{text} #{@unit.name}",
+                                       data: { action: "effective-date#carry" }) { text }
   end
 
   # -- Shared ----------------------------------------------------------------
