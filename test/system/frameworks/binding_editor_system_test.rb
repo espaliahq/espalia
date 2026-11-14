@@ -44,9 +44,14 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
     visit_edit_mode(size: size)
     trigger_binding_editor
 
+    assert_binding_editor_loaded
+  end
+
+  def assert_binding_editor_loaded
     assert_selector "#binding-editor-modal", visible: true
-    assert_selector "turbo-frame#binding-editor", visible: true
-    assert_text "Engineering Manager" # the unbound role offered in the add select
+    # Scoped to the frame: the explorer behind the modal names every role too,
+    # so a page-wide check passed while the frame still read "Loading…".
+    within("turbo-frame#binding-editor") { assert_selector "select#binding-add-role", text: "Engineering Manager" }
   end
 
   # Sign in and land on the edit-mode explorer with the matrix settled.
@@ -134,6 +139,18 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       assert_no_selector "#binding-editor-error", visible: true
     end
 
+    should "wait for the editor frame's body, not the explorer behind it" do
+      visit_edit_mode
+      patch_fetch("capability_bindings", respond: :delay)
+      trigger_binding_editor
+      assert_fetch_matched 1
+
+      assert_raises(Minitest::Assertion) { using_wait_time(1) { assert_binding_editor_loaded } }
+
+      page.execute_script("window.__releaseFetch();")
+      assert_binding_editor_loaded
+    end
+
     # The other half of that rule: `frame-error` speaks for the frame's own
     # GET, never for a form submitted INSIDE it. Turbo dispatches
     # `turbo:frame-missing` on the frame either way (verified in
@@ -198,8 +215,7 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
       trigger_binding_editor
-      assert_selector "turbo-frame#binding-editor", visible: true
-      assert_text "Software Engineer"
+      within("turbo-frame#binding-editor") { assert_text "Software Engineer" }
 
       remove_only_binding
 
