@@ -59,15 +59,15 @@ class TeamPlanning::Baseline
 
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
-    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units: snapshot.units.map { Unit.new(**it.to_h) },
-            people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {})
+    units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
+    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {})
   end
 
   private
 
   def person_from(person, memberships)
-    Person.new(**person.to_h.except(:providers),
-               memberships: memberships.map { Membership.new(unit_id: it.unit_id, allocation: it.allocation, role: it.role) })
+    places = memberships.map { Membership.new(**it.to_h.slice(*Membership.members)) }
+    Person.new(**person.to_h.slice(*Person.members), memberships: places)
   end
 
   # Everyone the map names: its people, their managers and the units' owners.
