@@ -84,7 +84,9 @@ class Views::Plans::ScenarioTable < Views::Base
   def row_menu(scenario, baseline)
     name = baseline ? "Today" : scenario[:name]
     render Components::Kit::Dropdown.new(strategy: :fixed) do |menu|
-      menu.trigger(label: "Actions for #{name}", button: { variant: :ghost, size: :xs, icon: true })
+      menu.trigger(label: "Actions for #{name}", button: { variant: :ghost, size: :xs, icon: true, compact: true }) do
+        icon("kebab", class: "size-4")
+      end
       menu.menu(width: "w-56") do
         menu.item(data: Views::Plans::ScenarioDialogs.fork_trigger(scenario[:scenario_id])) { "New scenario from here…" }
         unless baseline
