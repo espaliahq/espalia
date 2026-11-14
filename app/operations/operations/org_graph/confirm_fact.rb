@@ -3,6 +3,10 @@
 # Says that a fact Espalia holds about a person is still true, which clears
 # its stale flag (#142). A membership names its unit; any other fact is one
 # of the person's own, such as their title or site.
+#
+# A membership needs the rights to change it; a person fact needs
+# OrgGraphPolicy#edit_structure?. It takes no effective_on: a confirmation is
+# dated the day it is made, as org_fact_ages reads its time.
 class Operations::OrgGraph::ConfirmFact < Operations::Base
   include Operations::OrgGraph::UnitWrite
 

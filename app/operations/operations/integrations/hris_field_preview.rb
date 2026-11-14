@@ -5,6 +5,8 @@
 #
 # The payload holds counts and the units' labels, never who is in a unit. A
 # label is the field's own value, so a field that names people names them here.
+#
+# The web panel calls the same Operation.
 class Operations::Integrations::HrisFieldPreview < Operations::Base
   description "Preview what an HRIS field would give before choosing it as the source of an Org Graph " \
               "level or fact. For target \"level\": the units it would create, with their labels and how " \

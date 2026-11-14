@@ -2,6 +2,13 @@
 
 # Merges one unit into another: everyone moves to the unit that carries on,
 # and the merged unit retires.
+#
+# Approval is :in_app [#138](https://github.com/espaliahq/espalia/issues/138):
+# it moves many memberships at once and can't be undone in one step. It runs
+# under one new cause through apply_succession
+# ([#99](https://github.com/espaliahq/espalia/issues/99)). A unit an HRIS
+# mirrors, a merge into one, or a unit with live sub-units is refused with a
+# message that says why.
 class Operations::OrgGraph::MergeUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
   prepend Operations::OrgGraph::PlanWrite

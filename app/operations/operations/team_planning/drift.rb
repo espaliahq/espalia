@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 # What the Org Graph has learned since a plan's base, and what each change
-# meets in the plan.
+# meets in the plan ([#234](https://github.com/espaliahq/espalia/issues/234)).
+# A kind says which changes move its facet through
+# `TeamPlanning::Events::Change.subject_moved_by`. Walked by the privacy test
+# and the forgotten-person audit.
 class Operations::TeamPlanning::Drift < Operations::Base
   include Operations::TeamPlanning::PlanRead
 

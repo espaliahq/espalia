@@ -256,7 +256,7 @@ on main yet.
 |---|---|---|
 | 3.1 | Scenarios: `ScenarioForked` with parent, `then` or `instead` and period, `ScenarioPeriodSet`, `ScenarioRemoved`. Periods along a path are contiguous | 1.1 |
 | 3.2 | Resolution: the base, then each scenario's changes down the chain, last change per subject and facet. The plan's lock serialises writes, so changes to different facets both land | 3.1, 1.3 |
-| 3.3 | Rules: `RuleSet` with tenant defaults, resolved down the chain like any change | 3.2 |
+| 3.3 | Rules: `RuleSet` with tenant defaults, resolved down the chain like any change. The real rule kinds come with 5.2, 7.1 and 8.1 | 3.2 |
 | 3.4 | Unit changes: `UnitSet`, `UnitRetired`, `UnitSuccessionSet`, with ids the plan mints | 3.2 |
 | 3.5 | Positions: `PositionSet` (role and level from the framework, unit, FTE, backfill or new) and `PositionClosed` | 3.2 |
 | 3.6 | Assignments: `AssignmentSet` places a person in a position or unit with an allocation. The Unassigned bucket is derived | 3.5 |

@@ -136,6 +136,30 @@ says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
 
+### Rules
+
+A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
+holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
+A kind names itself, gives a built-in default and checks a value. A value is always an
+object. No kind ships yet: the first come with 5.2, 7.1 and 8.1.
+
+`RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
+that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
+on one subject both land. `Map#rule(name, unit_id:)` reads a rule in this order:
+
+1. The unit, then each unit above it on the scenario's map.
+2. The plan-wide value.
+3. The tenant's default, set by an admin with `tenants_set_planning_rule`.
+4. The kind's built-in default.
+
+A retired unit's rules drop out with it. Tenant defaults are read as they stand now, not
+as of the base date, since they are configuration and not facts about the organisation.
+
+A rule's value may one day be sensitive: an on-cost rate, a guardrail on pay. So a refusal
+names what is wrong and never repeats the value. A kind declares `shreddable?`, and until
+[#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
+yes is refused at registration.
+
 ### Undo
 
 Undo and redo are events that point at the event they reverse. The stream is never

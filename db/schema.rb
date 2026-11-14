@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_120011) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1021,6 +1021,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
     t.check_constraint "destroyed_at IS NULL AND key_material IS NOT NULL OR destroyed_at IS NOT NULL AND key_material IS NULL AND destroyed_reason IS NOT NULL", name: "plan_encryption_keys_live_or_destroyed"
   end
 
+  create_table "planning_rule_defaults", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "rule", null: false
+    t.jsonb "value", default: {}, null: false
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "rule"], name: "index_planning_rule_defaults_on_tenant_id_and_rule", unique: true
+    t.index ["updated_by_id"], name: "index_planning_rule_defaults_on_updated_by_id"
+  end
+
   create_table "projection_versions", primary_key: "name", id: :string, force: :cascade do |t|
     t.datetime "applied_at", null: false
     t.integer "version", null: false
@@ -1225,6 +1236,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
   add_foreign_key "person_development_comments", "tenants"
   add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "plan_encryption_keys", "tenants"
+  add_foreign_key "planning_rule_defaults", "tenants"
+  add_foreign_key "planning_rule_defaults", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "recorded_reporting_managers", "tenants"
   add_foreign_key "team_planning_plan_members", "tenants"
   add_foreign_key "team_planning_plans", "tenants"

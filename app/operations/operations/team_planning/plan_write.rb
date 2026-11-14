@@ -2,6 +2,11 @@
 
 # What the plan write tools share: the plan they name and the command handler,
 # which checks {PlanPolicy} against the plan as its stream has it.
+#
+# To anyone outside the plan it reads as missing, so a refusal never says
+# which plan ids exist
+# [#192](https://github.com/espaliahq/espalia/issues/192). A missing or
+# deleted plan comes back as invalid params with the reason.
 module Operations::TeamPlanning::PlanWrite
   UUID_RE = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 

@@ -3,7 +3,13 @@
 # What the pay band tools share: the admin-only check, reading a figure, and
 # the payload each returns. A refusal never repeats a figure, so a band can't
 # reach a log through an error message.
+#
+# Admins only, so even an Org Graph editor is refused
+# [#191](https://github.com/espaliahq/espalia/issues/191). A band keys on a
+# framework level and a country, blank for any.
 module Operations::Tenants::PayBandSupport
+  include Operations::Tenants::EditorNames
+
   FIGURE = /\A\d{1,12}(\.\d{1,2})?\z/
   FIGURE_SCHEMA = { type: "string", pattern: FIGURE.source.sub("\\A", "^").sub("\\z", "$") }.freeze
   FIGURE_HELP = "Figures are decimal strings with at most two decimal places, such as \"120000\"."
@@ -61,18 +67,6 @@ module Operations::Tenants::PayBandSupport
       updated_at: band.updated_at.iso8601,
       updated_by: names[band.updated_by_id]
     }
-  end
-
-  # Who last changed each band: the person linked to them in this tenant, or their email.
-  # Anyone forgotten, or no longer a member, reads as a former member.
-  #
-  # @param bands [Array<PayBand>]
-  # @return [Hash{String => String}] by user id
-  def editor_names(bands)
-    ids = bands.filter_map(&:updated_by_id).uniq
-    members = TenantUser.where(user_id: ids, forgotten_at: nil).includes(:person, :user)
-                        .to_h { [ it.user_id, it.person&.name || it.user.email ] }
-    ids.to_h { [ it, members.fetch(it, Person::FORMER_MEMBER) ] }
   end
 
   # @param pay_band_id [String]
