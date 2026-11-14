@@ -136,6 +136,51 @@ says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
 
+### Positions as built
+
+`PositionSet` and `PositionClosed` share the facet `position`, so the later one wins and a
+later `PositionSet` reopens a closed position. The plan mints a position's id. Its
+`level_id` is the framework level that pay bands key on, so cost prices it with no
+mapping, and the write checks that the level belongs to the role. `basis` is `backfill`,
+which is committed budget, or `new`, which is planned; the map reads it as the position's
+budget. A position's unit is not checked at write: a position in a retired unit still
+resolves, and 3.8 marks it. The baseline has no positions, so every one starts in a plan.
+
+### Adding a change kind
+
+Several lanes add kinds at once, so each adds one the same way. `PositionSet`
+([#228](https://github.com/espaliahq/espalia/issues/228)) is the worked example.
+
+1. **The kind.** Subclass `TeamPlanning::Events::Change` in
+   `app/contexts/team_planning/events/`. Name its `facet`. Give it `end_state`, which
+   checks the kind's own fields and returns them as stored; it raises `TeamPlanning::Error`
+   with a sentence a planner can read. Give it `apply_to(map, data)`, which must not depend
+   on another kind having landed. The kind's fields may not reuse `Change::FIELDS`.
+2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
+   and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
+   resolver.
+3. **The map.** If the kind adds something the map doesn't hold, add it to
+   `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
+   any names it needs in `Baseline#named`, never in `apply_to`.
+4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
+   `ChangeWrite`. Call `editable_plan!` first, so an outsider gets "No such plan" before
+   any other check. Check what needs a projection (a framework role, a person) in the
+   operation, since the aggregate reads no projection. Then call `set_change!`.
+5. **The read.** Extend a scenario read, or add one through `PlanRead`, reading
+   `Resolution#call`.
+6. **The tool's shared files.** Merge main first. Run
+   `UPDATE_SNAPSHOTS=1 bin/rails test test/mcp/tool_registry_snapshot_test.rb` and commit
+   only your tools' files under `test/mcp/tool_snapshots/`; never edit the test. Give each
+   read tool its own `test/integration/forgotten_person_audit/<tool>.rb`, a
+   `ForgottenPersonAudit.walk` with its params, or `ForgottenPersonAudit.exempt` with a
+   reason when it can't show a person. Add any new parameter to `params_for` in
+   `test/integration/team_planning_privacy_test.rb`, which walks every Team Planning tool
+   as an outsider. Add a row to the tool file map in `docs/guidelines/mcp-server.md`.
+7. **The tests.** The kind's `end_state` refusals beside it in
+   `test/contexts/team_planning/events/`. In `test/operations/team_planning/`, through the
+   operations: a change reaching the steps after its scenario, an alternative overriding
+   its parent, the outsider and viewer refusals, and tenant isolation.
+
 ### Undo
 
 Undo and redo are events that point at the event they reverse. The stream is never
