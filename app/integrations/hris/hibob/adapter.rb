@@ -45,8 +45,12 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # Once the tenant is cut over to the Org Graph, passes 1 to 3 leave
   # `job_title`, `manager_id` and `status` alone: Pass 2b's events write them
   # through {OrgGraph::Projections::PeopleColumns}, and Pass 3 records a leaving.
+  # Once it is also fed from the Org Graph, passes 3b and 5 are skipped:
+  # {OrgGraph::SyncHandlers::PersonDevelopmentFeed} follows each Org Graph
+  # write, and :person_development counts what it did.
   #
   # @return [Hash] summary with :created, :updated, :deactivated, :offboarded, :org_graph_events,
+  #   :person_development,
   #   :skipped_inactive, :assigned,
   #   :role_changed, :level_changed, :unchanged, :errors,
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
@@ -57,79 +61,83 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     employees = fetch_employees
     result = build_initial_result
 
-    # The flag is read once, so a cut-over waits for this sync to finish.
+    # The flags are read once, so a cut-over waits for this sync to finish.
     OrgGraph::PeopleCutover.hold_off(tenant) do
-      ActsAsTenant.with_tenant(tenant) do
-        external_id_map = {}
-        managers = Hash.new { |found, ext_id| found[ext_id] = external_id_map[ext_id] || Person.find_by(external_id: ext_id) }
-        manager_links = {}
-        touched_person_ids = []
-        org_graph_facts = {}
-        mirror_readings = {}
-        projected = tenant.org_graph_people_projected?
-        ensure_forgotten_recognisable!
+      fed = tenant.person_development_fed?
+      result[:person_development] = OrgGraph::SyncHandlers::PersonDevelopmentFeed.tally do
+        ActsAsTenant.with_tenant(tenant) do
+          external_id_map = {}
+          managers = Hash.new { |found, ext_id| found[ext_id] = external_id_map[ext_id] || Person.find_by(external_id: ext_id) }
+          manager_links = {}
+          touched_person_ids = []
+          org_graph_facts = {}
+          mirror_readings = {}
+          projected = tenant.org_graph_people_projected?
+          ensure_forgotten_recognisable!
 
-        # Pass 1: Upsert all employees
-        employees.each do |raw_employee|
-          mapper = Hris::Hibob::ResponseMapper.new(
-            raw_employee,
-            level_field_id: config.level_field_id,
-            mapped_fields:
-          )
-          # Dev-only PII guard — pass-through outside development.
-          attrs = Hris::DevNameWhimsifier.call(mapper.call)
-          manager_ext_id = mapper.manager_external_id
+          # Pass 1: Upsert all employees
+          employees.each do |raw_employee|
+            mapper = Hris::Hibob::ResponseMapper.new(
+              raw_employee,
+              level_field_id: config.level_field_id,
+              mapped_fields:
+            )
+            # Dev-only PII guard — pass-through outside development.
+            attrs = Hris::DevNameWhimsifier.call(mapper.call)
+            manager_ext_id = mapper.manager_external_id
 
-          person = upsert_person(attrs, result, projected:, started_on: mapper.org_graph_facts[:started_on])
-          if person
-            external_id_map[attrs[:external_id]] = person
-            manager_links[person] = manager_ext_id if manager_ext_id.present?
-            touched_person_ids << person.id
-            org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
-                                        manager_supplied: mapper.manager_supplied?,
-                                        status: attrs[:status] }.compact.merge(mapper.org_graph_facts)
-            mirror_readings[person] = mapper unless attrs[:status] == "inactive"
+            person = upsert_person(attrs, result, projected:, started_on: mapper.org_graph_facts[:started_on])
+            if person
+              external_id_map[attrs[:external_id]] = person
+              manager_links[person] = manager_ext_id if manager_ext_id.present?
+              touched_person_ids << person.id
+              org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
+                                          manager_supplied: mapper.manager_supplied?,
+                                          status: attrs[:status] }.compact.merge(mapper.org_graph_facts)
+              mirror_readings[person] = mapper unless attrs[:status] == "inactive"
+            end
+          rescue => e
+            result[:errors] << {
+              external_id: raw_employee["id"],
+              email: raw_employee["email"],
+              error: e.message
+            }
           end
-        rescue => e
-          result[:errors] << {
-            external_id: raw_employee["id"],
-            email: raw_employee["email"],
-            error: e.message
-          }
+
+          # Pass 2: Resolve manager relationships, unless the Org Graph writes them (Pass 2b)
+          manager_links.each do |person, manager_ext_id|
+            manager = managers[manager_ext_id]
+            person.update!(manager: manager) if manager && person.manager_id != manager.id
+          end unless projected
+
+          # Pass 2b: Record new people in the Org Graph, then write each fact that differs.
+          # A fed tenant's Person Development follows from these writes.
+          record_org_graph_differences(org_graph_facts, managers, result)
+
+          # Pass 2d: Mirror the structure levels HiBob provides, from each person's field
+          mirror_structure_levels(mirror_readings, result)
+
+          absent = absent_people(employees.filter_map { it["id"] }, result)
+          leaving = Person.where(id: absent.where(status: "active").pluck(:id))
+
+          # Pass 2c: Leave, in the Org Graph, everyone the response no longer holds
+          record_org_graph_absences(absent, result)
+
+          # Pass 3: Deactivate people no longer in HRIS
+          deactivate_removed(leaving, result)
+
+          # Pass 3b: Offboard every inactive person still participating —
+          # withdraw from open cycles, remove framework assignments
+          offboard_inactive(result) unless fed
+
+          # Pass 4: Auto-link TenantUsers to Person records by email
+          auto_link_tenant_users
+
+          # Pass 5: Assign (or reassign) to framework roles/levels
+          assign_to_framework(result, touched_person_ids) unless fed
+
+          stamp_last_synced
         end
-
-        # Pass 2: Resolve manager relationships, unless the Org Graph writes them (Pass 2b)
-        manager_links.each do |person, manager_ext_id|
-          manager = managers[manager_ext_id]
-          person.update!(manager: manager) if manager && person.manager_id != manager.id
-        end unless projected
-
-        # Pass 2b: Record new people in the Org Graph, then write each fact that differs
-        record_org_graph_differences(org_graph_facts, managers, result)
-
-        # Pass 2d: Mirror the structure levels HiBob provides, from each person's field
-        mirror_structure_levels(mirror_readings, result)
-
-        absent = absent_people(employees.filter_map { it["id"] }, result)
-        leaving = Person.where(id: absent.where(status: "active").pluck(:id))
-
-        # Pass 2c: Leave, in the Org Graph, everyone the response no longer holds
-        record_org_graph_absences(absent, result)
-
-        # Pass 3: Deactivate people no longer in HRIS
-        deactivate_removed(leaving, result)
-
-        # Pass 3b: Offboard every inactive person still participating —
-        # withdraw from open cycles, remove framework assignments
-        offboard_inactive(result)
-
-        # Pass 4: Auto-link TenantUsers to Person records by email
-        auto_link_tenant_users
-
-        # Pass 5: Assign (or reassign) to framework roles/levels
-        assign_to_framework(result, touched_person_ids)
-
-        stamp_last_synced
       end
     end
 

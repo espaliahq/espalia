@@ -1443,6 +1443,101 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "#sync_people once Person Development is fed from the Org Graph" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @framework = create(:framework_state)
+        @e_role = create(:framework_role, code: "E", name: "Software Engineer")
+        @em_role = create(:framework_role, code: "EM", name: "Engineering Manager", track: "management")
+        @e_level_5 = create(:framework_level, role_id: @e_role.role_id, ordinal: 5, code: "E5", title: "Senior SWE")
+        @em_level_6 = create(:framework_level, role_id: @em_role.role_id, ordinal: 6, code: "EM6", title: "Eng Manager")
+        @cycle_id = SecureRandom.uuid_v7
+        AssessmentCycles::CommandHandler.new.define_cycle(@cycle_id, @framework.framework_id, "Q1", "regular", 1)
+      end
+      build_adapter(@fixture["employees"]).sync_people
+      assert OrgGraph::PeopleCutover.new(@tenant).run(apply: true).applied
+      @tenant.update!(person_development_fed_at: Time.current)
+      ActsAsTenant.with_tenant(@tenant) do
+        @alice = Person.find_by!(external_id: "bob-001")
+        @bob = Person.find_by!(external_id: "bob-002")
+      end
+    end
+
+    should "change nothing when the HRIS still says the same" do
+      result = build_adapter(@fixture["employees"]).sync_people
+
+      assert_empty result[:errors]
+      assert_empty result[:person_development]
+    end
+
+    should "move someone whose title and level both changed with one role change" do
+      employees = with_employee("bob-001") do |e|
+        e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Engineering Manager"
+        e["humanReadable"]["work"]["customColumns"]["column_test_id"] = "6"
+      end
+
+      result = build_adapter(employees).sync_people
+
+      assert_equal({ change_role: 1 }, result[:person_development])
+      assert_equal 0, result[:role_changed]
+      assignment = ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.find_by!(person_id: @alice.id) }
+      assert_equal [ @em_role.role_id, @em_level_6.level_id ], [ assignment.role_id, assignment.level_id ]
+    end
+
+    should "withdraw and unassign someone HiBob stops returning" do
+      result = build_adapter(@fixture["employees"].reject { it["id"] == "bob-001" }).sync_people
+
+      assert_equal({ withdraw: 1, unassign: 1 }, result[:person_development])
+      assert_equal 0, result[:offboarded]
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil PersonFrameworkAssignment.find_by(person_id: @alice.id)
+        assert_equal "withdrawn", AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @alice.id).status
+      end
+    end
+
+    should "clear the manager when HiBob says there is none" do
+      result = build_adapter(with_employee("bob-001") { it["work"]["reportsTo"] = nil }).sync_people
+
+      assert_equal({ clear_manager: 1 }, result[:person_development])
+      assert_nil PersonDevelopment::CommandHandler.new.load(@alice.id, @framework.framework_id).manager_id
+    end
+
+    should "keep the manager when HiBob withholds the field" do
+      result = build_adapter(with_employee("bob-001") { it["work"].delete("reportsTo") }).sync_people
+
+      assert_empty result[:person_development]
+      assert_equal @bob.id, PersonDevelopment::CommandHandler.new.load(@alice.id, @framework.framework_id).manager_id
+    end
+
+    should "withdraw and unassign nobody when the absence brake holds" do
+      staff = synthetic_employees(10)
+      build_adapter(@fixture["employees"] + staff).sync_people
+      assigned = ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.count }
+
+      result = build_adapter(@fixture["employees"] + staff.first(4)).sync_people
+
+      assert_match "so no one was marked as left", result[:errors].sole[:error]
+      assert_empty result[:person_development]
+      assert_equal 0, result[:offboarded]
+      assert_equal assigned, ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.count }
+    end
+  end
+
+  context "#sync_people while Person Development is not fed" do
+    should "leave Person Development to passes 3b and 5" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_state)
+        role = create(:framework_role, code: "E", name: "Software Engineer")
+        create(:framework_level, role_id: role.role_id, ordinal: 5, code: "E5", title: "Senior SWE")
+      end
+
+      result = build_adapter(@fixture["employees"]).sync_people
+
+      assert_empty result[:person_development]
+      assert_equal 1, result[:assigned]
+    end
+  end
+
   context "mirroring a structure level" do
     setup do
       @team_level = SecureRandom.uuid_v7
