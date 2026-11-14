@@ -62,15 +62,25 @@ class PlansController < ApplicationController
       summary: Views::Plans::CapacityStrip.new(marks:) }
   end
 
+  # A scenario that no longer resolves says so in its cell rather than
+  # taking the whole table with it.
   def capacity_columns(plan, scenarios)
-    marks = scenarios.to_h { [ it[:scenario_id], capacity_marks(plan, it[:scenario_id]) ] }
-    return [] unless marks.values.any?(&:measured?)
+    marks = scenarios.to_h { [ it[:scenario_id], capacity_marks_or_nil(plan, it[:scenario_id]) ] }
+    return [] unless marks.values.any? { it&.measured? }
 
-    [ Views::Plans::ScenarioTable::Column.new(
-      heading: "Capacity",
-      cell: ->(scenario) { Views::Plans::CapacityUnitTotal.new(totals: marks[scenario[:scenario_id]].totals, baseline: marks[scenario[:scenario_id]].baseline?,
-                                                                empty: "None counted") }
-    ) ]
+    [ Views::Plans::ScenarioTable::Column.new(heading: "Capacity", cell: ->(scenario) { capacity_cell(marks[scenario[:scenario_id]]) }) ]
+  end
+
+  def capacity_marks_or_nil(plan, scenario_id)
+    capacity_marks(plan, scenario_id)
+  rescue ActiveRecord::RecordNotFound
+    nil
+  end
+
+  def capacity_cell(marks)
+    return Views::Plans::CapacityUnitTotal.new(totals: [], baseline: false, empty: "Can't be counted") unless marks
+
+    Views::Plans::CapacityUnitTotal.new(totals: marks.totals, baseline: marks.baseline?, empty: "None counted")
   end
 
   def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil)
