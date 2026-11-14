@@ -62,6 +62,15 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "No period of its own"
   end
 
+  should "add the units and what is in no unit up to the total exactly, in the map's read and the table's" do
+    cost = call(Operations::TeamPlanning::Cost, plan_id: @plan_id, scenario_id: @year)
+    table = call(Operations::TeamPlanning::ScenarioCosts, plan_id: @plan_id)[:scenarios].find { it[:scenario_id] == @year }
+
+    units = cost[:units].sum { BigDecimal(it[:scenario][:converted]) }
+    assert_equal BigDecimal(cost[:total][:scenario][:converted]), units
+    assert_equal cost[:total], table[:total]
+  end
+
   should "show no band minimum or maximum on either page, with or without pay access" do
     viewer = ActsAsTenant.with_tenant(@tenant) { account(name: "Vic Viewer") }
     call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: viewer.person.id, role: "viewer")
