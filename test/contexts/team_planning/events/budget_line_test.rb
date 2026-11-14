@@ -29,6 +29,15 @@ class TeamPlanning::Events::BudgetLineTest < ActiveSupport::TestCase
     assert_equal "A budget line needs an amount, a head count or both", assert_raises(TeamPlanning::Error) { SET.end_state(figures(head_count: nil)) }.message
   end
 
+  should "read a line back as an override row stores it, with the sealed amount left out" do
+    planned = SET.end_state(figures(amount: "9000", currency: "NZD", period: "month", location: "NZ", tenant_line: true))
+    held = SET.apply_to(map, { subject_id: TENANT, **planned })
+
+    assert_equal planned.except(:amount), SET.read_from(held, subject_id: TENANT)
+    assert_equal({ starts_on: "2026-07-01", ends_on: "2027-06-30", origin: "existing", currency: "AUD", period: "year", tenant_line: true },
+                 SET.read_from(map, subject_id: TENANT))
+  end
+
   should "change a tenant line in place, add a plan line, and cut either" do
     changed = SET.apply_to(map, { subject_id: TENANT, **SET.end_state(figures(tenant_line: true)) })
     added = SET.apply_to(changed, { subject_id: PLAN, **SET.end_state(figures) })

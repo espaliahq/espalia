@@ -55,6 +55,8 @@ class TeamPlanning::Events::BudgetLineSet < TeamPlanning::Events::Change
     map.with(budget_lines: held ? map.budget_lines.map { it.id == id ? line : it } : map.budget_lines + [ line ])
   end
 
+  # Reads as an override row stores the end state: figures as strings, and the sealed amount left out.
+  #
   # @param map [TeamPlanning::Baseline::Map]
   # @param subject_id [String]
   # @param facet [String]
@@ -62,8 +64,9 @@ class TeamPlanning::Events::BudgetLineSet < TeamPlanning::Events::Change
   def self.read_from(map, subject_id:, facet: self.facet)
     line = map.budget_lines.find { it.id == subject_id } or return nil
 
-    TeamPlanning::Baseline::BUDGET_FIGURES.to_h { [ it, line.public_send(it) ] }
-      .merge(%i[starts_on ends_on approved_on].to_h { [ it, line.public_send(it)&.iso8601 ] })
-      .compact.merge(tenant_line: line.source != "plan")
+    (TeamPlanning::Baseline::BUDGET_FIGURES - [ :amount ]).to_h { [ it, line.public_send(it) ] }
+      .merge(%i[starts_on ends_on approved_on].to_h { [ it, line.public_send(it)&.iso8601 ] },
+             head_count: ::BudgetLine.figure_of(line.head_count))
+      .compact_blank.merge(tenant_line: line.source != "plan")
   end
 end
