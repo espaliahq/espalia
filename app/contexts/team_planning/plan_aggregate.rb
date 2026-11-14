@@ -298,6 +298,7 @@ class TeamPlanning::PlanAggregate
   # @param person_id [String]
   # @return [String, nil] its event id
   def last_undoable_by(scenario_id, person_id)
+    ensure_open!
     log = @logs.fetch(live_scenario!(scenario_id), [])
     log.reverse_each.find { !undone?(it.event_id) && actor_of(it) == person_id && later_in_effect(log, it).nil? }&.event_id
   end
@@ -309,6 +310,7 @@ class TeamPlanning::PlanAggregate
   # @param person_id [String]
   # @return [String, nil] the undone entry's event id
   def last_redoable_by(scenario_id, person_id)
+    ensure_open!
     log = @logs.fetch(live_scenario!(scenario_id), [])
     @reversals.fetch(scenario_id, []).reverse_each do |undo|
       next unless undo.data[:undone_by_id] == person_id

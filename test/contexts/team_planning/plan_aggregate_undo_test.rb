@@ -169,6 +169,8 @@ class TeamPlanning::PlanAggregateUndoTest < ActiveSupport::TestCase
     @plan.delete(deleted_by_id: @ada_id)
 
     assert_equal "Next year has been deleted", refusal { undo_change(@lean, change) }
+    assert_equal "Next year has been deleted", refusal { @plan.last_undoable_by(@lean, @ada_id) }
+    assert_equal "Next year has been deleted", refusal { @plan.last_redoable_by(@lean, @ada_id) }
   end
 
   should "rebuild what stands undone from the stream" do
