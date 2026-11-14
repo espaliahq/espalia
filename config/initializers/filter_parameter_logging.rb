@@ -7,5 +7,6 @@
 # See the ActiveSupport::ParameterFilter documentation for supported notations and behaviors.
 Rails.application.config.filter_parameters += [
   :passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv, :cvc,
-  :pay_band, :minimum, :midpoint, :maximum
+  # Pay band figures, by exact key: a symbol matches any key containing it, which would hide pay_band_id
+  /\A(?:pay_band|minimum|midpoint|maximum)\z/
 ]
