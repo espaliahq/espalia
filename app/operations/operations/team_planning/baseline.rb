@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-# The organisation a plan stands on.
+# The organisation a plan stands on
+# ([#210](https://github.com/espaliahq/espalia/issues/210)). It and
+# `team_planning_plan` are walked by the privacy test and the forgotten-person
+# audit.
 class Operations::TeamPlanning::Baseline < Operations::Base
   include Operations::TeamPlanning::PlanRead
 

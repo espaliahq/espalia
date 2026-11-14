@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 # Retires a unit Espalia holds, ending every membership in it.
+#
+# Approval is :in_app [#138](https://github.com/espaliahq/espalia/issues/138):
+# it ends many memberships at once and can't be undone in one step. It runs
+# under one new cause, so every event it writes shares a correlation id. A
+# unit an HRIS mirrors is refused.
 class Operations::OrgGraph::RetireUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
   prepend Operations::OrgGraph::PlanWrite

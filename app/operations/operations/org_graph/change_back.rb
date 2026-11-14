@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 # "Change it back" for one entry of a unit's activity (#137).
+#
+# A change that can't be changed back comes back as invalid params with its
+# reason; one the caller lacks the rights for, as not authorized with its
+# reason.
 class Operations::OrgGraph::ChangeBack < Operations::Base
   description "Change back one entry of an Org Graph unit's activity, by its id from org_graph_activity. " \
               "Writes the inverse as a new change; history keeps both. Refused, with the reason, for a " \

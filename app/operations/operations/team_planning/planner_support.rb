@@ -2,6 +2,9 @@
 
 # What the planner operations share: finding a person's account in the
 # tenant, and the list as it reads after a change.
+#
+# The grant is tenant_users.team_planner (decision 7), in the Org Graph editor
+# tools' shape.
 module Operations::TeamPlanning::PlannerSupport
   private
 

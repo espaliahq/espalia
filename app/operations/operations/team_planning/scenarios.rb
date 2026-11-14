@@ -2,6 +2,9 @@
 
 # A plan's scenarios: the baseline, and each scenario with its parent,
 # relation and the period the tree gives it.
+#
+# Any member may list them, the baseline first with the plan's id
+# [#208](https://github.com/espaliahq/espalia/issues/208).
 class Operations::TeamPlanning::Scenarios < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
