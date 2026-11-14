@@ -115,6 +115,12 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_match(/minimum can't be above the midpoint/, errors.first)
   end
 
+  should "refuse a currency ISO 4217 doesn't list" do
+    error = assert_raises(Operations::Base::ParameterError) { add(currency: "XYZ") }
+
+    assert_equal "Currency must be an ISO 4217 currency code, such as AUD", error.message
+  end
+
   should "refuse a second band for the same level and location" do
     add
     error = assert_raises(Operations::Base::ParameterError) { add(location: " fixtureland") }

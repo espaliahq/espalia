@@ -62,6 +62,8 @@ class PayBandTest < ActiveSupport::TestCase
   should "keep the currency as an upper-case ISO code and the period as given" do
     assert_equal "AUD", band(currency: " aud ").tap(&:valid?).currency
     assert_not band(currency: "DOLLARS").valid?
+    assert_not band(currency: "XYZ").valid?, "three letters, but not an ISO 4217 currency"
+    assert band(currency: "nzd").valid?
     assert_not band(period: "week").valid?
   end
 
