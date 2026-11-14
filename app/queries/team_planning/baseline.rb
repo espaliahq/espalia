@@ -28,27 +28,68 @@ class TeamPlanning::Baseline
   # @!attribute names [Hash{String => String}] person id => name, empty until joined
   # @!attribute rules [Rules] the rules the organisation follows
   # @!attribute unresolved [Array<Unresolved>] the people a plan places who aren't on the map
+  # @!attribute step_ids [Array<String>] the scenarios of the step on screen: it and those it is an
+  #   alternative of. A departure set in one of them marks the person leaving; one set earlier takes them off
+  # @!attribute departed [Array<Departed>] the people a departure in an earlier step took off the map
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
-                    :rules, :unresolved) do
-    def initialize(retired_units: [], successions: [], unresolved: [], **) = super
+                    :rules, :unresolved, :step_ids, :departed) do
+    def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], **) = super
 
-    # Puts each position's people in its unit, and anyone left in no live
-    # unit in Unassigned. A placement in a closed position keeps its
-    # position but has no unit.
+    # Takes off the map anyone a departure in an earlier step took, puts
+    # each position's people in its unit, and anyone left in no live unit in
+    # Unassigned. A placement in a closed position keeps its position but
+    # has no unit.
     #
     # @return [Map]
     def settled
+      gone, staying = people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
+      departed = self.departed + gone.map { Departed.new(person_id: it.id, **it.departure) }
       unit_of = positions.to_h { [ it.id, it.unit_id ] }
-      people = self.people.map do |person|
+      people = staying.map do |person|
         person.with(memberships: person.memberships.map { it.position_id ? it.with(unit_id: unit_of[it.position_id]) : it })
       end
       live = units.to_set(&:id)
-      with(people:, unassigned_ids: people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
+      with(people:, departed:, unassigned_ids: people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
     end
 
+    # A leaver never fills the position that backfills them.
+    #
     # @return [Hash{String => Array<Array(Member, Membership)>}] position id => each person placed there, with the placement
     def occupants
-      people.flat_map { |person| person.memberships.select(&:position_id).map { [ person, it ] } }.group_by { it.last.position_id }
+      people.flat_map { |person| person.memberships.select { it.position_id && it.position_id != person.backfill_id }.map { [ person, it ] } }
+        .group_by { it.last.position_id }
+    end
+
+    # @return [Hash{String => Array<String>}] position id => the people whose departure it backfills,
+    #   leaving in this step or gone before it
+    def backfills
+      (people.filter_map { [ it.backfill_id, it.id ] if it.backfill_id } + departed.filter_map { [ it.position_id, it.person_id ] if it.position_id })
+        .group_by(&:first).transform_values { it.map(&:last) }
+    end
+
+    # The people whose line points at a person or a position. For a vacant
+    # manager position, this is the span the open seat carries.
+    #
+    # @param id [String] a person id or a position id
+    # @return [Array<String>] person ids, direct reports only
+    def reports_of(id) = people.select { it.manager_id == id || it.manager_position_id == id }.map(&:id)
+
+    # The lines above a person, nearest first. It stops at a person with no
+    # manager, at a position (a seat has no line of its own; read its people
+    # with {#occupants}), at someone off the map, or at a repeat, so a loop an
+    # ancestor's edit made never spins.
+    #
+    # @param person_id [String]
+    # @return [Array<Line>]
+    def managers_above(person_id)
+      by_id = people.index_by(&:id)
+      lines = []
+      seen = Set[person_id]
+      while (line = by_id[person_id]&.line)
+        lines << line
+        break unless (person_id = line.person_id) && seen.add?(person_id)
+      end
+      lines
     end
 
     # The position's FTE less what its people fill: each one's allocation
@@ -81,7 +122,8 @@ class TeamPlanning::Baseline
     # @return [Array<String>] every person id the map uses: its people, their
     #   managers, the units' owners and the people it can't place
     def person_ids
-      (people.flat_map { [ it.id, it.manager_id ] } + units.flat_map(&:owner_ids) + unresolved.map(&:person_id)).compact.uniq
+      (people.flat_map { [ it.id, it.manager_id ] } + units.flat_map(&:owner_ids) + unresolved.map(&:person_id) +
+        departed.map(&:person_id)).compact.uniq
     end
 
     # @param person_id [String]
@@ -139,9 +181,31 @@ class TeamPlanning::Baseline
   # Units that carry on from others: a split, a merge or a replacement.
   Succession = Data.define(:id, :predecessor_ids, :successor_ids)
 
-  # A person and their facts that day, with each place they hold.
+  # A person and their facts that day, with each place they hold. Their
+  # line points at `manager_id` (the Org Graph's manager fact, or a plan's
+  # change) or at `manager_position_id`, a vacant manager seat, or at
+  # neither. `departure` is set while they are leaving: `leaves_in_id`, the
+  # scenario whose step they leave in, and `position_id`, their backfill.
   Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
-                       :memberships)
+                       :memberships, :manager_position_id, :departure) do
+    def initialize(manager_position_id: nil, departure: nil, **) = super
+
+    # @return [Line, nil] nil when they report to nobody
+    def line = manager_id || manager_position_id ? Line.new(person_id: manager_id, position_id: manager_position_id) : nil
+
+    # @return [Boolean]
+    def leaving? = !departure.nil?
+
+    # @return [String, nil] the position backfilling them
+    def backfill_id = departure&.dig(:position_id)
+  end
+
+  # Where a reporting line points: a person or a position, never both.
+  Line = Data.define(:person_id, :position_id)
+
+  # Someone a departure in an earlier step took off the map, the step they
+  # left in, and the position backfilling them, if any.
+  Departed = Data.define(:person_id, :leaves_in_id, :position_id)
 
   # A person's place in a unit, or in a position. A position's place takes
   # the position's unit when the map settles, and none once it closes.
@@ -203,6 +267,7 @@ class TeamPlanning::Baseline
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
     map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: [], positions: [], names: {},
+                  step_ids: [ @plan.id ],
                   rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
     return map unless history
 
