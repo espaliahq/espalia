@@ -136,6 +136,20 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :done, statuses(status)[[ @brook.id, "assignment" ]]
   end
 
+  should "settle positions afresh on each read, so a reader used again sees a position the plan has moved" do
+    position = SecureRandom.uuid_v7
+    move = ->(unit_id) do
+      plan(TeamPlanning::Events::PositionSet, position, role_id: @squads, level_id: @squads, unit_id:, fte: 1.0, basis: "new")
+    end
+    move.(@platform)
+    plan(TeamPlanning::Events::AssignmentSet, @brook.id, placements: [ { position_id: position, allocation: 1.0 } ])
+    reader = as_tenant { TeamPlanning::Status.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @q1, today: TODAY) }
+    assert_not_equal :done, statuses(as_tenant { reader.call })[[ @brook.id, "assignment" ]]
+
+    move.(@payments)
+    assert_equal :done, statuses(as_tenant { reader.call })[[ @brook.id, "assignment" ]]
+  end
+
   should "read pending while today matches the step before, and conflicting once it leaves both" do
     plan(TitleSet, @ada.id, title: "Senior Engineer")
     q2 = as_tenant { fork("Q2", parent_id: @q1, relation: "then", ends_on: "2026-09-30") }

@@ -62,6 +62,7 @@ class TeamPlanning::Status
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     @aggregate = @repository.load_plan(@plan.id)
+    @resolved = {}
     changes = tracked_changes
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
@@ -94,7 +95,7 @@ class TeamPlanning::Status
   end
 
   def resolved(scenario_id)
-    (@resolved ||= {})[scenario_id] ||= TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository).structure
+    @resolved[scenario_id] ||= TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository).structure
   end
 
   def end_state_of(change) = change.data.except(*TeamPlanning::Events::Change::FIELDS)
