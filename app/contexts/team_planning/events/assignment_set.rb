@@ -48,7 +48,7 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
       return map.with(unresolved: map.unresolved + [ TeamPlanning::Baseline::Unresolved.new(person_id: data[:subject_id], why: nil) ])
     end
 
-    memberships = data[:placements].map { TeamPlanning::Baseline::Membership.new(**it.to_h.symbolize_keys) }
+    memberships = data[:placements].map { TeamPlanning::Baseline::Membership.new(**it.to_h.symbolize_keys.slice(*TeamPlanning::Baseline::Membership.members)) }
     map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(memberships:) : it })
   end
 

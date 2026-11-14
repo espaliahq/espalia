@@ -12,22 +12,26 @@ module Operations::TeamPlanning::MapPayload
   def map_payload(map)
     { base_on: map.base_on.iso8601, known_on: map.known_on.iso8601,
       units: map.units.map(&:to_h),
-      people: map.people.map { it.to_h.merge(memberships: it.memberships.map(&:to_h), allocation_total: it.allocation_total) },
+      people: people_payload(map),
       unassigned_ids: map.unassigned_ids,
       positions: positions_payload(map),
       unresolved: map.unresolved.map(&:to_h),
       names: names_for(map) }
   end
 
+  def people_payload(map)
+    totals = map.allocation_totals
+    map.people.map { it.to_h.merge(memberships: it.memberships.map(&:to_h), allocation_total: totals[it.id]) }
+  end
+
   def positions_payload(map)
+    by_position = map.occupants
     map.positions.map do |position|
-      occupants = map.occupants(position.id).map { |person, place| { person_id: person.id, allocation: place.allocation, role: place.role } }
-      { position_id: position.id, **position.to_h.except(:id), budget: position.budget, occupants:, open_fte: map.open_fte(position) }
+      held = by_position.fetch(position.id, [])
+      occupants = held.map { |person, place| { person_id: person.id, allocation: place.allocation, role: place.role } }
+      { position_id: position.id, **position.to_h.except(:id), budget: position.budget, occupants:, open_fte: map.open_fte(position, held) }
     end
   end
 
-  def names_for(map)
-    ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids) + map.unresolved.map(&:person_id)
-    ids.compact.uniq.to_h { [ it, map.name_of(it) ] }
-  end
+  def names_for(map) = map.person_ids.to_h { [ it, map.name_of(it) ] }
 end

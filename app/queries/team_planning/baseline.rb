@@ -41,10 +41,9 @@ class TeamPlanning::Baseline
       with(people:, unassigned_ids: people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
     end
 
-    # @param position_id [String]
-    # @return [Array<Array(Member, Membership)>] each person placed in the position, with the placement
-    def occupants(position_id)
-      people.flat_map { |person| person.memberships.select { it.position_id == position_id }.map { [ person, it ] } }
+    # @return [Hash{String => Array<Array(Member, Membership)>}] position id => each person placed there, with the placement
+    def occupants
+      people.flat_map { |person| person.memberships.select(&:position_id).map { [ person, it ] } }.group_by { it.last.position_id }
     end
 
     # The position's FTE less what its people fill: each one's allocation
@@ -52,10 +51,32 @@ class TeamPlanning::Baseline
     # the position is overfilled.
     #
     # @param position [Position]
+    # @param occupants [Array<Array(Member, Membership)>] from {#occupants}
     # @return [Float]
-    def open_fte(position)
-      filled = occupants(position.id).sum { |person, placement| placement.allocation.to_f * (person.fte || 1).to_f }
+    def open_fte(position, occupants)
+      filled = occupants.sum { |person, placement| placement.allocation.to_f * (person.fte || 1).to_f }
       (position.fte.to_f - filled).round(4)
+    end
+
+    # Each person's allocations in live units, summed. A total over 1 is
+    # never refused, so checks read it. nil means unknown: the HRIS gave a
+    # place no allocation, and a check must not read unknown as
+    # under-allocated. A place in a closed position or a gone unit counts
+    # for nothing.
+    #
+    # @return [Hash{String => Float, nil}] person id => total
+    def allocation_totals
+      live = units.to_set(&:id)
+      people.to_h do |person|
+        allocations = person.memberships.select { live.include?(it.unit_id) }.map(&:allocation)
+        [ person.id, allocations.any?(&:nil?) ? nil : allocations.sum(&:to_f).round(4) ]
+      end
+    end
+
+    # @return [Array<String>] every person id the map uses: its people, their
+    #   managers, the units' owners and the people it can't place
+    def person_ids
+      (people.flat_map { [ it.id, it.manager_id ] } + units.flat_map(&:owner_ids) + unresolved.map(&:person_id)).compact.uniq
     end
 
     # @param person_id [String]
@@ -112,17 +133,7 @@ class TeamPlanning::Baseline
 
   # A person and their facts that day, with each place they hold.
   Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
-                       :memberships) do
-    # The sum of the person's allocations. A total over 1 is never refused,
-    # so checks read it. nil means unknown: the HRIS gave a place no
-    # allocation. A check must not read unknown as under-allocated.
-    #
-    # @return [Float, nil]
-    def allocation_total
-      allocations = memberships.map(&:allocation)
-      allocations.sum(&:to_f).round(4) unless allocations.any?(&:nil?)
-    end
-  end
+                       :memberships)
 
   # A person's place in a unit, or in a position. A position's place takes
   # the position's unit when the map settles, and none once it closes.
@@ -169,18 +180,17 @@ class TeamPlanning::Baseline
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
-    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), positions: [], names: {},
-            rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {}))
+    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: [], positions: [], names: {},
+            rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
   end
 
-  # Joins the names of everyone a map names (its people, their managers, the
-  # units' owners and the people it can't place) and of each position's role and level.
+  # Joins the names of everyone the map names ({Map#person_ids}) and of each
+  # position's role and level.
   #
   # @param map [Map]
   # @return [Map]
   def named(map)
-    ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids) + map.unresolved.map(&:person_id)
-    map.with(names: ::Person.where(tenant_id: @plan.tenant_id, id: ids.compact.uniq).pluck(:id, :name).to_h,
+    map.with(names: ::Person.where(tenant_id: @plan.tenant_id, id: map.person_ids).pluck(:id, :name).to_h,
              positions: named_positions(map.positions))
   end
 

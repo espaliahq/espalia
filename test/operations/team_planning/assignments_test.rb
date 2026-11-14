@@ -74,7 +74,7 @@ class Operations::TeamPlanning::AssignmentsTest < ActiveSupport::TestCase
     moved = assign(@q1, @ada, { unit_id: @growth, allocation: 1, role: "Lead" })
 
     assert_equal({ plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
-                   placements: [ { position_id: nil, unit_id: @growth, allocation: 1.0, role: "Lead" } ], allocation_total: 1.0 }, moved)
+                   placements: [ { position_id: nil, unit_id: @growth, allocation: 1.0, role: "Lead" } ] }, moved)
     assert_equal [ @payments ], units_of(@plan_id, @ada)
     [ @q1, @lean, @q2 ].each { assert_equal [ @growth ], units_of(it, @ada) }
   end
@@ -108,8 +108,7 @@ class Operations::TeamPlanning::AssignmentsTest < ActiveSupport::TestCase
     assign(@q1, @ada, { unit_id: @payments, allocation: 0.6 }, { unit_id: @growth, allocation: 0.4 })
     assert_in_delta 1.0, map(@q1)[:people].find { it[:id] == @ada.id }[:allocation_total]
 
-    over = assign(@q1, @ada, { unit_id: @payments, allocation: 1 }, { unit_id: @growth, allocation: 0.5 })
-    assert_in_delta 1.5, over[:allocation_total]
+    assign(@q1, @ada, { unit_id: @payments, allocation: 1 }, { unit_id: @growth, allocation: 0.5 })
     assert_in_delta 1.5, map(@q1)[:people].find { it[:id] == @ada.id }[:allocation_total]
   end
 
@@ -131,6 +130,14 @@ class Operations::TeamPlanning::AssignmentsTest < ActiveSupport::TestCase
 
     assert_equal [ [ position_id, nil ] ], places(@q2, @bo).map { it.values_at(:position_id, :unit_id) }
     assert_includes map(@q2)[:unassigned_ids], @bo.id
+    assert_in_delta 0.0, map(@q2)[:people].find { it[:id] == @bo.id }[:allocation_total]
+  end
+
+  should "refuse a new placement in a position closed in the scenario" do
+    position_id = open_position(@plan_id)
+    call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @q1, position_id:)
+
+    assert_equal "This scenario has no such open position", refusal(placements: [ { position_id:, allocation: 1 } ])
   end
 
   should "name a position's occupants and its open FTE, an unknown FTE counting as full time" do
@@ -179,12 +186,14 @@ class Operations::TeamPlanning::AssignmentsTest < ActiveSupport::TestCase
   should "refuse a position the scenario lacks, and a person outside the tenant" do
     elsewhere = create(:person, tenant: create(:tenant))
 
-    assert_equal "This scenario has no such position", refusal(placements: [ { position_id: open_position(@q2), allocation: 1 } ])
+    assert_equal "This scenario has no such open position", refusal(placements: [ { position_id: open_position(@q2), allocation: 1 } ])
+    assert_equal "unit_id must be a UUID, got \"payments\"", refusal(placements: [ { unit_id: "payments", allocation: 1 } ])
     assert_equal "No such person", refusal(person_id: elsewhere.id, placements: [ { unit_id: @growth, allocation: 1 } ])
   end
 
   should "read as missing to an admin outside the plan, and refuse a viewer's write" do
     assert_equal "No such plan", refusal(as: @other_admin, placements: [])
+    assert_equal "No such plan", refusal(as: @other_admin, placements: [ { unit_id: @growth, allocation: 7 } ])
     assert_equal "No such plan", refusal(as: @viewer, placements: [])
     assert_raises(Operations::Base::ParameterError) { map(@q1, as: @other_admin) }
     assert_equal [ @payments ], map(@q1, as: @viewer)[:people].find { it[:id] == @ada.id }[:memberships].pluck(:unit_id)
