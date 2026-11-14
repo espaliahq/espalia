@@ -20,6 +20,7 @@ class Shreddable::Value::Sealed < Shreddable::Value
     @identifier = identifier
     @cipher = cipher
     @key_of = key_of
+    @sealed = []
   end
 
   # @return [Object, nil] the value, or nil once removed
@@ -39,6 +40,7 @@ class Shreddable::Value::Sealed < Shreddable::Value
   # @return [void]
   def marshal_load(_)
     @opened = Shreddable::Value.removed
+    @sealed = []
     freeze
   end
 

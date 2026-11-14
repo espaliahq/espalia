@@ -186,6 +186,14 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
     assert_predicate second.data[:note], :removed?
   end
 
+  should "write a value read back into a new event" do
+    publish(note_written)
+    publish(note_written(note: read_back.data[:note]))
+
+    notes = in_tenant { @event_store.read.stream(@stream).to_a.map { it.data[:note].reveal } }
+    assert_equal [ "Moving to the platform team" ] * 2, notes
+  end
+
   should "load a value that opened as removed back from Marshal as removed" do
     publish(note_written)
     note = read_back.data[:note]
