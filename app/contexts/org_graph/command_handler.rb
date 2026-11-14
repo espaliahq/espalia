@@ -230,12 +230,15 @@ class OrgGraph::CommandHandler
   def set_membership(person_id, unit_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_membership!(person_id, unit_id)
-    ensure_provides_unit!(ensure_live_unit!(unit_id), options[:provider], person_id)
-    with_person(person_id, plan) { |person| person.set_membership(unit_id, **attributed(options, :set_by_id)) }
+    unit = ensure_live_unit!(unit_id)
+    with_person(person_id, plan) do |person|
+      ensure_provides_unit!(unit, options[:provider], person_id, held: person.membership_provider(unit.id))
+      person.set_membership(unit_id, **attributed(options, :set_by_id))
+    end
   end
 
   # Ends a person's membership of one unit. A retired unit's memberships can
-  # still be ended.
+  # still be ended; a unit the structure doesn't hold can't be checked, so is refused.
   #
   # @param person_id [String]
   # @param unit_id [String]
@@ -243,9 +246,11 @@ class OrgGraph::CommandHandler
   def end_membership(person_id, unit_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_membership!(person_id, unit_id)
-    unit = find_unit(unit_id)
-    ensure_provides_unit!(unit, options[:provider], person_id) if unit
-    with_person(person_id, plan) { |person| person.end_membership(unit_id, **attributed(options, :ended_by_id)) }
+    unit = find_unit(unit_id) or raise "Unit not found"
+    with_person(person_id, plan) do |person|
+      ensure_provides_unit!(unit, options[:provider], person_id, held: person.membership_provider(unit.id))
+      person.end_membership(unit_id, **attributed(options, :ended_by_id))
+    end
   end
 
   # Ends every open membership a person has, as the system does when they
@@ -270,11 +275,10 @@ class OrgGraph::CommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_move_membership!(person_id, from_unit_id, unit_id)
     unit = ensure_live_unit!(unit_id)
-    membership = OrgMembership.find_by(person_id: person_id, unit_id: from_unit_id.to_s.downcase)
-    if membership
-      ensure_provides_unit!(unit, membership.provider, person_id, held: find_unit(from_unit_id)&.provider == unit.provider)
-    end
+    from = find_unit(from_unit_id) or raise "Unit not found"
     with_person(person_id, plan) do |person|
+      provider = person.membership_provider(from.id) or raise "Not a member of this unit"
+      ensure_provides_unit!(unit, provider, person_id, held: (provider if from.provider == unit.provider))
       person.move_membership(from_unit_id, unit_id, **attributed(options, :moved_by_id))
     end
   end
@@ -289,14 +293,20 @@ class OrgGraph::CommandHandler
   # @raise [RuntimeError] if another provider supplies the fact or the unit
   def confirm_fact(person_id, fact, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
-    if fact.to_s == OrgGraph::FactConfirmation::MEMBERSHIP
+    membership = fact.to_s == OrgGraph::FactConfirmation::MEMBERSHIP
+    if membership
       authorize_membership!(person_id, options[:unit_id])
-      ensure_provides_unit!(ensure_live_unit!(options[:unit_id]), OrgGraph::StructureAggregate::ESPALIA, person_id)
+      unit = ensure_live_unit!(options[:unit_id])
     else
       authorize_structure!
       ensure_provides!(person_id, OrgGraph::StructureAggregate::ESPALIA, fact.to_sym)
     end
-    with_person(person_id, plan) { |person| person.confirm_fact(fact, **attributed(options, :confirmed_by_id)) }
+    with_person(person_id, plan) do |person|
+      if membership
+        ensure_provides_unit!(unit, OrgGraph::StructureAggregate::ESPALIA, person_id, held: person.membership_provider(unit.id))
+      end
+      person.confirm_fact(fact, **attributed(options, :confirmed_by_id))
+    end
   end
 
   private
@@ -345,15 +355,15 @@ class OrgGraph::CommandHandler
   # Espalia may place a person the unit's provider does not know, since its
   # sync will never place them; that membership stays Espalia's, and Espalia
   # can still end or move it once the provider comes to know them.
-  def ensure_provides_unit!(unit, provider, person_id, held: holds?(person_id, unit, provider))
+  #
+  # `held` is who supplies the membership as the person's stream has it,
+  # never org_memberships, which a Members rebuild empties while writes go on (#170).
+  def ensure_provides_unit!(unit, provider, person_id, held:)
     return if unit.provider == provider.to_s
-    return if provider.to_s == OrgGraph::StructureAggregate::ESPALIA && (held || !known_to?(unit.provider, person_id))
+    return if provider.to_s == OrgGraph::StructureAggregate::ESPALIA &&
+              (held == provider.to_s || !known_to?(unit.provider, person_id))
 
     raise "#{unit.provider} supplies this unit; change its members there"
-  end
-
-  def holds?(person_id, unit, provider)
-    OrgMembership.exists?(person_id: person_id, unit_id: unit.id, provider: provider.to_s)
   end
 
   def known_to?(provider, person_id)

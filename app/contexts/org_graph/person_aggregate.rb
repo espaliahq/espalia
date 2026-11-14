@@ -313,6 +313,11 @@ class OrgGraph::PersonAggregate
   end
 
   # @param unit_id [String]
+  # @return [String, nil] who supplies the person's open membership of the
+  #   unit, or nil when they are not in it
+  def membership_provider(unit_id) = @memberships.dig(unit_id.to_s.downcase, :provider)
+
+  # @param unit_id [String]
   # @return [Date, nil] the latest date a change to this membership took
   #   effect, which a backdated change leaves in place
   def membership_changed_on(unit_id)
