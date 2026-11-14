@@ -53,6 +53,23 @@ class TeamPlanning::Events::AssignmentSetTest < ActiveSupport::TestCase
     assert_equal state, end_state(*TeamPlanning::Events::AssignmentSet.read_from(settled, subject_id: "p1")[:placements])
   end
 
+  should "show a position placement as a place in the position's unit at its allocation, with its role only when the plan names one" do
+    position = TeamPlanning::Baseline::Position.new(id: "0190a1b2-0000-7000-8000-000000000007", role_id: nil, level_id: nil,
+                                                    unit_id: UNIT.downcase, fte: 1.0, basis: "new", role_name: nil, level_name: nil)
+    map = TeamPlanning::Baseline::Map.new(base_on: Date.current, known_on: Date.current, units: [], people: [], unassigned_ids: [],
+                                          positions: [ position ], names: {}, rules: nil)
+    place = ->(**it) { { placements: [ { position_id: nil, unit_id: UNIT.downcase, allocation: 1.0, role: nil, **it } ] } }
+    shows = ->(read, planned) { TeamPlanning::Events::AssignmentSet.shows?(read, end_state(planned), map:) }
+
+    assert shows.(place.(), { position_id: position.id, allocation: 1.0 })
+    assert shows.(place.(role: "Lead"), { position_id: position.id, allocation: 1.0 })
+    assert shows.(place.(role: "Lead"), { position_id: position.id, allocation: 1.0, role: "Lead" })
+    assert_not shows.(place.(), { position_id: position.id, allocation: 1.0, role: "Lead" })
+    assert_not shows.(place.(allocation: 0.5), { position_id: position.id, allocation: 1.0 })
+    assert_not shows.(place.(unit_id: "0190a1b2-0000-7000-8000-000000000009"), { position_id: position.id, allocation: 1.0 })
+    assert_not shows.(place.(), { position_id: "0190a1b2-0000-7000-8000-000000000008", allocation: 1.0 })
+  end
+
   should "hold two placement lists in another order the same, and a different allocation not" do
     one = { unit_id: UNIT.downcase, allocation: 0.5, role: nil, position_id: nil }
     two = { unit_id: "0190a1b2-0000-7000-8000-000000000009", allocation: 0.5, role: nil, position_id: nil }

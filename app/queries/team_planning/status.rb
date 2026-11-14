@@ -19,6 +19,10 @@
 # ({TeamPlanning::Events::Change.subject_moved_by}) has a status. A plan-only
 # kind, such as a rule, would read pending forever, so it is left out.
 #
+# Each kind compares with {TeamPlanning::Events::Change.shows?}, given the
+# map its planned state settles on, since the Org Graph can't say which
+# position someone fills, only where they are.
+#
 # @example
 #   TeamPlanning::Status.new(context:, plan:, scenario_id:).call.statuses.select { it.status == :conflicting }
 class TeamPlanning::Status
@@ -77,15 +81,20 @@ class TeamPlanning::Status
     kind = change.class
     subject_id, facet = key
     today = kind.read_from(now, subject_id:, facet:)
-    before = [ kind.read_from(base, subject_id:, facet:), *step_before(change, key, base) ]
+    before = [ [ kind.read_from(base, subject_id:, facet:), base ], *step_before(change, key, base) ]
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
-              status: status_of(kind, today, end_state_of(change), before))
+              status: status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before))
   end
 
+  # Each planned state comes with the map it belongs to, so a kind can show it as the Org Graph would.
   def status_of(kind, today, planned, before)
-    return :done if kind.same_end_state?(today, planned)
+    return :done if kind.shows?(today, planned.first, map: planned.last)
 
-    before.any? { kind.same_end_state?(today, it) } ? :pending : :conflicting
+    before.any? { |state, map| kind.shows?(today, state, map:) } ? :pending : :conflicting
+  end
+
+  def resolved(scenario_id)
+    (@resolved ||= {})[scenario_id] ||= TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository).structure
   end
 
   def end_state_of(change) = change.data.except(*TeamPlanning::Events::Change::FIELDS)
@@ -102,10 +111,10 @@ class TeamPlanning::Status
     index = path.index(step)
     earlier = @aggregate.winning_changes(path[index - 1])[key] if index.positive?
     return [] unless earlier
-    return [ end_state_of(earlier) ] if earlier.instance_of?(change.class)
+    return [ [ end_state_of(earlier), resolved(path[index - 1]) ] ] if earlier.instance_of?(change.class)
 
     subject_id, facet = key
-    [ change.class.read_from(earlier.class.apply_to(base, earlier.data), subject_id:, facet:) ]
+    [ [ change.class.read_from(earlier.class.apply_to(base, earlier.data), subject_id:, facet:), base ] ]
   end
 
   # Today's name wins; the base names a unit since retired.

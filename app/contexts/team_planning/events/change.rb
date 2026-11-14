@@ -66,6 +66,16 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [Boolean]
   def self.same_end_state?(left, right) = left.as_json == right.as_json
 
+  # Whether the Org Graph reads as a planned end state shows it, for status per
+  # change. A kind whose end state names something only the plan holds says how
+  # the Org Graph would show it.
+  #
+  # @param read [Hash, nil] the end state read off the Org Graph
+  # @param planned [Hash, nil]
+  # @param map [TeamPlanning::Baseline::Map] the plan's map the planned end state belongs to
+  # @return [Boolean]
+  def self.shows?(read, planned, map:) = same_end_state?(read, planned)
+
   # @return [Boolean] whether this kind names its facet and says how it lands
   def self.complete? = %i[facet apply_to].all? { overrides?(it) }
 

@@ -59,6 +59,28 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   # @return [Boolean]
   def self.same_end_state?(left, right) = super(in_order(left), in_order(right))
 
+  # The Org Graph can't say which position someone fills, only where they are, so a placement in
+  # a position shows as a place in the position's unit on the plan's map, at its allocation, with
+  # its role only when the plan names one.
+  #
+  # @param read [Hash, nil] the placements read off the Org Graph
+  # @param planned [Hash, nil]
+  # @param map [TeamPlanning::Baseline::Map] settled, so each position has its unit
+  # @return [Boolean]
+  def self.shows?(read, planned, map:)
+    return same_end_state?(read, planned) unless read && planned
+
+    units = map.positions.to_h { [ it.id, it.unit_id ] }
+    places = read.as_json.fetch("placements").dup
+    wanted = planned.as_json.fetch("placements")
+    return false unless wanted.size == places.size
+
+    wanted.all? do |want|
+      index = places.index { shows_place?(it, want, units) }
+      index && places.delete_at(index)
+    end
+  end
+
   # @param change [OrgGraph::ChangesBetween::Change]
   # @return [String, nil] the person an Org Graph change places, moves or takes out of a unit
   def self.subject_moved_by(change) = (change.person_id if MOVED_BY.include?(change.kind))
@@ -85,6 +107,13 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
     map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(memberships:) : it })
   end
 
+  def self.shows_place?(place, wanted, units)
+    return place == wanted unless wanted["position_id"]
+
+    place["unit_id"] == units[wanted["position_id"]] && !place["unit_id"].nil? && place["allocation"] == wanted["allocation"] &&
+      (wanted["role"].nil? || place["role"] == wanted["role"])
+  end
+
   def self.placement!(placement)
     raise TeamPlanning::Error, "A placement names a position or a unit" unless placement.is_a?(Hash)
 
@@ -103,5 +132,5 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "An allocation is above 0 and at most 1"
   end
 
-  private_class_method :placement!, :allocation!, :in_order, :placement_of
+  private_class_method :placement!, :allocation!, :in_order, :placement_of, :shows_place?
 end

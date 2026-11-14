@@ -15,8 +15,12 @@ class Operations::TeamPlanning::Status < Operations::Base
               "reads the planned end state, 'pending' when today still reads what the plan's base held or what " \
               "the step before plans, 'conflicting' when it reads none of these; before the plan's base date " \
               "nothing reads conflicting. A person's placements are one facet, so a placement list is " \
-              "done only when the whole list matches. A change the Org Graph never holds, such as a rule, has no " \
-              "status: it would read pending forever. Subjects are named by id, and `names` maps each the Org Graph " \
+              "done only when the whole list matches. The Org Graph can't say which position someone fills, only " \
+              "where they are, so a placement in a position is done once the person is in the position's unit at " \
+              "its allocation, with its role only when the plan names one. A change the Org Graph never holds, " \
+              "such as a rule or a position, has no status: it would read pending forever. A unit retirement and " \
+              "a unit succession have no status yet either, since the Org Graph's as-of read holds only live " \
+              "units and no successions. Subjects are named by id, and `names` maps each the Org Graph " \
               "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \
               "plan holds has none. Refused, as an unknown plan, unless " \
               "the caller is a member."

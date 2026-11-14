@@ -122,6 +122,20 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :done, statuses(status)[[ @brook.id, "assignment" ]]
   end
 
+  should "read a position placement pending until the person is in the position's unit at its allocation, then done" do
+    position = SecureRandom.uuid_v7
+    plan(TeamPlanning::Events::PositionSet, position, role_id: SecureRandom.uuid_v7, level_id: SecureRandom.uuid_v7,
+                                                      unit_id: @platform, fte: 1.0, basis: "backfill")
+    plan(TeamPlanning::Events::AssignmentSet, @brook.id, placements: [ { position_id: position, allocation: 1.0 } ])
+    assert_equal :pending, statuses(status)[[ @brook.id, "assignment" ]]
+
+    on(Time.utc(2026, 3, 10, 9)) do
+      @org.end_membership(@brook.id, @payments, **ESPALIA, effective_on: "2026-03-10")
+      @org.set_membership(@brook.id, @platform, **ESPALIA, effective_on: "2026-03-10", allocation: 1.0)
+    end
+    assert_equal :done, statuses(status)[[ @brook.id, "assignment" ]]
+  end
+
   should "read pending while today matches the step before, and conflicting once it leaves both" do
     plan(TitleSet, @ada.id, title: "Senior Engineer")
     q2 = as_tenant { fork("Q2", parent_id: @q1, relation: "then", ends_on: "2026-09-30") }

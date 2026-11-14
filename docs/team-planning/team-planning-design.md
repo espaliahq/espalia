@@ -469,9 +469,14 @@ A person's placements are one facet, so a planned list is done only when the who
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
 Org Graph can move (it implements `subject_moved_by`) has a status: today, a unit set and
 an assignment. A rule, a position and a succession are plan-only, so each would read
-pending forever. A retirement has none yet either: the Org Graph's as-of read gives only
-live units, so today's map can't show a unit retired. A placement in a position never
-reads done, since the Org Graph places people in units, not positions. Names come
+pending forever. A retirement and a succession have none yet either: the Org Graph's
+as-of read gives only live units and holds no successions, so today's map can't show a
+unit retired or succeeded.
+
+The Org Graph can't say which position someone fills, only where they are. So a placement
+in a position is held against the place it settles to on the scenario's map: the
+position's unit, at the placement's allocation, with its role only when the plan names
+one. It reads done once the person is in that unit at that allocation. Names come
 last and from today, so a forgotten person reads "Former member", a renamed unit its new
 name, and a subject only the plan holds has none. `Raised` will join these once
 `ChangeRaised` exists. `team_planning_status` gives the same read over MCP.
