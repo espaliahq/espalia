@@ -22,6 +22,8 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
   parameter :top_level, :boolean
   parameter :level_id, String, allow_blank: false
   forbids_when :parent_id, if: :top_level, equals: true, message: "Give parent_id or top_level, not both"
+  requires_any_of :unit_id, :name
+  requires_any_of :unit_id, :level_id
 
   # @return [Hash] `{ plan_id, scenario_id, unit_id, name, parent_id, level_id }`
   def perform
@@ -52,7 +54,6 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
   end
 
   def check_level!(map, current, level_id, parent_id)
-    refuse!("A new unit needs a level_id") unless level_id
     refuse!("A unit's level can't change: create a unit at the new level instead") if current && current.level_id != level_id
     refuse!("Level is not in the taxonomy") unless current || level_ids.include?(level_id)
     returning = current && map.units.none? { it.id == current.id }

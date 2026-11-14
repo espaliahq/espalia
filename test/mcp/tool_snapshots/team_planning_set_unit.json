@@ -41,23 +41,55 @@
       "plan_id"
     ],
     "additionalProperties": false,
-    "if": {
-      "properties": {
-        "top_level": {
-          "const": true
-        }
-      },
-      "required": [
-        "top_level"
-      ]
-    },
-    "then": {
-      "not": {
-        "required": [
-          "parent_id"
+    "allOf": [
+      {
+        "anyOf": [
+          {
+            "required": [
+              "unit_id"
+            ]
+          },
+          {
+            "required": [
+              "name"
+            ]
+          }
         ]
+      },
+      {
+        "anyOf": [
+          {
+            "required": [
+              "unit_id"
+            ]
+          },
+          {
+            "required": [
+              "level_id"
+            ]
+          }
+        ]
+      },
+      {
+        "if": {
+          "properties": {
+            "top_level": {
+              "const": true
+            }
+          },
+          "required": [
+            "top_level"
+          ]
+        },
+        "then": {
+          "not": {
+            "required": [
+              "parent_id"
+            ]
+          }
+        }
       }
-    }
+    ]
   },
   "annotations": {
     "readOnlyHint": false,

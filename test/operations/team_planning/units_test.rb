@@ -68,7 +68,8 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
     should "refuse what the Org Graph would" do
       risk = write(Operations::TeamPlanning::SetUnit, name: "Risk", level_id: @squad)[:unit_id]
       {
-        "A new unit needs a level_id" => { name: "Risk" },
+        "provide at least one of: unit_id, level_id" => { name: "Risk" },
+        "provide at least one of: unit_id, name" => { level_id: @squad },
         "Level is not in the taxonomy" => { name: "Risk", level_id: SecureRandom.uuid_v7 },
         "A parent must sit at a higher level" => { name: "Risk", level_id: @squad, parent_id: @payments },
         "The parent must be a live unit in this scenario" => { name: "Risk", level_id: @squad, parent_id: SecureRandom.uuid_v7 },
