@@ -19,13 +19,15 @@ class Operations::TeamPlanning::PinChange < Operations::Base
   parameter :subject_id, String, required: true, allow_blank: false
   parameter :facet, String, required: true, allow_blank: false
 
-  # @return [Hash] the pin, as team_planning_overrides lists it
+  # @return [Hash] the pin, as team_planning_overrides lists it; just the key, unpinned, once someone has already cleared it
   def perform
     plan_id = plan_id!
     scenario_id = scenario_id!(:scenario_id)
     refusing_bad_plans { handler.pin_change(plan_id, scenario_id:, subject_id: params[:subject_id], facet: params[:facet]) }
     plan = TeamPlanningPlan.find(plan_id)
-    Operations::TeamPlanning::Overrides.listed(context:, plan:, scenario_id:).find { it.values_at(:subject_id, :facet) == [ params[:subject_id], params[:facet] ] }
-                                       .merge(plan_id:, scenario_id:)
+    key = { subject_id: params[:subject_id], facet: params[:facet] }
+    pinned = Operations::TeamPlanning::Overrides.listed(context:, plan:, scenario_id:).find { it.slice(:subject_id, :facet) == key }
+    # Another editor can clear the pin between the write and this read.
+    (pinned || { **key, pinned: false }).merge(plan_id:, scenario_id:)
   end
 end

@@ -104,6 +104,13 @@ class Operations::TeamPlanning::OverridesTest < ActiveSupport::TestCase
     assert_equal({ "cap" => 8 }, listed.dig(:end_state, "value"))
   end
 
+  should "answer with the key, unpinned, when another editor clears the pin before the answer is read" do
+    set_cap(@q1, 8)
+    pinned = Operations::TeamPlanning::Overrides.stub(:listed, []) { change(:PinChange, @lean) }
+
+    assert_equal({ subject_id: @plan_id, facet: CAP, pinned: false, plan_id: @plan_id, scenario_id: @lean }, pinned)
+  end
+
   should "pin the baseline's value with no scenario to name" do
     pinned = change(:PinChange, @q1)
 
