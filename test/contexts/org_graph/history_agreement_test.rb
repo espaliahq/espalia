@@ -195,6 +195,18 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
       assert_equal({ @payments => 0.5 }, live_allocations)
     end
 
+    should "change back a second change on the same date to the first one" do
+      later("2026-03-01") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-10", allocation: 0.8) }
+      later("2026-03-02") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-10", allocation: 0.3) }
+
+      later("2026-03-03") do
+        OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back(OrgUnitActivity.for_unit(@payments).first)
+      end
+
+      assert_equal [ 0.5, 0.8 ], %w[2026-02-05 2026-02-15].map { history("membership", it, key: @payments)["allocation"] }
+      assert_equal({ @payments => 0.8 }, live_allocations)
+    end
+
     should "change back the backdated membership change and leave the later terms" do
       later("2026-03-01") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8) }
       later("2026-04-15") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-10", allocation: 1.0) }
