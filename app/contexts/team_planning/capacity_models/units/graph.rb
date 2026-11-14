@@ -5,13 +5,14 @@
 # about who manages whom, with two exceptions for seats that have no line of
 # their own:
 #
-# - An open individual position counts against the nearest unit, walking up
-#   from its own, that holds exactly one manager seat. Two or more in the
+# - An open position counts against the nearest unit, walking up from its
+#   own, that holds exactly one other manager seat. Two or more in the
 #   nearest unit that has any, or none up the tree, and it counts against
 #   nobody, with a note saying so.
 # - A vacant manager position also takes, as direct reports, the people that
 #   walk leads to who have no manager on the map, so a seat whose lines
-#   haven't been redrawn yet still carries its span.
+#   haven't been redrawn yet still carries its span. Someone who already
+#   manages the seat, as the head of the tree does, is never its report.
 #
 # A leaver is never a report, and their reports pass to the position
 # backfilling them, or to nobody.
@@ -39,6 +40,7 @@ class TeamPlanning::CapacityModels::Units::Graph
     @manager_role_ids = manager_role_ids.to_set
     @people = map.people.reject(&:leaving?).index_by(&:id)
     @units = map.units.index_by(&:id)
+    @positions = map.positions.index_by(&:id)
     @lines = Hash.new { |hash, key| hash[key] = [] }
     @unmanaged = []
     route_lines
@@ -46,7 +48,8 @@ class TeamPlanning::CapacityModels::Units::Graph
     @seats_in = seats_by_unit
     @notes = {}
     @attached = Hash.new { |hash, key| hash[key] = [] }
-    attach_open_positions
+    attach_open_positions(manager: false)
+    attach_open_positions(manager: true)
     attach_unmanaged
   end
 
@@ -67,7 +70,6 @@ class TeamPlanning::CapacityModels::Units::Graph
       distance = DISTANCES[[ depth, 2 ].min]
       frontier = frontier.flat_map { direct(it) }.uniq.select { seen.add?(it) }
       reports += frontier.map { report(it, distance) }
-      frontier = frontier.select { @people.key?(it) }
       depth += 1
     end
     reports
@@ -107,14 +109,15 @@ class TeamPlanning::CapacityModels::Units::Graph
     end
   end
 
-  # An open position manages as itself; a filled one through the one person
-  # in it. Shared or closed, it manages nobody.
+  # A position manages through the one person in it, or as itself while
+  # nobody is. Shared or closed, it manages nobody.
   def seat_of(position_id, occupants)
     return unless position_id
-    return position_id if @open.key?(position_id)
 
     filled = occupants.fetch(position_id, []).map(&:first).reject(&:leaving?).map(&:id).uniq
-    filled.first if filled.one?
+    return filled.first if filled.one?
+
+    position_id if filled.empty? && @open.key?(position_id)
   end
 
   def manager_ids
@@ -125,18 +128,21 @@ class TeamPlanning::CapacityModels::Units::Graph
   def seats_by_unit
     by_unit = Hash.new { |hash, key| hash[key] = [] }
     @manager_ids.each do |id|
-      units = @people.key?(id) ? @people[id].memberships.map(&:unit_id) : [ @map.positions.find { it.id == id }&.unit_id ]
+      units = @people.key?(id) ? @people[id].memberships.map(&:unit_id) : [ @positions[id]&.unit_id ]
       units.compact.uniq.each { by_unit[it] << id }
     end
     by_unit
   end
 
-  def attach_open_positions
+  def attach_open_positions(manager:)
     @map.positions.each do |position|
-      next if !@open.key?(position.id) || manager?(position.id)
+      next if !@open.key?(position.id) || manager?(position.id) != manager
 
-      manager, note = nearest_manager(position.unit_id, except: position.id)
-      manager ? @attached[manager] << position.id : @notes[position.id] = [ note ]
+      above, note = nearest_manager(position.unit_id, except: position.id)
+      next @notes[position.id] = [ note ] unless above
+      next if manages?(position.id, above)
+
+      @attached[above] << position.id
     end
   end
 
@@ -144,9 +150,11 @@ class TeamPlanning::CapacityModels::Units::Graph
     @unmanaged.each do |person|
       unit_id = person.memberships.min_by { [ -it.allocation.to_r, it.unit_id.to_s ] }&.unit_id
       manager, = nearest_manager(unit_id, except: person.id)
-      @attached[manager] << person.id if manager && !@people.key?(manager)
+      @attached[manager] << person.id if manager && !@people.key?(manager) && !manages?(person.id, manager)
     end
   end
+
+  def manages?(id, other_id) = span(id).any? { it.id == other_id }
 
   def nearest_manager(unit_id, except:)
     seen = Set.new

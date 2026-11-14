@@ -370,12 +370,15 @@ the figure overloaded, with the excess. Each step names what it charges for.
 
 - **A manager seat** is one with line reports, or a backfill of a leaver who had them, or a
   role in `manager_role_ids`.
-- **An open individual position** counts against the nearest unit, walking up from its own,
-  holding exactly one manager seat: a filled one as a future direct report at its open FTE,
-  or a vacant one as part of its span. Two in the nearest unit that has any, or none up
-  the tree, and it counts against nobody, with a note saying which.
+- **A line to a position** goes to the one person in it, or to the open seat while nobody is.
+- **An open position**, a manager's included, counts against the nearest unit, walking up
+  from its own, holding exactly one other manager seat: a filled one as a future direct
+  report at its open FTE, or a vacant one as part of its span. Two in the nearest unit that
+  has any, or none up the tree, and it counts against nobody, with a note saying which. A
+  manager above a vacant manager seat pays for its team at skip level and below.
 - **A vacant manager position** also takes, as direct reports, the people the same walk
-  leads to who have no manager on the map. Anyone a staffed manager holds stays theirs.
+  leads to who have no manager on the map. Anyone a staffed manager holds stays theirs, and
+  someone who already manages the seat, as the head of the tree does, is never its report.
 - **A leaver** is never a report. Their reports pass to their backfill, or to nobody.
 
 ### Clearing and pinning

@@ -27,9 +27,10 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
 
   def unit(id, parent_id = nil) = Baseline::Unit.new(id:, name: id, parent_id:, level_id: nil, owner_ids: [])
 
-  def member(id, unit_id, manager_id: nil, manager_position_id: nil, departure: nil)
+  def member(id, unit_id, manager_id: nil, manager_position_id: nil, departure: nil, position_id: nil)
     Baseline::Member.new(id:, title: nil, level: nil, manager_id:, cost_centre: nil, site: nil, country: nil, fte: 1, employment_type: nil,
-                         memberships: [ Baseline::Membership.new(unit_id:, allocation: 1.0, role: nil) ], manager_position_id:, departure:)
+                         memberships: [ Baseline::Membership.new(unit_id:, allocation: 1.0, role: nil, position_id:) ], manager_position_id:,
+                         departure:)
   end
 
   def position(id, unit_id) = Baseline::Position.new(id:, role_id: nil, level_id: nil, unit_id:, fte: 1, basis: "new", role_name: nil, level_name: nil)
@@ -180,15 +181,39 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
     assert_not(%w[m a c v].any? { graph.span(it).map(&:id).include?("lone") })
   end
 
-  should "make a seat whose role a tenant names a manager, so open seats and unmanaged people below it count against it" do
+  should "make a seat whose role a tenant names a manager, so open seats, vacant managers and unmanaged people below it count against it" do
     @positions << position("lead", "root")
     @open["lead"] = 1r
     @levels["lead"] = 4
     @roles["lead"] = [ "em" ]
     params = { "manager_role_ids" => [ "EM" ] }
 
-    assert_equal %w[lone m], price("lead", params:).working.select { it.label.include?("direct") }.map(&:subject_id)
+    working = price("lead", params:).working
+    assert_equal %w[lone v m], working.select { it.label.include?("direct") }.map(&:subject_id)
+    assert_equal %w[e f w].sort, (working.select { it.label.include?("skip") }.map(&:subject_id) - %w[a b g p]).sort
     assert_equal [ "Base at L4", "Units" ], price("lead").working.map(&:label)
+  end
+
+  should "send a line to a position to the one person in it, though some of its FTE stands open" do
+    @positions << position("pair", "squad")
+    @open["pair"] = 1r
+    @people += [ member("o", "squad", position_id: "pair"), member("r", "squad", manager_position_id: "pair") ]
+    graph = Units::Graph.new(map:, facts:, manager_role_ids: [])
+
+    assert_equal [ "r" ], graph.span("o").map(&:id)
+    assert_not graph.manager?("pair")
+  end
+
+  should "never make the head of the tree a report of a vacant manager seat beneath them" do
+    @people << member("ceo", "root")
+    @people.map! { it.id == "m" ? it.with(manager_id: "ceo") : it }
+    @positions << position("vp", "root")
+    @open["vp"] = 1r
+    @roles["vp"] = [ "em" ]
+    graph = Units::Graph.new(map:, facts:, manager_role_ids: [ "em" ])
+
+    assert_includes graph.span("ceo").map(&:id), "vp"
+    assert_not_includes graph.span("vp").map(&:id), "ceo"
   end
 
   should "never count a leaver as a report, and pass their reports to the position backfilling them, or to nobody" do
