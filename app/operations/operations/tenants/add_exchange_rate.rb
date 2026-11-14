@@ -6,7 +6,7 @@ class Operations::Tenants::AddExchangeRate < Operations::Base
 
   description "Add an exchange rate: one unit of from_currency is worth rate units of to_currency from " \
               "applies_from (YYYY-MM-DD) until a later rate for the pair applies. Both are ISO 4217 codes. One " \
-              "rate per pair and date; use tenants_change_exchange_rate to correct one. " \
+              "rate per pair and date, either way round; use tenants_change_exchange_rate to correct one. " \
               "#{Operations::Tenants::ExchangeRateSupport::RATE_HELP} Refused unless the caller is a tenant admin."
   category :write
   approval :in_app

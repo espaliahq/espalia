@@ -74,7 +74,7 @@ class Tenant::ExchangeRatesControllerTest < ActionDispatch::IntegrationTest
       post tenant_exchange_rates_path, params: rate_params(rate: "0.77")
 
       assert_response :unprocessable_content
-      assert_includes flash[:alert], "already a rate from NZD to AUD applying from 2026-07-01"
+      assert_includes flash[:alert], "already a rate between NZD and AUD applying from 2026-07-01"
       assert_no_match(/0\.77/, flash[:alert])
       assert_select "#exchange-rate-rate[value='0.77']"
     end

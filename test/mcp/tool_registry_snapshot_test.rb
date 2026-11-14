@@ -3664,7 +3664,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "tenants_add_exchange_rate",
         "description" => "Add an exchange rate: one unit of from_currency is worth rate units of to_currency from " \
                          "applies_from (YYYY-MM-DD) until a later rate for the pair applies. Both are ISO 4217 codes. One " \
-                         "rate per pair and date; use tenants_change_exchange_rate to correct one. " \
+                         "rate per pair and date, either way round; use tenants_change_exchange_rate to correct one. " \
                          "A rate is a decimal string above zero with at most twelve decimal places, such as \"0.92\": " \
                          "one unit of from_currency is worth that much to_currency. " \
                          "Refused unless the caller is a tenant admin.",

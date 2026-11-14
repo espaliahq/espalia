@@ -33,13 +33,13 @@ class ExchangeRateTest < ActiveSupport::TestCase
     assert_equal BigDecimal("60"), convert(100, on: JULY.next_month)
   end
 
-  should "prefer whichever direction applies from later, and the pair's own on the same date" do
+  should "prefer whichever direction applies from later, and the pair's own should two adds race to one date" do
     rate.save!
     rate(from: "AUD", to: "NZD", rate: "4", applies_from: JULY.next_month).save!
 
     assert_equal BigDecimal("25"), convert(100, on: JULY.next_month)
 
-    rate(rate: "0.2", applies_from: JULY.next_month).save!
+    rate(rate: "0.2", applies_from: JULY.next_month).save!(validate: false)
     assert_equal BigDecimal("20"), convert(100, on: JULY.next_month)
   end
 
@@ -81,7 +81,16 @@ class ExchangeRateTest < ActiveSupport::TestCase
     duplicate = rate(from: "nzd", rate: "0.7")
 
     assert_not duplicate.valid?
-    assert_includes duplicate.errors[:base], "There is already a rate from NZD to AUD applying from 2026-07-01"
+    assert_includes duplicate.errors[:base], "There is already a rate between NZD and AUD applying from 2026-07-01"
+  end
+
+  should "refuse the reverse pair on the same date, which would contradict the rate" do
+    rate.save!
+    reverse = rate(from: "AUD", to: "NZD", rate: "4")
+
+    assert_not reverse.valid?
+    assert_includes reverse.errors[:base], "There is already a rate between AUD and NZD applying from 2026-07-01"
+    assert rate(from: "AUD", to: "NZD", rate: "2", applies_from: JULY.next_day).valid?
   end
 
   should "refuse a rate that isn't positive, a currency ISO doesn't list, or one currency twice" do

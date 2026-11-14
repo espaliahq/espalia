@@ -70,7 +70,7 @@ class Operations::Tenants::ExchangeRatesTest < ActiveSupport::TestCase
   should "refuse a bad date, a second rate for the pair's date, and one currency twice" do
     assert_match(/applies_from must be a date/, assert_raises(Operations::Base::ParameterError) { add(applies_from: "July") }.message)
     add
-    assert_match(/already a rate from NZD to AUD/, assert_raises(Operations::Base::ParameterError) { add(rate: "0.7") }.message)
+    assert_match(/already a rate between NZD and AUD/, assert_raises(Operations::Base::ParameterError) { add(rate: "0.7") }.message)
     assert_raises(Operations::Base::ParameterError) { add(to_currency: "NZD") }
   end
 
