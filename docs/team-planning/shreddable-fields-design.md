@@ -1,7 +1,8 @@
 # Shreddable event fields — design
 
-> Status: proposal. Nothing here is built. [The index](README.md) lists the companion
-> designs, the mockups and the plan.
+> Status: proposal. The plan key store is built; [What is built](#what-is-built) says
+> what it does. [The index](README.md) lists the companion designs, the mockups and the
+> plan.
 
 Events are immutable. Some of what they should hold must be forgettable: a salary pasted
 into a plan, a note about why someone is moving, a reason for a change in hours. A
@@ -21,11 +22,13 @@ benefit from it.
 | Reference | `person_id`, `manager_id` | In clear. An opaque id. |
 | Clear | A level, a team, an FTE | In clear. |
 | Shreddable by person | A reason for leaving, pay held by the Org Graph | Encrypted under that person's key. |
-| Shreddable by plan | A pasted salary, a note on a change, a scenario description | Encrypted under that plan's key. |
+| Shreddable by plan | A note on a change, a scenario description, a budget amount | Encrypted under that plan's key. |
+| Shreddable by person within a plan | Their uploaded pay, a corrected level, a planned promotion | Encrypted under that person's key in that plan. |
 
-A field has exactly one key. Data a plan holds about a person is under the plan's key:
-it is the plan's speculation, and it should go when the plan goes, even though the
-person is still employed.
+A field has exactly one key. Data a plan holds about a person is under that person's key
+in the plan. It goes when the plan goes, as every key in the plan does. It also goes
+when the person is forgotten, which destroys their key in every plan at once and leaves
+the rest of each plan readable.
 
 ## Mechanism
 
@@ -51,6 +54,35 @@ We supply:
 - **A declaration** that reads better than the raw schema, for example
   `shreddable :value, by: :plan`.
 - **The guard** described below.
+
+## What is built
+
+`PlanKeyStore` holds the keys in the `plan_encryption_keys` table, one row per key, and
+answers RailsEventStore's key repository interface: `key_of`, `create` and `forget`.
+Identifiers carry the tenant:
+
+```text
+tenant-<tenant_id>/plan-<plan_id>
+tenant-<tenant_id>/plan-<plan_id>/person-<person_id>
+```
+
+- **Key material is encrypted at rest** with Active Record encryption, under the keys the
+  tenant credential columns already use.
+- **A key is read by its identifier's tenant**, because the mapper reads an event before
+  a handler sets the tenant. An identifier from another tenant than the current one is
+  refused.
+- **`destroy_plan` and `destroy_person` write in the caller's transaction** and queue
+  nothing, so the transaction that writes `PlanDeleted` or `PersonForgotten` can destroy
+  the keys too, and a plan or person is never half forgotten. `OrgGraph::Forgetting`
+  will call `destroy_person` inside its own per-person transaction.
+- **A destroyed key stays destroyed.** Its row keeps no key material, and `create`
+  refuses a new key for a deleted plan or a forgotten person, including a plan that never
+  held a key for them.
+- **Without Active Record encryption keys**, reading or minting a key raises
+  `PlanKeyStore::Unavailable` with a plain reason. Destroying keys needs no key
+  material, so forgetting still works, and nothing outside plans is affected.
+
+Nothing writes a shreddable field yet. The declaration and the guard come next.
 
 ## The guard
 
@@ -158,7 +190,9 @@ so each projection decides for itself.
   were due. Two cases need a person:
   someone forgotten on request before their date, and a deleted plan, which comes back
   and has to be deleted again. A deployment that restores a backup should check for
-  both.
+  both. One partial case is caught: `PlanEncryptionKey.outliving_forgotten_people`
+  lists live keys for people the Org Graph has forgotten. A full restore brings back
+  the person's row as it was, so nothing detects that.
 - **Events already written stay in clear.** A field cannot be made shreddable after the
   fact without rewriting history. Covering existing evidence and comments is a separate
   migration with its own design.
@@ -171,6 +205,7 @@ so each projection decides for itself.
 
 ## Deferred
 
-- Key rotation.
+- Key rotation. Rotating the Active Record encryption keys that protect the key store
+  needs Rails' re-encryption with the previous keys kept, not a swap.
 - Holding keys apart from the event store, so no single backup has both. It would make
   forgetting immediate everywhere, at the cost of a second store to run.
