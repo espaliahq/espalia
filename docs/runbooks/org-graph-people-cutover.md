@@ -24,6 +24,7 @@ The deploy that ships this projection needs `REBUILD_ON_DEPLOY=org_graph/people_
 
    It prints counts and person ids, never names or emails:
    - **recorded from their row**: people with no stream yet, such as someone added by hand or on first sign-in. A person with an HRIS external id is recorded as that provider's, and anyone else as Espalia's.
+   - **leavers dated by**: how many inactive people took their leaving date from each source, best first. *hris termination date* is the termination date in the HiBob record the row last stored. *row updated* is the day the row last changed, used when that was before the cut-over day. *cut over* is the cut-over date, for a leaver with no other evidence. Retention counts from this date, so a large *cut over* count means those leavers are kept longer than the tenant's period says.
    - **could not be recorded**: each id with its reason. Any entry here stops the cut-over.
    - **differs from the stream**: for each column, the people whose row disagrees with what their stream rebuilds. Any entry here stops the cut-over too.
 

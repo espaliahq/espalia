@@ -21,7 +21,9 @@ class OrgGraph::PeopleCutover
   # @!attribute failed [Hash{String => String}] person id to the reason recording failed
   # @!attribute differences [Hash{String => Array<String>}] column to the ids whose rebuilt value differs
   # @!attribute applied [Boolean] whether the tenant is now cut over
-  Report = Data.define(:recorded, :failed, :differences, :applied)
+  # @!attribute left_on_sources [Hash{String => Integer}] how many leavers recorded
+  #   from their row took their leaving date from each source
+  Report = Data.define(:recorded, :failed, :differences, :applied, :left_on_sources)
 
   # The kinds of fact {row_facts} records.
   RECORDED_FACTS = %w[employment_status title manager].freeze
@@ -50,14 +52,34 @@ class OrgGraph::PeopleCutover
 
   # The facts to record someone with from their row. A person carrying an
   # HRIS external id is recorded as that provider's; anyone else, such as
-  # someone added by hand or on first sign-in, as Espalia's.
+  # someone added by hand or on first sign-in, as Espalia's. A leaver leaves
+  # on the date {leaving} finds.
   #
   # @param person [Person]
+  # @param on [Date] the cut-over date
   # @return [Hash] keywords for {OrgGraph::CommandHandler#record_person}
-  def self.row_facts(person)
-    { provider: provider_for(person), effective_on: Date.current,
-      employment_status: OrgGraph::Projections::PeopleColumns.employment_status(person.status),
-      title: person.job_title, manager_id: person.manager_id == person.id ? nil : person.manager_id }
+  def self.row_facts(person, on: Date.current)
+    employment_status = OrgGraph::Projections::PeopleColumns.employment_status(person.status)
+    { provider: provider_for(person), effective_on: on, employment_status:,
+      title: person.job_title, manager_id: person.manager_id == person.id ? nil : person.manager_id,
+      **(leaving(person, on:) if employment_status == "left") }
+  end
+
+  # When a leaver left, from the best evidence their row holds: the
+  # termination date in the HRIS record it stored, then the row's last
+  # update, then the cut-over date. Nothing records when a row became
+  # inactive, so the last update stands in for it, but only from before the
+  # cut-over day: an update that day says nothing about when they left. A
+  # termination date after the cut-over date is passed over.
+  #
+  # @param person [Person]
+  # @param on [Date] the cut-over date
+  # @return [Hash] :left_on and :left_on_source, one of {OrgGraph::PersonAggregate::LEFT_ON_SOURCES}
+  def self.leaving(person, on: Date.current)
+    evidence = { "hris_termination_date" => Hris::BaseAdapter.terminated_on(person)&.then { Date.iso8601(it) },
+                 "row_updated" => person.updated_at&.to_date&.then { it if it < on } }
+    source, left_on = evidence.find { |_, date| date && date <= on } || [ "cut_over", on ]
+    { left_on:, left_on_source: source }
   end
 
   # The provider {OrgGraph::CommandHandler} lets record the person: their
@@ -92,13 +114,13 @@ class OrgGraph::PeopleCutover
 
       ActsAsTenant.with_tenant(@tenant) do
         before = snapshot
-        recorded, failed = record_unrecorded
+        recorded, failed, left_on_sources = record_unrecorded
         @tenant.update!(org_graph_people_projected_at: Time.current)
         rebuild
         differences = compare(before, snapshot)
 
         applied = apply && failed.empty? && (differences.empty? || accept_stream)
-        report = Report.new(recorded:, failed:, differences:, applied:)
+        report = Report.new(recorded:, failed:, differences:, applied:, left_on_sources:)
       end
       raise ActiveRecord::Rollback unless report.applied
     end
@@ -147,18 +169,21 @@ class OrgGraph::PeopleCutover
     handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, repository: OrgGraph::Repository.new(event_store: @event_store))
     recorded = []
     failed = {}
+    left_on_sources = Hash.new(0)
 
     AuditMetadata.with(acting_via: :system, correlation_id: SecureRandom.uuid_v7) do
       AuditMetadata.wrap_event_store do
         Person.where.not(id: recorded_ids).find_each do |person|
-          ActiveRecord::Base.transaction(requires_new: true) { handler.record_person(person.id, **self.class.row_facts(person)) }
+          facts = self.class.row_facts(person)
+          ActiveRecord::Base.transaction(requires_new: true) { handler.record_person(person.id, **facts) }
           recorded << person.id
+          left_on_sources[facts[:left_on_source]] += 1 if facts[:left_on_source]
         rescue => e
           failed[person.id] = e.message
         end
       end
     end
-    [ recorded.sort, failed ]
+    [ recorded.sort, failed, left_on_sources.sort.to_h ]
   end
 
   def recorded_ids

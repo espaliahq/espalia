@@ -116,6 +116,19 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep where a worked-out leaving date came from" do
+      record(employment_status: "left", left_on: "2025-12-01", left_on_source: "row_updated")
+
+      assert_equal [ "2025-12-01", "row_updated" ], events.sole.data.values_at(:left_on, :left_on_source)
+    end
+
+    should "refuse an unknown leaving date source, or one with no leaving date" do
+      assert_raises(RuntimeError, match: /leaving date source/) do
+        record(employment_status: "left", left_on: "2025-12-01", left_on_source: "guess")
+      end
+      assert_raises(RuntimeError, match: /needs a leaving date/) { record(employment_status: "left", left_on_source: "cut_over") }
+    end
+
     should "refuse a person as their own manager" do
       assert_raises(RuntimeError, match: /manage themselves/) { record(manager_id: @person_id) }
     end
