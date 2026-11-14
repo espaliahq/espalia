@@ -396,6 +396,8 @@ These do one Capybara click, and if the destination text/selector doesn't appear
 
 **If a failure carries a `note: JS recovery —` line, read it first.** That is the shared cue for every recovery in the helpers, and the phrase after it names the cause the evidence actually supports: a drifted locator, an element rendered late, a frame re-render, a detached node, or a document replaced mid-navigation. The helpers never fail *because* of a miss (a slow first click can land after the recovery runs, so the assertion keeps its full wait); the note appears only alongside a genuine failure it is likely to explain.
 
+**A failed `click_button_with_js_fallback` also prints a `signal timeline`.** It lists, in milliseconds from the click, each probe's start and end beside when the signal text entered and left the page and when Turbo submitted and rendered. A signal added and removed between probes means it was there and too brief to catch; no `signal added` line means it never rendered. Read it before changing the test ([#241](https://github.com/espaliahq/espalia/issues/241)).
+
 **Pass exactly one signal** — exactly one of `expect_text:` or `expect_selector:` (plus `expect_no_text:`, accepted only by `click_button_with_js_fallback`), never two. Each helper (`click_with_retry` included) checks a single signal by precedence, so a second one would be silently ignored: never armed, never asserted. Passing zero or more than one raises `ArgumentError` at authoring time. When a click needs a second assertion, write it yourself after the helper returns.
 
 ## Copying to the Clipboard: Click for Real

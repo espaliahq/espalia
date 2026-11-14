@@ -61,4 +61,41 @@ class ClickRecoveryNoteSystemTest < ApplicationSystemTestCase
       assert_match(/found no <a> matching "Vanishing link"/, error.message)
     end
   end
+
+  context "click_button_with_js_fallback" do
+    # The shape of #241: the click lands and its signal shows, but is gone
+    # before any probe reads the page.
+    should "report when its signal came and went around each probe" do
+      visit new_user_session_path
+      assert_selector "input#user_email"
+
+      page.execute_script(<<~JS)
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Flash briefly";
+        button.addEventListener("click", () => {
+          const signal = document.createElement("div");
+          signal.textContent = "Fleeting signal";
+          document.body.appendChild(signal);
+          queueMicrotask(() => signal.remove());
+        });
+        document.body.appendChild(button);
+      JS
+
+      error = assert_raises(Minitest::Assertion) do
+        Capybara.using_wait_time(1) do
+          click_button_with_js_fallback("Flash briefly", expect_text: "Fleeting signal")
+        end
+      end
+
+      timeline = error.message[/signal timeline.*/m]
+
+      assert timeline, "expected a signal timeline in:\n#{error.message}"
+      assert_operator timeline.index("click"), :<, timeline.index("signal added in <div>")
+      assert_operator timeline.index("signal added in <div>"), :<, timeline.index("signal removed with <div>")
+      assert_match(/probe 1 ended, not landed/, timeline)
+      assert_match(/probe 2 ended, not landed/, timeline)
+      assert_match(/final assertion started/, timeline)
+    end
+  end
 end
