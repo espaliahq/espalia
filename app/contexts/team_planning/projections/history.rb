@@ -10,6 +10,9 @@
 # entries with it; the stream keeps them. It hears every kind in
 # {TeamPlanning::ChangeKinds}.
 #
+# Production already holds changes, pins and clears, so the deploy that ships
+# it needs `REBUILD_ON_DEPLOY=team_planning/history`.
+#
 class TeamPlanning::Projections::History
   # Stable identifier used as the natural key in `projection_versions.name`.
   PROJECTION_NAME = "team_planning/history"

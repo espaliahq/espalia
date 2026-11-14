@@ -260,7 +260,10 @@ other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
 undo and redo, in order, with who made it and, while it stands undone, who undid it.
-`team_planning_history` lists it, and a forgotten person reads as a former member. The
+`team_planning_history` lists it, and a forgotten person reads as a former member.
+Production already holds changes, pins and clears, so the deploy that ships the history
+needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeploy's
+`verify` stops the deploy. The
 history and overrides projections read events through one mapping,
 `TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
 never reaches either table: the history names the field in `sealed_fields` and leaves
