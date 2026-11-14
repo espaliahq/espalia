@@ -2,7 +2,8 @@
 
 # One place's capacity, a person's or an open position's, drawn the same way
 # so the two compare. It opens to show its working: each step of the model,
-# then the planner's override if there is one.
+# then the planner's override if there is one, and whether managing others
+# costs the seat more than its base.
 class Views::Plans::CapacityFigure < Views::Base
   Format = Views::Plans::CapacityMarks::Format
 
@@ -44,6 +45,7 @@ class Views::Plans::CapacityFigure < Views::Base
     p(class: "text-xs") { @marks.description_of(@place[:model]) }
     ol(class: "mt-1 space-y-0.5") { @place[:working].each { step(it) } }
     calculated if @place[:overridden]
+    overload
     notes
   end
 
@@ -65,6 +67,14 @@ class Views::Plans::CapacityFigure < Views::Base
     return unless @place[:calculated]
 
     p(class: "mt-1") { "The model gives #{Format.amount(BigDecimal(@place[:calculated]), symbol)}." }
+  end
+
+  def overload
+    return unless @place[:overloaded]
+
+    p(class: "mt-1 text-default", data: { capacity_overloaded: "" }) do
+      "Overloaded: managing others costs #{Format.amount(BigDecimal(@place[:excess]), symbol)} more than this seat's base."
+    end
   end
 
   def notes

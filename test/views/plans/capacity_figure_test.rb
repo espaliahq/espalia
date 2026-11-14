@@ -1,0 +1,27 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Views::Plans::CapacityFigureTest < ActiveSupport::TestCase
+  PLAN = "01a1da48-c64a-7529-af90-0f97e41cda99"
+  MODELS = { "units" => { symbol: "u", description: "Units on a curve" } }.freeze
+
+  def marks
+    payload = { plan_id: PLAN, scenario_id: PLAN, totals: {}, units: [], seats: [], unclassified: [], models: MODELS, names: {} }
+    Views::Plans::CapacityMarks.new(scenario: payload, baseline: payload, names: {})
+  end
+
+  def figure(**place)
+    place = { model: "units", capacity: "0", overridden: false, calculated: nil, overloaded: false, excess: "0", notes: [],
+              working: [ { label: "Base for the level", amount: "1", op: "+", subject_id: nil } ], **place }
+    Nokogiri::HTML5.fragment(Views::Plans::CapacityFigure.new(place:, marks:, label: "Ada").call).at_css("[data-capacity-figure]")
+  end
+
+  should "say a figure is overloaded, and by how much, in its working" do
+    overloaded = figure(overloaded: true, excess: "0.35")
+
+    assert_equal "Overloaded: managing others costs 0.4u more than this seat's base.",
+                 overloaded.at_css("[data-capacity-overloaded]").text
+    assert_nil figure.at_css("[data-capacity-overloaded]")
+  end
+end
