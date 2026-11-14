@@ -165,19 +165,19 @@ class TeamPlanning::PlanAggregate
   #
   # @param scenario_id [String]
   # @param name [String]
+  # @param current [String, nil] the name it has now: the plan holds no name, so the caller says
   # @param renamed_by_id [String]
   # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown or
   #   the baseline, or the name is blank or too long
-  def rename_scenario(scenario_id, name:, renamed_by_id:)
+  def rename_scenario(scenario_id, name:, current:, renamed_by_id:)
     ensure_open!
-    scenario = @scenarios[live_scenario!(scenario_id)]
-    raise TeamPlanning::Error, "The baseline can't be renamed" unless scenario
+    raise TeamPlanning::Error, "The baseline can't be renamed" unless @scenarios[live_scenario!(scenario_id)]
 
     name = require_name(name, "scenario")
-    return if name == scenario.name
+    return if name == current
 
     apply(TeamPlanning::Events::ScenarioRenamed.new(data: {
-      plan_id: @plan_id, scenario_id: scenario_id, name: name, previous_name: scenario.name, renamed_by_id: renamed_by_id
+      plan_id: @plan_id, scenario_id: scenario_id, name: name, previous_name: current, renamed_by_id: renamed_by_id
     }))
   end
 
@@ -519,9 +519,7 @@ class TeamPlanning::PlanAggregate
                                                   relation: data[:relation], ends_on:)
   end
 
-  on TeamPlanning::Events::ScenarioRenamed do |event|
-    id = event.data[:scenario_id]
-    @scenarios[id] = @scenarios.fetch(id).with(name: event.data[:name])
+  on TeamPlanning::Events::ScenarioRenamed do |_event|
   end
 
   on TeamPlanning::Events::ScenarioPeriodSet do |event|

@@ -9,7 +9,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
   FIXTURE_TENANT = "01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b"
   LIVE_PLAN = "01a1d95d-7d14-7bef-a3cd-04d39d0e4ee4"
   ACTOR = "01a1d95d-7cea-70f5-aef9-85f2e797741b"
-  NAMES = [ "Next year", "The year after", "Lean Q1", "Closing the office" ].freeze
+  NAMES = [ "Next year", "The year after", "Lean Q1", "Lean first quarter", "Closing the office" ].freeze
 
   Stored = TeamPlanning::NameSealing::StoredEvent
 
@@ -20,9 +20,14 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     @deleted_plan = SecureRandom.uuid_v7
     [ @tenant, @other ].each do |tenant|
       LEGACY.each { store(tenant, it["event_type"], it["data"], it["metadata"]) }
+      scenario_id = SecureRandom.uuid_v7
       store(tenant, "TeamPlanning::Events::ScenarioForked", JSON.generate(
-        "plan_id" => LIVE_PLAN, "scenario_id" => SecureRandom.uuid_v7, "parent_id" => LIVE_PLAN, "relation" => "then",
+        "plan_id" => LIVE_PLAN, "scenario_id" => scenario_id, "parent_id" => LIVE_PLAN, "relation" => "then",
         "name" => "Lean Q1", "starts_on" => "2026-11-14", "ends_on" => "2027-03-31", "forked_by_id" => ACTOR
+      ))
+      store(tenant, "TeamPlanning::Events::ScenarioRenamed", JSON.generate(
+        "plan_id" => LIVE_PLAN, "scenario_id" => scenario_id, "name" => "Lean first quarter", "previous_name" => "Lean Q1",
+        "renamed_by_id" => ACTOR
       ))
       store(tenant, "TeamPlanning::Events::PlanCreated", JSON.generate(
         "plan_id" => @deleted_plan, "name" => "Closing the office", "base_on" => "2026-11-14", "created_by_id" => ACTOR
@@ -64,7 +69,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     counts = sealing.dry_run
 
     assert_equal({ "TeamPlanning::Events::PlanCreated" => 3, "TeamPlanning::Events::PlanRenamed" => 1,
-                   "TeamPlanning::Events::ScenarioForked" => 1 }, counts)
+                   "TeamPlanning::Events::ScenarioForked" => 1, "TeamPlanning::Events::ScenarioRenamed" => 1 }, counts)
     assert_equal @before, rows(@tenant)
   end
 
@@ -75,7 +80,11 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     assert_equal @before.size, after.size
     @before.zip(after).each do |was, now|
       assert_equal was.except("data", "metadata"), now.except("data", "metadata"), "id, type and timestamps"
-      fields = JSON.parse(now["metadata"])["shreddable"]&.keys or next assert_equal(was, now)
+      fields = JSON.parse(now["metadata"])["shreddable"]&.keys
+      names = JSON.parse(was["data"]).slice("name", "previous_name").compact.keys
+      next assert_equal(was, now) if names.empty?
+
+      assert_equal names.sort, Array(fields).sort, "#{was['event_type']} seals every name it holds"
 
       old_data, new_data = JSON.parse(was["data"]), JSON.parse(now["data"])
       assert_equal JSON.generate(old_data.except(*fields)), JSON.generate(new_data.except(*fields))
@@ -107,7 +116,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) do
       assert_equal "The year after", TeamPlanningPlan.find(LIVE_PLAN).name.reveal
       assert_predicate TeamPlanningPlan.find(@deleted_plan).name, :removed?
-      assert_equal [ "Baseline", "Lean Q1" ], TeamPlanningScenario.where(plan_id: LIVE_PLAN).sort_by { it.baseline? ? 0 : 1 }.map { it.name.reveal }
+      assert_equal [ "Baseline", "Lean first quarter" ], TeamPlanningScenario.where(plan_id: LIVE_PLAN).sort_by { it.baseline? ? 0 : 1 }.map { it.name.reveal }
     end
   end
 
