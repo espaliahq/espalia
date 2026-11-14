@@ -17,7 +17,7 @@ module OrgPersonDrawer
     @person = Person.find(params[:org_person_id] || params[:id])
   rescue ActiveRecord::RecordNotFound
     authorize :org_graph, :show_units?
-    redirect_to tenant_org_graph_path, alert: "That person isn't in this workspace."
+    redirect_to tenant_org_graph_path(unit: unit_param, **comparison_params), alert: "That person isn't in this workspace."
   end
 
   # @param notice [String]

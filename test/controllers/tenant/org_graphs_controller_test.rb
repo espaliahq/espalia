@@ -178,7 +178,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ "2026-02-28", "2026-03-01" ], page.css("#comparison-from, #comparison-to").map { it["max"] }
     end
 
-    should "refuse a reversed range with a message, and mark nothing" do
+    should "refuse a reversed range with a message, mark nothing, and carry the dates as typed" do
       build_org_graph(@tenant)
 
       get tenant_org_graph_path(from: "2026-02-10", to: "2026-02-01")
@@ -187,7 +187,9 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       page = Nokogiri::HTML5(response.body)
       assert_includes page.at_css("#org-graph-comparison [role='status'], #org-graph-comparison [role='alert']").text,
                       "Pick an end date after the date you compare with."
-      assert_not page.css("nav[aria-labelledby='org-graph-tree-label'] a").any? { it["href"].include?("from=") }
+      assert_not page.at_css("nav[aria-labelledby='org-graph-tree-label']").text.include?("was ")
+      assert page.css("nav[aria-labelledby='org-graph-tree-label'] a[href*='unit=']").all? { it["href"].include?("from=2026-02-10&to=2026-02-01") },
+             "the next page still shows why"
     end
 
     context "with a window picked" do

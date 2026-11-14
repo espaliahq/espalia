@@ -45,6 +45,12 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
         end
       end
 
+      should "keep the window when the unit is gone" do
+        get edit_tenant_org_unit_path(SecureRandom.uuid, **@window)
+
+        assert_redirected_to tenant_org_graph_path(**@window)
+      end
+
       should "come back to the drawer with the window after a change" do
         patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { name: "Core" }, **@window }
 

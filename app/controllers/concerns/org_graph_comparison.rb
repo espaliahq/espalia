@@ -12,9 +12,11 @@ module OrgGraphComparison
 
   private
 
-  # @return [Hash{Symbol => String}] from, to and by, or none when no date is
-  #   picked or the dates make no window
-  def comparison_params = comparison_window&.params || {}
+  # Dates that make no window are carried as typed, so the next page still
+  # shows why.
+  #
+  # @return [Hash{Symbol => String}] from, to and by, or none when no date is picked
+  def comparison_params = comparison_window&.params || params.permit(:from, :to, :by).to_h.compact_blank.symbolize_keys
 
   # @param unit_id [String, nil] the unit open on the Units view
   # @return [Hash] the comparison slots for Views::Tenant::OrgGraph::ShowView
