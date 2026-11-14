@@ -11,6 +11,10 @@
 # plan always keeps an editor: the last one can neither leave nor become a
 # viewer.
 #
+# A member may also hold the see-pay right, which its creator holds from the
+# start. The last holder can neither give it up nor leave, so someone can
+# always grant it.
+#
 # Its scenarios form a tree under the root, the baseline, which shares the
 # plan's id, stands on the base date and has no period. A `then` scenario is
 # the next step after its parent; an `instead` scenario is an alternative over
@@ -55,6 +59,7 @@ class TeamPlanning::PlanAggregate
 
   def initialize
     @members = {}
+    @pay_holders = Set.new
     @scenarios = {}
     @removed_scenario_ids = Set.new
     @logs = {}
@@ -184,15 +189,53 @@ class TeamPlanning::PlanAggregate
   #
   # @param person_id [String]
   # @param removed_by_id [String]
+  # @param departed [Boolean] they have left or been forgotten, so taking them
+  #   off can't lock the plan out of pay any further than it already is
   # @raise [TeamPlanning::Error] if the plan is gone, they aren't a member, or
-  #   they are its last editor
-  def remove_member(person_id, removed_by_id:)
+  #   they are its last editor or, unless departed, its last pay holder
+  def remove_member(person_id, removed_by_id:, departed: false)
     ensure_open!
     raise TeamPlanning::Error, "They aren't a member of this plan" unless member?(person_id)
 
     ensure_editor_remains!(person_id)
+    ensure_pay_holder_remains!(person_id) unless departed
     apply(TeamPlanning::Events::PlanMemberRemoved.new(data: {
       plan_id: @plan_id, person_id: person_id, removed_by_id: removed_by_id
+    }))
+  end
+
+  # Lets a member see pay in the plan. A member who holds it already writes
+  # nothing.
+  #
+  # @param person_id [String]
+  # @param granted_by_id [String]
+  # @param recovery [Boolean] a tenant admin restoring a locked-out plan
+  # @raise [TeamPlanning::Error] if the plan is gone or they aren't a member
+  def grant_see_pay(person_id, granted_by_id:, recovery: false)
+    ensure_open!
+    raise TeamPlanning::Error, "They aren't a member of this plan" unless member?(person_id)
+    return if sees_pay?(person_id)
+
+    data = { plan_id: @plan_id, person_id: person_id, granted_by_id: granted_by_id }
+    data[:recovery] = true if recovery
+    apply(TeamPlanning::Events::SeePayGranted.new(data: data))
+  end
+
+  # Takes the see-pay right from a member. One who doesn't hold it writes
+  # nothing.
+  #
+  # @param person_id [String]
+  # @param withdrawn_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone, they aren't a member, or
+  #   they are its last holder
+  def withdraw_see_pay(person_id, withdrawn_by_id:)
+    ensure_open!
+    raise TeamPlanning::Error, "They aren't a member of this plan" unless member?(person_id)
+    return unless sees_pay?(person_id)
+
+    ensure_pay_holder_remains!(person_id)
+    apply(TeamPlanning::Events::SeePayWithdrawn.new(data: {
+      plan_id: @plan_id, person_id: person_id, withdrawn_by_id: withdrawn_by_id
     }))
   end
 
@@ -601,6 +644,13 @@ class TeamPlanning::PlanAggregate
   # @return [Array<String>] person ids
   def editor_ids = @members.select { |_, role| role == "editor" }.keys
 
+  # @param person_id [String]
+  # @return [Boolean] whether they hold the see-pay right
+  def sees_pay?(person_id) = @pay_holders.include?(person_id)
+
+  # @return [Array<String>] the members who hold the see-pay right
+  def pay_holder_ids = @pay_holders.to_a
+
   # @return [Boolean] whether the plan has been created
   def exists? = !@plan_id.nil?
 
@@ -612,6 +662,7 @@ class TeamPlanning::PlanAggregate
     @base_on = Date.iso8601(event.data[:base_on])
     @created_by_id = event.data[:created_by_id]
     @members[@created_by_id] = "editor"
+    @pay_holders << @created_by_id
   end
 
   on TeamPlanning::Events::PlanRebased do |event|
@@ -634,6 +685,15 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::PlanMemberRemoved do |event|
     @members.delete(event.data[:person_id])
+    @pay_holders.delete(event.data[:person_id])
+  end
+
+  on TeamPlanning::Events::SeePayGranted do |event|
+    @pay_holders << event.data[:person_id]
+  end
+
+  on TeamPlanning::Events::SeePayWithdrawn do |event|
+    @pay_holders.delete(event.data[:person_id])
   end
 
   # The plan holds no name.
@@ -765,6 +825,12 @@ class TeamPlanning::PlanAggregate
     return unless editor_ids == [ person_id ]
 
     raise TeamPlanning::Error, "A plan needs an editor: make someone else an editor first"
+  end
+
+  def ensure_pay_holder_remains!(person_id)
+    return unless pay_holder_ids == [ person_id ]
+
+    raise TeamPlanning::Error, "A plan needs someone who can see pay: give the right to someone else first"
   end
 
   def ensure_open!

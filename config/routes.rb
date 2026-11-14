@@ -414,6 +414,8 @@ Rails.application.routes.draw do
     resources :assignments, only: [ :update ], controller: "plans/assignments"
     # Move a position to another unit on the scenario map; the id is the position's.
     resources :positions, only: [ :update ], controller: "plans/positions"
+    # Grant and withdraw the see-pay right ([#300](https://github.com/espaliahq/espalia/issues/300)); the id is the member's.
+    resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.
