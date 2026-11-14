@@ -54,6 +54,7 @@ class TeamPlanning::CapacityModelsTest < ActiveSupport::TestCase
 
     assert_equal Rational(3, 10), figure.amount
     assert_equal [ Rational(1, 2), Rational(3, 5), Rational(3, 10) ], figure.working.map(&:amount)
+    assert_equal %w[+ × =], figure.working.map(&:op)
     assert_equal "FTE", figure.working.first.label
   end
 

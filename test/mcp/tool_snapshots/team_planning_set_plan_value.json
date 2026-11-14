@@ -1,0 +1,46 @@
+{
+  "name": "team_planning_set_plan_value",
+  "description": "Hold a person's level or FTE in a scenario of a Team Planning plan in place of the Org Graph's, for a value the HRIS has wrong or that is about to change. An FTE is above 0 and at most 1. The plan keeps the value private to that person, so once they are forgotten it reads as removed. Use team_planning_set_planned_level for a promotion. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "field": {
+        "type": "string",
+        "enum": [
+          "level",
+          "fte"
+        ]
+      },
+      "value": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "A level, or an FTE such as \"0.8\"."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "person_id",
+      "field",
+      "value"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

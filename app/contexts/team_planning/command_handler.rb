@@ -287,6 +287,10 @@ class TeamPlanning::CommandHandler
   end
 
   def inherited(plan, scenario_id, subject_id, facet)
+    if TeamPlanning::ChangeKinds.holding(facet).any? { it.is_a?(Shreddable) }
+      raise TeamPlanning::Error, "This holds a value the plan keeps private, which can't be pinned yet: set it in this scenario instead"
+    end
+
     from_id, change = plan.inherited_change(scenario_id, [ subject_id, facet ])
     return [ change.class, change.data.except(*TeamPlanning::Events::Change::FIELDS), [ from_id, change.event_id ] ] if change
 

@@ -9,7 +9,9 @@
 # - **done**: today reads the end state;
 # - **pending**: today still reads what the baseline held, or what the step
 #   before the change's own step plans;
-# - **conflicting**: today reads none of these.
+# - **conflicting**: today reads none of these;
+# - **unknown**: the plan's value is sealed and its key is gone, so nobody can
+#   say what it planned.
 #
 # A plan whose base is still to come holds every change against today, so
 # nothing it plans reads conflicting before the plan starts.
@@ -41,7 +43,7 @@ class TeamPlanning::Status
   # @!attribute change_id [String] the planned change's event id
   # @!attribute subject_id [String]
   # @!attribute facet [String]
-  # @!attribute status [Symbol] :done, :pending or :conflicting
+  # @!attribute status [Symbol] :done, :pending, :conflicting or :unknown
   Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status)
 
   # @param context [AuthorizationContext]
@@ -65,6 +67,7 @@ class TeamPlanning::Status
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     @aggregate = @repository.load_plan(@plan.id)
     @resolved = {}
+    @winning = {}
     changes = tracked_changes
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
@@ -75,8 +78,11 @@ class TeamPlanning::Status
 
   private
 
+  # A placeholder hire never reaches the Org Graph, so nothing it holds has a status.
   def tracked_changes
-    @aggregate.winning_changes(@scenario_id).select { |_, change| change.class.tracked? }
+    changes = winning(@scenario_id)
+    hires = changes.keys.filter_map { |subject_id, facet| subject_id if facet == TeamPlanning::Events::PlaceholderSet.facet }
+    changes.select { |(subject_id, _), change| change.class.tracked? && hires.exclude?(subject_id) }
   end
 
   # Today, and the base to hold it against. A succession the Org Graph held on
@@ -89,6 +95,8 @@ class TeamPlanning::Status
     [ now.with(successions: now.successions - base.successions), base.with(retired_units: [], successions: [], left_ids: []) ]
   end
 
+  def winning(scenario_id) = @winning[scenario_id] ||= @repository.sealed(@aggregate.winning_changes(scenario_id))
+
   def entry(change, key, base:, now:)
     kind = change.class
     subject_id, facet = key
@@ -98,8 +106,11 @@ class TeamPlanning::Status
               status: status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before))
   end
 
+  def removed?(end_state) = end_state.values.any? { it.is_a?(Shreddable::Value) && it.removed? }
+
   # Each planned state comes with the map it belongs to, so a kind can show it as the Org Graph would.
   def status_of(kind, today, planned, before)
+    return :unknown if removed?(planned.first)
     return :done if kind.shows?(today, planned.first, map: planned.last)
 
     before.any? { |state, map| kind.shows?(today, state, map:) } ? :pending : :conflicting
@@ -121,7 +132,7 @@ class TeamPlanning::Status
     chain = @aggregate.resolution_chain(@scenario_id)
     step = chain.drop(chain.index(change.data[:scenario_id])).find { path.include?(it) }
     index = path.index(step)
-    earlier = @aggregate.winning_changes(path[index - 1])[key] if index.positive?
+    earlier = winning(path[index - 1])[key] if index.positive?
     return [] unless earlier
     return [ [ end_state_of(earlier), resolved(path[index - 1]) ] ] if earlier.instance_of?(change.class)
 

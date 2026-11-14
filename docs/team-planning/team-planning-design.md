@@ -88,7 +88,7 @@ Every change event has the same shape:
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
 | People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
 | Budget | `BudgetLineSet`, `BudgetLineCut`, `PositionFundingSet` (position draws on budget lines) |
-| Plan data | `PlanDataSet` (subject, field, value) |
+| Plan data | `PlanDataSet` (person, field, value), `PlaceholderSet` (a hire the HRIS doesn't know: label, level, FTE) |
 | Rules | `RuleSet` (configuration, capacity model, budget strictness, guardrail, assumption) |
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
@@ -351,8 +351,8 @@ are, not a person's data, so the rule is not shreddable.
 A capacity model prices a seat. `TeamPlanning::CapacityModel` is the interface and
 `TeamPlanning::CapacityModels` the registry, built like the rule kinds. A model names
 itself, checks its params and returns a `Figure` for one place: an exact `Rational` and the
-`Step`s of its working, which a person's card can list. The only model so far is `per_fte`,
-one unit per FTE, there to prove the plumbing; the units model is 7.2.
+`Step`s of its working, which a person's card can list. Two models are built in: `per_fte`,
+one unit per FTE, and `units` (below).
 
 The `capacity_model` rule chooses a model per role family, and a role can choose another.
 Its default chooses nothing, so a plan counts nothing until a tenant or plan says how. Read
@@ -375,18 +375,74 @@ share of the seat) is priced on its own:
 - **An FTE the map doesn't hold** counts as 1, and the working says so.
 - **An allocation the HRIS didn't give** shares what the person's other places leave, and
   the working says so.
-- **A leaver** will count nowhere: 3.7 keeps them on the map while a backfill position
-  carries the headcount, so the query drops them before it builds seats.
+- **A leaver** counts nowhere, with the reason "leaving": their backfill position carries
+  the seat, and their own place in it never counts as filling it.
 
 A place no model covers counts nowhere and is listed as unclassified with its reason: no
 title, a title mapped to no role, a role not in the framework, a position since closed, no
 model chosen, or a model no longer registered. A place in a unit gone from the map counts
 for the scenario but under no unit.
 
-A model gets the whole map with each seat, so 7.2 can find who reports to a seat by its id,
-a person's or a position's, without the interface changing. Totals are kept per model, per unit and for the scenario, and never
+A model gets the whole map with each seat, and `Facts`: each seat's level ordinal, its
+roles and an open seat's FTE. Totals are kept per model, per unit and for the scenario, and never
 summed across models. Figures stay exact; `team_planning_capacity` sends them as decimal
 strings, and only the display rounds.
+
+#### The units model
+
+`TeamPlanning::CapacityModels::Units` ([#265](https://github.com/espaliahq/espalia/issues/265))
+counts a seat in units, where one is roughly what a solid mid-level contributor delivers.
+Every number below is a parameter of the `capacity_model` rule; the defaults are
+illustrative, never an organisation's figures.
+
+```json
+{"base":{"start":"0.4","slope":"0.3","knee":4,"decay":"0.5"},
+ "fixed_cost":{"default":"0.1","by_level":{}},
+ "per_report":{"direct":"0.1","skip":"0.03","deeper":"0.01"},
+ "report_weight":{"default":"1","by_level":{"1":"1.5","2":"1.25"}},
+ "manager_role_ids":[]}
+```
+
+Levels are framework level ordinals. The base rises by `slope` a level to the `knee`, and
+each level beyond adds `decay` times the step before, so it never passes
+base(knee) + slope × decay ÷ (1 − decay). The defaults give L1 0.4, L3 1.0, L4 1.3, L5 1.45
+and a cap of 1.6. `check` refuses a negative, a decay of 1 or more, a level that isn't
+whole and an unknown key, naming the key and never its value.
+
+A manager pays a fixed cost by their level and a cost per report by distance (direct, skip,
+deeper), times the report's level weight, or the default weight when the report's level
+resolves to none. The figure is max(base − cost, 0) × allocation × FTE: the whole cost is
+taken before the seat splits across places. A cost past the base floors at zero and marks
+the figure overloaded, with the excess. Each step names what it charges for.
+
+`Units::Graph` reads who a seat manages from reporting lines, never from unit owners:
+ownership says who may edit a unit, not who manages it. One principle runs through the
+rules: a vacant seat and a filled one must stay comparable, so leaving a seat empty never
+flatters a scenario.
+
+- **A manager seat** is one with line reports, or a backfill of a leaver who had them, or a
+  role in `manager_role_ids`.
+- **A line to a position** goes to the one person in it, and to the open seat only while
+  nobody is. A position two people share sends it to neither, and the report reads as
+  unmanaged. So does a closed position, though someone still fills it. Otherwise a part-filled position would take every report and leave the person
+  in it managing nobody, and a shared one would need a split the map can't give.
+- **An open position**, a manager's included, counts against the nearest unit, walking up
+  from its own, holding exactly one other manager seat: a filled one as a future direct
+  report at its open FTE, or a vacant one as part of its span. Two in the nearest unit that
+  has any, or none up the tree, and it counts against nobody, with a note saying which.
+- **A vacant manager position counts against the manager above it**, which pays its open
+  seat as a direct report and its team at skip level and below, as if the seat were filled.
+  Otherwise a director with an open manager seat would pay nothing for that team.
+- **A vacant manager position also takes, as direct reports, the people the same walk
+  leads to who have no manager on the map.** Anyone a staffed manager holds stays theirs.
+- **A vacant manager seat never takes its own manager as a report.** The head of the tree
+  has no manager, so without this an open seat beneath them would take them, and with them
+  everyone.
+- **A leaver is never a report.** Their reports pass to their backfill, or to nobody,
+  whether the line names the leaver or a position only the leaver fills.
+- **A leaver keeps the positions they fill filled for the step**, so their capacity goes to
+  their backfill or nowhere. Reopening those positions too would count the seat twice
+  whenever a backfill exists.
 
 ### Clearing and pinning
 
@@ -602,6 +658,24 @@ Two consequences of [the aggregate guard](shreddable-fields-design.md):
   guardrails are shown and not enforced.
 - "Unchanged, so do nothing" cannot be checked in the aggregate for these fields. The
   Operation checks it against a projection.
+
+**As built in 3.14** ([#270](https://github.com/espaliahq/espalia/issues/270)):
+
+- **A placeholder hire is its own kind, `PlaceholderSet`.** A key is chosen per event
+  class, and a placeholder is not a person, so its label, level and FTE seal under the
+  plan's key. `PlanDataSet` holds a person's corrected level or FTE, one facet per field,
+  and `LevelSet` a planned promotion, both under the person's key. Forgetting someone
+  shreds their two and leaves every placeholder as it was.
+- **Reads unseal from the stored events.** The aggregate keeps redacted copies, so
+  Resolution and Status re-read the winning sealed changes by event id
+  (`TeamPlanning::Repository#sealed`). No sealed read model was needed.
+- **Precedence:** a planned promotion, then a corrected level, then the Org Graph's.
+- **A shredded value reads as unknown.** `Member#planned_or_own` gives `:unknown`, the map
+  shows `{ removed: true }`, capacity counts the FTE as not known (at 1) and gives no
+  target for the level, and a change's status reads `unknown`. Nothing raises, and
+  nothing falls back to the Org Graph's value.
+- **A sealed value can't be pinned yet.** `ChangePinned` copies an end state, and a sealed
+  one can't be copied in clear, so pinning one is refused with a reason.
 
 ## The headcount budget
 
