@@ -100,7 +100,8 @@ class Views::Plans::Timeline < Views::Base
   def wide_grid
     div(class: "group/move hidden overflow-x-auto rounded-lg border border-default bg-default md:block",
         data: ({ controller: "map-move" } if @moving)) do
-      div(class: "grid min-w-max text-sm", style: "grid-template-columns: minmax(6rem, 9rem) repeat(#{columns.size}, minmax(11rem, 1fr))",
+      div(class: "grid text-sm", style: "grid-template-columns: minmax(6rem, 9rem) repeat(#{columns.size}, minmax(11rem, 1fr)); " \
+                                        "min-width: #{9 + (11 * columns.size)}rem",
           data: { timeline_grid: "" }) do
         @row = 1
         header_row
@@ -178,7 +179,7 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def wide_bar(lane, bar)
-    div(class: "z-10 px-1 py-1 group-data-[dragging]/move:pointer-events-none", style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
+    div(class: "z-10 px-1 py-1 group-data-[dragging]/move:pointer-events-none has-[[aria-expanded=true]]:z-20", style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
       bar_box(lane, bar, steps: movable_steps(bar)) do
         span(class: "sr-only") { "#{span_of(bar)}: " }
         bar_text(lane, bar, starts: bar[:from], ends: bar[:to])
@@ -260,7 +261,7 @@ class Views::Plans::Timeline < Views::Base
 
   def bar_box(lane, bar, steps: [], drag: true, &content)
     position = bar[:kind] == "position"
-    div(class: "flex flex-wrap items-baseline gap-x-2 rounded border px-2 py-1 text-default " \
+    div(class: "flex flex-wrap items-center gap-x-2 rounded border px-2 py-1 text-default " \
                "#{position ? 'border-dashed border-emphasized bg-default' : 'border-default bg-subtle'}#{' cursor-grab' if drag && steps.any?}",
         draggable: ("true" if drag && steps.any?), data: { timeline_lane: lane[:lane_id], **(drag ? drag_data(bar, steps) : {}) }) do
       content.call
@@ -293,7 +294,7 @@ class Views::Plans::Timeline < Views::Base
                                            data: move_trigger(bar, steps.first)) { "Move…" }
       else
         render Components::Kit::Dropdown.new(strategy: :fixed) do |menu|
-          menu.trigger(label: "Move…", button: { variant: :ghost, size: :sm, aria_label: label })
+          menu.trigger(label:, button: { variant: :ghost, size: :sm, compact: true }) { "Move…" }
           menu.menu(label:) do
             steps.each { |step| menu.item(data: move_trigger(bar, step)) { "In #{step_name(step)}" } }
           end
