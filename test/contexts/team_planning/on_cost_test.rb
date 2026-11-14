@@ -53,7 +53,9 @@ class TeamPlanning::OnCostTest < ActiveSupport::TestCase
     assert_equal "1200.5",
                  TeamPlanning::RuleKinds.check("on_cost", { model: "itemised", params: { items: [ { name: "Kit", amount: Rational(2401, 2), currency: "EUR" } ] } })
                    .dig("params", "items", 0, "amount")
-    assert_equal "A flat on-cost's percent must be a percentage, such as 12.5", refusal({ model: "flat", params: { percent: Rational(1, 3) } })
+    [ Rational(1, 3), Rational(25, 2) + Rational(1, 10**80) ].each do |inexact|
+      assert_equal "A flat on-cost's percent must be a percentage, such as 12.5", refusal({ model: "flat", params: { percent: inexact } })
+    end
   end
 
   should "refuse a malformed model without repeating a figure" do
