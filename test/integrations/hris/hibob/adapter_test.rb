@@ -840,10 +840,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "1618" ], adapter.read_field("work.department", kind: :text).keys
     end
 
-    should "read a department of any size in the same number of queries" do
-      counts = [ 1, 6 ].map do |size|
+    should "read a department of any size in the same number of queries, adoptions included" do
+      counts = [ 2, 6 ].map do |size|
         employees = Array.new(size) { { "id" => "q#{size}-#{it}", "email" => "q#{size}-#{it}@example.com" } }
-        employees.each { create(:person, tenant: @tenant, hris_source: "hibob", external_id: it["id"], email: it["email"], name: "Person #{it['id']}") }
+        employees.each_with_index do |employee, index|
+          # Half the rows are held by HRIS id, half wait to be adopted by email.
+          create(:person, tenant: @tenant, hris_source: "hibob", external_id: (employee["id"] if index.even?), email: employee["email"], name: "Person #{employee['id']}")
+        end
         queries = 0
         counting = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" || payload[:sql].match?(/\A\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)/) }
         ActiveSupport::Notifications.subscribed(counting, "sql.active_record") do

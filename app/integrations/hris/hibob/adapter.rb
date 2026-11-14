@@ -220,11 +220,12 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     rows = Person.where(external_id: employees.filter_map { it["id"].presence&.to_s }).index_by(&:external_id)
     emails = employees.filter_map { it["email"].downcase.strip if it["email"].is_a?(String) }
     claims = Hris::Hibob::EmailClaims.new.preload([ *emails, *rows.values.map(&:email) ])
+    adoptable = Person.where(forgotten_at: nil, external_id: nil, email: emails).index_by(&:id)
     employees.each do |raw_employee|
       mapper = Hris::Hibob::ResponseMapper.new(raw_employee, level_field_id: config.level_field_id, mapped_fields:)
       # Dev-only PII guard — pass-through outside development.
       attrs = Hris::DevNameWhimsifier.call(mapper.call)
-      person = upsert_person(attrs, result, claims:, rows:, write:, projected:, started_on: mapper.org_graph_facts[:started_on])
+      person = upsert_person(attrs, result, claims:, rows:, adoptable:, write:, projected:, started_on: mapper.org_graph_facts[:started_on])
       yield mapper, attrs, person if person
     rescue OrgGraph::Forgetting::KeyMissing
       raise
@@ -441,11 +442,12 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param result [Hash] running tally of sync results
   # @param claims [Hris::Hibob::EmailClaims] who holds each email so far in this walk
   # @param rows [Hash{String => Person}] each row by HRIS id so far in this walk
+  # @param adoptable [Hash{String => Person}] each row with no HRIS id that holds an email in the response, by id
   # @param write [Boolean] false to decide without saving, for a preview
   # @param projected [Boolean] whether the tenant is cut over to the Org Graph
   # @param started_on [String, nil] HiBob's start date, ISO 8601
   # @return [Person, nil] the created or updated person, nil when skipped or invalid
-  def upsert_person(attrs, result, claims:, rows:, write: true, projected: false, started_on: nil)
+  def upsert_person(attrs, result, claims:, rows:, adoptable: {}, write: true, projected: false, started_on: nil)
     external_id = attrs[:external_id].to_s
     person = external_id.present? ? rows[external_id] : Person.find_by(external_id: attrs[:external_id])
     forgotten = forgotten_person(attrs[:external_id]) unless person
@@ -463,7 +465,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         }
         return nil
       end
-      person = Person.where(forgotten_at: nil).find_by(id: holder.person_id) if holder
+      person = adoptable.fetch(holder.person_id) { Person.where(forgotten_at: nil).find_by(id: holder.person_id) } if holder
     end
     person ||= Person.new
     is_new = person.new_record?
