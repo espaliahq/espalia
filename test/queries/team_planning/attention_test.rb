@@ -163,6 +163,16 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ [ report.id, moved ] ], items.select { it.facet == "reporting_line" }.map { [ it.subject_id, it.change ] }
   end
 
+  should "name the manager's departure, not a later rename of the report's unit" do
+    report = member(SecureRandom.uuid_v7, manager_id: PERSON)
+    left = change(TeamPlanning::Events::DepartureSet, PERSON, leaves_in_id: ROOT)
+    renamed = change(TeamPlanning::Events::UnitSet, LIVE, name: "Renamed", parent_id: ROOT, level_id: LEVEL)
+
+    items = TeamPlanning::Attention.new(map(people: [ member.with(departure: { leaves_in_id: ROOT, position_id: nil }), report ]),
+                                        { left.key => left, renamed.key => renamed }, left_ids: [ PERSON ]).call
+    assert_equal [ [ report.id, left ] ], items.map { [ it.subject_id, it.change ] }
+  end
+
   should "mark a manager or a manager's position that is no longer in the scenario" do
     position = B::Position.new(id: SecureRandom.uuid_v7, role_id: nil, level_id: LEVEL, unit_id: ROOT, fte: 1.0, basis: "new",
                                role_name: nil, level_name: nil)

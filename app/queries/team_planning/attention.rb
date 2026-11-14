@@ -35,6 +35,7 @@ class TeamPlanning::Attention
   LINE = TeamPlanning::Events::ReportingLineSet.facet
   CAPACITY = TeamPlanning::Events::CapacitySet.facet
   DEPARTURE = TeamPlanning::Events::DepartureSet.facet
+  UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
@@ -150,9 +151,10 @@ class TeamPlanning::Attention
     @parents = @map.units.to_h { [ it.id, it.parent_id ] }
     @owned = @map.units.each_with_object(Hash.new { |hash, id| hash[id] = Set.new }) { |unit, owned| unit.owner_ids.each { owned[it] << unit.id } }
     @map.people.filter_map do |person|
-      reason = manager_reason(person, by_id, positions, heads)
-      broken_by = [ [ person.id, ASSIGNMENT ], *near_units(person).map { [ it, UNIT ] }, *manager_keys(person.line) ]
-      item(person.id, LINE, reason, broken_by:) if reason
+      next unless (reason = manager_reason(person, by_id, positions, heads))
+
+      units = UNSHARED.include?(reason) ? near_units(person).map { [ it, UNIT ] } : []
+      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *units, *manager_keys(person.line) ])
     end
   end
 
@@ -172,13 +174,13 @@ class TeamPlanning::Attention
       return "Their manager has since left" if @left.include?(manager.id)
       return if nearby.empty?
 
-      "Their manager shares no unit with them" unless nearby.intersect?(units_of(manager))
+      UNSHARED.first unless nearby.intersect?(units_of(manager))
     else
       position = positions[line.position_id]
       return "Their manager's position is no longer in this scenario" unless position
       return if nearby.empty? || !@live.include?(position.unit_id)
 
-      "Their manager's position shares no unit with them" unless nearby.include?(position.unit_id)
+      UNSHARED.last unless nearby.include?(position.unit_id)
     end
   end
 
