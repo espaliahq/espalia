@@ -26,4 +26,11 @@ class PersonDevelopment::Repository
       @repository.with_aggregate(PersonDevelopment::Aggregate.new, stream, &block)
     end
   end
+
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @return [PersonDevelopment::Aggregate] the aggregate as its stream stands
+  def load(person_id, framework_id)
+    @repository.load(PersonDevelopment::Aggregate.new, EventStreamNaming.person_development_stream(person_id, framework_id))
+  end
 end

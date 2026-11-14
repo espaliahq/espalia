@@ -3,7 +3,7 @@
 # View-model wrapping a single HRIS-imported person with the data needed
 # to render its row on the HRIS integration detail page.
 #
-# Mirrors the resolution logic in {Hris::Hibob::Adapter#dispatch_framework_assignment}
+# Resolves through {Integrations::HrisTitleResolution::Target}, as the sync does,
 # so the displayed status reflects exactly what a sync would do today.
 #
 # Pure value object — no DB access. The controller is responsible for
@@ -50,11 +50,11 @@ class Integrations::HrisPersonRow
   # @return [Symbol] one of the STATUS_* constants
   def status
     return STATUS_INACTIVE if person.status == "inactive"
-    return STATUS_NO_TITLE if person.job_title.blank?
-    return STATUS_UNMAPPED if mapping.nil?
-    return STATUS_MISSING_ROLE if role.nil?
-    return STATUS_MISSING_ORDINAL if resolved_ordinal.nil?
-    return STATUS_MISSING_LEVEL if level.nil?
+
+    target = Integrations::HrisTitleResolution::Target.new(
+      title: person.job_title, mapping:, role:, level:, ordinal: resolved_ordinal
+    ).status
+    return target unless target == :resolved
     return STATUS_PENDING_SYNC if assignment.nil?
     return STATUS_DRIFT if assignment.role_id != role.role_id || assignment.level_id != level.level_id
 

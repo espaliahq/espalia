@@ -52,6 +52,25 @@ class PersonDevelopment::AggregateAuthorityTest < ActiveSupport::TestCase
     end
   end
 
+  context "#clear_reporting_manager" do
+    should "record no manager, carrying the previous one" do
+      @aggregate.record_reporting_manager(@manager_id)
+      @aggregate.clear_reporting_manager
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::ReportingManagerRecorded, event
+      assert_nil event.data[:manager_id]
+      assert_equal @manager_id, event.data[:previous_manager_id]
+      assert_nil @aggregate.manager_id
+    end
+
+    should "no-op when no manager is recorded" do
+      before = @aggregate.unpublished_events.to_a.size
+      @aggregate.clear_reporting_manager
+      assert_equal before, @aggregate.unpublished_events.to_a.size
+    end
+  end
+
   context "#delegate_manager_rating" do
     should "apply ManagerRatingDelegated with attribution" do
       granter = SecureRandom.uuid_v7

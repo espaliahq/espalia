@@ -167,6 +167,9 @@ Reporting line & delegation:
       actual change emits an event (low-volume, genuine history). Populated by
       the HRIS sync (every touched person with an assignment) and a one-off
       backfill (events:backfill_reporting_managers).
+    ← A nil manager_id clears the manager: the Org Graph feed (story 9.1)
+      writes one when the HRIS says the person has none, and the authority
+      row is deleted.
     ← AUTHORITY SOURCE OF TRUTH. Both the aggregate's manager-rating invariant
       (below) and AssessmentPolicy#manages_assessee? read the RECORDED value and
       fall back to live Person.manager_id only when nothing is recorded yet

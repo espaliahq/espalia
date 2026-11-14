@@ -86,6 +86,26 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Records that the person no longer has a reporting manager.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param source [String] "hris"
+  def clear_reporting_manager(person_id, framework_id, source: "hris")
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.clear_reporting_manager(source: source)
+    end
+  end
+
+  # Reads a person's development stream without writing to it.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @return [PersonDevelopment::Aggregate]
+  def load(person_id, framework_id)
+    @repository.load(person_id, framework_id)
+  end
+
   # Grants manager-rating authority for this person/framework to a delegate.
   #
   # @param person_id [String] UUID of the person being assessed

@@ -56,6 +56,14 @@ class Tenant < ApplicationRecord
     org_graph_people_projected_at.present?
   end
 
+  # Whether Person Development takes this tenant's framework assignments and
+  # reporting managers from the Org Graph, rather than the HRIS sync (9.1).
+  #
+  # @return [Boolean]
+  def person_development_fed?
+    person_development_fed_at.present?
+  end
+
   # Whether feedback recorded here is sent to the model for placement
   # suggestions. Off until the data-handling decision (plan D2) is made, and
   # never switched on by seeds. The switch lives in {#ai_config}; a tenant

@@ -361,7 +361,10 @@ tenant is cut over once every person has a stream that starts with `PersonRecord
 rebuild reproduces every row ([runbook](../runbooks/org-graph-people-cutover.md)). Until
 then the sync writes those columns itself. The other non-identifier columns stay with the
 sync for now: `department` until a level is mirrored from an HRIS field (6.7), and
-`level_id`, `role_id` and `hris_level_ordinal` until E9 moves the framework mapping.
+`level_id`, `role_id` and `hris_level_ordinal` until E9 moves the framework mapping. Story
+9.1 starts that move: once a tenant is fed, Person Development's assignments, role and level
+moves, offboarding and reporting managers follow the Org Graph
+([runbook](../runbooks/org-graph-person-development-cutover.md)).
 
 The existing Person Development events (`PersonRoleChanged`, `PersonLevelChanged`,
 `ReportingManagerRecorded`) are about a person's place in a framework and stay. They

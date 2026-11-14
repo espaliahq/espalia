@@ -25,6 +25,20 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
   ImportedItem = Struct.new(:title, :content, :author, :withdrawn_by, :recorded_unplaced, :external_reference,
                             keyword_init: true)
 
+  context "reporting_manager_recorded" do
+    should "name the new manager" do
+      html = render_entry(kind: "reporting_manager_recorded", payload: { manager_id: "m1", manager_name: "Marcus" },
+                          capability_stable_id: nil, level_ordinal: nil)
+      assert_includes html, "Reporting manager changed to Marcus"
+    end
+
+    should "say the manager was cleared when none is recorded" do
+      html = render_entry(kind: "reporting_manager_recorded", payload: { manager_id: nil, previous_manager_id: "m1" },
+                          capability_stable_id: nil, level_ordinal: nil)
+      assert_includes html, "Reporting manager cleared"
+    end
+  end
+
   context "evidence_recorded from a peer system" do
     should "say where it was given, linking to the original" do
       reference = ExternalReference.new(system: "chip", url: "https://chip.example.com/f/1",
