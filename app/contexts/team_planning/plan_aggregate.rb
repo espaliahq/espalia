@@ -442,6 +442,12 @@ class TeamPlanning::PlanAggregate
     apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id:, in_effect_event_id: }))
   end
 
+  # @param scenario_id [String] the root or a live scenario
+  # @param event_id [String] an entry of its log
+  # @return [String] the facet the entry changes, pins or clears
+  # @raise [TeamPlanning::Error] if the scenario is unknown or the entry not in its log
+  def facet_of(scenario_id, event_id) = key_of(log_entry!(live_scenario!(scenario_id), event_id)).last
+
   # Writes, rewrites or clears the note on a change or pin, which must still
   # stand in its scenario: not undone, not cleared and not replaced.
   #

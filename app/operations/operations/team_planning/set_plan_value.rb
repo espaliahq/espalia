@@ -9,7 +9,8 @@
 class Operations::TeamPlanning::SetPlanValue < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
 
-  FIELDS = ::TeamPlanning::Events::PlanDataSet::FIELDS.keys.freeze
+  # Pay has its own tool, which needs the see-pay right.
+  FIELDS = (::TeamPlanning::Events::PlanDataSet::FIELDS.keys - %w[pay]).freeze
 
   description "Hold a person's level or FTE in a scenario of a Team Planning plan in place of the Org Graph's, " \
               "for a value the HRIS has wrong or that is about to change. An FTE is above 0 and at most 1. The " \
