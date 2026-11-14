@@ -4,33 +4,35 @@
 # by country. Tenant admins only. A refused form is shown again with what was
 # typed, so nothing has to be entered twice.
 class Tenant::PayBandsController < ApplicationController
+  include PayBandsPage
+
   FIELDS = %i[level_id location currency period minimum midpoint maximum].freeze
 
   # GET /tenant/pay_bands
   def index
-    authorize_bands
-    render_index
+    authorize_pay_bands
+    render_pay_bands_page
   end
 
   # POST /tenant/pay_bands
   def create
-    authorize_bands
+    authorize_pay_bands
     band = Operations::Tenants::AddPayBand.call(context: pundit_user, params: band_params)
     redirect_to tenant_pay_bands_path, notice: "Band added for #{band[:level]}, #{location_name(band)}.", status: :see_other
   rescue Operations::Base::ParameterError => e
     flash.now[:alert] = "The band could not be added: #{e.message}."
-    render_index(draft: band_params, status: :unprocessable_content)
+    render_pay_bands_page(drafts: { band: band_params }, status: :unprocessable_content)
   end
 
   # GET /tenant/pay_bands/:id/edit
   def edit
-    authorize_bands
+    authorize_pay_bands
     render_edit(band_payload)
   end
 
   # PATCH /tenant/pay_bands/:id
   def update
-    authorize_bands
+    authorize_pay_bands
     band = Operations::Tenants::ChangePayBand.call(context: pundit_user,
                                                    params: band_params.except(:level_id, :location).merge(pay_band_id: params[:id]))
     redirect_to tenant_pay_bands_path, notice: "Band changed for #{band[:level]}, #{location_name(band)}.", status: :see_other
@@ -41,7 +43,7 @@ class Tenant::PayBandsController < ApplicationController
 
   # DELETE /tenant/pay_bands/:id
   def destroy
-    authorize_bands
+    authorize_pay_bands
     band = Operations::Tenants::RemovePayBand.call(context: pundit_user, params: { pay_band_id: params[:id] })
     redirect_to tenant_pay_bands_path, notice: "Band removed for #{band[:level]}, #{location_name(band)}.", status: :see_other
   rescue Operations::Base::ParameterError => e
@@ -50,21 +52,8 @@ class Tenant::PayBandsController < ApplicationController
 
   private
 
-  def authorize_bands
-    authorize ActsAsTenant.current_tenant, :manage_pay_bands?, policy_class: TenantPolicy
-  end
-
-  def render_index(draft: {}, status: :ok)
-    render Views::Tenant::PayBands::IndexView.new(
-      bands: Operations::Tenants::PayBands.call(context: pundit_user, params: {})[:pay_bands],
-      roles: FrameworkState::Role.includes(:levels).order(:name).to_a,
-      countries: PayBand.known_countries,
-      draft:, **shell
-    ), status:
-  end
-
   def render_edit(band, status: :ok)
-    render Views::Tenant::PayBands::EditView.new(band:, **shell), status:
+    render Views::Tenant::PayBands::EditView.new(band:, **admin_shell), status:
   end
 
   # @raise [ActiveRecord::RecordNotFound] for a band this tenant doesn't hold, which renders a 404
@@ -90,9 +79,4 @@ class Tenant::PayBandsController < ApplicationController
   end
 
   def location_name(band) = band[:location] || "any location"
-
-  def shell
-    { user: current_user, current_tenant: ActsAsTenant.current_tenant,
-      tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a } }
-  end
 end
