@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
-# The scenario map's "Move" dialog ([#285](https://github.com/espaliahq/espalia/issues/285)), one per map, for an editor on a
-# scenario other than Today. Each person row's "Move…" button opens it, and a
-# drop on a unit clicks that same button with the unit in `data-move-to`, so
-# drag and keyboard share one path. The `move-form` controller fills it from
-# the trigger, and it posts to {Plans::AssignmentsController}.
+# The "Move" dialog for an editor on a scenario other than Today: one per map
+# ([#285](https://github.com/espaliahq/espalia/issues/285)), and one per step on the timeline
+# ([#309](https://github.com/espaliahq/espalia/issues/309)), which also gives it `return_to`.
+# Each person's "Move…" button opens it, and a drop on a unit clicks that same
+# button with the unit in `data-move-to`, so drag and keyboard share one path.
+# The `move-form` controller fills it from the trigger, and it posts to
+# {Plans::AssignmentsController}.
 class Views::Plans::MoveDialog < Views::Base
   ID = "move-person-modal"
   UNASSIGNED = Operations::TeamPlanning::MovePlace::UNASSIGNED
