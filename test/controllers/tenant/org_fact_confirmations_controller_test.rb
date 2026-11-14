@@ -68,6 +68,17 @@ class Tenant::OrgFactConfirmationsControllerTest < ActionDispatch::IntegrationTe
     assert_not_includes flags, "site"
   end
 
+  should "keep the drawer's chosen date when going back to it" do
+    travel 91.days
+    get tenant_org_person_path(@org[:brook])
+    assert_equal Date.current.iso8601,
+                 page.at_css("[data-stale-flag='site'] input[name='effective_on']")["value"]
+
+    post tenant_org_person_confirmations_path(@org[:brook]), params: { facts: %w[site country], effective_on: "2026-12-01" }
+
+    assert_redirected_to tenant_org_person_path(@org[:brook], on: "2026-12-01")
+  end
+
   should "come back to the unit drawer with the reason when a confirmation is refused" do
     post tenant_org_person_confirmations_path(@org[:cyril]),
          params: { facts: [ "membership" ], unit_id: @org[:engineering], return_to: "unit", unit: @org[:checkout] }

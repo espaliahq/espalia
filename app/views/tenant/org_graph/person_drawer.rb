@@ -244,7 +244,7 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
 
   def stale_flag(ages, subject, confirm:)
     render Views::Tenant::OrgGraph::StaleFlag.new(
-      ages:, person: @person, subject:, confirm:, back_to: { unit: @unit_id, back: @back }
+      ages:, person: @person, subject:, confirm:, back_to: { unit: @unit_id, back: @back, effective_on: @effective_on }
     )
   end
 
