@@ -31,14 +31,21 @@ class TeamPlanning::Resolution
   # @return [TeamPlanning::Baseline::Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def structure(aggregate = @repository.load_plan(@plan.id))
-    winning = aggregate.winning_changes(@scenario_id).values
-    base = @baseline.structure.with(step_ids: step_of(aggregate))
-    resolved = winning.reduce(base) { |map, change| change.class.apply_to(map, change.data) }
-    explained(resolved.settled)
-  end
+  def structure(aggregate = @repository.load_plan(@plan.id)) = resolved(aggregate).first
+
+  # @return [Array<TeamPlanning::Attention::Item>] what no longer fits, each with the change it belongs to
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def attention = TeamPlanning::Attention.new(*resolved).call
 
   private
+
+  def resolved(aggregate = @repository.load_plan(@plan.id))
+    winning = aggregate.winning_changes(@scenario_id)
+    base = @baseline.structure.with(step_ids: step_of(aggregate))
+    map = winning.values.reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
+    [ explained(map.settled), winning ]
+  end
 
   # The scenario and those it is an alternative of: the chain after the step
   # before it on the timeline. The scenarios that step replaced come earlier
