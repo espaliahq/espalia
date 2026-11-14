@@ -17,14 +17,20 @@ class Plans::ScenariosController < ApplicationController
   # PATCH /planning/:plan_id/scenarios/:id
   #
   # Renames and describes from one dialog. Each field is its own write, so a
-  # rename can land when a description is refused; the alert says which.
+  # rename can land when a description is refused; the alert says so.
   def update
     authorize_editor
     fields = params.expect(scenario: [ :name, :description ])
     scenario = { plan_id:, scenario_id: params.expect(:id) }
     name = Operations::TeamPlanning::RenameScenario.call(context: pundit_user, params: { **scenario, name: fields[:name] })[:name] if fields.key?(:name)
     if fields.key?(:description)
-      Operations::TeamPlanning::DescribeScenario.call(context: pundit_user, params: { **scenario, description: fields[:description] })
+      begin
+        Operations::TeamPlanning::DescribeScenario.call(context: pundit_user, params: { **scenario, description: fields[:description] })
+      rescue Operations::Base::ParameterError => e
+        raise unless name
+
+        return redirect_back_or_to plan_path(plan_id), alert: "Saved #{name}, but couldn't save its description: #{e.message}"
+      end
     end
     redirect_back_or_to plan_path(plan_id), notice: name ? "Saved #{name}." : "Scenario saved."
   rescue Operations::Base::ParameterError => e

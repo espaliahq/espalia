@@ -71,6 +71,13 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Couldn't save the scenario: A scenario's description can be at most 500 characters", flash[:alert]
     end
 
+    should "say the name was saved when only the description is refused" do
+      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "First quarter", description: "x" * 501 } }
+
+      assert_equal "Saved First quarter, but couldn't save its description: " \
+                   "A scenario's description can be at most 500 characters", flash[:alert]
+    end
+
     should "be offered the controls on the plan page and the map" do
       get plan_path(@plan_id)
       assert_select "button[data-modal-target-id='#{Views::Plans::ScenarioDialogs::FORK_ID}']", text: "New scenario"
