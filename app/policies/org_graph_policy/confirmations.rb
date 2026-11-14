@@ -36,11 +36,15 @@ class OrgGraphPolicy::Confirmations
   # @param membership [OrgMembership]
   # @return [Boolean] whether the viewer may say it is still true
   def membership?(membership)
-    unit = units[membership.unit_id] or return false
+    unit = unit(membership) or return false
 
     membership.provider == ESPALIA && !membership.person.forgotten? &&
       @policy.edit_membership?(membership.person, unit)
   end
+
+  # @param membership [OrgMembership]
+  # @return [OrgUnit, nil] its unit, while it is live
+  def unit(membership) = units[membership.unit_id]
 
   # @param person [Person]
   # @param employment [String] the person drawer's employment key, such as "site"

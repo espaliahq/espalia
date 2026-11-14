@@ -102,13 +102,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   end
 
   def stale_flag(membership)
-    ages = @confirmations.membership(membership) or return
-
-    render Views::Tenant::OrgGraph::StaleFlag.new(
-      ages:, person: membership.person,
-      subject: "#{membership.person.name}'s membership of #{membership.unit.name}",
-      confirm: @confirmations.membership?(membership), back_to: { return_to: "units", unit: @unit.id }
-    )
+    render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "units", unit: @unit.id })
   end
 
   def hris_level(person)

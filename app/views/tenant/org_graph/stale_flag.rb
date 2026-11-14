@@ -11,6 +11,21 @@ class Views::Tenant::OrgGraph::StaleFlag < Views::Base
   # @param subject [String] what is stale, for the button's name ("membership of Platform")
   # @param confirm [Boolean] whether to offer "Still true"
   # @param back_to [Hash] `return_to`, `unit` and `back` for the redirect
+  # A unit member's flag, as the Units view and the unit drawer show it.
+  #
+  # @param confirmations [OrgGraphPolicy::Confirmations]
+  # @param membership [OrgMembership]
+  # @param back_to [Hash] as for {#initialize}
+  # @return [Views::Tenant::OrgGraph::StaleFlag] which renders nothing when the membership is fresh
+  def self.membership(confirmations, membership, back_to:)
+    ages = confirmations.membership(membership)
+    new(
+      ages:, person: membership.person,
+      subject: "#{membership.person.name}'s membership of #{confirmations.unit(membership)&.name}",
+      confirm: ages.present? && confirmations.membership?(membership), back_to:
+    )
+  end
+
   def initialize(ages:, person:, subject:, confirm:, back_to: {})
     @ages = Array(ages)
     @person = person
