@@ -12,13 +12,25 @@ class Views::Plans::ScenarioTable < Views::Base
   # Columns beside the name show from `sm` up; below it they stack under the name.
   WIDE = "hidden sm:table-cell"
 
+  # Depth-first from the baseline, so each scenario sits under its parent.
+  #
+  # @param scenarios [Array<Hash>] from `team_planning_scenarios`
+  # @return [Array<Array(Hash, Integer)>] each scenario with its depth
+  def self.tree(scenarios)
+    children = scenarios.group_by { it[:parent_id] }
+    walk = ->(scenario, depth) { [ [ scenario, depth ], *(children[scenario[:scenario_id]] || []).flat_map { walk.(it, depth + 1) } ] }
+    (children[nil] || []).flat_map { walk.(it, 0) }
+  end
+
   # @param plan_id [String]
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param extra_columns [Array<Column>]
-  def initialize(plan_id:, scenarios:, extra_columns: [])
+  # @param can_edit [Boolean] whether each row offers a menu to fork and rename
+  def initialize(plan_id:, scenarios:, extra_columns: [], can_edit: false)
     @plan_id = plan_id
     @scenarios = scenarios
     @extra_columns = extra_columns
+    @can_edit = can_edit
   end
 
   def view_template
@@ -32,6 +44,7 @@ class Views::Plans::ScenarioTable < Views::Base
                 th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { "Period" }
                 @extra_columns.each { |column| th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { column.heading } }
                 th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { "State" }
+                th(scope: "col", class: "w-0 px-2 py-2") { span(class: "sr-only") { "Actions" } } if @can_edit
               end
             end
             tbody(class: "divide-y divide-subtle") { ordered.each { |scenario, depth| row(scenario, depth) } }
@@ -64,6 +77,22 @@ class Views::Plans::ScenarioTable < Views::Base
       td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period(scenario) }
       @extra_columns.each { |column| td(class: "#{WIDE} px-4 py-3 align-top") { column.cell.call(scenario) } }
       td(class: "#{WIDE} px-4 py-3 align-top") { state(baseline) }
+      td(class: "px-2 py-2 align-top text-right") { row_menu(scenario, baseline) } if @can_edit
+    end
+  end
+
+  def row_menu(scenario, baseline)
+    name = baseline ? "Today" : scenario[:name]
+    render Components::Kit::Dropdown.new(strategy: :fixed) do |menu|
+      menu.trigger(label: "Actions for #{name}", button: { variant: :ghost, size: :xs, icon: true })
+      menu.menu(width: "w-56") do
+        menu.item(data: Views::Plans::ScenarioDialogs.fork_trigger(scenario[:scenario_id])) { "New scenario from here…" }
+        unless baseline
+          menu.item(data: Views::Plans::ScenarioDialogs.rename_trigger(plan_scenario_path(@plan_id, scenario[:scenario_id]), scenario[:name])) do
+            "Rename…"
+          end
+        end
+      end
     end
   end
 
@@ -85,10 +114,5 @@ class Views::Plans::ScenarioTable < Views::Base
     "#{first} to #{ends.strftime("#{unit} %Y")}"
   end
 
-  # Depth-first from the baseline, so each scenario sits under its parent.
-  def ordered
-    children = @scenarios.group_by { it[:parent_id] }
-    walk = ->(scenario, depth) { [ [ scenario, depth ], *(children[scenario[:scenario_id]] || []).flat_map { walk.(it, depth + 1) } ] }
-    (children[nil] || []).flat_map { walk.(it, 0) }
-  end
+  def ordered = self.class.tree(@scenarios)
 end

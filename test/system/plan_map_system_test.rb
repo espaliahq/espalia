@@ -74,7 +74,7 @@ class PlanMapSystemTest < ApplicationSystemTestCase
       should "show a scenario's moves and open positions" do
         sign_in_as(@viewer.user)
         visit map_plan_path(@plan_id)
-        click_link_with_js_fallback("Q1 hires", expect_text: "with this scenario's changes")
+        switch_to("Q1 hires")
 
         within(unit("Payments")) { assert_no_text "Bo Reyes" }
         within(unit("Growth")) do
@@ -109,6 +109,21 @@ class PlanMapSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  # Pills from `sm` up, a list on a phone (#271).
+  def switch_to(name)
+    if page.has_selector?("nav[aria-label='Scenario']", visible: true, wait: 0)
+      click_link_with_js_fallback(name, expect_text: "with this scenario's changes")
+    else
+      wait_for_stimulus "auto-submit"
+      page.execute_script(<<~JS, name)
+        const select = document.getElementById("map-scenario")
+        select.value = [...select.options].find((option) => option.text.endsWith(arguments[0])).value
+        select.dispatchEvent(new Event("change", { bubbles: true }))
+      JS
+      assert_text "with this scenario's changes"
+    end
+  end
 
   def unit(name) = find("[data-map-unit]", text: name, match: :first)
 

@@ -38,7 +38,7 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
     render plan_page(plan, scenarios:, open_tab: :map,
-                           body: Views::Plans::ScenarioMap.new(map:, scenarios:))
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?(plan)))
   end
 
   private
@@ -52,6 +52,7 @@ class PlansController < ApplicationController
               Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])) ],
       open_tab:,
       body:,
+      can_edit: can_edit?(plan),
       **layout
     )
   end
@@ -75,6 +76,12 @@ class PlansController < ApplicationController
   end
 
   def policy_for(record) = PlanPolicy.new(pundit_user, record)
+
+  def can_edit?(plan)
+    return @can_edit if defined?(@can_edit)
+
+    @can_edit = policy_for(TeamPlanningPlan.find(plan[:plan_id])).update?
+  end
 
   def layout
     { user: current_user, current_tenant: ActsAsTenant.current_tenant,
