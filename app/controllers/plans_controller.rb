@@ -44,10 +44,12 @@ class PlansController < ApplicationController
   private
 
   def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil)
+    members = read(Operations::TeamPlanning::PlanMembers)[:members]
     Views::Plans::ShowView.new(
       plan:,
       scenarios:,
-      members: read(Operations::TeamPlanning::PlanMembers)[:members],
+      members:,
+      see_pay: see_pay(members),
       tabs: [ Views::Plans::ShowView::Tab.new(key: :scenarios, label: "Scenarios", href: plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])) ],
       open_tab:,
@@ -76,6 +78,12 @@ class PlansController < ApplicationController
   end
 
   def policy_for(record) = PlanPolicy.new(pundit_user, record)
+
+  def see_pay(members)
+    { can_manage_see_pay: policy_for(@plan_record).manage_see_pay?,
+      reachable_ids: PlanPolicy.reachable_ids(members.pluck(:person_id)),
+      locked_out: PlanPolicy.locked_out?(@plan_record) }
+  end
 
   def can_edit?
     return @can_edit if defined?(@can_edit)
