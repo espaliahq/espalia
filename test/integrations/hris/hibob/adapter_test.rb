@@ -966,8 +966,9 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       should "keep the manager when HiBob withholds the field or sends one it cannot read" do
         [ ->(e) { e["work"].delete("reportsTo") }, ->(e) { e["work"]["reportsTo"] = "bob-002" },
           ->(e) { e["work"]["reportsTo"] = { "displayName" => "Someone" } } ].each do |withhold|
-          build_adapter(with_employee("bob-001", &withhold)).sync_people
+          result = build_adapter(with_employee("bob-001", &withhold)).sync_people
 
+          assert_empty result[:errors]
           assert_empty new_events
         end
       end

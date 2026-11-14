@@ -567,7 +567,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @return [Person, nil] the forgotten row this HiBob id once belonged to
   # A report's payload keeps naming a manager who has been forgotten.
   def without_forgotten_manager(raw)
-    manager_id = raw&.dig("work", "reportsTo", "id")
+    manager_id = raw && Hris::Hibob::ResponseMapper.new(raw).manager_external_id
     return raw unless forgotten_person(manager_id) && !Person.exists?(external_id: manager_id.to_s)
 
     raw.deep_dup.tap do |copy|
