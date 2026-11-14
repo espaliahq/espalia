@@ -224,6 +224,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       attrs = Hris::DevNameWhimsifier.call(mapper.call)
       person = upsert_person(attrs, result, claims:, write:, projected:, started_on: mapper.org_graph_facts[:started_on])
       yield mapper, attrs, person if person
+    rescue OrgGraph::Forgetting::KeyMissing
+      raise
     rescue => e
       result[:errors] << { external_id: raw_employee["id"], email: raw_employee["email"], error: e.message }
     end
@@ -240,7 +242,6 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
     employees = client.search_people(fields: fields.uniq, show_inactive: true).select { it["id"].present? }
     ActsAsTenant.with_tenant(tenant) do
-      ensure_forgotten_recognisable!
       kept = []
       first_pass(employees, build_initial_result, projected: tenant.org_graph_people_projected?, write: false) do |mapper, attrs, person|
         kept << [ mapper, attrs, person ] unless attrs[:status] == "inactive"

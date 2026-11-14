@@ -808,6 +808,16 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "2718" ], read_department(employees).keys
     end
 
+    should "read the rows it holds without the forgetting key, and refuse only a newcomer it cannot check" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
+      forget_row("9999")
+
+      OrgGraph::Forgetting.stub(:key, nil) do
+        assert_equal [ "1618" ], read_department([ { "id" => "1618", "email" => "held@example.com" } ]).keys
+        assert_raises(OrgGraph::Forgetting::KeyMissing) { read_department([ { "id" => "2718", "email" => "e@example.com" } ]) }
+      end
+    end
+
     should "put each value on the row the sync writes it to, adopted by email or held by id" do
       held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
       adopted = create(:person, tenant: @tenant, email: "adopt@example.com")
@@ -1910,7 +1920,6 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     adapter = Hris::Hibob::Adapter.new(@tenant)
     ActsAsTenant.with_tenant(@tenant) do
       held = Person.ids.to_set
-      adapter.send(:ensure_forgotten_recognisable!)
       rows = []
       adapter.send(:first_pass, employees, adapter.send(:build_initial_result), projected: false, write:) do |_, attrs, person|
         rows << [ attrs[:external_id], (person.id if held.include?(person.id)) ]
