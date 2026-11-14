@@ -218,7 +218,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     lean = fork(q1, relation: "instead", name: "Lean Q1")
     q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")
     @plan.set_scenario_period(q1, ends_on: "2027-02-28", set_by_id: @editor_id)
-    @plan.rename_scenario(lean, name: "Lean first quarter", current: "Q1", renamed_by_id: @editor_id)
+    @plan.rename_scenario(lean, name: "Lean first quarter", current: "Lean Q1", renamed_by_id: @editor_id)
     @plan.remove_scenario(q2, removed_by_id: @editor_id)
 
     replayed = TeamPlanning::PlanAggregate.new
