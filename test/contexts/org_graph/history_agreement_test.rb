@@ -258,6 +258,71 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
       assert_equal [ 0.5, 0.5 ], %w[2026-03-15 2026-04-15].map { history("membership", it, key: @payments)["allocation"] }
     end
 
+    should "leave her live terms as history reads them once two changes made together are changed back" do
+      later("2026-04-15") do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8)
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01", allocation: 0.6)
+      end
+
+      later("2026-04-16") { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back_group("request-1") }
+
+      assert_equal 0.5, history("membership", "2026-04-16", key: @payments)["allocation"]
+      assert_equal({ @payments => 0.5 }, live_allocations)
+    end
+
+    should "leave her where she was, since the day she joined, once a move is changed back on its own day" do
+      later("2026-04-15") { @handler.move_membership(@ada.id, @payments, @platform, effective_on: "2026-04-01") }
+      later("2026-04-16") do
+        OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back(OrgUnitActivity.for_unit(@platform).first)
+      end
+
+      assert_nil history("membership", "2026-04-16", key: @platform)
+      assert_equal 0.5, history("membership", "2026-04-16", key: @payments)["allocation"]
+      assert_equal({ @payments => 0.5 }, live_allocations)
+      assert_equal on("2026-02-01"), as_tenant { OrgMembership.find_by!(person_id: @ada.id, unit_id: @payments).member_since }
+    end
+
+    should "let her membership end before the day of an ending that was changed back" do
+      later("2026-04-15") { @handler.end_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01") }
+      later("2026-04-16") do
+        OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back(OrgUnitActivity.for_unit(@payments).first)
+      end
+
+      later("2026-04-17") { @handler.end_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-15") }
+
+      assert_nil history("membership", "2026-03-16", key: @payments)
+      assert_empty live_allocations
+    end
+
+    should "let her membership end before both of two changes made together, dated out of order, once they are changed back" do
+      later("2026-04-15") do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01", allocation: 0.8)
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.6)
+      end
+      later("2026-04-16") { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back_group("request-1") }
+
+      later("2026-04-17") { @handler.end_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-15") }
+
+      assert_nil history("membership", "2026-02-16", key: @payments)
+      assert_empty live_allocations
+    end
+
+    should "let her be set to terms a change-back withdrew" do
+      later("2026-04-15") do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8)
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01", allocation: 0.6)
+      end
+      later("2026-04-16") { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back_group("request-1") }
+
+      later("2026-04-17") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-17", allocation: 0.8) }
+
+      assert_equal 0.8, history("membership", "2026-04-17", key: @payments)["allocation"]
+      assert_equal({ @payments => 0.8 }, live_allocations)
+    end
+
     should "change back a request that added her to a unit and then changed her terms there" do
       later("2026-04-15") do
         request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
