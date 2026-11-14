@@ -255,7 +255,7 @@ on main yet.
 | # | Story | Needs |
 |---|---|---|
 | 3.1 | Scenarios: `ScenarioForked` with parent, `then` or `instead` and period, `ScenarioPeriodSet`, `ScenarioRemoved`. Periods along a path are contiguous | 1.1 |
-| 3.2 | Resolution: the base, then each scenario's changes down the chain, last change per subject and facet. End-state changes to different facets retry on a version conflict | 3.1, 1.3 |
+| 3.2 | Resolution: the base, then each scenario's changes down the chain, last change per subject and facet. The plan's lock serialises writes, so changes to different facets both land | 3.1, 1.3 |
 | 3.3 | Rules: `RuleSet` with tenant defaults, resolved down the chain like any change | 3.2 |
 | 3.4 | Unit changes: `UnitSet`, `UnitRetired`, `UnitSuccessionSet`, with ids the plan mints | 3.2 |
 | 3.5 | Positions: `PositionSet` (role and level from the framework, unit, FTE, backfill or new) and `PositionClosed` | 3.2 |
@@ -408,6 +408,11 @@ second rebases and regenerates it. Nothing else is shared.
 
 The second wave opens when 1.1 lands: 1.2, 1.3 and 3.1 can run together, and 2.2 joins
 when 2.1 lands.
+
+When 3.2 lands, the change kinds can run as parallel lanes: 3.3, 3.4, 3.5, 3.6 and 3.7.
+Each kind subclasses `TeamPlanning::Events::Change`, and the plan aggregate routes every
+subclass to one handler, so no lane touches the aggregate. Each adds its own event, its
+end state and how it lands on a resolved map.
 
 ## Decisions
 
