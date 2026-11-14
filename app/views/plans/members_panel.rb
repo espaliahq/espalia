@@ -8,7 +8,7 @@ class Views::Plans::MembersPanel < Views::Base
   end
 
   def view_template
-    render Components::Kit::Card.new(title: "Members", density: :compact) do |card|
+    render Components::Kit::Card.new(title: "Members", density: :compact, heading_level: :h2) do |card|
       card.body do
         ul(class: "space-y-2 text-sm") do
           @members.each do |member|
