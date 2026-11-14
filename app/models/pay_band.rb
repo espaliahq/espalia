@@ -43,18 +43,21 @@ class PayBand < ApplicationRecord
   def self.known_spelling(location)
     return location if location.empty?
 
-    known_countries.find { location_key(it) == location_key(location) } || location
+    current_sites.where("regexp_replace(lower(btrim(value->>'country')), '\\s+', ' ', 'g') = ?", location_key(location))
+                 .pick(Arel.sql("value->>'country'"))&.squish || location
   end
 
   # The countries the Org Graph holds for people now, for the location field.
   #
   # @return [Array<String>] sorted, one spelling per country
   def self.known_countries
-    OrgFactPeriod.current.where(subject_type: "person", fact: "site", effective_to: nil)
-                 .distinct.pluck(Arel.sql("value->>'country'"))
+    current_sites.distinct.pluck(Arel.sql("value->>'country'"))
                  .filter_map { it.to_s.squish.presence }
                  .uniq { location_key(it) }.sort
   end
+
+  # @return [ActiveRecord::Relation<OrgFactPeriod>] each person's site in effect now
+  def self.current_sites = OrgFactPeriod.current.where(subject_type: "person", fact: "site", effective_to: nil)
 
   # Where a band sits on the screen: by role, then from the lowest level,
   # then the any-location band before the countries. A band whose level has
