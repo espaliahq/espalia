@@ -104,6 +104,13 @@ class Views::Plans::ScenarioMap < Views::Base
       return
     end
 
+    div(class: "divide-y divide-subtle") do
+      roles(people) if people.any?
+      positions.each { position_row(it) }
+    end
+  end
+
+  def roles(people)
     groups = people.group_by { |_, place| place[:role].presence }
     dl(class: "divide-y divide-subtle") do
       groups.keys.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.each do |role|
@@ -114,7 +121,6 @@ class Views::Plans::ScenarioMap < Views::Base
           end
         end
       end
-      positions.each { position_row(it) }
     end
   end
 
