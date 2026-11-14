@@ -94,7 +94,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
   should "name the retirement for someone no scenario moved" do
     write(Operations::TeamPlanning::RetireUnit, @q1, unit_id: @payments)
 
-    assert_equal [ [ @ada.id, "assignment", "Placed in a retired unit" ], [ @bo.id, "assignment", "Placed in a retired unit" ] ], items(@q1)
+    assert_equal [ [ @ada.id, "assignment", "Placed in a retired unit" ], [ @bo.id, "assignment", "Placed in a retired unit" ] ].sort, items(@q1)
     assert_equal({ kind: "UnitRetired", scenario_id: @q1 }, change_of(@bo.id, @q1).except(:event_id))
     assert_match Operations::TeamPlanning::PlanWrite::UUID_RE, change_of(@bo.id, @q1)[:event_id]
   end
@@ -107,7 +107,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal({ kind: "AssignmentSet", scenario_id: @q2 }, change_of(position).except(:event_id))
 
     write(Operations::TeamPlanning::ClosePosition, @q1, position_id: position)
-    assert_equal [ [ @ada.id, "assignment", "Placed in a closed position" ], [ @bo.id, "assignment", "Placed in a closed position" ] ], items
+    assert_equal [ [ @ada.id, "assignment", "Placed in a closed position" ], [ @bo.id, "assignment", "Placed in a closed position" ] ].sort, items
   end
 
   should "mark a position in a unit an earlier step retired" do
