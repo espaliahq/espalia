@@ -58,6 +58,12 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
                                                 level_id: @e2.level_id, unit_id:, fte: 1, basis:)[:position_id]
   end
 
+  def hire(scenario_id, label, seat, allocation: 1)
+    id = call(Operations::TeamPlanning::SetPlaceholderHire, plan_id: @plan_id, scenario_id:, label:)[:placeholder_id]
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id:, person_id: id, placements: [ { position_id: seat, allocation: } ])
+    id
+  end
+
   def leave(scenario_id, person, position_id: nil)
     call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id:, person_id: person.id, position_id:)
   end
@@ -146,14 +152,30 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
 
   should "carry a hire on in the lane of the position they fill" do
     seat = open_position(@q1, unit_id: @growth)
-    hire = call(Operations::TeamPlanning::SetPlaceholderHire, plan_id: @plan_id, scenario_id: @q2, label: "Growth engineer")[:placeholder_id]
-    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @q2, person_id: hire,
-                                                  placements: [ { position_id: seat, allocation: 1 } ])
+    hire = hire(@q2, "Growth engineer", seat)
     result = timeline
 
     assert_equal [ [ "position", seat, @growth, 1, 1 ], [ "person", hire, @growth, 2, 2 ] ], spans(lane(result, seat))
     assert_nil lane(result, hire)
     assert_equal "Growth engineer", result[:names][hire]
+  end
+
+  should "give a seat's lane to one hire, however many it takes" do
+    seat = open_position(@q1, unit_id: @growth)
+    hires = [ hire(@q2, "First", seat, allocation: 0.5), hire(@q2, "Second", seat, allocation: 0.5) ]
+    result = timeline
+
+    assert_equal 1, lane(result, seat)[:bars].count { it[:kind] == "person" }
+    assert_equal 1, hires.count { lane(result, it) }
+  end
+
+  should "run a backfill shared by two leavers in the lane of the one it replaces" do
+    backfill = open_position(@q1, basis: "backfill")
+    [ @ada, @bo ].each { leave(@q1, it, position_id: backfill) }
+    result = timeline
+    owner = result[:lanes].find { |lane| lane[:bars].any? { it[:subject_id] == backfill } }
+
+    assert_equal owner[:lane_id], owner[:bars].find { it[:subject_id] == backfill }[:replaces_id]
   end
 
   should "order blocks as they first appear and lanes in a block by when they arrive, people first, then by name" do

@@ -164,32 +164,38 @@ class TeamPlanning::Timeline
       [ first.from, first.kind == "person" ? 0 : 1, first.kind == "person" ? @names.fetch(first.subject_id, "") : "", lane.id ]
     end
 
-    # Which lane each person and position runs in. A backfill runs in its
-    # leaver's lane; someone who first appears filling a position that stood
-    # empty earlier takes the position's lane.
+    # Which lane each person and position runs in, column by column so a
+    # hire is in their seat's lane before a backfill for them looks it up.
+    # Someone who first appears filling a position that stood empty earlier
+    # takes its lane, one hire per seat; a backfill runs in its leaver's lane.
     def lane_owners
       owner = {}
-      first_column = {}
-      @maps.each_with_index do |map, column|
-        map.people.each { first_column[it.id] ||= column; owner[it.id] ||= it.id }
-      end
-      backfilled = @maps.flat_map { |map| map.backfills.flat_map { |position_id, ids| ids.map { [ position_id, it ] } } }.to_h
-      position_columns = {}
-      @maps.each_with_index do |map, column|
-        map.positions.each do |position|
-          position_columns[position.id] ||= column
-          owner[position.id] ||= backfilled.key?(position.id) ? owner.fetch(backfilled[position.id], backfilled[position.id]) : position.id
-        end
-      end
+      taken = Set[]
       @maps.each_with_index do |map, column|
         map.people.each do |person|
-          next unless first_column[person.id] == column && owner[person.id] == person.id
+          next if owner.key?(person.id)
 
-          seat = person.memberships.filter_map(&:position_id).find { position_columns.fetch(it, column) < column }
-          owner[person.id] = owner[seat] if seat
+          seat = person.memberships.filter_map(&:position_id).find { (opened = position_column[it]) && opened < column && !taken.include?(it) }
+          owner[person.id] = seat ? owner.fetch(seat).tap { taken << seat } : person.id
+        end
+        map.positions.each do |position|
+          owner[position.id] ||= (leaver = replaces[position.id]) ? owner.fetch(leaver, leaver) : position.id
         end
       end
       owner
+    end
+
+    def position_column
+      @position_column ||= @maps.each_with_index.with_object({}) do |(map, column), first|
+        map.positions.each { first[it.id] ||= column }
+      end
+    end
+
+    # The person each backfill replaces, the first it names where it first does.
+    def replaces
+      @replaces ||= @maps.each_with_object({}) do |map, first|
+        map.backfills.each { |position_id, ids| first[position_id] ||= ids.first }
+      end
     end
 
     def lanes(lane_of)
@@ -217,7 +223,6 @@ class TeamPlanning::Timeline
     end
 
     def position_bars
-      replaces = @maps.flat_map { |map| map.backfills.to_a }.to_h { |position_id, ids| [ position_id, ids.first ] }
       places = @maps.map do |map|
         filled = map.occupants
         live = map.units.to_set(&:id)

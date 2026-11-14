@@ -155,6 +155,8 @@ decides none of these rules:
 - **Backfills.** A leaver's lane records the step they leave in, and the position that
   backfills them carries on in it, naming who it replaces. A new position gets a lane of its
   own, and the first person to fill it takes that lane, so a seat and its hire read as one head.
+  A seat shared by two hires gives its lane to one of them. A backfill shared by two leavers
+  runs in the lane of the first, the one its `replaces_id` names.
 - **Order.** Blocks come in the order they first appear. Lanes come by the column they first
   appear in, people before positions, then by name and id.
 - **Names.** Lanes and blocks carry ids, and names come from the map's own lookup, so a
