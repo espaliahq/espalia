@@ -4,9 +4,11 @@
 # ([#288](https://github.com/espaliahq/espalia/issues/288)). Totals come by
 # default; a seat's working only for the one unit a caller names, so a large
 # plan answers in a page. Figures leave as decimal strings. Band midpoints
-# are tenant configuration, not anyone's pay, so every plan member sees them
-# until the see-pay right (5.5). It names people, so the forgotten-person
-# audit walks it.
+# are tenant configuration, not anyone's pay, so every plan member sees them;
+# each band's minimum and maximum need the see-pay right
+# ([#300](https://github.com/espaliahq/espalia/issues/300)), and `pay_view`
+# names which a caller got. It names people, so the forgotten-person audit
+# walks it.
 class Operations::TeamPlanning::Cost < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
@@ -24,7 +26,9 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "with null for no unit; `with_below` adds the units below. Cost centres use null for no cost centre. " \
               "Unit, cost-centre and plan totals always agree. A seat that can't be priced is in `unpriced` with its reason, " \
               "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
-              "bands_changed_at says when a band last changed. The baseline has no period, so it can't be the " \
+              "bands_changed_at says when a band last changed. pay_view is band_ranges for a member with the see-pay " \
+              "right, whose seat working also shows each band's minimum and maximum, and band_midpoints for " \
+              "everyone else. Totals are the same in both. The baseline has no period, so it can't be the " \
               "scenario. Figures are decimal strings; people are named by id in `names`. Refused, as an unknown " \
               "plan, unless the caller is a member."
   category :read
@@ -34,10 +38,11 @@ class Operations::TeamPlanning::Cost < Operations::Base
   parameter :scenario_id, String, required: true, schema: { description: "A scenario of the plan; not the plan's id, as the baseline has no period." }
   parameter :unit_id, String, allow_blank: false, schema: { description: "A unit on the scenario's or the baseline's map, for the working of each seat in it." }
 
-  # @return [Hash] `{ plan_id, scenario_id, period, reference_currency, bands_changed_at, total, units,
-  #   cost_centres, unpriced, names }`, and `seats` for a unit
+  # @return [Hash] `{ plan_id, scenario_id, period, reference_currency, bands_changed_at, pay_view, total,
+  #   units, cost_centres, unpriced, names }`, and `seats` for a unit
   def perform
     plan = plan!
+    @ranges = PlanPolicy.new(context, plan).see_pay?
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call }
     unit_id = unit!(report)
@@ -45,6 +50,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
     seats = { scenario: lines_in(report.scenario, unit_id), baseline: lines_in(report.baseline, unit_id) } if unit_id
     { plan_id: plan.id, scenario_id:, period: { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601 },
       reference_currency: report.reference_currency, bands_changed_at: report.bands_changed_at&.iso8601,
+      pay_view: @ranges ? "band_ranges" : "band_midpoints",
       total: compared(report, report.scenario.total, report.baseline.total), units: units(report), cost_centres: cost_centres(report),
       unpriced: unpriced.map { unpriced(it) }, **({ unit_id:, seats: } if unit_id), names: names(report, unpriced, seats) }
   end
@@ -91,14 +97,19 @@ class Operations::TeamPlanning::Cost < Operations::Base
     band = line.band
     { seat_id: line.seat_id, kind: line.kind, position_id: line.position_id, cost_centre: line.cost_centre,
       level_id: line.level_id, level_source: line.level_source,
-      band: band && { pay_band_id: band.id, level: band.level_label, location: band.location_name, currency: band.currency,
-                      period: band.period, midpoint: band.figure(:midpoint) },
+      band: band && band(band),
       hours_per_year: line.hours_per_year && decimal(line.hours_per_year), yearly: line.yearly && decimal(line.yearly),
       fte: decimal(line.fte), fraction: decimal(line.fraction),
       held: line.held && { starts_on: line.held.begin.iso8601, ends_on: line.held.end.iso8601 }, days: line.days,
       share: decimal(line.share), base: line.base && decimal(line.base),
       on_cost: line.on_cost && { amount: decimal(line.on_cost.amount), working: line.on_cost.working.map { { label: it.label, amount: decimal(it.amount) } } },
       amount: line.amount && decimal(line.amount), reason: line.reason, reason_text: ::TeamPlanning::Cost::REASONS[line.reason] }
+  end
+
+  def band(band)
+    figures = @ranges ? PayBand::FIGURES : %i[midpoint]
+    { pay_band_id: band.id, level: band.level_label, location: band.location_name, currency: band.currency,
+      period: band.period, **figures.index_with { band.figure(it) } }
   end
 
   def unpriced(line)

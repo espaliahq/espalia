@@ -110,7 +110,14 @@ class Views::Plans::ScenarioTable < Views::Base
     render Components::Kit::Badge.new(baseline ? "Read only" : "Draft", tone: baseline ? :neutral : :info)
   end
 
-  def period(scenario)
+  def period(scenario) = self.class.period(scenario)
+
+  # A scenario's period as the plan's pages print it: "As of" for the baseline,
+  # whole months by name.
+  #
+  # @param scenario [Hash] from `team_planning_scenarios`
+  # @return [String]
+  def self.period(scenario)
     starts = Date.iso8601(scenario[:starts_on])
     return "As of #{starts.strftime('%-d %b %Y')}" if scenario[:parent_id].nil?
     return "From #{starts.strftime('%-d %b %Y')}" unless scenario[:ends_on]

@@ -10,8 +10,14 @@
 # A tenant admin or a planner may create a plan. A plan with no editor left
 # is frozen, and a tenant admin may then delete it without opening it.
 #
+# Band ranges and actual pay need the see-pay right as well as membership,
+# and only a holder passes it on. A plan none of whose holders can still
+# open it is locked out of pay; a tenant admin may then give the right to its
+# reachable editors, again without opening it.
+#
 # The record is a {TeamPlanning::PlanAggregate} or a {TeamPlanningPlan} row:
-# anything with `role_of(person_id)` and `editor_ids`.
+# anything with `role_of(person_id)`, `editor_ids`, `sees_pay?(person_id)`
+# and `pay_holder_ids`.
 #
 # @example
 #   PlanPolicy.new(context, plan).update?
@@ -59,6 +65,21 @@ class PlanPolicy < ApplicationPolicy
   # @return [Boolean]
   def leave? = role.present?
 
+  # Whether the caller may see band ranges, and the actual pay the plan holds.
+  # Every read of either asks this.
+  # @return [Boolean]
+  def see_pay? = role.present? && record.sees_pay?(person.id)
+
+  # Whether the caller may give the see-pay right to a member, or take it.
+  # The plan still refuses to lose its last holder.
+  # @return [Boolean]
+  def manage_see_pay? = see_pay?
+
+  # Whether this plan is locked out of pay and the caller may restore it
+  # unread. A frozen plan has no editor to restore it to.
+  # @return [Boolean]
+  def restore_see_pay? = manage_frozen? && self.class.locked_out?(record) && !self.class.frozen?(record)
+
   # Whether the caller may list the tenant's frozen plans, and delete one.
   # @return [Boolean]
   def manage_frozen? = tenant_member? && tenant_admin?
@@ -73,6 +94,13 @@ class PlanPolicy < ApplicationPolicy
   # @param plan [#editor_ids]
   # @return [Boolean]
   def self.frozen?(plan) = reachable_ids(plan.editor_ids).empty?
+
+  # A plan is locked out of pay when none of those who hold the see-pay
+  # right is still an active, unforgotten person with an account.
+  #
+  # @param plan [#pay_holder_ids]
+  # @return [Boolean]
+  def self.locked_out?(plan) = reachable_ids(plan.pay_holder_ids).empty?
 
   # Whether the caller can still be in a plan: active, and not forgotten.
   # Their tenant account is checked by `tenant_member?` beside each use.
