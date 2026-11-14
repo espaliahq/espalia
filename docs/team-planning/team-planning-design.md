@@ -245,12 +245,14 @@ The `capacity_model` rule chooses a model per role family, and a role can choose
 Its default chooses nothing, so a plan counts nothing until a tenant or plan says how. Read
 at a seat's unit, a unit can choose differently for its subtree.
 
-`TeamPlanning::Capacity` reads a scenario. A seat is a person or an open position, and each
-place it holds (a unit and its share of the seat) is priced on its own:
+`TeamPlanning::Capacity` reads the settled scenario map. A seat is a person, or the FTE a
+position's occupants leave open, and each place it holds (a unit or a position, and its
+share of the seat) is priced on its own:
 
-- **A position's place** does that position's work, so it takes the position's role and
-  level. A vacant position is priced exactly as a filled one, so empty seats can't flatter
-  a scenario.
+- **A place in a position** does that position's work, so it takes the position's role
+  and level, whether a person fills it or it stands open. A position counts only for the
+  FTE its occupants leave, so a filled one is counted once, through its people, and an
+  open one is priced exactly as a filled one would be.
 - **A person placed straight in a unit** takes their own role and level: their title and
   level as the map holds them, through the tenant's title mapping, as the HRIS sync
   resolves them (`Integrations::HrisTitleResolution`). Never through
@@ -258,10 +260,18 @@ place it holds (a unit and its share of the seat) is priced on its own:
   person's role or level in a scenario, must put the change on the map's `Member`, so
   capacity follows it.
 - **An FTE the map doesn't hold** counts as 1, and the working says so.
+- **An allocation the HRIS didn't give** shares what the person's other places leave, and
+  the working says so.
+- **A leaver** will count nowhere: 3.7 keeps them on the map while a backfill position
+  carries the headcount, so the query drops them before it builds seats.
 
 A place no model covers counts nowhere and is listed as unclassified with its reason: no
-title, a title mapped to no role, a role not in the framework, no model chosen, or a model
-no longer registered. Totals are kept per model, per unit and for the scenario, and never
+title, a title mapped to no role, a role not in the framework, a position since closed, no
+model chosen, or a model no longer registered. A place in a unit gone from the map counts
+for the scenario but under no unit.
+
+A model gets the whole map with each seat, so 7.2 can find who reports to a seat by its id,
+a person's or a position's, without the interface changing. Totals are kept per model, per unit and for the scenario, and never
 summed across models. Figures stay exact; `team_planning_capacity` sends them as decimal
 strings, and only the display rounds.
 
