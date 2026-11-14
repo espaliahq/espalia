@@ -161,10 +161,15 @@ class PlanKeyStore
   # can't be minted between a destroy's check and its commit. The lock lasts
   # until the caller's transaction ends.
   def lock(kind, tenant_id, id)
-    key = "plan-keys/#{kind}/#{tenant_id}/#{id}"
     PlanEncryptionKey.connection.execute(
-      PlanEncryptionKey.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key ])
+      PlanEncryptionKey.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                                             lock_name(kind, tenant_id, id) ])
     )
+  end
+
+  # Every spelling of a uuid names the same lock.
+  def lock_name(kind, tenant_id, id)
+    [ "plan-keys", kind, *[ tenant_id, id ].map { it.to_s.delete("{}-").downcase } ].join("/")
   end
 
   def live_key(parts, cipher)

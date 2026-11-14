@@ -180,6 +180,14 @@ class PlanKeyStoreTest < ActiveSupport::TestCase
       assert_raises(PlanKeyStore::Destroyed) { in_tenant { @store.create(@person_key) } }
     end
 
+    should "take the same lock whatever the spelling of the person's id" do
+      names = [ @person.id, @person.id.upcase, "{#{@person.id.delete('-')}}" ].map do
+        @store.send(:lock_name, :person, @tenant.id, it)
+      end
+
+      assert_equal 1, names.uniq.size
+    end
+
     should "roll back with the caller's transaction" do
       in_tenant do
         @store.create(@person_key)
