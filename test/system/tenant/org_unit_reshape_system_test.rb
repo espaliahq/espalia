@@ -15,6 +15,15 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
     @org = build_org_graph(@tenant)
   end
 
+  def add_to_platform_only(name)
+    ActsAsTenant.with_tenant(@tenant) do
+      person = FactoryBot.create(:person, tenant: @tenant, name:, job_title: "Engineer")
+      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      handler.record_person(person.id, **OrgGraphFixture::PROVENANCE, employment_status: "employed")
+      handler.set_membership(person.id, @org[:platform], allocation: 1, **OrgGraphFixture::PROVENANCE)
+    end
+  end
+
   def unit(key) = ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[key]) }
 
   def units_of(person)
@@ -25,6 +34,7 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
     setup { page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE) }
 
     should "split a unit, showing who will be in no team before it applies" do
+      add_to_platform_only("Gil Harrow")
       sign_in_as(@admin_user)
       visit edit_tenant_org_unit_path(@org[:platform])
       assert_selector "#org-graph-drawer-title", text: "Platform"
@@ -37,10 +47,12 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
       select "Core", from: "Ada Quill"
       click_button_with_js_fallback "Review the split", expect_selector: "#org-unit-split-unplaced"
       screenshot("split_review")
+      within("#org-unit-split-unplaced") { assert_text "Gil Harrow" }
       within("#org-unit-split-staying li", text: "Brook Tamsin") { assert_text "stays in Checkout" }
       within("ul[aria-label='Moving to Core']") { assert_text "Ada Quill" }
 
       click_button_with_js_fallback "Split Platform", expect_text: "Split Platform into Core and Edge."
+      within("##{Views::Tenant::OrgGraph::Tray::ID}") { assert_text "Gil Harrow" }
       assert unit(:platform).retired?
       assert_equal [ "Core" ], units_of(:ada)
       assert_selector "nav[aria-labelledby='org-graph-tree-label']", text: "Edge"
