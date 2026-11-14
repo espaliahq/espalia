@@ -44,6 +44,9 @@ class OrgGraph::StaleFacts
   # @return [Array<OrgFactAge>]
   def employment(person_id, employment) = facts(person_id, EMPLOYMENT.fetch(employment, []))
 
+  # @return [Array<OrgFactAge>] every stale row, oldest first
+  def to_a = rows.values.sort_by(&:checked_at)
+
   private
 
   def rows

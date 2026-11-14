@@ -2959,6 +2959,31 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_stale_facts",
+        "description" => "List which of the given people's memberships and facts are stale: Espalia holds them and nobody " \
+                         "has changed or confirmed them within the tenant's threshold. Each row has the person id, the " \
+                         "fact (\"membership\", or a fact such as \"site\" or \"title\"), the unit id for a membership, the " \
+                         "day it was last checked and the id of whoever checked it. Oldest first. A fact an HRIS holds is " \
+                         "never stale, since each sync confirms it. Admins only while the Org Graph is unfinished.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "person_ids" => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "person_ids to look at"
+            }
+          },
+          "required" => [ "person_ids" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "org_graph_units",
         "description" => "List the Org Graph's live units in tree order, the order the Units page shows them: each " \
                          "with its id, name, level, parent, the provider that holds it (\"espalia\" or an HRIS), its " \

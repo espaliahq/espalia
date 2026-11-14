@@ -13,11 +13,16 @@ class OrgGraphPolicy::ConfirmationsTest < ActiveSupport::TestCase
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
 
+  def policy_for(viewer, role:)
+    tenant_user = create(:tenant_user, tenant: @tenant, person: viewer, role:)
+    OrgGraphPolicy.new(AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: viewer), :org_graph)
+  end
+
+  def overview = OrgGraph::UnitsOverview.new(selected_unit_id: @org[:checkout])
+
   def confirmations_for(viewer, role: :member)
     as_tenant do
-      tenant_user = create(:tenant_user, tenant: @tenant, person: viewer, role:)
-      policy = OrgGraphPolicy.new(AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: viewer), :org_graph)
-      OrgGraphPolicy::Confirmations.for_cards(policy, OrgGraph::UnitsOverview.new(selected_unit_id: @org[:checkout]))
+      OrgGraphPolicy::Confirmations.new(policy_for(viewer, role:), overview, OrgGraph::StaleFacts.new(person_ids: Person.ids))
     end
   end
 
@@ -26,7 +31,9 @@ class OrgGraphPolicy::ConfirmationsTest < ActiveSupport::TestCase
   end
 
   should "flag the stale memberships of the cards on screen, and let an admin confirm them" do
-    confirmations = confirmations_for(as_tenant { create(:person, tenant: @tenant) }, role: :admin)
+    confirmations = as_tenant do
+      OrgGraphPolicy::Confirmations.for_cards(policy_for(create(:person, tenant: @tenant), role: :admin), overview)
+    end
 
     assert confirmations.membership(membership(:cyril, :checkout))
     assert confirmations.membership(membership(:dot, :payments))
@@ -49,7 +56,9 @@ class OrgGraphPolicy::ConfirmationsTest < ActiveSupport::TestCase
       OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
                               .set_membership(@org[:cyril].id, @org[:engineering], provider: "hibob", effective_on: "2026-01-05")
     end
-    confirmations = confirmations_for(as_tenant { create(:person, tenant: @tenant) }, role: :admin)
+    confirmations = as_tenant do
+      OrgGraphPolicy::Confirmations.for_cards(policy_for(create(:person, tenant: @tenant), role: :admin), overview)
+    end
 
     assert_not confirmations.membership?(membership(:cyril, :engineering))
   end
