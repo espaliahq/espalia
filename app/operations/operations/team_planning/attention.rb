@@ -9,9 +9,11 @@ class Operations::TeamPlanning::Attention < Operations::Base
   description "List what needs attention in a scenario of a Team Planning plan the caller is in: changes that " \
               "still resolve but no longer fit, often because a scenario it follows changed later. Each item has " \
               "the subject_id and facet that no longer fit (a person's assignment, a position, a unit, a " \
-              "succession), a reason, and the change it belongs to: its kind, the scenario that made it and its " \
-              "event_id. That is the later to land of the subject's own change and the change that broke it, such " \
+              "succession, or a place's capacity as capacity:<unit or position id>), a reason, and the change it " \
+              "belongs to: its kind, the scenario that made it and its event_id. That is the later to land of the subject's own change and the change that broke it, such " \
               "as a parent unit's retirement; change is null when nothing in the plan explains it. " \
+              "Once any place has a capacity model chosen, each place no model covers is listed too, except a leaver's, " \
+              "a forgotten person's override and a closed position's. " \
               "Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
               "the caller is a member."
@@ -31,11 +33,16 @@ class Operations::TeamPlanning::Attention < Operations::Base
 
   private
 
+  # A capacity item's subject is a person or an open position, so only the
+  # people among them are named.
   def names_of(plan, items)
-    ids = items.select { it.facet == ::TeamPlanning::Attention::ASSIGNMENT }.map(&:subject_id).uniq
-    known = ::Person.where(tenant_id: plan.tenant_id, id: ids).pluck(:id, :name).to_h
-    ids.to_h { [ it, known.fetch(it, Person::FORMER_MEMBER) ] }
+    placed, capacity = items.select { person_facet?(it.facet) }.partition { it.facet == ::TeamPlanning::Attention::ASSIGNMENT }
+    known = ::Person.where(tenant_id: plan.tenant_id, id: (placed + capacity).map(&:subject_id).uniq).pluck(:id, :name).to_h
+    placed.map(&:subject_id).uniq.to_h { [ it, known.fetch(it, Person::FORMER_MEMBER) ] }
+          .merge(capacity.map(&:subject_id).select { known.key?(it) }.to_h { [ it, known[it] ] })
   end
+
+  def person_facet?(facet) = facet == ::TeamPlanning::Attention::ASSIGNMENT || facet.split(":").first == ::TeamPlanning::Attention::CAPACITY
 
   def item_row(item)
     change = item.change && { kind: item.change.class.name.demodulize, scenario_id: item.change.data[:scenario_id],

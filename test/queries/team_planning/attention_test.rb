@@ -18,6 +18,20 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
   def reasons(map, changes = {}) = TeamPlanning::Attention.new(map, changes).call.map(&:reason)
 
+  should "mark a place that counts for no capacity, but not a leaver's, a forgotten override's or a closed position's" do
+    position = SecureRandom.uuid_v7
+    unclassified = { "no_model" => nil, "leaving" => nil, "override_unknown" => nil, "closed_position" => position }.map do |reason, position_id|
+      place = TeamPlanning::CapacityModel::Place.new(unit_id: LIVE, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id:)
+      seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])
+      [ TeamPlanning::Capacity::Seat.new(seat:, places: []),
+        TeamPlanning::Capacity::Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason:) ]
+    end
+
+    items = TeamPlanning::Attention.new(map, {}, unclassified:).call
+    assert_equal [ [ PERSON, "capacity:#{LIVE}", "Counts for no capacity: no capacity model is chosen for the role or its family" ] ],
+                 items.map { [ it.subject_id, it.facet, it.reason ] }
+  end
+
   should "say which unit a succession lost, and nothing for one whose predecessor retired as it should" do
     fits = B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [ RETIRED ], successor_ids: [ LIVE ])
     broken = B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [ GONE ], successor_ids: [ RETIRED ])

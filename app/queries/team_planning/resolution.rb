@@ -16,6 +16,7 @@ class TeamPlanning::Resolution
   # @param repository [TeamPlanning::Repository]
   def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
     @baseline = TeamPlanning::Baseline.new(context:, plan:)
+    @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
@@ -36,7 +37,12 @@ class TeamPlanning::Resolution
   # @return [Array<TeamPlanning::Attention::Item>] what no longer fits, each with the change it belongs to
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def attention = TeamPlanning::Attention.new(*resolved).call
+  def attention
+    map, winning = resolved
+    capacity = TeamPlanning::Capacity.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository)
+                                     .report_for(map)
+    TeamPlanning::Attention.new(map, winning, unclassified: capacity.measured? ? capacity.unclassified : []).call
+  end
 
   private
 

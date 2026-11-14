@@ -24,7 +24,7 @@ class TeamPlanning::Attention
   #   nil only when no change explains it
   Item = Data.define(:subject_id, :facet, :reason, :change)
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides unclassified].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
@@ -33,8 +33,10 @@ class TeamPlanning::Attention
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
-  def initialize(map, changes)
+  # @param unclassified [Array<Array(TeamPlanning::Capacity::Seat, TeamPlanning::Capacity::Place)>] from {TeamPlanning::Capacity::Report#unclassified}
+  def initialize(map, changes, unclassified: [])
     @map = map
+    @unclassified = unclassified
     @changes = changes
     @order = changes.keys.each_with_index.to_h
     @live = map.units.to_set(&:id)
@@ -102,6 +104,20 @@ class TeamPlanning::Attention
       person.capacity_overrides.keys.reject { held.include?(it) }.sort.map do |place_id|
         item(person.id, "#{CAPACITY}:#{place_id}", "Overrides capacity in a place they don't hold", broken_by: [ [ person.id, ASSIGNMENT ] ])
       end
+    end
+  end
+
+  # A leaver's backfill carries their seat, a forgotten person's override is
+  # gone with them, and a closed position is the placements check's item.
+  UNCLASSIFIED_ELSEWHERE = %w[leaving override_unknown closed_position].freeze
+
+  def unclassified
+    @unclassified.reject { |_, place| UNCLASSIFIED_ELSEWHERE.include?(place.reason) }.map do |priced, place|
+      seat = priced.seat
+      facet = [ CAPACITY, place.place.position_id || place.unit_id ].compact.join(":")
+      cause = seat.kind == "person" ? ASSIGNMENT : POSITION
+      item(seat.id, facet, "Counts for no capacity: #{TeamPlanning::Capacity::REASONS.fetch(place.reason).downcase_first}",
+           broken_by: [ [ seat.id, cause ] ])
     end
   end
 
