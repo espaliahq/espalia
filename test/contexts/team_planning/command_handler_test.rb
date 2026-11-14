@@ -206,6 +206,14 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
     context "a plan locked out of pay" do
       setup { @creator.update!(status: "inactive") }
 
+      should "still let an editor take off the holder who left" do
+        plan = handler(@colleague_context).remove_member(@plan_id, @creator.id)
+
+        assert_not plan.member?(@creator.id)
+        assert_empty plan.pay_holder_ids
+        assert PlanPolicy.locked_out?(ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find(@plan_id) })
+      end
+
       should "be restored by a tenant admin to its reachable editors, each grant the admin's" do
         result = handler(@admin).restore_see_pay(@plan_id)
 

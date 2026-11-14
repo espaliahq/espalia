@@ -188,14 +188,16 @@ class TeamPlanning::PlanAggregate
   #
   # @param person_id [String]
   # @param removed_by_id [String]
+  # @param departed [Boolean] they have left or been forgotten, so taking them
+  #   off can't lock the plan out of pay any further than it already is
   # @raise [TeamPlanning::Error] if the plan is gone, they aren't a member, or
-  #   they are its last editor
-  def remove_member(person_id, removed_by_id:)
+  #   they are its last editor or, unless departed, its last pay holder
+  def remove_member(person_id, removed_by_id:, departed: false)
     ensure_open!
     raise TeamPlanning::Error, "They aren't a member of this plan" unless member?(person_id)
 
     ensure_editor_remains!(person_id)
-    ensure_pay_holder_remains!(person_id)
+    ensure_pay_holder_remains!(person_id) unless departed
     apply(TeamPlanning::Events::PlanMemberRemoved.new(data: {
       plan_id: @plan_id, person_id: person_id, removed_by_id: removed_by_id
     }))

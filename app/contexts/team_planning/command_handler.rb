@@ -107,8 +107,9 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(person_id == @actor.person&.id ? :leave? : :manage_members?, plan)
       ensure_reachable_editor_remains!(plan, person_id)
-      ensure_reachable_holder_remains!(plan, person_id)
-      plan.remove_member(person_id, removed_by_id: actor_id!)
+      departed = PlanPolicy.reachable_ids([ person_id ]).empty?
+      ensure_reachable_holder_remains!(plan, person_id) unless departed
+      plan.remove_member(person_id, removed_by_id: actor_id!, departed:)
     end
   end
 
