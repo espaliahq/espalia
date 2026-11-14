@@ -235,7 +235,7 @@ because a binding budget guardrail needs them.
 | 1.3 | Baseline reader: the root scenario resolved over `OrgGraph::AsOf` on the plan's base date, joined to names, with "Former member" for anyone forgotten | 1.1 |
 | 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes | 1.2, 1.3 |
 | 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
-| 1.6 | Read-only map of the baseline: units, people with their allocation and role from `AsOf::Membership`, and the Unassigned bucket | 1.4 |
+| 1.6 | Read-only map of any scenario, the baseline by default: units, people with their allocation and role, open positions, and the Unassigned bucket, read through `team_planning_scenario_map` | 1.4 |
 
 ### P2 Shreddable plan fields
 
