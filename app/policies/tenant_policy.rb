@@ -39,6 +39,12 @@ class TenantPolicy < ApplicationPolicy
   # @return [Boolean] whether the viewer can list, grant or take back the planner role
   def manage_team_planners? = tenant_admin?
 
+  # Bands price every plan, so only an admin keeps them, and only an admin
+  # reads them in full: a plan member sees a band's midpoint through the plan.
+  #
+  # @return [Boolean] whether the viewer can list, add, change or remove pay bands
+  def manage_pay_bands? = tenant_admin?
+
   # Narrower than the cycle report's bar (which admits managers): the export
   # carries names and feedback text. A linked Person is required so every
   # export is attributable to someone in the audit log.

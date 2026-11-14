@@ -113,8 +113,9 @@ class Hris::BaseAdapter
     raise NotImplementedError, "#{self.class}#fetch_field_catalogue must be implemented"
   end
 
-  # What each current person's record holds for one field, read live and
-  # stored nowhere.
+  # What one field holds for each person the next sync places, read live and
+  # stored nowhere. "Places" means the people the sync's first pass keeps, so
+  # a preview of this field counts whom the mirror would.
   #
   # @param field_id [String] the field's catalogue id
   # @param kind [Symbol] :list or :text
