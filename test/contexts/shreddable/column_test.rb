@@ -238,6 +238,9 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       assert_equal 1, Note.where("plan_id = ?", @plan_id).order(:plan_id).count
       assert_equal [ @plan_id ], Note.where(plan_id: @plan_id).pluck(:plan_id)
       assert_nothing_raised { Note.where(plan_id: "note").to_a }
+      assert_nothing_raised { Note.where([ "plan_id::text <> ?", "note" ]).to_a }
+      assert_nothing_raised { Note.where.not([ "plan_id::text = ?", "note" ]).to_a }
+      assert_nothing_raised { Note.exists?([ "plan_id::text = ?", "note" ]) }
     end
   end
 end

@@ -50,7 +50,7 @@ module Shreddable::Column
     # Only the condition is checked: the values bound into it are data.
     %i[where rewhere having exists?].each do |name|
       define_method(name) do |*args, **kwargs, &block|
-        Shreddable::Column.refuse!(model, args.first(1) + [ kwargs ], name)
+        Shreddable::Column.refuse!(model, Shreddable::Column.condition(args, kwargs), name)
         super(*args, **kwargs, &block)
       end
     end
@@ -60,7 +60,7 @@ module Shreddable::Column
   module WhereChainGuard
     def not(*args, **kwargs)
       model = @scope.model
-      Shreddable::Column.refuse!(model, args.first(1) + [ kwargs ], :where) if model.respond_to?(:shreddable_columns)
+      Shreddable::Column.refuse!(model, Shreddable::Column.condition(args, kwargs), :where) if model.respond_to?(:shreddable_columns)
       super
     end
   end
@@ -164,6 +164,17 @@ module Shreddable::Column
     return sealed if sealed && sealed["identifier"] == id && sealed_by&.key == key.key
 
     Shreddable.encrypt(Shreddable::Value.wrap(value).reveal, id, key)
+  end
+
+  # The condition of a `where`, without the values bound into it, in either
+  # `where("sql ?", x)` or `where([ "sql ?", x ])`.
+  #
+  # @param args [Array]
+  # @param kwargs [Hash]
+  # @return [Array]
+  def self.condition(args, kwargs)
+    first = args.first
+    (first.is_a?(Array) && first.first.is_a?(String) ? first.first(1) : args.first(1)) + [ kwargs ]
   end
 
   # @raise [Refused] if any argument names a shreddable column
