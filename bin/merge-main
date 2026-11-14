@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Merge origin/main into the current branch, and rebuild db/schema.rb from both
+# sides' migrations when the merge leaves it conflicted (two PRs that both migrate
+# always clash on its `version:` line). Any other conflict is left for you.
+#
+# The rebuild runs against the TEST database, which it reloads; the dev database
+# is untouched, so run `bin/rails db:migrate` afterwards.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+  echo "Commit or stash your changes first." >&2
+  exit 1
+fi
+
+git fetch origin main
+if git merge --no-edit origin/main; then
+  echo "Merged cleanly."
+  exit 0
+fi
+
+conflicted=$(git diff --name-only --diff-filter=U)
+
+if grep -qx "db/schema.rb" <<<"$conflicted"; then
+  echo "Rebuilding db/schema.rb from main's schema plus this branch's migrations…"
+  git show origin/main:db/schema.rb > db/schema.rb
+  # Loading a schema marks every migration file older than its version as run,
+  # which would skip this branch's own migrations; un-mark them so they run.
+  ours=$(git diff --name-only --diff-filter=A origin/main...HEAD -- db/migrate | sed -E 's#.*/([0-9]+)_.*#\1#' | paste -sd, -)
+  RAILS_ENV=test bin/rails db:drop db:create db:schema:load
+  if [[ -n "$ours" ]]; then
+    RAILS_ENV=test bin/rails runner "ActiveRecord::Base.connection.execute(%(DELETE FROM schema_migrations WHERE version IN (#{'$ours'.split(',').map { |v| ActiveRecord::Base.connection.quote(v) }.join(',')})))"
+  fi
+  RAILS_ENV=test bin/rails db:migrate db:schema:dump
+  git add db/schema.rb
+  echo
+  echo "db/schema.rb now differs from main by:"
+  git diff origin/main -- db/schema.rb || true
+fi
+
+remaining=$(git diff --name-only --diff-filter=U)
+if [[ -n "$remaining" ]]; then
+  echo
+  echo "Resolve these by hand, then commit:" >&2
+  echo "$remaining" >&2
+  exit 1
+fi
+
+git commit --no-edit
+echo "Merged. Check the schema diff above shows only this branch's changes."

@@ -373,6 +373,7 @@ end
 
 ## Behaviours and practices
 
+- **Create every migration with `bin/rails g migration <Name>`; never type a version.** Lanes that typed round versions (`…090000`) picked the same one, and Rails refuses a duplicate only once both reach main. `test/db/migration_versions_test.rb` rejects a hand-typed one. To take in main, run `bin/merge-main`: it rebuilds a conflicted `db/schema.rb` from main's schema plus your migrations, on the test database.
 - Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
 - **Handing one GitHub issue to an agent (or picking one up solo)? Follow [docs/guidelines/issue-delivery.md](docs/guidelines/issue-delivery.md).** It is the delivery contract around the work itself — claim the issue, branch from the stated base, commit per change, test + visual pass, README screenshots, precommit, `/code-review`, PR body, then CI and the CodeRabbit threads — and it exists so an unsupervised run lands the same way every time.
 - Always update relevant documentation if functionality diverges from what is documented.
