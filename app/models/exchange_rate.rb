@@ -51,6 +51,27 @@ class ExchangeRate < ApplicationRecord
     rate.from_currency == from ? amount * rate.rate : amount / rate.rate
   end
 
+  # What one unit of a currency is worth in another, exactly, so a report
+  # can convert a Rational without rounding it.
+  #
+  # @param from [String]
+  # @param to [String]
+  # @param on [Date]
+  # @return [Rational]
+  # @raise [MissingRate] as {.convert} does
+  def self.factor(from:, to:, on:)
+    raise ArgumentError, "ExchangeRate.factor needs a current tenant" unless ActsAsTenant.current_tenant
+
+    from = Currency::NORMALIZE.call(from)
+    to = Currency::NORMALIZE.call(to)
+    return 1r if from == to
+
+    rate = in_force(from, to, on)
+    raise MissingRate, "There is no exchange rate from #{from} to #{to} in force on #{on.iso8601}" unless rate
+
+    rate.from_currency == from ? rate.rate.to_r : 1 / rate.rate.to_r
+  end
+
   # @return [ExchangeRate, nil] the latest-dated rate for the pair either way round
   def self.in_force(from, to, on)
     where(from_currency: from, to_currency: to).or(where(from_currency: to, to_currency: from))

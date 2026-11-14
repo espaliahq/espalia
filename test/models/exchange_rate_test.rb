@@ -25,6 +25,15 @@ class ExchangeRateTest < ActiveSupport::TestCase
     assert_equal BigDecimal("200"), convert(100, from: "AUD", to: "NZD")
   end
 
+  should "give the factor between two currencies exactly, either way round, so a Rational converts without rounding" do
+    rate(rate: "0.3").save!
+
+    assert_equal [ Rational(3, 10), Rational(10, 3), 1r ],
+                 [ %w[NZD AUD], %w[AUD NZD], %w[AUD AUD] ].map { |from, to| ExchangeRate.factor(from:, to:, on: JULY) }
+    refused = assert_raises(ExchangeRate::MissingRate) { ExchangeRate.factor(from: "NZD", to: "EUR", on: JULY) }
+    assert_equal "There is no exchange rate from NZD to EUR in force on 2026-07-01", refused.message
+  end
+
   should "use the rate in force on the date, so each period converts at its own" do
     rate.save!
     rate(rate: "0.6", applies_from: JULY.next_month).save!
