@@ -135,5 +135,22 @@ class Tenant::OrgGraphSettings::LevelHandoversControllerTest < ActionDispatch::I
       stubbed { get tenant_org_graph_settings_level_handover_path(@level_id) }
       assert_redirected_to root_path
     end
+
+    should "refuse a hand-over without changing the level" do
+      stubbed do
+        patch tenant_org_graph_settings_level_handover_path(@level_id),
+              params: { field_id: TEAM.id, calls: @calls, fingerprint: "not-it" }
+      end
+
+      assert_redirected_to root_path
+      assert_equal "espalia", level.provider
+    end
+
+    should "refuse a hand-back without changing the level" do
+      stubbed { delete tenant_org_graph_settings_level_handover_path(@level_id), params: { fingerprint: "not-it" } }
+
+      assert_redirected_to root_path
+      assert_equal "espalia", level.provider
+    end
   end
 end
