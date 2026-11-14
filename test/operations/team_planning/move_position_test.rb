@@ -79,4 +79,10 @@ class Operations::TeamPlanning::MovePositionTest < ActiveSupport::TestCase
     assert_equal "The position is already in that unit", refusal(to_unit_id: @payments)
     assert_equal @payments, map[:positions].find { it[:position_id] == @position }[:unit_id]
   end
+
+  should "refuse a position whose unit has been retired" do
+    call(Operations::TeamPlanning::RetireUnit, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments)
+
+    assert_equal "This position is in no unit and can't be moved", refusal(to_unit_id: @growth)
+  end
 end

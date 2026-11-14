@@ -30,6 +30,7 @@ class Operations::TeamPlanning::MovePosition < Operations::Base
       map = Operations::TeamPlanning::ScenarioMap.call(context:, params: { plan_id: plan_id!, scenario_id: })
       position = map[:positions].find { it[:position_id] == uuid!(:position_id) } or
         raise Operations::Base::ParameterError, "This scenario has no such position"
+      raise Operations::Base::ParameterError, "This position is in no unit and can't be moved" unless map[:units].any? { it[:id] == position[:unit_id] }
       raise Operations::Base::ParameterError, "This scenario has no such unit" unless map[:units].any? { it[:id] == uuid!(:to_unit_id) }
       raise Operations::Base::ParameterError, "The position is already in that unit" if position[:unit_id] == uuid!(:to_unit_id)
 
