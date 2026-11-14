@@ -23,6 +23,9 @@ module Shreddable
     end
   end
 
+  # Wraps declared fields as each event of the class is built.
+  #
+  # @param event_class [Class]
   def self.extended(event_class)
     event_class.prepend(Wrapping)
   end

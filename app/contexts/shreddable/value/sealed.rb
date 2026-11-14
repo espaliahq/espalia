@@ -22,11 +22,16 @@ class Shreddable::Value::Sealed < Shreddable::Value
     @key_of = key_of
   end
 
+  # @return [Object, nil] the value, or nil once removed
+  # @raise [PlanKeyStore::ForeignTenant, PlanKeyStore::Unavailable]
   def reveal = opened.reveal
 
+  # @return [Boolean]
   def removed? = opened.removed?
 
   # Printing never opens the value.
+  #
+  # @return [String]
   def to_s = @opened ? @opened.to_s : "[shreddable]"
 
   # A value that opened as removed loads back as removed, without its ciphertext.
@@ -37,6 +42,7 @@ class Shreddable::Value::Sealed < Shreddable::Value
     freeze
   end
 
+  # @return [Integer]
   def hash = opened.hash
 
   private
