@@ -256,6 +256,43 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "a level's menu at mobile" do
+    setup do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@admin_user)
+      @guild_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          .define_taxonomy([ { level_id: SecureRandom.uuid_v7, name: "Squad" }, { level_id: @guild_id, name: "Guild" } ],
+                           effective_on: "2026-01-01")
+      end
+      visit tenant_org_graph_settings_path
+      assert_selector "#org-graph-level-#{@guild_id} [data-controller~='dropdown'][data-connected]", visible: :all
+    end
+
+    # A scroll's event fires on the next frame, so a tap that scrolls the
+    # kebab into view can open the menu before that scroll is reported (#199).
+    should "stay open when a scroll made before it opened is reported after" do
+      page.execute_script(<<~JS, "org-graph-level-menu-#{@guild_id}")
+        window.scrollTo(0, 0);
+        window.scrollBy(0, 40);
+        document.getElementById(arguments[0]).click();
+      JS
+      assert_operator page.evaluate_script("window.scrollY"), :>, 0, "the page must scroll for this to test anything"
+
+      assert_selector "#org-graph-level-remove-#{@guild_id}", visible: true
+      page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(arguments[0]))")
+      assert_selector "#org-graph-level-remove-#{@guild_id}", visible: true, wait: 0
+    end
+
+    should "close when the page scrolls after it opens" do
+      click_button_with_js_fallback("org-graph-level-menu-#{@guild_id}", expect_selector: "#org-graph-level-remove-#{@guild_id}")
+      page.execute_script("window.scrollTo(0, window.scrollY > 20 ? 0 : 40)")
+
+      assert_no_selector "#org-graph-level-remove-#{@guild_id}", visible: true
+    end
+  end
+
   private
 
   def level_names = all("#org-graph-levels li[id^='org-graph-level-'] p.font-medium").map(&:text)

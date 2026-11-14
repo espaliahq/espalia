@@ -489,8 +489,10 @@ mounts; one expanded row **362,526 → 228,000 B (−37%)**, 70 → 0 mounts.
 
 ### 30. A fixed menu should follow its trigger, not dismiss on scroll
 
-`Kit::Dropdown`'s fixed strategy closes on any scroll, because a `position:
-fixed` panel otherwise detaches from the trigger it belongs to. Carrying that
+`Kit::Dropdown`'s fixed strategy closes on a scroll, because a `position:
+fixed` panel otherwise detaches from the trigger it belongs to. It now closes
+only once the trigger has moved, since the same late scroll event closed the
+Org Graph level menu at mobile width ([#199](https://github.com/espaliahq/espalia/issues/199)). Carrying that
 rule into the delegated menu made it flaky in a way that looked like a dropped
 click: a JS-dispatched `scrollIntoView` immediately before the trigger click
 queues a scroll event that lands *after* the menu opens, closing it in the same

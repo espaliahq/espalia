@@ -13,8 +13,8 @@
 // With data-dropdown-fixed-value="true" the open menu is positioned against
 // the viewport (position: fixed at the trigger's rect) instead of relying on
 // CSS absolute positioning — so it can escape overflow-clipping ancestors
-// like the role tree's scroll pane. The menu closes on any scroll while open
-// in this mode (a fixed menu would otherwise detach from its trigger).
+// like the role tree's scroll pane. The menu closes on any scroll that moves
+// its trigger while open in this mode (it would otherwise detach from it).
 
 import BaseController from "controllers/base_controller"
 import { useClickOutside, useTransition } from "stimulus-use"
@@ -88,14 +88,24 @@ export default class extends BaseController {
   // trigger out from under a fixed menu, so close rather than float loose.
   // Scrolls INSIDE the menu are exempt — a tall panel scrolls its own
   // content (max-h + overflow on the panel) without dismissing itself.
+  // A scroll's event fires a frame late, so one made just before the menu
+  // opened (a tap that scrolls its trigger into view) arrives after it:
+  // close only once the trigger has really moved from where the menu sits.
   #onAnyScroll(event) {
     if (this.menuTarget.classList.contains("hidden")) return
     if (event && this.menuTarget.contains(event.target)) return
+    if (!this.#triggerMoved()) return
     this.close()
+  }
+
+  #triggerMoved() {
+    const { top, left } = this.triggerTarget.getBoundingClientRect()
+    return Math.abs(top - this._anchor.top) >= 1 || Math.abs(left - this._anchor.left) >= 1
   }
 
   #positionFixed() {
     const rect = this.triggerTarget.getBoundingClientRect()
+    this._anchor = { top: rect.top, left: rect.left }
     const menu = this.menuTarget
     // Pre-open guess only — the menu is still hidden so it can't be
     // measured; #clampFixed re-clamps horizontally with the REAL width
