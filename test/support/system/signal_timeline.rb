@@ -39,17 +39,23 @@ class SignalTimeline
   # @return [String]
   def report
     page_events = @read_page_events.call
-    events = @marks + page_marks(page_events)
-    start = events.map(&:first).min
-    # Ties keep the order each side recorded them in; sort_by alone is unstable.
-    lines = events.each_with_index.sort_by { |(at, _), i| [ at, i ] }
-                  .map { |(at, what), _| format("  %+7dms %s", at - start, what) }
+    lines = if @page_offset
+              ordered(@marks + page_marks(page_events))
+    else
+              ordered(@marks) + [ "  page events, on the page's own clock:" ] + ordered(page_marks(page_events))
+    end
     lines << "  (no page events: the page fully reloaded after the click)" if page_events.nil?
     lines << "  (no page events: the page could not be read)" if page_events == :unavailable
     "signal timeline (#{@page_offset ? 'page times on the test clock' : 'clocks not aligned'}):\n#{lines.join("\n")}"
   end
 
   private
+
+  # Ties keep the order each side recorded them in; sort_by alone is unstable.
+  def ordered(events)
+    start = events.map(&:first).min
+    events.each_with_index.sort_by { |(at, _), i| [ at, i ] }.map { |(at, what), _| format("  %+7dms %s", at - start, what) }
+  end
 
   def page_marks(page_events)
     return [] unless page_events.is_a?(Array)

@@ -20,6 +20,22 @@ class SignalTimelineTest < ActiveSupport::TestCase
     REPORT
   end
 
+  should "list page events apart, each side from its own start, when the clocks could not be aligned" do
+    times = [ 990, 1000 ]
+    timeline = SignalTimeline.new(-> { [ [ 5000, "signal added in <div>" ], [ 5030, "turbo:render" ] ] }, clock: -> { times.shift })
+    timeline.mark("click")
+    timeline.mark("probe 1 started")
+
+    assert_equal <<~REPORT.chomp, timeline.report
+      signal timeline (clocks not aligned):
+             +0ms click
+            +10ms probe 1 started
+        page events, on the page's own clock:
+             +0ms signal added in <div>
+            +30ms turbo:render
+    REPORT
+  end
+
   should "say so when the page lost its events" do
     timeline = SignalTimeline.new(-> { nil })
     timeline.mark("click")
