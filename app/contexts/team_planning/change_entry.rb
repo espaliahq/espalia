@@ -6,6 +6,10 @@
 #
 # A shreddable value never leaves the event: {#end_state} holds only the
 # fields in clear, and {#sealed_fields} names the rest.
+#
+# An update to today changes no facet, but the history keeps it as a
+# baseline entry, `rebase`, with the old and new base and the keys of the
+# conflicts it carried forward.
 TeamPlanning::ChangeEntry = Data.define(
   :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
   :actor_id, :at, :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id
@@ -15,7 +19,7 @@ TeamPlanning::ChangeEntry = Data.define(
   def self.from(event)
     fields = fields_of(event) or return nil
 
-    new(event_id: event.event_id, plan_id: event.data[:plan_id], scenario_id: event.data[:scenario_id],
+    new(event_id: event.event_id, plan_id: event.data[:plan_id], scenario_id: event.data[:scenario_id] || event.data[:plan_id],
         at: event.timestamp, subject_id: nil, facet: nil, kind: nil, end_state: nil, sealed_fields: [],
         pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, **fields)
   end
@@ -33,6 +37,8 @@ TeamPlanning::ChangeEntry = Data.define(
       { action: "clear", **data.slice(:subject_id, :facet), actor_id: data[:cleared_by_id] }
     when TeamPlanning::Events::ChangeUndone
       { action: "undo", **data.slice(:subject_id, :facet), reverses_event_id: data[:undone_event_id], actor_id: data[:undone_by_id] }
+    when TeamPlanning::Events::PlanRebased
+      { action: "rebase", end_state: data.slice(:base_on, :previous_base_on, :conflicts).deep_stringify_keys, actor_id: data[:rebased_by_id] }
     when TeamPlanning::Events::ChangeRedone
       { action: "redo", **data.slice(:subject_id, :facet), reverses_event_id: data[:redone_event_id], actor_id: data[:redone_by_id] }
     end

@@ -45,6 +45,7 @@ class TeamPlanning::PlanAggregate
     @logs = {}
     @undone = Set.new
     @redo_stacks = {}
+    @carried = {}
   end
 
   # Opens the plan.
@@ -92,6 +93,49 @@ class TeamPlanning::PlanAggregate
     apply(TeamPlanning::Events::PlanDeleted.new(data: {
       plan_id: @plan_id, deleted_by_id: deleted_by_id, reason: reason.to_s.squish.presence
     }.compact))
+  end
+
+  # Moves the plan's base to a later day. Every scenario re-resolves over the
+  # Org Graph on the new base; nothing else is written. A `then` step under
+  # the baseline starts on the base, so its start moves too.
+  #
+  # @param base_on [Date, String] the new base, today when a planner updates
+  # @param expected_base_on [Date, String] the base the caller last read, so a
+  #   move made since refuses rather than hiding drift they never saw
+  # @param conflicts [Array<Hash>] `{ scenario_id, subject_id, facet }` for each
+  #   change reading conflicting now, the scenario being the one that made it
+  # @param rebased_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone, moved since, already on
+  #   that day or later, a first step would end before the new base, or a
+  #   conflict names a scenario the plan doesn't have
+  # @raise [Date::Error] for a date that isn't YYYY-MM-DD
+  def rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id:)
+    ensure_open!
+    base_on = require_date(base_on)
+    if require_date(expected_base_on) != @base_on
+      raise TeamPlanning::Error, "#{@name} has moved since you looked: it now stands on #{@base_on.iso8601}"
+    end
+    raise TeamPlanning::Error, "#{@name} already stands on #{@base_on.iso8601}" if base_on == @base_on
+    raise TeamPlanning::Error, "#{@name} stands on #{@base_on.iso8601}, after #{base_on.iso8601}: a base only moves forward" if base_on < @base_on
+
+    ensure_first_steps_reach!(base_on)
+    apply(TeamPlanning::Events::PlanRebased.new(data: {
+      plan_id: @plan_id, base_on: base_on.iso8601, previous_base_on: @base_on.iso8601,
+      conflicts: conflict_keys!(conflicts), rebased_by_id:
+    }))
+  end
+
+  # The conflicts the last update to today found that still stand in a
+  # scenario: the change it made to that key then is still the one in effect.
+  # A set, clear or undo there ends one. A pin in a scenario below gives that
+  # scenario its own change, so the conflict no longer reaches it.
+  #
+  # @param scenario_id [String] the scenario that made the change
+  # @return [Hash{Array(String, String) => Date}] subject and facet => the base the update moved to
+  def carried_conflicts(scenario_id)
+    @carried.fetch(scenario_id, {}).each_with_object({}) do |(key, (event_id, since)), open|
+      open[key] = since if in_effect_at(scenario_id, key, @undone) == event_id
+    end
   end
 
   # Makes someone a member, or gives a member another role. The role they
@@ -474,6 +518,21 @@ class TeamPlanning::PlanAggregate
     @members[@created_by_id] = "editor"
   end
 
+  on TeamPlanning::Events::PlanRebased do |event|
+    base_on = Date.iso8601(event.data[:base_on])
+    conflicts = event.data[:conflicts].map { it.to_h.symbolize_keys }
+    @carried = conflicts.group_by { it[:scenario_id] }.to_h do |scenario_id, conflicts|
+      earlier = carried_conflicts(scenario_id)
+      carried = conflicts.filter_map do |conflict|
+        key = conflict.values_at(:subject_id, :facet)
+        event_id = in_effect_at(scenario_id, key, @undone) or next
+        [ key, [ event_id, earlier.fetch(key, base_on) ] ]
+      end
+      [ scenario_id, carried.to_h ]
+    end
+    @base_on = base_on
+  end
+
   on TeamPlanning::Events::PlanMemberAdded do |event|
     @members[event.data[:person_id]] = event.data[:role]
   end
@@ -670,6 +729,20 @@ class TeamPlanning::PlanAggregate
     end
 
     period
+  end
+
+  def ensure_first_steps_reach!(base_on)
+    step = children_of(@plan_id).find { it.relation == "then" && it.ends_on < base_on } or return
+
+    raise TeamPlanning::Error, "#{step.name} ends on #{step.ends_on.iso8601}, before #{base_on.iso8601}: end it later or remove it first"
+  end
+
+  def conflict_keys!(conflicts)
+    conflicts.map { it.to_h.symbolize_keys.slice(:scenario_id, :subject_id, :facet) }.uniq.each do |conflict|
+      raise ArgumentError, "A conflict needs a scenario_id, subject_id and facet" unless conflict.size == 3 && conflict.values.all?(String)
+
+      live_scenario!(conflict[:scenario_id])
+    end
   end
 
   # Refuses ends that would leave any live scenario ending before it starts,

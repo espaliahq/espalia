@@ -142,6 +142,17 @@ class TeamPlanning::CommandHandler
   end
 
   # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#rebase
+  def rebase_plan(plan_id, base_on:, expected_base_on:, conflicts:)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
   # @param scenario_id [String]
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
