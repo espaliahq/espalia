@@ -17,8 +17,8 @@ class Operations::TeamPlanning::Scenarios < Operations::Base
   # @return [Hash] `{ plan_id, scenarios: [{ scenario_id, parent_id, relation, name, starts_on, ends_on }] }`
   def perform
     plan = plan!
-    rows = TeamPlanningScenario.where(plan_id: plan.id).order(:created_at, :id)
-    scenarios = rows.sort_by { it.baseline? ? 0 : 1 }.map do |row|
+    rows = TeamPlanningScenario.where(plan_id: plan.id).order(:created_at, :id).partition(&:baseline?).flatten
+    scenarios = rows.map do |row|
       { scenario_id: row.id, parent_id: row.parent_id, relation: row.relation, name: row.name,
         starts_on: row.starts_on.iso8601, ends_on: row.ends_on&.iso8601 }
     end
