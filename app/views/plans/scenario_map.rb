@@ -30,9 +30,9 @@ class Views::Plans::ScenarioMap < Views::Base
       unresolved_notice if @map[:unresolved].any?
       div(class: "grid gap-4 md:grid-cols-2 2xl:grid-cols-3") do
         ordered_units.each { |unit, path| unit_card(unit, path) }
-        unassigned_card if unassigned.any?
+        unassigned_card if unassigned.any? || unplaced_positions.any?
       end
-      empty_state if ordered_units.empty? && unassigned.empty?
+      empty_state if ordered_units.empty? && unassigned.empty? && unplaced_positions.empty?
     end
   end
 
@@ -90,12 +90,22 @@ class Views::Plans::ScenarioMap < Views::Base
             class: "rounded-lg border border-dashed border-default bg-default") do
       header(class: "border-b border-subtle px-4 py-3") do
         h3(id: "map-unassigned", class: "text-base font-semibold text-default") { "Unassigned" }
-        p(class: "mt-1 text-sm text-muted") { "#{count(unassigned.size, 'person', 'people')} in no unit" }
+        p(class: "mt-1 text-sm text-muted") { "#{unassigned_summary} in no unit" }
       end
-      ul(class: "px-2 py-2") do
-        unassigned.sort_by { name(it[:id]) }.each { |person| person_row(person, nil) }
+      if unassigned.any?
+        ul(class: "px-2 py-2") do
+          unassigned.sort_by { name(it[:id]) }.each { |person| person_row(person, nil) }
+        end
       end
+      unplaced_positions.each { position_row(it) }
     end
+  end
+
+  def unassigned_summary
+    parts = []
+    parts << count(unassigned.size, "person", "people") if unassigned.any?
+    parts << count(unplaced_positions.size, "position", "positions") if unplaced_positions.any?
+    parts.join(" and ")
   end
 
   def rows(people, positions)
@@ -202,7 +212,18 @@ class Views::Plans::ScenarioMap < Views::Base
     @members.fetch(unit_id, [])
   end
 
-  def positions_in(unit_id) = @map[:positions].select { it[:unit_id] == unit_id }
+  def positions_in(unit_id)
+    @positions ||= @map[:positions].group_by { it[:unit_id] }
+    @positions.fetch(unit_id, [])
+  end
+
+  # Positions whose unit isn't on the map, such as one a later scenario retired.
+  def unplaced_positions
+    @unplaced_positions ||= begin
+      ids = @map[:units].to_set { it[:id] }
+      @map[:positions].reject { ids.include?(it[:unit_id]) }
+    end
+  end
 
   def unassigned
     @unassigned ||= begin

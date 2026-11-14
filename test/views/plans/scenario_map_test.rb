@@ -25,7 +25,7 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
 
   def place(unit_id, allocation, role: "ENG", position_id: nil) = { unit_id:, allocation:, role:, position_id: }
 
-  def position(open_fte) = { position_id: POSITION, unit_id: PAYMENTS, basis: "new", role_name: "Software Engineer", level_name: nil, open_fte: }
+  def position(open_fte, unit_id: PAYMENTS) = { position_id: POSITION, unit_id:, basis: "new", role_name: "Software Engineer", level_name: nil, open_fte: }
 
   def card(html, name) = html.css("[data-map-unit]").find { it.at_css("h3").text == name }
 
@@ -47,6 +47,16 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
 
       assert payments.css("dl > *").all? { it.name == "div" && it.at_css("> dt") && it.at_css("> dd") }
       assert payments.at_css("[data-map-position]")
+    end
+  end
+
+  context "the Unassigned card" do
+    should "list a position whose unit isn't on the map" do
+      gone = "01a1da48-c64a-7529-af90-0f97e41cdaa3"
+      unassigned = card(render_map(positions: [ position(1.0, unit_id: gone) ]), "Unassigned")
+
+      assert_equal "1 position in no unit", unassigned.at_css("header p").text
+      assert_includes unassigned.at_css("[data-map-position]").text, "New position: Software Engineer"
     end
   end
 end
