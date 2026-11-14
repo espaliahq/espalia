@@ -52,6 +52,7 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to map_plan_url(@plan_id, scenario: @q1)
       assert_equal "Saved Lean Q1.", flash[:notice]
       assert_equal "Hire two seniors", scenario_named("Lean Q1")&.description&.reveal
+      assert_equal "Lean Q1", scenario_named("Lean Q1")&.name&.reveal
     end
 
     should "clear a description with a blank" do
@@ -123,7 +124,9 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
 
   private
 
-  def scenario_named(name) = ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.find_by(plan_id: @plan_id, name:) }
+  def scenario_named(name)
+    ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).find { it.name&.reveal == name } }
+  end
 
   def account(role: :member, name: "Someone", **grants)
     user = create(:user)

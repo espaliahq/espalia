@@ -41,9 +41,9 @@ class TeamPlanning::Projections::Scenarios
       when TeamPlanning::Events::ScenarioForked
         write(data[:scenario_id], event, **data.slice(:plan_id, :parent_id, :relation, :name, :starts_on, :ends_on, :forked_by_id))
       when TeamPlanning::Events::ScenarioRenamed
-        TeamPlanningScenario.where(id: data[:scenario_id]).update_all(name: data[:name], updated_at: event.timestamp)
+        TeamPlanningScenario.find_by(id: data[:scenario_id])&.update!(name: data[:name], updated_at: event.timestamp)
       when TeamPlanning::Events::ScenarioDescribed
-        TeamPlanningScenario.where(id: data[:scenario_id]).update_all(description: sealed_description(event), updated_at: event.timestamp)
+        TeamPlanningScenario.find_by(id: data[:scenario_id])&.update!(description: data[:description], updated_at: event.timestamp)
       when TeamPlanning::Events::ScenarioPeriodSet
         follow_tree(data[:plan_id], event, moved: data[:scenario_id], ends_on: Date.iso8601(data[:ends_on]))
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningScenario.where(id: data[:scenario_id]).delete_all
@@ -52,13 +52,6 @@ class TeamPlanning::Projections::Scenarios
   end
 
   private
-
-  # The column keeps the event's sealed form, so destroying the plan's key
-  # forgets every copy at once.
-  def sealed_description(event)
-    TeamPlanningScenario.seal_column(:description, event.data[:description],
-                                     tenant_id: event.metadata[:tenant_id], plan_id: event.data[:plan_id])
-  end
 
   def write(id, event, **attributes)
     row = TeamPlanningScenario.find_or_initialize_by(id:)

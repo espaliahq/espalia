@@ -18,7 +18,7 @@ class Operations::TeamPlanning::RenameScenario < Operations::Base
   def perform
     plan_id = plan_id!
     scenario_id = scenario_id!(:scenario_id)
-    plan = refusing_bad_plans { handler.rename_scenario(plan_id, scenario_id, name: params[:name]) }
-    { plan_id:, scenario_id:, name: plan.scenarios.fetch(scenario_id).name }
+    refusing_bad_plans { handler.rename_scenario(plan_id, scenario_id, name: params[:name]) }
+    { plan_id:, scenario_id:, name: params[:name].squish }
   end
 end
