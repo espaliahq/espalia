@@ -47,6 +47,25 @@ Scenarios are entities inside the plan, not streams of their own. Forking, re-pa
 and removing a scenario are then checked in one aggregate, and one history covers the
 whole plan.
 
+### Scenarios as built
+
+Story 3.1 ([#208](https://github.com/espaliahq/espalia/issues/208)) built the tree.
+
+- The baseline is implicit. Its id is the plan's, it stands on the base date, and it has
+  no period, no alternative and can't be removed.
+- A `then` scenario starts the day after its parent ends, or on the base date after the
+  baseline. It holds its own end, and `ScenarioPeriodSet` moves only that end.
+- An `instead` scenario covers its parent's period exactly, so an alternative of an
+  alternative covers the original's.
+- A parent has at most one `then` step. A second next step is an alternative to the first.
+- A move that would leave a later step ending before it starts is refused, and the
+  refusal names that step.
+- A scenario others fork from can't be removed. Ids are never reused.
+- Scenario names are plain text in the event, as plan names are. Until
+  [#209](https://github.com/espaliahq/espalia/issues/209) shreds them, the name parameter
+  asks callers to leave people's names out.
+- `team_planning_scenarios` holds one row per scenario, with the period the tree gives it.
+
 ### Events
 
 Every change event has the same shape:
