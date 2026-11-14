@@ -519,13 +519,16 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
         end
       end
 
-      should "refuse to end a membership in a unit the Org Graph doesn't hold" do
-        @handler.set_membership(@person_id, @team, **PROVENANCE)
-        OrgUnit.where(id: @team).delete_all
+      should "refuse to end a membership when a Structure rebuild has emptied the units too" do
+        @handler.set_membership(@person_id, @squad, **HELD_BY_ESPALIA)
+        empty_member_list
+        OrgUnit.where(id: @squad).delete_all
+        written = stream_events.size
 
         assert_raises(RuntimeError, match: "Unit not found") do
-          @handler.end_membership(@person_id, @team, **HELD_BY_ESPALIA)
+          @handler.end_membership(@person_id, @squad, **HELD_BY_ESPALIA)
         end
+        assert_equal written, stream_events.size
       end
 
       should "let Espalia end, move and confirm the membership it holds for someone the HRIS now knows" do
