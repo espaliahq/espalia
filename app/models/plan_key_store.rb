@@ -149,11 +149,11 @@ class PlanKeyStore
 
   def refuse_destroyed!(parts)
     plan_key = scope_for(parts.merge(person_id: nil))
-    raise Destroyed, "The plan was deleted" if plan_key.destroyed.exists?(destroyed_reason: "plan_deleted")
+    raise Destroyed, "The plan was deleted" if plan_key.tombstones.exists?(destroyed_reason: "plan_deleted")
     return unless parts[:person_id]
 
     person_destroyed = ActsAsTenant.without_tenant do
-      PlanEncryptionKey.destroyed.exists?(tenant_id: parts[:tenant_id], person_id: parts[:person_id],
+      PlanEncryptionKey.tombstones.exists?(tenant_id: parts[:tenant_id], person_id: parts[:person_id],
                                           destroyed_reason: "person_forgotten") ||
         Person.unscoped.where(tenant_id: parts[:tenant_id], id: parts[:person_id]).where.not(forgotten_at: nil).exists?
     end
