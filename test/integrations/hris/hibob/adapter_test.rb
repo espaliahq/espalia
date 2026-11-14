@@ -1221,6 +1221,21 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal [ "Stale", nil, "inactive" ], @alice.reload.slice(:job_title, :manager_id, :status).values
       end
 
+      should "assign nobody HiBob reports gone while the units rebuild, though their row still reads active" do
+        ActsAsTenant.with_tenant(@tenant) do
+          Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+            PersonDevelopment::CommandHandler.new.unassign_from_framework(@alice.id, FrameworkState::Framework.first.framework_id)
+          end
+        end
+        employees = with_employee("bob-001") { |e| e["isActive"] = false }
+
+        result = while_rebuilding(@tenant, OrgGraph::Projections::Structure) { build_adapter(employees).sync_people }
+
+        assert_equal "active", @alice.reload.status, "the leaving waits for the rebuild"
+        assert_nil PersonFrameworkAssignment.find_by(person_id: @alice.id)
+        assert_operator result[:skipped_inactive], :>=, 1
+      end
+
       should "write a new title through its event" do
         employees = with_employee("bob-001") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Staff Engineer" }
 

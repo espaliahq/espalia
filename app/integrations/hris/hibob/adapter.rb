@@ -57,6 +57,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     @sync_correlation_id = correlation_id.presence || SecureRandom.uuid_v7
     unless_structure_rebuilding do |writable|
       @org_graph_writable = writable
+      @held_back_leaver_ids = []
       sync_people_with_org_graph
     end
   end
@@ -450,7 +451,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param managers [Hash{String => Person, nil}] each manager external id, resolved once
   # @param result [Hash] running tally
   def record_org_graph_differences(rows, managers, result)
-    return result[:people_skipped_while_rebuilding] += rows.size unless org_graph_writable?
+    return hold_back_org_graph_differences(rows, result) unless org_graph_writable?
 
     with_hris_event_context do
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
@@ -471,6 +472,13 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         result[:errors] << { person_id: person.id, error: e.message }
       end
     end
+  end
+
+  # A cut-over tenant's status moves only through these events, so a leaver
+  # the rebuild held back still reads as active, and Pass 5 must not assign them.
+  def hold_back_org_graph_differences(rows, result)
+    @held_back_leaver_ids = rows.filter_map { |person, row| person.id if row[:status] == "inactive" }
+    result[:people_skipped_while_rebuilding] += rows.size
   end
 
   # A failed catalogue read mirrors nothing, so no unit retires for want of
@@ -744,7 +752,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       resolution.rows(Person.where(id: touched_person_ids)).each do |row|
         # HiBob returns inactive employees too (show_inactive: true) —
         # they are offboarded by Pass 3b, never (re-)assigned here.
-        if row.status == Integrations::HrisPersonRow::STATUS_INACTIVE
+        if row.status == Integrations::HrisPersonRow::STATUS_INACTIVE || held_back_leaver?(row.person)
           result[:skipped_inactive] += 1
           next
         end
@@ -754,6 +762,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       end
     end
   end
+
+  def held_back_leaver?(person) = Array(@held_back_leaver_ids).include?(person.id)
 
   # Dispatches the command a resolved row calls for, or tallies why it can't.
   #
