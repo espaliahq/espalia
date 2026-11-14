@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Splits a unit into new units beside it: each placed member moves to their
-# successor, anyone unplaced is left in no team, and the unit retires.
+# successor, anyone unplaced leaves it, and the unit retires.
 class Operations::OrgGraph::SplitUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
 
@@ -9,14 +9,14 @@ class Operations::OrgGraph::SplitUnit < Operations::Base
     type: "object",
     additionalProperties: { type: "string" },
     description: "person_id => the name of the successor they move to, one of successor_names. Members left " \
-                 "out end their membership and show as in no team."
+                 "out end their membership, and those with no other live unit show as in no team."
   }.freeze
 
   description "Split a unit into two or more new units from effective_on (today by default). The successors " \
               "take the unit's level and parent. Each person placements names moves to their successor with " \
-              "the same role and allocation; anyone not named leaves and shows as in no team. The unit " \
-              "retires, and everything shares one cause. A unit with live sub-units, or one an HRIS " \
-              "supplies, is refused."
+              "the same role and allocation; anyone not named leaves, and shows as in no team if " \
+              "they have no other live unit. The unit retires, and everything shares one cause. A unit with " \
+              "live sub-units, or one an HRIS supplies, is refused."
   approval :in_app
 
   parameter :unit_id, String, required: true

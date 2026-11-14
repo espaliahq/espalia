@@ -5,9 +5,9 @@ class Operations::OrgGraph::RetireUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
 
   description "Retire a unit in the Org Graph from effective_on (today by default), ending every membership " \
-              "in it, so its people show as in no team. A unit with live sub-units is refused until they are " \
-              "moved or retired, and one an HRIS supplies is retired in the HRIS. Refused unless the caller " \
-              "is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it."
+              "in it. Its people with no other live unit then show as in no team. A unit with live sub-units " \
+              "is refused until they are moved or retired, and one an HRIS supplies is retired in the HRIS. " \
+              "Refused unless the caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it."
   approval :in_app
 
   parameter :unit_id, String, required: true

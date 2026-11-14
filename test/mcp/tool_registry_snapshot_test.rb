@@ -3198,7 +3198,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "org_graph_retire_unit",
-        "description" => "Retire a unit in the Org Graph from effective_on (today by default), ending every membership in it, so its people show as in no team. A unit with live sub-units is refused until they are moved or retired, and one an HRIS supplies is retired in the HRIS. Refused unless the caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it.",
+        "description" => "Retire a unit in the Org Graph from effective_on (today by default), ending every membership in it. Its people with no other live unit then show as in no team. A unit with live sub-units is refused until they are moved or retired, and one an HRIS supplies is retired in the HRIS. Refused unless the caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -3309,7 +3309,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "org_graph_split_unit",
-        "description" => "Split a unit into two or more new units from effective_on (today by default). The successors take the unit's level and parent. Each person placements names moves to their successor with the same role and allocation; anyone not named leaves and shows as in no team. The unit retires, and everything shares one cause. A unit with live sub-units, or one an HRIS supplies, is refused.",
+        "description" => "Split a unit into two or more new units from effective_on (today by default). The successors take the unit's level and parent. Each person placements names moves to their successor with the same role and allocation; anyone not named leaves, and shows as in no team if they have no other live unit. The unit retires, and everything shares one cause. A unit with live sub-units, or one an HRIS supplies, is refused.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -3334,7 +3334,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
               "additionalProperties" => {
                 "type" => "string"
               },
-              "description" => "person_id => the name of the successor they move to, one of successor_names. Members left out end their membership and show as in no team."
+              "description" => "person_id => the name of the successor they move to, one of successor_names. Members left out end their membership, and those with no other live unit show as in no team."
             }
           },
           "required" => [ "unit_id", "successor_names" ],
