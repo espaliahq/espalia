@@ -475,7 +475,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   end
 
   # A cut-over tenant's status moves only through these events, so a leaver
-  # the rebuild held back still reads as active, and Pass 5 must not assign them.
+  # the rebuild held back still reads as active: Pass 3b offboards them, and
+  # Pass 5 must not assign them again.
   def hold_back_org_graph_differences(rows, result)
     @held_back_leaver_ids = rows.filter_map { |person, row| person.id if row[:status] == "inactive" }
     result[:people_skipped_while_rebuilding] += rows.size
@@ -663,7 +664,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #
   # @param result [Hash] running tally
   def offboard_inactive(result)
-    inactive_ids = Person.inactive.select(:id)
+    inactive_ids = Person.inactive.or(Person.where(id: Array(@held_back_leaver_ids))).select(:id)
 
     open_enrollments = AssessmentCycleEnrollment.active
       .where(person_id: inactive_ids)
