@@ -59,16 +59,17 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       error = assert_raises(RuntimeError) do
         as_tenant { @handler.define_taxonomy(levels(%w[Department Team]), effective_on: @today) }
       end
-      assert_match "holds units", error.message
+      assert_equal "Squad can't be removed, as it holds Checkout", error.message
     end
 
     should "refuse to drop a level a retired unit held" do
       create_unit(@squad, "Checkout", level: "Squad")
       as_tenant { @handler.retire_unit(@squad, effective_on: @today) }
 
-      assert_raises(RuntimeError) do
+      error = assert_raises(RuntimeError) do
         as_tenant { @handler.define_taxonomy(levels(%w[Department Team]), effective_on: @today) }
       end
+      assert_equal "Squad can't be removed, as it held Checkout", error.message
     end
 
     should "refuse a level id that isn't a UUID" do

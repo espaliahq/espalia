@@ -60,14 +60,14 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String] when the taxonomy took effect
   # @param defined_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the levels are empty, blank or duplicated
-  # @raise [RuntimeError] if a level in use is dropped or reordered
+  # @raise [RuntimeError] if a level any unit has held is dropped, naming the
+  #   units, or a level in use is reordered
   def define_taxonomy(levels, effective_on:, defined_by_id: nil)
     new_providers = new_level_providers(levels)
     levels = normalise_levels(levels)
     return if levels == @levels
 
-    dropped = @units.values.map(&:level_id).uniq - level_ids(levels)
-    raise "Can't drop a level that holds units: #{dropped.join(', ')}" if dropped.any?
+    @levels.reject { |level| level_ids(levels).include?(level[:level_id]) }.each { ensure_never_held!(it) }
 
     in_use = live_units.map(&:level_id).uniq
 
@@ -140,7 +140,6 @@ class OrgGraph::StructureAggregate
       raise "#{level[:name]} comes from #{level_provider(level_id)}; hand it back to Espalia before removing it"
     end
 
-    ensure_never_held!(level)
     define_taxonomy(@levels - [ level ], effective_on:, defined_by_id:)
   end
 
