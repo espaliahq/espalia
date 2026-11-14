@@ -7,6 +7,8 @@
 # Incremental disclosure: defaults to `summary` (units with member counts). Pass
 # `mode: "full"` for each person's facts and every membership, and `unit_id`
 # to narrow either mode to one unit and the units under it.
+#
+# The read behind [#123](https://github.com/espaliahq/espalia/issues/123).
 class Operations::OrgGraph::AsOf < Operations::Base
   include Operations::OrgGraph::DateParameter
 

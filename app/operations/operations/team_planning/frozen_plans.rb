@@ -3,6 +3,8 @@
 # The plans no editor can reach any more, for a tenant admin to delete. It
 # says only that each exists, when it froze and how many viewers it has:
 # never its name, contents or members.
+#
+# A plan is frozen when none of its editors is active and remembered.
 class Operations::TeamPlanning::FrozenPlans < Operations::Base
   description "List the Team Planning plans that are frozen because none of their editors is still in the " \
               "organisation. Each is a plan id, the day it froze (null when no leaving date is known) and the " \
