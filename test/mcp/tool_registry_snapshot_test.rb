@@ -2625,7 +2625,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "org_graph_add_editor",
-        "description" => "Make an active person with an account in this organisation an Org Graph editor, so they may change its taxonomy, providers, units and people's facts. Admins already may. Returns the list as org_graph_editors reads it.",
+        "description" => "Make an active person with an account in this organisation an Org Graph editor, so they may change its providers, units and people's facts. Admins already may, and only admins may add or reorder its levels. Returns the list as org_graph_editors reads it.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
