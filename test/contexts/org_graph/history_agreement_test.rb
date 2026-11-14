@@ -295,6 +295,20 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
       assert_empty live_allocations
     end
 
+    should "let her membership end before both of two changes made together, dated out of order, once they are changed back" do
+      later("2026-04-15") do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01", allocation: 0.8)
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.6)
+      end
+      later("2026-04-16") { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back_group("request-1") }
+
+      later("2026-04-17") { @handler.end_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-15") }
+
+      assert_nil history("membership", "2026-02-16", key: @payments)
+      assert_empty live_allocations
+    end
+
     should "let her be set to terms a change-back withdrew" do
       later("2026-04-15") do
         request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")

@@ -7,8 +7,8 @@
 # A set dated earlier than the terms held moves the start back and keeps the
 # later terms. A change-back dated on the day of the change it reverses
 # withdraws that change, as History does: the change drops out, the rest is
-# folded again, and the change-back counts only where it differs from what
-# is left.
+# folded again, and the change-back counts only where it differs from the
+# terms left in effect on its own date.
 #
 class OrgGraph::MembershipFold
   EVENTS = [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipMoved ].freeze
@@ -75,10 +75,15 @@ class OrgGraph::MembershipFold
     data = event.data
     case event
     when OrgGraph::Events::MembershipSet
-      @memberships[data[:unit_id]]&.slice(:allocation, :role) == data.slice(:allocation, :role)
+      as_of(data[:effective_on])[data[:unit_id]]&.slice(:allocation, :role) == data.slice(:allocation, :role)
     when OrgGraph::Events::MembershipEnded then !@memberships.key?(data[:unit_id])
     when OrgGraph::Events::MembershipMoved then !@memberships.key?(data[:from_unit_id]) && @memberships.key?(data[:unit_id])
     end
+  end
+
+  def as_of(on)
+    on = on.to_s
+    OrgGraph::MembershipFold.new.tap { |fold| @log.each { fold.apply(it) if it.data[:effective_on].to_s <= on } }.memberships
   end
 
   def step(event)
