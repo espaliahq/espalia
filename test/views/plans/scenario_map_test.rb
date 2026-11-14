@@ -81,4 +81,13 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
       assert_includes unassigned.at_css("[data-map-position]").text, "New position: Software Engineer"
     end
   end
+
+  should "number positions that read alike oldest first, wherever the map lists them" do
+    older, newer = [ "01a1da48-c64a-7529-af90-0f97e41cdab1", "01a1da48-c64a-7529-af90-0f97e41cdab2" ]
+    alike = [ newer, older ].map { position(1).merge(position_id: it, level_id: "e2") }
+    names = Views::Plans::ScenarioMap.position_names(alike + [ position(1).merge(level_id: "e3") ])
+
+    assert_equal({ older => "New position: Software Engineer (1)", newer => "New position: Software Engineer (2)",
+                   POSITION => "New position: Software Engineer" }, names)
+  end
 end

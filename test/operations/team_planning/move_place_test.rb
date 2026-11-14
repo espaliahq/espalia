@@ -21,6 +21,8 @@ class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
       @ada = create(:person, tenant: @tenant, name: "Ada Quill")
       @bo = create(:person, tenant: @tenant, name: "Bo Reyes")
       @cy = create(:person, tenant: @tenant, name: "Cy Loner")
+      @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+      @e2 = create(:framework_level, tenant: @tenant, role_id: @engineer.role_id, ordinal: 2, title: "Engineer II")
       structure.define_taxonomy([ { level_id: level, name: "Squad" } ], effective_on: "2026-01-01")
       structure.create_unit(@payments, "Payments", level_id: level, effective_on: "2026-01-01")
       structure.create_unit(@growth, "Growth", level_id: level, effective_on: "2026-01-01")
@@ -49,7 +51,12 @@ class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
 
   def places(person, scenario_id: @q1)
     call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id:)[:people]
-      .find { it[:id] == person.id }[:memberships].map { it.slice(:unit_id, :allocation, :role).compact }
+      .find { it[:id] == person.id }[:memberships].map { it.slice(:position_id, :unit_id, :allocation, :role).compact }
+  end
+
+  def open_position(unit_id: @growth)
+    call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id,
+                                                level_id: @e2.level_id, unit_id:, fte: 1, basis: "new")[:position_id]
   end
 
   def refusal(person = @ada, **params)
@@ -101,5 +108,43 @@ class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
     assert_equal "Ada Quill holds no such place", refusal(from_unit_id: "unassigned", to_unit_id: @growth, allocation: 1)
     assert_equal "This scenario has no such unit", refusal(from_unit_id: @payments, to_unit_id: SecureRandom.uuid_v7, allocation: 1)
     assert_equal [ @payments, @platform ].sort, places(@ada).pluck(:unit_id).sort
+  end
+
+  context "into a position" do
+    setup { @position = open_position }
+
+    should "place the person in the position, replacing a place they already hold there" do
+      move(@cy, from_unit_id: "unassigned", to_position_id: @position, allocation: 0.5)
+      move(@ada, from_unit_id: @payments, to_position_id: @position, allocation: 1, role: "Lead")
+      move(@ada, from_unit_id: @platform, to_position_id: @position, allocation: 0.4)
+
+      assert_equal [ { position_id: @position, unit_id: @growth, allocation: 0.5 } ], places(@cy)
+      assert_equal [ { position_id: @position, unit_id: @growth, allocation: 0.4 } ], places(@ada)
+    end
+
+    should "fill a full position anyway, and let Attention say it is overfilled" do
+      move(@ada, from_unit_id: @payments, to_position_id: @position, allocation: 1)
+      move(@cy, from_unit_id: "unassigned", to_position_id: @position, allocation: 1)
+
+      assert_equal [ { position_id: @position, unit_id: @growth, allocation: 1.0 } ], places(@cy)
+      items = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @q1)[:items]
+      assert_equal [ [ @position, "Overfilled by 1 FTE" ] ], items.map { it.values_at(:subject_id, :reason) }
+    end
+
+    should "refuse a position the scenario lacks, and both destinations or neither" do
+      assert_equal "This scenario has no such position",
+                   refusal(from_unit_id: @payments, to_position_id: SecureRandom.uuid_v7, allocation: 1)
+      assert_equal "Give to_unit_id or to_position_id, not both",
+                   refusal(from_unit_id: @payments, to_unit_id: @growth, to_position_id: @position, allocation: 1)
+      assert_equal "provide at least one of: to_unit_id, to_position_id", refusal(from_unit_id: @payments, allocation: 1)
+      assert_equal [ @payments, @platform ].sort, places(@ada).pluck(:unit_id).sort
+    end
+
+    should "refuse a position whose unit the scenario retired" do
+      call(Operations::TeamPlanning::RetireUnit, plan_id: @plan_id, scenario_id: @q1, unit_id: @growth)
+
+      assert_equal "This scenario has no such position",
+                   refusal(from_unit_id: @payments, to_position_id: @position, allocation: 1)
+    end
   end
 end
