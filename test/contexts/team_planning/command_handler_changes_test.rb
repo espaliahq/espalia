@@ -5,10 +5,12 @@ require "test_helper"
 class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
   class TitleSet < TeamPlanning::Events::Change
     def self.facet = "title"
+    def self.apply_to(map, _data) = map
   end
 
   class SiteSet < TeamPlanning::Events::Change
     def self.facet = "site"
+    def self.apply_to(map, _data) = map
   end
 
   # Runs a block while a write is between loading the plan and storing it.

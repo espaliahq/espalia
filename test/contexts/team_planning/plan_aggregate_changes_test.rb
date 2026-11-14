@@ -6,6 +6,11 @@ class TeamPlanning::PlanAggregateChangesTest < ActiveSupport::TestCase
   class TitleSet < TeamPlanning::Events::Change
     def self.facet = "title"
     def self.end_state(end_state) = end_state.tap { raise TeamPlanning::Error, "A title can't be blank" if it[:title].blank? }
+    def self.apply_to(map, _data) = map
+  end
+
+  class Unfinished < TeamPlanning::Events::Change
+    def self.facet = "title"
   end
 
   setup do
@@ -48,13 +53,16 @@ class TeamPlanning::PlanAggregateChangesTest < ActiveSupport::TestCase
     assert_equal [ [ "ada", "title" ] ], @plan.changes_in(@q1).map(&:key).uniq
   end
 
-  should "refuse an unknown scenario, an end state the kind refuses, anything not a change, and a deleted plan" do
+  should "refuse an unknown scenario, an end state the kind refuses, anything not a whole change, and a deleted plan" do
     assert_equal "This plan has no such scenario", refusal { set(SecureRandom.uuid_v7, "Senior Engineer") }
     assert_equal "A title can't be blank", refusal { set(@q1, " ") }
     assert_raises(ArgumentError) do
       @plan.set_change(TeamPlanning::Events::ScenarioRemoved, scenario_id: @q1, subject_id: "ada", set_by_id: @editor_id)
     end
 
+    assert_raises(ArgumentError) do
+      @plan.set_change(Unfinished, scenario_id: @q1, subject_id: "ada", set_by_id: @editor_id, end_state: { title: "Lead" })
+    end
     taken = assert_raises(ArgumentError) do
       @plan.set_change(TitleSet, scenario_id: @q1, subject_id: "ada", set_by_id: @editor_id,
                                  end_state: { title: "Lead", "set_by_id" => "someone else", plan_id: "another" })

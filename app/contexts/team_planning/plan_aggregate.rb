@@ -224,6 +224,7 @@ class TeamPlanning::PlanAggregate
   # @raise [ArgumentError] for a kind that is not a change, or an end state naming a field every change holds
   def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {})
     raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change
+    raise ArgumentError, "#{kind} must name its facet and say how it lands on a map" unless kind.complete?
 
     ensure_open!
     live_scenario!(scenario_id)

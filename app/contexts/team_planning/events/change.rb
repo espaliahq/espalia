@@ -33,6 +33,9 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [TeamPlanning::Baseline::Map] the map with this end state in place
   def self.apply_to(map, data) = raise(NotImplementedError, "#{name} must say how it lands on a map")
 
+  # @return [Boolean] whether this kind names its facet and says how it lands
+  def self.complete? = %i[facet apply_to].all? { method(it).owner != TeamPlanning::Events::Change.singleton_class }
+
   # @return [Array(String, String)] what the last change wins over
   def key = [ data[:subject_id], self.class.facet ]
 end
