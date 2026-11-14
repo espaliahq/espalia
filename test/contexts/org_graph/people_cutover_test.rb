@@ -32,6 +32,17 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
     end
   end
 
+  should "record an HRIS person as their HRIS's while a Structure rebuild has emptied the fact providers" do
+    unrecorded = as_tenant { create(:person, tenant: @tenant, job_title: "Analyst", external_id: "bob-3", hris_source: "hibob") }
+    OrgGraph::Projections::Structure.reset!(tenant: @tenant)
+
+    report = @cutover.run(apply: true)
+
+    assert report.applied
+    assert_equal "hibob", stream(unrecorded).sole.data[:provider]
+    assert_equal "espalia", stream(@by_hand).sole.data[:provider]
+  end
+
   context "a clean cut-over" do
     setup { @report = @cutover.run(apply: true) }
 
