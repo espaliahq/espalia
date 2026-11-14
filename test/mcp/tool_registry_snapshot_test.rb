@@ -2772,7 +2772,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Change back one entry of an Org Graph unit's activity, by its id from " \
           "org_graph_activity. Writes the inverse as a new change; history keeps both. Refused, " \
           "with the reason, for a change the caller couldn't make, one another provider supplied, " \
-          "one already changed back or one a later change has replaced.",
+          "one already changed back, one a later change has replaced, or a backdated change that " \
+          "moved the day someone joined a unit earlier.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
