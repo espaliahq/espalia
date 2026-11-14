@@ -76,7 +76,7 @@ Every change event has the same shape:
   scenario_id:,
   subject:,     # what the change is about: a person, a position, a unit, a rule, a budget line
   state:,       # where the subject ends up; never a step from a previous state
-  note:,        # why; shreddable under the plan key
+  note:,        # why; shreddable under the subject's key: a person's in the plan, else the plan's
   set_by:
 }
 ```
@@ -86,13 +86,14 @@ Every change event has the same shape:
 | Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
-| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
+| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
 | Budget | `BudgetLineSet`, `BudgetLineCut`, `PositionFundingSet` (position draws on budget lines) |
 | Plan data | `PlanDataSet` (person, field, value), `PlaceholderSet` (a hire the HRIS doesn't know: label, level, FTE) |
 | Rules | `RuleSet` (configuration, capacity model, budget strictness, guardrail, assumption) |
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
 | Undo | `ChangeUndone`, `ChangeRedone`, each naming the event it reverses |
+| Notes | `ChangeNoted`: a change's or pin's note written, rewritten or cleared |
 | The Org Graph | `PlanRebased` (the date the plan now stands on, the one before, and the conflicts it carries) |
 | Reality | `StepClosed`, `PlanApproved`, `ChangeRaised`, `ChangeApplied` |
 
@@ -137,6 +138,34 @@ In code, each change kind subclasses `TeamPlanning::Events::Change`, names its f
 says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
+
+### The timeline as built
+
+`TeamPlanning::Timeline` (the `team_planning_timeline` tool) reads one timeline path and
+stores nothing. It resolves each step as the map does, then lays the steps out as columns.
+The tab ([#289](https://github.com/espaliahq/espalia/issues/289)) draws what it returns and
+decides none of these rules:
+
+- **Blocks.** A unit is one block across the columns it lives in, so a rename changes the
+  label, not the block. A unit that succeeds exactly one other continues that block. A split
+  or a merge starts new blocks that name the ones they carry on from.
+- **Lanes.** A lane belongs to a person and lasts while they are on the map, placed or not.
+  Someone in two places at once has one lane with two bars, and that is no move.
+- **Moves.** A move names the units a person left and joined between two columns. Carrying
+  on into a unit's successor in the same block is no move. Placed in
+  no live unit reads as Unassigned, so a lane never vanishes because its person lost a place.
+- **Backfills.** A leaver's lane records the step they leave in, and the position that
+  backfills them carries on in it, naming who it replaces. A new position gets a lane of its
+  own, and the first person to fill it takes that lane, so a seat and its hire read as one head.
+  A seat shared by two hires gives its lane to one of them. A backfill shared by two leavers
+  runs in the lane of the first, the one its `replaces_id` names.
+- **Order.** Blocks come in the order they first appear. Lanes come by the column they first
+  appear in, people before positions, then by name and id.
+- **Names.** Lanes and blocks carry ids, and names come from the map's own lookup, so a
+  forgotten person keeps their lane under Person::FORMER_MEMBER.
+
+The baseline is read once and every step resolves over it, so each column sees the same Org
+Graph and the read costs one Org Graph query whatever the path's length.
 
 ### Unit changes as built
 
@@ -232,8 +261,12 @@ facet, so a later step or an alternative can have the person stay.
 - **Planned, not Org Graph leavers.** Someone the Org Graph has leave by the base date is off
   the map from the start, and the plan shows where it still places them (decision 6 in the
   plan). A departure is the plan's own statement.
-- **The step is the date for now.** Costing part of a period (5.4) adds an optional leaving
-  date within the step.
+- **A leaving date is optional.** `leaves_on` names their last day, within the step's
+  period, and cost splits the step there: the leaver costs up to it, the backfill from the
+  day after. Without one the step is the date, so the leaver costs nothing in it and the
+  backfill carries the whole step. A departure set before dates existed carries no
+  `leaves_on` and reads the same way. The baseline has no period, so a departure there
+  takes no date.
 
 ### Needing attention as built
 
@@ -301,7 +334,7 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. The kinds so far are `capacity_model` (7.1) and `on_cost` (5.2), both below; 8.1 brings more.
+object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2) and `working_hours` (5.4), all below; 8.1 brings more.
 
 `RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
 that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
@@ -342,9 +375,13 @@ once, at report time (5.3).
 
 The `on_cost` rule chooses the model and its params. Its default adds nothing, so a plan
 costs base pay alone until a tenant or plan chooses. Read at a seat's unit, a unit can
-price its subtree differently. 5.4 prices positions with
+price its subtree differently. Cost prices each seat with
 `TeamPlanning::RuleKinds::OnCost.on_cost_of`. Rates are tenant configuration, as pay bands
 are, not a person's data, so the rule is not shreddable.
+
+The `working_hours` rule says how many hours a full-time seat works in a year, so an
+hourly pay band can price a year. Its default is 40 hours a week for 52 weeks: 2,080.
+A month band is twelve months; a year band is itself.
 
 ### Capacity as built
 
@@ -466,6 +503,44 @@ flatters a scenario.
   their backfill or nowhere. Reopening those positions too would count the seat twice
   whenever a backfill exists.
 
+### Cost as built
+
+`TeamPlanning::Cost` prices a scenario over its period and prices the baseline over the
+same days, so the two compare ([#288](https://github.com/espaliahq/espalia/issues/288)).
+The baseline has no period of its own, so it is never the scenario costed.
+`team_planning_cost` sends the totals, each unit and each cost centre, and the working of
+every seat only for a unit the caller names.
+
+- **A seat** is a person, or the FTE a position's occupants leave open, as capacity counts it.
+- **Its level** is the person's own, a planned one winning. When theirs resolves to none,
+  the position's level prices it, and the working says so (`level_source`). An open seat
+  takes its position's level.
+- **Its band** is the one for that level and the person's country, else the band for any
+  location. An open seat has no country, so it takes the band for any location.
+- **Its figure** is the band's midpoint for a full-time year (`working_hours` for an hourly
+  band), times FTE, times its place's share of the seat, times the days held out of 365.
+  The `on_cost` rule at its unit adds on-cost. A person's places always share their whole
+  seat, so units and cost centres sum to the plan's total.
+- **A leaver and their backfill** split one seat at the leaving date and never overlap:
+  the leaver costs up to it, the backfill from the next day. A leaver with no date costs
+  nothing in the period, and their backfill holds the whole of it. A backfill for several
+  leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
+  period any FTE no leaver opens.
+- **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
+  until positions carry a cost-centre label in 6.2. No cost centre is a bucket of its own,
+  counted like any other.
+- **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
+  that refuses it, or a level or FTE lost with a forgotten person's key), never counted
+  as zero.
+
+Every figure stays in its band's currency, exact, and the totals hold one sum per currency.
+Each converts once, at the read, at the rate in force on the period's first day. A missing
+rate leaves the converted total empty and names the pair and the date. Only the display
+rounds. Plans reprice live: a changed band changes every plan's cost, and the report says
+when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
+time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
+to a rate, reprices plans too but does not move the stamp.
+
 ### Clearing and pinning
 
 `ChangeCleared` hands one facet of one subject back to the scenario's parent. The aggregate
@@ -517,7 +592,7 @@ make ends what they can redo, as in an editor. Undo and redo are for editors, li
 other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
-undo and redo, in order, with who made it and, while it stands undone, who undid it.
+undo, redo and note, in order, with who made it and, while it stands undone, who undid it.
 The baseline's history also lists each update to today, with the base it left and the
 conflicts it carried.
 `team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
@@ -528,7 +603,58 @@ needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeplo
 history and overrides projections read events through one mapping,
 `TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
 never reaches either table: the history names the field in `sealed_fields` and leaves
-the value out. Removing a scenario drops its history.
+the value out. The note is the one exception, held in a sealed column (see below).
+Removing a scenario drops its history.
+
+### Notes
+
+**As built in 3.13b** ([#273](https://github.com/espaliahq/espalia/issues/273)): every
+change and pin may carry a `note`, the planner's reason, such as why someone moves.
+**The note follows the key of the change's subject.**
+
+- **A note on a change to a person seals under that person's key in the plan.** A kind
+  whose subject is a person declares `about_a_person`: `AssignmentSet`, `CapacitySet`,
+  `DepartureSet`, `DepartureWithdrawn`, `LevelSet`, `PlanDataSet` and `ReportingLineSet`. Forgetting the
+  person removes the note with the level, the pay and the rest. An assignment of a
+  placeholder hire seals under the placeholder's id, a key only deleting the plan
+  destroys.
+- **Any other note seals under the plan's key**: on a unit, a position, a rule, a
+  placeholder hire or a succession. The `Change` base declares `shreddable :note, by:
+  :plan`, so a new kind gets that with nothing declared. Forgetting a person leaves such a
+  note readable, the accepted limit of free text
+  ([#110](https://github.com/espaliahq/espalia/issues/110)), so the tools ask planners to
+  keep personal details out of it.
+- **Every copy chooses the same key.** `ChangePinned`, `ChangeNoted` and both read models
+  seal through `TeamPlanning::ChangeKinds::NOTED_PERSON`, which reads the subject and
+  facet: the subject's key when the facet's kinds are about a person, else the plan's.
+  Kinds that share a facet share a subject, and a test holds them to it.
+- **Deleting the plan removes every note**, since it destroys every key the plan holds.
+  Destroying the plan's own key alone would leave notes on people readable under theirs.
+- **Once removed, a note reads as `{ removed: true }`**, as a value does. The history still
+  shows that a note was written, by whom and when.
+- **A note is never part of the end state.** `note` is in `Change::FIELDS`, which every end
+  state leaves out, so resolution, `same_end_state?`, status and drift read two changes
+  that differ only in their notes as the same. An end state can't set `note`.
+- **Every write tool takes `note`,** at most 2,000 characters, through
+  `Operations::TeamPlanning::ChangeWrite`. A blank note is none, and a change without one
+  stores no note field, as it did before notes.
+- **`ChangeNoted` rewrites or clears a note** on a change or pin that still stands in its
+  scenario: not undone, not cleared and not replaced. It carries the noted event's id, its
+  subject and facet, the note (nil clears it) and who wrote it. It is not an entry of the
+  log, so it can't be undone and doesn't end what anyone can redo. `team_planning_note_change`
+  exposes it; it is for editors, like any other change, so a frozen plan refuses it.
+- **The note follows its change.** The overrides row holds the note of the change in
+  effect. An undo or redo that brings a change back brings the last note written on it
+  before then, read from the plan stream.
+- **Both read models seal the note.** `team_planning_overrides.note` and
+  `team_planning_history_entries.note` are shreddable columns under the same key as their
+  event, copying the sealed form from it, so forgetting the person or deleting the plan
+  makes every copy unreadable at once. A history row for a change or pin keeps the note
+  it was made with; each `note` row keeps one rewrite and names the change in
+  `noted_event_id`. `team_planning_overrides` and `team_planning_history` show it as
+  `{ value: }`.
+- **No rebuild.** No stored event held a note before 3.13b and the new columns start empty,
+  so neither projection's `CODE_VERSION` moved.
 
 ### Two people editing at once
 
@@ -707,7 +833,9 @@ name, and a subject only the plan holds has none. `Raised` will join these once
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not
 in the HRIS yet) are `PlanDataSet` events. A value about a named person, such as their
 pay or a corrected level, is shreddable under that person's key in the plan. Every other
-value, every note and every scenario description are shreddable under the plan's key.
+value, every note on a change whose subject is not a person and every scenario
+description are shreddable under the plan's key. A note follows its subject's key, so a
+note on a change to a person seals under that person's key in the plan.
 Deleting the plan deletes every key it holds. The events remain and still say that
 something was set; what it was is unreadable at once, and gone for good once the backups
 taken before the deletion have expired.
@@ -942,7 +1070,7 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 | Cost and budget | Approved, funded, remaining and unfunded, per unit and cost centre. |
 | Capacity | Per model, per unit, with each person's working. |
 | Capability profile | Per unit and per position, under the existing cohort rule. |
-| Timeline | One path through the scenario tree, with lanes and moves. |
+| Timeline | One path through the scenario tree, with lanes and moves. Read on demand by `TeamPlanning::Timeline`, not stored. |
 | Headcount walk | Per step and unit: opening, hires, known and expected departures, transfers, closing. Drawn as a lane of the timeline. |
 | Checks | Every warning, with guardrail checks marked. |
 | Change list | The approved changes with their derived status. |
@@ -978,6 +1106,9 @@ that writes `PersonForgotten` destroys that person's key in every plan at once. 
 value a plan held about them, such as their pay, a corrected level or a planned
 promotion, becomes unreadable. They stay in each plan's history as a former member with no identity.
 
-One thing can still name them: a note. A note is free text under the plan's key, so one
-that mentions the person stays readable to the plan's members until the plan is
-deleted. Deleting the plan is the remedy when that is not acceptable.
+Notes on changes to them go too, since a note follows the key of its change's subject.
+One thing can still name them: a note on another change, such as a unit's or a rule's.
+That note is free text under the plan's key, so one that mentions the person stays
+readable to the plan's members until the plan is deleted
+([#110](https://github.com/espaliahq/espalia/issues/110)). The note tools tell planners
+to keep personal details out of it. Deleting the plan is the remedy when that is not acceptable.

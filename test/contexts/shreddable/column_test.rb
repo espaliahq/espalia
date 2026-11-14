@@ -236,6 +236,21 @@ class Shreddable::ColumnTest < ActiveSupport::TestCase
       assert_equal NOTE, ActsAsTenant.with_tenant(@tenant) { ids.find(row.id).note.reveal }
     end
 
+    should "seal under the key of the person a callable names, or the plan's when it names none" do
+      tenant_id = @tenant.id
+      identifiers = [ tenant_id, nil ].map do |person_id|
+        by_person = Class.new(Note) { shreddable_column :note, by: :person, person: ->(_row) { person_id } }
+        by_person.define_singleton_method(:name) { "PersonNamedByCallable" }
+        row = ActsAsTenant.with_tenant(@tenant) { by_person.create!(tenant_id:, plan_id: SecureRandom.uuid_v7, note: NOTE) }
+
+        assert_equal NOTE, ActsAsTenant.with_tenant(@tenant) { by_person.find(row.id).note.reveal }
+        [ row.plan_id, JSON.parse(stored(row.plan_id))["identifier"] ]
+      end
+
+      assert_equal [ PlanKeyStore.person_identifier(tenant_id, identifiers.first.first, tenant_id),
+                     PlanKeyStore.plan_identifier(tenant_id, identifiers.last.first) ], identifiers.map(&:last)
+    end
+
     should "refuse to order, match, group or pluck it" do
       [
         -> { Note.order(:note) },

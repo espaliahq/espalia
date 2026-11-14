@@ -160,12 +160,13 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
     seat = open_position(@q1)
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
                                                   placements: [ { position_id: seat, allocation: 1 } ])
-    assert_equal({ plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, position_id: seat }, depart(@q1, @ada, position_id: seat))
+    assert_equal({ plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, position_id: seat, leaves_on: nil }, depart(@q1, @ada, position_id: seat))
 
     [ @q1, @lean ].each do |step|
       leaver = person_in(step, @ada)
       assert leaver[:leaving], step
       assert_equal seat, leaver[:backfill_position_id]
+      assert_nil leaver[:leaves_on]
       position = map(step)[:positions].find { it[:position_id] == seat }
       assert_equal [], position[:occupants], "a leaver never fills their backfill"
       assert_in_delta 1.0, position[:open_fte]
@@ -231,6 +232,29 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
     positions = call(Operations::TeamPlanning::Positions, plan_id: @plan_id, scenario_id: @q2)
     assert_equal [ @ada.id ], positions[:positions].first[:backfill_for_ids]
     assert_equal Person::FORMER_MEMBER, positions[:names].fetch(@ada.id)
+  end
+
+  should "hold a leaving date within the step, and carry it with them once they've gone" do
+    seat = open_position(@q1)
+    assert_equal "2026-04-30", depart(@q1, @ada, position_id: seat, leaves_on: "2026-04-30")[:leaves_on]
+    assert_equal [ true, "2026-04-30" ], person_in(@q1, @ada).values_at(:leaving, :leaves_on), "the step they leave in shows when"
+    call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @q2, subject_id: @ada.id, facet: "departure")
+
+    depart(@q1, @cy)
+
+    assert_equal [ { person_id: @ada.id, position_id: seat, leaves_on: "2026-04-30" }, { person_id: @cy.id, position_id: nil } ],
+                 map(@q2)[:departed].sort_by { it[:person_id] == @ada.id ? 0 : 1 }
+  end
+
+  should "refuse a leaving date outside the step, in the baseline, or that isn't a date" do
+    assert_equal "The leaving date must fall within the scenario's period, 2026-03-02 to 2026-06-30",
+                 refusal(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, leaves_on: "2026-07-01")
+    assert_equal "The leaving date must fall within the scenario's period, 2026-07-01 to 2026-09-30",
+                 refusal(Operations::TeamPlanning::SetDeparture, scenario_id: @q2, person_id: @ada.id, leaves_on: "2026-06-30")
+    assert_equal "The baseline has no period, so a departure in it takes no leaving date",
+                 refusal(Operations::TeamPlanning::SetDeparture, scenario_id: @plan_id, person_id: @ada.id, leaves_on: "2026-03-02")
+    assert_equal "A leaving date must be a date, such as 2027-03-31",
+                 refusal(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, leaves_on: "end of April")
   end
 
   should "refuse a departure's missing position, and someone outside the tenant" do

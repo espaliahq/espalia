@@ -10,6 +10,14 @@
 # What the plan holds privately reads as `{ value: }`, or `{ removed: true }`
 # once its key is gone, under `planned_level`, `plan_data` and `placeholder`.
 module Operations::TeamPlanning::MapPayload
+  # @param value [Shreddable::Value, nil]
+  # @return [Hash, nil] `{ value: }`, or `{ removed: true }` once its key is gone
+  def self.sealed(value)
+    return nil if value.nil?
+
+    value.removed? ? { removed: true } : { value: value.reveal }
+  end
+
   private
 
   # @param map [TeamPlanning::Baseline::Map] with names joined
@@ -21,7 +29,7 @@ module Operations::TeamPlanning::MapPayload
       unassigned_ids: map.unassigned_ids,
       positions: positions_payload(map),
       unresolved: map.unresolved.map(&:to_h),
-      departed: map.departed.map { it.to_h.except(:leaves_in_id) },
+      departed: map.departed.map { it.departure.except(:leaves_in_id).merge(person_id: it.person_id) },
       names: names_for(map) }
   end
 
@@ -32,7 +40,7 @@ module Operations::TeamPlanning::MapPayload
             .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
                    capacity_overrides: person.capacity_overrides.transform_values { sealed_payload(it) },
                    placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
-                   leaving: person.leaving?, backfill_position_id: person.backfill_id)
+                   leaving: person.leaving?, leaves_on: (person.departure[:leaves_on] if person.leaving?), backfill_position_id: person.backfill_id)
     end
   end
 
@@ -49,9 +57,5 @@ module Operations::TeamPlanning::MapPayload
 
   def names_for(map) = map.person_ids.index_with { map.name_of(it) }
 
-  def sealed_payload(value)
-    return nil if value.nil?
-
-    value.removed? ? { removed: true } : { value: value.reveal }
-  end
+  def sealed_payload(value) = Operations::TeamPlanning::MapPayload.sealed(value)
 end

@@ -34,7 +34,7 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
 
   def move(scenario_id: @q1, **fields)
     patch plan_assignment_path(@plan_id, @ada.id),
-          params: { move: { scenario_id:, from_unit_id: @payments, to_unit_id: @growth, allocation: "60", role: "Lead", **fields } }
+          params: { move: { scenario_id:, from_unit_id: @payments, to: @growth, allocation: "60", role: "Lead", **fields } }
   end
 
   context "an editor" do
@@ -49,9 +49,47 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "drop a place on Unassigned, ignoring the allocation the hidden field still holds" do
-      move(to_unit_id: "unassigned")
+      move(to: "unassigned")
 
       assert_empty places(@q1)
+    end
+
+    should "place a person in a position the form names as a choice" do
+      position = ActsAsTenant.with_tenant(@tenant) do
+        role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+        level = create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 2, title: "Engineer II")
+        call(Operations::TeamPlanning::SetPosition, @editor, plan_id: @plan_id, scenario_id: @q1, role_id: role.role_id,
+                                                            level_id: level.level_id, unit_id: @growth, fte: 1, basis: "new")[:position_id]
+      end
+
+      move(to: Views::Plans::MoveDialog.position_choice(position))
+
+      assert_equal "Move saved.", flash[:notice]
+      assert_equal [ { unit_id: @growth, allocation: 0.6, role: "Lead" } ], places(@q1)
+      get map_plan_path(@plan_id, scenario: @q1)
+      assert_select "[data-map-position='#{position}'] [data-map-occupant='#{@ada.id}']"
+    end
+
+    should "name each position choice by its level, and number ones that still read alike as the map does" do
+      ActsAsTenant.with_tenant(@tenant) do
+        role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+        level = create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 2, title: "Engineer II")
+        2.times do
+          call(Operations::TeamPlanning::SetPosition, @editor, plan_id: @plan_id, scenario_id: @q1, role_id: role.role_id,
+                                                              level_id: level.level_id, unit_id: @growth, fte: 1, basis: "new")
+        end
+      end
+
+      get map_plan_path(@plan_id, scenario: @q1)
+
+      choices = css_select("#move-to option[value^='#{Views::Plans::MoveDialog::POSITION}']")
+      assert_equal [ "Growth › New position: Software Engineer (1) · Engineer II", "Growth › New position: Software Engineer (2) · Engineer II" ],
+                   choices.map(&:text)
+      choices.each_with_index do |choice, index|
+        position = choice["value"].delete_prefix(Views::Plans::MoveDialog::POSITION)
+        assert_select "[data-map-position='#{position}'] span.font-medium", text: "New position: Software Engineer (#{index + 1})"
+        assert_select "[data-map-position='#{position}'] button[aria-label='Move New position: Software Engineer (#{index + 1}) in Growth']"
+      end
     end
 
     should "refuse Today and say why" do

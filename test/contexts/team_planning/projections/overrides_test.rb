@@ -37,9 +37,9 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
     SecureRandom.uuid_v7.tap { @handler.fork_scenario(@plan_id, it, parent_id:, relation:, name:, ends_on:) }
   end
 
-  def set_cap(scenario_id, cap)
+  def set_cap(scenario_id, cap, note: nil)
     @handler.set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id:, subject_id: @plan_id,
-                                                                 end_state: { rule: "test_headcount_cap", value: { cap: } })
+                                                                 end_state: { rule: "test_headcount_cap", value: { cap: } }, note:)
   end
 
   def overrides = TeamPlanningOverride.order(:scenario_id).pluck(:scenario_id, :facet, :pinned, :end_state)
@@ -91,6 +91,18 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
     assert_equal({ "rule" => "test_headcount_cap", "value" => { "cap" => 6 } }, TeamPlanningOverride.sole.end_state)
   end
 
+  should "keep each change's note, sealed, and bring it back with its change on undo and redo" do
+    set_cap(@q1, 8, note: "Hiring freeze until the spring")
+    set_cap(@q1, 6)
+    assert_nil TeamPlanningOverride.sole.note
+
+    @handler.undo_change(@plan_id, scenario_id: @q1)
+    assert_equal "Hiring freeze until the spring", TeamPlanningOverride.sole.note.reveal
+
+    @handler.redo_change(@plan_id, scenario_id: @q1)
+    assert_nil TeamPlanningOverride.sole.note
+  end
+
   should "drop the row when the only change is undone, and restore a cleared one when the clear is undone" do
     set_cap(@lean, 5)
     @handler.undo_change(@plan_id, scenario_id: @lean)
@@ -128,15 +140,22 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
     should "reset! + replay produce identical read-model state, including the stable ids" do
       set_cap(@q1, 8)
       @handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
-      set_cap(@q1, 6)
+      set_cap(@q1, 6, note: "Hiring freeze until the spring")
       gone = fork(@q1, "instead", "Gone")
       set_cap(gone, 2)
       @handler.clear_change(@plan_id, scenario_id: gone, subject_id: @plan_id, facet: CAP)
+      pin_id = TeamPlanningOverride.find_by!(scenario_id: @lean).event_id
+      @handler.note_change(@plan_id, scenario_id: @lean, event_id: pin_id, note: "Lean keeps the old cap")
       set_cap(@lean, 4)
       @handler.undo_change(@plan_id, scenario_id: @lean)
+      assert_equal "Lean keeps the old cap", TeamPlanningOverride.find_by!(scenario_id: @lean).note.reveal
+      @handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @q1, subject_id: @person.id,
+                                                                    end_state: { level: "4" }, note: "Ready since the launch")
+      level_id = TeamPlanningOverride.find_by!(scenario_id: @q1, facet: "level").event_id
+      @handler.note_change(@plan_id, scenario_id: @q1, event_id: level_id, note: "Ready, and asked for it")
 
       before = snapshot_read_models(TeamPlanning::Projections::Overrides, @tenant)
-      assert_equal 2, before[:overrides].size
+      assert_equal 3, before[:overrides].size
 
       TeamPlanning::Projections::Overrides.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningOverride.count

@@ -3,6 +3,7 @@
 # Creates a unit in a scenario, or renames or moves one it already has.
 class Operations::TeamPlanning::SetUnit < Operations::Base
   include Operations::TeamPlanning::UnitChange
+  include Operations::TeamPlanning::ChangeWrite
 
   description "Create, rename or move a unit in a scenario of a Team Planning plan. Without unit_id it creates a " \
               "unit, which needs a name and a level_id from the Org Graph taxonomy. With unit_id (an Org Graph " \

@@ -409,6 +409,8 @@ Rails.application.routes.draw do
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"
+    # Move a position to another unit on the scenario map; the id is the position's.
+    resources :positions, only: [ :update ], controller: "plans/positions"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.
