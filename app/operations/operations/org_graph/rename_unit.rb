@@ -3,7 +3,7 @@
 # Renames a unit Espalia holds. A unit an HRIS supplies keeps its HRIS name.
 class Operations::OrgGraph::RenameUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
-  include Operations::OrgGraph::PlanWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   description "Rename a unit in the Org Graph, from effective_on (today by default). Only a unit Espalia " \
               "holds can be renamed here; one an HRIS supplies is renamed in the HRIS. Refused unless the " \

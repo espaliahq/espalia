@@ -4,7 +4,7 @@
 # the HRIS doesn't know, and the sync leaves them be (#115).
 class Operations::OrgGraph::AddMember < Operations::Base
   include Operations::OrgGraph::UnitWrite
-  include Operations::OrgGraph::PlanWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   description "Place a person in a live unit of the Org Graph, from effective_on (today by default), with an " \
               "optional role and allocation (greater than 0, at most 1). A person can be in several units. " \

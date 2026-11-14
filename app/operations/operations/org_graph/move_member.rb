@@ -3,7 +3,7 @@
 # Moves a person's membership from one unit to another, keeping its terms.
 class Operations::OrgGraph::MoveMember < Operations::Base
   include Operations::OrgGraph::UnitWrite
-  include Operations::OrgGraph::PlanWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   description "Move a person's membership of one unit to another live unit, keeping its role and " \
               "allocation, from effective_on (today by default). A membership an HRIS supplies moves in " \

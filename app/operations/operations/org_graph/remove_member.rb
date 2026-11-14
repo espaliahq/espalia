@@ -3,7 +3,7 @@
 # Ends a person's membership of a unit. effective_on is their last day there.
 class Operations::OrgGraph::RemoveMember < Operations::Base
   include Operations::OrgGraph::UnitWrite
-  include Operations::OrgGraph::PlanWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   description "End a person's membership of a unit in the Org Graph; effective_on (today by default) is " \
               "their last day in it. A membership an HRIS supplies ends in the HRIS, not here."

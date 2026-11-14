@@ -4,7 +4,7 @@
 # successor, anyone unplaced leaves it, and the unit retires.
 class Operations::OrgGraph::SplitUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
-  include Operations::OrgGraph::PlanWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   PLACEMENTS_SCHEMA = {
     type: "object",

@@ -4,7 +4,7 @@
 # and the merged unit retires.
 class Operations::OrgGraph::MergeUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
-  include Operations::OrgGraph::PlanWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   description "Merge a unit into another live unit from effective_on (today by default). Every membership " \
               "moves to into_unit_id, keeping its role and allocation, and unit_id retires, all under one " \
