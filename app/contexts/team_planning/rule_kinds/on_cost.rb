@@ -34,9 +34,10 @@ class TeamPlanning::RuleKinds::OnCost < TeamPlanning::RuleKind
     extra = value.keys - %w[model params]
     raise TeamPlanning::Error, "An on_cost rule takes only model and params, not #{extra.join(", ")}" if extra.any?
     raise TeamPlanning::Error, "An on_cost rule must name a model" if value["model"].blank?
+    raise TeamPlanning::Error, "An on_cost rule must give its model's params" unless value.key?("params")
 
     model = value["model"].to_s
-    { "model" => model, "params" => TeamPlanning::OnCostModels.check(model, value.fetch("params", {})) }
+    { "model" => model, "params" => TeamPlanning::OnCostModels.check(model, value["params"]) }
   end
 
   # @param value [Hash] as {.check} stored it

@@ -36,6 +36,9 @@ class TeamPlanning::OnCostTest < ActiveSupport::TestCase
 
     assert_equal 4_500 + 600, figure.amount
     assert_equal [ 4_500, 600 ], figure.working.map(&:amount)
+    assert_equal [ "Equipment: a fixed amount, for 50% of a full-time year", "Equipment: a fixed amount, for 33.33% of a full-time year",
+                   "Equipment: a fixed amount, for a full-time year" ],
+                 [ Rational(1, 2), Rational(1, 3), 1 ].map { on_cost(value, share: it).working.last.label }
   end
 
   should "refuse to price a fixed amount in another currency than the seat's" do
@@ -47,6 +50,9 @@ class TeamPlanning::OnCostTest < ActiveSupport::TestCase
 
   should "refuse a malformed model without repeating a figure" do
     assert_equal "No such on-cost model", refusal({ model: "guess", params: {} })
+    assert_equal "An on_cost rule must give its model's params", refusal({ model: "flat" })
+    assert_equal "Pension is a percentage, so it takes no currency",
+                 refusal({ model: "itemised", params: { items: [ { name: "Pension", percent: "9", currency: "EUR" } ] } })
     assert_equal "A flat on-cost's percent must be a percentage, such as 12.5", refusal({ model: "flat", params: { percent: "-31.7" } })
     assert_equal "A flat on-cost takes only percent, not cap", refusal({ model: "flat", params: { percent: "1", cap: "77" } })
     assert_equal "An on-cost by country names one country twice",

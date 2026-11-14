@@ -51,7 +51,7 @@ class TeamPlanning::OnCostModels::Itemised < TeamPlanning::OnCostModel
         raise TeamPlanning::Error, "#{item["name"]} is a fixed amount in #{item["currency"]}, and this seat is priced in #{currency}"
       end
 
-      Step.new(label: "#{item["name"]}: a fixed amount, for #{share.to_f.round(4)} of a full-time year", amount: item["amount"].to_r * share)
+      Step.new(label: "#{item["name"]}: a fixed amount, for #{year_shown(share)}", amount: item["amount"].to_r * share)
     end
     Figure.new(amount: working.sum(0r, &:amount), working:)
   end
@@ -67,9 +67,13 @@ class TeamPlanning::OnCostModels::Itemised < TeamPlanning::OnCostModel
     raise TeamPlanning::Error, "A part's name is at most #{NAME_LENGTH} characters" if name.length > NAME_LENGTH
     raise TeamPlanning::Error, "#{name} must have a percent or an amount and currency, not both" if item.key?("percent") == item.key?("amount")
 
-    return { "name" => name, "percent" => percent!(item["percent"], "#{name}'s percent") } if item.key?("percent")
+    if item.key?("percent")
+      raise TeamPlanning::Error, "#{name} is a percentage, so it takes no currency" if item.key?("currency")
 
-    amount = item["amount"].is_a?(Numeric) ? BigDecimal(item["amount"].to_s).to_s("F").delete_suffix(".0") : item["amount"].to_s.strip
+      return { "name" => name, "percent" => percent!(item["percent"], "#{name}'s percent") }
+    end
+
+    amount = decimal_text(item["amount"])
     raise TeamPlanning::Error, "#{name}'s amount must be a number, such as 1200 or 1200.50" unless amount.match?(AMOUNT)
 
     code = Currency::NORMALIZE.(item["currency"])
@@ -78,5 +82,11 @@ class TeamPlanning::OnCostModels::Itemised < TeamPlanning::OnCostModel
     { "name" => name, "amount" => amount, "currency" => code }
   end
 
-  private_class_method :item!
+  def self.year_shown(share)
+    return "a full-time year" if share == 1
+
+    "#{BigDecimal(share * 100, 12).round(2).to_s("F").delete_suffix(".0")}% of a full-time year"
+  end
+
+  private_class_method :item!, :year_shown
 end

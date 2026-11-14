@@ -26,6 +26,12 @@ class TeamPlanning::OnCostModels
 
     private
 
-    def models = BUILT_IN.map(&:constantize).index_by(&:model_name)
+    def models
+      BUILT_IN.map(&:constantize).each_with_object({}) do |model, by_name|
+        raise ArgumentError, "#{model} names #{model.model_name}, which #{by_name[model.model_name]} already holds" if by_name.key?(model.model_name)
+
+        by_name[model.model_name] = model
+      end
+    end
   end
 end

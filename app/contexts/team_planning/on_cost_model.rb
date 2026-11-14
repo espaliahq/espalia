@@ -54,11 +54,15 @@ class TeamPlanning::OnCostModel
   # @return [String] the percentage as stored: digits, up to four decimal places
   # @raise [TeamPlanning::Error] for anything but a percentage from 0 to 999.9999
   def self.percent!(value, what)
-    text = value.is_a?(Numeric) ? BigDecimal(value.to_s).to_s("F").delete_suffix(".0") : value.to_s.strip
+    text = decimal_text(value)
     raise TeamPlanning::Error, "#{what} must be a percentage, such as 12.5" unless text.match?(PERCENT)
 
     text
   end
+
+  # @param value [String, Numeric]
+  # @return [String] a number as typed, or a Numeric as plain decimal digits
+  def self.decimal_text(value) = value.is_a?(Numeric) ? BigDecimal(value.to_s).to_s("F").delete_suffix(".0") : value.to_s.strip
 
   # @param percent [String] as {.percent!} stored it
   # @return [Rational] the fraction of the base
@@ -67,5 +71,5 @@ class TeamPlanning::OnCostModel
   # @return [String] a percentage for a step's label
   def self.shown(percent) = "#{percent}%"
 
-  private_class_method :percent!, :fraction, :shown
+  private_class_method :percent!, :decimal_text, :fraction, :shown
 end
