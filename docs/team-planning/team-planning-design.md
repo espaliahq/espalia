@@ -476,7 +476,7 @@ every seat only for a unit the caller names.
   leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
   period any FTE no leaver opens.
 - **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
-  until positions carry a cost-centre label. No cost centre is a bucket of its own,
+  until positions carry a cost-centre label in 6.2. No cost centre is a bucket of its own,
   counted like any other.
 - **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
   that refuses it, or a level or FTE lost with a forgotten person's key), never counted
