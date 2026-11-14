@@ -168,6 +168,23 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Records several changes in one write, so they land together or not at all.
+  #
+  # @param plan_id [String]
+  # @param changes [Array<Hash>] each `{ kind:, scenario_id:, subject_id:, end_state: }`
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#set_change
+  def set_changes(plan_id, changes)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      changes.each do |change|
+        plan.set_change(change.fetch(:kind), scenario_id: change.fetch(:scenario_id), subject_id: change.fetch(:subject_id),
+                                             set_by_id: actor_id!, end_state: change.fetch(:end_state, {}))
+      end
+    end
+  end
+
   private
 
   # Someone who has left may still be made a viewer of a plan they are in, so
