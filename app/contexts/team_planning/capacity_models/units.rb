@@ -80,7 +80,7 @@ class TeamPlanning::CapacityModels::Units < TeamPlanning::CapacityModel
   # @param facts [TeamPlanning::CapacityModel::Facts]
   # @return [TeamPlanning::CapacityModel::Figure]
   def self.capacity_of(seat, place:, params:, map:, facts: Facts.new)
-    settings = settings(params)
+    settings = facts.cache[[ :units_settings, params ]] ||= settings(params)
     ordinal = facts.ordinal_of[place.level_id]
     return Figure.new(amount: 0r, working: [], reason: "no_level") unless ordinal
 
