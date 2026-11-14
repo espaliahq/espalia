@@ -37,7 +37,9 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
     end
 
     should "refuse a base that is not a date" do
-      assert_raises(ArgumentError) { create_plan(base_on: "soon") }
+      %w[soon friday 1 2026-W46 2026-318 2026-11-14x 2026-02-30].each do |base_on|
+        assert_raises(Date::Error, base_on) { create_plan(base_on:) }
+      end
     end
   end
 

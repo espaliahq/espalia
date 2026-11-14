@@ -22,14 +22,14 @@ class TeamPlanning::PlanAggregate
   # @param base_on [Date, String] the day the plan stands on
   # @param created_by_id [String] person_id of the creator
   # @raise [TeamPlanning::Error] if the plan exists, or the name is blank or too long
-  # @raise [ArgumentError] if base_on is not a date
+  # @raise [Date::Error] unless base_on is a Date or a YYYY-MM-DD string
   def create(plan_id, name:, base_on:, created_by_id:)
     raise TeamPlanning::Error, "This plan already exists" if @plan_id
 
     apply(TeamPlanning::Events::PlanCreated.new(data: {
       plan_id: plan_id,
       name: require_name(name),
-      base_on: Date.parse(base_on.to_s).iso8601,
+      base_on: require_date(base_on).iso8601,
       created_by_id: created_by_id
     }))
   end
@@ -85,6 +85,13 @@ class TeamPlanning::PlanAggregate
   def ensure_open!
     raise TeamPlanning::Error, "No such plan" unless exists?
     raise TeamPlanning::Error, "#{@name} has been deleted" if deleted?
+  end
+
+  def require_date(value)
+    return value if value.is_a?(Date)
+    raise Date::Error, "invalid date: #{value.inspect}" unless value.to_s.match?(/\A\d{4}-\d{2}-\d{2}\z/)
+
+    Date.iso8601(value)
   end
 
   def require_name(name)

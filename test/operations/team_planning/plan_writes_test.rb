@@ -36,8 +36,10 @@ class Operations::TeamPlanning::PlanWritesTest < ActiveSupport::TestCase
     end
 
     should "refuse a bad date" do
-      error = assert_raises(Operations::Base::ParameterError) { create_plan(base_on: "next tuesday") }
-      assert_match "base_on must be a date", error.message
+      %w[next-tuesday 2026-W46 2026-318 20261114].each do |base_on|
+        error = assert_raises(Operations::Base::ParameterError, base_on) { create_plan(base_on:) }
+        assert_equal "base_on must be a date, YYYY-MM-DD", error.message
+      end
     end
 
     should "refuse a member who is not a tenant admin" do

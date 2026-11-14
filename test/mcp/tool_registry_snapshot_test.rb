@@ -3605,7 +3605,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "base_on" => {
               "type" => "string",
               "minLength" => 1,
-              "pattern" => "\\S"
+              "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
             }
           },
           "required" => [ "name" ],
