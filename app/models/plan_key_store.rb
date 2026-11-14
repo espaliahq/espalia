@@ -76,7 +76,9 @@ class PlanKeyStore
     row && encryption_key(row)
   end
 
-  # Mints the key, or returns the live one already there.
+  # Mints the key, or returns the live one already there. Called inside a
+  # transaction, it holds the plan's lock until that commits, so a destroy
+  # can't land between this and the write that uses the key.
   #
   # @param identifier [String]
   # @param cipher [String]
@@ -85,9 +87,6 @@ class PlanKeyStore
   # @raise [Unavailable, ForeignTenant, InvalidIdentifier]
   def create(identifier, cipher: DEFAULT_CIPHER)
     parts = parse(identifier)
-    existing = live_key(parts, cipher)
-    return existing if existing
-
     PlanEncryptionKey.transaction do
       lock(:plan, parts[:tenant_id], parts[:plan_id])
       lock(:person, parts[:tenant_id], parts[:person_id]) if parts[:person_id]

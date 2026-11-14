@@ -7,7 +7,7 @@
 # Event handler methods (on blocks) update internal state.
 #
 class Frameworks::Aggregate
-  include AggregateRoot
+  include Shreddable::AggregateRoot
 
   # Suggestion target_entity_types whose approval requires a draft because
   # the underlying add_*/archive_* command is shape-changing (alters the

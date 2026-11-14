@@ -23,7 +23,9 @@
 # its parent plus its own differences, while on the timeline
 # ({#timeline_path}) it stands in its parent's place.
 class TeamPlanning::PlanAggregate
-  include AggregateRoot.with(strategy: -> { TeamPlanning::ChangeAwareApplyStrategy.new })
+  include AggregateRoot.with(
+    strategy: -> { Shreddable::RedactingApplyStrategy.new(TeamPlanning::ChangeAwareApplyStrategy.new) }
+  )
 
   NAME_LIMIT = 120
   ROLES = %w[editor viewer].freeze
