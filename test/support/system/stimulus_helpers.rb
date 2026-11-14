@@ -1109,7 +1109,7 @@ module StimulusHelpers
     sent = SignalTimeline.now
     page_clock = evaluate_recovery_script("(() => { #{SIGNAL_TIMELINE_JS} })()", expect_text.to_s)
     page_offset = ((sent + SignalTimeline.now) / 2) - page_clock if page_clock.is_a?(Numeric)
-    SignalTimeline.new(-> { evaluate_recovery_script("window.__signalTimeline || null") }, page_offset:)
+    SignalTimeline.new(-> { evaluate_recovery_script("window.__signalTimeline || null") }, page_offset:, watching: expect_text.present?)
   end
 
   # A miss phrase, carrying the prefix every note shares so a reader (or a

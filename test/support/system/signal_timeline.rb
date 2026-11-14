@@ -13,8 +13,11 @@ class SignalTimeline
   # @param page_offset [Numeric, nil] Ruby's clock minus the page's, measured
   #   when the timeline was armed; nil when it could not be measured
   # @param clock [#call] returns the time in ms
-  def initialize(read_page_events, page_offset: nil, clock: SignalTimeline.method(:now))
+  # @param watching [Boolean] whether the page watches for the signal text;
+  #   it can't for a selector or a removal
+  def initialize(read_page_events, page_offset: nil, clock: SignalTimeline.method(:now), watching: true)
     @read_page_events = read_page_events
+    @watching = watching
     @page_offset = page_offset
     @clock = clock
     @marks = []
@@ -46,6 +49,7 @@ class SignalTimeline
     end
     lines << "  (no page events: the page fully reloaded after the click)" if page_events.nil?
     lines << "  (no page events: the page could not be read)" if page_events == :unavailable
+    lines << "  (signal not watched: only signal text is, not a selector or a removal)" unless @watching
     "signal timeline (#{@page_offset ? 'page times on the test clock' : 'clocks not aligned'}):\n#{lines.join("\n")}"
   end
 

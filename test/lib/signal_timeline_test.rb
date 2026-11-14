@@ -36,6 +36,11 @@ class SignalTimelineTest < ActiveSupport::TestCase
     REPORT
   end
 
+  should "say so when it watched for no signal" do
+    assert_match(/signal not watched/, SignalTimeline.new(-> { [] }, watching: false).report)
+    assert_no_match(/signal not watched/, SignalTimeline.new(-> { [] }).report)
+  end
+
   should "say so when the page lost its events" do
     timeline = SignalTimeline.new(-> { nil })
     timeline.mark("click")
