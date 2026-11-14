@@ -1,0 +1,32 @@
+{
+  "name": "team_planning_set_scenario_period",
+  "description": "Move the end of a 'then' scenario in a Team Planning plan. Its start follows from the tree, every step after it starts the day after the new end, and its alternatives take the new period. Refused if a later step would end before it starts, naming that step, or unless the caller is an editor.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      },
+      "ends_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "ends_on"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

@@ -1,0 +1,24 @@
+{
+  "name": "org_graph_remove_editor",
+  "description": "Stop a person being an Org Graph editor. They keep their rights over units they own and their reports' memberships. An admin's rights can't be removed this way. Returns the list as org_graph_editors reads it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "person_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

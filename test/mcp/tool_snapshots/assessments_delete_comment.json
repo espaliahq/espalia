@@ -1,0 +1,29 @@
+{
+  "name": "assessments_delete_comment",
+  "description": "Delete a comment on an assessment (soft delete — preserves reply chains; author or tenant admin).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "comment_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "comment_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

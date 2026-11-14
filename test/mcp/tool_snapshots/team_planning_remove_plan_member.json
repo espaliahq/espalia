@@ -1,0 +1,28 @@
+{
+  "name": "team_planning_remove_plan_member",
+  "description": "Take a member off a Team Planning plan. An editor may remove anyone, and any member may remove themselves, except its last editor. Refused, as an unknown plan, unless the caller may.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id",
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

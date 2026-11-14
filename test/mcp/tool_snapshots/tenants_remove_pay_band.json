@@ -1,0 +1,24 @@
+{
+  "name": "tenants_remove_pay_band",
+  "description": "Remove a pay band, by pay_band_id from tenants_pay_bands. Positions it priced fall back to the level's any-location band, or go unpriced. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "pay_band_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "pay_band_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

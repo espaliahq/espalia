@@ -1,0 +1,22 @@
+{
+  "name": "team_planning_delete_plan",
+  "description": "Delete a Team Planning plan. It cannot be restored. Refused unless the caller is one of its editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

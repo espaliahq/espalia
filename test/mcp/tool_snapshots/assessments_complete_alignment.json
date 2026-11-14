@@ -1,0 +1,28 @@
+{
+  "name": "assessments_complete_alignment",
+  "description": "Mark the alignment conversation complete for one of your direct reports — against their own role, or against another role with as_role_id. Every current-level cell of that role must carry an agreed rating.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "as_role_id": {
+        "type": "string"
+      },
+      "as_level_ordinal": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "assignment_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

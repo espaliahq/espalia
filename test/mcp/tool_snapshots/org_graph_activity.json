@@ -1,0 +1,28 @@
+{
+  "name": "org_graph_activity",
+  "description": "Read one Org Graph unit's activity, newest first, 25 groups a page. A group is every change made under one cause, such as one request or one approved plan change. Each group has its summary, who made it (a person's name, or the provider that supplied it), when it took effect, when the Org Graph learned it, any plan reference, its parts and whether the caller can change it back, with the reason when not. Each part has its own id, description and change-back answer. Changing a group back reverses it in every unit it touched, and units_touched counts them. Admins only while the Org Graph is unfinished.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "unit_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid"
+      },
+      "page": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "unit_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

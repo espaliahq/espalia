@@ -1,0 +1,37 @@
+{
+  "name": "assessments_remove_evidence_link",
+  "description": "Remove one capability × level link from a feedback / evidence item (it keeps its other links).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "evidence_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "evidence_id",
+      "capability_stable_id",
+      "level_ordinal"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

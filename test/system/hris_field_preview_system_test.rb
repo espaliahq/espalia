@@ -28,6 +28,7 @@ class HrisFieldPreviewSystemTest < ApplicationSystemTestCase
       "hb-5" => Hris::FieldValue.withheld
     }
     adapter = Object.new
+    adapter.extend(Hris::FieldRows)
     adapter.define_singleton_method(:provider_name) { "hibob" }
     adapter.define_singleton_method(:catalogue_id) { |field_id| field_id }
     adapter.define_singleton_method(:field_catalogue) { [ TEAM ] }

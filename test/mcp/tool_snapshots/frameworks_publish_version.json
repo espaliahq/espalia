@@ -1,0 +1,22 @@
+{
+  "name": "frameworks_publish_version",
+  "description": "Request publication of the current draft as a new framework version; runs in the background and notifies the requester (owner/editor only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

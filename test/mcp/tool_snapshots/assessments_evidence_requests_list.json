@@ -1,0 +1,26 @@
+{
+  "name": "assessments_evidence_requests_list",
+  "description": "List feedback / evidence requests addressed to you (incoming) and ones you've made (outgoing), each with when it was requested, due, last reminded, and responded to, declined (with the reason) or cancelled.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "responded",
+          "declined",
+          "cancelled"
+        ]
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

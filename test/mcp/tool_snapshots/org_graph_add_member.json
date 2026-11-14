@@ -1,0 +1,66 @@
+{
+  "name": "org_graph_add_member",
+  "description": "Place a person in a live unit of the Org Graph, from effective_on (today by default), with an optional role and allocation (greater than 0, at most 1). A person can be in several units. A unit an HRIS supplies takes only people that HRIS doesn't hold; place the others in the HRIS. Someone already in the unit is refused.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "plan_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan whose change this applies. Refused unless you may apply that plan's changes"
+      },
+      "plan_change_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "the plan change this applies; needs plan_id"
+      },
+      "cause_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "groups this with the plan's other changes, to change back together; needs plan_id"
+      },
+      "unit_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string"
+      },
+      "allocation": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "unit_id",
+      "person_id"
+    ],
+    "additionalProperties": false,
+    "dependentRequired": {
+      "plan_change_id": [
+        "plan_id"
+      ],
+      "cause_id": [
+        "plan_id"
+      ]
+    }
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

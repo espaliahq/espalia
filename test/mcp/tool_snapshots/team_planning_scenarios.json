@@ -1,0 +1,22 @@
+{
+  "name": "team_planning_scenarios",
+  "description": "List the scenarios of a Team Planning plan the caller is in. The baseline comes first: its id is the plan's, it stands on the base date and has no parent, relation or end. Each other scenario has its parent_id, its relation ('then' follows the parent, 'instead' is an alternative to it) and its period. Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

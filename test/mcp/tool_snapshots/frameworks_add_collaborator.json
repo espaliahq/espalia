@@ -1,0 +1,218 @@
+{
+  "name": "frameworks_add_collaborator",
+  "description": "Grant a person a collaborator role on a framework — framework-wide (owner/editor/collaborator/viewer) or scoped via scope_type + scope_id (the four lead roles).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "editor",
+          "role_family_lead",
+          "role_lead",
+          "capability_category_lead",
+          "capability_lead",
+          "collaborator",
+          "viewer"
+        ]
+      },
+      "scope_type": {
+        "type": "string",
+        "enum": [
+          "role_family",
+          "role",
+          "capability_category",
+          "capability"
+        ]
+      },
+      "scope_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "person_id",
+      "role"
+    ],
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "role": {
+              "const": "role_family_lead"
+            }
+          },
+          "required": [
+            "role"
+          ]
+        },
+        "then": {
+          "required": [
+            "scope_type"
+          ],
+          "properties": {
+            "scope_type": {
+              "const": "role_family"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "role": {
+              "const": "role_lead"
+            }
+          },
+          "required": [
+            "role"
+          ]
+        },
+        "then": {
+          "required": [
+            "scope_type"
+          ],
+          "properties": {
+            "scope_type": {
+              "const": "role"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "role": {
+              "const": "capability_category_lead"
+            }
+          },
+          "required": [
+            "role"
+          ]
+        },
+        "then": {
+          "required": [
+            "scope_type"
+          ],
+          "properties": {
+            "scope_type": {
+              "const": "capability_category"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "role": {
+              "const": "capability_lead"
+            }
+          },
+          "required": [
+            "role"
+          ]
+        },
+        "then": {
+          "required": [
+            "scope_type"
+          ],
+          "properties": {
+            "scope_type": {
+              "const": "capability"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "role": {
+              "enum": [
+                "role_family_lead",
+                "role_lead",
+                "capability_category_lead",
+                "capability_lead"
+              ]
+            }
+          },
+          "required": [
+            "role"
+          ]
+        },
+        "then": {
+          "required": [
+            "scope_id"
+          ],
+          "properties": {
+            "scope_id": {
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "role": {
+              "enum": [
+                "owner",
+                "editor",
+                "collaborator",
+                "viewer"
+              ]
+            }
+          },
+          "required": [
+            "role"
+          ]
+        },
+        "then": {
+          "not": {
+            "required": [
+              "scope_type"
+            ]
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "role": {
+              "enum": [
+                "owner",
+                "editor",
+                "collaborator",
+                "viewer"
+              ]
+            }
+          },
+          "required": [
+            "role"
+          ]
+        },
+        "then": {
+          "not": {
+            "required": [
+              "scope_id"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

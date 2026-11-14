@@ -1,0 +1,29 @@
+{
+  "name": "team_planning_create_plan",
+  "description": "Create a Team Planning plan, a private draft of the organisation built on the Org Graph as it stood on base_on (today by default). Only its members see it, and its creator is its first editor. Refused unless the caller is a tenant admin or a planner, linked to a person.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "base_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
