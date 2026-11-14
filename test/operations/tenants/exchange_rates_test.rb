@@ -81,6 +81,17 @@ class Operations::Tenants::ExchangeRatesTest < ActiveSupport::TestCase
     errors.each { |message| assert_no_match(/\d\.\d|-3/, message) }
   end
 
+  should "refuse a change to a rate removed after it was found" do
+    added = add
+    stale = ActsAsTenant.with_tenant(@tenant) { ExchangeRate.find(added[:exchange_rate_id]).tap { ExchangeRate.find(it.id).destroy! } }
+
+    ExchangeRate.stub(:find_by, stale) do
+      error = assert_raises(Operations::Base::ParameterError) { call(:ChangeExchangeRate, exchange_rate_id: stale.id, rate: "1") }
+
+      assert_equal "There is no such exchange rate", error.message
+    end
+  end
+
   should "refuse a rate this tenant doesn't hold" do
     assert_raises(Operations::Base::ParameterError) { call(:ChangeExchangeRate, exchange_rate_id: SecureRandom.uuid_v7, rate: "1") }
   end

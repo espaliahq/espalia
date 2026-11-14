@@ -28,5 +28,7 @@ class Operations::Tenants::ChangePayBand < Operations::Base
       band.assign_attributes(currency: params[:currency], period: params[:period], **figures)
       band_payload(save_band!(band))
     end
+  rescue ActiveRecord::RecordNotFound
+    raise Operations::Base::ParameterError, "There is no such pay band"
   end
 end

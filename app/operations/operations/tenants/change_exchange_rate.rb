@@ -22,5 +22,7 @@ class Operations::Tenants::ChangeExchangeRate < Operations::Base
       rate.rate = rate_value
       rate_payload(save_setting!(rate))
     end
+  rescue ActiveRecord::RecordNotFound
+    raise Operations::Base::ParameterError, "There is no such exchange rate"
   end
 end
