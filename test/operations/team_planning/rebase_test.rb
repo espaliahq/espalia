@@ -127,6 +127,22 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
                  refusal { call(:RebasePreview, plan_id: later) }
   end
 
+  should "refuse a preview the plan is updated under, rather than counts read over two bases" do
+    repository = TeamPlanning::Repository.new
+    loads = 0
+    update = -> { handler.rebase_plan(@plan_id, base_on: "2026-03-24", expected_base_on: BASE_ON) }
+    repository.define_singleton_method(:load_plan) do |id|
+      update.call if (loads += 1) == 2
+      super(id)
+    end
+
+    error = on(Time.utc(2026, 3, 25, 9)) do
+      preview = TeamPlanning::RebasePreview.new(context: context_for(@editor), plan: TeamPlanningPlan.find(@plan_id), repository:)
+      assert_raises(TeamPlanning::Error) { preview.call }
+    end
+    assert_equal "This plan was updated while you looked: preview it again", error.message
+  end
+
   should "carry a conflict only in the scenario it was read in, and not to a change made after the read" do
     drift_brook
     plan(TitleSet, @brook.id, @lean, title: "Principal Engineer")

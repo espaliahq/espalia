@@ -33,16 +33,21 @@ class TeamPlanning::RebasePreview
 
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  # @raise [TeamPlanning::Error] when the plan already stands on today, or on a day still to come
+  # @raise [TeamPlanning::Error] when the plan already stands on today, or on a day still to come, or is
+  #   updated while the preview reads it
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
+    @plan.reload
     raise TeamPlanning::Error, "This plan already stands on today, #{@today.iso8601}" if @plan.base_on == @today
     if @plan.base_on > @today
       raise TeamPlanning::Error, "This plan stands on #{@plan.base_on.iso8601}, still to come: it already reads the Org Graph as known now"
     end
 
+    base_on = @plan.base_on
     reports = scenario_ids.map { [ it, status_of(it) ] }
-    Report.new(base_on: @plan.base_on, to: @today, scenarios: reports.map { |id, report| counts(id, report) },
+    raise TeamPlanning::Error, "This plan was updated while you looked: preview it again" unless @plan.base_on == base_on
+
+    Report.new(base_on:, to: @today, scenarios: reports.map { |id, report| counts(id, report) },
                conflicts: reports.flat_map { |id, report| conflicts(id, report) })
   end
 
