@@ -35,7 +35,8 @@ class TeamPlanning::Cost
     "level_unknown" => "The plan's level for the person was lost with their key",
     "fte_unknown" => "The plan's FTE for the person was lost with their key",
     "no_level" => "No level resolves for the seat",
-    "no_band" => "No pay band covers the seat's level and country"
+    "no_band" => "No pay band covers the seat's level and country",
+    "on_cost_refused" => "The on-cost rule at the seat's unit can't price it, such as a fixed amount in another currency"
   }.freeze
 
   # Where a seat's level comes from.
@@ -213,6 +214,8 @@ class TeamPlanning::Cost
     on_cost = TeamPlanning::RuleKinds::OnCost.on_cost_of(rule_at("on_cost", seat[:unit_id]), base:, currency: band.currency,
                                                           country:, share: line.share)
     line.with(base:, on_cost:)
+  rescue TeamPlanning::Error
+    line.with(base:, reason: "on_cost_refused")
   end
 
   def person_level(member)

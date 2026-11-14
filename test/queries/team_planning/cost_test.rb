@@ -220,6 +220,17 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal [ "10% of base pay" ], lines(scenario, @ada.id).sole.on_cost.working.map(&:label)
   end
 
+  should "list a seat its on-cost rule can't price as unpriced, and still price the rest" do
+    fixed = { model: "itemised", params: { items: [ { name: "Laptop", amount: "2000", currency: "EUR" } ] } }
+    operation(Operations::TeamPlanning::SetRule, unit_id: @payments, rule: "on_cost", value: fixed)
+    scenario = cost.scenario
+
+    dee = lines(scenario, @dee.id).sole
+    assert_equal [ "on_cost_refused", 120_000r, nil ], [ dee.reason, dee.base, dee.amount ]
+    assert_equal 41_600r + 800r, lines(scenario, @brook.id).find { it.unit_id == @payments }.amount, "a EUR seat takes the fixed amount at its share"
+    assert_equal({ "EUR" => 184_000r }, scenario.total.native)
+  end
+
   should "state when the bands last changed, since a plan reprices live" do
     travel_to Time.utc(2026, 1, 5, 9)
     as_tenant { PayBand.find_by(level_id: @e5.level_id, location_key: "").update!(midpoint: 110_000) }

@@ -22,7 +22,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "Totals are per currency in `native`, and `converted` is the same in the reference currency at the " \
               "period's start, null with `missing` saying why when a rate is missing. Units count their own places, " \
               "with null for no unit; `with_below` adds the units below. Cost centres use null for no cost centre. " \
-              "Unit, cost-centre and plan totals always agree. A seat no band prices is in `unpriced` with its reason, " \
+              "Unit, cost-centre and plan totals always agree. A seat that can't be priced is in `unpriced` with its reason, " \
               "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
               "bands_changed_at says when a band last changed. The baseline has no period, so it can't be the " \
               "scenario. Figures are decimal strings; people are named by id in `names`. Refused, as an unknown " \

@@ -476,8 +476,9 @@ every seat only for a unit the caller names.
 - **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
   until positions carry a cost-centre label. No cost centre is a bucket of its own,
   counted like any other.
-- **A seat no band prices** is listed with its reason (no level, no band, or a level or
-  FTE lost with a forgotten person's key), never counted as zero.
+- **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
+  that refuses it, or a level or FTE lost with a forgotten person's key), never counted
+  as zero.
 
 Every figure stays in its band's currency, exact, and the totals hold one sum per currency.
 Each converts once, at the read, at the rate in force on the period's first day. A missing
