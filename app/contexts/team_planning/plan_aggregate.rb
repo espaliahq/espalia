@@ -211,6 +211,8 @@ class TeamPlanning::PlanAggregate
   # @param subject_id [String]
   # @param set_by_id [String] person_id of the actor
   # @param end_state [Hash] the kind's own fields, none of them a field every change holds
+  # @yieldparam plan [TeamPlanning::PlanAggregate] once the plan is open and the scenario known, for the
+  #   caller's own checks, such as one against a projection, which this aggregate never reads
   # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the end state refused
   # @raise [ArgumentError] for a kind that is not a change, or an end state naming a field every change holds
   def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {})
@@ -219,6 +221,7 @@ class TeamPlanning::PlanAggregate
 
     ensure_open!
     live_scenario!(scenario_id)
+    yield self if block_given?
     fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
     apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }))
   end

@@ -16,13 +16,12 @@ class Operations::TeamPlanning::ClosePosition < Operations::Base
 
   # @return [Hash] `{ plan_id, scenario_id, position_id, closed }`
   def perform
-    editable_plan!
     position_id = uuid!(:position_id)
-    unless winning_change(position_id, ::TeamPlanning::Events::PositionSet.facet).is_a?(::TeamPlanning::Events::PositionSet)
-      raise Operations::Base::ParameterError, "This scenario has no such open position"
+    set_change!(::TeamPlanning::Events::PositionClosed, subject_id: position_id) do |plan|
+      unless winning_change(plan, position_id, ::TeamPlanning::Events::PositionSet.facet).is_a?(::TeamPlanning::Events::PositionSet)
+        raise Operations::Base::ParameterError, "This scenario has no such open position"
+      end
     end
-
-    set_change!(::TeamPlanning::Events::PositionClosed, subject_id: position_id)
     { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), position_id:, closed: true }
   end
 end

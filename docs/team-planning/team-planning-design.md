@@ -163,9 +163,10 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
    any names it needs in `Baseline#named`, never in `apply_to`.
 4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
-   `ChangeWrite`. Call `editable_plan!` first, so an outsider gets "No such plan" before
-   any other check. Check what needs a projection (a framework role, a person) in the
-   operation, since the aggregate reads no projection. Then call `set_change!`.
+   `ChangeWrite` and calls `set_change!`. Put the checks the aggregate can't make, such as
+   whether a framework role exists, in the block you pass it, since the aggregate reads no
+   projection. The block runs under the plan's lock, after the editor check, so an outsider
+   gets "No such plan" first and no check races another edit.
 5. **The read.** Extend a scenario read, or add one through `PlanRead`, reading
    `Resolution#call`.
 6. **The tool's shared files.** Merge main first. Run

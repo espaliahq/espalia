@@ -26,11 +26,12 @@ class Operations::TeamPlanning::SetPosition < Operations::Base
 
   # @return [Hash] `{ plan_id, scenario_id, position_id, role_id, level_id, unit_id, fte, basis, budget }`
   def perform
-    editable_plan!
-    position_id = params[:position_id].nil? ? SecureRandom.uuid_v7 : known_position_id!
-    role_id, level_id = role_and_level!
-    end_state = { role_id:, level_id:, unit_id: uuid!(:unit_id), fte: params[:fte], basis: params[:basis] }
-    plan = set_change!(POSITION, subject_id: position_id, end_state:)
+    position_id = params[:position_id].nil? ? SecureRandom.uuid_v7 : uuid!(:position_id)
+    end_state = { role_id: uuid!(:role_id), level_id: uuid!(:level_id), unit_id: uuid!(:unit_id), fte: params[:fte], basis: params[:basis] }
+    plan = set_change!(POSITION, subject_id: position_id, end_state:) do |locked|
+      known_position!(locked, position_id) unless params[:position_id].nil?
+      role_and_level!(end_state)
+    end
 
     stored = plan.changes_in(scenario_id!(:scenario_id)).last.data.slice(*POSITION::IDS, :fte, :basis)
     { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), position_id:, **stored,
@@ -39,20 +40,16 @@ class Operations::TeamPlanning::SetPosition < Operations::Base
 
   private
 
-  def known_position_id!
-    position_id = uuid!(:position_id)
-    return position_id if winning_change(position_id, POSITION.facet)
+  def known_position!(plan, position_id)
+    return if winning_change(plan, position_id, POSITION.facet)
 
     raise Operations::Base::ParameterError, "This scenario has no such position"
   end
 
-  def role_and_level!
-    role_id = uuid!(:role_id)
-    level = FrameworkState::Level.find_by(level_id: uuid!(:level_id))
-    raise Operations::Base::ParameterError, "No such role" unless FrameworkState::Role.exists?(role_id:)
+  def role_and_level!(end_state)
+    level = FrameworkState::Level.find_by(level_id: end_state[:level_id])
+    raise Operations::Base::ParameterError, "No such role" unless FrameworkState::Role.exists?(role_id: end_state[:role_id])
     raise Operations::Base::ParameterError, "No such level" unless level
-    raise Operations::Base::ParameterError, "That level belongs to another role" unless level.role_id == role_id
-
-    [ role_id, level.level_id ]
+    raise Operations::Base::ParameterError, "That level belongs to another role" unless level.role_id == end_state[:role_id]
   end
 end
