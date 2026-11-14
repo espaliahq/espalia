@@ -593,9 +593,6 @@ class OrgGraph::PersonAggregate
   end
 
   OrgGraph::MembershipFold::EVENTS.each do |type|
-    on type do |event|
-      @membership_fold.apply(event)
-      @memberships, @membership_ends = @membership_fold.memberships, @membership_fold.ends
-    end
+    on(type) { |event| @membership_fold.apply(event) }
   end
 end

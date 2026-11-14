@@ -6,8 +6,9 @@
 #
 # A set dated earlier than the terms held moves the start back and keeps the
 # later terms. A change-back dated on the day of the change it reverses
-# withdraws that change, as History does: both drop out and the rest is
-# folded again.
+# withdraws that change, as History does: the change drops out, the rest is
+# folded again, and the change-back counts only where it differs from what
+# is left.
 #
 class OrgGraph::MembershipFold
   EVENTS = [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipMoved ].freeze
@@ -17,6 +18,17 @@ class OrgGraph::MembershipFold
 
   # @return [Hash{String => String}] unit_id => the last day of its last ended membership
   attr_reader :ends
+
+  # Whether the event withdraws the change it reverses, by History's rule.
+  #
+  # @param event [RubyEventStore::Event]
+  # @return [Boolean]
+  def self.withdraws?(event)
+    id = event.data[:changed_back_id]
+    id.present? && Rails.configuration.event_store.read.event(id).data[:effective_on].to_s == event.data[:effective_on].to_s
+  rescue RubyEventStore::EventNotFound
+    false
+  end
 
   # The person's memberships as their stream knew them up to and including `event`.
   #
@@ -39,11 +51,16 @@ class OrgGraph::MembershipFold
   # @return [void]
   def apply(event)
     withdrawn = withdrawn_by(event)
-    return step(@log.push(event).last) unless withdrawn
+    if withdrawn
+      @log.delete(withdrawn)
+      @memberships.clear
+      @ends.clear
+      @log.each { step(it) }
+      return if holds?(event)
+    end
 
-    @log.delete(withdrawn)
-    @memberships, @ends = {}, {}
-    @log.each { step(it) }
+    @log << event
+    step(event)
   end
 
   private
@@ -52,6 +69,16 @@ class OrgGraph::MembershipFold
     id = event.data[:changed_back_id]
     original = id.present? && @log.find { it.event_id == id }
     original if original && original.data[:effective_on].to_s == event.data[:effective_on].to_s
+  end
+
+  def holds?(event)
+    data = event.data
+    case event
+    when OrgGraph::Events::MembershipSet
+      @memberships[data[:unit_id]]&.slice(:allocation, :role) == data.slice(:allocation, :role)
+    when OrgGraph::Events::MembershipEnded then !@memberships.key?(data[:unit_id])
+    when OrgGraph::Events::MembershipMoved then !@memberships.key?(data[:from_unit_id]) && @memberships.key?(data[:unit_id])
+    end
   end
 
   def step(event)
@@ -73,13 +100,14 @@ class OrgGraph::MembershipFold
   end
 
   def finish(unit_id, on)
-    @ends[unit_id] = on.to_s
     @memberships.delete(unit_id)
+    @ends[unit_id] = on.to_s
   end
 
   def move(data)
     on = data[:effective_on].to_s
-    since = finish(data[:from_unit_id], on)&.fetch(:since) || on
+    since = @memberships[data[:from_unit_id]]&.fetch(:since) || on
+    finish(data[:from_unit_id], on)
     @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: since, changed_on: on)
   end
 end

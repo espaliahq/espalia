@@ -7,8 +7,8 @@
 # goes when it ends; its history stays in the person's stream. The rows follow
 # {OrgGraph::MembershipFold}, as the person aggregate does: a set dated earlier
 # than the row's moves `member_since` back and keeps the later terms. A
-# change-back refolds the person from their stream, since one that withdraws a
-# change can bring back terms the rows no longer hold.
+# change-back that withdraws a change refolds the person from their stream,
+# since it can bring back terms the rows no longer hold.
 #
 class OrgGraph::Projections::Members
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -31,17 +31,17 @@ class OrgGraph::Projections::Members
   # @param event [RubyEventStore::Event]
   def call(event)
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
-      person_id = event.data[:person_id]
-      rows = OrgMembership.where(person_id:)
-      write(rows, fold(event, rows).memberships)
+      rows = OrgMembership.where(person_id: event.data[:person_id])
+      next write(rows, OrgGraph::MembershipFold.through(event).memberships) if OrgGraph::MembershipFold.withdraws?(event)
+
+      units = event.data.values_at(:unit_id, :from_unit_id).compact
+      write(rows.where(unit_id: units), fold_from(rows.where(unit_id: units), event).memberships)
     end
   end
 
   private
 
-  def fold(event, rows)
-    return OrgGraph::MembershipFold.through(event) if event.data[:changed_back_id].present?
-
+  def fold_from(rows, event)
     held = rows.to_h do |row|
       [ row.unit_id, { allocation: row.allocation, role: row.role, provider: row.provider,
                        since: row.member_since.to_s, changed_on: row.effective_on.to_s } ]
