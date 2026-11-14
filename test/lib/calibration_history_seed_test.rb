@@ -147,6 +147,17 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
       "a product report has no product sibling to move to"
   end
 
+  should "move the same people whatever ids a seed run gave them" do
+    seed = CalibrationHistorySeed.new(tenant: @tenant, framework: @framework, io: StringIO.new)
+    cycle = AssessmentCycle.new(name: CalibrationHistorySeed::FUTURE_CYCLES.first)
+    draw = lambda do
+      people = Array.new(20) { |i| build(:person, id: SecureRandom.uuid_v7, email: "person#{i}@seed.example") }
+      seed.stub(:population, people) { seed.send(:movers, cycle).map(&:email) }
+    end
+
+    assert_equal draw.call, draw.call
+  end
+
   should "leave a live session on the current cycle" do
     stats = run_seed
 

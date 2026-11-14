@@ -190,9 +190,12 @@ class CalibrationHistorySeed
   end
 
   # The population slice that changes rater this time — at least one whenever
-  # there is anyone to move.
+  # there is anyone to move. Drawn by cycle name and person identity, not ids:
+  # every seed run mints fresh ids, so drawing by id moved different people
+  # each run, and now and then all of one rater's reports, which drops that
+  # rater from the demo session (#155).
   def movers(cycle)
-    people = population(cycle).sort_by { |person| weight("move", cycle.cycle_id, person.id) }
+    people = population(cycle).sort_by { |person| weight("move", cycle.name, identity(person)) }
     return [] if people.empty?
 
     people.first([ (people.size * MOVER_SHARE).ceil, 1 ].max)
@@ -210,11 +213,14 @@ class CalibrationHistorySeed
     # different sequence per run, which would pick a different sibling and
     # break the convergence this class promises.
     candidates = Person.where(manager_id: current.manager_id, department: current.department)
-      .where.not(id: current.id).order(:id).to_a
+      .where.not(id: current.id).order(:email, :id).to_a
     return nil if candidates.empty?
 
-    candidates[(weight("sibling", person.id) * candidates.size).floor.clamp(0, candidates.size - 1)]
+    candidates[(weight("sibling", identity(person)) * candidates.size).floor.clamp(0, candidates.size - 1)]
   end
+
+  # What names a person across seed runs: the email the seed gave them.
+  def identity(person) = person.email.presence || person.id
 
   # The carried values are now real; who confirms them is the demo.
   def vet_carried_ratings(cycle)
@@ -298,7 +304,7 @@ class CalibrationHistorySeed
     @facilitator_id ||= Person.joins(:tenant).where(tenant: @tenant, manager_id: nil).first&.id
   end
 
-  # Deterministic 0…1 from stable ids — the same trick the population seed
+  # Deterministic 0…1 from its parts — the same trick the population seed
   # uses, so a re-run converges instead of re-rolling every persona.
   def weight(*parts)
     Digest::SHA256.hexdigest([ "calib-history-v1", *parts ].join("/"))[0, 8].to_i(16) / 4294967295.0
