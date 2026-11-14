@@ -16,7 +16,14 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     "team_planning_scenarios" => "returns scenario ids, periods and names; a name is free text editors are asked to keep people out of, not shredded until #209"
   }.freeze
 
+  class HeadcountCap < TeamPlanning::RuleKind
+    def self.rule_name = "test_headcount_cap"
+    def self.description = "The most people a unit may hold"
+    def self.default = { cap: 10 }
+  end
+
   setup do
+    TeamPlanning::RuleKinds.register(HeadcountCap)
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
     @fx = build_role_lens_framework(tenant: @tenant)
@@ -38,7 +45,10 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     forget_quinn
   end
 
-  teardown { ActsAsTenant.current_tenant = nil }
+  teardown do
+    ActsAsTenant.current_tenant = nil
+    TeamPlanning::RuleKinds.unregister(HeadcountCap)
+  end
 
   should "show a forgotten person as a former member in every read" do
     reads = Operations::Registry.all.select { |op| op.category == :read }
@@ -67,6 +77,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "org_graph_activity"
     assert_includes reached, "org_graph_person_get"
     assert_includes reached, "tenants_pay_bands"
+    assert_includes reached, "tenants_planning_rules"
     assert_includes reached, "team_planning_plan_members"
     assert_includes reached, "team_planning_baseline"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
@@ -118,6 +129,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     plan_with_quinn
     PayBand.create!(level: @fx.e_levels.fetch(2), currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
                     updated_by: User.find_by!(email: ERASED_EMAIL))
+    PlanningRuleDefault.create!(rule: "test_headcount_cap", value: { cap: 4 }, updated_by: User.find_by!(email: ERASED_EMAIL))
   end
 
   def place_quinn_in_the_org_graph
@@ -219,6 +231,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "team_planning_planners" => {},
         "team_planning_plans" => {},
         "tenants_pay_bands" => {},
+        "tenants_planning_rules" => {},
         "tenants_forgetting_dry_run" => {}
       }
     end
