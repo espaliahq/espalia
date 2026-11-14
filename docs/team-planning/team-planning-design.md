@@ -195,6 +195,22 @@ parent's list no longer reaches it.
   (4.2) fixes, or "has left", for a leaver by the base date or a forgotten person. 3.8
   marks them and the changes tab shows them.
 
+### Needing attention as built
+
+A write refuses only a malformed change. Fit is read, never refused
+([#257](https://github.com/espaliahq/espalia/issues/257)). `TeamPlanning::Attention` walks a
+resolved scenario and lists what no longer fits. `Resolution#attention` runs it on the settled
+map and the changes that won, and nothing is stored. Each item has the subject and facet, a
+reason a planner can read, and the change it belongs to: the subject's own winning change, or,
+for a subject no scenario changed, the change that broke it, such as its unit's `UnitRetired`.
+
+It marks a placement in a closed position, or in a retired unit or one gone from the scenario;
+a position in such a unit, or overfilled; a unit under a retired parent; anyone in
+`unresolved`; and a succession that lost a predecessor or whose successor is no longer live. A
+position in a retired unit is the position's item, not each occupant's. `team_planning_attention`
+reads it, and the checks projection (4.6) and the changes tab (4.4) will too. Reporting lines
+and departures ([#256](https://github.com/espaliahq/espalia/issues/256)) add their checks here.
+
 ### Adding a change kind
 
 Several lanes add kinds at once, so each adds one the same way. `PositionSet`
@@ -212,7 +228,9 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
    any names it needs in `Baseline#named`, never in `apply_to`. Anything derived from
    several kinds, such as who is unassigned, belongs in `Map#settled`, which `Resolution`
-   runs once every change has applied.
+   runs once every change has applied. If a later change elsewhere can leave the kind's end
+   state standing on something gone, add a check to `TeamPlanning::Attention` rather than
+   refusing the write.
 4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
    `ChangeWrite` and calls `set_change!`. Put the checks the aggregate can't make, such as
    whether a framework role exists, in the block you pass it, since the aggregate reads no
