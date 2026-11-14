@@ -53,7 +53,10 @@ class TeamPlanning::Drift
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     from = @plan.base_on - 1
-    changes = @today > from ? OrgGraph::ChangesBetween.new(context: @context, from:, to: @today, by: :learned).call.changes : []
+    return Report.new(from:, to: @today, changes: [], names: {}) unless @today > from
+
+    changes = OrgGraph::ChangesBetween.new(context: @context, from:, to: @today, by: :learned).call.changes
+    return Report.new(from:, to: @today, changes: [], names: {}) if changes.empty?
 
     planned = planned_changes
     from_plan = plan_ids(changes.map(&:event_id))
