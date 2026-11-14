@@ -135,6 +135,16 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
     assert_includes block(result, @growth)[:lane_ids], @bo.id
   end
 
+  should "not count carrying on into a unit's successor as a move" do
+    core = unit(@q2, name: "Core", level_id: @squad)
+    call(Operations::TeamPlanning::SetUnitSuccession, plan_id: @plan_id, scenario_id: @q2, predecessor_ids: [ @payments ], successor_ids: [ core ])
+    assign(@q2, @ada, { unit_id: core, allocation: 1 })
+    ada = lane(timeline, @ada.id)
+
+    assert_equal [ [ "person", @ada.id, @payments, 0, 1 ], [ "person", @ada.id, core, 2, 2 ] ], spans(ada)
+    assert_empty ada[:moves]
+  end
+
   should "end a leaver's lane where they leave and carry their backfill on in it, but give a new position its own" do
     backfill = open_position(@q1, basis: "backfill")
     leave(@q1, @cy, position_id: backfill)

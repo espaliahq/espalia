@@ -150,7 +150,8 @@ decides none of these rules:
   or a merge starts new blocks that name the ones they carry on from.
 - **Lanes.** A lane belongs to a person and lasts while they are on the map, placed or not.
   Someone in two places at once has one lane with two bars, and that is no move.
-- **Moves.** A move names the units a person left and joined between two columns. Placed in
+- **Moves.** A move names the units a person left and joined between two columns. Carrying
+  on into a unit's successor in the same block is no move. Placed in
   no live unit reads as Unassigned, so a lane never vanishes because its person lost a place.
 - **Backfills.** A leaver's lane records the step they leave in, and the position that
   backfills them carries on in it, naming who it replaces. A new position gets a lane of its

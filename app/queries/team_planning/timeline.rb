@@ -14,7 +14,8 @@
 #   not. Holding two places at once is two bars in one lane.
 # - Where a person leaves a unit and joins another from one column to the
 #   next, the lane records a move naming both sides. Taking on or dropping a
-#   second place is no move. A nil unit is Unassigned: placed in no live unit.
+#   second place is no move, and nor is carrying on into a unit's successor in
+#   the same block. A nil unit is Unassigned: placed in no live unit.
 # - A leaver's lane ends in the step they leave in, and the position that
 #   backfills them carries on in it. A new position takes no one's lane, and
 #   the first person to fill it takes its lane, so a seat and its hire read
@@ -257,9 +258,11 @@ class TeamPlanning::Timeline
 
           was = units_of(before, person)
           now = units_of(after, next_person)
-          next if (was - now).empty? || (now - was).empty?
+          left = was.reject { |unit_id| now.any? { block_for(it) == block_for(unit_id) } }
+          joined = now.reject { |unit_id| was.any? { block_for(it) == block_for(unit_id) } }
+          next if left.empty? || joined.empty?
 
-          Move.new(person_id: person.id, after: column, left_unit_ids: was - now, joined_unit_ids: now - was)
+          Move.new(person_id: person.id, after: column, left_unit_ids: left, joined_unit_ids: joined)
         end
       end
     end
