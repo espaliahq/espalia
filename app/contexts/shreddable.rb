@@ -62,11 +62,6 @@ module Shreddable
     Shreddable.identifier(rule, tenant_id, data.fetch(:plan_id), rule[:by] == :person ? data.fetch(rule[:person]) : nil)
   end
 
-  # Each value the mapper encrypted, with its stored form, so a sync
-  # projection copies the bytes a rebuild will copy. Keyed by identity: two
-  # equal values are sealed apart.
-  SEALED = ObjectSpace::WeakMap.new
-
   # @param clear [Object] a JSON value
   # @param identifier [String]
   # @param key [RubyEventStore::Mappers::EncryptionKey]

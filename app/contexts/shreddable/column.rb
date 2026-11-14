@@ -158,7 +158,7 @@ module Shreddable::Column
     raise ArgumentError, "Seal a shreddable value inside a transaction" unless PlanEncryptionKey.connection.transaction_open?
 
     id = identifier.call
-    sealed = value.is_a?(Shreddable::Value) && Shreddable::SEALED[value]
+    sealed, = value.sealed if value.is_a?(Shreddable::Value)
     return sealed if sealed && sealed["identifier"] == id
 
     Shreddable.encrypt(Shreddable::Value.wrap(value).reveal, id, PlanKeyStore.new.create(id))

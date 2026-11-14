@@ -63,7 +63,8 @@ class Shreddable::Mapper
       identifier = event.class.shreddable_identifier(tenant_id, data, field)
       key = keys[identifier] ||= @key_store.create(identifier)
       sealed = Shreddable.encrypt(reveal(data[field]), identifier, key)
-      Shreddable::SEALED[data[field]] = sealed if data[field].is_a?(Shreddable::Value)
+      # So a sync projection copies the bytes a rebuild will copy.
+      data[field].sealed!(sealed, key) if data[field].is_a?(Shreddable::Value)
       data[field] = sealed["ciphertext"]
       [ field, { cipher: sealed["cipher"], iv: sealed["iv"], identifier: identifier } ]
     end

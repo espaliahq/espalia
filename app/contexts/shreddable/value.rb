@@ -36,8 +36,22 @@ class Shreddable::Value
     # A frozen copy, so nobody can change it after the check.
     @value = removed ? nil : Ractor.make_shareable(read_back)
     @removed = removed
+    @sealed = []
     freeze
   end
+
+  # The stored form the mapper last wrote for this value. The value holds it,
+  # so it lives as long as the event does.
+  #
+  # @api private
+  # @return [Array(Hash, RubyEventStore::Mappers::EncryptionKey), nil] the stored form and its key
+  def sealed = @sealed.first
+
+  # @api private
+  # @param stored [Hash] the stored form
+  # @param key [RubyEventStore::Mappers::EncryptionKey] the key that sealed it
+  # @return [void]
+  def sealed!(stored, key) = @sealed.replace([ [ stored, key ] ])
 
   # @return [Object, nil] the value, or nil once removed
   def reveal = @value
@@ -70,6 +84,7 @@ class Shreddable::Value
   def marshal_load(_)
     @value = nil
     @removed = true
+    @sealed = []
     freeze
   end
 
