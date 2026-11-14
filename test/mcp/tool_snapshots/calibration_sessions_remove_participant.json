@@ -1,0 +1,26 @@
+{
+  "name": "calibration_sessions_remove_participant",
+  "description": "Remove a participating rater from a draft calibration session (their reports stay in the population).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id",
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

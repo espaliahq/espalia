@@ -1,0 +1,22 @@
+{
+  "name": "frameworks_draft_changes",
+  "description": "What publishing the open draft would change (capabilities, categories, role bindings, levels, expectations) and how many open-cycle people each change reaches.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

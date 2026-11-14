@@ -9,6 +9,8 @@ class Tenant::HrisFieldPreviewsControllerTest < ActionDispatch::IntegrationTest
   FRAME = "turbo-frame##{Views::Integrations::HrisFieldPreviewFrame::FRAME_ID}".freeze
 
   FakeAdapter = Struct.new(:values, :error) do
+    include Hris::FieldRows
+
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
     def field_catalogue = [ TEAM ]

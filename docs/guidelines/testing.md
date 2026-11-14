@@ -597,6 +597,23 @@ flake ([#106](https://github.com/espaliahq/espalia/issues/106)).
 `mousemove` from `Input.dispatchMouseEvent`, and a new window on the same page
 does, suspect browser UI over the tab before the page or the helpers.
 
+## Chrome's Back-Forward Cache Is Off
+
+**`ApplicationSystemTestCase` starts Chrome with
+`--disable-features=BackForwardCache`, so keep it off.** Capybara's reset
+navigates to `about:blank` and then clears cookies. With the cache on, the old
+page is parked rather than unloaded, and a request it still had open finishes
+after the clear. Its `Set-Cookie` hands the next test the last test's session.
+That test's sign-in then honours whatever the old session held: a stored
+return-to sent a manager to `/assessments` instead of Home
+([#212](https://github.com/espaliahq/espalia/issues/212)).
+`test/system/browser_reset_system_test.rb` holds a response open across the
+reset and fails if its cookie survives.
+
+**The tell is a test that starts somewhere it never went.** If a fresh sign-in
+lands on a page the test didn't visit, or finds a session already signed in,
+suspect a response from the previous test before the helpers.
+
 ## Clear Any CDP Emulation You Set
 
 **A CDP emulation outlives the test that set it.** Capybara reuses one browser

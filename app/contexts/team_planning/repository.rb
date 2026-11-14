@@ -31,6 +31,16 @@ class TeamPlanning::Repository
     plan
   end
 
+  # Loads a plan to read, taking no lock and storing nothing.
+  #
+  # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate]
+  # @raise [ArgumentError] if no tenant context is available
+  def load_plan(plan_id)
+    current_tenant!
+    @repository.load(TeamPlanning::PlanAggregate.new, EventStreamNaming.plan_stream(plan_id))
+  end
+
   private
 
   # The expected version catches a write only between load and store; the
@@ -41,9 +51,10 @@ class TeamPlanning::Repository
   end
 
   def with_tenant_metadata(&block)
-    tenant = ActsAsTenant.current_tenant
-    raise ArgumentError, "No tenant context available" unless tenant
+    @event_store.with_metadata({ tenant_id: current_tenant!.id }, &block)
+  end
 
-    @event_store.with_metadata({ tenant_id: tenant.id }, &block)
+  def current_tenant!
+    ActsAsTenant.current_tenant or raise ArgumentError, "No tenant context available"
   end
 end

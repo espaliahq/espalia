@@ -1,0 +1,31 @@
+{
+  "name": "assessments_accept_evidence_suggestion",
+  "description": "Accept a placement suggestion: link the feedback / evidence to the suggested capability × level. Pass valence to place it with a different judgement than the one suggested; the decision is then recorded as edited rather than accepted.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "suggestion_id": {
+        "type": "string"
+      },
+      "valence": {
+        "type": "string",
+        "enum": [
+          "strongly_demonstrated",
+          "demonstrated",
+          "growth_area",
+          "significant_growth_area"
+        ]
+      }
+    },
+    "required": [
+      "suggestion_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

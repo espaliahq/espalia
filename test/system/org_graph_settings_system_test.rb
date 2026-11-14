@@ -8,6 +8,8 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
 
   # Answers as a connected HiBob would, so nothing here reaches a real HRIS.
   FakeAdapter = Struct.new(:values) do
+    include Hris::FieldRows
+
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
     def field_catalogue = [ CENTRE ]

@@ -120,6 +120,22 @@ ancestor's edit because it is later in the chain, not because anything protected
 A change that no longer fits (it places someone in a unit an ancestor has retired) still
 resolves. The projection marks it as needing attention.
 
+A scenario has two paths from the root, and the code keeps them apart:
+
+- **The resolution chain** (`PlanAggregate#resolution_chain`) is every scenario whose
+  changes it resolves through. An alternative follows its parent, so it starts as the
+  parent plus its own differences, and its own changes win.
+- **The timeline path** (`PlanAggregate#timeline_path`) is the steps as the timeline lays
+  them out. An alternative takes its parent's place, sharing its period and column.
+
+An alternative that wants what its parent's parent had sets that end state itself. A
+one-step "follow the parent's parent again" is `ChangeCleared` (3.9).
+
+In code, each change kind subclasses `TeamPlanning::Events::Change`, names its facet and
+says how its end state lands on a map. `TeamPlanning::Resolution` reads
+`TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
+along the resolution chain, and joins names last.
+
 ### Undo
 
 Undo and redo are events that point at the event they reverse. The stream is never
@@ -128,10 +144,11 @@ scenario.
 
 ### Two people editing at once
 
-End-state changes to different subjects, or to different facets of one, commute, so the
-aggregate retries them on a version conflict. Two changes to the same subject and facet
-are a real conflict: the last write
-wins and both stay in the history.
+End-state changes to different subjects, or to different facets of one, commute. The
+repository holds the plan's lock from load to store, so a second editor's change loads
+only after the first has landed: no version conflict reaches the aggregate, and there is
+nothing to retry. Two changes to the same subject and facet are a real conflict: the last
+write wins and both stay in the history.
 
 ## The base pointer
 

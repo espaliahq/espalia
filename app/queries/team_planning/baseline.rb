@@ -46,10 +46,7 @@ class TeamPlanning::Baseline
 
   # @return [Map] with names joined
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def call
-    map = structure
-    map.with(names: names_for(map))
-  end
+  def call = named(structure)
 
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
@@ -63,16 +60,20 @@ class TeamPlanning::Baseline
     Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {})
   end
 
+  # Joins the names of everyone a map names: its people, their managers and
+  # the units' owners.
+  #
+  # @param map [Map]
+  # @return [Map]
+  def named(map)
+    ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids)
+    map.with(names: ::Person.where(tenant_id: @plan.tenant_id, id: ids.compact.uniq).pluck(:id, :name).to_h)
+  end
+
   private
 
   def person_from(person, memberships)
     places = memberships.map { Membership.new(**it.to_h.slice(*Membership.members)) }
     Member.new(**person.to_h.slice(*Member.members), memberships: places)
-  end
-
-  # Everyone the map names: its people, their managers and the units' owners.
-  def names_for(map)
-    ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids)
-    ::Person.where(tenant_id: @plan.tenant_id, id: ids.compact.uniq).pluck(:id, :name).to_h
   end
 end
