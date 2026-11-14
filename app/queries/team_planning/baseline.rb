@@ -408,7 +408,7 @@ class TeamPlanning::Baseline
   private
 
   # Configuration, so every day a reader asks for reads the lines as they are now.
-  def approved_budget = ::BudgetLine.where(tenant_id: @plan.tenant_id).order(:starts_on, :id).map { BudgetLine.approved(it) }
+  def approved_budget = @approved_budget ||= ::BudgetLine.where(tenant_id: @plan.tenant_id).order(:starts_on, :id).map { BudgetLine.approved(it) }
 
   def named_positions(positions)
     return positions if positions.empty?
