@@ -212,13 +212,16 @@ identifier. It reads back as a sealed value that opens on `reveal`.
   even for a projection that lags or fails.
 - **A rebuild needs no key.** The projection copies the sealed value from the event as it
   is, so a rebuild after the key is gone writes a value that opens as removed.
-- **A live write encrypts.** A sync projection receives the value in clear from the
-  publish, so the column encrypts it under the row's key, inside the publish's
-  transaction. `seal_column` does the same for a write that skips the model.
+- **A live write copies the same bytes.** A sync projection receives the value in clear
+  from the publish. The column stores the form the mapper just wrote for it, so a live
+  write and a rebuild store the same bytes. A value the mapper never sealed is encrypted
+  under the row's key, inside the transaction. `seal_column` does the same for a write
+  that skips the model.
 - **The identifier must be the row's own.** A sealed value copied into another plan's row
   opens as removed.
-- **The column can't be ordered, filtered, grouped or plucked.** Each raises, and its type
-  refuses any value in clear, so `update_all` and `insert_all` can't store one.
+- **The column can't be ordered, filtered, grouped or plucked.** The query methods raise,
+  and the column's type refuses any value in clear, so `update_all` and `insert_all`
+  can't store one. Raw SQL isn't checked.
 - **`Components::Shared::ShreddableText`** shows the value, or "Removed".
 
 The cost is a key lookup each time a read shows the value. The other option was a
