@@ -134,6 +134,19 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :conflicting, statuses(status(q2))[[ @ada.id, "title" ]]
   end
 
+  should "read pending while someone who joined after the base holds the place the step before plans" do
+    hire = as_tenant { create(:person, tenant: @tenant, name: "Cass Rowe") }
+    on(Time.utc(2026, 3, 10, 9)) do
+      @org.record_person(hire.id, **ESPALIA, effective_on: "2026-03-10", employment_status: "employed", title: "Engineer")
+      @org.set_membership(hire.id, @payments, **ESPALIA, effective_on: "2026-03-10", allocation: 1.0)
+    end
+    plan(TeamPlanning::Events::AssignmentSet, hire.id, placements: placements([ @payments, 1.0 ]))
+    q2 = as_tenant { fork("Q2", parent_id: @q1, relation: "then", ends_on: "2026-09-30") }
+    plan(TeamPlanning::Events::AssignmentSet, hire.id, q2, placements: placements([ @platform, 1.0 ]))
+
+    assert_equal :pending, statuses(status(q2))[[ hire.id, "assignment" ]]
+  end
+
   should "hold a plan whose base is still to come against today, so nothing reads conflicting" do
     on(Time.utc(2026, 3, 1, 9)) { @org.change_title(@brook.id, "Staff Engineer", **ESPALIA, effective_on: "2026-05-01") }
     later = SecureRandom.uuid_v7

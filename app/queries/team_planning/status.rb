@@ -90,8 +90,9 @@ class TeamPlanning::Status
 
   def end_state_of(change) = change.data.except(*TeamPlanning::Events::Change::FIELDS)
 
-  # What the step before the change's own step plans for its key, if it plans anything, read
-  # as the change's own kind reads it: a retirement before a restoration reads as no unit. An
+  # What the step before the change's own step plans for its key, if it plans anything. Another
+  # kind on the facet is read as the change's own kind reads it, so a retirement before a
+  # restoration reads as no unit. An
   # alternative takes its parent's place on the timeline, so a change it
   # inherits lands at the alternative's step.
   def step_before(change, key, base)
@@ -101,6 +102,7 @@ class TeamPlanning::Status
     index = path.index(step)
     earlier = @aggregate.winning_changes(path[index - 1])[key] if index.positive?
     return [] unless earlier
+    return [ end_state_of(earlier) ] if earlier.instance_of?(change.class)
 
     subject_id, facet = key
     [ change.class.read_from(earlier.class.apply_to(base, earlier.data), subject_id:, facet:) ]
