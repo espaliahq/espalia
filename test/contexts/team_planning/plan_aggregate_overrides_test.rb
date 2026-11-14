@@ -48,6 +48,19 @@ class TeamPlanning::PlanAggregateOverridesTest < ActiveSupport::TestCase
     assert_equal 1, @plan.unpublished_events.count { it.is_a?(TitleSet) && it.data[:scenario_id] == @lean && it.data[:subject_id] == "ada" }
   end
 
+  should "keep every change, pin and clear in the scenario's log, in order, and set again after a clear" do
+    set(@q1, "Senior Engineer")
+    set(@lean, "Lead Engineer")
+    clear(@lean)
+    pin(@lean, "Senior Engineer", from: [ @q1, @plan.changes_in(@q1).last.event_id ])
+    clear(@lean)
+    set(@lean, "Staff Engineer")
+
+    assert_equal [ TitleSet, TeamPlanning::Events::ChangeCleared, TitleSet, TeamPlanning::Events::ChangeCleared, TitleSet ],
+                 @plan.log_of(@lean).map(&:class)
+    assert_equal [ "Staff Engineer" ], @plan.changes_in(@lean).map { it.data[:title] }
+  end
+
   should "refuse to clear a facet the scenario doesn't change, even when its parent does" do
     set(@q1, "Senior Engineer")
 

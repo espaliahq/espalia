@@ -42,7 +42,7 @@ class TeamPlanning::PlanAggregate
     @members = {}
     @scenarios = {}
     @removed_scenario_ids = Set.new
-    @changes = {}
+    @logs = {}
   end
 
   # Opens the plan.
@@ -225,9 +225,25 @@ class TeamPlanning::PlanAggregate
     apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }))
   end
 
+  # Every change, pin and clear a scenario made, in order. A pin is the change
+  # it stands for, under the pin's event id.
+  #
   # @param scenario_id [String]
-  # @return [Array<TeamPlanning::Events::Change>] the scenario's own changes, oldest first
-  def changes_in(scenario_id) = @changes.fetch(scenario_id, []).dup
+  # @return [Array<TeamPlanning::Events::Change, TeamPlanning::Events::ChangeCleared>]
+  def log_of(scenario_id) = @logs.fetch(scenario_id, []).dup
+
+  # @param scenario_id [String]
+  # @return [Array<TeamPlanning::Events::Change>] the scenario's changes in effect, oldest first: its log without what it cleared
+  def changes_in(scenario_id)
+    @logs.fetch(scenario_id, []).each_with_object([]) do |entry, in_effect|
+      if entry.is_a?(TeamPlanning::Events::ChangeCleared)
+        key = entry.data.values_at(:subject_id, :facet)
+        in_effect.reject! { it.key == key }
+      else
+        in_effect << entry
+      end
+    end
+  end
 
   # Stops a scenario overriding one facet of one subject, so it follows its
   # parent there again. The changes it made stay in the stream.
@@ -253,7 +269,7 @@ class TeamPlanning::PlanAggregate
   def inherited_change(scenario_id, key)
     parent_id = @scenarios.fetch(live_scenario!(scenario_id)) { return nil }.parent_id
     resolution_chain(parent_id).reverse_each do |id|
-      change = @changes.fetch(id, []).reverse_each.find { it.key == key }
+      change = changes_in(id).reverse_each.find { it.key == key }
       return [ id, change ] if change
     end
     nil
@@ -394,8 +410,7 @@ class TeamPlanning::PlanAggregate
   end
 
   on TeamPlanning::Events::ChangeCleared do |event|
-    key = event.data.values_at(:subject_id, :facet)
-    @changes.fetch(event.data[:scenario_id], []).reject! { it.key == key }
+    record_change(event)
   end
 
   on TeamPlanning::Events::ChangePinned do |event|
@@ -407,7 +422,7 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::ScenarioRemoved do |event|
     @scenarios.delete(event.data[:scenario_id])
-    @changes.delete(event.data[:scenario_id])
+    @logs.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
@@ -422,7 +437,7 @@ class TeamPlanning::PlanAggregate
     fields
   end
 
-  def own_change?(scenario_id, key) = @changes.fetch(scenario_id, []).any? { it.key == key }
+  def own_change?(scenario_id, key) = changes_in(scenario_id).any? { it.key == key }
 
   def ensure_overrides!(scenario_id, key)
     raise TeamPlanning::Error, "#{name_of(scenario_id)} doesn't change this, so there is nothing to clear" unless own_change?(scenario_id, key)
@@ -434,7 +449,7 @@ class TeamPlanning::PlanAggregate
   end
 
   def record_change(event)
-    (@changes[event.data[:scenario_id]] ||= []) << event
+    (@logs[event.data[:scenario_id]] ||= []) << event
   end
 
   def ensure_editor_remains!(person_id)
