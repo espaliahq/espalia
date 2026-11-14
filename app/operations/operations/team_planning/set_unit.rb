@@ -55,7 +55,8 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
     refuse!("A new unit needs a level_id") unless level_id
     refuse!("A unit's level can't change: create a unit at the new level instead") if current && current.level_id != level_id
     refuse!("Level is not in the taxonomy") unless current || level_ids.include?(level_id)
-    return unless parent_id && (current.nil? || parent_id != current.parent_id)
+    returning = current && map.units.none? { it.id == current.id }
+    return unless parent_id && (current.nil? || returning || parent_id != current.parent_id)
 
     parent = map.units.find { it.id == parent_id } || refuse!("The parent must be a live unit in this scenario")
     if current && ([ current.id ] + descendant_ids(map, current.id)).include?(parent_id)

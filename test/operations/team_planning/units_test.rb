@@ -111,6 +111,15 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
       assert_empty units(@lean)[:retired_units]
     end
 
+    should "bring a unit back only beneath a live parent" do
+      [ @payments, @platform, @engineering ].each { write(Operations::TeamPlanning::RetireUnit, unit_id: it) }
+
+      assert_equal "The parent must be a live unit in this scenario",
+                   refusal(Operations::TeamPlanning::SetUnit, unit_id: @payments)
+      write(Operations::TeamPlanning::SetUnit, unit_id: @payments, top_level: true)
+      assert_equal %w[Payments], names
+    end
+
     should "retire a unit the plan created, and one it renamed, as each stood" do
       risk = write(Operations::TeamPlanning::SetUnit, name: "Risk", parent_id: @engineering, level_id: @squad)[:unit_id]
       write(Operations::TeamPlanning::SetUnit, unit_id: @payments, name: "Billing")
