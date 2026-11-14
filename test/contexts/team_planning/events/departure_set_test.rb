@@ -21,5 +21,6 @@ class TeamPlanning::Events::DepartureSetTest < ActiveSupport::TestCase
     assert KIND.complete?
     assert TeamPlanning::Events::DepartureWithdrawn.complete?
     assert KIND.readable?
+    assert TeamPlanning::Events::DepartureWithdrawn.readable?
   end
 end

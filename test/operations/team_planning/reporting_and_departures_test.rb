@@ -185,6 +185,14 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
     assert_equal [], map(@q1)[:positions].find { it[:position_id] == seat }[:backfill_for_ids]
   end
 
+  should "pin that someone stays when nothing above has them leave, so a later departure above doesn't reach" do
+    call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @q2, subject_id: @ada.id, facet: "departure")
+    depart(@q1, @ada)
+
+    assert person_in(@q1, @ada)[:leaving]
+    assert_not person_in(@q2, @ada)[:leaving]
+  end
+
   should "name a forgotten leaver as a former member on their backfill" do
     seat = open_position(@q1)
     depart(@q1, @ada, position_id: seat)
