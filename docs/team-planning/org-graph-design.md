@@ -685,7 +685,8 @@ screen and MCP share one implementation.
   Removing one is [#148](https://github.com/espaliahq/espalia/issues/148): only a level Espalia
   holds that no unit has ever held, retired units included, can go. A unit keeps its level
   for life, so a level that held one stays to explain the unit's history. The refusal names
-  the units, and a level an HRIS provides is handed back first.
+  the units, and a level an HRIS provides is handed back first. For now a level is removed
+  through `org_graph_remove_level`; the control in this panel is planned.
 - **Handing a level over.** A level with units is compared with a field. Each unit gets
   one call: match a value, succeed into another unit, or retire. The calls start from the
   suggested value, and the switch appears only once the calls are compared and nothing is
