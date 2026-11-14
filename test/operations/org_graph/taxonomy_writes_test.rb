@@ -80,7 +80,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     end
 
     should "keep two levels that hold units in their order, naming them" do
-      error = assert_raises(RuntimeError) do
+      error = assert_raises(Operations::Base::ParameterError) do
         call(Operations::OrgGraph::ReorderLevels, level_ids: [ @department, @squad, @team, @guild ])
       end
 
@@ -90,7 +90,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
 
     should "refuse an order that leaves out a level or names one twice" do
       [ [ @department, @team, @squad ], [ @department, @team, @squad, @squad ],
-        [ @department, @team, @squad, SecureRandom.uuid_v7 ] ].each do |order|
+        [ @department, @team, @squad, SecureRandom.uuid_v7 ], [] ].each do |order|
         assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::ReorderLevels, level_ids: order) }
       end
     end

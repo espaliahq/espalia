@@ -17,21 +17,17 @@ class Operations::OrgGraph::ReorderLevels < Operations::Base
 
   # @return [Hash] `{ level_ids, effective_on, levels }`, levels top first
   def perform
-    levels = current_levels
     order = Array(params[:level_ids]).map { |id| id.to_s.downcase }
-    unless order.uniq.size == order.size && order.sort == levels.map(&:id).sort
-      raise Operations::Base::ParameterError, "level_ids must name every level in the taxonomy once, top first"
-    end
-
+    levels = current_levels
     levels.each_with_index do |level, index|
       next if level.provider == ::OrgGraph::StructureAggregate::ESPALIA || order[index] == level.id
+      next unless order.sort == levels.map(&:id).sort
 
       raise Operations::Base::ParameterError,
             "#{level.name} comes from #{HrisConfig.provider_label(level.provider)}, so its place is set there"
     end
 
-    by_id = levels.index_by(&:id)
-    structure_handler.define_taxonomy(taxonomy_of(order.map { |id| by_id[id] }), effective_on:)
+    refusing_as_parameter_errors { structure_handler.reorder_levels(order, effective_on:) }
     { level_ids: order, effective_on:, levels: levels_payload }
   end
 end

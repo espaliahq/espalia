@@ -15,14 +15,11 @@ class Operations::OrgGraph::AddLevel < Operations::Base
   # @return [Hash] `{ level_id, name, effective_on, levels }`, levels top first
   def perform
     name = params[:name].strip
-    raise Operations::Base::ParameterError, "name can't be blank" if name.empty?
-
-    levels = current_levels
-    taken = levels.find { |level| level.name.casecmp?(name) }
+    taken = current_levels.find { |level| level.name.casecmp?(name) }
     raise Operations::Base::ParameterError, "There is already a level called #{taken.name}" if taken
 
     level_id = SecureRandom.uuid_v7
-    structure_handler.define_taxonomy([ *taxonomy_of(levels), { level_id:, name: } ], effective_on:)
+    refusing_as_parameter_errors { structure_handler.add_level(level_id, name, effective_on:) }
     { level_id:, name:, effective_on:, levels: levels_payload }
   end
 end
