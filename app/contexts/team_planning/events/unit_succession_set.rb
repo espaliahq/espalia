@@ -31,6 +31,13 @@ class TeamPlanning::Events::UnitSuccessionSet < TeamPlanning::Events::Change
     map.with(successions: map.successions.reject { it.id == succession.id } + [ succession ])
   end
 
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param subject_id [String]
+  # @return [Hash, nil] the succession's two sides, nil when the map has none by that id
+  def self.read_from(map, subject_id:, facet: self.facet)
+    map.successions.find { it.id == subject_id }&.to_h&.slice(:predecessor_ids, :successor_ids)
+  end
+
   def self.ids!(values, what)
     ids = Array(values).map { TeamPlanning::Events::UnitSet.id_or_nil(it, what) }.compact.uniq.sort
     raise TeamPlanning::Error, "A succession needs at least one #{what}" if ids.empty?

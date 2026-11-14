@@ -37,6 +37,14 @@ class TeamPlanning::Events::UnitChangesTest < ActiveSupport::TestCase
       assert_equal [ [ "Billing", nil, [ OTHER ] ] ], renamed.units.map { [ it.name, it.parent_id, it.owner_ids ] }
       assert_empty renamed.retired_units
     end
+
+    should "read a live unit back as the end state that set it, and nothing for a retired one" do
+      id = SecureRandom.uuid_v7
+      state = { name: "Billing", parent_id: PARENT, level_id: LEVEL }
+      set = TeamPlanning::Events::UnitSet.apply_to(map, subject_id: id, **state)
+      assert_equal state, TeamPlanning::Events::UnitSet.read_from(set, subject_id: id)
+      assert_nil TeamPlanning::Events::UnitSet.read_from(map(retired: [ unit(id) ]), subject_id: id)
+    end
   end
 
   context "UnitRetired" do
@@ -52,6 +60,18 @@ class TeamPlanning::Events::UnitChangesTest < ActiveSupport::TestCase
       assert_equal retired, TeamPlanning::Events::UnitRetired.apply_to(retired, as_it_stood)
       assert_equal [ "Billing" ], TeamPlanning::Events::UnitRetired.apply_to(map, as_it_stood).retired_units.map(&:name)
     end
+
+    should "read a retired unit back as it stood, and nothing for a live one" do
+      id = SecureRandom.uuid_v7
+      retired = TeamPlanning::Events::UnitRetired.apply_to(map, subject_id: id, name: "Billing", parent_id: nil, level_id: LEVEL)
+      assert_equal({ name: "Billing", parent_id: nil, level_id: LEVEL },
+                   TeamPlanning::Events::UnitRetired.read_from(retired, subject_id: id))
+      assert_nil TeamPlanning::Events::UnitRetired.read_from(map(units: [ unit(id) ]), subject_id: id)
+    end
+
+    should "leave the unit facet to both kinds, retirement first" do
+      assert_equal [ TeamPlanning::Events::UnitRetired, TeamPlanning::Events::UnitSet ], TeamPlanning::ChangeKinds.holding("unit")
+    end
   end
 
   context "UnitSuccessionSet" do
@@ -63,6 +83,14 @@ class TeamPlanning::Events::UnitChangesTest < ActiveSupport::TestCase
         "A unit can't succeed itself" => { predecessor_ids: [ LEVEL ], successor_ids: [ LEVEL ] } }.each do |message, state|
         assert_equal message, assert_raises(TeamPlanning::Error) { TeamPlanning::Events::UnitSuccessionSet.end_state(state) }.message
       end
+    end
+
+    should "read a succession back as the end state that set it" do
+      id = SecureRandom.uuid_v7
+      state = { predecessor_ids: [ LEVEL ], successor_ids: [ PARENT ] }
+      set = TeamPlanning::Events::UnitSuccessionSet.apply_to(map, subject_id: id, **state)
+      assert_equal state, TeamPlanning::Events::UnitSuccessionSet.read_from(set, subject_id: id)
+      assert_nil TeamPlanning::Events::UnitSuccessionSet.read_from(map, subject_id: SecureRandom.uuid_v7)
     end
   end
 end

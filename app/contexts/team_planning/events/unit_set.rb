@@ -42,6 +42,13 @@ class TeamPlanning::Events::UnitSet < TeamPlanning::Events::Change
              retired_units: map.retired_units.reject { it.id == id })
   end
 
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param subject_id [String]
+  # @return [Hash, nil] the unit as it stands, nil unless it is live
+  def self.read_from(map, subject_id:, facet: self.facet)
+    map.units.find { it.id == subject_id }&.to_h&.slice(:name, :parent_id, :level_id)
+  end
+
   # @param value [String, nil]
   # @param what [String] named in the refusal
   # @return [String, nil] the id, downcased

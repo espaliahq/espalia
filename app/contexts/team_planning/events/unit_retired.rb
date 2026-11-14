@@ -18,6 +18,13 @@ class TeamPlanning::Events::UnitRetired < TeamPlanning::Events::Change
   def self.end_state(end_state) = TeamPlanning::Events::UnitSet.end_state(end_state)
 
   # @param map [TeamPlanning::Baseline::Map]
+  # @param subject_id [String]
+  # @return [Hash, nil] the unit as it stood when retired, nil unless it is retired
+  def self.read_from(map, subject_id:, facet: self.facet)
+    map.retired_units.find { it.id == subject_id }&.to_h&.slice(:name, :parent_id, :level_id)
+  end
+
+  # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
   # @return [TeamPlanning::Baseline::Map] with the unit among the retired, as it stood
   def self.apply_to(map, data)
