@@ -953,11 +953,20 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
 
       should "record a manager the HRIS no longer names, which Pass 2 keeps" do
-        employees = with_employee("bob-001") { |e| e["work"].delete("reportsTo") }
+        employees = with_employee("bob-001") { |e| e["work"]["reportsTo"] = nil }
 
         build_adapter(employees).sync_people
 
         assert_equal [ [ OrgGraph::Events::ManagerChanged, nil ] ], new_events.map { |e| [ e.class, e.data[:manager_id] ] }
+      end
+
+      should "keep the manager when HiBob withholds the field or sends one it cannot read" do
+        [ ->(e) { e["work"].delete("reportsTo") }, ->(e) { e["work"]["reportsTo"] = "bob-002" },
+          ->(e) { e["work"]["reportsTo"] = { "displayName" => "Someone" } } ].each do |withhold|
+          build_adapter(with_employee("bob-001", &withhold)).sync_people
+
+          assert_empty new_events
+        end
       end
 
       should "leave the manager uncompared when HiBob names someone Espalia does not know" do

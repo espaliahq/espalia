@@ -86,6 +86,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
             manager_links[person] = manager_ext_id if manager_ext_id.present?
             touched_person_ids << person.id
             org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
+                                        manager_supplied: mapper.manager_supplied?,
                                         status: attrs[:status] }.compact.merge(mapper.org_graph_facts)
             mirror_readings[person] = mapper unless attrs[:status] == "inactive"
           end
@@ -401,12 +402,12 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # each that differs. A fact the row
   # does not supply is left out, never cleared. A manager is read from the
   # row itself, so a lost manager is recorded even though Pass 2 never
-  # clears one; a manager the sync cannot find, or the person themself, is
-  # left uncompared. A change in employment status is written too, a join
+  # clears one; a manager the sync cannot find, the person themself, or a
+  # manager field HiBob withheld is left uncompared. A change in employment status is written too, a join
   # on the start date and a leaving on the termination date when HiBob holds
   # them; a leaver's other facts are not compared.
   #
-  # @param rows [Hash{Person => Hash}] title, level, manager_external_id and
+  # @param rows [Hash{Person => Hash}] title, level, manager_external_id, manager_supplied and
   #   HiBob's status and the mapper's {Hris::Hibob::ResponseMapper#org_graph_facts} per person
   # @param managers [Hash{String => Person, nil}] each manager external id, resolved once
   # @param result [Hash] running tally
@@ -417,11 +418,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
       rows.each do |person, row|
         facts = row.slice(:title, :level, :cost_centre, :site, :country, :fte, :employment_type)
-        if row[:manager_external_id].nil?
-          facts[:manager_id] = nil
-        elsif (manager = managers[row[:manager_external_id]]) && manager != person
-          facts[:manager_id] = manager.id
-        end
+        facts.merge!(manager_fact(row, person, managers))
 
         result[:org_graph_events] += handler.sync_person(person.id, provider: provider_name, effective_on: today,
           employment_status: org_graph_status(row[:status], row[:started_on], today),
@@ -430,6 +427,17 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         result[:errors] << { person_id: person.id, error: e.message }
       end
     end
+  end
+
+  # The manager fact a row supplies: an explicit null clears it, and a field
+  # HiBob withheld, a manager the sync cannot find, or the person themself
+  # supplies nothing.
+  def manager_fact(row, person, managers)
+    return {} unless row[:manager_supplied]
+    return { manager_id: nil } if row[:manager_external_id].nil?
+
+    manager = managers[row[:manager_external_id]]
+    manager && manager != person ? { manager_id: manager.id } : {}
   end
 
   # A failed catalogue read mirrors nothing, so no unit retires for want of
