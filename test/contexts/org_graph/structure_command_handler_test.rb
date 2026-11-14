@@ -146,6 +146,14 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_raises(ArgumentError) { as_tenant { @handler.remove_level(guild, effective_on: @today) } }
     end
 
+    should "keep a level an HRIS provides until it is handed back" do
+      department = level_ids_top_first.first
+      as_tenant { @handler.set_level_provider(department, "hibob", effective_on: @today, field: "department") }
+
+      error = assert_raises(RuntimeError) { as_tenant { @handler.remove_level(department, effective_on: @today) } }
+      assert_equal "Department comes from hibob; hand it back to Espalia before removing it", error.message
+    end
+
     should "carry the plan that removed a level" do
       guild, plan_id, plan_change_id = Array.new(3) { SecureRandom.uuid_v7 }
       as_tenant do

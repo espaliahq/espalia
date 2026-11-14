@@ -145,9 +145,11 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     end
 
     should "refuse a level that isn't in the taxonomy" do
-      assert_raises(Operations::Base::ParameterError) do
+      error = assert_raises(Operations::Base::ParameterError) do
         call(Operations::OrgGraph::RemoveLevel, level_id: SecureRandom.uuid_v7)
       end
+
+      assert_equal "Level is not in the taxonomy", error.message
     end
 
     should "leave the taxonomy to a tenant admin" do

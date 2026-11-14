@@ -15,14 +15,14 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
 
   # @return [Hash] `{ level_id, name, effective_on, levels }`, levels top first
   def perform
+    # The aggregate refuses this too, but knows the provider only by its id.
     level = current_levels.find { |candidate| candidate.id == params[:level_id].to_s.downcase }
-    raise Operations::Base::ParameterError, "There is no such level in the taxonomy" unless level
-    unless level.provider == ::OrgGraph::StructureAggregate::ESPALIA
+    if level && level.provider != ::OrgGraph::StructureAggregate::ESPALIA
       raise Operations::Base::ParameterError,
             "#{level.name} comes from #{HrisConfig.provider_label(level.provider)}; hand it back to Espalia before removing it"
     end
 
-    refusing_as_parameter_errors { structure_handler.remove_level(level.id, effective_on:) }
-    { level_id: level.id, name: level.name, effective_on:, levels: levels_payload }
+    refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:) }
+    { level_id: params[:level_id].to_s.downcase, name: level&.name, effective_on:, levels: levels_payload }
   end
 end
