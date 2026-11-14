@@ -38,7 +38,7 @@ class Operations::OrgGraph::StaleFactsTest < ActiveSupport::TestCase
       Operations::OrgGraph::ConfirmFact.call(context:, params: { person_id: @org[:cyril].id, fact: "membership",
                                                                  unit_id: @org[:checkout] })
     end
-    assert_not(call(person_ids: [ @org[:cyril].id ])[:stale].any? { it[:unit_id] == @org[:checkout].id })
+    assert_not(call(person_ids: [ @org[:cyril].id ])[:stale].any? { it[:unit_id] == @org[:checkout] })
   end
 
   should "look only at the people asked about" do
