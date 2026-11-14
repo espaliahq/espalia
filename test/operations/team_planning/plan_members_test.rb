@@ -95,6 +95,17 @@ class Operations::TeamPlanning::PlanMembersTest < ActiveSupport::TestCase
       assert_not_includes result.to_json, @colleague.person_id
     end
 
+    should "count only viewers who can still read it, and give no day when nobody recorded one" do
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgLeaver.delete_all
+        @colleague.person.update!(status: "inactive")
+      end
+
+      entry = call(Operations::TeamPlanning::FrozenPlans, as: @admin)[:plans].sole
+      assert_equal 0, entry[:viewer_count]
+      assert_nil entry[:frozen_on]
+    end
+
     should "let a tenant admin delete it unread, keeping who and why" do
       result = call(Operations::TeamPlanning::DeleteFrozenPlan, as: @admin, plan_id: @plan_id, reason: "Its only editor left")
 

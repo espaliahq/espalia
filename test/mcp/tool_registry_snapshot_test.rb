@@ -3709,7 +3709,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "team_planning_frozen_plans",
-        "description" => "List the Team Planning plans that are frozen because none of their editors is still in the organisation. Each is a plan id, the day it froze and its number of viewers; never its name, contents or members. Tenant admins only, who may then delete one.",
+        "description" => "List the Team Planning plans that are frozen because none of their editors is still in the organisation. Each is a plan id, the day it froze (null when no leaving date is known) and the number of viewers who can still read it; never its name, contents or members. Tenant admins only, who may then delete one.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},
