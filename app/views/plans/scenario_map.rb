@@ -43,7 +43,7 @@ class Views::Plans::ScenarioMap < Views::Base
       span(class: "text-muted") { "Showing" }
       @scenarios.each do |scenario|
         current = scenario[:scenario_id] == @map[:scenario_id]
-        a(href: map_plan_path(@map[:plan_id], scenario: (scenario[:scenario_id] unless baseline?(scenario))),
+        a(href: map_plan_path(@map[:plan_id], scenario: (scenario[:scenario_id] unless baseline?(scenario[:scenario_id]))),
           aria: { current: ("page" if current) },
           class: "rounded-full border px-3 py-1 #{current ? 'border-brand bg-brand-subtle font-medium text-default' : 'border-default text-muted hover:text-default'}") do
           scenario_label(scenario)
@@ -52,13 +52,14 @@ class Views::Plans::ScenarioMap < Views::Base
     end
   end
 
-  def scenario_label(scenario) = baseline?(scenario) ? "Today" : scenario[:name]
+  def scenario_label(scenario) = baseline?(scenario[:scenario_id]) ? "Today" : scenario[:name]
 
-  def baseline?(scenario) = scenario[:parent_id].nil?
+  # The baseline scenario has the plan's id.
+  def baseline?(scenario_id) = scenario_id == @map[:plan_id]
 
   def as_of_line
     "The Org Graph on #{date(@map[:base_on])}, as known on #{date(@map[:known_on])}" \
-      "#{', with this scenario\'s changes' unless @map[:scenario_id] == @map[:plan_id]}. Read only."
+      "#{', with this scenario\'s changes' unless baseline?(@map[:scenario_id])}. Read only."
   end
 
   def unresolved_notice

@@ -12,9 +12,11 @@ class Views::Plans::ScenarioTable < Views::Base
   # Columns beside the name show from `sm` up; below it they stack under the name.
   WIDE = "hidden sm:table-cell"
 
+  # @param plan_id [String]
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param extra_columns [Array<Column>]
-  def initialize(scenarios:, extra_columns: [])
+  def initialize(plan_id:, scenarios:, extra_columns: [])
+    @plan_id = plan_id
     @scenarios = scenarios
     @extra_columns = extra_columns
   end
@@ -41,9 +43,6 @@ class Views::Plans::ScenarioTable < Views::Base
 
   private
 
-  # A plan's baseline scenario has the plan's id.
-  def plan_id = @scenarios.find { it[:parent_id].nil? }[:scenario_id]
-
   def row(scenario, depth)
     baseline = scenario[:parent_id].nil?
     tr(data: { scenario_id: scenario[:scenario_id] }) do
@@ -51,7 +50,7 @@ class Views::Plans::ScenarioTable < Views::Base
         div(style: ("padding-left: #{depth * 1.25}rem" if depth.positive?)) do
           p(class: "font-medium text-default") do
             span(class: "text-muted font-normal") { "#{scenario[:relation]} " } if scenario[:relation]
-            a(href: map_plan_path(plan_id, scenario: (scenario[:scenario_id] unless baseline)), class: "text-link underline") do
+            a(href: map_plan_path(@plan_id, scenario: (scenario[:scenario_id] unless baseline)), class: "text-link underline") do
               baseline ? "Today" : scenario[:name]
             end
           end
