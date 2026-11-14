@@ -63,11 +63,19 @@ class Operations::TeamPlanning::Overrides < Operations::Base
       return { scenario_id: found.scenario_id, end_state: found.end_state } if found
 
       kind = row.kind.safe_constantize
-      end_state = kind.read_from(parent_map, subject_id: row.subject_id, facet: row.facet) if @parent_id && kind&.readable?
-      { scenario_id: nil, end_state: end_state&.deep_stringify_keys }
+      { scenario_id: nil, end_state: read_off_parent(kind, row)&.deep_stringify_keys }
     end
 
     private
+
+    # A rule whose kind has since gone reads as nothing, not a failed listing.
+    def read_off_parent(kind, row)
+      return unless @parent_id && kind&.readable?
+
+      kind.read_from(parent_map, subject_id: row.subject_id, facet: row.facet)
+    rescue ::TeamPlanning::Error
+      nil
+    end
 
     def parent_map = @parent_map ||= ::TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @parent_id).structure
 

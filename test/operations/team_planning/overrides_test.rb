@@ -111,6 +111,15 @@ class Operations::TeamPlanning::OverridesTest < ActiveSupport::TestCase
     assert_equal({ "cap" => 10 }, pinned.dig(:end_state, "value"))
   end
 
+  should "list an override whose rule has since gone, with nothing to inherit" do
+    set_cap(@lean, 5)
+    TeamPlanning::RuleKinds.unregister(HeadcountCap)
+
+    assert_equal({ scenario_id: nil, end_state: nil }, overrides(@lean).sole[:inherits])
+  ensure
+    TeamPlanning::RuleKinds.register(HeadcountCap)
+  end
+
   should "name a forgotten setter as a former member" do
     set_cap(@lean, 5)
     as_tenant { @editor.person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
