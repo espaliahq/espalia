@@ -14,7 +14,10 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
               "People carry their facts and each place they hold (a unit, or a position with its unit), with " \
               "allocation and role, plus allocation_total: over 1 when over-allocated, null when unknown " \
               "because the HRIS gave no allocation. unassigned_ids are the people in no live unit. Positions " \
-              "carry their occupants and open_fte. unresolved lists people the plan places who aren't on the " \
+              "carry their occupants, open_fte and backfill_for_ids (whose departure each backfills). " \
+              "People carry their reporting line (manager_id, or manager_position_id for a manager being hired) " \
+              "and leaving, with backfill_position_id, when they leave in this scenario's step; departed lists " \
+              "those who left in an earlier step, with their backfill. unresolved lists people the plan places who aren't on the " \
               "map, with why: 'joined after the base date' (moving the plan's base date brings them in) or " \
               "'has left'. `names` maps every person id to a name; a forgotten person reads as " \
               "\"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the caller is a member."
@@ -24,7 +27,7 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
 
-  # @return [Hash] `{ plan_id, scenario_id, base_on, known_on, units, people, unassigned_ids, positions, unresolved, names }`
+  # @return [Hash] `{ plan_id, scenario_id, base_on, known_on, units, people, unassigned_ids, positions, unresolved, departed, names }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)

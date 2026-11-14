@@ -1,0 +1,35 @@
+{
+  "name": "team_planning_set_departure",
+  "description": "Have a person leave in a scenario of a Team Planning plan, optionally naming the position that backfills them: it carries the budget and the headcount, and the leaver never counts as filling it. In this scenario's step they stay on the map marked as leaving; in the steps after it they are gone and the position stands alone. team_planning_withdraw_departure has them stay. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "position_id": {
+        "type": "string",
+        "description": "The backfill: a position the scenario has. Leave it out when the seat isn't backfilled."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
