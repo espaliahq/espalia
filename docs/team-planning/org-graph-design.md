@@ -689,8 +689,9 @@ screen and MCP share one implementation.
   that would put a unit above its parent's level, or shift a level the HRIS supplies, isn't offered.
   An admin removes a level Espalia holds that no unit has ever held, retired units included
   ([#148](https://github.com/espaliahq/espalia/issues/148)). A unit keeps its level for life,
-  so a level that held one stays to explain the unit's history. Such a row names its units in
-  place of Remove, and a level an HRIS provides is handed back first.
+  so a level that held one stays to explain the unit's history. Such a row has no Remove, and
+  names the retired units it held. A level an HRIS provides is handed back first, and the last
+  level stays.
 - **Handing a level over.** A level with units is compared with a field. Each unit gets
   one call: match a value, succeed into another unit, or retire. The calls start from the
   suggested value, and the switch appears only once the calls are compared and nothing is
