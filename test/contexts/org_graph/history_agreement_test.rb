@@ -245,6 +245,19 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
 
       assert_equal [ 0.5, 0.8 ], %w[2026-02-15 2026-03-15].map { history("membership", it, key: @payments)["allocation"] }
     end
+
+    should "change back two changes of terms made together to the terms before both" do
+      later("2026-04-15") do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8)
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01", allocation: 0.6)
+      end
+
+      later("2026-04-16") { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back_group("request-1") }
+
+      assert_equal [ 0.5, 0.5 ], %w[2026-03-15 2026-04-15].map { history("membership", it, key: @payments)["allocation"] }
+      assert_equal({ @payments => 0.5 }, live_allocations)
+    end
   end
 
   context "a membership ended on a date" do

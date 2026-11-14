@@ -135,6 +135,8 @@ class OrgGraph::ChangeBackHandler
 
   def ensure_reversible!(entries, apart_from:)
     raise "Nothing to change back" if entries.empty?
+
+    @reversing = entries
     if apart_from && entries.any?(&:changed_back?)
       raise "Part of this change has already been changed back; change the rest back one entry at a time"
     end
@@ -144,14 +146,17 @@ class OrgGraph::ChangeBackHandler
       raise "This change has already been changed back" if entry.changed_back?
       raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA
     end
-    raise "A later change has replaced this one; change that back first" unless entries.all? { |entry| entry.latest?(apart_from:) }
+    unless entries.all? { |entry| entry.latest?(apart_from:) }
+      raise "A later change has replaced this one; change that back first"
+    end
     return unless entries.any? { |entry| moved_start_earlier?(entry) }
 
     raise "This moved the day they joined earlier, which can't be undone yet"
   end
 
   # A set dated before the membership it changed gave that membership an
-  # earlier start. No command withdraws those days (#154), so its inverse
+  # earlier start. No command withdraws those days
+  # ([#154](https://github.com/espaliahq/espalia/issues/154)), so its inverse
   # would only set the same terms on the same day again.
   def moved_start_earlier?(entry)
     entry.event_type == "MembershipSet" && entry.before && terms_known_before(entry).nil?
@@ -164,13 +169,18 @@ class OrgGraph::ChangeBackHandler
     @people.set_membership(entry.person_id, entry.unit_id, **terms, provider: ESPALIA, **options)
   end
 
-  # The terms in effect on the entry's day as the history knew them just before
-  # it. The entry's `before` is the change learned before it, which a backdated
-  # change sits ahead of. Event ids, not timestamps, since events can share one.
+  # The terms in effect on the entry's day as the history knew them before the
+  # change being reversed: the entry, or the first of its group for this person,
+  # so a group restores what held before all of it. The entry's `before` is the
+  # change learned just before it, which a backdated change sits ahead of. Every
+  # membership period is learned from the person's stream, so its earlier
+  # events say exactly what was known; timestamps can tie.
   def terms_known_before(entry)
-    membership_periods(entry).where.not(learned_by_event_id: entry.event_id)
-                             .where("superseded_by_event_id IS NULL OR superseded_by_event_id = ?", entry.event_id)
-                             .in_effect_on(entry.effective_on).pick(:value)
+    first = @reversing.select { it.person_id == entry.person_id }.min_by(&:position)
+    earlier = Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(entry.person_id))
+                   .to(first.event_id).map(&:event_id)
+    periods = membership_periods(entry).in_effect_on(entry.effective_on).where(learned_by_event_id: earlier)
+    periods.where(superseded_by_event_id: nil).or(periods.where.not(superseded_by_event_id: earlier)).pick(:value)
   end
 
   def membership_periods(entry)
