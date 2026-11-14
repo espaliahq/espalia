@@ -87,16 +87,22 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
     travel_to Time.utc(2026, 3, 25, 9)
   end
 
-  should "preview each scenario's counts and the conflicts an update would carry" do
+  should "preview the drift, each scenario's counts and the conflicts an update would carry" do
     drift_brook
     on(Time.utc(2026, 3, 22, 9)) { @org.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-22") }
     travel_to Time.utc(2026, 3, 25, 9)
+    result = preview
 
     assert_equal({ plan_id: @plan_id, base_on: "2026-03-02", to: "2026-03-25",
                    scenarios: [ { scenario_id: @plan_id, done: 0, pending: 0, conflicting: 0 },
                                 { scenario_id: @q1, done: 1, pending: 0, conflicting: 1 },
                                 { scenario_id: @lean, done: 1, pending: 0, conflicting: 1 } ],
-                   conflicts: brook_conflicts }, preview)
+                   conflicts: brook_conflicts }, result.except(:drift))
+    assert_equal call(:Drift, plan_id: @plan_id).except(:plan_id), result[:drift]
+    assert_equal [ [ @brook.id, "Staff Engineer" ], [ @ada.id, "Senior Engineer" ] ],
+                 result[:drift][:changes].map { [ it[:person_id], it[:after]["title"] ] }
+    assert_equal({ "from" => "2026-03-01", "names" => "Brook Tamsin" },
+                 { "from" => result[:drift][:from], "names" => result[:drift][:names][@brook.id] })
   end
 
   should "update the plan to today, record the conflicts, and start the first step on the new base" do

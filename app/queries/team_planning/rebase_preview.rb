@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 # What updating a plan to today would take in, read before a planner
-# confirms. The drift for the window is {TeamPlanning::Drift}'s; this adds
-# where each scenario's changes stand ({TeamPlanning::Status}) and the
-# conflicts the update would carry forward.
+# confirms: the drift for the window ({TeamPlanning::Drift}), where each
+# scenario's changes stand ({TeamPlanning::Status}), and the conflicts the
+# update would carry forward, all read over one base.
 #
 # Once the base is today, today reads the base, so a conflicting change would
 # read pending. {#call} names each conflict so the update can record it.
@@ -15,7 +15,8 @@ class TeamPlanning::RebasePreview
   # @!attribute to [Date] today, the base it would move to
   # @!attribute scenarios [Array<Counts>] the baseline first, then each live scenario
   # @!attribute conflicts [Array<Hash>] `{ scenario_id, subject_id, facet, change_id }`: the scenario it reads conflicting in, and the change that scenario resolves to
-  Report = Data.define(:base_on, :to, :scenarios, :conflicts)
+  # @!attribute drift [TeamPlanning::Drift::Report] what the Org Graph learned in the window
+  Report = Data.define(:base_on, :to, :scenarios, :conflicts, :drift)
 
   # @!attribute scenario_id [String] the plan's id for the baseline
   Counts = Data.define(:scenario_id, :done, :pending, :conflicting)
@@ -44,11 +45,12 @@ class TeamPlanning::RebasePreview
     end
 
     base_on = @plan.base_on
+    drift = TeamPlanning::Drift.new(context: @context, plan: @plan, today: @today, repository: @repository).call
     reports = scenario_ids.map { [ it, status_of(it) ] }
     raise TeamPlanning::Error, "This plan was updated while you looked: preview it again" unless @plan.base_on == base_on
 
     Report.new(base_on:, to: @today, scenarios: reports.map { |id, report| counts(id, report) },
-               conflicts: reports.flat_map { |id, report| conflicts(id, report) })
+               conflicts: reports.flat_map { |id, report| conflicts(id, report) }, drift:)
   end
 
   private

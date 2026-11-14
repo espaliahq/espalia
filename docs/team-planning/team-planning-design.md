@@ -474,9 +474,10 @@ when the first step would end before today, naming the step, and when the plan h
 since the caller looked: `team_planning_rebase_preview` returns the base it read, and the
 update must pass it back. Undo never reverses an update.
 
-The preview counts, for the baseline and each scenario, the changes that read done,
-pending and conflicting, and lists the conflicts. The drift being taken in is the drift
-report's.
+The preview shows the drift being taken in, in the drift report's own shape, and counts,
+for the baseline and each scenario, the changes that read done, pending and conflicting.
+It lists the conflicts too. It reads all of this over one base, and is refused if the
+plan moves while it reads.
 
 Once the base is today, a change that disagreed with the Org Graph would read pending:
 today and the base say the same thing. So `PlanRebased` records each conflict found at
