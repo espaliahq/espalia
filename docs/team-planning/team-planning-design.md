@@ -113,7 +113,9 @@ descendants. A descendant shows the change because its state is resolved at read
 
 The last change for a subject and facet wins. A facet is the part of a subject one kind
 of event sets: a person's assignment, their level and their reporting line are three
-facets, so `LevelSet` never competes with `AssignmentSet`. "Rebase" is this resolution run over a new base, so
+facets, so `LevelSet` never competes with `AssignmentSet`. Two kinds may share a facet on
+purpose: `PositionSet` and `PositionClosed` both set `position`, so a later set reopens a
+closed position. "Rebase" is this resolution run over a new base, so
 nothing has to be rewritten in storage. A descendant's explicit change survives an
 ancestor's edit because it is later in the chain, not because anything protected it.
 
@@ -209,6 +211,38 @@ A rule's value may one day be sensitive: an on-cost rate, a guardrail on pay. So
 names what is wrong and never repeats the value. A kind declares `shreddable?`, and until
 [#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
 yes is refused at registration.
+
+### Clearing and pinning
+
+`ChangeCleared` hands one facet of one subject back to the scenario's parent. The aggregate
+keeps every change, pin and clear a scenario makes in one ordered log, and works out what is
+in effect from it, so a clear hides the earlier changes for its key and resolution reads the
+parent's value again. Nothing leaves the log, so undoing a clear (3.10) can bring them back.
+Once `AssignmentSet` lands (3.6), clearing a person's assignment clears their whole
+placement list, since the list is one facet.
+
+`ChangePinned` keeps what a scenario inherits for a facet as it resolves now, so a later
+change in the parent no longer reaches it. It records the end state, the kind of change it
+stands for, and where the value came from: the ancestor scenario and the event that set
+it, or neither when the parent's resolved map gave it (a rule above the subject, or the
+baseline). The aggregate replays a pin as a change of that kind. The baseline has no
+parent, so it pins nothing, and a scenario can't pin a facet it already changes.
+
+To pin a value the baseline gives, a kind reads its end state off a map with
+`Change.read_from(map, subject_id:, facet:)`. The caller chooses the map: the parent's
+resolved map for a pin, and a map built from the Org Graph today for a change's status
+(4.3). A kind that doesn't implement it can still be pinned from an ancestor's change.
+
+`TeamPlanning::ChangeKinds.all` finds every kind of change: each `Change` subclass in
+`app/contexts/team_planning/events`, so a new kind touches only its own file. It loads that
+directory before it looks, since the projections subscribe before production eager-loads. A
+test checks every kind is complete. A clear or a pin acts on a subject and facet, whichever
+kind last set it; pinning a baseline value asks each readable kind of the facet in turn. The overrides
+projection subscribes through it and writes
+`team_planning_overrides`: one row per scenario, subject and facet the scenario sets or
+pinned. `team_planning_overrides` lists them, each beside what the scenario would inherit
+without it, and says when a pin's parent has moved on. Reconcile (4.5) reuses both: keep
+the plan is a pin, and follow reality is a clear.
 
 ### Undo
 
@@ -572,10 +606,10 @@ yet. Three properties of the events keep it possible, and must not be given up:
 
 ## Decided, with a known cost
 
-**Erasure inside a live plan.** When the Org Graph forgets a person, a handler on
-`PersonForgotten` destroys that person's key in every plan at once. Every value a plan
-held about them, such as their pay, a corrected level or a planned promotion, becomes
-unreadable. They stay in each plan's history as a former member with no identity.
+**Erasure inside a live plan.** When the Org Graph forgets a person, the transaction
+that writes `PersonForgotten` destroys that person's key in every plan at once. Every
+value a plan held about them, such as their pay, a corrected level or a planned
+promotion, becomes unreadable. They stay in each plan's history as a former member with no identity.
 
 One thing can still name them: a note. A note is free text under the plan's key, so one
 that mentions the person stays readable to the plan's members until the plan is

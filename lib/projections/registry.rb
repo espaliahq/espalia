@@ -39,7 +39,8 @@ module Projections::Registry
     "org_graph/history"                      => "OrgGraph::Projections::History",
     "team_planning/plans"                    => "TeamPlanning::Projections::Plans",
     "team_planning/plan_members"             => "TeamPlanning::Projections::PlanMembers",
-    "team_planning/scenarios"                => "TeamPlanning::Projections::Scenarios"
+    "team_planning/scenarios"                => "TeamPlanning::Projections::Scenarios",
+    "team_planning/overrides"                => "TeamPlanning::Projections::Overrides"
   }.freeze
 
   # @return [Array<String>] the registered projection names

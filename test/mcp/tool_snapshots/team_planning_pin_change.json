@@ -1,0 +1,38 @@
+{
+  "name": "team_planning_pin_change",
+  "description": "Pin what a scenario of a Team Planning plan inherits for one facet of one subject, as it resolves now, so a later change in its parent no longer reaches it: the 'keep the plan' answer when reconciling. facet is as team_planning_overrides lists it, such as 'rule:<name>'. The pin records where the value came from. Refused for the baseline, for a facet the scenario already changes, or unless the caller is an editor.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      },
+      "subject_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "facet": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "subject_id",
+      "facet"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

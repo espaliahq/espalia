@@ -835,7 +835,8 @@ result for each kind of id separately.
     projections hold ids and no identifiers, so they keep their rows unchanged. The history
     projection (3.1) handles `PersonForgotten` from its first version.
   - Each person is forgotten in one transaction: the row, the tenant membership, the names
-    stored notifications copied, and the event with its synchronous projections. A run that
+    stored notifications copied, their key in every Team Planning plan, and the event with
+    its synchronous projections. A run that
     dies partway leaves each person forgotten or untouched, so no checkpoint is needed.
   - The tenant membership is kept, deactivated and unlinked from its login. The global login
     is untouched, since it can belong to other tenants.
