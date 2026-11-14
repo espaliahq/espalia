@@ -133,6 +133,28 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :done, statuses(status)[[ @brook.id, "placements" ]]
   end
 
+  should "read pending while today matches the step before, and conflicting once it leaves both" do
+    plan(TitleSet, @ada.id, title: "Senior Engineer")
+    q2 = as_tenant { fork("Q2", parent_id: @q1, relation: "then", ends_on: "2026-09-30") }
+    plan(TitleSet, @ada.id, q2, title: "Lead Engineer")
+    on(Time.utc(2026, 3, 10, 9)) { @org.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-10") }
+
+    assert_equal :pending, statuses(status(q2))[[ @ada.id, "title" ]]
+
+    on(Time.utc(2026, 3, 20, 9)) { @org.change_title(@ada.id, "Staff Engineer", **ESPALIA, effective_on: "2026-03-20") }
+    assert_equal :conflicting, statuses(status(q2))[[ @ada.id, "title" ]]
+  end
+
+  should "hold a plan whose base is still to come against today, so nothing reads conflicting" do
+    on(Time.utc(2026, 3, 1, 9)) { @org.change_title(@brook.id, "Staff Engineer", **ESPALIA, effective_on: "2026-05-01") }
+    later = SecureRandom.uuid_v7
+    as_tenant { handler.create_plan(later, name: "Later", base_on: Date.new(2026, 6, 1)) }
+    as_tenant { handler.set_change(later, TitleSet, scenario_id: later, subject_id: @brook.id, end_state: { title: "Lead Engineer" }) }
+
+    report = as_tenant { TeamPlanning::Status.new(context: context_for(@planner), plan: TeamPlanningPlan.find(later), scenario_id: later, today: TODAY).call }
+    assert_equal [ :pending ], report.statuses.map(&:status)
+  end
+
   should "read pending for a subject only the plan holds, and conflicting for one who has since left" do
     plan(TitleSet, SecureRandom.uuid_v7, title: "Engineer")
     plan(TitleSet, @brook.id, title: "Lead Engineer")

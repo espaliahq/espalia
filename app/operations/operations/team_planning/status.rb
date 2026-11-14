@@ -12,8 +12,9 @@ class Operations::TeamPlanning::Status < Operations::Base
               "held against the Org Graph today (a UTC day, as known now). There is one status per subject and " \
               "facet the scenario resolves, from its own changes and those it inherits from the scenarios it " \
               "follows; scenario_id says which scenario made it (the plan_id is the baseline). 'done' when today " \
-              "reads the planned end state, 'pending' when today still reads what the plan's base held, " \
-              "'conflicting' when it reads neither. A person's placements are one facet, so a placement list is " \
+              "reads the planned end state, 'pending' when today still reads what the plan's base held or what " \
+              "the step before plans, 'conflicting' when it reads none of these; before the plan's base date " \
+              "nothing reads conflicting. A person's placements are one facet, so a placement list is " \
               "done only when the whole list matches. A change the Org Graph never holds, such as a rule, has no " \
               "status: it would read pending forever. Subjects are named by id, and `names` maps each the Org Graph " \
               "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \

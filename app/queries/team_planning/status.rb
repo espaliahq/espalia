@@ -7,8 +7,12 @@
 # organisation, as known now, and the plan's baseline.
 #
 # - **done**: today reads the end state;
-# - **pending**: today still reads what the baseline held;
-# - **conflicting**: today reads neither.
+# - **pending**: today still reads what the baseline held, or what the step
+#   before the change's own step plans;
+# - **conflicting**: today reads none of these.
+#
+# A plan whose base is still to come holds every change against today, so
+# nothing it plans reads conflicting before the plan starts.
 #
 # Only a kind that reads its end state off a map
 # ({TeamPlanning::Events::Change.readable?}) and that the Org Graph can move
@@ -18,8 +22,6 @@
 # @example
 #   TeamPlanning::Status.new(context:, plan:, scenario_id:).call.statuses.select { it.status == :conflicting }
 class TeamPlanning::Status
-  STATUSES = %i[done pending conflicting].freeze
-
   # @!attribute on [Date] today
   # @!attribute statuses [Array<Entry>] in the order the changes land
   # @!attribute names [Hash{String => String}] subject id => name, for the people and units the Org Graph holds
@@ -33,7 +35,7 @@ class TeamPlanning::Status
   # @!attribute change_id [String] the planned change's event id
   # @!attribute subject_id [String]
   # @!attribute facet [String]
-  # @!attribute status [Symbol] one of {STATUSES}
+  # @!attribute status [Symbol] :done, :pending or :conflicting
   Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status)
 
   # @param context [AuthorizationContext]
@@ -55,36 +57,49 @@ class TeamPlanning::Status
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
+    @aggregate = @repository.load_plan(@plan.id)
     changes = tracked_changes
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
-    base = @baseline.structure
     now = @baseline.map_on(@today)
-    statuses = changes.map { |facet, change| entry(change, facet, base:, now:) }
+    base = @today < @plan.base_on ? now : @baseline.structure
+    statuses = changes.map { |key, change| entry(change, key, base:, now:) }
     Report.new(on: @today, statuses:, names: names_for(statuses.map(&:subject_id), base, now))
   end
 
   private
 
   def tracked_changes
-    @repository.load_plan(@plan.id).winning_changes(@scenario_id).filter_map do |(_, facet), change|
-      [ facet, change ] if change.class.readable? && change.class.meets_org_graph?
-    end
+    @aggregate.winning_changes(@scenario_id).select { |_, change| change.class.readable? && change.class.meets_org_graph? }
   end
 
-  def entry(change, facet, base:, now:)
+  def entry(change, key, base:, now:)
     kind = change.class
-    subject_id = change.data[:subject_id]
-    planned = change.data.except(*TeamPlanning::Events::Change::FIELDS)
+    subject_id, facet = key
     today = kind.read_from(now, subject_id:, facet:)
+    before = [ kind.read_from(base, subject_id:, facet:), *step_before(change, key) ]
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
-              status: status_of(today, planned, kind.read_from(base, subject_id:, facet:)))
+              status: status_of(today, end_state_of(change), before))
   end
 
-  def status_of(today, planned, base)
+  def status_of(today, planned, before)
     return :done if same?(today, planned)
 
-    same?(today, base) ? :pending : :conflicting
+    before.any? { same?(today, it) } ? :pending : :conflicting
+  end
+
+  def end_state_of(change) = change.data.except(*TeamPlanning::Events::Change::FIELDS)
+
+  # What the step before the change's own step plans for its key, if it plans anything. An
+  # alternative takes its parent's place on the timeline, so a change it
+  # inherits lands at the alternative's step.
+  def step_before(change, key)
+    path = @aggregate.timeline_path(@scenario_id)
+    chain = @aggregate.resolution_chain(@scenario_id)
+    step = chain.drop(chain.index(change.data[:scenario_id])).find { path.include?(it) }
+    index = path.index(step)
+    earlier = @aggregate.winning_changes(path[index - 1])[key] if index.positive?
+    earlier ? [ end_state_of(earlier) ] : []
   end
 
   # A stored end state and one read off a map can differ in key type alone.
