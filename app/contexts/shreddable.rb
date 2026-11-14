@@ -36,7 +36,7 @@ module Shreddable
   # @param person [Symbol] the data key that holds that person's id
   # @raise [ArgumentError] for an unknown key
   def shreddable(*fields, by:, person: :person_id)
-    raise ArgumentError, "by: must be one of #{KEYS.join(', ')}" unless KEYS.include?(by)
+    Shreddable.check_key!(by)
 
     fields.each { own_shreddable_fields[it.to_sym] = { by:, person: } }
   end
@@ -59,10 +59,35 @@ module Shreddable
   # @return [String] the identifier of the key that encrypts the field
   def shreddable_identifier(tenant_id, data, field)
     rule = shreddable_fields.fetch(field)
-    plan_id = data.fetch(:plan_id)
+    Shreddable.identifier(rule, tenant_id, data.fetch(:plan_id), rule[:by] == :person ? data.fetch(rule[:person]) : nil)
+  end
+
+  # @param clear [Object] a JSON value
+  # @param identifier [String]
+  # @param key [RubyEventStore::Mappers::EncryptionKey]
+  # @return [Hash{String => String}] the stored form: the cipher, the
+  #   identifier, and the ciphertext and IV in Base64
+  def self.encrypt(clear, identifier, key)
+    iv = key.random_iv
+    { "cipher" => key.cipher, "ciphertext" => Base64.strict_encode64(key.encrypt(JSON.generate(clear), iv)),
+      "identifier" => identifier, "iv" => Base64.strict_encode64(iv) }
+  end
+
+  # @param rule [Hash] the declaration, with :by
+  # @param tenant_id [String]
+  # @param plan_id [String]
+  # @param person_id [String, nil] for a person's key
+  # @return [String] the identifier of the key the rule names
+  def self.identifier(rule, tenant_id, plan_id, person_id = nil)
     return PlanKeyStore.plan_identifier(tenant_id, plan_id) if rule[:by] == :plan
 
-    PlanKeyStore.person_identifier(tenant_id, plan_id, data.fetch(rule[:person]))
+    PlanKeyStore.person_identifier(tenant_id, plan_id, person_id)
+  end
+
+  # @param by [Symbol]
+  # @raise [ArgumentError] for an unknown key
+  def self.check_key!(by)
+    raise ArgumentError, "by: must be one of #{KEYS.join(', ')}" unless KEYS.include?(by)
   end
 
   # @param event_class [Class]

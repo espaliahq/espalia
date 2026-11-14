@@ -18,8 +18,10 @@ class TeamPlanning::Baseline
   # @!attribute base_on [Date] the day it shows
   # @!attribute known_on [Date] read as known at the end of this day
   # @!attribute units [Array<Unit>] the live units, by name
-  # @!attribute retired_units [Array<Unit>] units a scenario retired; the baseline has none
-  # @!attribute successions [Array<Succession>] links a scenario made; the baseline has none
+  # @!attribute retired_units [Array<Unit>] units a scenario retired; the baseline has none, and a
+  #   map read with `history: true` has those the Org Graph retired by its day
+  # @!attribute successions [Array<Succession>] links a scenario made; the baseline has none, and a
+  #   map read with `history: true` has those the Org Graph recorded by its day
   # @!attribute people [Array<Member>] the people employed that day, by id
   # @!attribute unassigned_ids [Array<String>] the people in no live unit
   # @!attribute positions [Array<Position>] the open positions; the Org Graph has none, so only a plan adds them
@@ -289,19 +291,29 @@ class TeamPlanning::Baseline
   # The organisation on another day, in the shape {#structure} gives, so a
   # reader can hold the plan up against it.
   #
+  # A plan's own map holds only the units and successions a scenario made, so
+  # the Org Graph's are left out unless a reader asks for them.
+  #
   # @param date [Date]
   # @param known_on [Date, nil] nil for what the Org Graph knows now
+  # @param history [Boolean] whether to carry the units the Org Graph retired, and the
+  #   successions it recorded, by that day
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def map_on(date, known_on: nil)
+  def map_on(date, known_on: nil, history: false)
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     snapshot = OrgGraph::AsOf.new(context: @context, date:, known_on:).call
 
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
-    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: [], positions: [], names: {}, step_ids: [ @plan.id ],
-            rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
+    map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: [], positions: [], names: {},
+                  step_ids: [ @plan.id ],
+                  rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
+    return map unless history
+
+    map.with(retired_units: snapshot.retired_units.map { Unit.new(**it.to_h.slice(*Unit.members)) },
+             successions: snapshot.successions.map { Succession.new(**it.to_h) })
   end
 
   # Joins the names of everyone the map names ({Map#person_ids}) and of each

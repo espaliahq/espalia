@@ -16,10 +16,12 @@
 # A plan whose base is still to come holds every change against today, so
 # nothing it plans reads conflicting before the plan starts.
 #
-# Only a kind that reads its end state off a map
-# ({TeamPlanning::Events::Change.readable?}) and that the Org Graph can move
-# ({TeamPlanning::Events::Change.subject_moved_by}) has a status. A plan-only
-# kind, such as a rule, would read pending forever, so it is left out.
+# Only a kind the Org Graph can show has a status
+# ({TeamPlanning::Events::Change.tracked?}). A plan-only kind, such as a rule,
+# would read pending forever, so it is left out. Today's map holds the units
+# the Org Graph retired and its successions, read through
+# {TeamPlanning::Events::Change.read_org_graph}, since a succession there has
+# an id the plan never saw.
 #
 # Each kind compares with {TeamPlanning::Events::Change.shows?}, given the
 # map its planned state settles on, since the Org Graph can't say which
@@ -69,8 +71,7 @@ class TeamPlanning::Status
     changes = tracked_changes
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
-    now = @baseline.map_on(@today)
-    base = @today < @plan.base_on ? now : @baseline.structure
+    now, base = maps
     statuses = changes.map { |key, change| entry(change, key, base:, now:) }
     Report.new(on: @today, statuses:, names: names_for(statuses.map(&:subject_id), base, now))
   end
@@ -81,7 +82,17 @@ class TeamPlanning::Status
   def tracked_changes
     changes = winning(@scenario_id)
     hires = changes.keys.filter_map { |subject_id, facet| subject_id if facet == TeamPlanning::Events::PlaceholderSet.facet }
-    changes.select { |(subject_id, _), change| change.class.readable? && change.class.meets_org_graph? && hires.exclude?(subject_id) }
+    changes.select { |(subject_id, _), change| change.class.tracked? && hires.exclude?(subject_id) }
+  end
+
+  # Today, and the base to hold it against. A succession the Org Graph held on
+  # the base date came before the plan, so today leaves it out.
+  def maps
+    now = @baseline.map_on(@today, history: true)
+    return [ now, now ] if @today < @plan.base_on
+
+    base = @baseline.map_on(@plan.base_on, known_on: @plan.base_on - 1, history: true)
+    [ now.with(successions: now.successions - base.successions), base.with(retired_units: [], successions: []) ]
   end
 
   def winning(scenario_id) = @winning[scenario_id] ||= @repository.sealed(@aggregate.winning_changes(scenario_id))
@@ -89,8 +100,8 @@ class TeamPlanning::Status
   def entry(change, key, base:, now:)
     kind = change.class
     subject_id, facet = key
-    today = kind.read_from(now, subject_id:, facet:)
-    before = [ [ kind.read_from(base, subject_id:, facet:), base ], *step_before(change, key, base) ]
+    today = kind.read_org_graph(now, change)
+    before = [ [ kind.read_org_graph(base, change), base ], *step_before(change, key, base) ]
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
               status: status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before))
   end
@@ -131,7 +142,7 @@ class TeamPlanning::Status
 
   # Today's name wins; the base names a unit since retired.
   def names_for(ids, *maps)
-    units = maps.flat_map(&:units).to_h { [ it.id, it.name ] }
+    units = maps.flat_map { it.units + it.retired_units }.to_h { [ it.id, it.name ] }
     people = ::Person.where(tenant_id: @plan.tenant_id, id: ids.uniq).pluck(:id, :name).to_h
     units.slice(*ids).merge(people)
   end

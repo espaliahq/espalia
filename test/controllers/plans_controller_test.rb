@@ -14,7 +14,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       @admin = account(role: :admin, name: "Ada Admin")
       @plan_id = call(Operations::TeamPlanning::CreatePlan, @editor, name: "Pay review 2027", base_on: "2026-11-14")[:plan_id]
       call(Operations::TeamPlanning::AddPlanMember, @editor, plan_id: @plan_id, person_id: @viewer.person.id, role: "viewer")
-      call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, relation: "then", name: "Q1 hires", ends_on: "2027-03-31")
+      @q1 = call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, relation: "then", name: "Q1 hires",
+                                                                  ends_on: "2027-03-31")[:scenario_id]
     end
   end
 
@@ -35,10 +36,26 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Erin Editor"
       assert_includes response.body, "your organisation&#39;s defaults"
     end
+
+    should "open the map on today, and on a scenario" do
+      get map_plan_path(@plan_id)
+      assert_response :success
+      assert_includes response.body, "Read only."
+      assert_not_includes response.body, "with this scenario&#39;s changes"
+
+      get map_plan_path(@plan_id, scenario: @q1)
+      assert_response :success
+      assert_includes response.body, "with this scenario&#39;s changes"
+    end
+
+    should "get a 404 for a scenario that isn't in the plan" do
+      get map_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
+      assert_response :not_found
+    end
   end
 
   context "someone outside the plan" do
-    should "not see it in the index, and get a 404 for its page, even as a tenant admin" do
+    should "not see it in the index, and get a 404 for its page and map, even as a tenant admin" do
       [ @outsider, @admin ].each do |account|
         sign_in account.user
         get plans_path
@@ -46,6 +63,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
         assert_not_includes response.body, "Pay review 2027"
 
         get plan_path(@plan_id)
+        assert_response :not_found
+        get map_plan_path(@plan_id)
         assert_response :not_found
         sign_out account.user
       end

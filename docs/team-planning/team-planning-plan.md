@@ -18,7 +18,7 @@ it uses. The ones planning leans on most:
 
 | Need | Built as |
 |---|---|
-| The organisation on a date (R4) | `OrgGraph::AsOf`: people, live units and memberships as known on a date, with each person's cost centre, site, country, FTE and employment type, and each membership's allocation and role |
+| The organisation on a date (R4) | `OrgGraph::AsOf`: people, live units and memberships as known on a date, with the retired units and successions apart, with each person's cost centre, site, country, FTE and employment type, and each membership's allocation and role |
 | What changed between two dates (R4) | `OrgGraph::ChangesBetween`, by effective or learned date. A change carries its `event_id`, not its plan or cause |
 | History with both times | The history projection, `org_fact_periods` |
 | Who holds a fact (R5) | `OrgFactProvider`, and the refusal in `CommandHandler#ensure_provides!` |
@@ -235,18 +235,17 @@ because a binding budget guardrail needs them.
 | 1.3 | Baseline reader: the root scenario resolved over `OrgGraph::AsOf` on the plan's base date, joined to names, with "Former member" for anyone forgotten | 1.1 |
 | 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes | 1.2, 1.3 |
 | 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
-| 1.6 | Read-only map of the baseline: units, people with their allocation and role from `AsOf::Membership`, and the Unassigned bucket | 1.4 |
+| 1.6 | Read-only map of any scenario, the baseline by default: units, people with their allocation and role, open positions, and the Unassigned bucket, read through `team_planning_scenario_map` | 1.4 |
 
 ### P2 Shreddable plan fields
 
-Built from [the shreddable fields design](shreddable-fields-design.md). Nothing of it is
-on main yet.
+Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
 | 2.1 | Key store: a key per plan, and one per person within a plan, to encrypt a field, decrypt it, and destroy the key | none |
 | 2.2 | Shreddable fields on events, and the aggregate guard: an aggregate never decides on a shreddable value | 2.1 |
-| 2.3 | Projections rebuild with keys destroyed, showing a value as removed | 2.2 |
+| 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form | 2.2 |
 | 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
 | 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6) | 2.2 |
 

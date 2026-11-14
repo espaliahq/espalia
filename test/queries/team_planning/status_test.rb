@@ -214,6 +214,56 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :pending, statuses(status(q2))[[ @payments, "unit" ]]
   end
 
+  should "read a planned retirement pending while the unit is live, and done once the Org Graph retires it" do
+    plan(TeamPlanning::Events::UnitRetired, @platform, name: "Platform", parent_id: nil, level_id: @squads)
+    assert_equal :pending, statuses(status)[[ @platform, "unit" ]]
+
+    on(Time.utc(2026, 3, 10, 9)) do
+      structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+      structure.rename_unit(@platform, "Platform Old", effective_on: "2026-03-10")
+      structure.retire_unit(@platform, effective_on: "2026-03-10")
+    end
+    assert_equal :done, statuses(status)[[ @platform, "unit" ]]
+    assert_equal "Platform Old", status.name_of(@platform)
+  end
+
+  should "find a planned succession by its predecessors: pending until recorded, conflicting when it names other successors" do
+    merged, elsewhere = Array.new(2) { SecureRandom.uuid_v7 }
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    on(Time.utc(2026, 2, 1, 9)) do
+      structure.create_unit(merged, "Money", level_id: @squads, effective_on: "2026-01-01")
+      structure.create_unit(elsewhere, "Core", level_id: @squads, effective_on: "2026-01-01")
+    end
+    planned = SecureRandom.uuid_v7
+    plan(TeamPlanning::Events::UnitSuccessionSet, planned, predecessor_ids: [ @payments, @platform ], successor_ids: [ merged ])
+    assert_equal :pending, statuses(status)[[ planned, "succession" ]]
+
+    on(Time.utc(2026, 3, 10, 9)) do
+      structure.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ elsewhere ], effective_on: "2026-03-10")
+    end
+    assert_equal :conflicting, statuses(status)[[ planned, "succession" ]]
+  end
+
+  should "read a merge done when the Org Graph records it in parts, and leave out a succession it held before the base" do
+    merged, earlier = Array.new(2) { SecureRandom.uuid_v7 }
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    on(Time.utc(2026, 2, 1, 9)) do
+      structure.create_unit(merged, "Money", level_id: @squads, effective_on: "2026-01-01")
+      structure.create_unit(earlier, "Billing", level_id: @squads, effective_on: "2026-01-01")
+      structure.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ earlier ], effective_on: "2026-02-01")
+    end
+    planned = SecureRandom.uuid_v7
+    plan(TeamPlanning::Events::UnitSuccessionSet, planned, predecessor_ids: [ @payments, @platform ], successor_ids: [ merged ])
+    assert_equal :pending, statuses(status)[[ planned, "succession" ]]
+
+    on(Time.utc(2026, 3, 10, 9)) do
+      [ @payments, @platform ].each do
+        structure.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ it ], successor_ids: [ merged ], effective_on: "2026-03-10")
+      end
+    end
+    assert_equal :done, statuses(status)[[ planned, "succession" ]]
+  end
+
   should "read a line to a person done once the Org Graph names that manager" do
     plan(TeamPlanning::Events::ReportingLineSet, @brook.id, manager_id: @ada.id)
     assert_equal :pending, statuses(status)[[ @brook.id, "reporting_line" ]]
