@@ -181,8 +181,11 @@ To pin a value the baseline gives, a kind reads its end state off a map with
 resolved map for a pin, and a map built from the Org Graph today for a change's status
 (4.3). A kind that doesn't implement it can still be pinned from an ancestor's change.
 
-Every kind of change is listed in `TeamPlanning::ChangeKinds::ALL`, which a test holds to
-every `Change` subclass. The overrides projection subscribes through it and writes
+`TeamPlanning::ChangeKinds.all` finds every kind of change: each `Change` subclass in
+`app/contexts/team_planning/events`, so a new kind touches only its own file. It loads that
+directory before it looks, since the projections subscribe before production eager-loads. A
+test checks every kind is complete and holds a facet no other kind holds. The overrides
+projection subscribes through it and writes
 `team_planning_overrides`: one row per scenario, subject and facet the scenario sets or
 pinned. `team_planning_overrides` lists them, each beside what the scenario would inherit
 without it, and says when a pin's parent has moved on. Reconcile (4.5) reuses both: keep
