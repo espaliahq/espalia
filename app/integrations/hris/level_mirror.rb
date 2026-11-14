@@ -45,6 +45,15 @@ class Hris::LevelMirror
     HrisUnitParentProposal.where(unit_id: OrgUnit.where(level_id: levels.map(&:id))).destroy_all
   end
 
+  # The same, for a sync a rebuild held back: the units a structure rebuild
+  # is replaying can't be looked up, and a tenant's proposals all belong to
+  # its one HRIS.
+  #
+  # @return [void]
+  def self.forget_every_parent_reading
+    HrisUnitParentProposal.delete_all
+  end
+
   # @param provider [String] the HRIS, such as "hibob"
   # @param catalogue [Array<Hris::Field>] the HRIS's field catalogue
   # @param readings [Hash{Person => #field_value}] each current person's

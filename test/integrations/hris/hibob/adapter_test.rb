@@ -1444,8 +1444,11 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       alice = employees.find { it["id"] == "bob-001" }
       alice["work"]["title"] = alice["humanReadable"]["work"]["title"] = "Staff Engineer"
 
+      reading = HrisUnitParentProposal.create!(unit_id: SecureRandom.uuid_v7, parent_id: SecureRandom.uuid_v7, first_seen_on: Date.current)
+
       result = while_rebuilding(@tenant, OrgGraph::Projections::Structure) { build_adapter(employees).sync_people }
 
+      assert_not HrisUnitParentProposal.exists?(reading.id), "a skipped sync breaks the run of two readings"
       assert_empty result[:errors]
       assert_equal 0, result[:org_graph_events]
       assert_equal 3, result[:people_skipped_while_rebuilding], "two people returned and one absent"
@@ -1484,11 +1487,14 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       adapter = build_adapter(@fixture["employees"])
       adapter.define_singleton_method(:fetch_field_catalogue) { [ Hris::Field.new(id: "work.department", name: "Department", kind: :text) ] }
 
+      reading = HrisUnitParentProposal.create!(unit_id: SecureRandom.uuid_v7, parent_id: SecureRandom.uuid_v7, first_seen_on: Date.current)
+
       result = while_rebuilding(@tenant, OrgGraph::Projections::Members) { adapter.sync_people }
 
       assert_empty result[:errors]
       assert_equal 1, result[:levels_skipped_while_rebuilding]
       assert_not OrgUnit.exists?(level_id: @team_level)
+      assert_not HrisUnitParentProposal.exists?(reading.id), "a skipped sync breaks the run of two readings"
     end
 
     should "mirror nothing when HiBob's field lists can't be read" do

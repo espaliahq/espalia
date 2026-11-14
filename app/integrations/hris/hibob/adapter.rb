@@ -481,6 +481,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param readings [Hash{Person => Hris::Hibob::ResponseMapper}] current people
   # @param result [Hash] running tally
   def mirror_structure_levels(readings, result)
+    return Hris::LevelMirror.forget_every_parent_reading unless org_graph_writable?
     return if mirrored_levels.empty?
 
     catalogue = begin
@@ -495,6 +496,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       Hris::LevelMirror.new(provider: provider_name, catalogue:, readings:, result:, levels: mirrored_levels).call
     end
   rescue ProjectionVersion::Rebuilding
+    Hris::LevelMirror.forget_every_parent_reading
     result[:levels_skipped_while_rebuilding] += mirrored_levels.size
   end
 
