@@ -868,18 +868,27 @@ Two consequences of [the aggregate guard](shreddable-fields-design.md):
 
 ## The headcount budget
 
-The budget stays in the plan. A budget line approved for a person already employed is close to that
-person's pay, so it belongs with the plan's other sensitive values, under the plan's key
-and deleted with it.
+The organisation's approved budget is tenant configuration, like pay bands: a `budget_lines`
+table that only tenant admins hold, on the Budget page or through the `tenants_*_budget_line`
+tools. Every plan reads it live as its root's default. A plan member sees a line only
+through their plan's read, and the tenant tools refuse everyone else with no detail. What a
+plan changes stays in the plan: a budget line approved for a person already employed is close
+to that person's pay, so a plan's own lines and changes belong with its other sensitive
+values, under the plan's key and deleted with it
+([#302](https://github.com/espaliahq/espalia/issues/302)).
 
 - **Headcount budget only.** A budget line is permission to spend on people: a period, an
   amount or a head count or both, and optionally the role, level, location and cost
   centre it was approved for. Cost centre is the label the Org Graph carries for a
   person, used for grouping. Accounts, ledger codes and every other financial or
   accounting identifier are out of scope.
-- **Budget lines are plan data.** `BudgetLineSet` and `BudgetLineCut` in a plan's root scenario
-  are its approved budget. A descendant changes them like anything else. The amount is
-  shreddable under the plan's key.
+- **A plan changes the budget with plan data.** `BudgetLineSet` and `BudgetLineCut` add,
+  change or cut a line in a scenario, and a descendant changes them like anything else. The
+  amount is shreddable under the plan's key. Removing a tenant line a plan has changed or cut
+  leaves the plan's change orphaned, and Attention flags it rather than dropping it.
+- **Money keeps its currency.** An amount keeps its own currency and period, a year or a
+  month, as a pay band's does, and is never converted. A line with a head count and no amount
+  has no amount, never zero.
 - **On-cost models.** What a position costs beyond base pay is calculated by an on-cost
   model: a flat rate, rates by country, or itemised components. Models are chosen and
   set like capacity models, with a tenant default that a plan or scenario can change.

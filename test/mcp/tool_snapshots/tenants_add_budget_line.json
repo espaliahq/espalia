@@ -1,0 +1,105 @@
+{
+  "name": "tenants_add_budget_line",
+  "description": "Add a line to the tenant's approved headcount budget, which every Team Planning plan starts from. Give an amount, a head count or both. An amount needs a currency (ISO 4217) and a period, year or month, and is kept as entered, never converted; a line with no amount reads as no amount, never zero. Figures are decimal strings with at most two decimal places. origin is existing (a person's seat), replacement or new; approved_on applies to a new position only. role_id and level_id (from frameworks_get) are optional, as are location and cost_centre. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "starts_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "ends_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "origin": {
+        "type": "string",
+        "enum": [
+          "existing",
+          "replacement",
+          "new"
+        ]
+      },
+      "approved_on": {
+        "type": "string",
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "amount": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "currency": {
+        "type": "string"
+      },
+      "period": {
+        "type": "string",
+        "enum": [
+          "year",
+          "month"
+        ]
+      },
+      "head_count": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "role_id": {
+        "type": "string"
+      },
+      "level_id": {
+        "type": "string"
+      },
+      "location": {
+        "type": "string"
+      },
+      "cost_centre": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "starts_on",
+      "ends_on",
+      "origin"
+    ],
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "origin": {
+              "enum": [
+                "existing",
+                "replacement"
+              ]
+            }
+          },
+          "required": [
+            "origin"
+          ]
+        },
+        "then": {
+          "not": {
+            "required": [
+              "approved_on"
+            ]
+          }
+        }
+      },
+      {
+        "dependentRequired": {
+          "amount": [
+            "currency",
+            "period"
+          ]
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

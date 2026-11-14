@@ -1,0 +1,24 @@
+{
+  "name": "tenants_remove_budget_line",
+  "description": "Remove a line from the tenant's approved budget, by budget_line_id from tenants_budget_lines. A plan that changed or cut the line keeps its change, which then reads as orphaned. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "budget_line_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "budget_line_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}
