@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# How the map reads show a resolved organisation: people by id, each with
+# How the map reads show a resolved organisation. People come by id, with
 # their places, allocation total, reporting line and whether they are
-# leaving, positions with their occupants, open FTE and whom they backfill,
-# the people a departure took off the map, and a `names` entry for every person id the payload uses, so a client
-# never meets an id it can't name.
+# leaving. Positions carry their occupants, open FTE and whom they backfill,
+# and `departed` lists those a departure took off the map. Every person id
+# has a `names` entry, so a client never meets an id it can't name.
 module Operations::TeamPlanning::MapPayload
   private
 
