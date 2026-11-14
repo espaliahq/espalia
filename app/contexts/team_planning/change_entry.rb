@@ -5,10 +5,11 @@
 # through it, so they agree on what each event did.
 #
 # A shreddable value never leaves the event: {#end_state} holds only the
-# fields in clear, and {#sealed_fields} names the rest.
+# fields in clear, and {#sealed_fields} names the rest. {#note} is the
+# planner's note as the event holds it, sealed.
 TeamPlanning::ChangeEntry = Data.define(
   :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
-  :actor_id, :at, :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id
+  :actor_id, :at, :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :note
 ) do
   # @param event [RubyEventStore::Event]
   # @return [TeamPlanning::ChangeEntry, nil] nil for an event that changes no facet
@@ -17,7 +18,7 @@ TeamPlanning::ChangeEntry = Data.define(
 
     new(event_id: event.event_id, plan_id: event.data[:plan_id], scenario_id: event.data[:scenario_id],
         at: event.timestamp, subject_id: nil, facet: nil, kind: nil, end_state: nil, sealed_fields: [],
-        pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, **fields)
+        pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, note: nil, **fields)
   end
 
   def self.fields_of(event)
@@ -25,10 +26,10 @@ TeamPlanning::ChangeEntry = Data.define(
     case event
     when TeamPlanning::Events::Change
       { action: "set", subject_id: data[:subject_id], facet: event.key.last, kind: event.class.name,
-        actor_id: data[:set_by_id], **split(data.except(*TeamPlanning::Events::Change::FIELDS)) }
+        actor_id: data[:set_by_id], note: data[:note], **split(data.except(*TeamPlanning::Events::Change::FIELDS)) }
     when TeamPlanning::Events::ChangePinned
       { action: "pin", **data.slice(:subject_id, :facet, :kind, :pinned_from_scenario_id, :pinned_from_event_id),
-        actor_id: data[:pinned_by_id], **split(data[:end_state].to_h) }
+        actor_id: data[:pinned_by_id], note: data[:note], **split(data[:end_state].to_h) }
     when TeamPlanning::Events::ChangeCleared
       { action: "clear", **data.slice(:subject_id, :facet), actor_id: data[:cleared_by_id] }
     when TeamPlanning::Events::ChangeUndone

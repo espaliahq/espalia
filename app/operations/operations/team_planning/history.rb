@@ -16,8 +16,9 @@ class Operations::TeamPlanning::History < Operations::Base
               "#{PER_PAGE} entries a page, with next_page true when another follows: every " \
               "change it set, pin and clear it made, and every undo and redo of one, with who did it and when. " \
               "action is set, pin, clear, undo or redo; an undo or redo names the entry it reverses in " \
-              "reverses_event_id. An entry that stands undone says who undid it. A value that can be erased is " \
-              "never shown here: sealed_fields names any such field. A forgotten person reads as " \
+              "reverses_event_id. An entry that stands undone says who undid it. A change or pin shows the note it " \
+              "was made with as note: { value }, or { removed: true } once the plan is deleted. Any other value " \
+              "that can be erased is never shown here: sealed_fields names any such field. A forgotten person reads as " \
               "\"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
@@ -51,7 +52,7 @@ class Operations::TeamPlanning::History < Operations::Base
       event_id: row.id, action: row.action, subject_id: row.subject_id, facet: row.facet,
       kind: row.kind&.demodulize&.underscore, end_state: row.end_state, sealed_fields: row.sealed_fields,
       pinned_from: (row.action == "pin" ? { scenario_id: row.pinned_from_scenario_id, event_id: row.pinned_from_event_id } : nil),
-      reverses_event_id: row.reverses_event_id,
+      reverses_event_id: row.reverses_event_id, note: Operations::TeamPlanning::MapPayload.sealed(row.note),
       by: person(row.actor_id, names), at: row.at.utc.iso8601,
       undone: (row.undone? ? { by: person(row.undone_by_id, names), at: row.undone_at.utc.iso8601 } : nil)
     }.compact

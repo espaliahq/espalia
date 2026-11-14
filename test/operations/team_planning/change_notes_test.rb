@@ -78,6 +78,22 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
     assert_equal [ @noted, @plain ].sort, drifted[:meets].map { it[:scenario_id] }.sort
   end
 
+  should "list the note with the override and the history entry, and read it as removed once the plan's key is gone" do
+    write(Operations::TeamPlanning::SetPlannedLevel, @noted, person_id: @ada.id, level: "4", note: "Ready since the platform launch")
+    write(Operations::TeamPlanning::SetPlannedLevel, @plain, person_id: @ada.id, level: "4")
+
+    reads = lambda do |scenario_id|
+      [ call(Operations::TeamPlanning::Overrides, plan_id: @plan_id, scenario_id:)[:overrides].sole,
+        call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id:)[:entries].sole ]
+    end
+    assert_equal [ { value: "Ready since the platform launch" } ] * 2, reads.call(@noted).map { it[:note] }
+    assert reads.call(@plain).none? { it.key?(:note) }
+
+    as_tenant { PlanKeyStore.new.destroy_plan(@plan_id) }
+    assert_equal [ { removed: true } ] * 2, as_tenant { [ TeamPlanningOverride, TeamPlanningHistoryEntry ].map { it.find_by!(scenario_id: @noted).note } }
+      .map { Operations::TeamPlanning::MapPayload.sealed(it) }
+  end
+
   should "pin a change with a note of its own" do
     write(Operations::TeamPlanning::SetReportingLine, @plan_id, person_id: @bo.id, manager_id: @ada.id)
     write(Operations::TeamPlanning::PinChange, @noted, subject_id: @bo.id, facet: "reporting_line", note: "Hold this whatever the baseline does")

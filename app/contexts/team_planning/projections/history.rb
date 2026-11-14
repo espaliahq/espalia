@@ -56,7 +56,7 @@ class TeamPlanning::Projections::History
     reversed&.update!(entry.action == "undo" ? { undone_by_id: entry.actor_id, undone_at: entry.at } : { undone_by_id: nil, undone_at: nil })
     TeamPlanningHistoryEntry.create!(
       id: entry.event_id, position: next_position(entry.scenario_id),
-      **entry.to_h.slice(:plan_id, :scenario_id, :action, :kind, :end_state, :sealed_fields, :actor_id, :at,
+      **entry.to_h.slice(:plan_id, :scenario_id, :action, :kind, :end_state, :sealed_fields, :actor_id, :at, :note,
                          :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :subject_id, :facet)
     )
   end

@@ -6,10 +6,15 @@
 # Projected from the plan streams by {TeamPlanning::Projections::History},
 # and nothing else writes it. Its id is the event's, so a rebuild keeps it.
 # An undo and a redo carry the subject and facet of the entry they reverse,
-# and an entry that stands undone says who undid it.
+# and an entry that stands undone says who undid it. A change or pin keeps
+# the note it was made with, sealed under the plan's key.
 #
 class TeamPlanningHistoryEntry < ApplicationRecord
+  include Shreddable::Column
+
   ACTIONS = %w[set pin clear undo redo].freeze
+
+  shreddable_column :note, by: :plan
 
   acts_as_tenant :tenant
 

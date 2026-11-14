@@ -6,11 +6,14 @@
 # Projected from the plan streams by {TeamPlanning::Projections::Overrides},
 # and nothing else writes it. A cleared override leaves it; the stream keeps
 # it for history. The id derives from the scenario, the subject and the
-# facet, so a rebuild keeps it.
+# facet, so a rebuild keeps it. The note is the planner's, sealed under the
+# plan's key.
 #
 class TeamPlanningOverride < ApplicationRecord
   include DeterministicId
+  include Shreddable::Column
   deterministic_id_from :scenario_id, :subject_id, :facet
+  shreddable_column :note, by: :plan
 
   acts_as_tenant :tenant
 

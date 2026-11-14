@@ -61,7 +61,7 @@ class TeamPlanning::Projections::Overrides
   def write(entry)
     row = TeamPlanningOverride.find_or_initialize_by(**entry.to_h.slice(:scenario_id, :subject_id, :facet))
     row.update!(**entry.to_h.slice(:plan_id, :kind, :end_state, :pinned_from_scenario_id, :pinned_from_event_id),
-                pinned: entry.action == "pin", set_by_id: entry.actor_id, event_id: entry.event_id, set_at: entry.at)
+                pinned: entry.action == "pin", set_by_id: entry.actor_id, event_id: entry.event_id, set_at: entry.at, note: entry.note)
   end
 
   def restore(entry, event)
