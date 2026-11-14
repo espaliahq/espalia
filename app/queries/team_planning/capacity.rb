@@ -30,6 +30,8 @@ class TeamPlanning::Capacity
     "unmapped_title" => "The person's title maps to no role",
     "unknown_role" => "The role isn't in the framework",
     "closed_position" => "The position this place is in has closed",
+    "leaving" => "The person leaves in this step, so a backfill position carries the seat if the plan gives one",
+    "no_level" => "The level resolves to none, so the model has nothing to price",
     "no_model" => "No capacity model is chosen for the role or its family",
     "unknown_model" => "The chosen capacity model isn't available"
   }.freeze
@@ -80,11 +82,12 @@ class TeamPlanning::Capacity
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
     @map = @resolution.call
-    @positions = @rules = nil
+    @positions = @rules = @own_levels = nil
     @live = @map.units.to_set(&:id)
     people = @map.people.map { person_seat(it) }
     seats = people + open_positions(people)
     families = family_ids(seats)
+    @facts = facts(seats)
     priced = seats.map { |seat, reasons| Seat.new(seat:, places: seat.places.zip(reasons).map { |place, reason| price(seat, place, reason, families) }) }
     Report.new(map: @map, seats: priced, **sums(priced))
   end
@@ -96,7 +99,9 @@ class TeamPlanning::Capacity
     fte = exact(member.fte_or_one)
     own = own_target(member)
     placements = member.memberships.presence || [ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]
-    places, reasons = allocations(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
+    places, reasons = TeamPlanning::Baseline::Membership.shares(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
+    reasons = reasons.map { "leaving" } if member.leaving?
+    (@own_levels ||= {})[member.id] = own.level&.level_id
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]
   end
 
@@ -123,19 +128,12 @@ class TeamPlanning::Capacity
     end
   end
 
-  # An allocation the HRIS didn't give shares what the seat's other places leave.
-  def allocations(placements)
-    known = placements.reject { it.allocation.nil? }.sum(0r) { exact(it.allocation) }
-    unknown = placements.count { it.allocation.nil? }
-    share = unknown.zero? ? 0r : [ 1r - known, 0r ].max / unknown
-    placements.map { [ it, it.allocation.nil? ? share : exact(it.allocation), !it.allocation.nil? ] }
-  end
-
   # A position counts only for the FTE its occupants leave open, so a filled
   # one is counted once, through the people in it.
   def open_positions(people)
     filled = Hash.new(0r)
-    people.each { |seat, _| seat.places.each { filled[it.position_id] += seat.fte * it.allocation if it.position_id } }
+    backfill = @map.people.to_h { [ it.id, it.backfill_id ] }
+    people.each { |seat, _| seat.places.each { filled[it.position_id] += seat.fte * it.allocation if it.position_id && it.position_id != backfill[seat.id] } }
     positions.values.sort_by(&:id).filter_map do |position|
       open = exact(position.fte) - filled[position.id]
       next unless open.positive?
@@ -156,7 +154,9 @@ class TeamPlanning::Capacity
     model, chosen_for = choice.values_at("model", "chosen_for")
     return Place.new(place:, model:, chosen_for:, figure: nil, reason: "unknown_model") unless TeamPlanning::CapacityModels.registered?(model)
 
-    figure = TeamPlanning::CapacityModels.fetch(model).capacity_of(seat, place:, params: choice["params"], map: @map)
+    figure = TeamPlanning::CapacityModels.fetch(model).capacity_of(seat, place:, params: choice["params"], map: @map, facts: @facts)
+    return Place.new(place:, model:, chosen_for:, figure: nil, reason: figure.reason) if figure.reason
+
     Place.new(place:, model:, chosen_for:, figure:, reason: nil)
   end
 
@@ -178,6 +178,17 @@ class TeamPlanning::Capacity
   def family_ids(seats)
     role_ids = seats.flat_map { |seat, _| seat.places.filter_map(&:role_id) }.uniq
     FrameworkState::Role.where(tenant_id: @plan.tenant_id, role_id: role_ids).pluck(:role_id, :role_family_id).to_h
+  end
+
+  # A person's level is their own, or failing that the level of the first
+  # position they fill.
+  def facts(seats)
+    level_ids = seats.to_h { |seat, _| [ seat.id, (@own_levels || {})[seat.id] || seat.places.filter_map(&:level_id).first ] }
+    every_level = level_ids.values + seats.flat_map { |seat, _| seat.places.map(&:level_id) }
+    ordinal_of = FrameworkState::Level.where(tenant_id: @plan.tenant_id, level_id: every_level.compact.uniq).pluck(:level_id, :ordinal).to_h
+    Model::Facts.new(level_of: level_ids.transform_values { ordinal_of[it] }.compact, ordinal_of:,
+                     role_ids_of: seats.to_h { |seat, _| [ seat.id, seat.places.filter_map(&:role_id).uniq ] },
+                     open_fte: seats.select { |seat, _| seat.kind == "position" }.to_h { |seat, _| [ seat.id, seat.fte ] })
   end
 
   def positions = @positions ||= @map.positions.index_by(&:id)
