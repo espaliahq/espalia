@@ -15,9 +15,10 @@
 # nothing it plans reads conflicting before the plan starts.
 #
 # Once a plan is updated to today, today reads its base, so a change that
-# conflicted would read pending. A conflict the update carried forward
-# ({TeamPlanning::PlanAggregate#carried_conflicts}) reads conflicting, with
-# `since` the day of that update, until today shows the change done.
+# conflicted would read pending. A conflict the update carried forward in this
+# scenario ({TeamPlanning::PlanAggregate#carried_conflicts}) reads conflicting,
+# with `since` the day of the update that first found it, while the scenario
+# still resolves to the same change. A change that reads done reads done.
 #
 # Only a kind that reads its end state off a map
 # ({TeamPlanning::Events::Change.readable?}) and that the Org Graph can move
@@ -68,6 +69,7 @@ class TeamPlanning::Status
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     @aggregate = @repository.load_plan(@plan.id)
+    @carried = @aggregate.carried_conflicts(@scenario_id)
     @resolved = {}
     changes = tracked_changes
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
@@ -90,7 +92,7 @@ class TeamPlanning::Status
     today = kind.read_from(now, subject_id:, facet:)
     before = [ [ kind.read_from(base, subject_id:, facet:), base ], *step_before(change, key, base) ]
     status = status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before)
-    since = @aggregate.carried_conflicts(change.data[:scenario_id])[key] unless status == :done
+    since = @carried[key] unless status == :done
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
               status: since ? :conflicting : status, since:)
   end

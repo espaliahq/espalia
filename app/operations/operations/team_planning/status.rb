@@ -15,8 +15,9 @@ class Operations::TeamPlanning::Status < Operations::Base
               "reads the planned end state, 'pending' when today still reads what the plan's base held or what " \
               "the step before plans, 'conflicting' when it reads none of these; before the plan's base date " \
               "nothing reads conflicting. A conflict an update to today carried forward still reads 'conflicting', " \
-              "with since the day of that update, until the change reads done or is set, cleared or undone in " \
-              "its scenario; otherwise since is null. A person's placements are one facet, so a placement list is " \
+              "with since the day of the update that first found it, while the scenario still resolves to the " \
+              "same change: a set, pin, clear or undo ends it. A change that reads done reads done; otherwise " \
+              "since is null. A person's placements are one facet, so a placement list is " \
               "done only when the whole list matches. The Org Graph can't say which position someone fills, only " \
               "where they are, so a placement in a position is done once the person is in the position's unit at " \
               "its allocation, with its role only when the plan names one. A change the Org Graph never holds, " \

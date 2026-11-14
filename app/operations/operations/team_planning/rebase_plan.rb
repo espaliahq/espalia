@@ -11,8 +11,8 @@ class Operations::TeamPlanning::RebasePlan < Operations::Base
               "reads the Org Graph as of it, with nothing else rewritten. The first step after the baseline " \
               "starts on the new base. Read team_planning_rebase_preview first and pass the base_on it gave, so " \
               "an update made since is refused rather than taken in unseen. A change that conflicts with the Org " \
-              "Graph at that moment stays conflicting in team_planning_status until it reads done or is set, " \
-              "cleared or undone in its scenario. Undo does not reverse an update: a base only moves forward. " \
+              "Graph at that moment stays conflicting in team_planning_status while the scenario still " \
+              "resolves to that change: a set, pin, clear or undo ends it. Undo does not reverse an update: a base only moves forward. " \
               "Refused when the plan already stands on today or a day still to come, when the first step would " \
               "end before today, naming it, and, as an unknown plan, unless the caller is an editor."
   category :write

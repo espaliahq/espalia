@@ -13,7 +13,8 @@ class Operations::TeamPlanning::RebasePreview < Operations::Base
               "For the baseline (scenario_id equal to the plan_id) and each scenario, it counts the planned " \
               "changes reading done, pending and conflicting, as team_planning_status reads them. Once the base " \
               "is today a conflicting change would read pending, so `conflicts` names each one, by the scenario " \
-              "that made it, subject_id and facet: the update records them, and status keeps them conflicting. " \
+              "it reads conflicting in, subject_id, facet and change_id: the update records them afresh, and " \
+              "status keeps them conflicting. " \
               "Pass base_on to team_planning_rebase_plan. Refused when the plan already stands on today or on a " \
               "day still to come, and, as an unknown plan, unless the caller is a member."
   category :read

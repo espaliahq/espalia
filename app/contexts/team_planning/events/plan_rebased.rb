@@ -5,14 +5,16 @@
 #
 # Today reads the new base, so a change that disagreed with reality would read
 # pending from here on. `conflicts` keeps each one in view: the key of every
-# change that read conflicting at the moment of the move, never its value.
+# change that read conflicting at the moment of the move, never its value,
+# with the scenario it read conflicting in and the change that scenario
+# resolved to.
 #
 # @!attribute [r] data
 #   @return [Hash] event data
 #   @option data [String] :plan_id
 #   @option data [String] :base_on YYYY-MM-DD, the new base
 #   @option data [String] :previous_base_on YYYY-MM-DD
-#   @option data [Array<Hash>] :conflicts `{ scenario_id, subject_id, facet }`, the scenario being the one that made the change
+#   @option data [Array<Hash>] :conflicts `{ scenario_id, subject_id, facet, change_id }`
 #   @option data [String] :rebased_by_id person_id of the actor
 #
 class TeamPlanning::Events::PlanRebased < RubyEventStore::Event

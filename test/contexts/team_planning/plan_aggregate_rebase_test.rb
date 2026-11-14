@@ -31,7 +31,9 @@ class TeamPlanning::PlanAggregateRebaseTest < ActiveSupport::TestCase
     @plan.rebase(base_on:, expected_base_on: expected, conflicts:, rebased_by_id: @ada_id)
   end
 
-  def conflict(scenario_id) = { scenario_id:, subject_id: "lin", facet: "title" }
+  def conflict(scenario_id, change_id: @plan.winning_changes(scenario_id)[%w[lin title]]&.event_id || "none")
+    { scenario_id:, subject_id: "lin", facet: "title", change_id: }
+  end
 
   def refusal(&) = assert_raises(TeamPlanning::Error, &).message
 
@@ -52,7 +54,9 @@ class TeamPlanning::PlanAggregateRebaseTest < ActiveSupport::TestCase
     assert_equal "Next year has moved since you looked: it now stands on 2027-01-01",
                  refusal { rebase("2027-02-01", expected: "2026-12-01") }
     assert_equal "Q1 ends on 2027-03-31, before 2027-04-01: end it later or remove it first", refusal { rebase("2027-04-01") }
-    assert_equal "This plan has no such scenario", refusal { rebase("2027-02-01", conflicts: [ conflict(SecureRandom.uuid_v7) ]) }
+    assert_equal "This plan has no such scenario", refusal { rebase("2027-02-01", conflicts: [ conflict(SecureRandom.uuid_v7, change_id: "e") ]) }
+    assert_equal "A conflict needs a scenario_id, subject_id, facet and change_id",
+                 refusal { rebase("2027-02-01", conflicts: [ conflict(@q1, change_id: "e").except(:change_id) ]) }
   end
 
   should "carry a conflict until a set, clear or undo ends it, keeping the date it was first found" do

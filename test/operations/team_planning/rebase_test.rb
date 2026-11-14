@@ -74,7 +74,11 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
 
   def refusal(&) = assert_raises(Operations::Base::ParameterError, &).message
 
-  def brook_conflict = { scenario_id: @q1, subject_id: @brook.id, facet: "title" }
+  def brook_change = call(:Status, plan_id: @plan_id, scenario_id: @q1)[:statuses].find { it[:subject_id] == @brook.id }[:change_id]
+
+  def brook_conflicts(change_id = brook_change)
+    [ @q1, @lean ].map { { scenario_id: it, subject_id: @brook.id, facet: "title", change_id: } }
+  end
 
   def drift_brook
     plan(TitleSet, @ada.id, title: "Senior Engineer")
@@ -92,13 +96,14 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
                    scenarios: [ { scenario_id: @plan_id, done: 0, pending: 0, conflicting: 0 },
                                 { scenario_id: @q1, done: 1, pending: 0, conflicting: 1 },
                                 { scenario_id: @lean, done: 1, pending: 0, conflicting: 1 } ],
-                   conflicts: [ brook_conflict ] }, preview)
+                   conflicts: brook_conflicts }, preview)
   end
 
   should "update the plan to today, record the conflicts, and start the first step on the new base" do
     drift_brook
+    expected = brook_conflicts
 
-    assert_equal({ plan_id: @plan_id, base_on: "2026-03-25", previous_base_on: "2026-03-02", conflicts: [ brook_conflict ] }, rebase)
+    assert_equal({ plan_id: @plan_id, base_on: "2026-03-25", previous_base_on: "2026-03-02", conflicts: expected }, rebase)
     assert_equal "2026-03-25", call(:Scenarios, plan_id: @plan_id)[:scenarios].find { it[:scenario_id] == @q1 }[:starts_on]
 
     statuses = call(:Status, plan_id: @plan_id, scenario_id: @q1)[:statuses].index_by { it[:subject_id] }
@@ -120,6 +125,22 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
     as_tenant { handler.create_plan(later, name: "Later", base_on: Date.new(2026, 6, 1)) }
     assert_equal "Later stands on 2026-06-01, still to come: it already reads the Org Graph as known now",
                  refusal { call(:RebasePreview, plan_id: later) }
+  end
+
+  should "carry a conflict only in the scenario it was read in, and not to a change made after the read" do
+    drift_brook
+    plan(TitleSet, @brook.id, @lean, title: "Principal Engineer")
+    q1_change = brook_change
+    plan(TitleSet, @brook.id, @q1, title: "Principal Engineer")
+    as_tenant do
+      handler.rebase_plan(@plan_id, base_on: "2026-03-25", expected_base_on: BASE_ON,
+                                    conflicts: [ { scenario_id: @q1, subject_id: @brook.id, facet: "title", change_id: q1_change } ])
+    end
+
+    [ @q1, @lean ].each do |scenario_id|
+      brook = call(:Status, plan_id: @plan_id, scenario_id:)[:statuses].find { it[:subject_id] == @brook.id }
+      assert_equal [ "pending", nil ], brook.values_at(:status, :since).map { it&.to_s }, scenario_id
+    end
   end
 
   should "refuse an update that would leave the first step ending before today, naming it" do

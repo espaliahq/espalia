@@ -30,6 +30,8 @@ class TeamPlanning::PlanAggregate
   NAME_LIMIT = 120
   ROLES = %w[editor viewer].freeze
   RELATIONS = %w[then instead].freeze
+  # A conflict an update carries: where it was read, its key, and the change it read.
+  CONFLICT_FIELDS = %i[scenario_id subject_id facet change_id].freeze
 
   # A scenario as the plan holds it. `ends_on` is held only for a `then`
   # scenario; {#period_of} works out every period.
@@ -102,8 +104,9 @@ class TeamPlanning::PlanAggregate
   # @param base_on [Date, String] the new base, today when a planner updates
   # @param expected_base_on [Date, String] the base the caller last read, so a
   #   move made since refuses rather than hiding drift they never saw
-  # @param conflicts [Array<Hash>] `{ scenario_id, subject_id, facet }` for each
-  #   change reading conflicting now, the scenario being the one that made it
+  # @param conflicts [Array<Hash>] `{ scenario_id, subject_id, facet, change_id }`
+  #   for each change reading conflicting now: the scenario it was read in, and
+  #   the change that scenario resolved to then
   # @param rebased_by_id [String]
   # @raise [TeamPlanning::Error] if the plan is gone, moved since, already on
   #   that day or later, a first step would end before the new base, or a
@@ -125,16 +128,20 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
-  # The conflicts the last update to today found that still stand in a
-  # scenario: the change it made to that key then is still the one in effect.
-  # A set, clear or undo there ends one. A pin in a scenario below gives that
-  # scenario its own change, so the conflict no longer reaches it.
+  # The conflicts the last update to today found in a scenario that still
+  # stand: the scenario still resolves the key to the change the update saw.
+  # A set, pin, clear or undo along its chain ends one, and a redo brings it
+  # back.
   #
-  # @param scenario_id [String] the scenario that made the change
-  # @return [Hash{Array(String, String) => Date}] subject and facet => the base the update moved to
+  # @param scenario_id [String] the scenario the conflict was read in
+  # @return [Hash{Array(String, String) => Date}] subject and facet => the base the update that first found it moved to
   def carried_conflicts(scenario_id)
-    @carried.fetch(scenario_id, {}).each_with_object({}) do |(key, (event_id, since)), open|
-      open[key] = since if in_effect_at(scenario_id, key, @undone) == event_id
+    carried = @carried.fetch(scenario_id, {})
+    return {} if carried.empty?
+
+    winning = winning_changes(scenario_id)
+    carried.each_with_object({}) do |(key, (change_id, since)), open|
+      open[key] = since if winning[key]&.event_id == change_id
     end
   end
 
@@ -521,14 +528,13 @@ class TeamPlanning::PlanAggregate
   on TeamPlanning::Events::PlanRebased do |event|
     base_on = Date.iso8601(event.data[:base_on])
     conflicts = event.data[:conflicts].map { it.to_h.symbolize_keys }
-    @carried = conflicts.group_by { it[:scenario_id] }.to_h do |scenario_id, conflicts|
+    @carried = conflicts.group_by { it[:scenario_id] }.to_h do |scenario_id, found|
       earlier = carried_conflicts(scenario_id)
-      carried = conflicts.filter_map do |conflict|
+      carried = found.to_h do |conflict|
         key = conflict.values_at(:subject_id, :facet)
-        event_id = in_effect_at(scenario_id, key, @undone) or next
-        [ key, [ event_id, earlier.fetch(key, base_on) ] ]
+        [ key, [ conflict[:change_id], earlier.fetch(key, base_on) ] ]
       end
-      [ scenario_id, carried.to_h ]
+      [ scenario_id, carried ]
     end
     @base_on = base_on
   end
@@ -738,8 +744,10 @@ class TeamPlanning::PlanAggregate
   end
 
   def conflict_keys!(conflicts)
-    conflicts.map { it.to_h.symbolize_keys.slice(:scenario_id, :subject_id, :facet) }.uniq.each do |conflict|
-      raise ArgumentError, "A conflict needs a scenario_id, subject_id and facet" unless conflict.size == 3 && conflict.values.all?(String)
+    conflicts.map { it.to_h.symbolize_keys.slice(*CONFLICT_FIELDS) }.uniq.each do |conflict|
+      unless conflict.size == CONFLICT_FIELDS.size && conflict.values.all?(String)
+        raise TeamPlanning::Error, "A conflict needs a scenario_id, subject_id, facet and change_id"
+      end
 
       live_scenario!(conflict[:scenario_id])
     end

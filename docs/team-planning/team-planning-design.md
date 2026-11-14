@@ -421,12 +421,14 @@ report's.
 
 Once the base is today, a change that disagreed with the Org Graph would read pending:
 today and the base say the same thing. So `PlanRebased` records each conflict found at
-that moment, as the scenario that made the change, its subject and its facet, never a
-value. The update finds them afresh rather than trusting the preview. The aggregate
-holds each one against the change in effect then, and the conflict stays open while that
-change does. Setting, clearing or undoing the facet in its scenario ends it, a redo of
-the same change brings it back, and a later update replaces the set, keeping the date a
-conflict was first found. Nothing stores the result: it is derived from the stream on
+that moment, as the scenario it read conflicting in, its subject, its facet and the
+change that scenario resolved to, never a value. A change's status depends on the
+scenario read, since a step can reshape what an inherited change lands on, so each
+scenario keeps its own. The update finds them afresh rather than trusting the preview,
+and a change made after that read never inherits a conflict it didn't have. The
+conflict stays open while the scenario still resolves to the same change. A set, pin,
+clear or undo along its chain ends it, a redo of the same change brings it back, and a
+later update replaces the set, keeping the date a conflict was first found. Nothing stores the result: it is derived from the stream on
 each load.
 
 ### The baseline reader
@@ -496,8 +498,10 @@ A plan whose base is still to come holds every change against today, so nothing 
 conflicting before the plan starts.
 
 A conflict an update carried forward (see *Updating to today*) reads conflicting, with
-`since` set to the day of the update that first found it, until the change reads done or
-is set, cleared or undone in its scenario. A done change stays done.
+`since` set to the day of the update that first found it, while the scenario still
+resolves to the same change. A change that reads done reads done, and if the Org Graph
+then moves off its end state, the carried conflict shows again: the plan stores no
+record that it was ever done.
 
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the

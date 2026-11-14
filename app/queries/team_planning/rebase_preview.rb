@@ -14,7 +14,7 @@ class TeamPlanning::RebasePreview
   # @!attribute base_on [Date] where the plan stands now
   # @!attribute to [Date] today, the base it would move to
   # @!attribute scenarios [Array<Counts>] the baseline first, then each live scenario
-  # @!attribute conflicts [Array<Hash>] `{ scenario_id, subject_id, facet }`, the scenario being the one that made the change
+  # @!attribute conflicts [Array<Hash>] `{ scenario_id, subject_id, facet, change_id }`: the scenario it reads conflicting in, and the change that scenario resolves to
   Report = Data.define(:base_on, :to, :scenarios, :conflicts)
 
   # @!attribute scenario_id [String] the plan's id for the baseline
@@ -43,7 +43,7 @@ class TeamPlanning::RebasePreview
 
     reports = scenario_ids.map { [ it, status_of(it) ] }
     Report.new(base_on: @plan.base_on, to: @today, scenarios: reports.map { |id, report| counts(id, report) },
-               conflicts: conflicts(reports.flat_map { |_, report| report.statuses }))
+               conflicts: reports.flat_map { |id, report| conflicts(id, report) })
   end
 
   private
@@ -57,7 +57,7 @@ class TeamPlanning::RebasePreview
     Counts.new(scenario_id:, done: tally.fetch(:done, 0), pending: tally.fetch(:pending, 0), conflicting: tally.fetch(:conflicting, 0))
   end
 
-  def conflicts(statuses)
-    statuses.select { it.status == :conflicting }.map { { scenario_id: it.scenario_id, subject_id: it.subject_id, facet: it.facet } }.uniq
+  def conflicts(scenario_id, report)
+    report.statuses.select { it.status == :conflicting }.map { { scenario_id:, subject_id: it.subject_id, facet: it.facet, change_id: it.change_id } }
   end
 end

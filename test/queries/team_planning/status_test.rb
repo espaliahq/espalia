@@ -92,9 +92,10 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     plan(TitleSet, @brook.id, title: "Lead Engineer")
     lean = as_tenant { fork("Lean Q1", parent_id: @q1, relation: "instead") }
     on(Time.utc(2026, 3, 20, 9)) { @org.change_title(@brook.id, "Staff Engineer", **ESPALIA, effective_on: "2026-03-20") }
+    change_id = status.statuses.find { it.subject_id == @brook.id }.change_id
     on(Time.utc(2026, 3, 25, 9)) do
-      handler.rebase_plan(@plan_id, base_on: "2026-03-25", expected_base_on: BASE_ON,
-                                    conflicts: [ { scenario_id: @q1, subject_id: @brook.id, facet: "title" } ])
+      conflicts = [ @q1, lean ].map { { scenario_id: it, subject_id: @brook.id, facet: "title", change_id: } }
+      handler.rebase_plan(@plan_id, base_on: "2026-03-25", expected_base_on: BASE_ON, conflicts:)
     end
 
     [ @q1, lean ].each do |scenario_id|
