@@ -137,7 +137,7 @@ class TeamPlanning::Cost
     @factors = {}
     scenario = priced(resolved(@scenario_id))
     baseline = priced(resolved(@plan.id))
-    Report.new(period: @period, reference_currency: @reference, bands_changed_at: bands.values.flatten.map(&:updated_at).max,
+    Report.new(period: @period, reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
                scenario:, baseline:)
   end
 

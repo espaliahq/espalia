@@ -23,6 +23,9 @@ class PayBand < ApplicationRecord
   normalizes :currency, with: Currency::NORMALIZE
 
   before_validation { self.location_key = self.class.location_key(location) }
+  # A removed band leaves no row, so the tenant keeps when the bands last
+  # changed: every plan reprices live, and a cost says as of when.
+  after_commit { tenant.update_column(:pay_bands_changed_at, Time.current) }
 
   validates :level_id, presence: true
   validates :role_name, :level_name, presence: true

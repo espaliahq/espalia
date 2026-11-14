@@ -238,6 +238,10 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     report = cost
     assert_equal Time.utc(2026, 1, 5, 9), report.bands_changed_at
     assert_equal [ 110_000r ], amounts(report.scenario, @ada.id)
+
+    travel_to Time.utc(2026, 1, 6, 9)
+    as_tenant { PayBand.find_by(level_id: @e6.level_id).destroy! }
+    assert_equal Time.utc(2026, 1, 6, 9), cost.bands_changed_at, "a removed band reprices plans too"
   end
 
   should "refuse to cost the baseline, which has no period" do

@@ -484,7 +484,9 @@ Every figure stays in its band's currency, exact, and the totals hold one sum pe
 Each converts once, at the read, at the rate in force on the period's first day. A missing
 rate leaves the converted total empty and names the pair and the date. Only the display
 rounds. Plans reprice live: a changed band changes every plan's cost, and the report says
-when a band last changed (`bands_changed_at`).
+when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
+time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
+to a rate, reprices plans too but does not move the stamp.
 
 ### Clearing and pinning
 
