@@ -23,16 +23,7 @@
 # its parent plus its own differences, while on the timeline
 # ({#timeline_path}) it stands in its parent's place.
 class TeamPlanning::PlanAggregate
-  # Every change kind lands in one handler, so a new kind needs no `on` here.
-  class ApplyStrategy < AggregateRoot::DefaultApplyStrategy
-    def call(aggregate, event)
-      return aggregate.send(:record_change, event) if event.is_a?(TeamPlanning::Events::Change)
-
-      super
-    end
-  end
-
-  include AggregateRoot.with(strategy: -> { ApplyStrategy.new })
+  include AggregateRoot.with(strategy: -> { TeamPlanning::ChangeAwareApplyStrategy.new })
 
   NAME_LIMIT = 120
   ROLES = %w[editor viewer].freeze
