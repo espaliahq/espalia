@@ -22,6 +22,14 @@ class Tenant::OrgGraphActivitySystemTest < ApplicationSystemTestCase
     end
   end
 
+  def change_back_button(field, value) = "#{SIDEBAR} form:has(input[name='#{field}'][value='#{value}']) button"
+
+  def brook_added
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgUnitActivity.for_unit(@org[:platform]).find_by!(person_id: @org[:brook].id, event_type: "MembershipSet")
+    end
+  end
+
   context "at desktop width" do
     setup { page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE) }
 
@@ -40,9 +48,8 @@ class Tenant::OrgGraphActivitySystemTest < ApplicationSystemTestCase
       end
       screenshot("activity_sidebar")
 
-      within(find("#{SIDEBAR} ol > li", text: "Added Brook Tamsin")) { click_button "Change it back" }
+      click_selector_with_js_fallback(change_back_button("entry_id", brook_added.id), expect_text: "Changed back.")
 
-      assert_text "Changed back."
       within(SIDEBAR) do
         assert_text "Removed Brook Tamsin"
         assert_selector "li", text: /Added Brook Tamsin.*Changed back/m
@@ -54,9 +61,8 @@ class Tenant::OrgGraphActivitySystemTest < ApplicationSystemTestCase
       sign_in_as(@admin_user)
       visit tenant_org_graph_path(unit: @org[:platform])
 
-      within(SIDEBAR) { click_button "Change it all back" }
+      click_selector_with_js_fallback(change_back_button("cause_id", "reorg-1"), expect_text: "Changed back.")
 
-      assert_text "Changed back."
       within(SIDEBAR) { assert_text "Moved 2 people out" }
       within("#unit-#{@org[:platform]}") { assert_no_text "Cyril Moss" }
       visit tenant_org_graph_path(unit: @org[:payments])
