@@ -1,0 +1,24 @@
+{
+  "name": "integrations_unmap_hris_title",
+  "description": "Remove an HRIS job title from the role mappings. The next sync skips people holding it, and they keep their current framework assignment (listed in the result).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "title"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

@@ -2,13 +2,13 @@
 
 Use this to turn on a tenant's scheduled forgetting, to forget one leaver on request, and to know what a database restore does to people already forgotten (story 8.2). The design is in [org-graph-design.md → Forgetting a person](../team-planning/org-graph-design.md#forgetting-a-person-r7).
 
-Forgetting erases a leaver's email, external id and raw HRIS payload from their `people` row, replaces their name with "Former member", unlinks their tenant membership from its login and Slack id, deletes their own notifications in the tenant, removes their name from the notifications others received, drops them from their reports' stored HRIS payloads and from skipped feedback-exchange records, and writes `PersonForgotten` to their person stream. It cannot be undone from inside the app. Every command and log line names people by id and gives counts, never a name or an email.
+Forgetting erases a leaver's email, external id and raw HRIS payload from their `people` row, replaces their name with "Former member", unlinks their tenant membership from its login and Slack id, deletes their own notifications in the tenant, removes their name from the notifications others received, drops them from their reports' stored HRIS payloads and from skipped feedback-exchange records, destroys their key in every Team Planning plan, and writes `PersonForgotten` to their person stream. It cannot be undone from inside the app. Every command and log line names people by id and gives counts, never a name or an email.
 
 ## How a former member reads
 
 Every screen, export, MCP read and report shows a forgotten person as "Former member". The name is stored that way, and a check constraint on `people` holds every forgotten row to it, so a query that plucks the column reads the stand-in too. Name searches skip forgotten people, so typing "former" offers none of them.
 
-A new MCP read must join the audit in `test/integration/forgotten_person_audit_test.rb`, or be exempted there with a reason. A read model that copies a person's name instead of joining `people` would keep the erased name, so join instead.
+A new MCP read must join the audit with a file of its own in `test/integration/forgotten_person_audit/`, walking it with params or exempting it with a reason. A read model that copies a person's name instead of joining `people` would keep the erased name, so join instead.
 
 ## What is not erased
 
@@ -56,17 +56,17 @@ bin/rails "org_graph:forgetting:forget[<tenant id>,<person id>,<admin's tenant u
 
 ## If a run fails
 
-Each person is one transaction: the row, the membership, the notifications, the event and the projections that handle it. A run that dies partway leaves each person either forgotten or untouched, and the next run takes whoever is still due. No checkpoint is needed.
+Each person is one transaction: the row, the membership, the notifications, their key in every plan, the event and the projections that handle it. A run that dies partway leaves each person either forgotten or untouched, and the next run takes whoever is still due. No checkpoint is needed.
 
 - **The HRIS can't be reached**: nobody in that tenant is forgotten that day. The error is reported and the other tenants carry on.
 - **The key is missing**: the job fails before touching any tenant.
 
 ## Restoring from a backup
 
-**A restore can undo forgetting.** It brings back the name, email and external id of everyone forgotten after the backup was taken, and removes their `PersonForgotten`.
+**A restore can undo forgetting.** It brings back the name, email and external id of everyone forgotten after the backup was taken, and removes their `PersonForgotten`. It also brings back their keys in every plan, so what plans held about them reads again until they are forgotten again, which for those below means asking again.
 
 - **People forgotten because their period ended** are forgotten again by the next scheduled run, since their leaving dates are in the restored events. That happens only if the tenant's schedule is on.
-- **People forgotten on request before their due date are not forgotten again** after a restore until their own period ends. Nothing in the app records the request outside the database you restored.
+- **People forgotten on request before their due date are not forgotten again** after a restore until their own period ends, and nor are their plan keys destroyed. Nothing in the app records the request outside the database you restored.
 
 So the real time to forget includes the backup retention period. Each deployment should state it. After a restore, tell the tenant admins which requests may need making again.
 

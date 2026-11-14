@@ -6,6 +6,9 @@
 #
 # Approval is :in_app, as for the tenant's other settings. Changing it marks
 # no fact stale or fresh by itself; the stale list reads it each time.
+#
+# Editors keep the facts, so they set it. Retention stays admin-only, in
+# tenants_update_retention_period.
 class Operations::OrgGraph::UpdateStalenessThreshold < Operations::Base
   description "Set how many days a fact Espalia holds about a person (a title, a manager, a membership) may " \
               "go without a change or a confirmation before it counts as stale. The default is " \

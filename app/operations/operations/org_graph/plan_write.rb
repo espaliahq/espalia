@@ -9,6 +9,12 @@
 # A reference says a plan made the change, so it is refused unless the
 # caller may apply that plan's changes. An unknown plan and a hidden one get
 # the same answer.
+#
+# Applying a plan's changes takes the may-approve right, which Team Planning
+# 8.1 adds, so for now every reference is refused
+# [#193](https://github.com/espaliahq/espalia/issues/193). A cause_id that
+# already groups changes from no plan or another plan is refused, since
+# changing a group back undoes all of it.
 module Operations::OrgGraph::PlanWrite
   PARAMETERS = {
     plan_id: "the plan whose change this applies. Refused unless you may apply that plan's changes",

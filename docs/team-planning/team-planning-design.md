@@ -136,6 +136,76 @@ says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
 
+### Positions as built
+
+`PositionSet` and `PositionClosed` share the facet `position`, so the later one wins and a
+later `PositionSet` reopens a closed position. The plan mints a position's id. Its
+`level_id` is the framework level that pay bands key on, so cost prices it with no
+mapping, and the write checks that the level belongs to the role. `basis` is `backfill`,
+which is committed budget, or `new`, which is planned; the map reads it as the position's
+budget. A position's unit is not checked at write: a position in a retired unit still
+resolves, and 3.8 marks it. The baseline has no positions, so every one starts in a plan.
+
+### Adding a change kind
+
+Several lanes add kinds at once, so each adds one the same way. `PositionSet`
+([#228](https://github.com/espaliahq/espalia/issues/228)) is the worked example.
+
+1. **The kind.** Subclass `TeamPlanning::Events::Change` in
+   `app/contexts/team_planning/events/`. Name its `facet`. Give it `end_state`, which
+   checks the kind's own fields and returns them as stored; it raises `TeamPlanning::Error`
+   with a sentence a planner can read. Give it `apply_to(map, data)`, which must not depend
+   on another kind having landed. The kind's fields may not reuse `Change::FIELDS`.
+2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
+   and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
+   resolver.
+3. **The map.** If the kind adds something the map doesn't hold, add it to
+   `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
+   any names it needs in `Baseline#named`, never in `apply_to`.
+4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
+   `ChangeWrite` and calls `set_change!`. Put the checks the aggregate can't make, such as
+   whether a framework role exists, in the block you pass it, since the aggregate reads no
+   projection. The block runs under the plan's lock, after the editor check, so an outsider
+   gets "No such plan" first and no check races another edit.
+5. **The read.** Extend a scenario read, or add one through `PlanRead`, reading
+   `Resolution#call`.
+6. **The tool's shared files.** Merge main first. Run
+   `UPDATE_SNAPSHOTS=1 bin/rails test test/mcp/tool_registry_snapshot_test.rb` and commit
+   only your tools' files under `test/mcp/tool_snapshots/`; never edit the test. Give each
+   read tool its own `test/integration/forgotten_person_audit/<tool>.rb`, a
+   `ForgottenPersonAudit.walk` with its params, or `ForgottenPersonAudit.exempt` with a
+   reason when it can't show a person. Add any new parameter to `params_for` in
+   `test/integration/team_planning_privacy_test.rb`, which walks every Team Planning tool
+   as an outsider. Put the tool's notes in its class comment; `bin/rails mcp:tools` lists it.
+7. **The tests.** The kind's `end_state` refusals beside it in
+   `test/contexts/team_planning/events/`. In `test/operations/team_planning/`, through the
+   operations: a change reaching the steps after its scenario, an alternative overriding
+   its parent, the outsider and viewer refusals, and tenant isolation.
+
+### Rules
+
+A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
+holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
+A kind names itself, gives a built-in default and checks a value. A value is always an
+object. No kind ships yet: the first come with 5.2, 7.1 and 8.1.
+
+`RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
+that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
+on one subject both land. `Map#rule(name, unit_id:)` reads a rule in this order:
+
+1. The unit, then each unit above it on the scenario's map.
+2. The plan-wide value.
+3. The tenant's default, set by an admin with `tenants_set_planning_rule`.
+4. The kind's built-in default.
+
+A retired unit's rules drop out with it. Tenant defaults are read as they stand now, not
+as of the base date, since they are configuration and not facts about the organisation.
+
+A rule's value may one day be sensitive: an on-cost rate, a guardrail on pay. So a refusal
+names what is wrong and never repeats the value. A kind declares `shreddable?`, and until
+[#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
+yes is refused at registration.
+
 ### Undo
 
 Undo and redo are events that point at the event they reverse. The stream is never
@@ -191,6 +261,24 @@ anyone `PlanPolicy#show?` refuses. It returns a `Map`:
 a plan's changes before anything is named. `call` joins the names last from the
 `people` table, for the people, their managers and the units' owners, so anyone forgotten
 reads "Former member". The forgotten-person audit walks it.
+
+### The drift reader
+
+`TeamPlanning::Drift` reads `OrgGraph::ChangesBetween` by learned date, from the day
+before the base date to today, so it covers exactly what the baseline leaves out. A
+backdated correction learned since the base shows with the day it took effect. A plan
+whose base is still to come has no drift.
+
+Each change says what it meets in the plan: for each scenario, the latest planned change
+to the facet it moves. Each kind decides which Org Graph changes move its facet, through
+`Change.subject_moved_by`, which returns the subject's id or nil. A person's placements
+are one facet, so a move in one placement meets the plan's whole list for that person.
+A change applied from this plan comes back `from_plan`, matched through the `plan_id` on
+its event; nothing sets one until approval exists. Whether a planned change is done,
+pending or conflicting is 4.3's status, below.
+
+`team_planning_drift` gives the same report to MCP, with people by id and a `names` map
+beside them.
 
 ## Status is derived, never stored
 
@@ -459,10 +547,10 @@ yet. Three properties of the events keep it possible, and must not be given up:
 
 ## Decided, with a known cost
 
-**Erasure inside a live plan.** When the Org Graph forgets a person, a handler on
-`PersonForgotten` destroys that person's key in every plan at once. Every value a plan
-held about them, such as their pay, a corrected level or a planned promotion, becomes
-unreadable. They stay in each plan's history as a former member with no identity.
+**Erasure inside a live plan.** When the Org Graph forgets a person, the transaction
+that writes `PersonForgotten` destroys that person's key in every plan at once. Every
+value a plan held about them, such as their pay, a corrected level or a planned
+promotion, becomes unreadable. They stay in each plan's history as a former member with no identity.
 
 One thing can still name them: a note. A note is free text under the plan's key, so one
 that mentions the person stays readable to the plan's members until the plan is

@@ -1,0 +1,22 @@
+{
+  "name": "team_planning_baseline",
+  "description": "Get the baseline of a Team Planning plan the caller is in: the organisation on the plan's base date, as known at the end of the day before. Units carry their parent, level and owners; people carry their facts that day and each unit they hold, with allocation and role. People are named by id, and `names` maps every person id the map uses to a name; a forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

@@ -3,6 +3,10 @@
 # What the Org Graph's write tools share: the unit they act on, the day a
 # change takes effect, and the command handlers, which check the policy for
 # that unit and name who may make a change they refuse.
+#
+# Each write [#124](https://github.com/espaliahq/espalia/issues/124) takes
+# effective_on, today by default, and runs the handlers as the caller. A unit
+# or membership an HRIS supplies is refused, as on the web.
 module Operations::OrgGraph::UnitWrite
   UUID_RE = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 

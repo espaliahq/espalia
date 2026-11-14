@@ -1,0 +1,40 @@
+{
+  "name": "assessments_request_evidence",
+  "description": "Ask a colleague to provide feedback / evidence for a capability × level on an assessment.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "requestee_person_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "message": {
+        "type": "string"
+      },
+      "due_at": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "requestee_person_id",
+      "capability_stable_id",
+      "level_ordinal"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

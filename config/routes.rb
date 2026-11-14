@@ -97,6 +97,8 @@ Rails.application.routes.draw do
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
     resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ]
+    resources :exchange_rates, only: [ :create, :edit, :update, :destroy ]
+    resource :reference_currency, only: [ :update ]
 
     # Org Graph Units view (#80), with "change it back" in its activity
     # sidebar (#137). Here, admins only, until the Org Graph screens are
@@ -200,7 +202,10 @@ Rails.application.routes.draw do
   end
   # RailsEventStore browser for debugging event streams (global admins only)
   authenticate :user, ->(u) { u.global_admin? } do
-    mount RailsEventStore::Browser => "/res"
+    mount RubyEventStore::Browser::App.for(
+      event_store_locator: -> { Rails.configuration.event_store_browser },
+      views_root: Rails.root.join("app/views/ruby_event_store_browser")
+    ) => "/res"
   end
 
   mount Lookbook::Engine, at: "/lookbook" if Rails.env.development?

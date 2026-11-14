@@ -1,0 +1,52 @@
+{
+  "name": "frameworks_remove_collaborator",
+  "description": "Remove a collaborator role from a person on a framework (their other roles on the framework are untouched).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "editor",
+          "role_family_lead",
+          "role_lead",
+          "capability_category_lead",
+          "capability_lead",
+          "collaborator",
+          "viewer"
+        ]
+      },
+      "scope_type": {
+        "type": "string",
+        "enum": [
+          "role_family",
+          "role",
+          "capability_category",
+          "capability"
+        ]
+      },
+      "scope_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "person_id",
+      "role"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

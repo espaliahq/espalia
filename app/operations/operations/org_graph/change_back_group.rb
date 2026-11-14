@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 # "Change it back" for a whole group of a unit's activity (#137).
+#
+# It covers every entry of one cause in every unit it touched. A change that
+# can't be changed back comes back as invalid params with its reason; one the
+# caller lacks the rights for, as not authorized with its reason.
 class Operations::OrgGraph::ChangeBackGroup < Operations::Base
   description "Change back every change made under one cause, by the cause_id of a group from " \
               "org_graph_activity. Reverses it in every unit it touched, not just the one read, as new " \

@@ -4,8 +4,8 @@
 # in the Org Graph that cannot be undone.
 #
 # Each person is one transaction: the row's identifiers, their tenant
-# membership's link to a login, the names notifications copied, and the
-# event, with the projections that handle it. A run that dies partway
+# membership's link to a login, the names notifications copied, their key
+# in every plan, and the event, with the projections that handle it. A run that dies partway
 # leaves each person either forgotten or untouched, and the next run takes
 # whoever is still due.
 #
@@ -264,6 +264,7 @@ class OrgGraph::Forgetting
             .forget_person(person_id, effective_on: on, reason:, retention_years: config.retention_years,
                                       requested_by_id:)
         end
+        PlanKeyStore.new.destroy_person(person.id)
         erase_identifiers(person)
         true
       end

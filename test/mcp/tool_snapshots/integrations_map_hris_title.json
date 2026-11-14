@@ -1,0 +1,33 @@
+{
+  "name": "integrations_map_hris_title",
+  "description": "Map an HRIS job title to a framework role, replacing any mapping it had. Omit level_ordinal to take each person's level from the HRIS level column, or pass one to fix the level for everyone with that title. Applied by the next HRIS sync; the result previews what that sync will do to each person holding the title.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "framework_role_code": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "title",
+      "framework_role_code"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

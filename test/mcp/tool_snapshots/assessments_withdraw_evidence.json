@@ -1,0 +1,29 @@
+{
+  "name": "assessments_withdraw_evidence",
+  "description": "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "evidence_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "evidence_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

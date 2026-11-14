@@ -248,7 +248,7 @@ on main yet.
 | 2.2 | Shreddable fields on events, and the aggregate guard: an aggregate never decides on a shreddable value | 2.1 |
 | 2.3 | Projections rebuild with keys destroyed, showing a value as removed | 2.2 |
 | 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
-| 2.5 | A handler on `PersonForgotten` destroys that person's key in every plan at once (decision 6) | 2.2 |
+| 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6) | 2.2 |
 
 ### P3 Scenarios and changes
 
@@ -256,7 +256,7 @@ on main yet.
 |---|---|---|
 | 3.1 | Scenarios: `ScenarioForked` with parent, `then` or `instead` and period, `ScenarioPeriodSet`, `ScenarioRemoved`. Periods along a path are contiguous | 1.1 |
 | 3.2 | Resolution: the base, then each scenario's changes down the chain, last change per subject and facet. The plan's lock serialises writes, so changes to different facets both land | 3.1, 1.3 |
-| 3.3 | Rules: `RuleSet` with tenant defaults, resolved down the chain like any change | 3.2 |
+| 3.3 | Rules: `RuleSet` with tenant defaults, resolved down the chain like any change. The real rule kinds come with 5.2, 7.1 and 8.1 | 3.2 |
 | 3.4 | Unit changes: `UnitSet`, `UnitRetired`, `UnitSuccessionSet`, with ids the plan mints | 3.2 |
 | 3.5 | Positions: `PositionSet` (role and level from the framework, unit, FTE, backfill or new) and `PositionClosed` | 3.2 |
 | 3.6 | Assignments: `AssignmentSet` places a person in a position or unit with an allocation. The Unassigned bucket is derived | 3.5 |

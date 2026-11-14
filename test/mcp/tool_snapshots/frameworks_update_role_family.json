@@ -1,0 +1,54 @@
+{
+  "name": "frameworks_update_role_family",
+  "description": "Update a role family's name, description, or department (owner/editor/lead only).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "role_family_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "description": {
+        "type": "string"
+      },
+      "department": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "framework_id",
+      "role_family_id"
+    ],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "name"
+        ]
+      },
+      {
+        "required": [
+          "description"
+        ]
+      },
+      {
+        "required": [
+          "department"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

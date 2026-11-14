@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_120011) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -337,6 +337,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
     t.index ["status"], name: "index_evidence_requests_on_status"
     t.index ["tenant_id", "cycle_id", "person_id"], name: "idx_evidence_requests_tenant_cycle_person"
     t.index ["tenant_id"], name: "index_evidence_requests_on_tenant_id"
+  end
+
+  create_table "exchange_rates", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "from_currency", null: false
+    t.string "to_currency", null: false
+    t.decimal "rate", precision: 24, scale: 12, null: false
+    t.date "applies_from", null: false
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "tenant_id, LEAST(from_currency, to_currency), GREATEST(from_currency, to_currency), applies_from", name: "index_exchange_rates_on_pair_and_date", unique: true
+    t.index ["updated_by_id"], name: "index_exchange_rates_on_updated_by_id"
+    t.check_constraint "from_currency::text <> to_currency::text", name: "exchange_rates_two_currencies"
+    t.check_constraint "rate > 0::numeric", name: "exchange_rates_positive"
   end
 
   create_table "feedback_drafts", id: :uuid, default: nil, force: :cascade do |t|
@@ -1021,6 +1036,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
     t.check_constraint "destroyed_at IS NULL AND key_material IS NOT NULL OR destroyed_at IS NOT NULL AND key_material IS NULL AND destroyed_reason IS NOT NULL", name: "plan_encryption_keys_live_or_destroyed"
   end
 
+  create_table "planning_rule_defaults", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "rule", null: false
+    t.jsonb "value", default: {}, null: false
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "rule"], name: "index_planning_rule_defaults_on_tenant_id_and_rule", unique: true
+    t.index ["updated_by_id"], name: "index_planning_rule_defaults_on_updated_by_id"
+  end
+
   create_table "projection_versions", primary_key: "name", id: :string, force: :cascade do |t|
     t.datetime "applied_at", null: false
     t.integer "version", null: false
@@ -1036,6 +1062,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
     t.datetime "updated_at", null: false
     t.index ["tenant_id", "person_id", "framework_id"], name: "idx_recorded_reporting_managers_unique", unique: true
     t.index ["tenant_id"], name: "index_recorded_reporting_managers_on_tenant_id"
+  end
+
+  create_table "reference_currencies", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "currency", null: false
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id"], name: "index_reference_currencies_on_tenant_id", unique: true
+    t.index ["updated_by_id"], name: "index_reference_currencies_on_updated_by_id"
   end
 
   create_table "team_planning_plan_members", id: :uuid, default: nil, force: :cascade do |t|
@@ -1167,6 +1203,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
   add_foreign_key "evidence_requests", "people", column: "requested_by_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "tenants"
+  add_foreign_key "exchange_rates", "tenants"
+  add_foreign_key "exchange_rates", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "feedback_drafts", "tenants"
   add_foreign_key "feedback_exchange_acks", "tenants"
   add_foreign_key "feedback_exchange_imports", "tenants"
@@ -1225,7 +1263,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
   add_foreign_key "person_development_comments", "tenants"
   add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "plan_encryption_keys", "tenants"
+  add_foreign_key "planning_rule_defaults", "tenants"
+  add_foreign_key "planning_rule_defaults", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "recorded_reporting_managers", "tenants"
+  add_foreign_key "reference_currencies", "tenants"
+  add_foreign_key "reference_currencies", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "team_planning_plan_members", "tenants"
   add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "team_planning_scenarios", "tenants"

@@ -42,7 +42,7 @@ class Integrations::HrisFieldPreview
   # @raise [UnknownField] when the catalogue holds no such field
   def call
     field = catalogue_field
-    values = held_values(adapter.read_field(field.id, kind: field.kind, alongside:))
+    values = ActsAsTenant.with_tenant(tenant) { adapter.read_field_rows(field.id, kind: field.kind, alongside:) }
     target == LEVEL ? level(field, values) : fact(field, values)
   end
 
@@ -58,18 +58,6 @@ class Integrations::HrisFieldPreview
   def catalogue_field
     id = adapter.catalogue_id(field_id)
     adapter.field_catalogue.find { it.id == id } or raise UnknownField, "The HRIS has no field #{field_id}"
-  end
-
-  # Each person the adapter read, whom the next sync places, beside their
-  # value. The adapter applies the sync's rule; this only finds their row,
-  # matched by id as the sync matches it.
-  #
-  # @param by_external_id [Hash{String => Hris::FieldValue}]
-  # @return [Array<(String, Hris::FieldValue)>] the row's id, or nil for a
-  #   person the sync has yet to create or link by email, beside their value
-  def held_values(by_external_id)
-    rows = ActsAsTenant.with_tenant(tenant) { Person.where(external_id: by_external_id.keys).pluck(:external_id, :id).to_h }
-    by_external_id.map { |external_id, value| [ rows[external_id], value ] }
   end
 
   def level(field, values)

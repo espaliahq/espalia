@@ -1,0 +1,32 @@
+{
+  "name": "assessments_comments_list",
+  "description": "List active comment threads on an assessment for one capability (optionally one level). Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_stable_id argument. Top-level comments carry their replies nested. Pass evidence_id to list the discussion thread on that evidence item's linkage at the cell instead of the cell's own comments.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "evidence_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assignment_id",
+      "capability_stable_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
