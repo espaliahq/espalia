@@ -63,18 +63,22 @@ namespace :events do
       classes.each { |k| puts "  - #{k::PROJECTION_NAME}" }
       puts ""
 
-      tenants.each do |tenant|
-        puts "════ tenant #{tenant.id} ════"
-        counts = Projections::GlobalReplayer.replay_all(tenant: tenant)
-        total = counts.values.sum
-        puts "[#{tenant.id}] global replay done — #{total} total handler invocations"
-        counts.each { |klass, n| puts "  #{klass::PROJECTION_NAME}: #{n}" }
-        puts ""
-      end
+      # Every projection's lock, as `rebuild` takes one, so a write that plans
+      # from a projection's tables refuses while they are replayed.
+      ProjectionVersion.with_operation_locks(classes.map { it::PROJECTION_NAME }) do
+        tenants.each do |tenant|
+          puts "════ tenant #{tenant.id} ════"
+          counts = Projections::GlobalReplayer.replay_all(tenant: tenant)
+          total = counts.values.sum
+          puts "[#{tenant.id}] global replay done — #{total} total handler invocations"
+          counts.each { |klass, n| puts "  #{klass::PROJECTION_NAME}: #{n}" }
+          puts ""
+        end
 
-      classes.each { |klass| ProjectionVersion.stamp!(klass) }
-      puts "Stamped projection_versions for all #{classes.size} projections."
-      puts "Run events:projections:verify to confirm."
+        classes.each { |klass| ProjectionVersion.stamp!(klass) }
+        puts "Stamped projection_versions for all #{classes.size} projections."
+        puts "Run events:projections:verify to confirm."
+      end
     end
 
     desc "Rebuild a projection from the event stream. Args: name, [tenant_id]"

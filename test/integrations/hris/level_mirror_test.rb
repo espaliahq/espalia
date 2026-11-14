@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 class Hris::LevelMirrorTest < ActiveSupport::TestCase
+  include RebuildLock
+
   Reading = Struct.new(:values) do
     def field_value(field_id, kind:) = values.fetch(field_id, Hris::FieldValue.withheld)
   end
@@ -27,6 +30,28 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
 
   teardown do
     ActsAsTenant.current_tenant = nil
+  end
+
+  context "while the units or members are rebuilt" do
+    should "refuse to mirror while the members are rebuilt, writing nothing until it is done" do
+      before = Rails.configuration.event_store.read.backward.limit(1).first.event_id
+      while_rebuilding(@tenant, OrgGraph::Projections::Members) do
+        assert_raises(ProjectionVersion::Rebuilding) { mirror(@staff[0] => { division: "d1", team: "t1" }) }
+        assert_empty Rails.configuration.event_store.read.from(before).to_a
+        replay(@tenant, OrgGraph::Projections::Members)
+      end
+
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+
+      assert_equal unit("work.department/t1").id, team_membership(@staff[0]).unit_id
+    end
+
+    should "refuse to mirror levels it was given while the units are rebuilt" do
+      levels = Hris::LevelMirror.levels("hibob")
+      while_rebuilding(@tenant, OrgGraph::Projections::Structure) do
+        assert_raises(ProjectionVersion::Rebuilding) { mirror_with({ @staff[0] => { division: "d1", team: "t1" } }, levels:) }
+      end
+    end
   end
 
   context "units" do
