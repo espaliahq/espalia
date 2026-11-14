@@ -133,11 +133,15 @@ class Operations::TeamPlanning::AssignmentsTest < ActiveSupport::TestCase
     assert_in_delta 0.0, map(@q2)[:people].find { it[:id] == @bo.id }[:allocation_total]
   end
 
-  should "refuse a new placement in a position closed in the scenario" do
+  should "accept a new placement in a closed position, and keep one when the rest of the list changes" do
     position_id = open_position(@plan_id)
+    assign(@q1, @bo, { position_id:, allocation: 0.5 }, { unit_id: @payments, allocation: 0.5 })
     call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @q1, position_id:)
 
-    assert_equal "This scenario has no such open position", refusal(placements: [ { position_id:, allocation: 1 } ])
+    assign(@q1, @bo, { position_id:, allocation: 0.5 }, { unit_id: @growth, allocation: 0.5 })
+    assign(@q1, @ada, { position_id:, allocation: 1 })
+    assert_equal [ [ position_id, nil ], [ nil, @growth ] ], places(@q1, @bo).map { it.values_at(:position_id, :unit_id) }
+    assert_includes map(@q1)[:unassigned_ids], @ada.id
   end
 
   should "name a position's occupants and its open FTE, an unknown FTE counting as full time" do
@@ -186,7 +190,7 @@ class Operations::TeamPlanning::AssignmentsTest < ActiveSupport::TestCase
   should "refuse a position the scenario lacks, and a person outside the tenant" do
     elsewhere = create(:person, tenant: create(:tenant))
 
-    assert_equal "This scenario has no such open position", refusal(placements: [ { position_id: open_position(@q2), allocation: 1 } ])
+    assert_equal "This scenario has no such position", refusal(placements: [ { position_id: open_position(@q2), allocation: 1 } ])
     assert_equal "unit_id must be a UUID, got \"payments\"", refusal(placements: [ { unit_id: "payments", allocation: 1 } ])
     assert_equal "No such person", refusal(person_id: elsewhere.id, placements: [ { unit_id: @growth, allocation: 1 } ])
   end

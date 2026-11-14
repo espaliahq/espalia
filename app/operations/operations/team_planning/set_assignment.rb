@@ -2,10 +2,10 @@
 
 # Sets every place a person holds in a scenario, as an AssignmentSet change.
 # Every check runs under the plan's lock, after the editor check, so an
-# outsider gets "No such plan" whatever the placements say. A new placement
-# in a closed position is refused, though one made before the close still
-# resolves. A total over 1 is read by the checks, never refused
-# [#229](https://github.com/espaliahq/espalia/issues/229).
+# outsider gets "No such plan" whatever the placements say. Fit is read,
+# never refused: a place in a closed position resolves with no unit, and a
+# total over 1 is left to the checks. Only a position the scenario never had
+# is refused [#229](https://github.com/espaliahq/espalia/issues/229).
 class Operations::TeamPlanning::SetAssignment < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
 
@@ -63,8 +63,8 @@ class Operations::TeamPlanning::SetAssignment < Operations::Base
       raise Operations::Base::ParameterError, "#{name} must be a UUID, got #{id.inspect}" unless id.match?(UUID_RE)
     end
     return unless placement[:position_id]
-    return if winning_change(plan, placement[:position_id], ::TeamPlanning::Events::PositionSet.facet).is_a?(::TeamPlanning::Events::PositionSet)
+    return if winning_change(plan, placement[:position_id], ::TeamPlanning::Events::PositionSet.facet)
 
-    raise Operations::Base::ParameterError, "This scenario has no such open position"
+    raise Operations::Base::ParameterError, "This scenario has no such position"
   end
 end
