@@ -3,6 +3,7 @@
 # Winds a unit down in a scenario.
 class Operations::TeamPlanning::RetireUnit < Operations::Base
   include Operations::TeamPlanning::UnitChange
+  include Operations::TeamPlanning::ChangeWrite
 
   description "Retire a live unit in a scenario of a Team Planning plan. Its people keep their place until an " \
               "assignment moves them. A unit with live sub-units is refused: move or retire them first. Setting " \

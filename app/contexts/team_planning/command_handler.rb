@@ -172,14 +172,15 @@ class TeamPlanning::CommandHandler
   # @param scenario_id [String]
   # @param subject_id [String]
   # @param end_state [Hash] the kind's own fields
+  # @param note [String, nil] why, sealed under the plan's key
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @yieldparam plan [TeamPlanning::PlanAggregate] under the plan's lock, once the actor may edit it
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
   # @see TeamPlanning::PlanAggregate#set_change
-  def set_change(plan_id, kind, scenario_id:, subject_id:, end_state: {}, &check)
+  def set_change(plan_id, kind, scenario_id:, subject_id:, end_state: {}, note: nil, &check)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.set_change(kind, scenario_id:, subject_id:, set_by_id: actor_id!, end_state:, &check)
+      plan.set_change(kind, scenario_id:, subject_id:, set_by_id: actor_id!, end_state:, note:, &check)
     end
   end
 
@@ -189,7 +190,7 @@ class TeamPlanning::CommandHandler
   #
   # @param plan_id [String]
   # @yieldparam plan [TeamPlanning::PlanAggregate] under the plan's lock, once the actor may edit it
-  # @yieldreturn [Array<Hash>] each `{ kind:, scenario_id:, subject_id:, end_state: }`
+  # @yieldreturn [Array<Hash>] each `{ kind:, scenario_id:, subject_id:, end_state:, note: }`, the note optional
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
   # @see TeamPlanning::PlanAggregate#set_change
@@ -198,7 +199,7 @@ class TeamPlanning::CommandHandler
       authorize_plan!(:update?, plan)
       yield(plan).each do |change|
         plan.set_change(change.fetch(:kind), scenario_id: change.fetch(:scenario_id), subject_id: change.fetch(:subject_id),
-                                             set_by_id: actor_id!, end_state: change.fetch(:end_state, {}))
+                                             set_by_id: actor_id!, end_state: change.fetch(:end_state, {}), note: change[:note])
       end
     end
   end
@@ -231,16 +232,17 @@ class TeamPlanning::CommandHandler
   # @param scenario_id [String]
   # @param subject_id [String]
   # @param facet [String]
+  # @param note [String, nil] why the scenario keeps it, sealed under the plan's key
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if nothing can be pinned
   # @see TeamPlanning::PlanAggregate#pin_change
-  def pin_change(plan_id, scenario_id:, subject_id:, facet:)
+  def pin_change(plan_id, scenario_id:, subject_id:, facet:, note: nil)
     facet = facet.to_s
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       plan.ensure_pinnable!(scenario_id, [ subject_id, facet ])
       kind, end_state, pinned_from = inherited(plan, scenario_id, subject_id, facet)
-      plan.pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_from:, pinned_by_id: actor_id!)
+      plan.pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_from:, pinned_by_id: actor_id!, note:)
     end
   end
 
@@ -287,7 +289,7 @@ class TeamPlanning::CommandHandler
   end
 
   def inherited(plan, scenario_id, subject_id, facet)
-    if TeamPlanning::ChangeKinds.holding(facet).any? { it.is_a?(Shreddable) }
+    if TeamPlanning::ChangeKinds.holding(facet).any?(&:seals_end_state?)
       raise TeamPlanning::Error, "This holds a value the plan keeps private, which can't be pinned yet: set it in this scenario instead"
     end
 

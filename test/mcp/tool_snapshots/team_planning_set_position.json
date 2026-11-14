@@ -1,9 +1,13 @@
 {
   "name": "team_planning_set_position",
-  "description": "Open a position in a scenario of a Team Planning plan, or change or reopen one by passing its position_id. A position is a framework role and one of that role's levels (the level pay bands key on), in a unit, at an FTE above 0 and at most 1. basis 'backfill' is committed budget; 'new' is planned. Give every field each time: the scenario's position becomes exactly this. Steps after the scenario, and its alternatives, inherit it unless they change it. Refused unless the caller is one of the plan's editors.",
+  "description": "Open a position in a scenario of a Team Planning plan, or change or reopen one by passing its position_id. A position is a framework role and one of that role's levels (the level pay bands key on), in a unit, at an FTE above 0 and at most 1. basis 'backfill' is committed budget; 'new' is planned. Give every field each time: the scenario's position becomes exactly this. Steps after the scenario, and its alternatives, inherit it unless they change it. Refused unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as why this person moves. Optional, at most 2000 characters; it never changes what the scenario resolves to. Deleting the plan erases it."
+      },
       "plan_id": {
         "type": "string"
       },

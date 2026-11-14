@@ -17,11 +17,14 @@ module Operations::TeamPlanning::UnitChange
   # before any check.
   #
   # @yieldparam map [TeamPlanning::Baseline::Map] the scenario by id, with no names
-  # @yieldreturn [Array<Hash>] each `{ kind:, scenario_id:, subject_id:, end_state: }`
+  # @yieldreturn [Array<Hash>] each `{ kind:, scenario_id:, subject_id:, end_state: }`; each carries the note a tool
+  #   takes through {Operations::TeamPlanning::ChangeWrite}
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   def set_unit_changes!(scenario_id)
     refusing_bad_plans do
-      handler.set_changes(plan_id!) { yield ::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id:).structure }
+      handler.set_changes(plan_id!) do
+        yield(::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id:).structure).map { { note: params[:note], **it } }
+      end
     end
   end
 

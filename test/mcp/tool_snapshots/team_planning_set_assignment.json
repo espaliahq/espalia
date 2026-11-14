@@ -1,9 +1,13 @@
 {
   "name": "team_planning_set_assignment",
-  "description": "Set every place a person holds in a scenario of a Team Planning plan: each a position or a unit, with an allocation above 0 and at most 1 and an optional role. The person's places become exactly this list, and an empty list leaves them unassigned. A place in a position follows the position if it moves. Allocations may total over 1; the scenario map shows the total. Steps after the scenario, and its alternatives, inherit the list unless they set it again. A placeholder hire is placed by its id. Refused unless the caller is one of the plan's editors.",
+  "description": "Set every place a person holds in a scenario of a Team Planning plan: each a position or a unit, with an allocation above 0 and at most 1 and an optional role. The person's places become exactly this list, and an empty list leaves them unassigned. A place in a position follows the position if it moves. Allocations may total over 1; the scenario map shows the total. Steps after the scenario, and its alternatives, inherit the list unless they set it again. A placeholder hire is placed by its id. Refused unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as why this person moves. Optional, at most 2000 characters; it never changes what the scenario resolves to. Deleting the plan erases it."
+      },
       "plan_id": {
         "type": "string"
       },

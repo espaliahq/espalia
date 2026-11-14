@@ -42,13 +42,14 @@ class TeamPlanning::Repository
   end
 
   # The aggregate never holds a shreddable value, so its changes come
-  # without one. A reader that shows the value swaps each such change for the
-  # event as stored, still sealed.
+  # without one. A reader that shows the value swaps each change whose end
+  # state is sealed for the event as stored, still sealed. A note alone
+  # decides nothing a reader of the end state shows, so it isn't fetched.
   #
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] as {PlanAggregate#winning_changes} gives them
   # @return [Hash{Array(String, String) => TeamPlanning::Events::Change}] the same keys, in the same order
   def sealed(changes)
-    ids = changes.values.select { it.class.is_a?(Shreddable) }.map(&:event_id)
+    ids = changes.values.select { it.class.seals_end_state? }.map(&:event_id)
     return changes if ids.empty?
 
     stored = @event_store.read.events(ids).to_a.index_by(&:event_id)
