@@ -118,10 +118,18 @@ class TeamPlanning::Attention
     @unclassified.reject { |_, place| UNCLASSIFIED_ELSEWHERE.include?(place.reason) }.map do |priced, place|
       seat = priced.seat
       facet = "#{CAPACITY}:#{place.place.position_id || place.unit_id || UNASSIGNED}"
-      causes = seat.kind == "person" ? [ ASSIGNMENT, (LEVEL if place.reason == "no_level") ].compact : [ POSITION ]
       item(seat.id, facet, "Counts for no capacity: #{TeamPlanning::Capacity::REASONS.fetch(place.reason).downcase_first}",
-           broken_by: causes.map { [ seat.id, it ] })
+           broken_by: unclassified_causes(seat, place))
     end
+  end
+
+  # A place in a position takes the position's role and level, so a later
+  # edit to the position can be what left its occupant uncovered.
+  def unclassified_causes(seat, place)
+    return [ [ seat.id, POSITION ] ] unless seat.kind == "person"
+
+    position_id = place.place.position_id
+    [ [ seat.id, ASSIGNMENT ], ([ seat.id, LEVEL ] if place.reason == "no_level"), ([ position_id, POSITION ] if position_id) ].compact
   end
 
   def item(subject_id, facet, reason, broken_by: [])

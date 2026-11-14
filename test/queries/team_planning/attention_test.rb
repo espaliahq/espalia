@@ -53,6 +53,19 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_same levelled, TeamPlanning::Attention.new(map, changes, unclassified:).call.sole.change
   end
 
+  should "credit the position's later change for an occupant it left uncovered" do
+    position_id = SecureRandom.uuid_v7
+    place = TeamPlanning::CapacityModel::Place.new(unit_id: LIVE, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id:)
+    seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])
+    unclassified = [ [ TeamPlanning::Capacity::Seat.new(seat:, places: []),
+                       TeamPlanning::Capacity::Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "no_model") ] ]
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    recast = change(TeamPlanning::Events::PositionSet, position_id)
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ position_id, TeamPlanning::Attention::POSITION ] => recast }
+
+    assert_same recast, TeamPlanning::Attention.new(map, changes, unclassified:).call.sole.change
+  end
+
   should "say which unit a succession lost, and nothing for one whose predecessor retired as it should" do
     fits = B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [ RETIRED ], successor_ids: [ LIVE ])
     broken = B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [ GONE ], successor_ids: [ RETIRED ])
