@@ -4,7 +4,11 @@
 # their places, allocation total, reporting line and whether they are
 # leaving. Positions carry their occupants, open FTE and whom they backfill,
 # and `departed` lists those a departure took off the map. Every person id
-# has a `names` entry, so a client never meets an id it can't name.
+# has a `names` entry, so a client never meets an id it can't name, and a
+# placeholder hire's name is its label.
+#
+# What the plan holds privately reads as `{ value: }`, or `{ removed: true }`
+# once its key is gone, under `planned_level`, `plan_data` and `placeholder`.
 module Operations::TeamPlanning::MapPayload
   private
 
@@ -24,8 +28,9 @@ module Operations::TeamPlanning::MapPayload
   def people_payload(map)
     totals = map.allocation_totals
     map.people.map do |person|
-      person.to_h.except(:departure)
-            .merge(memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
+      person.to_h.except(:departure, :planned_level, :plan_data, :placeholder)
+            .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
+                   placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
                    leaving: person.leaving?, backfill_position_id: person.backfill_id)
     end
   end
@@ -41,5 +46,16 @@ module Operations::TeamPlanning::MapPayload
     end
   end
 
-  def names_for(map) = map.person_ids.to_h { [ it, map.name_of(it) ] }
+  def names_for(map)
+    labels = map.people.select(&:placeholder?).to_h { [ it.id, it.placeholder ] }
+    map.person_ids.to_h { |id| [ id, labels.key?(id) ? placeholder_name(labels[id]) : map.name_of(id) ] }
+  end
+
+  def sealed_payload(value)
+    return nil if value.nil?
+
+    value.removed? ? { removed: true } : { value: value.reveal }
+  end
+
+  def placeholder_name(label) = label.removed? ? "Placeholder hire" : label.reveal
 end

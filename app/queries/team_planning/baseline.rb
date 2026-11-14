@@ -179,14 +179,49 @@ class TeamPlanning::Baseline
   # Units that carry on from others: a split, a merge or a replacement.
   Succession = Data.define(:id, :predecessor_ids, :successor_ids)
 
+  # What {Member#planned_or_own} gives for a value the plan held and has
+  # since lost to a destroyed key.
+  UNKNOWN = :unknown
+
   # A person and their facts that day, with each place they hold. Their
   # line points at `manager_id` (the Org Graph's manager fact, or a plan's
   # change) or at `manager_position_id`, a vacant manager seat, or at
   # neither. `departure` is set while they are leaving: `leaves_in_id`, the
   # scenario whose step they leave in, and `position_id`, their backfill.
+  #
+  # What the plan holds about them stays sealed: `planned_level`, a promotion;
+  # `plan_data`, the plan's corrections by field; and for a hire the plan
+  # added, `placeholder`, its label. Read a value through {#planned_or_own}.
   Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
-                       :memberships, :manager_position_id, :departure) do
-    def initialize(manager_position_id: nil, departure: nil, **) = super
+                       :memberships, :manager_position_id, :departure, :planned_level, :plan_data, :placeholder) do
+    def initialize(manager_position_id: nil, departure: nil, planned_level: nil, plan_data: {}, placeholder: nil, **) = super
+
+    # A hire the plan added, which no Org Graph id names.
+    #
+    # @param id [String] minted by the plan
+    # @param label [Shreddable::Value]
+    # @return [Member]
+    def self.placeholder(id, label)
+      new(id:, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: nil,
+          employment_type: nil, memberships: [], placeholder: label)
+    end
+
+    # The plan's value for a field where it holds one, else the Org Graph's.
+    # A planned promotion wins over a corrected level. A value whose key is
+    # gone reads as {UNKNOWN}, never as the Org Graph's: the plan said
+    # something here, and nobody can now say what.
+    #
+    # @param field [Symbol] :level or :fte
+    # @return [Object, Symbol] the value, nil when nobody holds one, or {UNKNOWN}
+    def planned_or_own(field)
+      value = (planned_level if field == :level) || plan_data[field]
+      return public_send(field) unless value
+
+      value.removed? ? UNKNOWN : value.reveal
+    end
+
+    # @return [Boolean]
+    def placeholder? = !placeholder.nil?
 
     # @return [Line, nil] nil when they report to nobody
     def line = manager_id || manager_position_id ? Line.new(person_id: manager_id, position_id: manager_position_id) : nil

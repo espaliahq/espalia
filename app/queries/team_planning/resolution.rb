@@ -41,7 +41,7 @@ class TeamPlanning::Resolution
   private
 
   def resolved(aggregate = @repository.load_plan(@plan.id))
-    winning = aggregate.winning_changes(@scenario_id)
+    winning = @repository.sealed(aggregate.winning_changes(@scenario_id))
     base = @baseline.structure.with(step_ids: step_of(aggregate))
     map = winning.values.reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
     [ explained(map.settled), winning ]
