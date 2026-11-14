@@ -12,10 +12,13 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   #
   # Capybara's reset parks the last page in the back-forward cache on its way
   # to about:blank, and a request that page still had open lands after the
-  # reset clears cookies, handing the next test the last one's session (#212).
+  # reset clears cookies, handing the next test the last one's session
+  # (https://github.com/espaliahq/espalia/issues/212). Rails yields the same
+  # options on every test's setup, so add the flag once.
+  no_back_forward_cache = "--disable-features=BackForwardCache"
   test_chrome_options = lambda do |options|
     options.add_preference("profile.password_manager_leak_detection", false)
-    options.add_argument("--disable-features=BackForwardCache")
+    options.add_argument(no_back_forward_cache) unless options.args.include?(no_back_forward_cache)
   end
 
   if ENV["CAPYBARA_SERVER_PORT"]
@@ -177,7 +180,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   #    (Surfaced in AlignmentAssessments "assessee experience during
   #    alignment" runs #27393468272 / #27490859327 / #27495673118 /
   #    #27514458883.) The back-forward cache was the cause, and is now off
-  #    (#212); this stays as a backstop.
+  #    (https://github.com/espaliahq/espalia/issues/212); this stays as a
+  #    backstop.
   #
   # Strategy: visit if the form isn't already on the page, wait for the
   # input to appear, and if it doesn't, explicitly delete cookies + revisit
