@@ -30,6 +30,13 @@ Rails.configuration.to_prepare do
   # subscribe lines autoload those handler classes.
   Rails.configuration.event_store = event_store
 
+  # What the /res browser reads: the same events, with shreddable fields
+  # shown as a placeholder.
+  Rails.configuration.event_store_browser = RailsEventStore::JSONClient.new(
+    mapper: Shreddable::DisplayMapper.new(Shreddable::Mapper.json_client_default),
+    repository: RubyEventStore::ActiveRecord::EventRepository.new(serializer: JSON)
+  )
+
   # ── Synchronous projections (same transaction) ──
   event_store.subscribe(
     Frameworks::Projections::PublishedState.new,
