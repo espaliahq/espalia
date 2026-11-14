@@ -14,6 +14,11 @@
 # A plan whose base is still to come holds every change against today, so
 # nothing it plans reads conflicting before the plan starts.
 #
+# Once a plan is updated to today, today reads its base, so a change that
+# conflicted would read pending. A conflict the update carried forward
+# ({TeamPlanning::PlanAggregate#carried_conflicts}) reads conflicting, with
+# `since` the day of that update, until today shows the change done.
+#
 # Only a kind that reads its end state off a map
 # ({TeamPlanning::Events::Change.readable?}) and that the Org Graph can move
 # ({TeamPlanning::Events::Change.subject_moved_by}) has a status. A plan-only
@@ -40,7 +45,8 @@ class TeamPlanning::Status
   # @!attribute subject_id [String]
   # @!attribute facet [String]
   # @!attribute status [Symbol] :done, :pending or :conflicting
-  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status)
+  # @!attribute since [Date, nil] for a conflict an update to today carried forward, the day of that update
+  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since)
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -83,8 +89,10 @@ class TeamPlanning::Status
     subject_id, facet = key
     today = kind.read_from(now, subject_id:, facet:)
     before = [ [ kind.read_from(base, subject_id:, facet:), base ], *step_before(change, key, base) ]
+    status = status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before)
+    since = @aggregate.carried_conflicts(change.data[:scenario_id])[key] unless status == :done
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
-              status: status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before))
+              status: since ? :conflicting : status, since:)
   end
 
   # Each planned state comes with the map it belongs to, so a kind can show it as the Org Graph would.
