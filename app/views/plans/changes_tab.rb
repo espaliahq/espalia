@@ -20,6 +20,7 @@ class Views::Plans::ChangesTab < Views::Base
     "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ]
   }.freeze
   PLAN_ONLY = "Only in this plan"
+  REMOVED_UNIT = "A removed unit"
 
   # @param plan [Hash] from `team_planning_plan`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
@@ -151,8 +152,13 @@ class Views::Plans::ChangesTab < Views::Base
   def attention_row(item)
     li(class: "p-3", data: { attention_item: item[:facet] }) do
       p(class: "text-sm text-default break-words") do
-        strong(class: "font-medium") { subject_name(item[:subject_id]) }
-        plain " · #{FACETS.fetch(item[:facet], item[:facet].humanize)}"
+        facet = FACETS.fetch(item[:facet], item[:facet].humanize)
+        if (name = attention_name(item[:subject_id]))
+          strong(class: "font-medium") { name }
+          plain " · #{facet}"
+        else
+          strong(class: "font-medium") { facet }
+        end
       end
       p(class: "mt-1 text-xs text-muted") { item[:reason] }
     end
@@ -195,7 +201,7 @@ class Views::Plans::ChangesTab < Views::Base
 
   def describe(change)
     person = name_of(change[:person_id])
-    unit = name_of(change[:unit_id])
+    unit = unit_name(change[:unit_id])
     case change[:kind]
     when "joined" then "#{person} joined"
     when "left" then "#{person} left"
@@ -203,7 +209,7 @@ class Views::Plans::ChangesTab < Views::Base
     when "membership_started" then "#{person} joined #{unit}"
     when "membership_ended" then "#{person} left #{unit}"
     when "membership_changed" then "#{person}'s place in #{unit} changed"
-    when "moved" then "#{person} moved from #{name_of(change[:from_unit_id])} to #{unit}"
+    when "moved" then "#{person} moved from #{unit_name(change[:from_unit_id])} to #{unit}"
     when "unit_created" then "#{unit} was created"
     when "unit_renamed" then "#{change.dig(:before, 'name') || unit} was renamed #{change.dig(:after, 'name') || unit}"
     when "unit_moved" then "#{unit} moved"
@@ -233,7 +239,10 @@ class Views::Plans::ChangesTab < Views::Base
 
   def name_of(id) = id && @drift[:names].fetch(id, Person::FORMER_MEMBER)
 
-  def subject_name(id) = @attention[:names][id] || @status[:names][id] || PLAN_ONLY
+  def unit_name(id) = id && @drift[:names].fetch(id, REMOVED_UNIT)
+
+  # Attention names people only. An unnamed unit may still be the Org Graph's, so it isn't called plan-only.
+  def attention_name(id) = @attention[:names][id] || @status[:names][id] || @drift[:names][id]
 
   def scenario_name(id)
     return "Today" if id == plan_id

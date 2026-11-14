@@ -41,7 +41,8 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
         drift_change("fact_changed", person_id: ADA, fact: "manager", before: { "manager_id" => BO }, after: { "manager_id" => "gone" }),
         drift_change("fact_changed", person_id: ADA, fact: "title", before: nil, after: { "title" => "Staff Engineer" },
                                      effective_on: "2026-11-01"),
-        drift_change("left", person_id: BO, withdrawn: true)
+        drift_change("left", person_id: BO, withdrawn: true),
+        drift_change("membership_started", person_id: ADA, unit_id: "gone-unit")
       ])
 
       rows = texts(html, "[data-drift-change]")
@@ -53,6 +54,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_includes rows[2], "Takes effect 1 Nov · learned 20 Nov"
       assert_includes rows[3], "Withdrawn"
       assert html.at_css("[data-drift-change='left'] .line-through")
+      assert_includes rows[4], "Ada Quill joined #{Views::Plans::ChangesTab::REMOVED_UNIT}"
     end
 
     should "mark a change from this plan, and link each scenario whose plan it meets" do
@@ -103,6 +105,12 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       html = render_tab(items: [ { subject_id: ADA, facet: "assignment", reason: "Placed, but has left", change: nil } ])
       row = html.at_css("[data-attention-item='assignment']")
       assert_equal [ "Ada Quill · Placement", "Placed, but has left" ], row.css("p").map { it.text.squish }
+    end
+
+    should "name a unit it can, and never call one it can't only the plan's" do
+      html = render_tab(items: [ { subject_id: PAYMENTS, facet: "unit", reason: "Its parent was retired", change: nil },
+                                 { subject_id: "elsewhere", facet: "unit", reason: "Its parent was retired", change: nil } ])
+      assert_equal [ "Payments · Unit", "Unit" ], html.css("[data-attention-item] p:first-child").map { it.text.squish }
     end
   end
 end
