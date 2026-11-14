@@ -27,10 +27,11 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
     should "split a unit, showing who will be in no team before it applies" do
       sign_in_as(@admin_user)
       visit edit_tenant_org_unit_path(@org[:platform])
+      assert_selector "#org-graph-drawer-title", text: "Platform"
 
       click_link_with_js_fallback "Split", expect_text: "First new unit"
-      fill_in "First new unit", with: "Core"
-      fill_in "Second new unit", with: "Edge"
+      js_fill_in "First new unit", with: "Core"
+      js_fill_in "Second new unit", with: "Edge"
       click_button_with_js_fallback "Next: place people", expect_text: "Choose a new unit for each person."
 
       select "Core", from: "Ada Quill"
@@ -48,12 +49,14 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
     should "say a unit with sub-units can't retire, and name the provider of a mirrored one" do
       sign_in_as(@admin_user)
       visit edit_tenant_org_unit_path(@org[:checkout])
+      assert_selector "#org-graph-drawer-title", text: "Checkout"
 
       click_link_with_js_fallback "Retire", expect_selector: "#org-unit-step-blocked"
       assert_text "Move or retire Checkout's sub-units first: Payments."
       assert_no_button "Retire Checkout"
 
       visit edit_tenant_org_unit_path(@org[:engineering])
+      assert_selector "#org-graph-drawer-title", text: "Engineering"
       within("section[aria-labelledby='org-unit-reshape']") do
         assert_text "HiBob holds Engineering, so split, merge or retire it there."
         assert_no_link "Retire"
@@ -67,6 +70,7 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
     should "merge one unit into another, and retire an empty one" do
       sign_in_as(@admin_user)
       visit edit_tenant_org_unit_path(@org[:payments])
+      assert_selector "#org-graph-drawer-title", text: "Payments"
 
       click_link_with_js_fallback "Merge", expect_selector: "#org-unit-merge-into"
       within("ul[aria-label='People moving from Payments']") { assert_text "Dot Fennick" }
@@ -77,6 +81,7 @@ class Tenant::OrgUnitReshapeSystemTest < ApplicationSystemTestCase
       assert_equal [ "Platform" ], units_of(:dot)
 
       visit edit_tenant_org_unit_path(@org[:checkout])
+      assert_selector "#org-graph-drawer-title", text: "Checkout"
       tomorrow = Date.tomorrow.iso8601
       js_fill_in "Changes take effect", with: tomorrow
       click_link_with_js_fallback "Retire", expect_text: "ends 2 memberships"
