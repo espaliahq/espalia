@@ -91,6 +91,15 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal "bob-002", @employees.first.dig("work", "reportsTo", "id")
     end
 
+    should "record an employee whose email is not text, and sync the rest" do
+      @employees << { "id" => "bob-099", "email" => 42, "displayName" => "Odd One" }
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal "bob-099", result[:errors].last[:external_id]
+      assert Person.exists?(external_id: "bob-001")
+    end
+
     should "refuse to sync, creating nobody, without the forgetting key" do
       forget_row("bob-003")
 
@@ -648,12 +657,12 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       adapter = Hris::Hibob::Adapter.new(@tenant)
       client = Minitest::Mock.new
       employees = [
-        { "id" => "3141", "work" => { "customColumns" => { "column_team" => "7" } },
+        { "id" => "3141", "email" => "pi@example.com", "displayName" => "Pi", "work" => { "customColumns" => { "column_team" => "7" } },
           "humanReadable" => { "work" => { "customColumns" => { "column_team" => "Payments" } } } },
-        { "id" => "2718" },
+        { "id" => "2718", "email" => "e@example.com", "displayName" => "E" },
         { "work" => { "customColumns" => { "column_team" => "9" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.customColumns.column_team], show_inactive: true)
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.customColumns.column_team], show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
       values = adapter.read_field("column_team", kind: :list)
@@ -667,10 +676,11 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       adapter = Hris::Hibob::Adapter.new(@tenant)
       client = Minitest::Mock.new
       employees = [
-        { "id" => "3141", "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
-        { "id" => "2718", "work" => { "customColumns" => { "column_country" => "Australia" } } }
+        { "id" => "3141", "email" => "pi@example.com", "displayName" => "Pi",
+          "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
+        { "id" => "2718", "email" => "e@example.com", "displayName" => "E", "work" => { "customColumns" => { "column_country" => "Australia" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.customColumns.column_country work.site],
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.customColumns.column_country work.site],
         show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
@@ -683,8 +693,9 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
 
     should "read everyone the sync keeps, such as a person on leave, and leave out a leaver" do
       employees = [
-        { "id" => "3141", "isActive" => true, "internal" => { "status" => "Inactive" }, "work" => { "department" => "Sales" } },
-        { "id" => "2718", "isActive" => false, "work" => { "department" => "Sales" } }
+        { "id" => "3141", "email" => "pi@example.com", "isActive" => true, "internal" => { "status" => "Inactive" },
+          "work" => { "department" => "Sales" } },
+        { "id" => "2718", "email" => "e@example.com", "isActive" => false, "work" => { "department" => "Sales" } }
       ]
 
       assert_equal [ "3141" ], read_department(employees).keys
@@ -778,8 +789,8 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     should "read a forgotten person only once they are back at work" do
       forget_row("3141")
       forget_row("2718")
-      employees = [ { "id" => "3141", "work" => { "startDate" => (Date.current - 1).iso8601 } },
-                    { "id" => "2718", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
+      employees = [ { "id" => "3141", "email" => "pi@example.com", "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "2718", "email" => "e@example.com", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
 
       assert_equal [ "3141" ], read_department(employees).keys
     end
@@ -799,6 +810,86 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       employees = [ { "id" => "3141", "email" => "taken@example.com", "work" => { "startDate" => (Date.current - 1).iso8601 } } ]
 
       assert_empty read_department(employees)
+    end
+    should "leave out a newcomer with no email or name, as the sync refuses to create them" do
+      employees = [ { "id" => "3141", "email" => "", "displayName" => "" }, { "id" => "2718", "email" => "e@example.com" } ]
+
+      assert_equal [ "2718" ], read_department(employees).keys
+    end
+
+    should "read the rows it holds without the forgetting key, and refuse only a newcomer it cannot check" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
+      forget_row("9999")
+
+      OrgGraph::Forgetting.stub(:key, nil) do
+        assert_equal [ "1618" ], read_department([ { "id" => "1618", "email" => "held@example.com" } ]).keys
+        assert_raises(OrgGraph::Forgetting::KeyMissing) { read_department([ { "id" => "2718", "email" => "e@example.com" } ]) }
+      end
+    end
+
+    should "keep a held row the sync leaves untouched, though the slim read differs from the payload it stored" do
+      held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
+      held.update_columns(name: "", department: "Sales", hris_raw_data: { "id" => "1618", "work" => { "title" => "Chef" } })
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      client.expect(:search_people, [ { "id" => "1618", "email" => "held@example.com", "work" => { "department" => "Sales" } } ],
+        fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
+        show_inactive: true)
+      adapter.instance_variable_set(:@client, client)
+
+      assert_equal [ "1618" ], adapter.read_field("work.department", kind: :text).keys
+    end
+
+    should "read a department of any size in the same number of queries, adoptions included" do
+      counts = [ 2, 6 ].map do |size|
+        employees = Array.new(size) { { "id" => "q#{size}-#{it}", "email" => "q#{size}-#{it}@example.com" } }
+        employees.each_with_index do |employee, index|
+          # Half the rows are held by HRIS id, half wait to be adopted by email.
+          create(:person, tenant: @tenant, hris_source: "hibob", external_id: (employee["id"] if index.even?), email: employee["email"], name: "Person #{employee['id']}")
+        end
+        queries = 0
+        counting = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" || payload[:sql].match?(/\A\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)/) }
+        ActiveSupport::Notifications.subscribed(counting, "sql.active_record") do
+          adapter = Hris::Hibob::Adapter.new(@tenant)
+          client = Minitest::Mock.new
+          client.expect(:search_people, employees.map { it.merge("displayName" => "Person #{it['id']}") },
+            fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
+            show_inactive: true)
+          adapter.instance_variable_set(:@client, client)
+          adapter.read_field("work.department", kind: :text)
+        end
+        queries
+      end
+
+      assert_equal counts.first, counts.last
+    end
+
+    should "put each value on the row the sync writes it to, adopted by email or held by id" do
+      held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
+      adopted = create(:person, tenant: @tenant, email: "adopt@example.com")
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      client.expect(:search_people, [ { "id" => "1618", "work" => { "department" => "Sales" } },
+                                      { "id" => "3141", "email" => "Adopt@example.com", "work" => { "department" => "Ops" } },
+                                      { "id" => "2718", "email" => "new@example.com", "displayName" => "E" } ],
+        fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
+        show_inactive: true)
+      adapter.instance_variable_set(:@client, client)
+
+      rows = adapter.read_field_rows("work.department", kind: :text)
+
+      assert_equal [ held.id, adopted.id, nil ], rows.map(&:first)
+      assert_equal [ "Sales", "Ops", nil ], rows.map { it.last.label }
+    end
+
+    should "adopt a row for a later employee with its email, though an earlier one was refused it" do
+      adopted = create(:person, tenant: @tenant, email: "adopt@example.com")
+      adopted.update_column(:name, "")
+      employees = [ { "id" => "3141", "email" => "adopt@example.com" },
+                    { "id" => "2718", "email" => "adopt@example.com", "displayName" => "Ada" } ]
+
+      assert_equal [ [ "2718", adopted.id ] ], first_pass_rows(employees, write: false)
+      assert_equal [ [ "2718", adopted.id ] ], first_pass_rows(employees, write: true)
     end
   end
 
@@ -1865,15 +1956,32 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     person
   end
 
-  # @param employees [Array<Hash>] what HiBob answers
+  # @param employees [Array<Hash>] what HiBob answers, each named unless it says otherwise
   # @return [Hash{String => Hris::FieldValue}] the department read for each
   def read_department(employees)
+    named = employees.map { { "displayName" => "Person #{it['id']}" }.merge(it) }
     adapter = Hris::Hibob::Adapter.new(@tenant)
     client = Minitest::Mock.new
-    client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.department],
+    client.expect(:search_people, named, fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
       show_inactive: true)
     adapter.instance_variable_set(:@client, client)
-    adapter.read_field("work.department", kind: :text).tap { client.verify }
+    values = adapter.read_field("work.department", kind: :text).tap { client.verify }
+    assert_equal first_pass_rows(named, write: false), first_pass_rows(named, write: true), "the preview must decide as the sync does"
+    values
+  end
+
+  # Pass 1's decisions over a response: each person it keeps, beside the row it
+  # matched or adopted, or nil for one it creates.
+  def first_pass_rows(employees, write:)
+    adapter = Hris::Hibob::Adapter.new(@tenant)
+    ActsAsTenant.with_tenant(@tenant) do
+      held = Person.ids.to_set
+      rows = []
+      adapter.send(:first_pass, employees, adapter.send(:build_initial_result), projected: false, write:) do |_, attrs, person|
+        rows << [ attrs[:external_id], (person.id if held.include?(person.id)) ]
+      end
+      rows
+    end
   end
 
   def build_adapter(employees)

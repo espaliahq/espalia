@@ -8,6 +8,8 @@ class Tenant::OrgGraphSettings::LevelSourcesControllersTest < ActionDispatch::In
   TEAM = Hris::Field.new(id: "work.customColumns.column_team", name: "Team", kind: :list)
 
   FakeAdapter = Struct.new(:values) do
+    include Hris::FieldRows
+
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
     def field_catalogue = [ TEAM ]

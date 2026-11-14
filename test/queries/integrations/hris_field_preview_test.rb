@@ -9,6 +9,8 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
 
   # Answers the catalogue and the field read as an adapter would.
   FakeAdapter = Struct.new(:values, :fields, :asked_alongside) do
+    include Hris::FieldRows
+
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
     def field_catalogue = fields
