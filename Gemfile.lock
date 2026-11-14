@@ -312,7 +312,7 @@ GEM
       ffi (~> 1.15)
     pact-ffi (0.5.8.1-x86_64-linux-musl)
       ffi (~> 1.15)
-    pagy (43.8.1)
+    pagy (43.8.2)
       json
       uri
       yaml
