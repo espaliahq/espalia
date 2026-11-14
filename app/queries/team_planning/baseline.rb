@@ -224,6 +224,24 @@ class TeamPlanning::Baseline
       value.removed? ? UNKNOWN : value.reveal
     end
 
+    # @return [Boolean] whether the plan holds a level for them
+    def planned_level? = !(planned_level || plan_data[:level]).nil?
+
+    # Their role and level through the tenant's title mapping. A level the
+    # plan holds wins over a mapping's fixed level, so one it can't resolve,
+    # removed or not a level ordinal, leaves the level unresolved. Capacity
+    # and cost both read it, so they price a person at one level.
+    #
+    # @param titles [Integrations::HrisTitleResolution]
+    # @return [Integrations::HrisTitleResolution::Target]
+    def own_target(titles)
+      ordinal = Integer(planned_or_own(:level), exception: false)
+      return titles.target(title, ordinal) unless planned_level?
+
+      own = titles.target(title, ordinal, planned_ordinal: ordinal)
+      ordinal ? own : own.with(level: nil, ordinal: nil)
+    end
+
     # @return [Boolean]
     def placeholder? = !placeholder.nil?
 

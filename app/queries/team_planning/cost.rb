@@ -189,7 +189,11 @@ class TeamPlanning::Cost
 
   def open_lines(map)
     filled = Hash.new(0r)
-    map.occupants.each { |position_id, people| people.each { |person, placement| filled[position_id] += (fte_of(person) || 1r) * exact(placement.allocation || 1) } }
+    map.people.each do |person|
+      TeamPlanning::Baseline::Membership.shares(person.memberships).each do |placement, share, _|
+        filled[placement.position_id] += (fte_of(person) || 1r) * share if placement.position_id && placement.position_id != person.backfill_id
+      end
+    end
     leavers = map.people.select(&:leaving?).group_by(&:backfill_id)
     map.positions.sort_by(&:id).filter_map do |position|
       open = exact(position.fte) - filled[position.id]
@@ -222,12 +226,7 @@ class TeamPlanning::Cost
     level = member.planned_or_own(:level)
     return [ nil, nil ] if level == TeamPlanning::Baseline::UNKNOWN
 
-    ordinal = Integer(level, exception: false)
-    planned = member.planned_level || member.plan_data[:level]
-    target = planned ? titles.target(member.title, ordinal, planned_ordinal: ordinal) : titles.target(member.title, ordinal)
-    return [ nil, nil ] if planned && ordinal.nil?
-
-    [ target.level&.level_id, planned ? "planned" : "own" ]
+    [ member.own_target(titles).level&.level_id, member.planned_level? ? "planned" : "own" ]
   end
 
   # A leaver in this step holds the seat up to their leaving date, and for

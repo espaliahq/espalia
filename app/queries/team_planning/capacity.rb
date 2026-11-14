@@ -97,23 +97,12 @@ class TeamPlanning::Capacity
   def person_seat(member)
     fte_known = ![ nil, TeamPlanning::Baseline::UNKNOWN ].include?(member.planned_or_own(:fte))
     fte = exact(member.fte_or_one)
-    own = own_target(member)
+    own = member.own_target(titles)
     placements = member.memberships.presence || [ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]
     places, reasons = TeamPlanning::Baseline::Membership.shares(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
     reasons = reasons.map { "leaving" } if member.leaving?
     (@own_levels ||= {})[member.id] = own.level&.level_id
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]
-  end
-
-  # A level the plan holds wins over a title mapping's fixed level, so one it
-  # can't resolve, removed or not a level ordinal, leaves the level unresolved.
-  def own_target(member)
-    level = member.planned_or_own(:level)
-    ordinal = Integer(level, exception: false)
-    return titles.target(member.title, ordinal) unless member.planned_level || member.plan_data[:level]
-
-    own = titles.target(member.title, ordinal, planned_ordinal: ordinal)
-    ordinal ? own : own.with(level: nil, ordinal: nil)
   end
 
   def person_place(placement, allocation, known, own)
