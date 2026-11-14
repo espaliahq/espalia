@@ -123,8 +123,37 @@ moves it. Planning asks the Org Graph two questions and no others:
 - What has the Org Graph learned since that day? (R4) This is the drift report.
 
 Reading the base as known the day before closes it: edits made later on the base date
-arrive as drift rows, one per edit, rather than moving the plan under its users. The
-plan stores the date, never a copy of the roster.
+arrive as drift rather than moving the plan under its users. The plan stores the date,
+never a copy of the roster.
+
+### When the Org Graph changes twice on the base date
+
+Two things can happen on one date, and the plan treats them differently:
+
+- **Changes taking effect that day, recorded before it.** A move scheduled for the base
+  date is part of the base. If two such changes set one fact, the later one recorded
+  stands, as `AsOf` reads it.
+- **Changes the Org Graph learns that day.** Neither is in the base. They arrive as
+  drift, and `ChangesBetween` reports one net change per fact. Two edits to one fact
+  make one drift row, with the later value, and the earlier value is not shown.
+
+A plan whose base date is still to come reads what the Org Graph knows now, until the
+day before its base date has passed. Until then its base moves as edits land.
+
+### The baseline reader
+
+`TeamPlanning::Baseline` reads the root scenario, which changes nothing yet, over
+`OrgGraph::AsOf` on the base date, known at the end of the day before. It is refused to
+anyone `PlanPolicy#show?` refuses. It returns a `Map`:
+
+- **Units**: the live units, with parent, level and owners.
+- **People**: everyone employed that day, with their facts and each membership's unit,
+  allocation and role.
+- **Unassigned**: the people in no live unit.
+
+`structure` returns the map by id with no names, so scenario resolution (3.2) can apply
+a plan's changes before anything is named. `call` joins the names last, from `people`,
+so anyone forgotten reads "Former member". The forgotten-person audit walks it.
 
 ## Status is derived, never stored
 
