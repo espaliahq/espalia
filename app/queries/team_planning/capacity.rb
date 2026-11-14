@@ -1,0 +1,176 @@
+# frozen_string_literal: true
+
+# What a scenario can deliver: each seat priced by the capacity model its
+# role chooses ({TeamPlanning::RuleKinds::Capacity}), then summed per unit and
+# for the plan. Sums are kept per model, so units and fractions of a person
+# never add up to one number.
+#
+# A seat is a person, or the FTE a position's occupants leave open, and each
+# of its places is priced on its own. A place in a position does that
+# position's work, so it takes the position's role and level. A person placed
+# straight in a unit takes the role and level their title and level resolve
+# to on the map, through the tenant's title mapping (as the HRIS sync
+# resolves them), never through today's framework assignment, which would
+# mix dates.
+#
+# A place whose role no model covers counts nowhere and is listed as
+# unclassified, with why. A place in a unit gone from the map is still
+# counted for the plan, under no unit. Figures stay exact Rationals.
+#
+# @example
+#   report = TeamPlanning::Capacity.new(context:, plan:, scenario_id:).call
+#   report.totals # => { "per_fte" => (23/2) }
+class TeamPlanning::Capacity
+  RULE = TeamPlanning::RuleKinds::Capacity
+  Model = TeamPlanning::CapacityModel
+
+  # Why a place counts nowhere.
+  REASONS = {
+    "no_title" => "The person has no title",
+    "unmapped_title" => "The person's title maps to no role",
+    "unknown_role" => "The role isn't in the framework",
+    "closed_position" => "The position this place is in has closed",
+    "no_model" => "No capacity model is chosen for the role or its family",
+    "unknown_model" => "The chosen capacity model isn't available"
+  }.freeze
+
+  TITLE_REASONS = {
+    Integrations::HrisPersonRow::STATUS_NO_TITLE => "no_title",
+    Integrations::HrisPersonRow::STATUS_UNMAPPED => "unmapped_title",
+    Integrations::HrisPersonRow::STATUS_MISSING_ROLE => "unknown_role"
+  }.freeze
+
+  # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named
+  # @!attribute seats [Array<Seat>] people by id, then positions with FTE left open, by id
+  # @!attribute units [Hash{String => Hash{String => Rational}}] live unit id => model => total
+  # @!attribute totals [Hash{String => Rational}] model => total
+  Report = Data.define(:map, :seats, :units, :totals) do
+    # @return [Array<Array(Seat, Place)>] each place that counts nowhere, with its seat
+    def unclassified = seats.flat_map { |seat| seat.places.select(&:unclassified?).map { [ seat, it ] } }
+  end
+
+  # @!attribute seat [TeamPlanning::CapacityModel::Seat]
+  # @!attribute places [Array<Place>] in the seat's order
+  Seat = Data.define(:seat, :places)
+
+  # @!attribute place [TeamPlanning::CapacityModel::Place] its role_id is nil when none resolves
+  # @!attribute model [String, nil] the model chosen
+  # @!attribute chosen_for [String, nil] "role" or "family"
+  # @!attribute figure [TeamPlanning::CapacityModel::Figure, nil] nil when unclassified
+  # @!attribute reason [String, nil] a {REASONS} key when unclassified
+  Place = Data.define(:place, :model, :chosen_for, :figure, :reason) do
+    # @return [Boolean]
+    def unclassified? = reason.present?
+
+    # @return [String, nil]
+    def unit_id = place.unit_id
+  end
+
+  # @param context [AuthorizationContext]
+  # @param plan [TeamPlanningPlan]
+  # @param scenario_id [String] the plan's id for the root
+  # @param repository [TeamPlanning::Repository]
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
+    @resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:)
+    @plan = plan
+  end
+
+  # @return [Report]
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def call
+    @map = @resolution.call
+    @positions = @rules = nil
+    @live = @map.units.to_set(&:id)
+    people = @map.people.map { person_seat(it) }
+    seats = people + open_positions(people)
+    families = family_ids(seats)
+    priced = seats.map { |seat, reasons| Seat.new(seat:, places: seat.places.zip(reasons).map { |place, reason| price(seat, place, reason, families) }) }
+    Report.new(map: @map, seats: priced, **sums(priced))
+  end
+
+  private
+
+  def person_seat(member)
+    fte = member.fte.nil? ? 1r : exact(member.fte)
+    own = titles.target(member.title, Integer(member.level, exception: false))
+    placements = member.memberships.presence || [ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]
+    places, reasons = allocations(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
+    [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known: !member.fte.nil?, places:), reasons ]
+  end
+
+  def person_place(placement, allocation, known, own)
+    base = { unit_id: placement.unit_id, allocation:, allocation_known: known, position_id: placement.position_id }
+    if placement.position_id
+      position = positions[placement.position_id]
+      return [ Model::Place.new(**base, role_id: nil, level_id: nil), "closed_position" ] unless position
+
+      [ Model::Place.new(**base, role_id: position.role_id, level_id: position.level_id), nil ]
+    else
+      [ Model::Place.new(**base, role_id: own.role&.role_id, level_id: own.level&.level_id), (TITLE_REASONS[own.status] unless own.role) ]
+    end
+  end
+
+  # An allocation the HRIS didn't give shares what the seat's other places leave.
+  def allocations(placements)
+    known = placements.reject { it.allocation.nil? }.sum(0r) { exact(it.allocation) }
+    unknown = placements.count { it.allocation.nil? }
+    share = unknown.zero? ? 0r : [ 1r - known, 0r ].max / unknown
+    placements.map { [ it, it.allocation.nil? ? share : exact(it.allocation), !it.allocation.nil? ] }
+  end
+
+  # A position counts only for the FTE its occupants leave open, so a filled
+  # one is counted once, through the people in it.
+  def open_positions(people)
+    filled = Hash.new(0r)
+    people.each { |seat, _| seat.places.each { filled[it.position_id] += seat.fte * it.allocation if it.position_id } }
+    positions.values.sort_by(&:id).filter_map do |position|
+      open = exact(position.fte) - filled[position.id]
+      next unless open.positive?
+
+      place = Model::Place.new(unit_id: position.unit_id, allocation: 1r, allocation_known: true, role_id: position.role_id,
+                               level_id: position.level_id, position_id: position.id)
+      [ Model::Seat.new(id: position.id, kind: "position", fte: open, fte_known: true, places: [ place ]), [ nil ] ]
+    end
+  end
+
+  def price(seat, place, reason, families)
+    return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason:) if reason
+    return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "unknown_role") unless families.key?(place.role_id)
+
+    choice = RULE.choice_for(rule_at(place.unit_id), role_id: place.role_id, family_id: families[place.role_id])
+    return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "no_model") unless choice
+
+    model, chosen_for = choice.values_at("model", "chosen_for")
+    return Place.new(place:, model:, chosen_for:, figure: nil, reason: "unknown_model") unless TeamPlanning::CapacityModels.registered?(model)
+
+    figure = TeamPlanning::CapacityModels.fetch(model).capacity_of(seat, place:, params: choice["params"], map: @map)
+    Place.new(place:, model:, chosen_for:, figure:, reason: nil)
+  end
+
+  # A unit gone from the map takes its rules with it, so its places follow
+  # the plan-wide choice.
+  def rule_at(unit_id)
+    key = @live.include?(unit_id) ? unit_id : nil
+    (@rules ||= {})[key] ||= @map.rule(RULE.rule_name, unit_id: key)
+  end
+
+  def sums(seats)
+    priced = seats.flat_map(&:places).reject(&:unclassified?)
+    units = priced.select { @live.include?(it.unit_id) }.group_by(&:unit_id).transform_values { total_by_model(it) }
+    { units:, totals: total_by_model(priced) }
+  end
+
+  def total_by_model(places) = places.group_by(&:model).transform_values { |group| group.sum { it.figure.amount } }.sort.to_h
+
+  def family_ids(seats)
+    role_ids = seats.flat_map { |seat, _| seat.places.filter_map(&:role_id) }.uniq
+    FrameworkState::Role.where(tenant_id: @plan.tenant_id, role_id: role_ids).pluck(:role_id, :role_family_id).to_h
+  end
+
+  def positions = @positions ||= @map.positions.index_by(&:id)
+
+  def titles = @titles ||= Integrations::HrisTitleResolution.new(@plan.tenant)
+
+  def exact(value) = Rational(value.to_s)
+end

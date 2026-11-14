@@ -238,7 +238,7 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. No kind ships yet: the first come with 5.2, 7.1 and 8.1.
+object. The first kind is `capacity_model` (7.1, below); 5.2 and 8.1 bring more.
 
 `RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
 that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
@@ -256,6 +256,48 @@ A rule's value may one day be sensitive: an on-cost rate, a guardrail on pay. So
 names what is wrong and never repeats the value. A kind declares `shreddable?`, and until
 [#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
 yes is refused at registration.
+
+### Capacity as built
+
+A capacity model prices a seat. `TeamPlanning::CapacityModel` is the interface and
+`TeamPlanning::CapacityModels` the registry, built like the rule kinds. A model names
+itself, checks its params and returns a `Figure` for one place: an exact `Rational` and the
+`Step`s of its working, which a person's card can list. The only model so far is `per_fte`,
+one unit per FTE, there to prove the plumbing; the units model is 7.2.
+
+The `capacity_model` rule chooses a model per role family, and a role can choose another.
+Its default chooses nothing, so a plan counts nothing until a tenant or plan says how. Read
+at a seat's unit, a unit can choose differently for its subtree.
+
+`TeamPlanning::Capacity` reads the settled scenario map. A seat is a person, or the FTE a
+position's occupants leave open, and each place it holds (a unit or a position, and its
+share of the seat) is priced on its own:
+
+- **A place in a position** does that position's work, so it takes the position's role
+  and level, whether a person fills it or it stands open. A position counts only for the
+  FTE its occupants leave, so a filled one is counted once, through its people, and an
+  open one is priced exactly as a filled one would be.
+- **A person placed straight in a unit** takes their own role and level: their title and
+  level as the map holds them, through the tenant's title mapping, as the HRIS sync
+  resolves them (`Integrations::HrisTitleResolution`). Never through
+  `PersonFrameworkAssignment`, whose dates are not the scenario's. 3.14, which changes a
+  person's role or level in a scenario, must put the change on the map's `Member`, so
+  capacity follows it.
+- **An FTE the map doesn't hold** counts as 1, and the working says so.
+- **An allocation the HRIS didn't give** shares what the person's other places leave, and
+  the working says so.
+- **A leaver** will count nowhere: 3.7 keeps them on the map while a backfill position
+  carries the headcount, so the query drops them before it builds seats.
+
+A place no model covers counts nowhere and is listed as unclassified with its reason: no
+title, a title mapped to no role, a role not in the framework, a position since closed, no
+model chosen, or a model no longer registered. A place in a unit gone from the map counts
+for the scenario but under no unit.
+
+A model gets the whole map with each seat, so 7.2 can find who reports to a seat by its id,
+a person's or a position's, without the interface changing. Totals are kept per model, per unit and for the scenario, and never
+summed across models. Figures stay exact; `team_planning_capacity` sends them as decimal
+strings, and only the display rounds.
 
 ### Clearing and pinning
 

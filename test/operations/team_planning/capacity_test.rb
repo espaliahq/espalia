@@ -1,0 +1,82 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
+  ESPALIA = { provider: "espalia", effective_on: "2026-02-01" }.freeze
+
+  setup do
+    @tenant = create(:tenant, :with_hibob_config)
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    @unit_id = SecureRandom.uuid_v7
+
+    travel_to Time.utc(2026, 2, 1, 9)
+    ActsAsTenant.with_tenant(@tenant) do
+      @family = create(:framework_role_family)
+      @engineer = create(:framework_role, code: "E", role_family_id: @family.role_family_id)
+      @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5)
+      squads = SecureRandom.uuid_v7
+      structure.define_taxonomy([ { level_id: squads, name: "Squad" } ], effective_on: "2026-01-01")
+      structure.create_unit(@unit_id, "Payments", level_id: squads, effective_on: "2026-01-01")
+      @ada = create(:person, tenant: @tenant, name: "Ada Quill")
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).tap do |people|
+        people.record_person(@ada.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0)
+        people.set_membership(@ada.id, @unit_id, **ESPALIA, allocation: Rational(1, 3).to_f)
+      end
+      @admin = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
+      @outsider = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
+    end
+    @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-03-02")[:plan_id]
+  end
+
+  def call(operation, as: @admin, **params)
+    ActsAsTenant.with_tenant(@tenant) do
+      operation.call(context: AuthorizationContext.new(user: as.user, tenant_user: as, person: as.person), params:)
+    end
+  end
+
+  def capacity(as: @admin) = call(Operations::TeamPlanning::Capacity, as:, plan_id: @plan_id, scenario_id: @plan_id)
+
+  should "show each seat's places and working as decimal strings, totals per model, and name the people" do
+    ActsAsTenant.with_tenant(@tenant) do
+      context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+      TeamPlanning::CommandHandler.new(actor: context).set_change(
+        @plan_id, TeamPlanning::Events::RuleSet, scenario_id: @plan_id, subject_id: @plan_id,
+                                                 end_state: { rule: "capacity_model", value: { families: { @family.role_family_id => { model: "per_fte" } } } }
+      )
+    end
+    call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @plan_id, role_id: @engineer.role_id,
+                                                level_id: @e5.level_id, unit_id: @unit_id, fte: 0.5, basis: "new")
+    result = capacity
+
+    ada = result[:seats].find { it[:seat_id] == @ada.id }
+    place = ada[:places].first
+    assert_equal [ "person", "1", true ], ada.values_at(:kind, :fte, :fte_known)
+    assert_equal [ @unit_id, @engineer.role_id, @e5.level_id, "per_fte", "family" ],
+                 place.values_at(:unit_id, :role_id, :level_id, :model, :chosen_for)
+    assert_equal place[:allocation], place[:capacity]
+    assert_equal [ "FTE", "1" ], place[:working].first.values_at(:label, :amount)
+    assert_match(/\A0\.3333/, place[:capacity])
+    assert_equal "0.5", result[:seats].find { it[:kind] == "position" }[:places].first[:capacity]
+    assert_equal [ "per_fte" ], result[:totals].keys
+    assert_equal [ { unit_id: @unit_id, name: "Payments", totals: result[:totals] } ], result[:units]
+    assert_equal({ @ada.id => "Ada Quill" }, result[:names])
+    assert_empty result[:unclassified]
+  end
+
+  should "list every seat as unclassified, with why, until a model is chosen" do
+    result = capacity
+
+    assert_empty result[:totals]
+    assert_equal [ [ @ada.id, "person", @unit_id, "no_model" ] ],
+                 result[:unclassified].map { it.values_at(:seat_id, :kind, :unit_id, :reason) }
+    assert_equal TeamPlanning::Capacity::REASONS["no_model"], result[:unclassified].first[:reason_text]
+  end
+
+  should "refuse a scenario the plan doesn't have, and a caller who isn't in the plan, as the web and MCP both see it" do
+    assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::Capacity, plan_id: @plan_id, scenario_id: SecureRandom.uuid_v7)
+    end
+    assert_equal "No such plan", assert_raises(Operations::Base::ParameterError) { capacity(as: @outsider) }.message
+  end
+end
