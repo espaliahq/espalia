@@ -111,7 +111,7 @@ Rails.application.routes.draw do
       resources :editors, only: [ :create, :destroy ], param: :person_id
       resources :fact_providers, only: :update, param: :fact
       resources :fact_fields, only: :show, param: :fact
-      resources :levels, only: :create
+      resources :levels, only: [ :create, :destroy ]
       resource :level_order, only: :update
       resources :level_providers, only: :update, param: :level_id
       resources :level_fields, only: :show, param: :level_id
@@ -128,6 +128,10 @@ Rails.application.routes.draw do
       get :candidates, on: :member
       resources :owners, only: [ :create, :destroy ], controller: "org_unit_owners"
       resources :members, only: [ :create, :update, :destroy ], controller: "org_unit_members"
+      # Retire, merge and split (#138): `new` is the drawer step, `create` applies it.
+      resource :retirement, only: [ :new, :create ], controller: "org_unit_retirements"
+      resource :merge, only: [ :new, :create ], controller: "org_unit_merges"
+      resource :split, only: [ :new, :create ], controller: "org_unit_splits"
     end
 
     # The person drawer (#132): `show` opens it over the Units view, and each

@@ -37,4 +37,24 @@ module OrgUnitDrawer
   end
 
   def drawer_path = edit_tenant_org_unit_path(@unit, on: drawer_on, **comparison_params)
+
+  # The date a drawer step opens with: the one carried in, or today.
+  def step_date = params[:on].presence || effective_on || Date.current.iso8601
+
+  # Renders a drawer over the Units view, opened at the unit.
+  #
+  # @yieldparam overview [OrgGraph::UnitsOverview]
+  # @yieldparam rights [OrgGraphPolicy::UnitRights]
+  # @yieldreturn [Phlex::SGML] the drawer
+  def render_drawer
+    overview = OrgGraph::UnitsOverview.new(selected_unit_id: @unit.id)
+    render Views::Tenant::OrgGraph::ShowView.new(
+      overview:,
+      user: current_user,
+      current_tenant: ActsAsTenant.current_tenant,
+      tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a },
+      drawer: yield(overview, OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview)),
+      **comparison_slots(unit_id: @unit.id)
+    )
+  end
 end

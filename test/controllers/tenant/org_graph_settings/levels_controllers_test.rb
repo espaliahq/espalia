@@ -109,19 +109,79 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_select "#org-graph-level-down-#{@team_id}", count: 0
       assert_select "#org-graph-levels input#org-graph-new-level[name=name]"
     end
+
+    should "remove a level no unit has ever held" do
+      delete tenant_org_graph_settings_level_path(@squad_id)
+
+      assert_redirected_to tenant_org_graph_settings_path
+      assert_equal "Squad is no longer a level.", flash[:notice]
+      assert_equal %w[Tribe Team], level_names
+    end
+
+    should "name the units that keep a level in place" do
+      delete tenant_org_graph_settings_level_path(@team_id)
+
+      assert_equal "The level could not be removed: Team can't be removed, as it holds Payments", flash[:alert]
+      assert_equal %w[Tribe Squad Team], level_names
+    end
+
+    should "refuse a level an HRIS provides, and one that is already gone" do
+      region_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).define_taxonomy(
+          [ { level_id: region_id, name: "Region", provider: "hibob" }, { level_id: @tribe_id, name: "Tribe" },
+            { level_id: @squad_id, name: "Squad" }, { level_id: @team_id, name: "Team" } ], effective_on: Date.current
+        )
+      end
+
+      delete tenant_org_graph_settings_level_path(region_id)
+      assert_equal "The level could not be removed: Region comes from HiBob; hand it back to Espalia before removing it",
+                   flash[:alert]
+
+      delete tenant_org_graph_settings_level_path(SecureRandom.uuid_v7)
+      assert_equal "The level could not be removed: Level is not in the taxonomy", flash[:alert]
+      assert_equal %w[Region Tribe Squad Team], level_names
+    end
+
+    should "offer Remove only on a level no unit has ever held, and name the retired units of one that did" do
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        @guild_id = SecureRandom.uuid_v7
+        structure.add_level(@guild_id, "Guild", effective_on: Date.current)
+        unit_id = SecureRandom.uuid_v7
+        structure.create_unit(unit_id, "Atlas", level_id: @guild_id, effective_on: Date.current)
+        structure.retire_unit(unit_id, effective_on: Date.current)
+      end
+
+      get tenant_org_graph_settings_path
+
+      assert_select "#org-graph-level-remove-#{@squad_id}", text: "Remove Squad"
+      assert_select "#org-graph-level-remove-#{@team_id}", count: 0
+      assert_select "#org-graph-level-remove-#{@guild_id}", count: 0
+      assert_select "#org-graph-level-#{@guild_id}", text: /0 units · held Atlas/
+      assert_select "#org-graph-level-#{@team_id}", text: /From Espalia · holds Payments/
+      assert_select "#org-graph-level-menu-#{@squad_id}[aria-label=?]", "Actions for Squad"
+    end
   end
 
   context "as an Org Graph editor" do
     setup { sign_in @editor_user }
 
-    should "refuse to add or move a level" do
+    should "refuse to add, move or remove a level, and offer none of them" do
       post tenant_org_graph_settings_levels_path, params: { name: "Guild" }
       assert_equal "You are not authorized to perform this action.", flash[:alert]
 
       patch tenant_org_graph_settings_level_order_path,
             params: { level_id: @squad_id, direction: "down" }
       assert_equal "You are not authorized to perform this action.", flash[:alert]
+
+      delete tenant_org_graph_settings_level_path(@squad_id)
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
       assert_equal %w[Tribe Squad Team], level_names
+
+      get tenant_org_graph_settings_path
+      assert_select "#org-graph-level-remove-#{@squad_id}", count: 0
+      assert_select "#org-graph-level-menu-#{@squad_id}", count: 0
     end
   end
 end

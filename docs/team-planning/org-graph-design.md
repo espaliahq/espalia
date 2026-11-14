@@ -124,8 +124,9 @@ names the succession and its successors, and its members move rather than leave:
   date, so they appear in the "in no team" tray for someone to place. The handler never
   guesses.
 - **Placements are not stored on the structure events.** They are ordinary membership
-  commands issued with the split, sharing its cause. The split screen (5.6) and applying
-  a plan (7.3) supply the names.
+  commands issued with the split, sharing its cause. The split step in the unit drawer
+  (5.6, [#138](https://github.com/espaliahq/espalia/issues/138)) and applying a plan
+  (7.3) supply the names. The drawer's step lists who will be in no team before it applies.
 
 A plan applies a succession through `OrgGraph::StructureCommandHandler#apply_succession`,
 built with the approval as its `cause_id:`. In one transaction it moves the people the plan
@@ -683,15 +684,15 @@ screen and MCP share one implementation.
 
 - **Where each fact comes from.** Each fact's provider, and, for a fact the HRIS supplies,
   the field it is read from. A field is previewed before it is chosen.
-- **Levels.** Each level's provider and live units. An empty level is read from a field
+- **Levels.** Each level's provider and the live units it holds, named. An empty level is read from a field
   directly. An admin adds a level, which starts at the bottom, and moves the ones Espalia
   holds up or down a place ([#127](https://github.com/espaliahq/espalia/issues/127)). A move
   that would put a unit above its parent's level, or shift a level the HRIS supplies, isn't offered.
-  Removing one is [#148](https://github.com/espaliahq/espalia/issues/148): only a level Espalia
-  holds that no unit has ever held, retired units included, can go. A unit keeps its level
-  for life, so a level that held one stays to explain the unit's history. The refusal names
-  the units, and a level an HRIS provides is handed back first. For now a level is removed
-  through `org_graph_remove_level`; the control in this panel is planned.
+  An admin removes a level Espalia holds that no unit has ever held, retired units included
+  ([#148](https://github.com/espaliahq/espalia/issues/148)). A unit keeps its level for life,
+  so a level that held one stays to explain the unit's history. Such a row has no Remove, and
+  names the retired units it held. Remove sits in the row's kebab menu and asks first. A level an HRIS provides is handed back first, and the last
+  level stays.
 - **Handing a level over.** A level with units is compared with a field. Each unit gets
   one call: match a value, succeed into another unit, or retire. The calls start from the
   suggested value, and the switch appears only once the calls are compared and nothing is
