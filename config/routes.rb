@@ -97,9 +97,12 @@ Rails.application.routes.draw do
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
 
-    # Org Graph Units view (#80), read-only. Here, admins only, until the
-    # Org Graph screens are finished.
-    resource :org_graph, only: :show, controller: "org_graphs"
+    # Org Graph Units view (#80), with "change it back" in its activity
+    # sidebar (#137). Here, admins only, until the Org Graph screens are
+    # finished.
+    resource :org_graph, only: :show, controller: "org_graphs" do
+      post :change_back
+    end
 
     # The unit drawer (#124): `edit` opens it over the Units view, and each
     # change posts to its own small resource.
