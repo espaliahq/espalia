@@ -9,15 +9,22 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   # Chrome's leak check runs in the background, and once it reports the leak
   # Chrome drops every click and key sent to the tab for the rest of that
   # test. Whichever test is running then fails as a dropped click (#106).
-  no_leak_check = ->(options) { options.add_preference("profile.password_manager_leak_detection", false) }
+  #
+  # Capybara's reset parks the last page in the back-forward cache on its way
+  # to about:blank, and a request that page still had open lands after the
+  # reset clears cookies, handing the next test the last one's session (#212).
+  test_chrome_options = lambda do |options|
+    options.add_preference("profile.password_manager_leak_detection", false)
+    options.add_argument("--disable-features=BackForwardCache")
+  end
 
   if ENV["CAPYBARA_SERVER_PORT"]
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ], options: {
       browser: :remote,
       url: "http://#{ENV["SELENIUM_HOST"]}:4444"
-    }, &no_leak_check
+    }, &test_chrome_options
   else
-    driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ], &no_leak_check
+    driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ], &test_chrome_options
   end
 
   # Default to a single worker — each worker runs its own Chrome, and one short
@@ -59,7 +66,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1400,1400")
-    options.add_preference("profile.password_manager_leak_detection", false)
+    test_chrome_options.call(options)
 
     client = Selenium::WebDriver::Remote::Http::Default.new
     client.read_timeout = 120
@@ -165,11 +172,12 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   # 1. `visit new_user_session_path` returns on a starved CI runner before
   #    the rendered page has settled — fill_in then races an empty document.
   # 2. After `Capybara.reset_sessions!` mid-test, a leftover authenticated
-  #    session can survive the reset on some Selenium configurations;
-  #    Devise then redirects /users/sign_in to root for the still-signed-in
-  #    user, so the form never renders. (Surfaced in AlignmentAssessments
-  #    "assessee experience during alignment" runs #27393468272 /
-  #    #27490859327 / #27495673118 / #27514458883.)
+  #    session survived the reset; Devise then redirects /users/sign_in to
+  #    root for the still-signed-in user, so the form never renders.
+  #    (Surfaced in AlignmentAssessments "assessee experience during
+  #    alignment" runs #27393468272 / #27490859327 / #27495673118 /
+  #    #27514458883.) The back-forward cache was the cause, and is now off
+  #    (#212); this stays as a backstop.
   #
   # Strategy: visit if the form isn't already on the page, wait for the
   # input to appear, and if it doesn't, explicitly delete cookies + revisit
