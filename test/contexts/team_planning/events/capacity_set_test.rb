@@ -19,7 +19,7 @@ class TeamPlanning::Events::CapacitySetTest < ActiveSupport::TestCase
   end
 
   should "give each place its own facet, so clearing one keeps the others" do
-    assert KIND.holds?("capacity:#{SEAT}")
-    assert_not KIND.holds?("assignment")
+    assert KIND.holds?("capacity:#{SEAT.downcase}")
+    [ "assignment", "capacity:", "capacity:Payments", "capacity:#{SEAT}" ].each { assert_not KIND.holds?(it), it }
   end
 end

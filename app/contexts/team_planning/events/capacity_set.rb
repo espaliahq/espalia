@@ -22,6 +22,7 @@ class TeamPlanning::Events::CapacitySet < TeamPlanning::Events::Change
   shreddable :amount, by: :person, person: :subject_id
 
   PLACES = TeamPlanning::Events::AssignmentSet::PLACES
+  PLACE_ID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
 
   # @return [String]
   def self.facet = "capacity"
@@ -51,7 +52,7 @@ class TeamPlanning::Events::CapacitySet < TeamPlanning::Events::Change
 
   # @param facet [String]
   # @return [Boolean]
-  def self.holds?(facet) = facet.start_with?("#{self.facet}:")
+  def self.holds?(facet) = facet.start_with?("#{self.facet}:") && facet.delete_prefix("#{self.facet}:").match?(PLACE_ID)
 
   def self.amount!(value)
     amount = value.to_s.strip
@@ -62,5 +63,6 @@ class TeamPlanning::Events::CapacitySet < TeamPlanning::Events::Change
 
   private_class_method :amount!
 
+  # @return [Array(String, String)]
   def key = [ data[:subject_id], "#{self.class.facet}:#{self.class.place_of(data)}" ]
 end
