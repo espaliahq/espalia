@@ -123,6 +123,27 @@ class OrgGraph::StructureAggregate
     define_taxonomy(ids.map { |id| by_id[id] }, effective_on:, defined_by_id:)
   end
 
+  # Removes a level Espalia holds that no unit has ever held. A unit keeps its
+  # level for life, so the units this stream holds, retired ones included, are
+  # every unit a level has held.
+  #
+  # @param level_id [String] a level in the current taxonomy
+  # @param effective_on [Date, String]
+  # @param defined_by_id [String, nil] person_id of the actor
+  # @raise [ArgumentError] if the level isn't in the taxonomy or is the last one
+  # @raise [RuntimeError] if an HRIS provides the level or a unit has held it
+  def remove_level(level_id, effective_on:, defined_by_id: nil)
+    level_id = require_id(level_id, "Level id")
+    level = @levels.find { |candidate| candidate[:level_id] == level_id }
+    raise ArgumentError, "Level is not in the taxonomy" unless level
+    unless level_provider(level_id) == ESPALIA
+      raise "#{level[:name]} comes from #{level_provider(level_id)}; hand it back to Espalia before removing it"
+    end
+
+    ensure_never_held!(level)
+    define_taxonomy(@levels - [ level ], effective_on:, defined_by_id:)
+  end
+
   # Sets who supplies a taxonomy level's units and, for an HRIS, the field
   # each person's unit at that level is read from. Moving the level to another
   # provider clears its field; restating the same provider with a new field
@@ -644,6 +665,16 @@ class OrgGraph::StructureAggregate
       end
     end
     seen
+  end
+
+  def ensure_never_held!(level)
+    held = @units.values.select { |unit| unit.level_id == level[:level_id] }.sort_by(&:name)
+    return if held.empty?
+
+    retired, live = held.partition(&:retired)
+    reasons = [ ("holds #{live.map(&:name).to_sentence}" if live.any?),
+                ("held #{retired.map(&:name).to_sentence}" if retired.any?) ].compact
+    raise "#{level[:name]} can't be removed, as it #{reasons.join(' and ')}"
   end
 
   def ensure_levels_in_use_keep_order!(levels, in_use)

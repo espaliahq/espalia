@@ -132,6 +132,20 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#remove_level" do
+    should "remove a level no unit has held, and refuse one already gone" do
+      guild = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.add_level(guild, "Guild", effective_on: @today)
+        @handler.remove_level(guild, effective_on: @today, defined_by_id: @actor)
+      end
+
+      assert_equal %w[Department Team Squad], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
+      assert_equal @actor, structure_events.last.data[:defined_by_id]
+      assert_raises(ArgumentError) { as_tenant { @handler.remove_level(guild, effective_on: @today) } }
+    end
+  end
+
   context "#create_unit" do
     should "give the unit a stable id, a level, a provider and an effective date" do
       create_unit(@team, "  Payments ", level: "Team")
