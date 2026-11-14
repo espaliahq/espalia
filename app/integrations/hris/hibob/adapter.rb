@@ -487,6 +487,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           email: attrs[:email],
           error: person.errors.full_messages.join(", ")
         }
+        # The walk hands this row on to a later employee with the same id or email.
+        person.restore_attributes.then { person.errors.clear } if person.persisted?
         return nil
       end
     end

@@ -881,6 +881,16 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ held.id, adopted.id, nil ], rows.map(&:first)
       assert_equal [ "Sales", "Ops", nil ], rows.map { it.last.label }
     end
+
+    should "adopt a row for a later employee with its email, though an earlier one was refused it" do
+      adopted = create(:person, tenant: @tenant, email: "adopt@example.com")
+      adopted.update_column(:name, "")
+      employees = [ { "id" => "3141", "email" => "adopt@example.com" },
+                    { "id" => "2718", "email" => "adopt@example.com", "displayName" => "Ada" } ]
+
+      assert_equal [ [ "2718", adopted.id ] ], first_pass_rows(employees, write: false)
+      assert_equal [ [ "2718", adopted.id ] ], first_pass_rows(employees, write: true)
+    end
   end
 
   context "#fetch_field_catalogue" do
