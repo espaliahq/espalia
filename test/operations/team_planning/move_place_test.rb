@@ -85,6 +85,14 @@ class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
     assert_equal [ { unit_id: @platform, allocation: 1.0 } ], places(@ada)
   end
 
+  should "keep the move's note on the assignment it writes, under the person's key" do
+    move(@ada, from_unit_id: @payments, to_unit_id: @growth, allocation: 0.5, note: "Growth needs a lead")
+
+    override = ActsAsTenant.with_tenant(@tenant) { TeamPlanningOverride.find_by!(scenario_id: @q1, subject_id: @ada.id, facet: "assignment") }
+    assert_equal "Growth needs a lead", override.note.reveal
+    assert_equal PlanKeyStore.person_identifier(@tenant.id, @plan_id, @ada.id), override.read_attribute(:note)["identifier"]
+  end
+
   should "refuse Today, a viewer, a place the person doesn't hold, a unit the scenario lacks and a move with no allocation" do
     assert_match "Today can't be edited", refusal(scenario_id: @plan_id, from_unit_id: @payments, to_unit_id: @growth, allocation: 1)
     assert_equal "No such plan", refusal(as: @viewer, from_unit_id: @payments, to_unit_id: @growth, allocation: 1)
