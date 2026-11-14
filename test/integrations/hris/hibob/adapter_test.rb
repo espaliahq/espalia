@@ -802,6 +802,29 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
 
       assert_empty read_department(employees)
     end
+    should "leave out a newcomer with no email or name, as the sync refuses to create them" do
+      employees = [ { "id" => "3141", "email" => "", "displayName" => "" }, { "id" => "2718", "email" => "e@example.com" } ]
+
+      assert_equal [ "2718" ], read_department(employees).keys
+    end
+
+    should "put each value on the row the sync writes it to, adopted by email or held by id" do
+      held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
+      adopted = create(:person, tenant: @tenant, email: "adopt@example.com")
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      client.expect(:search_people, [ { "id" => "1618", "work" => { "department" => "Sales" } },
+                                      { "id" => "3141", "email" => "Adopt@example.com", "work" => { "department" => "Ops" } },
+                                      { "id" => "2718", "email" => "new@example.com", "displayName" => "E" } ],
+        fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
+        show_inactive: true)
+      adapter.instance_variable_set(:@client, client)
+
+      rows = adapter.read_field_rows("work.department", kind: :text)
+
+      assert_equal [ held.id, adopted.id, nil ], rows.map(&:first)
+      assert_equal [ "Sales", "Ops", nil ], rows.map { it.last.label }
+    end
   end
 
   context "#fetch_field_catalogue" do
@@ -1870,12 +1893,30 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   # @param employees [Array<Hash>] what HiBob answers, each named unless it says otherwise
   # @return [Hash{String => Hris::FieldValue}] the department read for each
   def read_department(employees)
+    named = employees.map { { "displayName" => "Person #{it['id']}" }.merge(it) }
     adapter = Hris::Hibob::Adapter.new(@tenant)
     client = Minitest::Mock.new
-    client.expect(:search_people, employees.map { { "displayName" => "Person #{it['id']}" }.merge(it) }, fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
+    client.expect(:search_people, named, fields: %w[root.id root.isActive root.email root.firstName root.surname root.displayName work.startDate work.department],
       show_inactive: true)
     adapter.instance_variable_set(:@client, client)
-    adapter.read_field("work.department", kind: :text).tap { client.verify }
+    values = adapter.read_field("work.department", kind: :text).tap { client.verify }
+    assert_equal first_pass_rows(named, write: false), first_pass_rows(named, write: true), "the preview must decide as the sync does"
+    values
+  end
+
+  # Pass 1's decisions over a response: each person it keeps, beside the row it
+  # matched or adopted, or nil for one it creates.
+  def first_pass_rows(employees, write:)
+    adapter = Hris::Hibob::Adapter.new(@tenant)
+    ActsAsTenant.with_tenant(@tenant) do
+      held = Person.ids.to_set
+      adapter.send(:ensure_forgotten_recognisable!)
+      rows = []
+      adapter.send(:first_pass, employees, adapter.send(:build_initial_result), projected: false, write:) do |_, attrs, person|
+        rows << [ attrs[:external_id], (person.id if held.include?(person.id)) ]
+      end
+      rows
+    end
   end
 
   def build_adapter(employees)
