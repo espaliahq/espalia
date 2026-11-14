@@ -71,12 +71,16 @@ class Views::Plans::ScenarioTable < Views::Base
 
   def period(scenario)
     starts = Date.iso8601(scenario[:starts_on])
-    return "As of #{starts.strftime("%-d %b %Y")}" if scenario[:parent_id].nil?
-    return "From #{starts.strftime("%b %Y")}" unless scenario[:ends_on]
+    return "As of #{starts.strftime('%-d %b %Y')}" if scenario[:parent_id].nil?
+    return "From #{starts.strftime('%-d %b %Y')}" unless scenario[:ends_on]
 
     ends = Date.iso8601(scenario[:ends_on])
-    first = starts.year == ends.year ? starts.strftime("%b") : starts.strftime("%b %Y")
-    "#{first} to #{ends.strftime('%b %Y')}"
+    whole_months = starts.day == 1 && ends == ends.end_of_month
+    unit = whole_months ? "%b" : "%-d %b"
+    return starts.strftime("%b %Y") if whole_months && starts.month == ends.month && starts.year == ends.year
+
+    first = starts.year == ends.year ? starts.strftime(unit) : starts.strftime("#{unit} %Y")
+    "#{first} to #{ends.strftime("#{unit} %Y")}"
   end
 
   # Depth-first from the baseline, so each scenario sits under its parent.
