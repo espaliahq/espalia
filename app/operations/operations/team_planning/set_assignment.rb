@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 # Sets every place a person holds in a scenario, as an AssignmentSet change.
-# The person and position checks run under the plan's lock, after the editor
-# check, so an outsider gets "No such plan" and learns nothing about who
-# works here. A total over 1 is read by the checks, never refused
+# Every check runs under the plan's lock, after the editor check, so an
+# outsider gets "No such plan" whatever the placements say. A new placement
+# in a closed position is refused, though one made before the close still
+# resolves. A total over 1 is read by the checks, never refused
 # [#229](https://github.com/espaliahq/espalia/issues/229).
 class Operations::TeamPlanning::SetAssignment < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
@@ -41,25 +42,29 @@ class Operations::TeamPlanning::SetAssignment < Operations::Base
   parameter :person_id, String, required: true
   parameter :placements, Array, required: true, schema: PLACEMENTS_SCHEMA
 
-  # @return [Hash] `{ plan_id, scenario_id, person_id, placements, allocation_total }`
+  # @return [Hash] `{ plan_id, scenario_id, person_id, placements }`
   def perform
     person_id = uuid!(:person_id)
-    end_state = refusing_bad_plans { ASSIGNMENT.end_state(placements: params[:placements]) }
-    set_change!(ASSIGNMENT, subject_id: person_id, end_state:) do |plan|
+    stored = nil
+    set_change!(ASSIGNMENT, subject_id: person_id, end_state: { placements: params[:placements] }) do |plan|
+      stored = ASSIGNMENT.end_state(placements: params[:placements])
       raise Operations::Base::ParameterError, "No such person" unless ::Person.exists?(tenant_id: ActsAsTenant.current_tenant&.id, id: person_id)
 
-      end_state[:placements].filter_map { it[:position_id] }.each { known_position!(plan, it) }
+      stored[:placements].each { place!(plan, it) }
     end
 
-    { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), person_id:, **end_state,
-      allocation_total: end_state[:placements].sum { it[:allocation] }.round(4) }
+    { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), person_id:, **stored }
   end
 
   private
 
-  def known_position!(plan, position_id)
-    return if winning_change(plan, position_id, ::TeamPlanning::Events::PositionSet.facet)
+  def place!(plan, placement)
+    placement.slice(*ASSIGNMENT::PLACES).compact.each do |name, id|
+      raise Operations::Base::ParameterError, "#{name} must be a UUID, got #{id.inspect}" unless id.match?(UUID_RE)
+    end
+    return unless placement[:position_id]
+    return if winning_change(plan, placement[:position_id], ::TeamPlanning::Events::PositionSet.facet).is_a?(::TeamPlanning::Events::PositionSet)
 
-    raise Operations::Base::ParameterError, "This scenario has no such position"
+    raise Operations::Base::ParameterError, "This scenario has no such open position"
   end
 end
