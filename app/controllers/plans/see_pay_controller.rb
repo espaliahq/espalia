@@ -20,9 +20,9 @@ class Plans::SeePayController < ApplicationController
   def change(operation, done:, failed:)
     authorize_holder
     operation.call(context: pundit_user, params: { plan_id:, person_id: })
-    redirect_to plan_path(plan_id), notice: "#{Person.find_by(id: person_id)&.name || 'They'} #{done}."
+    redirect_to plan_path(plan_id), status: :see_other, notice: "#{Person.find_by(id: person_id)&.name || 'They'} #{done}."
   rescue Operations::Base::ParameterError => e
-    redirect_back_or_to plan_path(plan_id), alert: "#{failed}: #{e.message}"
+    redirect_back_or_to plan_path(plan_id), status: :see_other, alert: "#{failed}: #{e.message}"
   end
 
   def plan_id = params.expect(:plan_id)
