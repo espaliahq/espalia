@@ -18,10 +18,12 @@ class TeamPlanning::Baseline
   # @!attribute base_on [Date] the day it shows
   # @!attribute known_on [Date] read as known at the end of this day
   # @!attribute units [Array<Unit>] the live units, by name
+  # @!attribute retired_units [Array<Unit>] units a scenario retired; the baseline has none
+  # @!attribute successions [Array<Succession>] links a scenario made; the baseline has none
   # @!attribute people [Array<Member>] the people employed that day, by id
   # @!attribute unassigned_ids [Array<String>] the people in no live unit
   # @!attribute names [Hash{String => String}] person id => name, empty until joined
-  Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :names) do
+  Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :names) do
     # @param person_id [String]
     # @return [String]
     def name_of(person_id) = names.fetch(person_id, Person::FORMER_MEMBER)
@@ -29,6 +31,9 @@ class TeamPlanning::Baseline
 
   # A live unit. `parent_id` is nil at the root.
   Unit = Data.define(:id, :name, :parent_id, :level_id, :owner_ids)
+
+  # Units that carry on from others: a split, a merge or a replacement.
+  Succession = Data.define(:id, :predecessor_ids, :successor_ids)
 
   # A person and their facts that day, with each place they hold.
   Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
@@ -57,7 +62,7 @@ class TeamPlanning::Baseline
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
-    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {})
+    Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, retired_units: [], successions: [], people:, unassigned_ids: people.select { it.memberships.empty? }.map(&:id), names: {})
   end
 
   # Joins the names of everyone a map names: its people, their managers and
