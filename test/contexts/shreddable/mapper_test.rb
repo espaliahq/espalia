@@ -60,6 +60,14 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
     assert_equal PlanKeyStore.person_identifier(@tenant.id, @plan_id, @person.id), description.dig("pay", "identifier")
   end
 
+  should "keep the stored form it wrote on the value, so a garbage collection can't drop it" do
+    event = publish(note_written)
+    GC.start(full_mark: true, immediate_sweep: true)
+    stored, = event.data[:note].sealed
+
+    assert_equal stored_row["data"]["note"], stored&.fetch("ciphertext")
+  end
+
   should "read a field as removed once its key is destroyed, leaving the others" do
     publish(note_written)
     in_tenant { PlanKeyStore.new.destroy_person(@person.id) }
