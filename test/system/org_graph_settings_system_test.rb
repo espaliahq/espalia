@@ -287,7 +287,9 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
 
     should "close when the page scrolls after it opens" do
       click_button_with_js_fallback("org-graph-level-menu-#{@guild_id}", expect_selector: "#org-graph-level-remove-#{@guild_id}")
+      before = page.evaluate_script("window.scrollY")
       page.execute_script("window.scrollTo(0, window.scrollY > 20 ? 0 : 40)")
+      assert_not_equal before, page.evaluate_script("window.scrollY"), "the page must scroll for this to test anything"
 
       assert_no_selector "#org-graph-level-remove-#{@guild_id}", visible: true
     end
