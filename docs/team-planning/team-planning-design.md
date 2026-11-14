@@ -138,6 +138,31 @@ says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
 
+### The timeline as built
+
+`TeamPlanning::Timeline` (the `team_planning_timeline` tool) reads one timeline path and
+stores nothing. It resolves each step as the map does, then lays the steps out as columns.
+The tab ([#289](https://github.com/espaliahq/espalia/issues/289)) draws what it returns and
+decides none of these rules:
+
+- **Blocks.** A unit is one block across the columns it lives in, so a rename changes the
+  label, not the block. A unit that succeeds exactly one other continues that block. A split
+  or a merge starts new blocks that name the ones they carry on from.
+- **Lanes.** A lane belongs to a person and lasts while they are on the map, placed or not.
+  Someone in two places at once has one lane with two bars, and that is no move.
+- **Moves.** A move names the units a person left and joined between two columns. Placed in
+  no live unit reads as Unassigned, so a lane never vanishes because its person lost a place.
+- **Backfills.** A leaver's lane records the step they leave in, and the position that
+  backfills them carries on in it, naming who it replaces. A new position gets a lane of its
+  own, and the first person to fill it takes that lane, so a seat and its hire read as one head.
+- **Order.** Blocks come in the order they first appear. Lanes come by the column they first
+  appear in, people before positions, then by name and id.
+- **Names.** Lanes and blocks carry ids, and names come from the map's own lookup, so a
+  forgotten person keeps their lane under Person::FORMER_MEMBER.
+
+Each step resolves the baseline again, one Org Graph read per step. That is fine for the
+handful of steps a plan has.
+
 ### Unit changes as built
 
 `UnitSet` carries a unit's whole end state: its name, its parent and its level. It creates a
@@ -920,7 +945,7 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 | Cost and budget | Approved, funded, remaining and unfunded, per unit and cost centre. |
 | Capacity | Per model, per unit, with each person's working. |
 | Capability profile | Per unit and per position, under the existing cohort rule. |
-| Timeline | One path through the scenario tree, with lanes and moves. |
+| Timeline | One path through the scenario tree, with lanes and moves. Read on demand by `TeamPlanning::Timeline`, not stored. |
 | Headcount walk | Per step and unit: opening, hires, known and expected departures, transfers, closing. Drawn as a lane of the timeline. |
 | Checks | Every warning, with guardrail checks marked. |
 | Change list | The approved changes with their derived status. |
