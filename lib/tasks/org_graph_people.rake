@@ -44,15 +44,15 @@ end
 #
 # Usage:
 #   bin/rails "org_graph:person_development:cut_over[<tenant id>]"                   # dry run
-#   bin/rails "org_graph:person_development:cut_over[<tenant id>,<manager clears>]"  # apply
+#   bin/rails "org_graph:person_development:cut_over[<tenant id>,<confirmation>]"    # apply
 #   bin/rails "org_graph:person_development:revert[<tenant id>]"
 namespace :org_graph do
   namespace :person_development do
-    desc "Feed a tenant's Person Development from the Org Graph (dry run unless the manager clear count is given)"
-    task :cut_over, %i[tenant_id clears] => :environment do |_, args|
+    desc "Feed a tenant's Person Development from the Org Graph (dry run unless the dry run's confirmation is given)"
+    task :cut_over, %i[tenant_id confirmation] => :environment do |_, args|
       tenant = Tenant.find(args.fetch(:tenant_id) { abort "Usage: org_graph:person_development:cut_over[<tenant id>]" })
-      apply = args[:clears].present?
-      report = OrgGraph::PersonDevelopmentCutover.new(tenant).run(apply:, confirm_clears: (Integer(args[:clears]) if apply))
+      apply = args[:confirmation].present?
+      report = OrgGraph::PersonDevelopmentCutover.new(tenant).run(apply:, confirmation: args[:confirmation])
 
       report.changes.each do |kind, ids|
         puts "#{kind.to_s.tr('_', ' ')}#{' (unexpected)' unless OrgGraph::PersonDevelopmentCutover::EXPECTED.include?(kind)}: #{ids.size}"
@@ -61,6 +61,7 @@ namespace :org_graph do
       puts "changes: none" if report.changes.empty?
       puts "could not be read: #{report.failed.size}"
       report.failed.each { |id, reason| puts "  #{id}: #{reason}" }
+      puts "confirmation: #{report.confirmation}" unless apply
       puts "refused: #{report.refusal}" if report.refusal
       puts report.applied ? "fed from the Org Graph: yes" : "fed from the Org Graph: no, nothing was kept"
     end

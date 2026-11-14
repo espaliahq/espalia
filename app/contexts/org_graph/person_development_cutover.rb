@@ -8,13 +8,13 @@
 # reports what the feed would change. The old sync never cleared a lost
 # manager, so manager clears are expected; anything else means the Org Graph
 # and Person Development disagree, and the cut-over refuses. Applying needs
-# the clear count the dry run printed, so nobody clears managers they have
-# not seen counted.
+# the confirmation the dry run printed, a digest of the clears' person ids,
+# so nobody clears a manager they have not seen listed.
 #
 # @example
 #   cutover = OrgGraph::PersonDevelopmentCutover.new(tenant)
 #   report = cutover.run(apply: false)
-#   cutover.run(apply: true, confirm_clears: report.changes.fetch(:clear_manager, []).size)
+#   cutover.run(apply: true, confirmation: report.confirmation)
 #   cutover.revert!
 class OrgGraph::PersonDevelopmentCutover
   # The changes a clean cut-over may carry.
@@ -32,6 +32,9 @@ class OrgGraph::PersonDevelopmentCutover
 
     # @return [Integer]
     def clears = changes.fetch(:clear_manager, []).size
+
+    # @return [String] a short digest of the manager clears' person ids
+    def confirmation = Digest::SHA256.hexdigest(changes.fetch(:clear_manager, []).sort.join(","))[0, 12]
   end
 
   # @param tenant [Tenant]
@@ -40,12 +43,13 @@ class OrgGraph::PersonDevelopmentCutover
   end
 
   # @param apply [Boolean] feed the tenant when the dry run is clean
-  # @param confirm_clears [Integer, nil] the manager clears the operator saw counted
+  # @param confirmation [String, nil] the {Report#confirmation} the operator saw
+  #   printed; none is needed when there are no clears
   # @return [Report]
   # @raise [ArgumentError] if the tenant is already fed or its people are not cut over
   # @raise [ProjectionVersion::Rebuilding] while a projection the feed plans from rebuilds
-  def run(apply:, confirm_clears: nil)
-    unless_rebuilding { run_unguarded(apply:, confirm_clears:) }
+  def run(apply:, confirmation: nil)
+    unless_rebuilding { run_unguarded(apply:, confirmation:) }
   end
 
   # Hands assignments, moves, offboarding and managers back to the HRIS
@@ -66,7 +70,7 @@ class OrgGraph::PersonDevelopmentCutover
     raise ProjectionVersion::Rebuilding, "A projection the feed reads is being rebuilt; run this again once the rebuild ends"
   end
 
-  def run_unguarded(apply:, confirm_clears:)
+  def run_unguarded(apply:, confirmation:)
     report = nil
     ActiveRecord::Base.transaction do
       @tenant.lock!
@@ -78,7 +82,7 @@ class OrgGraph::PersonDevelopmentCutover
         changes, failed = preview
         report = Report.new(changes:, failed:, refusal: nil, applied: false)
         if apply
-          refusal = refusal_for(report, confirm_clears)
+          refusal = refusal_for(report, confirmation)
           report = refusal ? report.with(refusal:) : feed!(report)
         end
       end
@@ -99,10 +103,11 @@ class OrgGraph::PersonDevelopmentCutover
     [ changes.sort_by { |kind, _| OrgGraph::PersonDevelopmentFeed::KINDS.index(kind) }.to_h, failed ]
   end
 
-  def refusal_for(report, confirm_clears)
+  def refusal_for(report, confirmation)
     return "#{report.failed.size} people could not be read" if report.failed.any?
     return "the Org Graph disagrees with Person Development: #{report.unexpected.join(', ')}" if report.unexpected.any?
-    return "#{report.clears} manager clears were counted, not #{confirm_clears.to_i}" unless confirm_clears.to_i == report.clears
+    return nil if confirmation.nil? && report.clears.zero?
+    return "the manager clears are not the ones confirmed (#{report.confirmation}, not #{confirmation || 'none'}); dry-run it again" unless confirmation == report.confirmation
 
     nil
   end

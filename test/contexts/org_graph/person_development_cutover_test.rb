@@ -65,19 +65,44 @@ class OrgGraph::PersonDevelopmentCutoverTest < ActiveSupport::TestCase
   context "with a manager the HRIS no longer names" do
     setup { as_tenant { @people.change_manager(@ada.id, nil, **HIBOB) } }
 
-    should "count the clear and keep nothing until the operator confirms that count" do
+    should "list the clear and keep nothing until the operator confirms it" do
       report = @cutover.run(apply: true)
 
       assert_equal({ clear_manager: [ @ada.id ] }, report.changes)
-      assert_match "1 manager clears were counted, not 0", report.refusal
+      assert_match "not the ones confirmed", report.refusal
       assert_not @tenant.reload.person_development_fed?
       assert_equal @lead.id, manager_of(@ada)
     end
 
-    should "clear it once the count is confirmed" do
-      assert @cutover.run(apply: true, confirm_clears: 1).applied
+    should "clear it once the dry run's confirmation is given" do
+      confirmation = @cutover.run(apply: false).confirmation
+
+      assert @cutover.run(apply: true, confirmation:).applied
       assert @tenant.reload.person_development_fed?
       assert_nil manager_of(@ada)
+    end
+
+    should "refuse when a different person's clear takes the place of the one confirmed" do
+      bea = as_tenant do
+        person = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-bea")
+        @people.record_person(person.id, **HIBOB, employment_status: "employed", title: "Software Engineer", level: "5",
+                                         manager_id: @lead.id)
+        development = PersonDevelopment::CommandHandler.new
+        development.assign_to_framework(person.id, @framework.framework_id, role_id_of(@ada), level_id_of(@ada))
+        development.record_reporting_manager(person.id, @framework.framework_id, @lead.id)
+        person
+      end
+      confirmation = @cutover.run(apply: false).confirmation
+      as_tenant do
+        @people.change_manager(@ada.id, @lead.id, **HIBOB)
+        @people.change_manager(bea.id, nil, **HIBOB)
+      end
+
+      report = @cutover.run(apply: true, confirmation:)
+
+      assert_equal({ clear_manager: [ bea.id ] }, report.changes)
+      assert_match "not the ones confirmed", report.refusal
+      assert_not @tenant.reload.person_development_fed?
     end
   end
 
@@ -89,6 +114,12 @@ class OrgGraph::PersonDevelopmentCutoverTest < ActiveSupport::TestCase
   end
 
   private
+
+  def role_id_of(person) = held(person).role_id
+
+  def level_id_of(person) = held(person).level_id
+
+  def held(person) = as_tenant { PersonDevelopment::CommandHandler.new.load(person.id, @framework.framework_id) }
 
   def manager_of(person)
     as_tenant { PersonDevelopment::CommandHandler.new.load(person.id, @framework.framework_id).manager_id }
