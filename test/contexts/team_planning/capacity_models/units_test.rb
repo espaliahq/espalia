@@ -83,6 +83,7 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
 
     assert_equal Rational("0.1"), price("x", ordinal: 0).amount
     assert_equal [ 0r, false ], price("x", ordinal: -1).then { [ it.amount, it.overloaded ] }
+    assert_equal Rational("-0.05"), price("m", ordinal: 0, params: { "fixed_cost" => { "by_level" => { "0" => "0.05" } } }).working.second.amount
   end
 
   should "follow a tenant's own curve" do

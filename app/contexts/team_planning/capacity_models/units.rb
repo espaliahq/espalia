@@ -172,7 +172,11 @@ class TeamPlanning::CapacityModels::Units < TeamPlanning::CapacityModel
     def by_level!(group, levels)
       raise TeamPlanning::Error, "units #{group} by_level must be an object" unless levels.is_a?(Hash)
 
-      levels.to_h { |level, value| [ level!("#{group} by_level", level), number!("#{group} by_level", value) ] }
+      levels.to_h { |level, value| [ ordinal!("#{group} by_level", level), number!("#{group} by_level", value) ] }
+    end
+
+    def ordinal!(key, value)
+      Integer(value.to_s, exception: false) or raise TeamPlanning::Error, "units #{key} must be a whole level"
     end
 
     def role_ids!(ids)
