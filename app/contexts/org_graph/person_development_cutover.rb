@@ -81,7 +81,7 @@ class OrgGraph::PersonDevelopmentCutover
     changes = Hash.new { |all, kind| all[kind] = [] }
     failed = {}
     Person.hris_managed.ids.sort.each do |person_id|
-      feed.reconcile(person_id).each { changes[it] << person_id }
+      ActiveRecord::Base.transaction(requires_new: true) { feed.reconcile(person_id) }.each { changes[it] << person_id }
     rescue => e
       failed[person_id] = e.message
     end
