@@ -74,6 +74,11 @@ class TeamPlanning::OnCostTest < ActiveSupport::TestCase
   end
 
   should "describe each model's params, so a client can see their keys" do
-    assert_equal %w[flat by_country itemised], RULE.json_schema[:oneOf].map { it.dig(:properties, :model, :const) }
+    schema = RULE.json_schema
+    assert_equal %w[flat by_country itemised], schema[:oneOf].map { it.dig(:properties, :model, :const) }
+    assert_equal [ %w[model params], %w[flat by_country itemised] ], [ schema[:properties].keys.map(&:to_s), schema.dig(:properties, :model, :enum) ]
+
+    item = TeamPlanning::OnCostModels::Itemised.params_schema.dig(:properties, :items, :items)
+    assert_equal [ [ "percent" ], %w[amount currency] ], item[:oneOf].map { it[:required] }
   end
 end

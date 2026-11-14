@@ -21,10 +21,11 @@ class TeamPlanning::RuleKinds::OnCost < TeamPlanning::RuleKind
 
   # @return [Hash]
   def self.json_schema
+    models = TeamPlanning::OnCostModels.all
     { type: "object",
-      oneOf: TeamPlanning::OnCostModels.all.map do |model|
-        { properties: { model: { const: model.model_name }, params: model.params_schema }, required: %w[model params] }
-      end }
+      properties: { model: { type: "string", enum: models.map(&:model_name) }, params: { type: "object" } },
+      required: %w[model params],
+      oneOf: models.map { { properties: { model: { const: it.model_name }, params: it.params_schema } } } }
   end
 
   # @param value [Hash] with string keys

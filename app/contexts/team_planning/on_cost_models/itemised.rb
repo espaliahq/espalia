@@ -21,7 +21,9 @@ class TeamPlanning::OnCostModels::Itemised < TeamPlanning::OnCostModel
     item = { type: "object",
              properties: { name: { type: "string" }, percent: { type: "string" },
                            amount: { type: "string", description: "A year, for a full-time seat" }, currency: { type: "string" } },
-             required: [ "name" ] }
+             required: [ "name" ],
+             oneOf: [ { required: [ "percent" ], not: { anyOf: [ { required: [ "amount" ] }, { required: [ "currency" ] } ] } },
+                      { required: %w[amount currency], not: { required: [ "percent" ] } } ] }
     { type: "object", properties: { items: { type: "array", items: item } }, required: [ "items" ] }
   end
 
