@@ -13,7 +13,7 @@ class Views::Plans::MembersPanel < Views::Base
   # @param plan_id [String, nil] needed only with `can_manage_see_pay`
   # @param can_manage_see_pay [Boolean] whether the viewer may grant and withdraw the right
   # @param reachable_ids [Array<String>] members still active and remembered, who alone can hold it
-  # @param locked_out [Boolean] whether no reachable member holds the right
+  # @param locked_out [Boolean] whether no reachable member holds the right, on a plan a tenant admin can restore
   def initialize(members:, plan_id: nil, can_manage_see_pay: false, reachable_ids: [], locked_out: false)
     @members = members
     @plan_id = plan_id

@@ -82,7 +82,7 @@ class PlansController < ApplicationController
   def see_pay(members)
     { can_manage_see_pay: policy_for(@plan_record).manage_see_pay?,
       reachable_ids: PlanPolicy.reachable_ids(members.pluck(:person_id)),
-      locked_out: PlanPolicy.locked_out?(@plan_record) }
+      locked_out: PlanPolicy.locked_out?(@plan_record) && !PlanPolicy.frozen?(@plan_record) }
   end
 
   def can_edit?

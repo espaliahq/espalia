@@ -66,9 +66,19 @@ class Plans::SeePayControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "be told to ask a tenant admin when no one left can see pay" do
-      ActsAsTenant.with_tenant(@tenant) { @editor.person.update!(status: "inactive") }
+      ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::TeamPlanning::AddPlanMember, @editor, plan_id: @plan_id, person_id: account(name: "Sam Second").person.id,
+                                                               role: "editor")
+        @editor.person.update!(status: "inactive")
+      end
       get plan_path(@plan_id)
       assert_select "aside", text: /Ask a tenant admin to restore the right/
+    end
+
+    should "not be sent to a tenant admin who can't help, on a plan frozen for want of editors" do
+      ActsAsTenant.with_tenant(@tenant) { @editor.person.update!(status: "inactive") }
+      get plan_path(@plan_id)
+      assert_select "aside", text: /Ask a tenant admin/, count: 0
     end
   end
 
