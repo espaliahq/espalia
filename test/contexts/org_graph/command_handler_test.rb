@@ -53,6 +53,18 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
   end
 
   context "#sync_person" do
+    should "read who supplies the facts once, however many it checks" do
+      repository = OrgGraph::Repository.new
+      reads = 0
+      repository.define_singleton_method(:fact_providers) { reads += 1; super() }
+      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, repository:)
+
+      handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+      handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Lead")
+
+      assert_equal 2, reads
+    end
+
     should "record a new person, then write only what changed" do
       first = @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
       repeat = @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")

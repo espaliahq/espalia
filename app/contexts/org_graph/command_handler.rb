@@ -311,10 +311,15 @@ class OrgGraph::CommandHandler
     @repository.with_person(person_id, plan:, cause_id: @cause_id, facts:, &block)
   end
 
+  # Who supplies each fact can't change while the shared lock is held, so
+  # every check inside one command reads the stream once.
   def with_facts(person_id, plan, provider, *keys)
     with_person(person_id, plan, facts: true) do |person|
+      outer, @fact_providers = @fact_providers, @repository.fact_providers
       ensure_provides!(person_id, provider, *keys)
       yield person
+    ensure
+      @fact_providers = outer
     end
   end
 
@@ -343,7 +348,7 @@ class OrgGraph::CommandHandler
     return if kinds.empty?
 
     source = Person.where(id: person_id).where.not(external_id: nil).pick(:hris_source)
-    providers = @repository.fact_providers
+    providers = @fact_providers || @repository.fact_providers
     kinds.each do |kind|
       holder = providers.fetch(kind, OrgGraph::StructureAggregate::ESPALIA)
       holder = OrgGraph::StructureAggregate::ESPALIA unless holder == source
