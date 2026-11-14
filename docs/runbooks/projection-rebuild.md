@@ -50,11 +50,19 @@ The sync handlers in [config/initializers/rails_event_store.rb](../../config/ini
 
 A rebuild empties a projection's tables for each tenant, then replays them. A write that planned from those tables meanwhile would decide from an empty or half-built list. Retiring a unit once ended nobody's membership this way, because the member list it read was still being replayed ([#173](https://github.com/espaliahq/espalia/issues/173)).
 
-So the writers that plan from `org_graph/members` or `org_graph/structure` refuse while either one is rebuilt. They are: retiring a unit, applying a succession, the HRIS level mirror, and handing a level over or back. Each takes a shared advisory lock on the same key a rebuild holds exclusively (`ProjectionVersion.unless_rebuilding`), so:
+So the writers that plan from those tables refuse while the projection they read is rebuilt. Each takes a shared advisory lock on the same key a rebuild holds exclusively (`ProjectionVersion.unless_rebuilding`):
+
+| Writer | Refuses while rebuilding |
+|---|---|
+| Retiring a unit, applying a succession | `org_graph/members` |
+| The HRIS level mirror, handing a level over or back | `org_graph/members` or `org_graph/structure` |
+| An HRIS sync's Org Graph writes (people, leavings, the mirror) | `org_graph/structure` |
+
+So:
 
 - a write during a rebuild refuses at once. A person sees "The Org Graph is being rebuilt; try again in a minute." over the web or MCP.
-- an HRIS sync during a rebuild skips its unit and membership writes and counts them as `levels_skipped_while_rebuilding`, never as an error. The next sync mirrors as usual.
-- a rebuild that starts during a write waits for the write to finish.
+- an HRIS sync during a rebuild still updates people's rows, offboards and assigns, and counts what it held back apart from the errors: `levels_skipped_while_rebuilding` for a mirror refused by a members rebuild, `people_skipped_while_rebuilding` for the people it wrote nothing for during a structure rebuild. The next sync writes them.
+- a rebuild that starts during a write waits for it to finish. A structure rebuild waits for a running HRIS sync, HiBob fetch included.
 
 **The guard covers only rebuilds that start after it ships.** A rebuild that runs in the same deploy as the guard, through `REBUILD_ON_DEPLOY`, runs while the old release still serves traffic, and the old release takes no lock. Rebuild `org_graph/members` or `org_graph/structure` in a quiet window until one deploy carrying the guard has gone out.
 
