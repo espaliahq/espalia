@@ -363,7 +363,8 @@ Each place is its own facet, `capacity:<position or unit id>`, so clearing one k
 others. The model still prices the place: its figure rides along as `calculated`, and the
 working ends with an "=" step naming it, so a reader sees what the planner replaced. An
 override applies only to a place a model prices, so it never turns an unclassified place
-or a leaver into a count. The amount is the plan's judgement about a named person, so it
+or a leaver into a count; such a place keeps its reason and is marked `overridden`, so the
+override stays visible. The amount is the plan's judgement about a named person, so it
 seals under their key like a planned level. Once they are forgotten the place counts
 nowhere, with the reason "override_unknown", and never falls back to the model's figure.
 The write refuses only a malformed override; one on a place the person doesn't hold in the

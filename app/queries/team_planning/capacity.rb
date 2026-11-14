@@ -17,7 +17,9 @@
 # ends with it, so a reader sees the calculated figure behind it. An override
 # the plan can no longer read, because its person was forgotten, leaves the
 # place counting nowhere: falling back to the model would state a figure the
-# planner chose to replace.
+# planner chose to replace. A place that counts nowhere for another reason,
+# such as a leaver's, keeps that reason, and is marked overridden so the
+# override doesn't vanish.
 #
 # A place whose role no model covers counts nowhere and is listed as
 # unclassified, with why. A place in a unit gone from the map is still
@@ -68,8 +70,9 @@ class TeamPlanning::Capacity
   # @!attribute figure [TeamPlanning::CapacityModel::Figure, nil] nil when unclassified
   # @!attribute reason [String, nil] a {REASONS} key when unclassified
   # @!attribute calculated [TeamPlanning::CapacityModel::Figure, nil] the model's figure, when an override replaced it
-  Place = Data.define(:place, :model, :chosen_for, :figure, :reason, :calculated) do
-    def initialize(calculated: nil, **) = super
+  # @!attribute overridden [Boolean] the plan holds an override for the place, applied or not
+  Place = Data.define(:place, :model, :chosen_for, :figure, :reason, :calculated, :overridden) do
+    def initialize(calculated: nil, overridden: false, **) = super
 
     # @return [Boolean]
     def unclassified? = reason.present?
@@ -156,6 +159,15 @@ class TeamPlanning::Capacity
   end
 
   def price(seat, place, reason, families)
+    priced = model_price(seat, place, reason, families)
+    override = @overrides.dig(seat.id, place.position_id || place.unit_id)
+    return priced unless override
+    return priced.with(overridden: true) if priced.unclassified?
+
+    overridden(priced, override)
+  end
+
+  def model_price(seat, place, reason, families)
     return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason:) if reason
     return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "unknown_role") unless families.key?(place.role_id)
 
@@ -168,17 +180,16 @@ class TeamPlanning::Capacity
     figure = TeamPlanning::CapacityModels.fetch(model).capacity_of(seat, place:, params: choice["params"], map: @map, facts: @facts)
     return Place.new(place:, model:, chosen_for:, figure: nil, reason: figure.reason) if figure.reason
 
-    overridden(Place.new(place:, model:, chosen_for:, figure:, reason: nil), @overrides.dig(seat.id, place.position_id || place.unit_id))
+    Place.new(place:, model:, chosen_for:, figure:, reason: nil)
   end
 
   def overridden(priced, override)
-    return priced unless override
-    return priced.with(figure: nil, reason: "override_unknown", calculated: priced.figure) if override.removed?
+    return priced.with(figure: nil, reason: "override_unknown", calculated: priced.figure, overridden: true) if override.removed?
 
     calculated = priced.figure
     amount = exact(override.reveal)
     step = Model::Step.new(label: "Planner's override, in place of #{decimal(calculated.amount)}", amount:, op: "=")
-    priced.with(figure: Model::Figure.new(amount:, working: calculated.working + [ step ]), calculated:)
+    priced.with(figure: Model::Figure.new(amount:, working: calculated.working + [ step ]), calculated:, overridden: true)
   end
 
   # A unit gone from the map takes its rules with it, so its places follow

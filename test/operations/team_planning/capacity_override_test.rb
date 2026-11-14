@@ -104,6 +104,17 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
     assert_nil place_of_ada[:calculated]
   end
 
+  should "mark an override on a place that counts nowhere for another reason, and leave the place's reason" do
+    override("0.8")
+    write(Operations::TeamPlanning::SetDeparture, scenario_id: @q2, person_id: @ada.id)
+
+    place = place_of_ada
+    assert_equal [ nil, "leaving", true ], place.values_at(:capacity, :reason, :overridden)
+    assert_equal [ true ], place[:unclassified].map { it[:overridden] }
+    assert_equal [ "0.8", true ], place_of_ada(@q1).values_at(:capacity, :overridden)
+    assert_not place_of_ada(@plan_id)[:overridden]
+  end
+
   should "refuse to pin an override, since the plan keeps it private" do
     override("0.8")
     message = assert_raises(Operations::Base::ParameterError) do
