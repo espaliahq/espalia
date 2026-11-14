@@ -72,18 +72,19 @@ class PlansSystemTest < ApplicationSystemTestCase
         end
         assert_no_sideways_overflow
       end
-    end
-  end
 
-  should "show an outsider no plan, and no page for it" do
-    sign_in_as(@outsider.user)
-    visit plans_path
-    assert_text "You're not in any plans yet"
-    assert_no_text "Pay review 2027"
-    visit plan_path(@plan_id)
-    # The test environment shows Rails' error page, so the 404 reads as the exception that makes one.
-    assert_text "ActiveRecord::RecordNotFound"
-    [ "Pay review 2027", "Q1 hires", "Slower hiring", "Erin Editor" ].each { assert_no_text it }
+      should "show an outsider no plan, and no page for it" do
+        sign_in_as(@outsider.user)
+        visit plans_path
+        assert_text "You're not in any plans yet"
+        assert_no_text "Pay review 2027"
+        assert_no_sideways_overflow
+        visit plan_path(@plan_id)
+        # The test environment shows Rails' error page, so the 404 reads as the exception that makes one.
+        assert_text "ActiveRecord::RecordNotFound"
+        [ "Pay review 2027", "Q1 hires", "Slower hiring", "Erin Editor" ].each { assert_no_text it }
+      end
+    end
   end
 
   private
