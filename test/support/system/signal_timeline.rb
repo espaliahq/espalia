@@ -12,15 +12,17 @@ class SignalTimeline
   #   after a full page load, or :unavailable when the page could not be read
   # @param page_offset [Numeric, nil] Ruby's clock minus the page's, measured
   #   when the timeline was armed; nil when it could not be measured
-  def initialize(read_page_events, page_offset: nil)
+  # @param clock [#call] returns the time in ms
+  def initialize(read_page_events, page_offset: nil, clock: SignalTimeline.method(:now))
     @read_page_events = read_page_events
     @page_offset = page_offset
+    @clock = clock
     @marks = []
   end
 
   # @param what [String]
   def mark(what)
-    @marks << [ self.class.now, what ]
+    @marks << [ @clock.call, what ]
   end
 
   # Marks a probe's start and end around the block.
