@@ -32,6 +32,15 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                  items.map { [ it.subject_id, it.facet, it.reason ] }
   end
 
+  should "name a place in no unit as unassigned, so every capacity facet has a place" do
+    place = TeamPlanning::CapacityModel::Place.new(unit_id: nil, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id: nil)
+    seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])
+    unclassified = [ [ TeamPlanning::Capacity::Seat.new(seat:, places: []),
+                       TeamPlanning::Capacity::Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "no_model") ] ]
+
+    assert_equal [ "capacity:unassigned" ], TeamPlanning::Attention.new(map, {}, unclassified:).call.map(&:facet)
+  end
+
   should "say which unit a succession lost, and nothing for one whose predecessor retired as it should" do
     fits = B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [ RETIRED ], successor_ids: [ LIVE ])
     broken = B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [ GONE ], successor_ids: [ RETIRED ])

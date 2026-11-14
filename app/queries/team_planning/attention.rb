@@ -30,6 +30,8 @@ class TeamPlanning::Attention
   UNIT = TeamPlanning::Events::UnitSet.facet
   SUCCESSION = TeamPlanning::Events::UnitSuccessionSet.facet
   CAPACITY = TeamPlanning::Events::CapacitySet.facet
+  # A place in no unit has no id an override could name, as the map's own drop target hasn't.
+  UNASSIGNED = "unassigned"
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
@@ -114,7 +116,7 @@ class TeamPlanning::Attention
   def unclassified
     @unclassified.reject { |_, place| UNCLASSIFIED_ELSEWHERE.include?(place.reason) }.map do |priced, place|
       seat = priced.seat
-      facet = [ CAPACITY, place.place.position_id || place.unit_id ].compact.join(":")
+      facet = "#{CAPACITY}:#{place.place.position_id || place.unit_id || UNASSIGNED}"
       cause = seat.kind == "person" ? ASSIGNMENT : POSITION
       item(seat.id, facet, "Counts for no capacity: #{TeamPlanning::Capacity::REASONS.fetch(place.reason).downcase_first}",
            broken_by: [ [ seat.id, cause ] ])
