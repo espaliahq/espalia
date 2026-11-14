@@ -80,6 +80,7 @@ class TeamPlanning::Capacity
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
     @map = @resolution.call
+    @positions = @rules = nil
     @live = @map.units.to_set(&:id)
     people = @map.people.map { person_seat(it) }
     seats = people + open_positions(people)
