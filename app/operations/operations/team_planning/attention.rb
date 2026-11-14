@@ -10,8 +10,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "still resolve but no longer fit, often because a scenario it follows changed later. Each item has " \
               "the subject_id and facet that no longer fit (a person's assignment, a position, a unit, a " \
               "succession), a reason, and the change it belongs to: its kind, the scenario that made it and its " \
-              "event_id. That is the subject's own change, or, for a subject no scenario changed, the change that " \
-              "broke it, such as a parent unit's retirement; change is null when nothing in the plan explains it. " \
+              "event_id. That is the later to land of the subject's own change and the change that broke it, such " \
+              "as a parent unit's retirement; change is null when nothing in the plan explains it. " \
               "Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
               "the caller is a member."

@@ -201,8 +201,8 @@ A write refuses only a malformed change. Fit is read, never refused
 ([#257](https://github.com/espaliahq/espalia/issues/257)). `TeamPlanning::Attention` walks a
 resolved scenario and lists what no longer fits. `Resolution#attention` runs it on the settled
 map and the changes that won, and nothing is stored. Each item has the subject and facet, a
-reason a planner can read, and the change it belongs to: the subject's own winning change, or,
-for a subject no scenario changed, the change that broke it, such as its unit's `UnitRetired`.
+reason a planner can read, and the change it belongs to: the later to land of the subject's own
+winning change and the change that broke it, such as its unit's `UnitRetired`.
 
 It marks a placement in a closed position, or in a retired unit or one gone from the scenario;
 a position in such a unit, or overfilled; a unit under a retired parent; anyone in
