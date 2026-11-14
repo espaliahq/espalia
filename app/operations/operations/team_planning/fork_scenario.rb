@@ -2,6 +2,9 @@
 
 # Forks a scenario in a plan: a step that follows its parent, or an
 # alternative that covers its parent's period instead.
+#
+# The plan's own refusals come back as invalid params
+# [#208](https://github.com/espaliahq/espalia/issues/208).
 class Operations::TeamPlanning::ForkScenario < Operations::Base
   include Operations::TeamPlanning::PlanWrite
   include Operations::OrgGraph::DateParameter

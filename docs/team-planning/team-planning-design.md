@@ -176,7 +176,7 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    `ForgottenPersonAudit.walk` with its params, or `ForgottenPersonAudit.exempt` with a
    reason when it can't show a person. Add any new parameter to `params_for` in
    `test/integration/team_planning_privacy_test.rb`, which walks every Team Planning tool
-   as an outsider. Add a row to the tool file map in `docs/guidelines/mcp-server.md`.
+   as an outsider. Put the tool's notes in its class comment; `bin/rails mcp:tools` lists it.
 7. **The tests.** The kind's `end_state` refusals beside it in
    `test/contexts/team_planning/events/`. In `test/operations/team_planning/`, through the
    operations: a change reaching the steps after its scenario, an alternative overriding

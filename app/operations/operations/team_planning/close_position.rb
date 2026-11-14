@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Closes an open position in a scenario.
+# Closes an open position in a scenario, as a PositionClosed change
+# [#228](https://github.com/espaliahq/espalia/issues/228).
 class Operations::TeamPlanning::ClosePosition < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
 

@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-# A scenario's open positions, resolved.
+# A scenario's open positions, resolved through {TeamPlanning::Resolution#call},
+# with role and level names from the framework and a budget of committed
+# (backfill) or planned (new). It shows no person, so the forgotten-person
+# audit exempts it [#228](https://github.com/espaliahq/espalia/issues/228).
 class Operations::TeamPlanning::Positions < Operations::Base
   include Operations::TeamPlanning::PlanRead
 

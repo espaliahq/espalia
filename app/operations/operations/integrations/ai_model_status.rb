@@ -6,6 +6,10 @@
 # edited on the Integrations page only, so no secret is ever exposed here:
 # only whether a key is stored, and the host of the address, never the address
 # itself.
+#
+# Full names of workspace people are always replaced before the model sees
+# them, and first names are too in the feedback itself; framework text keeps
+# first names. None of this is a setting, so there is no name switch to report.
 class Operations::Integrations::AiModelStatus < Operations::Base
   description "Show how this workspace's AI model is set up for feedback placement suggestions: whether it is " \
               "ready (a complete provider, address and model with an API key stored; it does not prove the " \

@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
-# Opens a position in a scenario, or changes or reopens one.
+# Opens a position in a scenario, or changes or reopens one, as a
+# PositionSet change. The role, level and position checks run under the
+# plan's lock, after the editor check, so an outsider gets "No such plan"
+# and learns nothing about the framework
+# [#228](https://github.com/espaliahq/espalia/issues/228).
 class Operations::TeamPlanning::SetPosition < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
 

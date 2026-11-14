@@ -2,6 +2,9 @@
 
 # Starts a plan: a private draft of the organisation, read from the Org Graph
 # as it stood on base_on.
+#
+# A tenant admin, or a planner linked to a person, may create one
+# [#192](https://github.com/espaliahq/espalia/issues/192).
 class Operations::TeamPlanning::CreatePlan < Operations::Base
   include Operations::TeamPlanning::PlanWrite
   include Operations::OrgGraph::DateParameter
