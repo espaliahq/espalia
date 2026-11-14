@@ -62,6 +62,13 @@ class PlanKeyStoreTest < ActiveSupport::TestCase
       assert_equal key.key, @store.key_of(@plan_key).key
     end
 
+    should "read an identifier built from an uppercase id" do
+      key = in_tenant { @store.create(@plan_key) }
+
+      assert_equal key.key, in_tenant { @store.key_of(PlanKeyStore.plan_identifier(@tenant.id, @plan_id.upcase)) }.key
+      assert_equal key.key, in_tenant { @store.key_of(@plan_key.upcase) }.key
+    end
+
     should "refuse an identifier it doesn't hand out" do
       assert_raises(PlanKeyStore::InvalidIdentifier) { in_tenant { @store.key_of("plan-#{@plan_id}") } }
     end

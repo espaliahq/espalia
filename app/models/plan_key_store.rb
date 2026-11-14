@@ -51,13 +51,13 @@ class PlanKeyStore
   # @param tenant_id [String]
   # @param plan_id [String]
   # @return [String]
-  def self.plan_identifier(tenant_id, plan_id) = "tenant-#{tenant_id}/plan-#{plan_id}"
+  def self.plan_identifier(tenant_id, plan_id) = "tenant-#{tenant_id}/plan-#{plan_id}".downcase
 
   # @param tenant_id [String]
   # @param plan_id [String]
   # @param person_id [String]
   # @return [String]
-  def self.person_identifier(tenant_id, plan_id, person_id) = "#{plan_identifier(tenant_id, plan_id)}/person-#{person_id}"
+  def self.person_identifier(tenant_id, plan_id, person_id) = "#{plan_identifier(tenant_id, plan_id)}/person-#{person_id.to_s.downcase}"
 
   # @return [Boolean] whether Active Record encryption has the keys it needs
   def self.available?
@@ -143,7 +143,7 @@ class PlanKeyStore
   private
 
   def parse(identifier, needs_encryption: true)
-    match = IDENTIFIER.match(identifier.to_s) or raise InvalidIdentifier, "Not a plan key identifier"
+    match = IDENTIFIER.match(identifier.to_s.downcase) or raise InvalidIdentifier, "Not a plan key identifier"
     current = ActsAsTenant.current_tenant
     raise ForeignTenant, "The key belongs to another tenant" if current && current.id != match[:tenant_id]
     raise Unavailable if needs_encryption && !self.class.available?
