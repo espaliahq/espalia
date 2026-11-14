@@ -33,13 +33,15 @@ class Operations::TeamPlanning::Attention < Operations::Base
 
   private
 
-  # A capacity item's subject is a person or an open position, so only the
-  # people among them are named.
+  # A capacity item's subject is a person or an open position, so only an
+  # assignment's subject unknown here is a forgotten person.
   def names_of(plan, items)
-    placed, capacity = items.select { person_facet?(it.facet) }.partition { it.facet == ::TeamPlanning::Attention::ASSIGNMENT }
-    known = ::Person.where(tenant_id: plan.tenant_id, id: (placed + capacity).map(&:subject_id).uniq).pluck(:id, :name).to_h
-    placed.map(&:subject_id).uniq.to_h { [ it, known.fetch(it, Person::FORMER_MEMBER) ] }
-          .merge(capacity.map(&:subject_id).select { known.key?(it) }.to_h { [ it, known[it] ] })
+    named = items.select { person_facet?(it.facet) }
+    known = ::Person.where(tenant_id: plan.tenant_id, id: named.map(&:subject_id).uniq).pluck(:id, :name).to_h
+    named.filter_map do |item|
+      name = known.fetch(item.subject_id) { Person::FORMER_MEMBER if item.facet == ::TeamPlanning::Attention::ASSIGNMENT }
+      [ item.subject_id, name ] if name
+    end.to_h
   end
 
   def person_facet?(facet) = facet == ::TeamPlanning::Attention::ASSIGNMENT || facet.split(":").first == ::TeamPlanning::Attention::CAPACITY
