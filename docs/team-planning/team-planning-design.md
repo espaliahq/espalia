@@ -93,6 +93,7 @@ Every change event has the same shape:
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
 | Undo | `ChangeUndone`, `ChangeRedone`, each naming the event it reverses |
+| Notes | `ChangeNoted`: a change's or pin's note written, rewritten or cleared |
 | The Org Graph | `PlanRebased` (the date the plan now stands on) |
 | Reality | `StepClosed`, `PlanApproved`, `ChangeRaised`, `ChangeApplied` |
 
@@ -469,7 +470,7 @@ make ends what they can redo, as in an editor. Undo and redo are for editors, li
 other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
-undo and redo, in order, with who made it and, while it stands undone, who undid it.
+undo, redo and note, in order, with who made it and, while it stands undone, who undid it.
 `team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
 a former member.
 Production already holds changes, pins and clears, so the deploy that ships the history
@@ -478,7 +479,42 @@ needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeplo
 history and overrides projections read events through one mapping,
 `TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
 never reaches either table: the history names the field in `sealed_fields` and leaves
-the value out. Removing a scenario drops its history.
+the value out. The note is the one exception, held in a sealed column (see below).
+Removing a scenario drops its history.
+
+### Notes
+
+**As built in 3.13b** ([#273](https://github.com/espaliahq/espalia/issues/273)): every
+change and pin may carry a `note`, the planner's reason, such as why someone moves. It is
+declared once on the `Change` base and on `ChangePinned`, `shreddable :note, by: :plan`, so
+a new kind gets it with nothing declared, even one whose end state seals under a person's
+key: `LevelSet` keeps its level under the person's key and its note under the plan's.
+Forgetting the person removes the level and leaves the note; deleting the plan removes
+the note.
+
+- **A note is never part of the end state.** `note` is in `Change::FIELDS`, which every end
+  state leaves out, so resolution, `same_end_state?`, status and drift read two changes
+  that differ only in their notes as the same. An end state can't set `note`.
+- **Every write tool takes `note`,** at most 2,000 characters, through
+  `Operations::TeamPlanning::ChangeWrite`. A blank note is none, and a change without one
+  stores no note field, as it did before notes.
+- **`ChangeNoted` rewrites or clears a note** on a change or pin that still stands in its
+  scenario: not undone, not cleared and not replaced. It carries the noted event's id, its
+  subject and facet, the note (nil clears it) and who wrote it. It is not an entry of the
+  log, so it can't be undone and doesn't end what anyone can redo. `team_planning_note_change`
+  exposes it; it is for editors, like any other change, so a frozen plan refuses it.
+- **The note follows its change.** The overrides row holds the note of the change in
+  effect. An undo or redo that brings a change back brings the last note written on it
+  before then, read from the plan stream.
+- **Both read models seal the note.** `team_planning_overrides.note` and
+  `team_planning_history_entries.note` are `shreddable_column :note, by: :plan`, copying the
+  sealed form from the event, so deleting the plan makes every copy unreadable at once. A
+  history row for a change or pin keeps the note it was made with; each `note` row keeps
+  one rewrite and names the change in `noted_event_id`. `team_planning_overrides` and
+  `team_planning_history` show it as `{ value: }`, or `{ removed: true }` once the key is
+  gone.
+- **No rebuild.** No stored event held a note before 3.13b and the new columns start empty,
+  so neither projection's `CODE_VERSION` moved.
 
 ### Two people editing at once
 

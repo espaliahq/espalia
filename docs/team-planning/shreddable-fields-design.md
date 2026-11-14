@@ -1,9 +1,9 @@
 # Shreddable event fields — design
 
 > Status: partly built. The plan key store, the declaration and the guard are built;
-> [What is built](#what-is-built) says what they do. No event declares a shreddable field
-> yet. [The index](README.md) lists the companion designs, the mockups and the
-> plan.
+> [What is built](#what-is-built) says what they do. Team Planning's plan and scenario
+> names, plan-held values and notes on changes declare shreddable fields.
+> [The index](README.md) lists the companion designs, the mockups and the plan.
 
 Events are immutable. Some of what they should hold must be forgettable: a salary pasted
 into a plan, a note about why someone is moving, a reason for a change in hours. A
@@ -135,6 +135,12 @@ end
   and a replay another.
 - **A declaration can't be skipped.** A subclass inherits its parent's fields, and data
   that names a declared field with a string key is refused rather than stored in clear.
+- **Fields compose across a hierarchy, each under its own key.** Every Team Planning
+  change inherits `shreddable :note, by: :plan` from the `Change` base, and a kind adds its
+  own: `LevelSet` seals its level under the person's key and its note under the plan's,
+  so forgetting the person leaves the note readable. A field that every change holds
+  belongs in `Change::FIELDS`, which keeps it out of the end state a kind compares
+  ([Notes](team-planning-design.md#notes)).
 - **The event store browser at `/res` reads through `Shreddable::DisplayMapper`**, which
   shows each shreddable field as `[shreddable]`.
 - **Every aggregate includes `Shreddable::AggregateRoot`** in place of `AggregateRoot`. Its
@@ -151,7 +157,11 @@ It does not know the new event class, so the record reads as a plain
 `RubyEventStore::Event`, and projections and the global replayer only read the types
 they handle, so they never see it. An event class that an older release does know would
 read its declared fields as Base64 strings, which is why a field must never be declared
-shreddable on an event class that already has records.
+shreddable on an event class that already has records. A new field is the exception,
+since no record holds it in clear: the change kinds gained `note` this way. An older
+release still unseals the note, since the record's metadata names it, but counts it as
+part of the change's end state, and its status read raises on a noted change. Roll back
+past 3.13b only before anyone writes a note.
 
 ## The guard
 
