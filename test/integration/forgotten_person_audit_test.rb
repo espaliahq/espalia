@@ -12,7 +12,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
   # Reads that cannot meet a forgotten person, with the reason.
   EXEMPT = {
     "integrations_hris_field_preview" => "reads the live HRIS, which no longer holds a forgotten person",
-    "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person"
+    "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person",
+    "team_planning_plan_members" => "returns person ids and roles, never a name, until story 1.4 brings names"
   }.freeze
 
   setup do
@@ -26,7 +27,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     @alex = create(:person, tenant: @tenant, name: "Alex Example", manager: @lead)
     @quinn = create(:person, tenant: @tenant, name: ERASED_NAME, email: ERASED_EMAIL, manager: @lead)
     create(:person, tenant: @tenant, name: "Riley Report", manager: @quinn)
-    create(:tenant_user, tenant: @tenant, user: create(:user, email: ERASED_EMAIL), person: @quinn, org_graph_editor: true)
+    create(:tenant_user, tenant: @tenant, user: create(:user, email: ERASED_EMAIL), person: @quinn, org_graph_editor: true,
+                         team_planner: true)
 
     @assignment, @cycle_id = enrol_in_role_lens_framework(@alex, @fx, tenant: @tenant)
     quinn_level = @fx.e_levels.fetch(2).level_id
@@ -69,11 +71,25 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
 
     editors = Operations::OrgGraph::Editors.call(context: lead_context, params: {})
     assert_equal [ @lead.id ], (editors[:editors] + editors[:admins]).map { it[:person_id] }, "org_graph_editors lists a forgotten editor"
+    planners = Operations::TeamPlanning::Planners.call(context: lead_context, params: {})
+    assert_equal [ @lead.id ], (planners[:planners] + planners[:admins]).map { it[:person_id] }, "team_planning_planners lists a forgotten planner"
 
     as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_by_tool.fetch("org_graph_as_of"))
     assert_equal [ @quinn.id ], as_of[:people].map { it[:id] }, "org_graph_as_of reads an empty Org Graph here"
     changes = Operations::OrgGraph::ChangesBetween.call(context: lead_context, params: params_by_tool.fetch("org_graph_changes_between"))
     assert_includes changes[:changes].map { it[:person_id] }, @quinn.id, "org_graph_changes_between reads an empty Org Graph here"
+  end
+
+  # The baseline has no Operation until story 1.4, so the registry walk can't reach it.
+  should "show a forgotten person as a former member in a plan's baseline" do
+    plan_id = SecureRandom.uuid_v7
+    TeamPlanning::CommandHandler.new(actor: lead_context).create_plan(plan_id, name: "Next year", base_on: Date.current + 1)
+    map = TeamPlanning::Baseline.new(context: lead_context, plan: TeamPlanningPlan.find(plan_id)).call
+
+    assert_equal [ @quinn.id ], map.people.map(&:id), "the baseline reads an empty Org Graph here"
+    assert_equal [ @quinn.id ], map.units.sole.owner_ids
+    assert_equal Person::FORMER_MEMBER, map.name_of(@quinn.id)
+    assert_not_includes map.names.values, ERASED_NAME
   end
 
   private
@@ -192,6 +208,9 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "reporting_evidence_coverage" => { **cycle, mode: "full" },
         "reporting_feedback_export" => cycle,
         "system_whoami" => {},
+        "team_planning_frozen_plans" => {},
+        "team_planning_planners" => {},
+        "team_planning_plans" => {},
         "tenants_pay_bands" => {},
         "tenants_forgetting_dry_run" => {}
       }

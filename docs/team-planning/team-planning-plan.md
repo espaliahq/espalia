@@ -231,9 +231,9 @@ because a binding budget guardrail needs them.
 | # | Story | Needs |
 |---|---|---|
 | 1.1 | Plan stream `tenant-{id}/Plan-{plan_id}` through `EventStreamNaming`: `PlanCreated` with name and base date, `PlanRenamed`, `PlanDeleted` | none |
-| 1.2 | Members as editor or viewer, `PlanMemberAdded` and `PlanMemberRemoved`, and a `PlanPolicy` under which a tenant admin does not open someone else's plan. A planner role, given by a tenant admin, may create a plan (decision 7) | 1.1 |
+| 1.2 | Members as editor or viewer, `PlanMemberAdded` and `PlanMemberRemoved`, and a `PlanPolicy` under which a tenant admin does not open someone else's plan. A planner role, given by a tenant admin, may create a plan (decision 7). A plan always keeps an editor; one whose editors have all left or been forgotten is frozen, readable by its viewers, and a tenant admin may delete it unread, saying why. Ships the member, planner and frozen-plan Operations, and a plan list by id and role | 1.1 |
 | 1.3 | Baseline reader: the root scenario resolved over `OrgGraph::AsOf` on the plan's base date, joined to names, with "Former member" for anyone forgotten | 1.1 |
-| 1.4 | Operations: list, create, get, rename and delete a plan, its members, and the baseline map | 1.2, 1.3 |
+| 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes | 1.2, 1.3 |
 | 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
 | 1.6 | Read-only map of the baseline: units, people with their allocation and role from `AsOf::Membership`, and the Unassigned bucket | 1.4 |
 

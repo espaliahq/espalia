@@ -653,7 +653,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         { "id" => "2718" },
         { "work" => { "customColumns" => { "column_team" => "9" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id work.customColumns.column_team], show_inactive: false)
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.customColumns.column_team], show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
       values = adapter.read_field("column_team", kind: :list)
@@ -670,8 +670,8 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         { "id" => "3141", "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
         { "id" => "2718", "work" => { "customColumns" => { "column_country" => "Australia" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id work.customColumns.column_country work.site],
-        show_inactive: false)
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.customColumns.column_country work.site],
+        show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
       values = adapter.read_field("column_country", kind: :text, alongside: "site")
@@ -679,6 +679,126 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal({ "3141" => Hris::FieldValue.new(state: :value, label: "Australia"),
                      "2718" => Hris::FieldValue.withheld }, values)
       client.verify
+    end
+
+    should "read everyone the sync keeps, such as a person on leave, and leave out a leaver" do
+      employees = [
+        { "id" => "3141", "isActive" => true, "internal" => { "status" => "Inactive" }, "work" => { "department" => "Sales" } },
+        { "id" => "2718", "isActive" => false, "work" => { "department" => "Sales" } }
+      ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "read a newcomer the sync creates, but not one whose email another HRIS id holds" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
+      employees = [ { "id" => "3141", "email" => "new@example.com" }, { "id" => "2718", "email" => "Held@example.com" } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "read only the first of two newcomers who share an email, as the sync creates only the first" do
+      employees = [ { "id" => "3141", "email" => "Shared@example.com" }, { "id" => "2718", "email" => "shared@example.com" } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "follow an email a held person moves to, in the order the sync writes it" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
+      employees = [ { "id" => "1618", "email" => "new@example.com" },
+                    { "id" => "3141", "email" => "old@example.com" },
+                    { "id" => "2718", "email" => "new@example.com" } ]
+
+      assert_equal %w[1618 3141], read_department(employees).keys
+    end
+
+    should "keep a held person's email when HiBob leaves it out" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
+      employees = [ { "id" => "1618" }, { "id" => "3141", "email" => "old@example.com" } ]
+
+      assert_equal [ "1618" ], read_department(employees).keys
+    end
+
+    should "leave out a held person whose new email another row holds, and keep their old one held" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
+      create(:person, tenant: @tenant, email: "new@example.com")
+      employees = [ { "id" => "1618", "email" => "new@example.com" },
+                    { "id" => "3141", "email" => "old@example.com" } ]
+
+      assert_empty read_department(employees)
+    end
+
+    should "follow an email a leaver moves to, without reading the leaver" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
+      employees = [ { "id" => "1618", "isActive" => false, "email" => "new@example.com" },
+                    { "id" => "3141", "email" => "old@example.com" },
+                    { "id" => "2718", "email" => "new@example.com" } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "leave out a newcomer whose email a new leaver claimed first" do
+      employees = [ { "id" => "1618", "isActive" => false, "email" => "shared@example.com" },
+                    { "id" => "3141", "email" => "shared@example.com" } ]
+
+      assert_empty read_department(employees)
+    end
+
+    should "read a rehired leaver only once their new start date comes" do
+      %w[3141 2718].each do |external_id|
+        person = create(:person, tenant: @tenant, hris_source: "hibob", external_id:)
+        OrgLeaver.create!(tenant: @tenant, person:, left_on: Date.current - 30)
+      end
+      employees = [ { "id" => "3141", "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "2718", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "read a leaver the sync adopts by email only once their new start date comes" do
+      %w[back@example.com ahead@example.com].each do |email|
+        OrgLeaver.create!(tenant: @tenant, person: create(:person, tenant: @tenant, email:), left_on: Date.current - 30)
+      end
+      employees = [ { "id" => "3141", "email" => "back@example.com", "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "2718", "email" => "ahead@example.com", "work" => { "startDate" => (Date.current + 7).iso8601 } },
+                    { "id" => "1618", "email" => "ahead@example.com" } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "read a leaver back at work with no start date, as the sync returns them on its own date" do
+      held = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "3141")
+      OrgLeaver.create!(tenant: @tenant, person: held, left_on: Date.current - 30)
+      OrgLeaver.create!(tenant: @tenant, person: create(:person, tenant: @tenant, email: "back@example.com"), left_on: Date.current - 30)
+      employees = [ { "id" => "3141" }, { "id" => "2718", "email" => "back@example.com" } ]
+
+      assert_equal %w[3141 2718], read_department(employees).keys
+    end
+
+    should "read a forgotten person only once they are back at work" do
+      forget_row("3141")
+      forget_row("2718")
+      employees = [ { "id" => "3141", "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "2718", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "let a newcomer take the email of a forgotten leaver" do
+      forget_row("1618")
+      employees = [ { "id" => "1618", "isActive" => false, "email" => "shared@example.com",
+                      "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "3141", "email" => "shared@example.com" } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "leave out a forgotten person back at work whose email another HRIS id holds" do
+      forget_row("3141")
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "taken@example.com")
+      employees = [ { "id" => "3141", "email" => "taken@example.com", "work" => { "startDate" => (Date.current - 1).iso8601 } } ]
+
+      assert_empty read_department(employees)
     end
   end
 
@@ -1743,6 +1863,17 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current, status: "inactive",
                           forgotten_external_id_digest: OrgGraph::Forgetting.digest(@tenant, "hibob", external_id))
     person
+  end
+
+  # @param employees [Array<Hash>] what HiBob answers
+  # @return [Hash{String => Hris::FieldValue}] the department read for each
+  def read_department(employees)
+    adapter = Hris::Hibob::Adapter.new(@tenant)
+    client = Minitest::Mock.new
+    client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.department],
+      show_inactive: true)
+    adapter.instance_variable_set(:@client, client)
+    adapter.read_field("work.department", kind: :text).tap { client.verify }
   end
 
   def build_adapter(employees)

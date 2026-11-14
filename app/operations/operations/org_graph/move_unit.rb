@@ -3,6 +3,7 @@
 # Moves a unit Espalia holds beneath another unit, or to the top.
 class Operations::OrgGraph::MoveUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   description "Move a unit in the Org Graph beneath another live unit at a higher level, or to the top " \
               "when parent_id is omitted, from effective_on (today by default). Only a unit Espalia holds " \
@@ -18,7 +19,7 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
     unit = live_unit!(:unit_id)
     parent = params[:parent_id] && live_unit!(:parent_id)
 
-    structure_handler.move_unit(unit.id, parent&.id, effective_on: effective_on)
+    structure_handler.move_unit(unit.id, parent&.id, effective_on: effective_on, **plan)
     { unit_id: unit.id, parent_id: parent&.id, effective_on: effective_on }
   end
 end

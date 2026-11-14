@@ -101,5 +101,5 @@ module Operations::OrgGraph::UnitWrite
   # @param cause_id [String, nil] shared by every event the handler writes
   def structure_handler(cause_id: nil) = ::OrgGraph::StructureCommandHandler.new(actor: context, cause_id: cause_id)
 
-  def person_handler = ::OrgGraph::CommandHandler.new(actor: context)
+  def person_handler(cause_id: nil) = ::OrgGraph::CommandHandler.new(actor: context, cause_id: cause_id)
 end

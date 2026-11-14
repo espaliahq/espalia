@@ -24,6 +24,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           org_graph/leavers
           org_graph/history
           team_planning/plans
+          team_planning/plan_members
         ].sort,
         Projections::Registry.names.sort
       )
