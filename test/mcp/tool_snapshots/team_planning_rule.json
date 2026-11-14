@@ -1,0 +1,39 @@
+{
+  "name": "team_planning_rule",
+  "description": "Get one rule of a scenario of a Team Planning plan the caller is in, by its name from tenants_planning_rules, as the scenario resolves it: for the whole plan or, with unit_id, at that unit, where the unit and each unit above it beat the plan-wide value, which beats the tenant's default, which beats the rule's own. A unit gone from the scenario takes its rules with it, so it reads the plan-wide value. team_planning_overrides lists which scenario set it. Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      },
+      "unit_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "Omit for the plan-wide value."
+      },
+      "rule": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "rule"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
