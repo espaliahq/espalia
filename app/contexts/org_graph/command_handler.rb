@@ -77,9 +77,11 @@ class OrgGraph::CommandHandler
   # @param employment_status [String] "pending", "employed" or "left"
   # @param started_on [Date, String, nil] the start date the provider holds
   # @param left_on [Date, String, nil] the leaving date the provider holds
+  # @param left_on_source [String, nil] where a leaving date worked out from
+  #   the person's row came from; kept only when they are first recorded
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
   # @return [Integer] how many events were written
-  def sync_person(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil, **facts)
+  def sync_person(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil, left_on_source: nil, **facts)
     plan, facts = OrgGraph::PlanReference.extract(facts)
     authorize_structure!
     ensure_provides!(person_id, provider, :employment_status)
@@ -99,7 +101,8 @@ class OrgGraph::CommandHandler
       else
         ensure_provides!(person_id, provider, *facts.keys)
         left_on = nil unless employment_status == "left"
-        person.record(person_id, provider:, effective_on:, employment_status:, started_on:, left_on:, **facts)
+        left_on_source = nil unless left_on
+        person.record(person_id, provider:, effective_on:, employment_status:, started_on:, left_on:, left_on_source:, **facts)
       end
       written = person.unpublished_events.count
     end

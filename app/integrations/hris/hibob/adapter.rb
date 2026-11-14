@@ -569,7 +569,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       OrgFactProvider.provider_for(OrgGraph::PersonAggregate::FACT_KINDS.fetch(key)) == provider_name
     end.map(&:to_h)
     Person.transaction(requires_new: true) do
-      handler.sync_person(person.id, provider: provider_name, effective_on: today, employment_status: "left", **ours)
+      handler.sync_person(person.id, provider: provider_name, effective_on: today, employment_status: "left",
+                                     **OrgGraph::PeopleCutover.leaving(person, on: today), **ours)
       espalias.compact.each do |key, value|
         handler.public_send(ESPALIA_CHANGES.fetch(key), person.id, value, provider: OrgGraph::StructureAggregate::ESPALIA, effective_on: today)
       end

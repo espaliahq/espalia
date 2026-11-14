@@ -238,6 +238,8 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
     should "read the termination date" do
       assert_equal "2026-10-31", Hris::Hibob::ResponseMapper.new(@fixture["employees"][2]).org_graph_facts[:terminated_on]
       assert_equal "2026-10-31", Hris::Hibob::ResponseMapper.terminated_on(@fixture["employees"][2])
+      rehired = @fixture["employees"][2].deep_merge("work" => { "startDate" => "2026-11-02" })
+      assert_nil Hris::Hibob::ResponseMapper.terminated_on(rehired)
     end
 
     should "turn a part-time percentage into a fraction and keep HiBob's own type label" do
