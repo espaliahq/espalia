@@ -16,8 +16,8 @@ class Operations::TeamPlanning::SetActualPay < Operations::Base
               "for members with the see-pay right; everyone else still sees band midpoints. The amount is base pay, " \
               "and cost adds the unit's on-cost on top. basis says what the amount is: full_time for a full-time " \
               "figure that the person's FTE scales, or actual for what they are paid as it is, already pro-rated, " \
-              "which FTE leaves alone. period is year, month or hour; an hourly amount is made yearly by the " \
-              "working_hours rule. The plan keeps it private to that person, so once they are forgotten it reads " \
+              "which FTE leaves alone. period is year, month or hour; an hourly amount is a rate, made yearly " \
+              "by the working_hours rule, so its basis is always full_time. The plan keeps it private to that person, so once they are forgotten it reads " \
               "as unknown and their seat goes unpriced. Clear it with team_planning_clear_change on facet data:pay. " \
               "Refused unless the caller is one of the plan's editors and holds the see-pay right."
   category :write

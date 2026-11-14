@@ -79,6 +79,7 @@ class TeamPlanning::Events::PlanDataSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "A pay currency is a three-letter ISO 4217 code" unless Currency::CODES.include?(currency)
     raise TeamPlanning::Error, "A pay period is year, month or hour" unless PayBand::PERIODS.include?(pay["period"])
     raise TeamPlanning::Error, "Say whether the amount is the person's actual pay or a full-time figure: basis actual or full_time" unless PAY_BASES.include?(pay["basis"])
+    raise TeamPlanning::Error, "An hourly amount is a rate, which FTE scales, so its basis is full_time" if pay["period"] == "hour" && pay["basis"] == "actual"
 
     { "amount" => BigDecimal(amount).to_s("F").delete_suffix(".0"), "currency" => currency, "period" => pay["period"], "basis" => pay["basis"] }
   end

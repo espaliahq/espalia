@@ -44,10 +44,11 @@ class Operations::TeamPlanning::ActualPayTest < ActiveSupport::TestCase
   should "refuse pay that can't be pay, without naming the value" do
     { { amount: "-417" } => "A pay amount is a number above 0, with at most 4 decimal places",
       { amount: "9,200" } => "A pay amount is a number above 0, with at most 4 decimal places",
-      { currency: "XYZ" } => "A pay currency is a three-letter ISO 4217 code" }.each do |bad, message|
+      { currency: "XYZ" } => "A pay currency is a three-letter ISO 4217 code",
+      { period: "hour", basis: "actual" } => "An hourly amount is a rate, which FTE scales, so its basis is full_time" }.each do |bad, message|
       error = refusal { set_pay(**bad) }
       assert_equal message, error
-      assert_not_includes error, bad.values.first
+      assert_not_includes error, bad[:amount] if bad[:amount]
     end
     assert_equal "missing required parameter: basis", refusal { call(Operations::TeamPlanning::SetActualPay, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, **PAY.except(:basis)) }
   end

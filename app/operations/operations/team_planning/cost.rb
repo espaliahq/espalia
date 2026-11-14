@@ -6,9 +6,11 @@
 # plan answers in a page. Figures leave as decimal strings. Band midpoints
 # are tenant configuration, not anyone's pay, so every plan member sees them;
 # each band's minimum and maximum need the see-pay right
-# ([#300](https://github.com/espaliahq/espalia/issues/300)), and `pay_view`
-# names which a caller got. It names people, so the forgotten-person audit
-# walks it.
+# ([#300](https://github.com/espaliahq/espalia/issues/300)), as does any
+# actual pay the plan holds
+# ([#317](https://github.com/espaliahq/espalia/issues/317)). `pay_view` names
+# which a caller got, and only a holder learns how many seats actual pay
+# priced. It names people, so the forgotten-person audit walks it.
 class Operations::TeamPlanning::Cost < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
@@ -26,9 +28,12 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "with null for no unit; `with_below` adds the units below. Cost centres use null for no cost centre. " \
               "Unit, cost-centre and plan totals always agree. A seat that can't be priced is in `unpriced` with its reason, " \
               "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
-              "bands_changed_at says when a band last changed. pay_view is band_ranges for a member with the see-pay " \
-              "right, whose seat working also shows each band's minimum and maximum, and band_midpoints for " \
-              "everyone else. Totals are the same in both. The baseline has no period, so it can't be the " \
+              "bands_changed_at says when a band last changed. pay_view is actual_pay for a member with the see-pay " \
+              "right: a person whose actual pay the plan holds is priced from it instead (made yearly, scaled by " \
+              "FTE only when its basis is full_time, by the days held, plus on-cost), each seat's pay_source says " \
+              "which, actual_pay_seats counts them, and the working shows each band's minimum and maximum. Held pay " \
+              "the plan lost with the person's key leaves the seat unpriced as pay_unknown. Everyone else gets " \
+              "band_midpoints, pricing every seat at its midpoint, so the two views total differently. The baseline has no period, so it can't be the " \
               "scenario. Figures are decimal strings; people are named by id in `names`. Refused, as an unknown " \
               "plan, unless the caller is a member."
   category :read
@@ -39,18 +44,19 @@ class Operations::TeamPlanning::Cost < Operations::Base
   parameter :unit_id, String, allow_blank: false, schema: { description: "A unit on the scenario's or the baseline's map, for the working of each seat in it." }
 
   # @return [Hash] `{ plan_id, scenario_id, period, reference_currency, bands_changed_at, pay_view, total,
+  #   actual_pay_seats (for a see-pay holder),
   #   units, cost_centres, unpriced, names }`, and `seats` for a unit
   def perform
     plan = plan!
-    @ranges = PlanPolicy.new(context, plan).see_pay?
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call }
+    @ranges = report.pay_view == "actual_pay"
     unit_id = unit!(report)
     unpriced = (report.scenario.unpriced + report.baseline.unpriced).uniq { [ it.seat_id, it.unit_id, it.reason ] }
     seats = { scenario: lines_in(report.scenario, unit_id), baseline: lines_in(report.baseline, unit_id) } if unit_id
     { plan_id: plan.id, scenario_id:, period: { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601 },
       reference_currency: report.reference_currency, bands_changed_at: report.bands_changed_at&.iso8601,
-      pay_view: @ranges ? "band_ranges" : "band_midpoints",
+      pay_view: report.pay_view, **actual_pay_seats(report),
       total: compared(report, report.scenario.total, report.baseline.total), units: units(report), cost_centres: cost_centres(report),
       unpriced: unpriced.map { unpriced(it) }, **({ unit_id:, seats: } if unit_id), names: names(report, unpriced, seats) }
   end
@@ -64,6 +70,12 @@ class Operations::TeamPlanning::Cost < Operations::Base
     return unit_id if [ report.scenario, report.baseline ].any? { |priced| priced.map.units.any? { it.id == unit_id } }
 
     raise Operations::Base::ParameterError, "No such unit"
+  end
+
+  def actual_pay_seats(report)
+    return {} unless @ranges
+
+    { actual_pay_seats: { scenario: report.scenario.actual_pay_seats, baseline: report.baseline.actual_pay_seats } }
   end
 
   def units(report)
@@ -96,8 +108,8 @@ class Operations::TeamPlanning::Cost < Operations::Base
   def line(line)
     band = line.band
     { seat_id: line.seat_id, kind: line.kind, position_id: line.position_id, cost_centre: line.cost_centre,
-      level_id: line.level_id, level_source: line.level_source,
-      band: band && band(band),
+      level_id: line.level_id, level_source: line.level_source, pay_source: line.pay_source, basis: line.basis,
+      currency: line.currency, band: band && band(band),
       hours_per_year: line.hours_per_year && decimal(line.hours_per_year), yearly: line.yearly && decimal(line.yearly),
       fte: decimal(line.fte), fraction: decimal(line.fraction),
       held: line.held && { starts_on: line.held.begin.iso8601, ends_on: line.held.end.iso8601 }, days: line.days,
