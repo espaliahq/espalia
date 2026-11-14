@@ -41,7 +41,7 @@ class Views::Tenant::PayBands::IndexView < Views::Base
             plain "Add a band for a level below. A band with no location prices that level anywhere."
           end
         end
-        groups.each { |title, bands| role_card(title, bands) }
+        groups.each { |role_id, bands| role_card(role_id, bands) }
         add_card
       end
     end
@@ -49,18 +49,14 @@ class Views::Tenant::PayBands::IndexView < Views::Base
 
   private
 
-  def groups
-    @bands.group_by { it[:in_framework] ? role_name(it) : GONE }
-  end
+  # Bands by role id, so two roles that share a name keep their own cards.
+  def groups = @bands.group_by { it[:role_id] }
 
-  def role_name(band) = band[:level].split(", ").first
-
-  def level_name(band) = band[:level].split(", ", 2).last
-
-  def role_card(title, bands)
-    render Components::Kit::Card.new(title:, heading_level: :h2, id: "pay-bands-#{title.parameterize}") do |card|
+  def role_card(role_id, bands)
+    title = role_id ? bands.first[:role] : GONE
+    render Components::Kit::Card.new(title:, heading_level: :h2, id: "pay-bands-#{role_id || 'gone'}") do |card|
       card.body do
-        p(class: "text-sm text-muted") { "Plans don't price positions at these levels. Remove them once no one needs them." } if title == GONE
+        p(class: "text-sm text-muted") { "Plans don't price positions at these levels. Remove them once no one needs them." } unless role_id
         ul(class: "divide-y divide-default") { bands.each { band_row(it) } }
       end
     end
@@ -71,7 +67,7 @@ class Views::Tenant::PayBands::IndexView < Views::Base
       div(class: "flex flex-wrap items-start justify-between gap-x-4 gap-y-2") do
         div(class: "min-w-0") do
           p(class: "text-sm font-medium text-default") do
-            plain level_name(band)
+            plain band[:in_framework] ? band[:level_name] : band[:level]
             span(class: "text-muted font-normal") { " · #{band[:location] || 'Any location'}" }
           end
           p(class: "text-sm text-default") { "#{range_text(band)}. #{midpoint_text(band)}." }

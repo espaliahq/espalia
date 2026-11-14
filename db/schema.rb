@@ -918,7 +918,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_070000) do
   create_table "pay_bands", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "level_id", null: false
-    t.string "level_label", null: false
+    t.string "role_name", null: false
+    t.string "level_name", null: false
     t.string "location", default: "", null: false
     t.string "location_key", default: "", null: false
     t.string "currency", null: false

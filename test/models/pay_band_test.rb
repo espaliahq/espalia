@@ -13,7 +13,7 @@ class PayBandTest < ActiveSupport::TestCase
   teardown { ActsAsTenant.current_tenant = nil }
 
   def band(**attrs)
-    PayBand.new(level_id: @level.level_id, level_label: PayBand.level_label(@level), currency: "AUD",
+    PayBand.new(level: @level, currency: "AUD",
                 period: "year", minimum: 100, midpoint: 150, maximum: 200, **attrs)
   end
 
@@ -24,7 +24,8 @@ class PayBandTest < ActiveSupport::TestCase
   end
 
   should "name its level by role, code and title, so the name outlives the level" do
-    assert_equal "Software Engineer, E2 Engineer II", PayBand.level_label(@level)
+    assert_equal [ "Software Engineer", "E2 Engineer II" ], band.values_at(:role_name, :level_name)
+    assert_equal "Software Engineer, E2 Engineer II", band.level_label
   end
 
   should "match a location ignoring case and spaces, and take the Org Graph's spelling" do

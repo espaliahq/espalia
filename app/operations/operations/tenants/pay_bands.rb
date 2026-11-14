@@ -15,7 +15,9 @@ class Operations::Tenants::PayBands < Operations::Base
   # @return [Hash] `{ pay_bands: [...] }`
   def perform
     levels = FrameworkState::Level.where(level_id: PayBand.distinct.select(:level_id)).index_by(&:level_id)
-    bands = PayBand.includes(:updated_by).to_a.sort_by { |band| PayBand.page_order(band, levels[band.level_id]) }
-    { pay_bands: bands.map { band_payload(it, levels[it.level_id]) } }
+    roles = FrameworkState::Role.where(role_id: levels.values.map(&:role_id)).index_by(&:role_id)
+    bands = PayBand.includes(:updated_by).to_a
+    payloads = bands.to_h { [ it, band_payload(it, levels[it.level_id], roles[levels[it.level_id]&.role_id]) ] }
+    { pay_bands: bands.sort_by { PayBand.page_order(it, levels[it.level_id]) }.map { payloads[it] } }
   end
 end

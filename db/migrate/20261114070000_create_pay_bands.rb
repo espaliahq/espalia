@@ -5,7 +5,8 @@ class CreatePayBands < ActiveRecord::Migration[8.1]
     create_table :pay_bands, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, null: false, foreign_key: true, index: false
       t.uuid :level_id, null: false
-      t.string :level_label, null: false
+      t.string :role_name, null: false
+      t.string :level_name, null: false
       t.string :location, null: false, default: ""
       t.string :location_key, null: false, default: ""
       t.string :currency, null: false

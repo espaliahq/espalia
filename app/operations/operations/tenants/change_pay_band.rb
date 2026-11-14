@@ -22,6 +22,8 @@ class Operations::Tenants::ChangePayBand < Operations::Base
   # @return [Hash] the band, as tenants_pay_bands lists it
   def perform
     band = find_band(params[:pay_band_id])
+    level = FrameworkState::Level.find_by(level_id: band.level_id)
+    band.level = level if level
     band.assign_attributes(currency: params[:currency], period: params[:period], **figures)
     band_payload(save_band!(band))
   end

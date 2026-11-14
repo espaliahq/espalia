@@ -25,7 +25,7 @@ class Operations::Tenants::AddPayBand < Operations::Base
     level = FrameworkState::Level.find_by(level_id: params[:level_id].to_s.downcase)
     raise ParameterError, "There is no such level in the framework" unless level
 
-    band = PayBand.new(level_id: level.level_id, level_label: PayBand.level_label(level), location: params[:location],
+    band = PayBand.new(level:, location: params[:location],
                        currency: params[:currency], period: params[:period], **figures)
     band_payload(save_band!(band), level)
   end

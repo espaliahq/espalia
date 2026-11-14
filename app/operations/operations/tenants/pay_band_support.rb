@@ -36,12 +36,22 @@ module Operations::Tenants::PayBandSupport
     raise Operations::Base::ParameterError, band.duplicate_message
   end
 
+  # Names a band by its level as the framework has it now, or as it was
+  # when the level left.
+  #
   # @param band [PayBand]
+  # @param level [FrameworkState::Level, nil]
+  # @param role [FrameworkState::Role, nil]
   # @return [Hash]
-  def band_payload(band, level = FrameworkState::Level.find_by(level_id: band.level_id))
+  def band_payload(band, level = FrameworkState::Level.find_by(level_id: band.level_id),
+                   role = level && FrameworkState::Role.find_by(role_id: level.role_id))
+    band.take_names_from(level, role) if level
     {
       pay_band_id: band.id,
       level_id: band.level_id,
+      role_id: level&.role_id,
+      role: band.role_name,
+      level_name: band.level_name,
       level: band.level_label,
       in_framework: level.present?,
       location: band.location.presence,

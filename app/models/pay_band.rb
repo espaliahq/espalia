@@ -24,7 +24,7 @@ class PayBand < ApplicationRecord
   before_validation { self.location_key = self.class.location_key(location) }
 
   validates :level_id, presence: true
-  validates :level_label, presence: true
+  validates :role_name, :level_name, presence: true
   validates :currency, format: { with: /\A[A-Z]{3}\z/, message: "must be a three-letter ISO 4217 code, such as AUD" }
   validates :period, inclusion: { in: PERIODS, message: "must be year, month or hour" }
   validates(*FIGURES, presence: true, numericality: { greater_than_or_equal_to: 0, less_than: 10**12 })
@@ -56,16 +56,6 @@ class PayBand < ApplicationRecord
                  .uniq { location_key(it) }.sort
   end
 
-  # The name a band keeps for its level, so it still reads once the level
-  # leaves the framework.
-  #
-  # @param level [FrameworkState::Level]
-  # @return [String] such as "Software Engineer, E4 Staff Engineer"
-  def self.level_label(level)
-    role = FrameworkState::Role.find_by(role_id: level.role_id)
-    [ role&.name, "#{level.code} #{level.title}" ].compact.join(", ")
-  end
-
   # Where a band sits on the screen: by role, then from the lowest level,
   # then the any-location band before the countries. A band whose level has
   # left the framework sits last.
@@ -74,8 +64,24 @@ class PayBand < ApplicationRecord
   # @param level [FrameworkState::Level, nil] the band's level, if still in the framework
   # @return [Array]
   def self.page_order(band, level)
-    [ level ? 0 : 1, band.level_label.split(",").first.to_s, level&.ordinal || 0, band.level_label, band.location_key ]
+    [ level ? 0 : 1, band.role_name, level&.role_id.to_s, level&.ordinal || 0, band.level_name, band.location_key ]
   end
+
+  # Takes the level and copies its names, so the band still reads once the
+  # level leaves the framework.
+  #
+  # @param level [FrameworkState::Level]
+  # @param role [FrameworkState::Role, nil] the level's role, when the caller holds it
+  def take_names_from(level, role = FrameworkState::Role.find_by(role_id: level.role_id))
+    self.level_id = level.level_id
+    self.role_name = role&.name.presence || "Unnamed role"
+    self.level_name = "#{level.code} #{level.title}".strip
+  end
+
+  alias level= take_names_from
+
+  # @return [String] such as "Software Engineer, E4 Staff Engineer"
+  def level_label = "#{role_name}, #{level_name}"
 
   # A figure with both its decimal places, as entered: "120000.00".
   #

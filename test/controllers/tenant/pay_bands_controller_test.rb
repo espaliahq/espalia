@@ -25,7 +25,7 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
 
   def stored_band(**attrs)
     ActsAsTenant.with_tenant(@tenant) do
-      PayBand.create!(level_id: @level.level_id, level_label: PayBand.level_label(@level), location: "Testonia",
+      PayBand.create!(level: @level, location: "Testonia",
                       currency: "NZD", period: "month", minimum: 8000, midpoint: 9000, maximum: 10_000, **attrs)
     end
   end
@@ -95,6 +95,19 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
 
       assert_redirected_to tenant_pay_bands_path
       assert_equal 0, ActsAsTenant.with_tenant(@tenant) { PayBand.count }
+    end
+
+    should "give two roles that share a name a card each" do
+      stored_band
+      other = ActsAsTenant.with_tenant(@tenant) do
+        role = create(:framework_role, tenant: @tenant)
+        create(:framework_level, tenant: @tenant, role_id: role.role_id, code: "E2", title: "Engineer II")
+      end
+      stored_band(level: other)
+
+      get tenant_pay_bands_path
+
+      assert_select "[id^='pay-bands-'] h2", text: "Software Engineer", count: 2
     end
 
     should "answer 404 for a band the tenant doesn't hold" do

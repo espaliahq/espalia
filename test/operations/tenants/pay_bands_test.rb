@@ -57,6 +57,17 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_not listed[:in_framework]
   end
 
+  should "name a band as the framework names its level now, and keep that name on a change" do
+    added = add
+    ActsAsTenant.with_tenant(@tenant) { FrameworkState::Role.find_by(role_id: @level.role_id).update!(name: "Platform Engineer") }
+
+    assert_equal "Platform Engineer, E2 Engineer II", call(:PayBands)[:pay_bands].sole[:level]
+
+    call(:ChangePayBand, pay_band_id: added[:pay_band_id], currency: "AUD", period: "year", **FIGURES)
+    ActsAsTenant.with_tenant(@tenant) { @level.destroy! }
+    assert_equal "Platform Engineer, E2 Engineer II", call(:PayBands)[:pay_bands].sole[:level]
+  end
+
   should "list the any-location band first, then the countries" do
     add(location: "Testonia")
     add(location: "")
@@ -97,7 +108,7 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
   should "refuse the second of two adds that race past the check" do
     add
     racing = ActsAsTenant.with_tenant(@tenant) do
-      PayBand.new(tenant: @tenant, level_id: @level.level_id, level_label: PayBand.level_label(@level), location: "Fixtureland",
+      PayBand.new(tenant: @tenant, level: @level, location: "Fixtureland",
                   currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3)
     end
     racing.define_singleton_method(:one_band_per_level_and_location) { nil }
