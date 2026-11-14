@@ -43,6 +43,15 @@ class PlanKeyStoreTest < ActiveSupport::TestCase
       assert_includes PlanEncryptionKey.encrypted_attributes, :key_material
     end
 
+    should "hold one key per identifier, whatever the cipher" do
+      in_tenant do
+        @store.create(@plan_key)
+
+        assert_raises(ArgumentError) { @store.create(@plan_key, cipher: "aes-256-cbc") }
+        assert_nil @store.key_of(@plan_key, cipher: "aes-256-cbc")
+      end
+    end
+
     should "read nothing before a key is minted" do
       assert_nil in_tenant { @store.key_of(@plan_key) }
     end

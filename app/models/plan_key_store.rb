@@ -84,14 +84,14 @@ class PlanKeyStore
   # @raise [Unavailable, ForeignTenant, InvalidIdentifier]
   def create(identifier, cipher: DEFAULT_CIPHER)
     parts = parse(identifier)
-    existing = scope_for(parts).live.find_by(cipher: cipher)
-    return encryption_key(existing) if existing
+    existing = live_key(parts, cipher)
+    return existing if existing
 
     PlanEncryptionKey.transaction do
       lock(:plan, parts[:tenant_id], parts[:plan_id])
       lock(:person, parts[:tenant_id], parts[:person_id]) if parts[:person_id]
-      existing = scope_for(parts).live.find_by(cipher: cipher)
-      return encryption_key(existing) if existing
+      existing = live_key(parts, cipher)
+      return existing if existing
 
       refuse_destroyed!(parts)
       encryption_key(insert_key(parts, cipher))
@@ -165,6 +165,13 @@ class PlanKeyStore
     PlanEncryptionKey.connection.execute(
       PlanEncryptionKey.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key ])
     )
+  end
+
+  def live_key(parts, cipher)
+    row = scope_for(parts).live.first or return
+    raise ArgumentError, "This identifier already has a #{row.cipher} key" unless row.cipher == cipher
+
+    encryption_key(row)
   end
 
   def insert_key(parts, cipher)
