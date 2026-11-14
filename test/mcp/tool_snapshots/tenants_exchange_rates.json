@@ -1,0 +1,20 @@
+{
+  "name": "tenants_exchange_rates",
+  "description": "Read the active tenant's reference currency (null until set), the one its reports total in, and its exchange rates: each converts one unit of from_currency to rate units of to_currency from applies_from on. Reports convert with the rate in force on the date, or the inverse of the reverse pair's; a pair with no rate is an error, never 1.0. Nothing is stored converted. Give exchange_rate_id to read one rate. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "exchange_rate_id": {
+        "type": "string"
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

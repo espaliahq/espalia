@@ -157,6 +157,19 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_equal [ "AUD", "month", BigDecimal("15") ], [ stored.currency, stored.period, stored.midpoint ]
   end
 
+  should "refuse a change to a band removed after it was found" do
+    added = add
+    stale = ActsAsTenant.with_tenant(@tenant) { PayBand.find(added[:pay_band_id]).tap { PayBand.find(it.id).destroy! } }
+
+    PayBand.stub(:find_by, stale) do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(:ChangePayBand, pay_band_id: stale.id, currency: "AUD", period: "year", **FIGURES)
+      end
+
+      assert_equal "There is no such pay band", error.message
+    end
+  end
+
   should "refuse a band this tenant doesn't hold" do
     assert_raises(Operations::Base::ParameterError) { call(:RemovePayBand, pay_band_id: SecureRandom.uuid_v7) }
   end

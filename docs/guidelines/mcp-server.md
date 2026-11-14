@@ -819,8 +819,8 @@ Each tool's notes live in its operation's class comment, so a new tool needs no 
 | `app/operations/operations/org_graph/` | The Org Graph: its reads (as of a date, changes between dates, units, a person, stale facts, activity), its sources and staleness settings, editors, unit and membership writes, change back, and the plan reference on writes |
 | `app/operations/operations/reporting/` | Reporting: the cycles a caller may report on, cohort, capability attainment, evidence coverage and the admin-only feedback export |
 | `app/operations/operations/system/` | `system_whoami`: who the token acts as, in which tenant |
-| `app/operations/operations/team_planning/` | Team Planning: plans, a plan, its baseline and its drift, their members and scenarios, frozen plans and the planner grant |
-| `app/operations/operations/tenants/` | Tenant settings: pay bands, retention and scheduled forgetting, the scoring vocabulary and the theme |
+| `app/operations/operations/team_planning/` | Team Planning: plans, a plan, its baseline and its drift, their members and scenarios, positions, frozen plans and the planner grant. `change_write.rb` holds what the change kinds' writes share |
+| `app/operations/operations/tenants/` | Tenant settings: pay bands, exchange rates and the reference currency, retention and scheduled forgetting, the scoring vocabulary and the theme |
 | `app/operations/operations/lifecycle_payload.rb` | Lifecycle timestamps and role-alignment times, one vocabulary for `reporting_cycle_cohort` and `assessments_get` (`current_cycle`, `past_cycles` over `Assessments::CycleHistory`) |
 | **MCP protocol plumbing** | |
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |

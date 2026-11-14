@@ -26,7 +26,7 @@ require "set"
 # are calibrated in a separate session run by their own manager.
 #
 class AssessmentCycles::CalibrationSessionAggregate
-  include AggregateRoot
+  include Shreddable::AggregateRoot
 
   CLOSE_REASONS = %w[facilitator cycle_closed].freeze
 

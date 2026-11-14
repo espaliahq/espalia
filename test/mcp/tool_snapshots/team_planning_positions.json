@@ -1,0 +1,27 @@
+{
+  "name": "team_planning_positions",
+  "description": "List the open positions in a scenario of a Team Planning plan the caller is in: those its own changes set, and those it inherits from the scenarios it follows. Each has its role and level (with names from the framework; a name is null once the framework drops it), unit, FTE, basis and budget: 'committed' for a backfill, 'planned' for a new position. Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
