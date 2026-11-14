@@ -41,8 +41,9 @@ class OrgGraph::PersonAggregate
     @left_on = nil
     @left_from = nil
     @fact_points = {}
-    @memberships = {}
-    @membership_ends = {}
+    @membership_fold = OrgGraph::MembershipFold.new
+    @memberships = @membership_fold.memberships
+    @membership_ends = @membership_fold.ends
     @forgotten = false
   end
 
@@ -591,25 +592,10 @@ class OrgGraph::PersonAggregate
     @started_on = event.data[:started_on]
   end
 
-  on OrgGraph::Events::MembershipSet do |event|
-    data = event.data
-    current = @memberships[data[:unit_id]] || {}
-    terms = current[:changed_on].to_s > data[:effective_on].to_s ? current : data
-    @memberships[data[:unit_id]] = terms.slice(:allocation, :role, :provider).merge(
-      since: [ current[:since], data[:effective_on] ].compact.min,
-      changed_on: [ current[:changed_on], data[:effective_on] ].compact.max
-    )
-  end
-
-  on OrgGraph::Events::MembershipEnded do |event|
-    @memberships.delete(event.data[:unit_id])
-    @membership_ends[event.data[:unit_id]] = event.data[:effective_on]
-  end
-
-  on OrgGraph::Events::MembershipMoved do |event|
-    data = event.data
-    since = @memberships.delete(data[:from_unit_id])&.fetch(:since) || data[:effective_on]
-    @membership_ends[data[:from_unit_id]] = data[:effective_on]
-    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: since, changed_on: data[:effective_on])
+  OrgGraph::MembershipFold::EVENTS.each do |type|
+    on type do |event|
+      @membership_fold.apply(event)
+      @memberships, @membership_ends = @membership_fold.memberships, @membership_fold.ends
+    end
   end
 end

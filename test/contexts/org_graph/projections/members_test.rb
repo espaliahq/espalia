@@ -92,6 +92,15 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
     end
   end
 
+  should "keep when a membership began once its ending is changed back" do
+    as_tenant do
+      @handler.end_membership(@grace.id, @payments, provider: "espalia", effective_on: "2026-05-01")
+      OrgGraph::ChangeBackHandler.new(actor: OrgGraph::Authorization::SYSTEM).change_back(OrgUnitActivity.for_unit(@payments).first)
+
+      assert_equal Date.new(2026, 3, 1), OrgMembership.find_by!(person_id: @grace.id, unit_id: @payments).member_since
+    end
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       as_tenant do
@@ -99,6 +108,10 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
         @handler.end_membership(@ada.id, @platform, **PROVENANCE)
         @handler.set_membership(@ada.id, @platform, role: "Reviewer", provider: "espalia", effective_on: "2026-07-01")
         @handler.move_membership(@grace.id, @payments, @platform, effective_on: "2026-08-01")
+        request = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: "request-1")
+        request.set_membership(@ada.id, @payments, allocation: 0.8, provider: "espalia", effective_on: "2026-09-01")
+        request.set_membership(@ada.id, @payments, allocation: 0.7, provider: "espalia", effective_on: "2026-10-01")
+        OrgGraph::ChangeBackHandler.new(actor: OrgGraph::Authorization::SYSTEM).change_back_group("request-1")
       end
 
       before = snapshot_read_models(OrgGraph::Projections::Members, @tenant)
