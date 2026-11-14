@@ -247,8 +247,14 @@ class TeamPlanning::Baseline
   Line = Data.define(:person_id, :position_id)
 
   # Someone a departure in an earlier step took off the map, the step they
-  # left in, and the position backfilling them, if any.
-  Departed = Data.define(:person_id, :leaves_in_id, :position_id)
+  # left in, the position backfilling them, if any, and the date within the
+  # step, if the plan gave one.
+  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on) do
+    def initialize(leaves_on: nil, **) = super
+
+    # @return [Hash] as {TeamPlanning::Events::DepartureSet} set it, `leaves_on` only when given
+    def departure = { leaves_in_id:, position_id: }.merge(leaves_on ? { leaves_on: } : {})
+  end
 
   # A person's place in a unit, or in a position. A position's place takes
   # the position's unit when the map settles, and none once it closes.

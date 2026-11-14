@@ -86,7 +86,7 @@ Every change event has the same shape:
 | Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
-| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
+| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
 | Budget | `BudgetLineSet`, `BudgetLineCut`, `PositionFundingSet` (position draws on budget lines) |
 | Plan data | `PlanDataSet` (person, field, value), `PlaceholderSet` (a hire the HRIS doesn't know: label, level, FTE) |
 | Rules | `RuleSet` (configuration, capacity model, budget strictness, guardrail, assumption) |
@@ -232,8 +232,12 @@ facet, so a later step or an alternative can have the person stay.
 - **Planned, not Org Graph leavers.** Someone the Org Graph has leave by the base date is off
   the map from the start, and the plan shows where it still places them (decision 6 in the
   plan). A departure is the plan's own statement.
-- **The step is the date for now.** Costing part of a period (5.4) adds an optional leaving
-  date within the step.
+- **A leaving date is optional.** `leaves_on` names their last day, within the step's
+  period, and cost splits the step there: the leaver costs up to it, the backfill from the
+  day after. Without one the step is the date, so the leaver costs nothing in it and the
+  backfill carries the whole step. A departure set before dates existed carries no
+  `leaves_on` and reads the same way. The baseline has no period, so a departure there
+  takes no date.
 
 ### Needing attention as built
 

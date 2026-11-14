@@ -1,6 +1,6 @@
 {
   "name": "team_planning_set_departure",
-  "description": "Have a person leave in a scenario of a Team Planning plan, optionally naming the position that backfills them: it carries the budget and the headcount, and the leaver never counts as filling it. In this scenario's step they stay on the map marked as leaving; in the steps after it they are gone and the position stands alone. team_planning_withdraw_departure has them stay. Refused unless the caller is one of the plan's editors.",
+  "description": "Have a person leave in a scenario of a Team Planning plan, optionally naming the position that backfills them: it carries the budget and the headcount, and the leaver never counts as filling it. In this scenario's step they stay on the map marked as leaving; in the steps after it they are gone and the position stands alone. A leaving date within the step splits its cost: the leaver costs up to that day and the backfill from the day after; without one, the backfill carries the whole step. team_planning_withdraw_departure has them stay. Refused unless the caller is one of the plan's editors.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -17,6 +17,11 @@
       "position_id": {
         "type": "string",
         "description": "The backfill: a position the scenario has. Leave it out when the seat isn't backfilled."
+      },
+      "leaves_on": {
+        "type": "string",
+        "format": "date",
+        "description": "Their last day, within the scenario's period. Leave it out to have them gone for the whole step."
       }
     },
     "required": [

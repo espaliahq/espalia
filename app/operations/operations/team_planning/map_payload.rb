@@ -21,7 +21,7 @@ module Operations::TeamPlanning::MapPayload
       unassigned_ids: map.unassigned_ids,
       positions: positions_payload(map),
       unresolved: map.unresolved.map(&:to_h),
-      departed: map.departed.map { it.to_h.except(:leaves_in_id) },
+      departed: map.departed.map { it.departure.except(:leaves_in_id).merge(person_id: it.person_id) },
       names: names_for(map) }
   end
 
