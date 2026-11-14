@@ -14,6 +14,11 @@ require "zlib"
 #   * [docs/guidelines/event-sourcing.md](docs/guidelines/event-sourcing.md)
 #
 class ProjectionVersion < ApplicationRecord
+  # A write refused by {.unless_rebuilding}. Operations show its message.
+  class Rebuilding < StandardError
+    def initialize(message = "The Org Graph is being rebuilt; try again in a minute.") = super
+  end
+
   self.primary_key = :name
 
   validates :name,    presence: true
@@ -51,6 +56,40 @@ class ProjectionVersion < ApplicationRecord
     yield
   ensure
     connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_unlock(?)", key ]))
+  end
+
+  # {.with_operation_lock} on several projections at once, taken in name
+  # order, so two callers that each take several cannot deadlock.
+  #
+  # @param names [Array<String>]
+  # @yield while every lock is held
+  # @return [Object] the block's value
+  def self.with_operation_locks(names, &block)
+    names.sort.reverse.reduce(block) { |inner, name| -> { with_operation_lock(name, &inner) } }.call
+  end
+
+  # Runs a write that plans from these projections' tables, unless one of
+  # them is being rebuilt. A rebuild holds {.with_operation_lock} from its
+  # first reset to its final stamp, so its tables are empty or half replayed
+  # throughout; a write that read them then would decide from a wrong list.
+  # Shares the same key, so the write refuses at once, and a rebuild that
+  # starts meanwhile waits for it to finish.
+  #
+  # @param names [Array<String>] `PROJECTION_NAME`s
+  # @yield while no rebuild can start
+  # @return [Object] the block's value
+  # @raise [Rebuilding] when a rebuild holds any of them
+  def self.unless_rebuilding(*names)
+    held = []
+    names.each do |name|
+      key = lock_key(name)
+      raise Rebuilding unless connection.select_value(sanitize_sql_array([ "SELECT pg_try_advisory_lock_shared(?)", key ]))
+
+      held << key
+    end
+    yield
+  ensure
+    held&.each { connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_unlock_shared(?)", it ])) }
   end
 
   # @param name [String]

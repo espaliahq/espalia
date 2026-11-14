@@ -647,6 +647,8 @@ class Operations::Base
     policy_check
     forbid_impersonated_write!
     AuditMetadata.wrap_event_store { perform }
+  rescue ProjectionVersion::Rebuilding => e
+    raise ParameterError, e.message
   end
 
   # Subclasses must implement.
