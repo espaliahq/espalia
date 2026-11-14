@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-# Lets a member change the whole Org Graph: its taxonomy, providers, units
-# and people's facts (#126).
+# Lets a member change the Org Graph's providers, units and people's facts
+# (#126). The taxonomy's levels stay an admin's call.
 #
 # Approval is :in_app, as it changes someone's permissions.
 class Operations::OrgGraph::AddEditor < Operations::Base
   include Operations::OrgGraph::EditorSupport
 
   description "Make an active person with an account in this organisation an Org Graph editor, so they may " \
-              "change its taxonomy, providers, units and people's facts. Admins already may. Returns the " \
-              "list as org_graph_editors reads it."
+              "change its providers, units and people's facts. Admins already may, and only admins may add " \
+              "or reorder its levels. Returns the list as org_graph_editors reads it."
   category :write
   approval :in_app
 

@@ -118,6 +118,24 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     end
   end
 
+  context "the taxonomy" do
+    setup { @levels = [ { level_id: @team, name: "Team" }, { level_id: @department, name: "Department" } ] }
+
+    should "be left to a tenant admin, even over an Org Graph editor" do
+      error = assert_raises(OrgGraph::Authorization::Refused) do
+        structure(context_for(@other, org_graph_editor: true)).define_taxonomy(@levels.reverse + [ { level_id: SecureRandom.uuid_v7, name: "Squad" } ],
+                                                                               effective_on: "2026-02-01")
+      end
+
+      assert_equal "Only a tenant admin can change the taxonomy's levels", error.message
+      assert_equal %w[Department Team], OrgTaxonomyLevel.top_first.pluck(:name)
+
+      structure(context_for(@lead, role: :admin)).define_taxonomy(@levels.reverse + [ { level_id: SecureRandom.uuid_v7, name: "Squad" } ],
+                                                                  effective_on: "2026-02-01")
+      assert_equal %w[Department Team Squad], OrgTaxonomyLevel.top_first.pluck(:name)
+    end
+  end
+
   context "as an owner of a unit above" do
     setup do
       OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01")

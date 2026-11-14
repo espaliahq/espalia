@@ -32,8 +32,20 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#define_taxonomy
   def define_taxonomy(levels, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
-    authorize_structure!
+    authorize_taxonomy!
     with_structure(plan) { |structure| structure.define_taxonomy(levels, **attributed(options, :defined_by_id)) }
+  end
+
+  # @see OrgGraph::StructureAggregate#add_level
+  def add_level(level_id, name, **options)
+    authorize_taxonomy!
+    with_structure(OrgGraph::PlanReference.new) { |structure| structure.add_level(level_id, name, **attributed(options, :defined_by_id)) }
+  end
+
+  # @see OrgGraph::StructureAggregate#reorder_levels
+  def reorder_levels(level_ids, **options)
+    authorize_taxonomy!
+    with_structure(OrgGraph::PlanReference.new) { |structure| structure.reorder_levels(level_ids, **attributed(options, :defined_by_id)) }
   end
 
   # @see OrgGraph::StructureAggregate#set_level_provider

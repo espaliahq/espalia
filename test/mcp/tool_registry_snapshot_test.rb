@@ -2625,7 +2625,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "org_graph_add_editor",
-        "description" => "Make an active person with an account in this organisation an Org Graph editor, so they may change its taxonomy, providers, units and people's facts. Admins already may. Returns the list as org_graph_editors reads it.",
+        "description" => "Make an active person with an account in this organisation an Org Graph editor, so they may change its providers, units and people's facts. Admins already may, and only admins may add or reorder its levels. Returns the list as org_graph_editors reads it.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -2636,6 +2636,34 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_add_level",
+        "description" => "Add a level to the bottom of the Org Graph's taxonomy, from effective_on (today by default). " \
+                         "Espalia holds the new level; use org_graph_reorder_levels to move it up. Level names are " \
+                         "unique, ignoring case. Refused unless the caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "name" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "name" ],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -3020,6 +3048,38 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "unit_id", "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_reorder_levels",
+        "description" => "Change the order of the Org Graph's taxonomy levels, from effective_on (today by default). " \
+                         "level_ids lists every level once, top first. A level an HRIS provides keeps its place, as its " \
+                         "order comes from the HRIS, and sits above every level Espalia holds. Two levels that both hold " \
+                         "units keep their order, so no unit ends up above its parent's level. Refused unless the " \
+                         "caller is a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "level_ids" => {
+              "type" => "array",
+              "items" => {
+                "type" => "string"
+              },
+              "description" => "every level_id in the taxonomy, top first"
+            }
+          },
+          "required" => [ "level_ids" ],
           "additionalProperties" => false
         },
         "annotations" => {
