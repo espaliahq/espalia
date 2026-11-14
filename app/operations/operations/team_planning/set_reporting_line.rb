@@ -56,10 +56,22 @@ class Operations::TeamPlanning::SetReportingLine < Operations::Base
     raise Operations::Base::ParameterError, "That line makes a loop: the manager already reports up to this person"
   end
 
+  # Walks up from the manager, through a manager position to the people
+  # holding it, looking for the person.
   def loop?(plan, person_id, manager_id)
     record = ::TeamPlanningPlan.find(plan_id!)
     map = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id: scenario_id!(:scenario_id)).structure(plan)
-    map.managers_above(manager_id).any? { it.person_id == person_id }
+    lines = map.people.to_h { [ it.id, it.line ] }
+    holders = map.occupants.transform_values { it.map { |holder, _| holder.id } }
+    above = [ manager_id ]
+    seen = Set.new
+    while (id = above.shift)
+      return true if id == person_id
+      next unless seen.add?(id) && (line = lines[id])
+
+      above.concat(line.person_id ? [ line.person_id ] : holders.fetch(line.position_id, []))
+    end
+    false
   end
 
   def person?(id) = ::Person.exists?(tenant_id: ActsAsTenant.current_tenant&.id, id:)
