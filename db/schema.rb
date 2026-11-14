@@ -1155,6 +1155,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_214711) do
     t.string "role", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "see_pay", default: false, null: false
+    t.uuid "see_pay_granted_by_id"
+    t.datetime "see_pay_granted_at"
+    t.boolean "see_pay_by_recovery", default: false, null: false
     t.index ["plan_id", "person_id"], name: "index_team_planning_plan_members_on_plan_id_and_person_id", unique: true
     t.index ["tenant_id", "person_id"], name: "index_team_planning_plan_members_on_tenant_id_and_person_id"
   end

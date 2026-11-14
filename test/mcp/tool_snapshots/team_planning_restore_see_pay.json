@@ -1,0 +1,22 @@
+{
+  "name": "team_planning_restore_see_pay",
+  "description": "Restore a Team Planning plan locked out of pay, one where nobody who holds the see-pay right can still open it, without opening it. Every editor who can still open the plan gets the right, each grant recorded as yours. Refused, as an unknown plan, unless the plan is locked out, still has such an editor, and the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

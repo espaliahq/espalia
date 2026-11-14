@@ -89,6 +89,39 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
                  no_unit.values_at(:scenario, :baseline, :difference).map { it.values_at(:converted, :missing) }
   end
 
+  context "the see-pay right" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @viewer = create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant))
+      end
+      call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @viewer.person.id, role: "viewer")
+    end
+
+    should "show a holder each band's range and everyone else its midpoint, with the same totals" do
+      holder = cost(unit_id: @payments)
+      viewer = cost(as: @viewer, unit_id: @payments)
+
+      assert_equal [ "band_ranges", "band_midpoints" ], [ holder[:pay_view], viewer[:pay_view] ]
+      assert_equal %w[0.00 100000.00 200000.00], band_of(holder).values_at(:minimum, :midpoint, :maximum)
+      assert_equal [ :midpoint ], band_of(viewer).keys & PayBand::FIGURES
+      assert_equal holder[:total], viewer[:total]
+      assert_not_includes viewer.to_json, "200000"
+    end
+
+    should "give an agent acting for a person exactly that person's view" do
+      assert_equal "band_midpoints", cost(as: @viewer)[:pay_view]
+      call(Operations::TeamPlanning::GrantSeePay, plan_id: @plan_id, person_id: @viewer.person.id)
+      assert_equal "band_ranges", cost(as: @viewer)[:pay_view]
+    end
+
+    should "name no figure when it refuses a caller outside the plan" do
+      error = assert_raises(Operations::Base::ParameterError) { cost(as: @outsider, unit_id: @payments) }
+      assert_equal "No such plan", error.message
+    end
+  end
+
+  def band_of(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }[:band]
+
   should "refuse a unit on neither map, the baseline as the scenario, and a caller outside the plan" do
     assert_equal "No such unit", assert_raises(Operations::Base::ParameterError) { cost(unit_id: SecureRandom.uuid_v7) }.message
     assert_match(/baseline has no period/, assert_raises(Operations::Base::ParameterError) { cost(scenario_id: @plan_id) }.message)

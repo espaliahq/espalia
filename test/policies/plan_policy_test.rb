@@ -65,7 +65,7 @@ class PlanPolicyTest < ActiveSupport::TestCase
         context_for(outsider, team_planner: true), context_for(outsider, global_admin: true),
         context_for(outsider) ].each do |context|
         policy = PlanPolicy.new(context, @plan)
-        %i[show? update? destroy? manage_members? leave? destroy_frozen?].each do |predicate|
+        %i[show? update? destroy? manage_members? leave? destroy_frozen? see_pay? manage_see_pay? restore_see_pay?].each do |predicate|
           assert_not policy.public_send(predicate), predicate
         end
       end
@@ -120,6 +120,72 @@ class PlanPolicyTest < ActiveSupport::TestCase
     should "be out of a tenant admin's reach while an editor remains" do
       @editor.update!(status: "active")
       assert_not PlanPolicy.new(context_for(create(:person, tenant: @tenant), role: :admin), @plan).destroy_frozen?
+    end
+  end
+
+  context "the see-pay right" do
+    should "let its holder see pay and pass it on, and a member without it neither" do
+      holder = PlanPolicy.new(context_for(@editor), @plan)
+      assert holder.see_pay?
+      assert holder.manage_see_pay?
+
+      viewer = PlanPolicy.new(context_for(@viewer), @plan)
+      assert_not viewer.see_pay?
+      assert_not viewer.manage_see_pay?
+    end
+
+    should "follow a grant, for a viewer as for an editor" do
+      @plan.grant_see_pay(@viewer.id, granted_by_id: @editor.id)
+      assert PlanPolicy.new(context_for(@viewer), @plan).see_pay?
+    end
+
+    should "answer the same from the plan's row as from its stream" do
+      row = TeamPlanningPlan.new(id: @plan.plan_id, tenant: @tenant)
+      row.members.build(person_id: @editor.id, role: "editor", see_pay: true, tenant: @tenant)
+      row.members.build(person_id: @viewer.id, role: "viewer", tenant: @tenant)
+
+      assert PlanPolicy.new(context_for(@editor), row).see_pay?
+      assert_not PlanPolicy.new(context_for(@viewer), row).see_pay?
+      assert_equal [ @editor.id ], row.pay_holder_ids
+    end
+
+    should "leave a holder who has left with nothing" do
+      @editor.update!(status: "inactive")
+      assert_not PlanPolicy.new(context_for(@editor), @plan).see_pay?
+    end
+  end
+
+  context "a plan locked out of pay" do
+    setup do
+      @plan.add_member(@viewer.id, role: "editor", added_by_id: @editor.id)
+      @admin = context_for(create(:person, tenant: @tenant), role: :admin)
+    end
+
+    should "be locked out once no holder is still active and remembered" do
+      assert_not PlanPolicy.locked_out?(@plan)
+      @editor.update!(status: "inactive")
+      assert PlanPolicy.locked_out?(@plan)
+    end
+
+    should "let a tenant admin restore it while an editor remains, and still not open it" do
+      @editor.update!(status: "inactive")
+      policy = PlanPolicy.new(@admin, @plan)
+      assert policy.restore_see_pay?
+      assert_not policy.show?
+      assert_not policy.see_pay?
+    end
+
+    should "be out of a tenant admin's reach while a holder remains, or once frozen" do
+      assert_not PlanPolicy.new(@admin, @plan).restore_see_pay?
+      [ @editor, @viewer ].each { it.update!(status: "inactive") }
+      assert_not PlanPolicy.new(@admin, @plan).restore_see_pay?
+    end
+
+    should "be out of reach of anyone but a tenant admin" do
+      @editor.update!(status: "inactive")
+      [ context_for(@viewer), context_for(create(:person, tenant: @tenant), team_planner: true) ].each do |context|
+        assert_not PlanPolicy.new(context, @plan).restore_see_pay?
+      end
     end
   end
 
