@@ -31,6 +31,19 @@ class TeamPlanning::Repository
     plan
   end
 
+  # Holds the plan's lock while the block runs, so a write that first reads the
+  # plan's state sees no other write land between its read and its store.
+  # {#with_plan} inside the block takes the same lock again, which Postgres allows.
+  #
+  # @param plan_id [String]
+  # @return [Object] what the block returns
+  def holding_plan(plan_id)
+    ActiveRecord::Base.transaction do
+      lock_stream(EventStreamNaming.plan_stream(plan_id))
+      yield
+    end
+  end
+
   # Loads a plan to read, taking no lock and storing nothing.
   #
   # @param plan_id [String]

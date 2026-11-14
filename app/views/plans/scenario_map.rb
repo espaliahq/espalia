@@ -7,8 +7,9 @@
 # Other lanes add to it rather than reshape it. `unit_marks` and
 # `person_marks` each take a callable that returns components for a unit's
 # heading or a person's row: capacity (#255), items needing attention (#257),
-# a leaving mark and reporting lines (#256). Editing (3.12) hangs drop targets
-# and drag handles on the `data-map-unit` and `data-map-person` hooks.
+# a leaving mark and reporting lines (#256). An editor on a scenario other
+# than Today can move people ([#285](https://github.com/espaliahq/espalia/issues/285)): units take drops, and each person row is
+# draggable with a "Move…" button that opens {Views::Plans::MoveDialog}.
 class Views::Plans::ScenarioMap < Views::Base
   NONE = ->(_) { [] }
 
@@ -16,10 +17,11 @@ class Views::Plans::ScenarioMap < Views::Base
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param unit_marks [#call] unit hash => components beside the unit's name
   # @param person_marks [#call] person hash => components beside the person's name
-  # @param can_edit [Boolean] whether to offer renaming the scenario shown
+  # @param can_edit [Boolean] whether the caller edits the plan: renaming the scenario shown, and moving people on it
   def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, can_edit: false)
     @can_edit = can_edit
     @map = map
+    @moving = can_edit && !baseline?(map[:scenario_id])
     @scenarios = scenarios
     @unit_marks = unit_marks
     @person_marks = person_marks
@@ -30,11 +32,12 @@ class Views::Plans::ScenarioMap < Views::Base
       scenario_picker
       p(class: "text-sm text-muted") { as_of_line }
       unresolved_notice if @map[:unresolved].any?
-      div(class: "grid gap-4 md:grid-cols-2 2xl:grid-cols-3") do
+      div(class: "grid gap-4 md:grid-cols-2 2xl:grid-cols-3", data: ({ controller: "map-move" } if @moving)) do
         ordered_units.each { |unit, path| unit_card(unit, path) }
-        unassigned_card if unassigned.any? || unplaced_positions.any?
+        unassigned_card if @moving || unassigned.any? || unplaced_positions.any?
       end
       empty_state if ordered_units.empty? && unassigned.empty? && unplaced_positions.empty?
+      move_dialog if @moving
     end
   end
 
@@ -96,8 +99,30 @@ class Views::Plans::ScenarioMap < Views::Base
 
   def as_of_line
     "The Org Graph on #{date(@map[:base_on])}, as known on #{date(@map[:known_on])}" \
-      "#{', with this scenario\'s changes' unless baseline?(@map[:scenario_id])}. Read only."
+      "#{', with this scenario\'s changes' unless baseline?(@map[:scenario_id])}. #{editing_hint}"
   end
+
+  def editing_hint
+    if @moving then "Drag a person to another unit, or use Move…, to move them in this scenario."
+    elsif @can_edit then "Read only. Pick or fork a scenario to move people."
+    else "Read only."
+    end
+  end
+
+  def move_dialog
+    current = @scenarios.find { it[:scenario_id] == @map[:scenario_id] }
+    render Views::Plans::MoveDialog.new(scenario_id: @map[:scenario_id], scenario_name: current ? scenario_label(current) : "this scenario",
+                                        units: ordered_units)
+  end
+
+  # Where a unit card takes a dragged person.
+  def drop_target(unit_id)
+    return { map_unit: unit_id } unless @moving
+
+    { map_unit: unit_id, action: "dragover->map-move#over dragleave->map-move#leave drop->map-move#drop" }
+  end
+
+  DROP_OVER = "data-[drop-over]:border-brand data-[drop-over]:bg-brand-subtle"
 
   def unresolved_notice
     render Components::Kit::Alert.new(tone: :warning, title: "Not on the map") do
@@ -109,8 +134,8 @@ class Views::Plans::ScenarioMap < Views::Base
 
   def unit_card(unit, path)
     people = members_of(unit[:id])
-    section(aria: { labelledby: "map-unit-#{unit[:id]}" }, data: { map_unit: unit[:id] },
-            class: "rounded-lg border border-default bg-default") do
+    section(aria: { labelledby: "map-unit-#{unit[:id]}" }, data: drop_target(unit[:id]),
+            class: "rounded-lg border border-default bg-default #{DROP_OVER}") do
       header(class: "border-b border-subtle px-4 py-3") do
         p(class: "text-xs text-muted break-words") { path.join(" › ") } if path.any?
         div(class: "flex flex-wrap items-center gap-2") do
@@ -124,11 +149,11 @@ class Views::Plans::ScenarioMap < Views::Base
   end
 
   def unassigned_card
-    section(aria: { labelledby: "map-unassigned" }, data: { map_unit: "unassigned" },
-            class: "rounded-lg border border-dashed border-default bg-default") do
+    section(aria: { labelledby: "map-unassigned" }, data: drop_target("unassigned"),
+            class: "rounded-lg border border-dashed border-default bg-default #{DROP_OVER}") do
       header(class: "border-b border-subtle px-4 py-3") do
         h3(id: "map-unassigned", class: "text-base font-semibold text-default") { "Unassigned" }
-        p(class: "mt-1 text-sm text-muted") { "#{unassigned_summary} in no unit" }
+        p(class: "mt-1 text-sm text-muted") { unassigned.any? || unplaced_positions.any? ? "#{unassigned_summary} in no unit" : "Drop someone here to take them out of a unit" }
       end
       if unassigned.any?
         ul(class: "px-2 py-2") do
@@ -173,16 +198,43 @@ class Views::Plans::ScenarioMap < Views::Base
   end
 
   def person_row(person, place)
-    li(data: { map_person: person[:id] }, class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1 text-sm") do
+    li(data: person_data(person, place), draggable: ("true" if @moving),
+       class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1 text-sm#{' cursor-grab' if @moving}") do
       span(class: "w-10 shrink-0 tabular-nums text-muted") { allocation(place) } if place
       span(class: "min-w-0 font-medium text-default break-words") { name(person[:id]) }
       @person_marks.call(person).each { render it }
       span(class: "ml-auto flex items-center gap-2 text-muted") do
         span(class: "hidden sm:inline") { person[:title] } if person[:title].present?
         render Components::Kit::Badge.new(person[:level], size: :sm) if person[:level].present?
+        move_button(person, place) if @moving
       end
     end
   end
+
+  def person_data(person, place)
+    return { map_person: person[:id] } unless @moving
+
+    { map_person: person[:id], map_move_from: from(place), action: "dragstart->map-move#start dragend->map-move#end" }
+  end
+
+  def move_button(person, place)
+    render Components::Kit::Button.new(
+      variant: :ghost, size: :sm, aria_label: "Move #{name(person[:id])}",
+      data: Views::Plans::MoveDialog.trigger(url: plan_assignment_path(@map[:plan_id], person[:id]), name: name(person[:id]),
+                                             from: from(place), place:, share: share(person, place))
+    ) { "Move…" }
+  end
+
+  # What the place counts for: its allocation, or for a place the HRIS gave
+  # none, the share MovePlace would write for it.
+  def share(person, place)
+    index = place && person[:memberships].index { it.equal?(place) }
+    return unless index
+
+    TeamPlanning::Baseline::Membership.shares(person[:memberships].map { TeamPlanning::Baseline::Membership.new(**it) })[index].second
+  end
+
+  def from(place) = place ? place[:unit_id] : Views::Plans::MoveDialog::UNASSIGNED
 
   def position_row(position)
     div(data: { map_position: position[:position_id] }, class: "px-4 py-2") do
