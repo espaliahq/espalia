@@ -24,7 +24,8 @@ class Operations::TeamPlanning::Status < Operations::Base
               "such as a rule or a position, has no status: it would read pending forever. A unit retirement is " \
               "done once the Org Graph has retired the unit. A unit succession is held against every succession " \
               "the Org Graph recorded since the base that shares a planned predecessor, joined: done when they " \
-              "join to the planned sides, conflicting when they don't. Subjects are named by id, and `names` maps each the Org Graph " \
+              "join to the planned sides, conflicting when they don't. A departure is done once the Org Graph has " \
+              "the person leave, and pending while they stay. Subjects are named by id, and `names` maps each the Org Graph " \
               "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \
               "plan holds has none. Refused, as an unknown plan, unless " \
               "the caller is a member."

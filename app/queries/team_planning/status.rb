@@ -23,7 +23,7 @@
 # Only a kind the Org Graph can show has a status
 # ({TeamPlanning::Events::Change.tracked?}). A plan-only kind, such as a rule,
 # would read pending forever, so it is left out. Today's map holds the units
-# the Org Graph retired and its successions, read through
+# the Org Graph retired, its successions and the people who left, read through
 # {TeamPlanning::Events::Change.read_org_graph}, since a succession there has
 # an id the plan never saw.
 #
@@ -95,7 +95,7 @@ class TeamPlanning::Status
     return [ now, now ] if @today < @plan.base_on
 
     base = @baseline.map_on(@plan.base_on, known_on: @plan.base_on - 1, history: true)
-    [ now.with(successions: now.successions - base.successions), base.with(retired_units: [], successions: []) ]
+    [ now.with(successions: now.successions - base.successions), base.with(retired_units: [], successions: [], left_ids: []) ]
   end
 
   def entry(change, key, base:, now:)

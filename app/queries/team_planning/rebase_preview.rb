@@ -36,9 +36,9 @@ class TeamPlanning::RebasePreview
   # @raise [TeamPlanning::Error] when the plan already stands on today, or on a day still to come
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
-    raise TeamPlanning::Error, "#{@plan.name} already stands on today, #{@today.iso8601}" if @plan.base_on == @today
+    raise TeamPlanning::Error, "This plan already stands on today, #{@today.iso8601}" if @plan.base_on == @today
     if @plan.base_on > @today
-      raise TeamPlanning::Error, "#{@plan.name} stands on #{@plan.base_on.iso8601}, still to come: it already reads the Org Graph as known now"
+      raise TeamPlanning::Error, "This plan stands on #{@plan.base_on.iso8601}, still to come: it already reads the Org Graph as known now"
     end
 
     reports = scenario_ids.map { [ it, status_of(it) ] }

@@ -49,11 +49,11 @@ class TeamPlanning::PlanAggregateRebaseTest < ActiveSupport::TestCase
   end
 
   should "refuse a base that doesn't move forward, a stale read, and one past the first step's end" do
-    assert_equal "Next year already stands on 2027-01-01", refusal { rebase("2027-01-01") }
-    assert_equal "Next year stands on 2027-01-01, after 2026-12-31: a base only moves forward", refusal { rebase("2026-12-31") }
-    assert_equal "Next year has moved since you looked: it now stands on 2027-01-01",
+    assert_equal "This plan already stands on 2027-01-01", refusal { rebase("2027-01-01") }
+    assert_equal "This plan stands on 2027-01-01, after 2026-12-31: a base only moves forward", refusal { rebase("2026-12-31") }
+    assert_equal "This plan has moved since you looked: it now stands on 2027-01-01",
                  refusal { rebase("2027-02-01", expected: "2026-12-01") }
-    assert_equal "Q1 ends on 2027-03-31, before 2027-04-01: end it later or remove it first", refusal { rebase("2027-04-01") }
+    assert_equal "The first step ends on 2027-03-31, before 2027-04-01: end it later or remove it first", refusal { rebase("2027-04-01") }
     assert_equal "This plan has no such scenario", refusal { rebase("2027-02-01", conflicts: [ conflict(SecureRandom.uuid_v7, change_id: "e") ]) }
     assert_equal "A conflict needs a scenario_id, subject_id, facet and change_id",
                  refusal { rebase("2027-02-01", conflicts: [ conflict(@q1, change_id: "e").except(:change_id) ]) }

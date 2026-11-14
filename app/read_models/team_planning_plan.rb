@@ -1,13 +1,18 @@
 # frozen_string_literal: true
 
 # A plan that has not been deleted, with its name, base date and creator.
+# The name is sealed under the plan's key: show it with
+# {Components::Shared::ShreddableText}, and never order or match by it.
 #
 # Projected from the plan streams by {TeamPlanning::Projections::Plans}, and
 # nothing else writes it. Its id is the plan's, so a rebuild keeps it. Its
 # members come from {TeamPlanningPlanMember}, which another projection writes.
 #
 class TeamPlanningPlan < ApplicationRecord
+  include Shreddable::Column
+
   acts_as_tenant :tenant
+  shreddable_column :name, by: :plan, plan: :id
 
   belongs_to :tenant
   has_many :members, class_name: "TeamPlanningPlanMember", foreign_key: :plan_id, inverse_of: :plan,

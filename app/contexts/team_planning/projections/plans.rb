@@ -11,7 +11,7 @@ class TeamPlanning::Projections::Plans
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   # @return [Array<Class>]
   def self.handled_events
@@ -36,7 +36,7 @@ class TeamPlanning::Projections::Plans
           .update!(name: data[:name], base_on: data[:base_on], created_by_id: data[:created_by_id],
                    created_at: event.timestamp, updated_at: event.timestamp)
       when TeamPlanning::Events::PlanRenamed
-        TeamPlanningPlan.where(id: data[:plan_id]).update_all(name: data[:name], updated_at: event.timestamp)
+        TeamPlanningPlan.find_by(id: data[:plan_id])&.update!(name: data[:name], updated_at: event.timestamp)
       when TeamPlanning::Events::PlanRebased
         TeamPlanningPlan.where(id: data[:plan_id]).update_all(base_on: data[:base_on], updated_at: event.timestamp)
       when TeamPlanning::Events::PlanDeleted

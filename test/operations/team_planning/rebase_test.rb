@@ -115,15 +115,15 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
   should "refuse a base already today or still to come, and an update since the preview was read" do
     travel_to Time.utc(2026, 3, 25, 9)
     rebase
-    assert_equal "Next year already stands on today, 2026-03-25", refusal { preview }
-    assert_equal "Next year already stands on today, 2026-03-25", refusal { rebase("2026-03-25") }
+    assert_equal "This plan already stands on today, 2026-03-25", refusal { preview }
+    assert_equal "This plan already stands on today, 2026-03-25", refusal { rebase("2026-03-25") }
 
     travel_to Time.utc(2026, 3, 30, 9)
-    assert_equal "Next year has moved since you looked: it now stands on 2026-03-25", refusal { rebase }
+    assert_equal "This plan has moved since you looked: it now stands on 2026-03-25", refusal { rebase }
 
     later = SecureRandom.uuid_v7
     as_tenant { handler.create_plan(later, name: "Later", base_on: Date.new(2026, 6, 1)) }
-    assert_equal "Later stands on 2026-06-01, still to come: it already reads the Org Graph as known now",
+    assert_equal "This plan stands on 2026-06-01, still to come: it already reads the Org Graph as known now",
                  refusal { call(:RebasePreview, plan_id: later) }
   end
 
@@ -145,7 +145,7 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
 
   should "refuse an update that would leave the first step ending before today, naming it" do
     travel_to Time.utc(2026, 7, 2, 9)
-    assert_equal "Q1 ends on 2026-06-30, before 2026-07-02: end it later or remove it first", refusal { rebase }
+    assert_equal "The first step ends on 2026-06-30, before 2026-07-02: end it later or remove it first", refusal { rebase }
   end
 
   should "bring in someone who joined in the window, and keep someone who left unresolved" do
