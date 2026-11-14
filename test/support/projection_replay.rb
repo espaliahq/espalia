@@ -136,6 +136,9 @@ module ProjectionReplayHelpers
       when "OrgGraph::Projections::History"
         # A row's natural key is its subject, fact, key, period and learned window.
         { fact_periods: rows(OrgFactPeriod) }
+      when "TeamPlanning::Projections::Plans"
+        # The PK is the event's plan id — assert it survives reset! + replay.
+        { plans: rows(TeamPlanningPlan, stable_id: true) }
 
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"

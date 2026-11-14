@@ -130,6 +130,19 @@ class EventStreamNamingTest < ActiveSupport::TestCase
     end
   end
 
+  context ".plan_stream" do
+    should "return one tenant-namespaced stream per plan" do
+      plan_id = SecureRandom.uuid_v7
+      assert_equal "tenant-#{@tenant.id}/Plan-#{plan_id}", EventStreamNaming.plan_stream(plan_id, tenant: @tenant)
+    end
+
+    should "raise ArgumentError when no tenant context available" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ArgumentError) { EventStreamNaming.plan_stream(SecureRandom.uuid_v7) }
+      end
+    end
+  end
+
   context ".extract_tenant_id" do
     should "extract tenant ID from framework stream name" do
       tenant_id = SecureRandom.uuid_v7

@@ -25,7 +25,7 @@ answer each one, and so we can see the smallest record that unblocks planning.
 | R1 | A stable id per person. Identifiers (name, email) are held apart from events. |
 | R2 | Roster facts with history: active or left with dates, title, level, manager, cost centre, country, FTE and employment type. |
 | R3 | Units and membership: nested units in tenant-named levels, and a person's membership of a unit with an allocation. Units keep their identity through a rename or a move, and a split or merge can be stated. |
-| R4 | Reading R2 and R3 as of an instant, and listing what changed between two instants. |
+| R4 | Reading R2 and R3 as of a date, and listing what changed between two dates. |
 | R5 | Provenance on every fact: which provider supplied it, and when it was last confirmed. |
 | R6 | Applying a change to a fact Espalia holds, with an effective date and a reference to where the change came from. |
 | R7 | Forgetting a person, announced as an event that projections can act on. |
@@ -36,7 +36,7 @@ Espalia already holds.
 
 The budget is not asked of the Org Graph. See *The headcount budget*.
 
-R4 is the expensive one. A plan stands on the Org Graph as of an instant, and must be able
+R4 is the expensive one. A plan stands on the Org Graph as of a date, and must be able
 to say what moved since.
 
 ## The plan stream
@@ -74,7 +74,7 @@ Every change event has the same shape:
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
 | Undo | `ChangeUndone`, `ChangeRedone`, each naming the event it reverses |
-| The Org Graph | `PlanRebased` (the instant the plan now stands on) |
+| The Org Graph | `PlanRebased` (the date the plan now stands on) |
 | Reality | `StepClosed`, `PlanApproved`, `ChangeRaised`, `ChangeApplied` |
 
 Subjects the plan creates (a position, a unit, a placeholder hire, a budget line) get an id
@@ -87,7 +87,7 @@ resolved over a different base.
 Editing an ancestor appends one event to the stream. Nothing is written for its
 descendants. A descendant shows the change because its state is resolved at read time:
 
-1. The Org Graph, as of the plan's base instant.
+1. The Org Graph, as of the plan's base date.
 2. Tenant defaults, for configuration.
 3. The plan's own data and rules.
 4. Each scenario's changes, from the root of the chain down to the scenario on screen.
@@ -116,13 +116,15 @@ wins and both stay in the history.
 
 ## The base pointer
 
-A plan stands on the Org Graph as of an instant. `PlanCreated` sets it and `PlanRebased`
+A plan stands on the Org Graph as of a date. `PlanCreated` sets it and `PlanRebased`
 moves it. Planning asks the Org Graph two questions and no others:
 
-- What was true at this instant? (R4)
-- What changed between this instant and now? (R4) This is the drift report.
+- What was true on this date, as known at the end of the day before? (R4)
+- What has the Org Graph learned since that day? (R4) This is the drift report.
 
-The plan stores the instant, never a copy of the roster.
+Reading the base as known the day before closes it: edits made later on the base date
+arrive as drift rows, one per edit, rather than moving the plan under its users. The
+plan stores the date, never a copy of the roster.
 
 ## Status is derived, never stored
 
@@ -141,10 +143,12 @@ they can never disagree with the Org Graph.
 ## Plan-held data
 
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not
-in the HRIS yet) are `PlanDataSet` events. The value, every note and every scenario
-description are shreddable under a key per plan. Deleting the plan deletes the key. The
-events remain and still say that something was set; what it was is unreadable at once,
-and gone for good once the backups taken before the deletion have expired.
+in the HRIS yet) are `PlanDataSet` events. A value about a named person, such as their
+pay or a corrected level, is shreddable under that person's key in the plan. Every other
+value, every note and every scenario description are shreddable under the plan's key.
+Deleting the plan deletes every key it holds. The events remain and still say that
+something was set; what it was is unreadable at once, and gone for good once the backups
+taken before the deletion have expired.
 
 Two consequences of [the aggregate guard](shreddable-fields-design.md):
 
@@ -219,7 +223,7 @@ Every figure has one of three sources, and the stored form follows from which.
 
 | Source | Stored as | Changes when |
 |---|---|---|
-| Actual | Nothing in the plan. Read from the Org Graph as of the base instant. | The base moves (`PlanRebased`). |
+| Actual | Nothing in the plan. Read from the Org Graph as of the base date. | The base moves (`PlanRebased`). |
 | Planned | An event in the plan stream. | Someone edits the scenario. |
 | Forecast | Nothing. Calculated by a read model from the plan's assumptions. | An assumption changes, or the base moves. |
 
@@ -250,8 +254,8 @@ The assumptions in a first version:
 
 What stays planned: `PositionSet` carries a hiring status and a target start date,
 plan-held until a hiring system is the provider of open positions. `LevelSet` is a
-planned promotion for a named person. Its level is shreddable under the plan's key,
-because it is the plan's statement about a person. A pay figure typed into the plan is a
+planned promotion for a named person. Its level is shreddable under that person's key
+in the plan, because it is the plan's statement about them. A pay figure typed into the plan is a
 `PlanDataSet`, as before.
 
 Forecast promotions and pay increases draw on a pool: a budget line approved for
@@ -261,15 +265,16 @@ Two of these forecasts add a dependency this module did not have before.
 
 | # | Required of assessments |
 |---|---|
-| A1 | For a person as of an instant: where their ratings place them against their level, in a form that maps to a place in a pay band. |
-| A2 | For a person as of an instant: promotion readiness for the next level. |
+| A1 | For a person on a date, as known at the end of the day before: where their ratings place them against their level, in a form that maps to a place in a pay band. |
+| A2 | For a person on a date, as known at the end of the day before: promotion readiness for the next level. |
 | A3 | Whether a given viewer may open that person's assessment. |
+| A4 | The assessment changes recorded between two dates, for the drift report. |
 
 The forecast is served as totals under the cohort rule. A3 gates the per-person
 breakdown: the Operation returns it only for people whose assessments the viewer may
 open, so the web and an MCP client get the same answer.
 
-Assessments are read as of the plan's base instant, like every other fact. A new
+Assessments are read as of the plan's base date, like every other fact. A new
 assessment cycle shows up as drift and takes effect on rebase.
 
 ## Approval and carrying a plan out
@@ -339,7 +344,7 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 
 ## Closing a step
 
-`StepClosed` records the instant a step's period ended. From then on:
+`StepClosed` records the date a step's period ended. From then on:
 
 - The next step resolves over the Org Graph, not over what the closed step planned.
 - Changes still pending in the closed step are shown in the next step as carried over.
@@ -388,9 +393,10 @@ yet. Three properties of the events keep it possible, and must not be given up:
 
 ## Decided, with a known cost
 
-**Erasure inside a live plan.** A person the Org Graph has forgotten stays in a plan as
-an anonymous id, with whatever the plan held about them, until the plan is deleted. The
-plan is private and the Org Graph's identifiers are gone, so this is accepted.
+**Erasure inside a live plan.** When the Org Graph forgets a person, a handler on
+`PersonForgotten` destroys that person's key in every plan at once. Every value a plan
+held about them, such as their pay, a corrected level or a planned promotion, becomes
+unreadable. They stay in each plan's history as a former member with no identity.
 
 One thing can still name them: a note. A note is free text under the plan's key, so one
 that mentions the person stays readable to the plan's members until the plan is

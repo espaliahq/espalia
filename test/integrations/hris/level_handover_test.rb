@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 class Hris::LevelHandoverTest < ActiveSupport::TestCase
+  include RebuildLock
+
   FakeAdapter = Struct.new(:values, :fields) do
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
@@ -171,6 +174,24 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_not_includes OrgUnitActivity.feed(@search).first.summary, "changed the terms"
     end
 
+    should "refuse while the units or members are rebuilt, writing nothing" do
+      fingerprint = compare(matches: @matches, resolutions: retire_legacy).fingerprint
+      before = Rails.configuration.event_store.read.backward.limit(1).first.event_id
+
+      [ OrgGraph::Projections::Structure, OrgGraph::Projections::Members ].each do |projection|
+        level = handover
+        while_rebuilding(@tenant, projection) do
+          assert_raises(ProjectionVersion::Rebuilding) do
+            level.hand_over!(field_id: TEAM.id, matches: @matches, resolutions: retire_legacy, fingerprint:, actor: @actor)
+          end
+          replay(@tenant, projection)
+        end
+      end
+
+      assert_empty written_since(before)
+      assert_equal "espalia", OrgTaxonomyLevel.find(@level_id).provider
+    end
+
     should "refuse a comparison that has gone stale, writing nothing" do
       fingerprint = compare(matches: @matches, resolutions: retire_legacy).fingerprint
       @values["hb-0"] = item("8", "Search")
@@ -229,6 +250,17 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       handover.hand_back!(fingerprint: handover.compare_handback.fingerprint, actor: @actor)
 
       assert_not HrisUnitParentProposal.exists?(unit_id: @payments)
+    end
+
+    should "refuse while the members are rebuilt" do
+      fingerprint = handover.compare_handback.fingerprint
+      before = Rails.configuration.event_store.read.backward.limit(1).first.event_id
+
+      while_rebuilding(@tenant, OrgGraph::Projections::Members) do
+        assert_raises(ProjectionVersion::Rebuilding) { handover.hand_back!(fingerprint:, actor: @actor) }
+      end
+
+      assert_empty written_since(before)
     end
 
     should "refuse a stale comparison" do

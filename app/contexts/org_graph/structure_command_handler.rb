@@ -166,18 +166,21 @@ class OrgGraph::StructureCommandHandler
   #   {OrgGraph::StructureAggregate#record_succession}
   # @raise [ArgumentError] if a placement names a unit outside the successors,
   #   or a person who isn't a member of exactly one predecessor
+  # @raise [ProjectionVersion::Rebuilding] while the member list is rebuilt
   def apply_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:, placements: {}, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     options = attributed(options, :stated_by_id)
-    ActiveRecord::Base.transaction do
-      @repository.lock_structure # before any person's, the order retire_unit takes them in
-      authorize_succession!([ predecessor_ids, successor_ids ])
-      applied = OrgUnitSuccession.exists?(succession_id: succession_id.to_s.downcase)
-      moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids), applied:)
-      place(moves, effective_on, plan, moved_by_id: options[:stated_by_id])
-      with_structure(plan) do |structure|
-        structure.record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:,
-                                                   **options, retire_predecessors: true)
+    ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Members::PROJECTION_NAME) do # placement_moves reads it
+      ActiveRecord::Base.transaction do
+        @repository.lock_structure # before any person's, the order retire_unit takes them in
+        authorize_succession!([ predecessor_ids, successor_ids ])
+        applied = OrgUnitSuccession.exists?(succession_id: succession_id.to_s.downcase)
+        moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids), applied:)
+        place(moves, effective_on, plan, moved_by_id: options[:stated_by_id])
+        with_structure(plan) do |structure|
+          structure.record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:,
+                                                     **options, retire_predecessors: true)
+        end
       end
     end
   end

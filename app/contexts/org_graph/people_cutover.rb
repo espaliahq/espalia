@@ -90,7 +90,8 @@ class OrgGraph::PeopleCutover
   # @return [String]
   def self.provider_for(person)
     source = person.hris_source if person.external_id.present?
-    held = RECORDED_FACTS.all? { OrgFactProvider.provider_for(it) == source }
+    providers = OrgGraph::Repository.new.fact_providers
+    held = RECORDED_FACTS.all? { providers.fetch(it, OrgGraph::StructureAggregate::ESPALIA) == source }
     held ? source : OrgGraph::StructureAggregate::ESPALIA
   end
 

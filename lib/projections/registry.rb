@@ -36,7 +36,8 @@ module Projections::Registry
     "org_graph/fact_ages"                    => "OrgGraph::Projections::FactAges",
     "org_graph/unit_activity"                => "OrgGraph::Projections::UnitActivity",
     "org_graph/leavers"                      => "OrgGraph::Projections::Leavers",
-    "org_graph/history"                      => "OrgGraph::Projections::History"
+    "org_graph/history"                      => "OrgGraph::Projections::History",
+    "team_planning/plans"                    => "TeamPlanning::Projections::Plans"
   }.freeze
 
   # @return [Array<String>] the registered projection names

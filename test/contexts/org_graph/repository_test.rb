@@ -28,6 +28,33 @@ class OrgGraph::RepositoryTest < ActiveSupport::TestCase
         assert_operator held, :>, before
       end
     end
+
+    should "share the structure stream's lock only when it reads who supplies facts" do
+      ActsAsTenant.with_tenant(create(:tenant)) do
+        shares = [ false, true ].map do |facts|
+          share = nil
+          OrgGraph::Repository.new.with_person(SecureRandom.uuid_v7, facts:) { share = advisory_lock_modes.include?("ShareLock") }
+          share
+        end
+
+        assert_equal [ false, true ], shares
+      end
+    end
+  end
+
+  context "#fact_providers" do
+    should "read the structure stream, whatever the projection holds" do
+      tenant = create(:tenant)
+      ActsAsTenant.with_tenant(tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.set_fact_provider("title", "hibob", effective_on: "2026-01-01")
+        structure.set_fact_provider("title", "espalia", effective_on: "2026-02-01")
+        structure.set_fact_provider("level", "hibob", effective_on: "2026-02-01")
+        OrgGraph::Projections::Structure.reset!(tenant:)
+
+        assert_equal({ "title" => "espalia", "level" => "hibob" }, OrgGraph::Repository.new.fact_providers)
+      end
+    end
   end
 
   context "#with_structure" do
@@ -53,6 +80,12 @@ class OrgGraph::RepositoryTest < ActiveSupport::TestCase
         assert_operator held, :>, before
       end
     end
+  end
+
+  def advisory_lock_modes
+    ActiveRecord::Base.connection.select_values(<<~SQL)
+      SELECT mode FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid() ORDER BY mode
+    SQL
   end
 
   def advisory_locks
