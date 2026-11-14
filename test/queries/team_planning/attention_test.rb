@@ -12,9 +12,16 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                **overrides)
   end
 
-  def unit(id, parent_id) = B::Unit.new(id:, name: "Unit", parent_id:, level_id: LEVEL, owner_ids: [])
+  # PERSON heads the tree, so a test on another check isn't also told they have no manager.
+  def unit(id, parent_id) = B::Unit.new(id:, name: "Unit", parent_id:, level_id: LEVEL, owner_ids: parent_id ? [] : [ PERSON ])
 
   def change(kind, subject_id, **end_state) = kind.new(data: { plan_id: ROOT, scenario_id: ROOT, subject_id:, set_by_id: PERSON, **end_state })
+
+  def member(id = PERSON, places: [ [ LIVE, 1 ] ], **line)
+    B::Member.new(id:, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: 1,
+                  employment_type: nil, memberships: places.map { |unit_id, allocation| B::Membership.new(unit_id:, allocation:, role: nil) },
+                  **line)
+  end
 
   def reasons(map, changes = {}) = TeamPlanning::Attention.new(map, changes).call.map(&:reason)
 
@@ -78,10 +85,55 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                            employment_type: nil,
                            memberships: [ B::Membership.new(unit_id: LIVE, allocation: 1.004, role: nil, position_id: position.id) ])
 
-    assert_equal [ "Overfilled by 0.004 FTE" ], reasons(map(positions: [ position ], people: [ person ]))
+    assert_equal [ "Overfilled by 0.004 FTE", "Over-allocated, at 100.4%" ], reasons(map(positions: [ position ], people: [ person ]))
   end
 
   should "read why someone off the map can't be placed" do
     assert_equal [ "Placed, but has left" ], reasons(map(unresolved: [ B::Unresolved.new(person_id: PERSON, why: B::Unresolved::LEFT) ]))
+  end
+  should "mark someone placed nowhere, over or under 100%, and never read an unknown total as under" do
+    assert_equal [ "Placed nowhere" ], reasons(map(people: [ member(places: []) ]))
+    assert_equal [ "Under-allocated, at 50%" ], reasons(map(people: [ member(places: [ [ LIVE, 0.5 ] ]) ]))
+    assert_equal [ "Over-allocated, at 150%" ], reasons(map(people: [ member(places: [ [ LIVE, 1 ], [ ROOT, 0.5 ] ]) ]))
+    assert_empty reasons(map(people: [ member(places: [ [ LIVE, 0.5 ], [ ROOT, nil ] ]) ]))
+  end
+
+  should "mark someone still placed after the Org Graph has them leave, unless the plan has them leave" do
+    leaver = member
+    assert_equal [ "Placed, but has since left" ], TeamPlanning::Attention.new(map(people: [ leaver ]), {}, left_ids: [ PERSON ]).call.map(&:reason)
+
+    leaving = leaver.with(departure: { leaves_in_id: ROOT, position_id: nil })
+    assert_empty TeamPlanning::Attention.new(map(people: [ leaving ]), {}, left_ids: [ PERSON ]).call
+  end
+
+  should "mark a contributor with no manager, but not the head of the tree" do
+    other = SecureRandom.uuid_v7
+    assert_equal [ [ other, "reporting_line", "Has no manager" ] ],
+                 TeamPlanning::Attention.new(map(people: [ member, member(other) ]), {}).call.map { it.to_h.values_at(:subject_id, :facet, :reason) }
+  end
+
+  should "count a manager who owns the unit above as sharing one, and mark one who shares none" do
+    team, far = Array.new(2) { SecureRandom.uuid_v7 }
+    units = [ unit(ROOT, nil), unit(LIVE, ROOT), unit(team, LIVE), unit(far, ROOT) ]
+    lead = member(SecureRandom.uuid_v7, places: [ [ LIVE, 1 ] ], manager_id: PERSON)
+    report = member(SecureRandom.uuid_v7, places: [ [ team, 1 ] ], manager_id: lead.id)
+    stray = member(SecureRandom.uuid_v7, places: [ [ far, 1 ] ], manager_id: lead.id)
+
+    assert_equal [ "Their manager shares no unit with them" ], reasons(map(units:, people: [ member, lead, report, stray ]))
+  end
+
+  should "mark a manager or a manager's position that is no longer in the scenario" do
+    position = B::Position.new(id: SecureRandom.uuid_v7, role_id: nil, level_id: LEVEL, unit_id: ROOT, fte: 1.0, basis: "new",
+                               role_name: nil, level_name: nil)
+    under_seat = member(SecureRandom.uuid_v7, manager_position_id: position.id)
+    elsewhere = member(SecureRandom.uuid_v7, places: [ [ ROOT, 1 ] ], manager_position_id: position.id)
+    assert_empty reasons(map(positions: [ position ], people: [ member, under_seat, elsewhere ]))
+
+    away = position.with(unit_id: LIVE)
+    assert_equal [ "Their manager's position shares no unit with them" ], reasons(map(positions: [ away ], people: [ member, elsewhere ]))
+
+    orphans = [ member(SecureRandom.uuid_v7, manager_id: SecureRandom.uuid_v7), member(SecureRandom.uuid_v7, manager_position_id: SecureRandom.uuid_v7) ]
+    assert_equal [ "Their manager is no longer in this scenario", "Their manager's position is no longer in this scenario" ].sort,
+                 reasons(map(people: [ member, *orphans ])).sort
   end
 end

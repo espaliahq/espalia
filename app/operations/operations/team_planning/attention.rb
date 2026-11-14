@@ -30,10 +30,12 @@ class Operations::TeamPlanning::Attention < Operations::Base
     { plan_id: plan.id, scenario_id:, items: items.map { item_row(it) }, names: names_of(plan, items) }
   end
 
+  PERSON_FACETS = [ ::TeamPlanning::Attention::ASSIGNMENT, ::TeamPlanning::Attention::LINE ].freeze
+
   private
 
   def names_of(plan, items)
-    ids = items.select { it.facet == ::TeamPlanning::Attention::ASSIGNMENT }.map(&:subject_id).uniq
+    ids = items.select { PERSON_FACETS.include?(it.facet) }.map(&:subject_id).uniq
     known = ::Person.where(tenant_id: plan.tenant_id, id: ids).pluck(:id, :name).to_h
     ids.to_h { [ it, known.fetch(it, Person::FORMER_MEMBER) ] }
   end

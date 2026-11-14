@@ -24,18 +24,21 @@ class TeamPlanning::Attention
   #   nil only when no change explains it
   Item = Data.define(:subject_id, :facet, :reason, :change)
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
   SUCCESSION = TeamPlanning::Events::UnitSuccessionSet.facet
+  LINE = TeamPlanning::Events::ReportingLineSet.facet
   CAPACITY = TeamPlanning::Events::CapacitySet.facet
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
-  def initialize(map, changes)
+  # @param left_ids [Array<String>] the people the Org Graph has had leave by today
+  def initialize(map, changes, left_ids: [])
     @map = map
     @changes = changes
+    @left = left_ids.to_set
     @order = changes.keys.each_with_index.to_h
     @live = map.units.to_set(&:id)
     @retired = map.retired_units.to_set(&:id)
@@ -104,6 +107,73 @@ class TeamPlanning::Attention
       end
     end
   end
+
+  # Someone placed only in a gone unit or a closed position has that item
+  # already, so placed nowhere is someone with no place at all. An unknown
+  # total is never under-allocated.
+  def allocations
+    totals = @map.allocation_totals
+    @map.people.filter_map do |person|
+      total = totals[person.id]
+      reason = if person.memberships.empty? then "Placed nowhere"
+      elsif total.nil? || total.zero? then nil
+      elsif total > 1 then "Over-allocated, at #{percent(total)}"
+      elsif total < 1 then "Under-allocated, at #{percent(total)}"
+      end
+      item(person.id, ASSIGNMENT, reason) if reason
+    end
+  end
+
+  def leavers
+    @map.people.filter_map do |person|
+      next unless @left.include?(person.id) && person.memberships.any? && !person.leaving?
+
+      item(person.id, ASSIGNMENT, "Placed, but has since left")
+    end
+  end
+
+  # The head of the tree owns a unit with no parent, so has no manager by
+  # right. A manager shares a unit when they are in or own one of the
+  # person's units, or the unit above it, so a lead reporting to the owner
+  # of the group around their team is not marked.
+  def managers
+    by_id = @map.people.index_by(&:id)
+    positions = @map.positions.index_by(&:id)
+    heads = @map.units.select { it.parent_id.nil? }.flat_map(&:owner_ids).to_set
+    @map.people.filter_map do |person|
+      reason = manager_reason(person, by_id, positions, heads)
+      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ] ]) if reason
+    end
+  end
+
+  def manager_reason(person, by_id, positions, heads)
+    return (heads.include?(person.id) ? nil : "Has no manager") unless (line = person.line)
+
+    nearby = near_units(person)
+    if line.person_id
+      manager = by_id[line.person_id]
+      return "Their manager is no longer in this scenario" unless manager
+      return if nearby.empty?
+
+      "Their manager shares no unit with them" unless nearby.intersect?(units_of(manager))
+    else
+      position = positions[line.position_id]
+      return "Their manager's position is no longer in this scenario" unless position
+      return if nearby.empty?
+
+      "Their manager's position shares no unit with them" unless nearby.include?(position.unit_id)
+    end
+  end
+
+  def near_units(person)
+    parent = @map.units.to_h { [ it.id, it.parent_id ] }
+    own = person.memberships.map(&:unit_id).select { @live.include?(it) }
+    (own + own.filter_map { parent[it] }).to_set
+  end
+
+  def units_of(person) = person.memberships.map(&:unit_id).compact.to_set | @map.units.select { it.owner_ids.include?(person.id) }.to_set(&:id)
+
+  def percent(total) = "#{fte(total * 100)}%"
 
   def item(subject_id, facet, reason, broken_by: [])
     keys = [ [ subject_id, facet ], *broken_by ].select { @order.key?(it) }

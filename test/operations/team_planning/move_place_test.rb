@@ -128,7 +128,7 @@ class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
 
       assert_equal [ { position_id: @position, unit_id: @growth, allocation: 1.0 } ], places(@cy)
       items = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @q1)[:items]
-      assert_equal [ [ @position, "Overfilled by 1 FTE" ] ], items.map { it.values_at(:subject_id, :reason) }
+      assert_equal [ [ @position, "Overfilled by 1 FTE" ] ], items.select { it[:facet] == "position" }.map { it.values_at(:subject_id, :reason) }
     end
 
     should "refuse a position the scenario lacks, and both destinations or neither" do
