@@ -171,7 +171,7 @@ class Views::Plans::ChangesTab < Views::Base
         select(id: "changes-scenario", name: "scenario", class: "min-w-0 flex-1 #{Components::Kit::Field::SELECT}",
                data: { action: "change->auto-submit#submit" }) do
           Views::Plans::ScenarioTable.tree(@scenarios).each do |scenario, depth|
-            option(value: scenario[:scenario_id], selected: scenario[:scenario_id] == scenario_id) { "#{'· ' * depth}#{scenario_name(scenario[:scenario_id])}" }
+            option(value: scenario_param(scenario[:scenario_id]).to_s, selected: scenario[:scenario_id] == scenario_id) { "#{'· ' * depth}#{scenario_name(scenario[:scenario_id])}" }
           end
         end
         noscript { render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit) { "Show" } }

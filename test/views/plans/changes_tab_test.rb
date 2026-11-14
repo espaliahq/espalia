@@ -93,6 +93,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_equal "Planned in Q1 hires", html.at_css("#changes-planned-heading").text
       assert_equal "Q1 hires", html.at_css("nav[aria-label='Scenario'] a[aria-current='page']").text
       assert_equal Q1, html.at_css("#changes-scenario option[selected]")["value"]
+      assert_equal "", html.css("#changes-scenario option").find { it.text == "Today" }["value"], "Today is the bare URL, as its pill is"
       assert_includes html.text, "This scenario plans nothing the Org Graph holds yet."
     end
   end
