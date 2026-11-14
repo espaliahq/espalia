@@ -406,6 +406,35 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_raises(RuntimeError, match: "espalia supplies title;") { @handler.change_title(hand_added.id, "Engineer", **PROVENANCE) }
     end
 
+    context "while a Structure rebuild has emptied the fact providers" do
+      setup do
+        @structure.set_fact_provider("employment_status", "espalia", effective_on: "2026-11-01")
+        OrgGraph::Projections::Structure.reset!(tenant: @tenant)
+      end
+
+      should "still refuse a fact from a provider that doesn't hold it, writing nothing" do
+        written = stream_events.size
+
+        assert_raises(RuntimeError, match: "hibob supplies title; change it there") do
+          @handler.change_title(@person_id, "Designer", **HELD_BY_ESPALIA)
+        end
+        assert_raises(RuntimeError, match: "hibob supplies site") do
+          @handler.apply_facts(@person_id, **HELD_BY_ESPALIA, site: "Sydney", country: "Australia")
+        end
+        assert_raises(RuntimeError, match: "espalia supplies employment_status") do
+          @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left")
+        end
+        assert_equal written, stream_events.size
+      end
+
+      should "still take each fact from whoever holds it" do
+        @handler.change_title(@person_id, "Designer", **PROVENANCE)
+        @handler.leave(@person_id, **HELD_BY_ESPALIA)
+
+        assert_equal %w[TitleChanged PersonLeft], stream_events.last(2).map { it.event_type.demodulize }
+      end
+    end
+
     should "take a membership only from its unit's provider" do
       level = SecureRandom.uuid_v7
       team = SecureRandom.uuid_v7

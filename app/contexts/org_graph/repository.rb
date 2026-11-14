@@ -17,10 +17,13 @@ class OrgGraph::Repository
   # @param person_id [String] UUID of the person
   # @param plan [OrgGraph::PlanReference, nil] stamped on every event written
   # @param cause_id [String, nil] the correlation id every event written shares
+  # @param facts [Boolean] also share the structure stream's lock, taken
+  #   first, so {#fact_providers} can't change before the write is stored
   # @yield [OrgGraph::PersonAggregate] the loaded aggregate
   # @raise [ArgumentError] if no tenant context is available
-  def with_person(person_id, plan: nil, cause_id: nil, &block)
-    with_locked_stream(EventStreamNaming.person_stream(person_id), cause_id) do |stream|
+  def with_person(person_id, plan: nil, cause_id: nil, facts: false, &block)
+    sharing = EventStreamNaming.org_structure_stream if facts
+    with_locked_stream(EventStreamNaming.person_stream(person_id), cause_id, sharing:) do |stream|
       @repository.with_aggregate(OrgGraph::PersonAggregate.new, stream) do |person|
         person.within_plan(plan, &block)
       end
@@ -56,6 +59,17 @@ class OrgGraph::Repository
     end
   end
 
+  # Who supplies each kind of person fact, as the structure stream has it. A
+  # Structure rebuild empties org_fact_providers while writes go on, so a
+  # missing row says nothing; a fact the stream never set is Espalia's
+  # ([#172](https://github.com/espaliahq/espalia/issues/172)).
+  #
+  # @return [Hash{String => String}] provider by fact, for the facts ever set
+  def fact_providers
+    @event_store.read.stream(EventStreamNaming.org_structure_stream).of_type([ OrgGraph::Events::FactProviderSet ]).each
+                .each_with_object({}) { |event, providers| providers[event.data[:fact]] = event.data[:provider] }
+  end
+
   # Holds the write lock on a person's stream until the enclosing transaction
   # ends, as {#with_person} does, so a check made after it can't be overtaken.
   #
@@ -71,17 +85,21 @@ class OrgGraph::Repository
   # so a caller that checks a read model first needs this lock to hold. The
   # transaction also holds the sync handlers the write sets off, since RES
   # commits the events before its subscribers run.
-  def with_locked_stream(stream, cause_id)
+  # A shared lock lets writes to many people read one stream at once, and
+  # comes first, as the structure's always does.
+  def with_locked_stream(stream, cause_id, sharing: nil)
     with_tenant_metadata(cause_id) do
       ActiveRecord::Base.transaction do
+        lock_stream(sharing, shared: true) if sharing
         lock_stream(stream)
         yield stream
       end
     end
   end
 
-  def lock_stream(stream)
-    sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", stream ])
+  def lock_stream(stream, shared: false)
+    lock = shared ? "pg_advisory_xact_lock_shared" : "pg_advisory_xact_lock"
+    sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT #{lock}(hashtextextended(?, 0))", stream ])
     ActiveRecord::Base.connection.execute(sql)
   end
 

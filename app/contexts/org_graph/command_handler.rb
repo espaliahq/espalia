@@ -37,8 +37,7 @@ class OrgGraph::CommandHandler
   def record_person(person_id, **facts)
     plan, facts = OrgGraph::PlanReference.extract(facts)
     authorize_structure!
-    ensure_provides!(person_id, facts[:provider], *facts.keys)
-    with_person(person_id, plan) { |person| person.record(person_id, **facts) }
+    with_facts(person_id, plan, facts[:provider], *facts.keys) { |person| person.record(person_id, **facts) }
   end
 
   # Applies the facts a provider supplies for one person in one load of their
@@ -53,9 +52,8 @@ class OrgGraph::CommandHandler
   def apply_facts(person_id, provider:, effective_on:, **facts)
     plan, facts = OrgGraph::PlanReference.extract(facts)
     authorize_structure!
-    ensure_provides!(person_id, provider, *facts.keys)
     written = 0
-    with_person(person_id, plan) do |person|
+    with_facts(person_id, plan, provider, *facts.keys) do |person|
       person.apply_facts(provider:, effective_on:, **facts)
       written = person.unpublished_events.count
     end
@@ -84,10 +82,9 @@ class OrgGraph::CommandHandler
   def sync_person(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil, left_on_source: nil, **facts)
     plan, facts = OrgGraph::PlanReference.extract(facts)
     authorize_structure!
-    ensure_provides!(person_id, provider, :employment_status)
     written = 0
     left_on = nil if leaves_before_start?(left_on, started_on)
-    with_person(person_id, plan) do |person|
+    with_facts(person_id, plan, provider, :employment_status) do |person|
       person.check_facts!(facts)
       if person.recorded?
         was_left = person.left?
@@ -114,8 +111,7 @@ class OrgGraph::CommandHandler
   # @param effective_on [Date, String] their start date
   def join(person_id, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :employment_status)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.join(provider:, effective_on:) }
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :employment_status) { |person| person.join(provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -123,8 +119,7 @@ class OrgGraph::CommandHandler
   # @param effective_on [Date, String] their leaving date
   def leave(person_id, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :employment_status)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.leave(provider:, effective_on:) }
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :employment_status) { |person| person.leave(provider:, effective_on:) }
   end
 
   # What a provider's sync calls for a person it no longer returns; see
@@ -138,7 +133,7 @@ class OrgGraph::CommandHandler
   def record_absence(person_id, provider:, effective_on:)
     authorize_structure!
     written = 0
-    @repository.with_person(person_id) do |person|
+    @repository.with_person(person_id, facts: true) do |person|
       person.leave_when_absent(provider:, effective_on:)
       written = person.unpublished_events.count
       ensure_provides!(person_id, provider, :employment_status) if written.positive?
@@ -164,40 +159,35 @@ class OrgGraph::CommandHandler
   # @param effective_on [Date, String] their return date
   def return_to_work(person_id, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :employment_status)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.return_to_work(provider:, effective_on:) }
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :employment_status) { |person| person.return_to_work(provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param title [String, nil]
   def change_title(person_id, title, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :title)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_title(title, provider:, effective_on:) }
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :title) { |person| person.change_title(title, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param level [String, nil] the provider's level, before any framework mapping
   def change_level(person_id, level, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :level)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_level(level, provider:, effective_on:) }
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :level) { |person| person.change_level(level, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param manager_id [String, nil] person_id of the new manager, or nil for none
   def change_manager(person_id, manager_id, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :manager_id)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_manager(manager_id, provider:, effective_on:) }
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :manager_id) { |person| person.change_manager(manager_id, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param cost_centre [String, nil]
   def change_cost_centre(person_id, cost_centre, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :cost_centre)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_cost_centre(cost_centre, provider:, effective_on:) }
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :cost_centre) { |person| person.change_cost_centre(cost_centre, provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -205,8 +195,7 @@ class OrgGraph::CommandHandler
   # @param country [String, nil]
   def change_site(person_id, site:, country:, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :site)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.change_site(site:, country:, provider:, effective_on:) }
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :site) { |person| person.change_site(site:, country:, provider:, effective_on:) }
   end
 
   # @param person_id [String]
@@ -214,8 +203,7 @@ class OrgGraph::CommandHandler
   # @param employment_type [String, nil]
   def change_employment(person_id, fte:, employment_type:, provider:, effective_on:, **plan)
     authorize_structure!
-    ensure_provides!(person_id, provider, :fte)
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) do |person|
+    with_facts(person_id, OrgGraph::PlanReference.new(**plan), provider, :fte) do |person|
       person.change_employment(fte:, employment_type:, provider:, effective_on:)
     end
   end
@@ -306,11 +294,12 @@ class OrgGraph::CommandHandler
       unit = ensure_live_unit!(options[:unit_id])
     else
       authorize_structure!
-      ensure_provides!(person_id, OrgGraph::StructureAggregate::ESPALIA, fact.to_sym)
     end
-    with_person(person_id, plan) do |person|
+    with_person(person_id, plan, facts: !membership) do |person|
       if membership
         ensure_provides_unit!(unit, OrgGraph::StructureAggregate::ESPALIA, person_id, held: person.membership_provider(unit.id))
+      else
+        ensure_provides!(person_id, OrgGraph::StructureAggregate::ESPALIA, fact.to_sym)
       end
       person.confirm_fact(fact, **attributed(options, :confirmed_by_id))
     end
@@ -318,8 +307,15 @@ class OrgGraph::CommandHandler
 
   private
 
-  def with_person(person_id, plan, &block)
-    @repository.with_person(person_id, plan:, cause_id: @cause_id, &block)
+  def with_person(person_id, plan, facts: false, &block)
+    @repository.with_person(person_id, plan:, cause_id: @cause_id, facts:, &block)
+  end
+
+  def with_facts(person_id, plan, provider, *keys)
+    with_person(person_id, plan, facts: true) do |person|
+      ensure_provides!(person_id, provider, *keys)
+      yield person
+    end
   end
 
   def leaves_before_start?(left_on, started_on)
@@ -338,16 +334,18 @@ class OrgGraph::CommandHandler
     unit
   end
 
-  # Reads the fact providers the structure projection writes, as above. A
-  # provider holds a fact only for people who carry its external id: anyone
-  # else, added by hand or with an account, is Espalia's for every fact.
+  # Reads who supplies each fact from the structure stream, whose lock
+  # {#with_facts} holds. A provider holds a fact only for people who carry its
+  # external id: anyone else, added by hand or with an account, is Espalia's
+  # for every fact.
   def ensure_provides!(person_id, provider, *keys)
     kinds = keys.filter_map { |key| OrgGraph::PersonAggregate::FACT_KINDS[key] }.uniq
     return if kinds.empty?
 
     source = Person.where(id: person_id).where.not(external_id: nil).pick(:hris_source)
+    providers = @repository.fact_providers
     kinds.each do |kind|
-      holder = OrgFactProvider.provider_for(kind)
+      holder = providers.fetch(kind, OrgGraph::StructureAggregate::ESPALIA)
       holder = OrgGraph::StructureAggregate::ESPALIA unless holder == source
       raise "#{holder} supplies #{kind}; change it there" unless holder == provider.to_s
     end
