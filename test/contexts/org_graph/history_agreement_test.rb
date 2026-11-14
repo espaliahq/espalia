@@ -246,16 +246,28 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
       assert_equal [ 0.5, 0.8 ], %w[2026-02-15 2026-03-15].map { history("membership", it, key: @payments)["allocation"] }
     end
 
-    should "change back two changes of terms made together to the terms before both" do
+    should "change back two changes of terms made together, the later back to the earlier first" do
       later("2026-04-15") do
         request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
         request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8)
-        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01", allocation: 0.6)
+        request.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01", allocation: 0.5)
       end
 
       later("2026-04-16") { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back_group("request-1") }
 
       assert_equal [ 0.5, 0.5 ], %w[2026-03-15 2026-04-15].map { history("membership", it, key: @payments)["allocation"] }
+    end
+
+    should "change back a request that added her to a unit and then changed her terms there" do
+      later("2026-04-15") do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        request.set_membership(@ada.id, @platform, **ESPALIA, effective_on: "2026-04-15", allocation: 0.4)
+        request.set_membership(@ada.id, @platform, **ESPALIA, effective_on: "2026-04-15", allocation: 0.6)
+      end
+      change_back = OrgGraph::ChangeBackHandler.new(actor: SYSTEM)
+
+      assert_nil as_tenant { change_back.group_refusal("request-1") }
+      later("2026-04-16") { change_back.change_back_group("request-1") }
       assert_equal({ @payments => 0.5 }, live_allocations)
     end
   end
