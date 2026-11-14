@@ -44,6 +44,18 @@ class Operations::OrgGraph::SourcesTest < ActiveSupport::TestCase
       assert_equal [ 0, 0, 1 ], levels.pluck(:live_units)
     end
 
+    should "name the retired units each level held, so the panel knows which it can't remove" do
+      ActsAsTenant.with_tenant(@tenant) do
+        [ "Billing", "Atlas" ].each do |name|
+          unit_id = SecureRandom.uuid_v7
+          @structure.create_unit(unit_id, name, level_id: @empty, effective_on: "2026-01-01")
+          @structure.retire_unit(unit_id, effective_on: "2026-02-01")
+        end
+      end
+
+      assert_equal [ [], %w[Atlas Billing], [] ], call[:levels].pluck(:retired_unit_names)
+    end
+
     should "say which HRIS is connected, and count stale facts against the threshold" do
       result = call
 

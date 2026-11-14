@@ -7,7 +7,8 @@
 class Operations::OrgGraph::Sources < Operations::Base
   description "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact " \
               "with its provider and the fields an HRIS reads it from, each structure level (top first) " \
-              "with its provider, field and number of live units, and the staleness threshold with how " \
+              "with its provider, field, number of live units and the names of the retired units it held " \
+              "(a level that has ever held a unit can't be removed), and the staleness threshold with how " \
               "many facts Espalia holds are stale, by fact. Admins and Org Graph editors only."
   category :read
   approval :none
@@ -48,8 +49,11 @@ class Operations::OrgGraph::Sources < Operations::Base
 
   def levels_payload
     live = OrgUnit.live.group(:level_id).count
+    retired = OrgUnit.where.not(retired_on: nil).order(:name).pluck(:level_id, :name)
+                     .group_by(&:first).transform_values { |rows| rows.map(&:last) }
     OrgTaxonomyLevel.top_first.map do |level|
-      { id: level.id, name: level.name, provider: level.provider, field: level.provider_field, live_units: live.fetch(level.id, 0) }
+      { id: level.id, name: level.name, provider: level.provider, field: level.provider_field,
+        live_units: live.fetch(level.id, 0), retired_unit_names: retired.fetch(level.id, []) }
     end
   end
 end
