@@ -2736,15 +2736,11 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "org_graph_confirm_fact",
         "description" => "Confirm that a fact Espalia holds about a person is still true, so it is no longer stale. " \
                          "A membership names its unit in unit_id; any other fact is the person's own. " \
-                         "A fact an HRIS supplies is confirmed by each sync and can't be confirmed here.",
+                         "A fact an HRIS supplies is confirmed by each sync and can't be confirmed here. " \
+                         "A confirmation is dated the day it is made.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "effective_on" => {
-              "type" => "string",
-              "minLength" => 1,
-              "pattern" => "\\S"
-            },
             "person_id" => {
               "type" => "string"
             },

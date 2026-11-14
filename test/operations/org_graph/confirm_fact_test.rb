@@ -29,11 +29,11 @@ class Operations::OrgGraph::ConfirmFactTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) { OrgFactAge.find_by(person_id: @org[person].id, fact:, unit_id:) }
   end
 
-  should "confirm a membership from the day given, with the caller as the one who checked" do
+  should "confirm a membership today, with the caller as the one who checked" do
     travel 100.days
-    result = call(person_id: @org[:brook].id, fact: "membership", unit_id: @org[:platform], effective_on: "2026-11-20")
+    result = call(person_id: @org[:brook].id, fact: "membership", unit_id: @org[:platform])
 
-    assert_equal({ person_id: @org[:brook].id, fact: "membership", unit_id: @org[:platform], effective_on: "2026-11-20" },
+    assert_equal({ person_id: @org[:brook].id, fact: "membership", unit_id: @org[:platform], confirmed_on: Date.current.iso8601 },
                  result)
     confirmed = age(:brook, "membership", @org[:platform])
     assert_equal [ Time.current.to_i, @admin.person.id ], [ confirmed.checked_at.to_i, confirmed.checked_by_id ]
