@@ -87,7 +87,8 @@ class TeamPlanning::Timeline
   end
 
   def alternatives(aggregate, before, scenario_id)
-    ordered(aggregate.scenarios.keys).select { it != scenario_id && aggregate.timeline_path(it) == before + [ it ] }
+    @paths ||= aggregate.scenarios.keys.index_with { aggregate.timeline_path(it) }
+    ordered(@paths.keys).select { it != scenario_id && @paths[it] == before + [ it ] }
   end
 
   def next_ids(aggregate, scenario_id)
