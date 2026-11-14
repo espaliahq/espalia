@@ -45,6 +45,12 @@ class TenantPolicy < ApplicationPolicy
   # @return [Boolean] whether the viewer can list, add, change or remove pay bands
   def manage_pay_bands? = tenant_admin?
 
+  # The approved budget is tenant-wide and sensitive, so only an admin holds
+  # it. A plan member sees a line only through their plan's read.
+  #
+  # @return [Boolean] whether the viewer can list, add, change or remove the tenant's budget lines
+  def manage_budget_lines? = tenant_admin?
+
   # A tenant default starts every plan's rules, so only an admin sets it.
   #
   # @return [Boolean] whether the viewer can list or set the tenant's Team Planning rule defaults
