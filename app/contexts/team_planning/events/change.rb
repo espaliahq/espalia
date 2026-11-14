@@ -14,11 +14,18 @@
 #   @option data [String] :scenario_id
 #   @option data [String] :subject_id an Org Graph id, or one the plan minted
 #   @option data [String] :set_by_id person_id of the actor
+#   @option data [Shreddable::Value, nil] :note why the planner made it, sealed under its subject's key:
+#     the person's in the plan for a kind {.about_a_person}, else the plan's; absent when there is none. It is no part of the end state, so it never decides how a change
+#     resolves, compares or reads against the Org Graph.
 #   The kind adds its end state alongside these.
 #
 class TeamPlanning::Events::Change < RubyEventStore::Event
-  # The fields every change holds, which no end state may set.
-  FIELDS = %i[plan_id scenario_id subject_id set_by_id].freeze
+  extend Shreddable
+
+  shreddable :note, by: :plan
+
+  # The fields every change may hold, which no end state may set.
+  FIELDS = %i[plan_id scenario_id subject_id set_by_id note].freeze
 
   # @return [String] the part of a subject this kind sets
   def self.facet = raise(NotImplementedError, "#{name} must name its facet")
@@ -89,6 +96,18 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @param map [TeamPlanning::Baseline::Map] the plan's map the planned end state belongs to
   # @return [Boolean]
   def self.shows?(read, planned, map:) = same_end_state?(read, planned)
+
+  # @return [Boolean] whether this kind seals a field of its end state, beyond the note any change may carry
+  def self.seals_end_state? = (shreddable_fields.keys - FIELDS).any?
+
+  # Declares this kind's subject a person, so its note seals under that
+  # person's key in the plan and goes when they are forgotten.
+  #
+  # @return [void]
+  def self.about_a_person = shreddable(:note, by: :person, person: :subject_id)
+
+  # @return [Boolean] whether this kind's subject is a person
+  def self.about_a_person? = shreddable_fields.dig(:note, :by) == :person
 
   # @return [Boolean] whether this kind names its facet and says how it lands
   def self.complete? = %i[facet apply_to].all? { overrides?(it) }

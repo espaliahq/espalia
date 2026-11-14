@@ -1,9 +1,13 @@
 {
   "name": "team_planning_retire_unit",
-  "description": "Retire a live unit in a scenario of a Team Planning plan. Its people keep their place until an assignment moves them. A unit with live sub-units is refused: move or retire them first. Setting the unit again with team_planning_set_unit brings it back. scenario_id defaults to the baseline, whose id is the plan's. Refused unless the caller is one of the plan's editors.",
+  "description": "Retire a live unit in a scenario of a Team Planning plan. Its people keep their place until an assignment moves them. A unit with live sub-units is refused: move or retire them first. Setting the unit again with team_planning_set_unit brings it back. scenario_id defaults to the baseline, whose id is the plan's. Refused unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
+      },
       "plan_id": {
         "type": "string"
       },
