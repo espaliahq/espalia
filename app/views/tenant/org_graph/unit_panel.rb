@@ -50,8 +50,9 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   def own_card? = @overview.cards.first&.id == @unit.id
 
   def unit_summary
-    beneath = @overview.descendants_of(@unit).group_by { |child| @overview.level_of(child) }.filter_map do |level, units|
-      level && pluralize_level(units.size, level.name)
+    counts = @overview.descendants_of(@unit).map(&:level_id).tally
+    beneath = @overview.levels.filter_map do |level|
+      counts[level.id] && pluralize_level(counts[level.id], level.name)
     end
     [ people(@overview.headcount(@unit)), *beneath ].join(", ")
   end

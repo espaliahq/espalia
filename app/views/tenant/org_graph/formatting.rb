@@ -9,13 +9,10 @@ module Views::Tenant::OrgGraph::Formatting
 
   # @param count [Integer]
   # @return [String] e.g. "1 person", "4 people"
-  def people(count) = "#{count} #{count == 1 ? 'person' : 'people'}"
+  def people(count) = "#{count} #{'person'.pluralize(count)}"
 
   # @param count [Integer]
   # @param name [String] a taxonomy level's name
   # @return [String] e.g. "3 teams"
-  def pluralize_level(count, name)
-    word = name.downcase
-    "#{count} #{count == 1 ? word : word.pluralize}"
-  end
+  def pluralize_level(count, name) = "#{count} #{name.downcase.pluralize(count)}"
 end
