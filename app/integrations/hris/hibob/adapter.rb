@@ -150,9 +150,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   def read_field(field_id, kind:, alongside: nil)
     fields = [ *READ_FIELD_IDENTITY, catalogue_id(field_id) ]
     fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
-    employees = client.search_people(fields: fields.uniq, show_inactive: true)
-      .select { it["id"].present? && it["isActive"] != false }
-    kept = ActsAsTenant.with_tenant(tenant) { employees.select(&upserted(employees)) }
+    employees = client.search_people(fields: fields.uniq, show_inactive: true).select { it["id"].present? }
+    # A leaver still claims and frees emails in the sync's walk, so they leave only after it.
+    kept = ActsAsTenant.with_tenant(tenant) { employees.select(&upserted(employees)) }.reject { it["isActive"] == false }
     kept.to_h { [ it["id"].to_s, Hris::Hibob::ResponseMapper.new(it).field_value(field_id, kind:, alongside:) ] }
   end
 
