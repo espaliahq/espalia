@@ -16,9 +16,7 @@ Graph is built first.
 | [Org Graph, design](org-graph-design.md) | People, teams and reporting lines with their history, and where each fact comes from. |
 | [Shreddable event fields, design](shreddable-fields-design.md) | How an immutable event can hold a value that must be forgettable. |
 | [Org Graph, implementation plan](org-graph-plan.md) | Epics, stories and their dependencies. |
-
-Team Planning has no implementation plan yet. It follows once the Org Graph is under
-way.
+| [Team Planning, implementation plan](team-planning-plan.md) | Epics, stories, the first release, and the decisions still open. |
 
 ## Mockups
 
