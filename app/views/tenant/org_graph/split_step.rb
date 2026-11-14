@@ -172,6 +172,6 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
   def carry_names = @names.each { |name| input(type: "hidden", name: "names[]", value: name) }
 
   def stage_path(stage)
-    new_tenant_org_unit_split_path(@unit, on: @effective_on, names: @names, placements: @placements, stage:)
+    new_tenant_org_unit_split_path(@unit, on: @effective_on, names: @names, placements: @placements, stage:, **compared)
   end
 end

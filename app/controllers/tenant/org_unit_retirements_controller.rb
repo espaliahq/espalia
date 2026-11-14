@@ -18,9 +18,9 @@ class Tenant::OrgUnitRetirementsController < ApplicationController
     authorize :org_graph, :show_units?
     result = Operations::OrgGraph::RetireUnit.call(context: pundit_user, params: with_date(unit_id: @unit.id))
     ended = result[:memberships_ended]
-    redirect_to tenant_org_graph_path(unit: @unit.parent_id), status: :see_other,
+    redirect_to tenant_org_graph_path(unit: @unit.parent_id, **comparison_params), status: :see_other,
                 notice: "Retired #{@unit.name}. #{ended} #{'membership'.pluralize(ended)} ended."
   rescue *FAILURES => e
-    redirect_to new_tenant_org_unit_retirement_path(@unit, on: effective_on), flash: { drawer_alert: readable(e.message) }
+    redirect_to new_tenant_org_unit_retirement_path(@unit, on: effective_on, **comparison_params), flash: { drawer_alert: readable(e.message) }
   end
 end

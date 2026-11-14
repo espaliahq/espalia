@@ -268,9 +268,9 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
         end
       elsif @rights.reshape?
         div(class: "flex flex-wrap gap-2") do
-          reshape_link("Split", new_tenant_org_unit_split_path(@unit, on: @effective_on)) if @rights.split?
-          reshape_link("Merge", new_tenant_org_unit_merge_path(@unit, on: @effective_on))
-          reshape_link("Retire", new_tenant_org_unit_retirement_path(@unit, on: @effective_on), tone: :danger)
+          reshape_link("Split", new_tenant_org_unit_split_path(@unit, on: @effective_on, **compared)) if @rights.split?
+          reshape_link("Merge", new_tenant_org_unit_merge_path(@unit, on: @effective_on, **compared))
+          reshape_link("Retire", new_tenant_org_unit_retirement_path(@unit, on: @effective_on, **compared), tone: :danger)
         end
       end
     end

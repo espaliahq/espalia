@@ -21,8 +21,8 @@ class Tenant::OrgUnitMergesController < ApplicationController
     result = Operations::OrgGraph::MergeUnit.call(context: pundit_user,
                                                   params: with_date(unit_id: @unit.id, into_unit_id:))
     into = OrgUnit.find(result[:into_unit_id])
-    redirect_to edit_tenant_org_unit_path(into), status: :see_other, notice: "Merged #{@unit.name} into #{into.name}."
+    redirect_to edit_tenant_org_unit_path(into, **comparison_params), status: :see_other, notice: "Merged #{@unit.name} into #{into.name}."
   rescue *FAILURES => e
-    redirect_to new_tenant_org_unit_merge_path(@unit, on: effective_on), flash: { drawer_alert: readable(e.message) }
+    redirect_to new_tenant_org_unit_merge_path(@unit, on: effective_on, **comparison_params), flash: { drawer_alert: readable(e.message) }
   end
 end

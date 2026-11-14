@@ -23,10 +23,10 @@ class Tenant::OrgUnitSplitsController < ApplicationController
     names = successor_names
     Operations::OrgGraph::SplitUnit.call(context: pundit_user,
                                          params: with_date(unit_id: @unit.id, successor_names: names, placements:))
-    redirect_to tenant_org_graph_path(unit: @unit.parent_id), status: :see_other,
+    redirect_to tenant_org_graph_path(unit: @unit.parent_id, **comparison_params), status: :see_other,
                 notice: "Split #{@unit.name} into #{names.to_sentence}."
   rescue *FAILURES => e
-    redirect_to new_tenant_org_unit_split_path(@unit, on: effective_on, names:, placements:, stage: "review"),
+    redirect_to new_tenant_org_unit_split_path(@unit, on: effective_on, names:, placements:, stage: "review", **comparison_params),
                 flash: { drawer_alert: readable(e.message) }
   end
 

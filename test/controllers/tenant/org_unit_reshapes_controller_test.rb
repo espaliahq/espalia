@@ -25,6 +25,8 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
 
   def labels(selector) = drawer.css(selector).map { it.text.strip }
 
+  def carries_window?(form) = @window.all? { |name, value| form.at_css("input[name='#{name}']")&.[]("value") == value }
+
   should "offer split, merge and retire in an Espalia unit's drawer, and name the provider in a mirrored one" do
     get edit_tenant_org_unit_path(@org[:platform])
     assert_equal [ "Split", "Merge", "Retire" ], labels("section[aria-labelledby='org-unit-reshape'] a")
@@ -33,6 +35,27 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
     assert_empty drawer.css("section[aria-labelledby='org-unit-reshape'] a")
     assert_includes drawer.at_css("section[aria-labelledby='org-unit-reshape']").text,
                     "HiBob holds Engineering, so split, merge or retire it there."
+  end
+
+  context "with a window picked" do
+    setup { @window = { from: "2026-02-01", by: "learned" } }
+
+    should "keep the window in the drawer's step links, each step's forms and links, and the redirect after" do
+      get edit_tenant_org_unit_path(@org[:platform], **@window)
+      assert drawer.at_css("a[href='#{new_tenant_org_unit_merge_path(@org[:platform], on: Date.current.iso8601, **@window)}']")
+
+      get new_tenant_org_unit_split_path(@org[:platform], stage: "review", names: %w[Core Edge], **@window)
+      assert drawer.css("form").all? { carries_window?(it) }
+      assert drawer.at_css("a[aria-label='Close']")["href"].end_with?(tenant_org_graph_path(unit: @org[:platform], **@window))
+      assert_includes drawer.at_css("a[href*='stage=place']")["href"], "by=learned"
+      assert_includes drawer.at_css("a[href^='#{edit_tenant_org_unit_path(@org[:platform])}']")["href"], "by=learned"
+
+      post tenant_org_unit_retirement_path(@org[:payments]), params: { effective_on: "2026-11-02", **@window }
+      assert_redirected_to tenant_org_graph_path(unit: @org[:checkout], **@window)
+
+      post tenant_org_unit_merge_path(@org[:platform]), params: { into_unit_id: "", **@window }
+      assert_includes response.location, "by=learned"
+    end
   end
 
   context "retire" do

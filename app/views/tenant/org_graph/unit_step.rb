@@ -6,6 +6,7 @@
 class Views::Tenant::OrgGraph::UnitStep < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Views::Tenant::OrgGraph::Formatting
+  include Views::Tenant::OrgGraph::KeepsComparison
 
   DATE_ID = "org-unit-step-effective-on"
 
@@ -23,7 +24,7 @@ class Views::Tenant::OrgGraph::UnitStep < Views::Base
   end
 
   def view_template
-    render Views::Tenant::OrgGraph::Drawer.new(title:, close_href: tenant_org_graph_path(unit: @unit.id)) do
+    render Views::Tenant::OrgGraph::Drawer.new(title:, close_href: tenant_org_graph_path(unit: @unit.id, **compared)) do
       div(class: "space-y-6") do
         back_link
         render Components::Kit::Alert.new(tone: :danger, role: "alert", id: "org-unit-alert") { @alert } if @alert
@@ -63,7 +64,7 @@ class Views::Tenant::OrgGraph::UnitStep < Views::Base
   def memberships = @memberships ||= @overview.members_of(@unit).sort_by { |membership| membership.person.name }
 
   def back_link
-    a(href: edit_tenant_org_unit_path(@unit, on: (@effective_on unless @effective_on == Date.current.iso8601)),
+    a(href: edit_tenant_org_unit_path(@unit, on: (@effective_on unless @effective_on == Date.current.iso8601), **compared),
       class: "inline-block text-sm text-link hover:underline") { "Back to #{@unit.name}" }
   end
 
@@ -91,6 +92,7 @@ class Views::Tenant::OrgGraph::UnitStep < Views::Base
   def step_form(action, method: "post", **attrs, &block)
     form(action:, method:, **attrs) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token) if method == "post"
+      comparison_fields
       block.call
     end
   end
