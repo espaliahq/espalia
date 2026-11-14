@@ -346,7 +346,7 @@ once, at report time (5.3).
 
 The `on_cost` rule chooses the model and its params. Its default adds nothing, so a plan
 costs base pay alone until a tenant or plan chooses. Read at a seat's unit, a unit can
-price its subtree differently. 5.4 prices positions with
+price its subtree differently. Cost prices each seat with
 `TeamPlanning::RuleKinds::OnCost.on_cost_of`. Rates are tenant configuration, as pay bands
 are, not a person's data, so the rule is not shreddable.
 
@@ -451,6 +451,39 @@ flatters a scenario.
 - **A leaver keeps the positions they fill filled for the step**, so their capacity goes to
   their backfill or nowhere. Reopening those positions too would count the seat twice
   whenever a backfill exists.
+
+### Cost as built
+
+`TeamPlanning::Cost` prices a scenario over its period and prices the baseline over the
+same days, so the two compare ([#288](https://github.com/espaliahq/espalia/issues/288)).
+The baseline has no period of its own, so it is never the scenario costed.
+`team_planning_cost` sends the totals, each unit and each cost centre, and the working of
+every seat only for a unit the caller names.
+
+- **A seat** is a person, or the FTE a position's occupants leave open, as capacity counts it.
+- **Its level** is the person's own, a planned one winning. When theirs resolves to none,
+  the position's level prices it, and the working says so (`level_source`). An open seat
+  takes its position's level.
+- **Its band** is the one for that level and the person's country, else the band for any
+  location. An open seat has no country, so it takes the band for any location.
+- **Its figure** is the band's midpoint for a full-time year (`working_hours` for an hourly
+  band), times FTE, times its place's share of the seat, times the days held out of 365.
+  The `on_cost` rule at its unit adds on-cost. A person's places always share their whole
+  seat, so units and cost centres sum to the plan's total.
+- **A leaver and their backfill** split one seat at the leaving date and never overlap:
+  the leaver costs up to it, the backfill from the next day. A leaver with no date costs
+  nothing in the period, and their backfill holds the whole of it.
+- **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
+  until positions carry a cost-centre label. No cost centre is a bucket of its own,
+  counted like any other.
+- **A seat no band prices** is listed with its reason (no level, no band, or a level or
+  FTE lost with a forgotten person's key), never counted as zero.
+
+Every figure stays in its band's currency, exact, and the totals hold one sum per currency.
+Each converts once, at the read, at the rate in force on the period's first day. A missing
+rate leaves the converted total empty and names the pair and the date. Only the display
+rounds. Plans reprice live: a changed band changes every plan's cost, and the report says
+when a band last changed (`bands_changed_at`).
 
 ### Clearing and pinning
 
