@@ -6,8 +6,11 @@
 # retired, a position someone closed. Those changes still resolve; this
 # read marks them, each with a reason and the change it belongs to.
 #
-# Derived from the map and the changes that won, never stored. The checks
-# projection (4.6) and the changes tab (4.4) both read it.
+# It also checks each person: allocation, someone still placed after the
+# Org Graph has them leave, and their manager (4.6).
+#
+# Derived from the map and the changes that won, never stored. The changes
+# tab (4.4) and the checks tab (4.7) both read it.
 #
 # @example
 #   TeamPlanning::Resolution.new(context:, plan:, scenario_id:).attention
