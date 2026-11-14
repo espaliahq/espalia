@@ -78,6 +78,13 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
     assert_equal [ "Base at L3", "Units" ], price("x", ordinal: 3).working.map(&:label)
   end
 
+  should "read a level below 1 on the same line, never below zero, so a seat that manages nobody is never overloaded" do
+    @facts = Model::Facts.new(level_of: @levels, ordinal_of: { "L0" => 0, "L-1" => -1 }, role_ids_of: @roles, open_fte: @open)
+
+    assert_equal Rational("0.1"), price("x", ordinal: 0).amount
+    assert_equal [ 0r, false ], price("x", ordinal: -1).then { [ it.amount, it.overloaded ] }
+  end
+
   should "follow a tenant's own curve" do
     params = { "base" => { "start" => "1", "slope" => "0.5", "knee" => 2, "decay" => "0" } }
 

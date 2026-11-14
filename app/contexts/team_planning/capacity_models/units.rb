@@ -26,10 +26,13 @@ class TeamPlanning::CapacityModels::Units < TeamPlanning::CapacityModel
   # The parameters, as exact numbers.
   Settings = Data.define(:start, :slope, :knee, :decay, :fixed_cost, :fixed_by_level, :per_report, :weight, :weight_by_level,
                          :manager_role_ids) do
+    # A framework whose levels start below 1 reads them on the same line,
+    # never below zero.
+    #
     # @param ordinal [Integer]
     # @return [Rational]
     def base(ordinal)
-      linear = start + slope * ([ ordinal, knee ].min - 1)
+      linear = [ start + slope * ([ ordinal, knee ].min - 1), 0r ].max
       return linear if ordinal <= knee
 
       linear + slope * (1..(ordinal - knee)).sum(0r) { decay**it }
