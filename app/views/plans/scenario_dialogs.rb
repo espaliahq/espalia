@@ -3,7 +3,7 @@
 # The plan page's "New scenario" and "Rename scenario" dialogs (#271), one of
 # each per page, for editors. The header button, each row's menu and the map's
 # picker open them, passing the scenario they start from in the trigger's
-# dataset, which the `scenario-fork-form` and `scenario-rename-form`
+# dataset, which the `scenario-fork-form` and `rename-form`
 # controllers read. Both forms post to {Plans::ScenariosController}, which
 # lands a fork on its map and sends a rename back to the page it came from.
 class Views::Plans::ScenarioDialogs < Views::Base
@@ -24,7 +24,7 @@ class Views::Plans::ScenarioDialogs < Views::Base
   # @param name [String] its current name
   # @return [Hash]
   def self.rename_trigger(url, name)
-    { action: "click->modal#open", modal_target_id: RENAME_ID, scenario_rename_action: url, scenario_rename_name: name }
+    { action: "click->modal#open", modal_target_id: RENAME_ID, rename_action: url, rename_name: name }
   end
 
   # Where a new scenario starts when nothing else says: the end of the chain
@@ -119,14 +119,14 @@ class Views::Plans::ScenarioDialogs < Views::Base
 
   def rename_form
     form(method: "post", class: "space-y-4",
-         data: { controller: "scenario-rename-form", action: "turbo:submit-end->modal#submitted" }) do
+         data: { controller: "rename-form", action: "turbo:submit-end->modal#submitted" }) do
       authenticity_token
       input(type: "hidden", name: "_method", value: "patch")
       field("rename-scenario-name", "Name", hint: "Leave people's names out.") do
         input(id: "rename-scenario-name", type: "text", name: "scenario[name]", required: true, pattern: ".*\\S.*",
               maxlength: TeamPlanning::PlanAggregate::NAME_LIMIT, autocomplete: "off", title: "The name can't be blank",
               aria: { describedby: "rename-scenario-name-hint" }, class: Components::Kit::Field::INPUT,
-              data: { scenario_rename_form_target: "name" })
+              data: { rename_form_target: "name" })
       end
       actions("Save")
     end

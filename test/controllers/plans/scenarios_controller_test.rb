@@ -67,7 +67,7 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       assert_select "form[action='#{plan_scenarios_path(@plan_id)}']"
 
       get map_plan_path(@plan_id, scenario: @q1)
-      assert_select "button[data-scenario-rename-name='Q1 hires']", text: "Rename…"
+      assert_select "button[data-rename-name='Q1 hires']", text: "Rename…"
     end
   end
 
