@@ -65,7 +65,7 @@ class Views::Plans::IndexView < Views::Base
   end
 
   def new_plan_form
-    section(aria: { labelledby: "new-plan" }) do
+    section(aria: { label: "New plan" }) do
       render Components::Kit::Card.new(title: "New plan", heading_level: :h2) do |card|
         card.body do
           render Components::Kit::Alert.new(tone: :danger, class: "mb-4") { @error } if @error
