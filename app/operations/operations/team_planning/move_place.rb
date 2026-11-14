@@ -70,7 +70,7 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
     moved, kept = held.partition { |place, _, _| from?(place, live) }
     raise Operations::Base::ParameterError, "#{map[:names][person_id]} holds no such place" if no_such_place?(moved, kept, live)
     raise Operations::Base::ParameterError, "This scenario has no such unit" unless to_position || to_unit == UNASSIGNED || live.include?(to_unit)
-    raise Operations::Base::ParameterError, "This scenario has no such position" if to_position && map[:positions].none? { it[:position_id] == to_position }
+    raise Operations::Base::ParameterError, "This scenario has no such position" if to_position && map[:positions].none? { it[:position_id] == to_position && live.include?(it[:unit_id]) }
 
     kept.reject! { |place, _, _| replaced?(place) }
     kept.map { |place, share, _| written(place, share) } + arriving

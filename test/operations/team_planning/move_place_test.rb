@@ -130,5 +130,12 @@ class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
                    refusal(from_unit_id: @payments, to_unit_id: @growth, to_position_id: @position, allocation: 1)
       assert_equal [ @payments, @platform ].sort, places(@ada).pluck(:unit_id).sort
     end
+
+    should "refuse a position whose unit the scenario retired" do
+      call(Operations::TeamPlanning::RetireUnit, plan_id: @plan_id, scenario_id: @q1, unit_id: @growth)
+
+      assert_equal "This scenario has no such position",
+                   refusal(from_unit_id: @payments, to_position_id: @position, allocation: 1)
+    end
   end
 end
