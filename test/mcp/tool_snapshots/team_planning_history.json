@@ -1,0 +1,26 @@
+{
+  "name": "team_planning_history",
+  "description": "List the history of a scenario of a Team Planning plan the caller is in, oldest first: every change it set, pin and clear it made, and every undo and redo of one, with who did it and when. action is set, pin, clear, undo or redo; an undo or redo names the entry it reverses in reverses_event_id. An entry that stands undone says who undid it. A value that can be erased is never shown here: sealed_fields names any such field. A forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

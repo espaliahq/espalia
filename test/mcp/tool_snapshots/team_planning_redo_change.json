@@ -1,0 +1,29 @@
+{
+  "name": "team_planning_redo_change",
+  "description": "Redo a change, pin or clear that was undone in a scenario of a Team Planning plan, in its place. Give event_id, as team_planning_history lists it, or leave it out to redo what your own latest undo in the scenario took back. Refused when a change to the same subject and facet was made since (the refusal names it), when it isn't undone, or unless the caller is an editor.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      },
+      "event_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
