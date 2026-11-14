@@ -163,8 +163,8 @@ decides none of these rules:
 - **Names.** Lanes and blocks carry ids, and names come from the map's own lookup, so a
   forgotten person keeps their lane under Person::FORMER_MEMBER.
 
-Each step resolves the baseline again, one Org Graph read per step. That is fine for the
-handful of steps a plan has.
+The baseline is read once and every step resolves over it, so each column sees the same Org
+Graph and the read costs one Org Graph query whatever the path's length.
 
 ### Unit changes as built
 

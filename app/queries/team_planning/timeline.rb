@@ -2,8 +2,9 @@
 
 # One path through a plan's scenarios, from the baseline to a scenario, laid
 # out as the timeline draws it: a column per step, units as blocks, a lane
-# per head, and the moves between columns. Each step is resolved as the map
-# resolves it ({TeamPlanning::Resolution}), and nothing is stored.
+# per head, and the moves between columns. The baseline is read once, each
+# step resolved over it as the map resolves it ({TeamPlanning::Resolution}),
+# and nothing is stored.
 #
 # The rules the screen inherits:
 #
@@ -74,7 +75,10 @@ class TeamPlanning::Timeline
     aggregate = @repository.load_plan(@plan.id)
     path = aggregate.timeline_path(@scenario_id)
     baseline = TeamPlanning::Baseline.new(context: @context, plan: @plan)
-    maps = path.map { baseline.named(TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, repository: @repository).structure(aggregate)) }
+    base = baseline.structure
+    maps = path.map do |scenario_id|
+      baseline.named(TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository, base:).structure(aggregate))
+    end
     Layout.new(maps).result(columns: columns(aggregate, path), next_ids: next_ids(aggregate, path.last))
   end
 

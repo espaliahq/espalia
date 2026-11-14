@@ -209,6 +209,14 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
     assert_not_includes result.to_json, "Bo Reyes"
   end
 
+  should "read the Org Graph once, whatever the path's length" do
+    reads = 0
+    as_of = OrgGraph::AsOf.method(:new)
+    OrgGraph::AsOf.stub(:new, ->(**args) { reads += 1; as_of.call(**args) }) { timeline }
+
+    assert_equal 1, reads
+  end
+
   should "open to a viewer and read as an unknown plan to anyone outside it" do
     assert_equal [ @plan_id, @q1, @q2 ], timeline(as: @viewer)[:columns].pluck(:scenario_id)
     error = assert_raises(Operations::Base::ParameterError) { timeline(as: @outsider) }
