@@ -65,5 +65,5 @@ class Tenant::ExchangeRatesController < ApplicationController
 
   def pair(rate) = "#{rate[:from_currency]} to #{rate[:to_currency]}"
 
-  def day(rate) = Date.iso8601(rate[:applies_from]).strftime("%-d %b %Y")
+  def day(rate) = Views::Tenant::PayBands::BandText.day_text(rate[:applies_from])
 end

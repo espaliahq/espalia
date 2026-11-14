@@ -99,7 +99,7 @@ module Views::Tenant::PayBands::RatesPanel
         currency_input("exchange-rate-from", "From", "from_currency", draft[:from_currency])
         currency_input("exchange-rate-to", "To", "to_currency", draft[:to_currency] || reference&.dig(:currency))
       end
-      field("exchange-rate-rate", "Rate", hint: "What one unit of the From currency is worth in the To currency.") do
+      field("exchange-rate-rate", "Rate", hint: "What one From is worth in To, with a point for decimals, such as 0.92.") do
         input(id: "exchange-rate-rate", name: "exchange_rate[rate]", type: "text", inputmode: "decimal", required: true,
               value: draft[:rate], autocomplete: "off", class: Components::Kit::Field::INPUT,
               aria: { describedby: "exchange-rate-rate-hint" })
@@ -124,5 +124,5 @@ module Views::Tenant::PayBands::RatesPanel
 
   def rate_name(rate) = "from #{rate[:from_currency]} to #{rate[:to_currency]} applying from #{rate_day(rate)}"
 
-  def rate_day(rate) = Date.iso8601(rate[:applies_from]).strftime("%-d %b %Y")
+  def rate_day(rate) = day_text(rate[:applies_from])
 end

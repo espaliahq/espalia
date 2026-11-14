@@ -27,9 +27,11 @@ class Views::Tenant::ExchangeRates::EditView < Views::Base
         card.body do
           settings_form(tenant_exchange_rate_path(@rate[:exchange_rate_id]), method: :patch, class: "space-y-4") do
             p(class: "text-sm text-muted") { "To change the currencies or the date, remove this rate and add another." }
-            field("exchange-rate-rate", "1 #{@rate[:from_currency]} is worth, in #{@rate[:to_currency]}") do
+            field("exchange-rate-rate", "1 #{@rate[:from_currency]} is worth, in #{@rate[:to_currency]}",
+                  hint: "A number above zero with a point for decimals, such as 0.92.") do
               input(id: "exchange-rate-rate", name: "exchange_rate[rate]", type: "text", inputmode: "decimal", required: true,
-                    value: @rate[:rate], autocomplete: "off", class: Components::Kit::Field::INPUT)
+                    value: @rate[:rate], autocomplete: "off", class: Components::Kit::Field::INPUT,
+                    aria: { describedby: "exchange-rate-rate-hint" })
             end
             div(class: "flex justify-end gap-2") do
               render Components::Kit::Button.new(variant: :outline, tone: :neutral, href: tenant_pay_bands_path) { "Cancel" }
@@ -43,7 +45,5 @@ class Views::Tenant::ExchangeRates::EditView < Views::Base
 
   private
 
-  def title
-    "#{@rate[:from_currency]} to #{@rate[:to_currency]}, from #{Date.iso8601(@rate[:applies_from]).strftime('%-d %b %Y')}"
-  end
+  def title = "#{@rate[:from_currency]} to #{@rate[:to_currency]}, from #{day_text(@rate[:applies_from])}"
 end
