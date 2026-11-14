@@ -211,25 +211,30 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     held_emails = rows.to_h { |external_id, _, email| [ external_id, email ] }
     left = OrgLeaver.where(person_id: held.values).pluck(:person_id).to_set
     emails = employees.filter_map { it["email"]&.downcase&.strip.presence }
-    taken = Person.where(forgotten_at: nil, email: emails).where.not(external_id: nil).pluck(:email).to_set
+    # Each email's row, by HRIS id; nil for a row without one, which a newcomer adopts.
+    owners = Person.where(email: [ *emails, *held_emails.values ].compact).pluck(:email, :external_id).to_h
     lambda do |employee|
       external_id = employee["id"].to_s
       email = employee["email"]&.downcase&.strip.presence
+      attrs = { status: employee["isActive"] == false ? "inactive" : "active" }
+      started_on = Hris::Hibob::ResponseMapper.new(employee).started_on
       if held.key?(external_id)
         # The sync writes each row's new email in response order, freeing the old one.
-        # With no email in the response it keeps the stored one.
-        if email
-          taken.delete(held_emails[external_id])
-          taken << email
+        # The unique index refuses an email another row holds, and the sync skips the person.
+        if email && email != held_emails[external_id]
+          next false if owners.key?(email)
+
+          owners.delete(held_emails[external_id])
+          owners[email] = external_id
         end
         # The Org Graph takes a leaver back only once their new start date comes.
-        next !left.include?(held[external_id]) || back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on)
+        next !left.include?(held[external_id]) || back_at_work?(attrs, started_on)
       end
-      next false if forgotten_person(external_id) && !back_at_work?({}, Hris::Hibob::ResponseMapper.new(employee).started_on)
-      next false if taken.include?(email)
+      next false if forgotten_person(external_id) && !back_at_work?(attrs, started_on)
+      next false if owners[email]
 
       # The sync creates people in response order, so the first to claim an email keeps it.
-      taken << email if email
+      owners[email] = external_id if email
       true
     end
   end

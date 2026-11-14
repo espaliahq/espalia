@@ -716,6 +716,15 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "1618" ], read_department(employees).keys
     end
 
+    should "leave out a held person whose new email another row holds, and keep their old one held" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
+      create(:person, tenant: @tenant, email: "new@example.com")
+      employees = [ { "id" => "1618", "email" => "new@example.com" },
+                    { "id" => "3141", "email" => "old@example.com" } ]
+
+      assert_empty read_department(employees)
+    end
+
     should "follow an email a leaver moves to, without reading the leaver" do
       create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
       employees = [ { "id" => "1618", "isActive" => false, "email" => "new@example.com" },
@@ -748,6 +757,15 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       forget_row("2718")
       employees = [ { "id" => "3141", "work" => { "startDate" => (Date.current - 1).iso8601 } },
                     { "id" => "2718", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "let a newcomer take the email of a forgotten leaver" do
+      forget_row("1618")
+      employees = [ { "id" => "1618", "isActive" => false, "email" => "shared@example.com",
+                      "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "3141", "email" => "shared@example.com" } ]
 
       assert_equal [ "3141" ], read_department(employees).keys
     end
