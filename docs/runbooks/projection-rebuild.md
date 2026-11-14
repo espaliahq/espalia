@@ -99,7 +99,7 @@ Plan and scenario names are now encrypted, so creating, renaming, forking or lis
 
 The predeploy changes the columns while the previous release still serves. Until traffic swaps, that release shows plan names as `{"removed"=>true}`, and creating, renaming or forking a plan fails. Plan lists read as empty while the rebuild runs. Deploy when nobody is planning.
 
-Names written before [#209](https://github.com/espaliahq/espalia/issues/209) sit in the event store in clear. After the deploy, run `bin/rails team_planning:names:dry_run` for the counts, then `bin/rails team_planning:names:seal`. It seals them in place and rebuilds both projections per tenant itself. See "The one rewrite" in [shreddable-fields-design.md](../team-planning/shreddable-fields-design.md). Rolling back past this deploy is unsafe once the task has run: an older release reads a sealed name as Base64.
+Names written before [#209](https://github.com/espaliahq/espalia/issues/209) sit in the event store in clear. After the deploy, run `bin/rails team_planning:names:dry_run` for the counts, then `bin/rails team_planning:names:seal` while no one is renaming a plan: the task takes no lock a rename waits on. It seals them in place and rebuilds both projections per tenant itself. See "The one rewrite" in [shreddable-fields-design.md](../team-planning/shreddable-fields-design.md). Rolling back past this deploy is unsafe once the task has run: an older release reads a sealed name as Base64.
 
 #### Recorded: `org_graph/members` v3 (withdrawn changes leave the member list, [#165](https://github.com/espaliahq/espalia/issues/165))
 

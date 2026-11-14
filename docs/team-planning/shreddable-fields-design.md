@@ -327,7 +327,11 @@ everything else here depends on that. It was acceptable once because:
   and scenarios read models. A second run changes nothing. It never runs from a
   migration.
 
-Run it once, after the deploy that ships [#209](https://github.com/espaliahq/espalia/issues/209):
+Run it once, after the deploy that ships [#209](https://github.com/espaliahq/espalia/issues/209),
+while no one is renaming a plan. The task takes no lock a rename waits on, so a rename
+during its rebuild can leave the old name in the plans read model. A second run won't
+repair that, as it finds nothing in clear and skips the rebuild; rebuild
+`team_planning/plans` instead.
 
 ```bash
 bin/rails team_planning:names:dry_run
