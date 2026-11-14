@@ -235,6 +235,22 @@ facet, so a later step or an alternative can have the person stay.
 - **The step is the date for now.** Costing part of a period (5.4) adds an optional leaving
   date within the step.
 
+### Needing attention as built
+
+A write refuses only a malformed change. Fit is read, never refused
+([#257](https://github.com/espaliahq/espalia/issues/257)). `TeamPlanning::Attention` walks a
+resolved scenario and lists what no longer fits. `Resolution#attention` runs it on the settled
+map and the changes that won, and nothing is stored. Each item has the subject and facet, a
+reason a planner can read, and the change it belongs to: the later to land of the subject's own
+winning change and the change that broke it, such as its unit's `UnitRetired`.
+
+It marks a placement in a closed position, or in a retired unit or one gone from the scenario;
+a position in such a unit, or overfilled; a unit under a retired parent; anyone in
+`unresolved`; and a succession that lost a predecessor or whose successor is no longer live. A
+position in a retired unit is the position's item, not each occupant's. `team_planning_attention`
+reads it, and the checks projection (4.6) and the changes tab (4.4) will too. Marking a reporting
+line or a departure that no longer fits (3.8, 4.6) adds its checks here.
+
 ### Adding a change kind
 
 Several lanes add kinds at once, so each adds one the same way. `PositionSet`
@@ -245,6 +261,10 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    checks the kind's own fields and returns them as stored; it raises `TeamPlanning::Error`
    with a sentence a planner can read. Give it `apply_to(map, data)`, which must not depend
    on another kind having landed. The kind's fields may not reuse `Change::FIELDS`.
+   If the Org Graph holds its facet, also give it `subject_moved_by(change)`, naming the
+   subject an Org Graph change moves, and `read_from(map, subject_id:, facet:)`, reading
+   its end state back off a map. Without the first it meets no drift; without both it has
+   no status. Test both in the drift and status tests, as their test-only kinds do.
 2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
    and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
    resolver.
@@ -252,7 +272,9 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
    any names it needs in `Baseline#named`, never in `apply_to`. Anything derived from
    several kinds, such as who is unassigned, belongs in `Map#settled`, which `Resolution`
-   runs once every change has applied.
+   runs once every change has applied. If a later change elsewhere can leave the kind's end
+   state standing on something gone, add a check to `TeamPlanning::Attention` rather than
+   refusing the write.
 4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
    `ChangeWrite` and calls `set_change!`. Put the checks the aggregate can't make, such as
    whether a framework role exists, in the block you pass it, since the aggregate reads no
@@ -537,6 +559,44 @@ Each planned change is compared with the Org Graph as it stands now:
 
 Only `Raised` rests on an event (`ChangeRaised`). The rest are read by comparison, so
 they can never disagree with the Org Graph.
+
+### The status reader
+
+`TeamPlanning::Status` takes a plan and a scenario and gives one status for each subject
+and facet the scenario resolves, down its resolution chain, so a change an alternative
+overrides takes the alternative's end state. It reads two maps in the baseline's shape:
+today's, from `Baseline#map_on(today)` as known now, and the baseline itself. Each kind
+reads its end state off both with `read_from`.
+
+- **Done**: today reads the planned end state. A change that plans no change from the
+  base is done.
+- **Pending**: today still reads what the base held, or what the step before the change's
+  own step plans: once Q1's move lands, Q2's next move for the same person waits its turn.
+  So is a subject only the plan holds, such as a new unit: neither map has it.
+- **Conflicting**: today reads none of these, as when someone the plan moves has left.
+
+A plan whose base is still to come holds every change against today, so nothing reads
+conflicting before the plan starts.
+
+A person's placements are one facet, so a planned list is done only when the whole list
+matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
+Org Graph can move (it implements `subject_moved_by`) has a status: today, a unit set,
+an assignment and a reporting line. A rule, a position and a succession are plan-only, so each would read
+pending forever. A retirement and a succession have none yet either: the Org Graph's
+as-of read gives only live units and holds no successions, so today's map can't show a
+unit retired or succeeded. Nor does a departure: the as-of read drops a leaver, so today's
+map can't tell someone gone from someone staying.
+
+A reporting line to a position reads done once the Org Graph names, as the person's
+manager, someone the scenario seats in that position.
+
+The Org Graph can't say which position someone fills, only where they are. So a placement
+in a position is held against the place it settles to on the scenario's map: the
+position's unit, at the placement's allocation, with its role only when the plan names
+one. It reads done once the person is in that unit at that allocation. Names come
+last and from today, so a forgotten person reads "Former member", a renamed unit its new
+name, and a subject only the plan holds has none. `Raised` will join these once
+`ChangeRaised` exists. `team_planning_status` gives the same read over MCP.
 
 ## Plan-held data
 

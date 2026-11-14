@@ -58,11 +58,32 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [String, nil] the subject's id, nil when it moves none
   def self.subject_moved_by(change) = nil
 
+  # Whether two end states of this kind are the same, as when one is read
+  # off a map and the other was planned. They can differ in key type alone.
+  #
+  # @param left [Hash, nil]
+  # @param right [Hash, nil]
+  # @return [Boolean]
+  def self.same_end_state?(left, right) = left.as_json == right.as_json
+
+  # Whether the Org Graph reads as a planned end state shows it, for status per
+  # change. A kind whose end state names something only the plan holds says how
+  # the Org Graph would show it.
+  #
+  # @param read [Hash, nil] the end state read off the Org Graph
+  # @param planned [Hash, nil]
+  # @param map [TeamPlanning::Baseline::Map] the plan's map the planned end state belongs to
+  # @return [Boolean]
+  def self.shows?(read, planned, map:) = same_end_state?(read, planned)
+
   # @return [Boolean] whether this kind names its facet and says how it lands
   def self.complete? = %i[facet apply_to].all? { overrides?(it) }
 
   # @return [Boolean] whether this kind can read its end state off a map
   def self.readable? = overrides?(:read_from)
+
+  # @return [Boolean] whether the Org Graph can move this kind's facet, so it has a status per change
+  def self.meets_org_graph? = overrides?(:subject_moved_by)
 
   # @param facet [String] the second half of a change's {#key}
   # @return [Boolean] whether a change of this kind can have that key

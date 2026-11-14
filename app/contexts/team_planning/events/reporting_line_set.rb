@@ -48,6 +48,21 @@ class TeamPlanning::Events::ReportingLineSet < TeamPlanning::Events::Change
     map.people.find { it.id == subject_id }&.then { it.to_h.slice(*TARGETS) }
   end
 
+  # The Org Graph names a manager, never a seat, so a line to a position
+  # shows as a line to someone who holds it on the plan's map.
+  #
+  # @param read [Hash, nil] the line read off the Org Graph
+  # @param planned [Hash, nil]
+  # @param map [TeamPlanning::Baseline::Map] settled, so each seat has its holders
+  # @return [Boolean]
+  def self.shows?(read, planned, map:)
+    seat = planned&.as_json&.dig("manager_position_id")
+    return same_end_state?(read, planned) unless read && seat
+
+    manager_id = read.as_json["manager_id"]
+    map.occupants.fetch(seat, []).any? { |holder, _| holder.id == manager_id }
+  end
+
   # @param change [OrgGraph::ChangesBetween::Change]
   # @return [String, nil] the person, when their manager fact changed
   def self.subject_moved_by(change) = (change.person_id if change.kind == :fact_changed && change.fact == "manager")

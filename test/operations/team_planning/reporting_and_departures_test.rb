@@ -131,6 +131,18 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
                  refusal(person_id: @ada.id, manager_position_id: seat)
   end
 
+  should "walk a seat whose holders report to it once each, and accept a line from outside" do
+    seat = open_position(@q1)
+    [ @ada, @bo ].each { report(@q1, it, manager_position_id: seat) }
+    [ @ada, @bo ].each do |holder|
+      call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @q1, person_id: holder.id,
+                                                    placements: [ { position_id: seat, allocation: 0.5 } ])
+    end
+
+    assert_equal seat, report(@q1, @cy, manager_position_id: seat)[:manager_position_id]
+    assert_equal [ @ada.id, @bo.id, @cy.id ].sort, resolved(@q1).reports_of(seat).sort
+  end
+
   should "refuse a self-line, a loop, both targets, a missing position and someone outside the tenant" do
     elsewhere = create(:person, tenant: create(:tenant))
 

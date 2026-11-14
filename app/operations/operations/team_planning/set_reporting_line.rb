@@ -63,8 +63,8 @@ class Operations::TeamPlanning::SetReportingLine < Operations::Base
     record = ::TeamPlanningPlan.find(plan_id!)
     map = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id: scenario_id!(:scenario_id)).structure(plan)
     lines = map.people.to_h { [ it.id, it.line ] }
-    holders = map.occupants.transform_values { it.map { |holder, _| holder.id } }
-    above = manager_id ? [ manager_id ] : holders.fetch(manager_position_id, [])
+    holders = map.occupants.transform_values { it.map { |holder, _| holder.id }.freeze }
+    above = manager_id ? [ manager_id ] : holders.fetch(manager_position_id, []).dup
     seen = Set.new
     while (id = above.shift)
       return true if id == person_id
