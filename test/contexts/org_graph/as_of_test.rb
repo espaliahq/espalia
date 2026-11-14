@@ -106,6 +106,22 @@ class OrgGraph::AsOfTest < ActiveSupport::TestCase
     assert_empty may.memberships
   end
 
+  should "hold a retired unit apart from the live ones, as it last stood, and a succession from the day it is recorded" do
+    succession = SecureRandom.uuid_v7
+    as_tenant do
+      @structure.record_succession(succession, predecessor_ids: [ @payments ], successor_ids: [ @platform ],
+                                               effective_on: "2026-04-30", retire_predecessors: true)
+    end
+
+    april = as_of("2026-04-29")
+    assert_equal [ [], [] ], [ april.retired_units, april.successions ]
+    may = as_of("2026-05-01")
+    assert_equal %w[Engineering Platform], may.units.map(&:name)
+    assert_equal [ [ @payments, "Payments", @engineering, @squads ] ], may.retired_units.map { [ it.id, it.name, it.parent_id, it.level_id ] }
+    assert_equal [ OrgGraph::AsOf::Succession.new(id: succession, predecessor_ids: [ @payments ], successor_ids: [ @platform ]) ],
+                 may.successions
+  end
+
   should "read what was known on an earlier day, leaving out a correction learned since" do
     travel 10.days
     as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-02-01") }

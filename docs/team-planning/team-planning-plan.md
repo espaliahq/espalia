@@ -18,7 +18,7 @@ it uses. The ones planning leans on most:
 
 | Need | Built as |
 |---|---|
-| The organisation on a date (R4) | `OrgGraph::AsOf`: people, live units and memberships as known on a date, with each person's cost centre, site, country, FTE and employment type, and each membership's allocation and role |
+| The organisation on a date (R4) | `OrgGraph::AsOf`: people, live units and memberships as known on a date, with the retired units and successions apart, with each person's cost centre, site, country, FTE and employment type, and each membership's allocation and role |
 | What changed between two dates (R4) | `OrgGraph::ChangesBetween`, by effective or learned date. A change carries its `event_id`, not its plan or cause |
 | History with both times | The history projection, `org_fact_periods` |
 | Who holds a fact (R5) | `OrgFactProvider`, and the refusal in `CommandHandler#ensure_provides!` |

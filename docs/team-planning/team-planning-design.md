@@ -264,7 +264,8 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    If the Org Graph holds its facet, also give it `subject_moved_by(change)`, naming the
    subject an Org Graph change moves, and `read_from(map, subject_id:, facet:)`, reading
    its end state back off a map. Without the first it meets no drift; without both it has
-   no status. Test both in the drift and status tests, as their test-only kinds do.
+   no status, unless the Org Graph holds the subject under an id of its own and the kind
+   overrides `read_org_graph` to find it, as a succession does (`Change.tracked?`). Test both in the drift and status tests, as their test-only kinds do.
 2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
    and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
    resolver.
@@ -484,6 +485,8 @@ Each change says what it meets in the plan: for each scenario, the latest planne
 to the facet it moves. Each kind decides which Org Graph changes move its facet, through
 `Change.subject_moved_by`, which returns the subject's id or nil. A person's placements
 are one facet, so a move in one placement meets the plan's whole list for that person.
+A retirement meets what moves a unit set, as both hold the facet `unit`. No Org Graph
+change names a planned succession, whose id is the plan's own, so a succession meets none.
 A change applied from this plan comes back `from_plan`, matched through the `plan_id` on
 its event; nothing sets one until approval exists. Whether a planned change is done,
 pending or conflicting is 4.3's status, below.
@@ -525,12 +528,23 @@ conflicting before the plan starts.
 
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
-Org Graph can move (it implements `subject_moved_by`) has a status: today, a unit set,
-an assignment and a reporting line. A rule, a position and a succession are plan-only, so each would read
-pending forever. A retirement and a succession have none yet either: the Org Graph's
-as-of read gives only live units and holds no successions, so today's map can't show a
-unit retired or succeeded. Nor does a departure: the as-of read drops a leaver, so today's
-map can't tell someone gone from someone staying.
+Org Graph can move (it implements `subject_moved_by`) or find (it overrides
+`read_org_graph`) has a status: a unit set, a retirement, a succession, an assignment and
+a reporting line. A rule and a position are plan-only, so each would read pending
+forever. Nor does a departure have one: the as-of read drops a leaver, so today's map
+can't tell someone gone from someone staying.
+
+Today's map is `Baseline#map_on(today, history: true)`, which adds the units the Org Graph
+has retired and the successions it holds, from `OrgGraph::AsOf`'s `retired_units` and
+`successions`. The plain map and the baseline leave both out, as a plan keeps its own. A
+retirement reads done once the Org Graph has retired the unit, whatever it last looked
+like, and pending while the unit is live. The Org Graph mints its own succession ids, so
+a kind reads its end state off today's map through `Change.read_org_graph`, which a
+succession overrides to find the Org Graph's successions by their predecessors. It joins
+every one that shares a planned predecessor, as the Org Graph may record a merge in parts.
+The joined sides read done when they match the plan, conflicting when they don't, and
+pending when there are none. A succession the Org Graph held on the base date came before
+the plan, so today's map leaves it out.
 
 A reporting line to a position reads done once the Org Graph names, as the person's
 manager, someone the scenario seats in that position.

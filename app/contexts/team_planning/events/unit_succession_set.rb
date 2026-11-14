@@ -38,6 +38,20 @@ class TeamPlanning::Events::UnitSuccessionSet < TeamPlanning::Events::Change
     map.successions.find { it.id == subject_id }&.to_h&.slice(:predecessor_ids, :successor_ids)
   end
 
+  # The Org Graph mints its own succession ids, so a planned succession is
+  # found by its predecessors. Every succession that shares one is joined, as
+  # the Org Graph may record a merge in parts.
+  #
+  # @param map [TeamPlanning::Baseline::Map] read off the Org Graph
+  # @param change [TeamPlanning::Events::UnitSuccessionSet]
+  # @return [Hash, nil] their two sides, nil when none shares a predecessor
+  def self.read_org_graph(map, change)
+    met = map.successions.select { it.predecessor_ids.intersect?(change.data[:predecessor_ids]) }
+    return if met.empty?
+
+    { predecessor_ids: met.flat_map(&:predecessor_ids).uniq.sort, successor_ids: met.flat_map(&:successor_ids).uniq.sort }
+  end
+
   def self.ids!(values, what)
     ids = Array(values).map { TeamPlanning::Events::UnitSet.id_or_nil(it, what) }.compact.uniq.sort
     raise TeamPlanning::Error, "A succession needs at least one #{what}" if ids.empty?
