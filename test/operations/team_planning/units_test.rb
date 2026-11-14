@@ -80,6 +80,21 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
       assert_equal "There is no such unit in this scenario",
                    refusal(Operations::TeamPlanning::SetUnit, scenario_id: @plan_id, unit_id: risk, name: "Risk")
     end
+
+    should "rename a unit whose level has left the taxonomy, and refuse to place a unit beneath it" do
+      guild_level = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM).add_level(guild_level, "Guild", effective_on: "2026-01-01")
+      end
+      guild = write(Operations::TeamPlanning::SetUnit, name: "Guild", level_id: guild_level)[:unit_id]
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM).remove_level(guild_level, effective_on: "2026-01-02")
+      end
+
+      assert_equal "Crafts", write(Operations::TeamPlanning::SetUnit, unit_id: guild, name: "Crafts")[:name]
+      assert_equal "Level is no longer in the taxonomy, so the unit can't be placed",
+                   refusal(Operations::TeamPlanning::SetUnit, name: "Risk", level_id: @squad, parent_id: guild)
+    end
   end
 
   context "RetireUnit" do

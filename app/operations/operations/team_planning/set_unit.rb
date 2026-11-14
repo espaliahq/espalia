@@ -55,13 +55,15 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
   def check_level!(map, current, level_id, parent_id)
     refuse!("A new unit needs a level_id") unless level_id
     refuse!("A unit's level can't change: create a unit at the new level instead") if current && current.level_id != level_id
-    refuse!("Level is not in the taxonomy") unless level_ids.include?(level_id)
-    return unless parent_id
+    refuse!("Level is not in the taxonomy") unless current || level_ids.include?(level_id)
+    return unless parent_id && (current.nil? || parent_id != current.parent_id)
 
     parent = map.units.find { it.id == parent_id } || refuse!("The parent must be a live unit in this scenario")
     if current && ([ current.id ] + descendant_ids(map, current.id)).include?(parent_id)
       refuse!("A unit can't move beneath itself or a unit below it")
     end
-    refuse!("A parent must sit at a higher level") unless level_ids.index(parent.level_id).to_i < level_ids.index(level_id)
+    child_rank, parent_rank = level_ids.index(level_id), level_ids.index(parent.level_id)
+    refuse!("Level is no longer in the taxonomy, so the unit can't be placed") unless child_rank && parent_rank
+    refuse!("A parent must sit at a higher level") unless parent_rank < child_rank
   end
 end
