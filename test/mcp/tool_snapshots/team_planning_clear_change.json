@@ -1,0 +1,38 @@
+{
+  "name": "team_planning_clear_change",
+  "description": "Stop a scenario of a Team Planning plan overriding one facet of one subject, so it follows its parent there again: the 'follow reality' answer when reconciling. facet is as team_planning_overrides lists it, such as 'rule:<name>'. A person's assignment clears whole. The earlier change stays in the plan's history. Refused if the scenario doesn't change that facet, or unless the caller is an editor.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      },
+      "subject_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "facet": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "subject_id",
+      "facet"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

@@ -91,6 +91,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "tenants_planning_rules"
     assert_includes reached, "team_planning_plan_members"
     assert_includes reached, "team_planning_baseline"
+    assert_includes reached, "team_planning_overrides"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
 
     editors = Operations::OrgGraph::Editors.call(context: lead_context, params: {})
@@ -157,13 +158,19 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     structure.add_unit_owner(@unit_id, @quinn.id, effective_on: Date.current)
   end
 
-  # Quinn joins while still in the organisation, as a viewer of the lead's plan.
+  # Quinn joins while still in the organisation, as an editor of the lead's
+  # plan, and sets a rule in one of its scenarios.
   def plan_with_quinn
     @plan_id = SecureRandom.uuid_v7
+    @scenario_id = SecureRandom.uuid_v7
     TeamPlanning::CommandHandler.new(actor: lead_context).tap do |handler|
       handler.create_plan(@plan_id, name: "Next year", base_on: Date.current + 1)
-      handler.add_member(@plan_id, @quinn.id, role: "viewer")
+      handler.add_member(@plan_id, @quinn.id, role: "editor")
+      handler.fork_scenario(@plan_id, @scenario_id, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: Date.current + 90)
     end
+    quinn = AuthorizationContext.new(user: User.find_by(email: ERASED_EMAIL), tenant_user: TenantUser.find_by(person_id: @quinn.id), person: @quinn)
+    TeamPlanning::CommandHandler.new(actor: quinn).set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id: @scenario_id, subject_id: @plan_id,
+                                                                                                       end_state: { rule: "test_headcount_cap", value: { cap: 4 } })
   end
 
   def suggest_as_quinn
