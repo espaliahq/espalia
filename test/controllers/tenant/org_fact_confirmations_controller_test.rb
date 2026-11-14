@@ -95,4 +95,20 @@ class Tenant::OrgFactConfirmationsControllerTest < ActionDispatch::IntegrationTe
 
     assert_redirected_to tenant_org_person_path(@org[:cyril])
   end
+
+  should "refuse a member who may not see the org graph and leave the fact unconfirmed" do
+    travel 91.days
+    member = create(:user)
+    ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: member, role: :member) }
+    sign_in member
+    checked_on = -> { ActsAsTenant.with_tenant(@tenant) { OrgFactAge.find_by!(person: @org[:cyril], unit: @org[:checkout]).checked_at } }
+    before = checked_on.call
+
+    post tenant_org_person_confirmations_path(@org[:cyril]),
+         params: { facts: [ "membership" ], unit_id: @org[:checkout], return_to: "units", unit: @org[:checkout] }
+
+    assert_redirected_to root_path
+    assert_equal "You are not authorized to perform this action.", flash[:alert]
+    assert_equal before, checked_on.call
+  end
 end
