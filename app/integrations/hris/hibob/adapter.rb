@@ -218,7 +218,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @yieldparam person [Person] the row, unsaved for a newcomer in a dry run
   def first_pass(employees, result, projected:, write: true)
     rows = Person.where(external_id: employees.filter_map { it["id"].presence&.to_s }).index_by(&:external_id)
-    claims = Hris::Hibob::EmailClaims.new.preload([ *employees.map { it["email"]&.downcase&.strip }, *rows.values.map(&:email) ])
+    emails = employees.filter_map { it["email"].downcase.strip if it["email"].is_a?(String) }
+    claims = Hris::Hibob::EmailClaims.new.preload([ *emails, *rows.values.map(&:email) ])
     employees.each do |raw_employee|
       mapper = Hris::Hibob::ResponseMapper.new(raw_employee, level_field_id: config.level_field_id, mapped_fields:)
       # Dev-only PII guard — pass-through outside development.

@@ -91,6 +91,15 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal "bob-002", @employees.first.dig("work", "reportsTo", "id")
     end
 
+    should "record an employee whose email is not text, and sync the rest" do
+      @employees << { "id" => "bob-099", "email" => 42, "displayName" => "Odd One" }
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal "bob-099", result[:errors].last[:external_id]
+      assert Person.exists?(external_id: "bob-001")
+    end
+
     should "refuse to sync, creating nobody, without the forgetting key" do
       forget_row("bob-003")
 
