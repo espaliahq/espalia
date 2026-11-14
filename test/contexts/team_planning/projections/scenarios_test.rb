@@ -67,6 +67,20 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
     assert_equal %w[Baseline First\ quarter], periods.map(&:first)
   end
 
+  should "store a renamed scenario's name sealed, unreadable once the plan's key is gone" do
+    q1 = fork(ends_on: "2027-03-31")
+    @handler.rename_scenario(@plan_id, q1, name: "First quarter")
+
+    stored = TeamPlanningScenario.connection.select_value(
+      TeamPlanningScenario.sanitize_sql_array([ "SELECT name::text FROM team_planning_scenarios WHERE id = ?", q1 ])
+    )
+    assert_not_includes stored, "First quarter"
+
+    PlanKeyStore.new.destroy_plan(@plan_id)
+
+    assert_predicate TeamPlanningScenario.find(q1).name, :removed?
+  end
+
   should "drop a removed scenario, and every scenario of a deleted plan" do
     q1 = fork(ends_on: "2027-03-31")
     q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")

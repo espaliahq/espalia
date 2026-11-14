@@ -41,7 +41,7 @@ class TeamPlanning::Projections::Scenarios
       when TeamPlanning::Events::ScenarioForked
         write(data[:scenario_id], event, **data.slice(:plan_id, :parent_id, :relation, :name, :starts_on, :ends_on, :forked_by_id))
       when TeamPlanning::Events::ScenarioRenamed
-        TeamPlanningScenario.where(id: data[:scenario_id]).update_all(name: data[:name], updated_at: event.timestamp)
+        TeamPlanningScenario.find_by(id: data[:scenario_id])&.update!(name: data[:name], updated_at: event.timestamp)
       when TeamPlanning::Events::ScenarioPeriodSet
         follow_tree(data[:plan_id], event) { it[data[:scenario_id]]&.ends_on = Date.iso8601(data[:ends_on]) }
       when TeamPlanning::Events::PlanRebased
