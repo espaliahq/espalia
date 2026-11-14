@@ -14,6 +14,8 @@
 #   # => { created: 5, updated: 12, deactivated: 1, errors: [] }
 #
 class Hris::BaseAdapter
+  include Hris::FieldRows
+
   FIELD_CATALOGUE_TTL = 1.hour
 
   # A deliberate brake: when more of the employed people vanish from one

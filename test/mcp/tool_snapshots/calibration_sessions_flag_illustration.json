@@ -1,0 +1,29 @@
+{
+  "name": "calibration_sessions_flag_illustration",
+  "description": "Flag one example (role illustration) as unclear from a live calibration session — raises a framework clarification anchored on the example.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "illustration_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id",
+      "illustration_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

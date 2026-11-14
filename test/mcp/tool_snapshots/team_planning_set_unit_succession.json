@@ -1,0 +1,50 @@
+{
+  "name": "team_planning_set_unit_succession",
+  "description": "Say which units carry on from which in a scenario of a Team Planning plan: a split (one predecessor, several successors), a merge (several predecessors, one successor) or a replacement. Every live predecessor retires in the same write. Successors must be live, no unit can succeed itself, and no chain of successions may loop back. Without succession_id it records a new succession; with one it restates it. scenario_id defaults to the baseline, whose id is the plan's. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "succession_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "predecessor_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "description": "the units that came before"
+      },
+      "successor_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "description": "live units that carry on from them"
+      }
+    },
+    "required": [
+      "plan_id",
+      "predecessor_ids",
+      "successor_ids"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

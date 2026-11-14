@@ -1,0 +1,38 @@
+{
+  "name": "frameworks_reorder_illustrations",
+  "description": "Reorder the examples (role illustrations) for one expectation and role (owner/editor/lead only). Pass the complete list of example (illustration) ids in the desired display order.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "framework_id": {
+        "type": "string"
+      },
+      "expectation_id": {
+        "type": "string"
+      },
+      "role_id": {
+        "type": "string"
+      },
+      "new_ordering": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Every example (illustration) id for this expectation × role, in the desired order"
+      }
+    },
+    "required": [
+      "framework_id",
+      "expectation_id",
+      "role_id",
+      "new_ordering"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

@@ -1,0 +1,51 @@
+{
+  "name": "team_planning_set_unit",
+  "description": "Create, rename or move a unit in a scenario of a Team Planning plan. Without unit_id it creates a unit, which needs a name and a level_id from the Org Graph taxonomy. With unit_id (an Org Graph unit, or one the plan created) it changes that unit: whatever you leave out stays as the scenario has it, and a retired unit comes back. parent_id places it beneath a live unit at a higher level; top_level true puts it at the top. A unit's level can't change. scenario_id defaults to the baseline, whose id is the plan's. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "unit_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "What the unit is, such as 'Payments'. Don't put a person's name in it."
+      },
+      "parent_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "top_level": {
+        "type": "boolean"
+      },
+      "level_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "org_graph_add_unit_owner",
+  "description": "Name a person as an owner of a live unit in the Org Graph, from effective_on (today by default). An owner may change the unit and every unit beneath it, so this grants permissions. Units an HRIS supplies take owners too.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "unit_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "unit_id",
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

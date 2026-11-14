@@ -1,7 +1,8 @@
 # Shreddable event fields — design
 
-> Status: proposal. The plan key store is built; [What is built](#what-is-built) says
-> what it does. [The index](README.md) lists the companion designs, the mockups and the
+> Status: partly built. The plan key store, the declaration and the guard are built;
+> [What is built](#what-is-built) says what they do. No event declares a shreddable field
+> yet. [The index](README.md) lists the companion designs, the mockups and the
 > plan.
 
 Events are immutable. Some of what they should hold must be forgettable: a salary pasted
@@ -44,8 +45,12 @@ end
 ```
 
 The mapper encrypts on write and decrypts on read. When the key is gone, the field reads
-back as a forgotten-data placeholder. The exact API is to be checked against the
-installed version.
+back as a forgotten-data placeholder.
+
+We use the library's key repository interface and its `EncryptionKey`, but not its
+mapper. Its schema sees only the event's data, and the tenant is in the metadata; it
+stores raw bytes, and our event store is JSON; and it hands back the plain value, where
+we want a wrapper. [What is built](#what-is-built) has our own.
 
 We supply:
 
@@ -78,14 +83,71 @@ tenant-<tenant_id>/plan-<plan_id>/person-<person_id>
 - **A destroyed key stays destroyed.** Its row keeps no key material, and `create`
   refuses a new key for a deleted plan or a forgotten person, including a plan that never
   held a key for them.
-- **It caches nothing**, so a destroyed key is gone for every reader at once. A read
-  that loads many events under the same few keys may memoise them for that read only;
-  a cache that outlives it would outlive a destroy too.
+- **It caches nothing**, so a destroyed key is gone for every reader at once. The mapper
+  keeps no memo either: a cache held by an event outlives its read, and would outlive a
+  destroy too.
 - **Without Active Record encryption keys**, reading or minting a key raises
   `PlanKeyStore::Unavailable` with a plain reason. Destroying keys needs no key
   material, so forgetting still works, and nothing outside plans is affected.
 
-Nothing writes a shreddable field yet. The declaration and the guard come next.
+### The declaration, the mapper and the guard
+
+An event class declares its fields:
+
+```ruby
+class TeamPlanning::Events::NoteWritten < RubyEventStore::Event
+  extend Shreddable
+  shreddable :note, by: :plan        # the plan's own key
+  shreddable :pay, by: :person       # the key of data[:person_id] in the plan
+end
+```
+
+- **`Shreddable::Mapper` wraps the event store's mapper.** On write it mints the key if
+  needed, encrypts each declared field with AES-256-GCM and stores the ciphertext in
+  Base64. The record's metadata gains `shreddable: { field => { cipher:, iv:,
+  identifier: } }`. The tenant comes from the event's own `tenant_id` metadata. Writing
+  for a deleted plan or a forgotten person raises `PlanKeyStore::Destroyed`.
+- **A shreddable write runs in a transaction.** Taking the key locks the plan, and the
+  person, until that transaction commits, so a destroy can't land between the key and
+  the append. Outside a transaction the write raises.
+- **On read it gives back a sealed `Shreddable::Value`**, which looks up its key on the
+  first `reveal` or `removed?`. It opens as removed once the key is gone, or if the
+  field is damaged. Each value looks up its key as it opens, with no memo, so a value
+  opened after a destroy reads as removed. So an aggregate load, or a
+  replayer passing over another tenant's events, never touches a key, and nothing reads
+  differently where Active Record encryption has no keys until a line asks for the
+  value. Revealing another tenant's value raises, as `PlanKeyStore#key_of` does. A nil
+  field is stored as nil, with no key.
+- **An event that declares nothing passes through untouched**: no query, no key lookup,
+  and the same bytes at rest. `test/contexts/shreddable/storage_compatibility_test.rb`
+  proves it against stored records of 36 event types, drawn from all five contexts. The
+  other event types are untested there, so a change to the inner mapper should add
+  records for the types it touches.
+- **`Shreddable::Value#reveal` is the one way in.** The value prints as `[shreddable]`, and
+  raises on `to_json`, `as_json`, YAML and Marshal, so it cannot reach a clear field of
+  another event, a log line or a cache. A value is a JSON value: a string, number,
+  boolean, array or hash with string keys. Anything JSON would read back differently,
+  such as symbol keys or a date, is refused, because a subscriber would see one value
+  and a replay another.
+- **A declaration can't be skipped.** A subclass inherits its parent's fields, and data
+  that names a declared field with a string key is refused rather than stored in clear.
+- **The event store browser at `/res` reads through `Shreddable::DisplayMapper`**, which
+  shows each shreddable field as `[shreddable]`.
+- **Every aggregate includes `Shreddable::AggregateRoot`** in place of `AggregateRoot`. Its
+  apply strategy hands each `on` handler a copy with every declared field set to
+  `Shreddable::Value.removed`. The aggregate still publishes the real event, so
+  subscribers and projections get the real value. A test fails if an aggregate in
+  `app/` includes the plain base.
+- **The assessment and framework activity feeds copy whole event data** into payloads
+  that the MCP tools serialise. A shreddable value there would raise, so a test keeps
+  those contexts from declaring one until their feeds handle it.
+
+**Rolling back.** A release before this one reads a shreddable record without raising.
+It does not know the new event class, so the record reads as a plain
+`RubyEventStore::Event`, and projections and the global replayer only read the types
+they handle, so they never see it. An event class that an older release does know would
+read its declared fields as Base64 strings, which is why a field must never be declared
+shreddable on an event class that already has records.
 
 ## The guard
 
@@ -126,11 +188,13 @@ Projections and handlers do read these values. They receive them wrapped.
 
 ### 3. Specs that replay with the keys forgotten
 
-Two shared specs run over every stream fixture.
+Two shared specs, in `test/contexts/shreddable/replay_without_keys_test.rb`, run over
+streams from every context built through the real handlers.
 
-- **Aggregates.** Replay with keys and without, run the same commands, and expect the
-  same state and the same new events. Layer 1 should make this always pass. It catches a
-  handler that bypasses the base class.
+- **Aggregates.** Replay every aggregate with keys and without, and expect the same
+  state, compared as Marshal bytes so a value still in clear raises. Each then runs one
+  new command, and the new events must match too. Layer 1 should make this always pass.
+  It catches a handler that bypasses the base class.
 - **Projections.** Rebuild with every key forgotten and expect nothing to raise.
 
 ## Forgetting

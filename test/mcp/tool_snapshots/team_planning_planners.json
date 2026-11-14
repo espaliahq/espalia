@@ -1,0 +1,16 @@
+{
+  "name": "team_planning_planners",
+  "description": "List who may create Team Planning plans: the planners an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

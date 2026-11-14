@@ -9,6 +9,8 @@ class Tenant::OrgGraphSettings::FactSourcesControllersTest < ActionDispatch::Int
   FRAME = "turbo-frame#org-graph-field-cost_centre"
 
   FakeAdapter = Struct.new(:error) do
+    include Hris::FieldRows
+
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
     def field_catalogue = error ? raise(error) : [ CENTRE ]

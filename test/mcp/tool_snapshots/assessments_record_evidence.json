@@ -1,0 +1,175 @@
+{
+  "name": "assessments_record_evidence",
+  "description": "Record a piece of feedback / evidence on an assessment — against a capability × level, or with no cell at all when you don't know which expectation it speaks to: the recipient or their manager places it later. Find a colleague's assignment_id with assessments_feedback_recipients. `content` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assignment_id": {
+        "type": "string"
+      },
+      "capability_stable_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "level_ordinal": {
+        "type": "integer"
+      },
+      "evidence_type": {
+        "type": "string",
+        "enum": [
+          "peer_feedback",
+          "manager_feedback",
+          "customer_feedback",
+          "impact",
+          "project_outcome",
+          "code_review",
+          "design_review",
+          "incident_response",
+          "presentation",
+          "mentoring",
+          "observation",
+          "other"
+        ]
+      },
+      "custom_type_label": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "content": {
+        "type": "string"
+      },
+      "valence": {
+        "type": "string",
+        "enum": [
+          "strongly_demonstrated",
+          "demonstrated",
+          "growth_area",
+          "significant_growth_area"
+        ],
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "external_reference": {
+        "type": "object",
+        "description": "Optional pointer to a supporting source in an external system.",
+        "properties": {
+          "system": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[_-][a-z0-9]+)*$",
+            "examples": [
+              "github",
+              "gitlab",
+              "linear",
+              "jira",
+              "slack",
+              "notion",
+              "google_doc",
+              "figma",
+              "other",
+              "chip"
+            ],
+            "description": "Originating system, as a lowercase slug."
+          },
+          "url": {
+            "type": "string",
+            "description": "An http(s) link to the source."
+          },
+          "external_id": {
+            "type": "string",
+            "description": "The item's ID within that system."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Free-form additional fields."
+          }
+        },
+        "additionalProperties": false
+      },
+      "additional_links": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "capability_stable_id": {
+              "type": "string"
+            },
+            "level_ordinal": {
+              "type": "integer"
+            },
+            "valence": {
+              "type": "string",
+              "enum": [
+                "strongly_demonstrated",
+                "demonstrated",
+                "growth_area",
+                "significant_growth_area"
+              ]
+            }
+          },
+          "required": [
+            "capability_stable_id",
+            "level_ordinal",
+            "valence"
+          ]
+        }
+      }
+    },
+    "required": [
+      "assignment_id",
+      "evidence_type",
+      "content"
+    ],
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "evidence_type": {
+              "const": "other"
+            }
+          },
+          "required": [
+            "evidence_type"
+          ]
+        },
+        "then": {
+          "required": [
+            "custom_type_label"
+          ],
+          "properties": {
+            "custom_type_label": {
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          }
+        }
+      },
+      {
+        "dependentRequired": {
+          "capability_stable_id": [
+            "level_ordinal",
+            "valence"
+          ],
+          "level_ordinal": [
+            "capability_stable_id"
+          ],
+          "valence": [
+            "capability_stable_id"
+          ],
+          "additional_links": [
+            "capability_stable_id"
+          ]
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
