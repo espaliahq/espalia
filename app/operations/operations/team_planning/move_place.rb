@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # Moves one of a person's places in a scenario, the way the scenario map's
-# drag and "Move…" do [#285](https://github.com/espaliahq/espalia/issues/285).
+# drag and "Move…" do [#285](https://github.com/espaliahq/espalia/issues/285),
+# to a unit or into a position. A full position takes them anyway: fit is
+# read, never refused, and Attention flags the position as overfilled.
 # It reads the person's places from the resolved map, swaps the one named for
 # the new one, and writes the whole list through {SetAssignment}, so the change
 # is an ordinary AssignmentSet. A place the HRIS gave no allocation is written
@@ -17,8 +19,11 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
   description "Move one of a person's places in a scenario of a Team Planning plan to another unit, or to " \
               "Unassigned, keeping their other places. from_unit_id names the place: a unit, with " \
               "from_position_id for a place in a position, or 'unassigned' for a person in no live unit. " \
-              "to_unit_id is the unit they move to, or 'unassigned' to drop the place. allocation (above 0, at " \
-              "most 1) and role describe the new place; a place they already hold in that unit is replaced. " \
+              "Give exactly one of to_unit_id or to_position_id; giving both or neither is refused. to_unit_id " \
+              "is the unit they move to, or 'unassigned' to drop the place; to_position_id instead places them " \
+              "in a position, even a full one, which the scenario then reports as overfilled. " \
+              "allocation (above 0, at most 1) and role describe the new place; a place they already hold in " \
+              "that unit, or in that position, is replaced. " \
               "Written as one AssignmentSet. Refused on the baseline, and unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
@@ -28,7 +33,9 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
   parameter :person_id, String, required: true
   parameter :from_unit_id, String, required: true, schema: { description: "The unit the place is in, or 'unassigned'." }
   parameter :from_position_id, String, schema: { description: "The position the place is in, when it is in one." }
-  parameter :to_unit_id, String, required: true, schema: { description: "The unit to move to, or 'unassigned'." }
+  parameter :to_unit_id, String, allow_blank: false, schema: { description: "The unit to move to, or 'unassigned'. Give exactly one of this or to_position_id." }
+  parameter :to_position_id, String, allow_blank: false, schema: { description: "A position of the scenario to place them in. Give exactly one of this or to_unit_id." }
+  requires_any_of :to_unit_id, :to_position_id
   parameter :allocation, Numeric, schema: { exclusiveMinimum: 0, maximum: 1,
                                             description: "The new place's allocation. Required unless moving to 'unassigned'." }
   parameter :role, String, schema: { description: "The person's role in the new place, such as Lead." }
@@ -63,10 +70,17 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
     held = ::TeamPlanning::Baseline::Membership.shares(person[:memberships].map { ::TeamPlanning::Baseline::Membership.new(**it) })
     moved, kept = held.partition { |place, _, _| from?(place, live) }
     raise Operations::Base::ParameterError, "#{map[:names][person_id]} holds no such place" if no_such_place?(moved, kept, live)
-    raise Operations::Base::ParameterError, "This scenario has no such unit" unless to_unit == UNASSIGNED || live.include?(to_unit)
+    raise Operations::Base::ParameterError, "This scenario has no such unit" unless to_position || to_unit == UNASSIGNED || live.include?(to_unit)
+    raise Operations::Base::ParameterError, "This scenario has no such position" if to_position && map[:positions].none? { it[:position_id] == to_position && live.include?(it[:unit_id]) }
 
-    kept.reject! { |place, _, _| place.position_id.nil? && place.unit_id == to_unit }
+    kept.reject! { |place, _, _| replaced?(place) }
     kept.map { |place, share, _| written(place, share) } + arriving
+  end
+
+  def replaced?(place)
+    return place.position_id == to_position if to_position
+
+    place.position_id.nil? && place.unit_id == to_unit
   end
 
   def from?(place, live)
@@ -95,12 +109,20 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
     return [] if to_unit == UNASSIGNED
     raise Operations::Base::ParameterError, "allocation is required" if params[:allocation].nil?
 
-    [ { unit_id: to_unit, allocation: params[:allocation].to_f, role: params[:role].presence }.compact ]
+    spot = to_position ? { position_id: to_position } : { unit_id: to_unit }
+    [ { **spot, allocation: params[:allocation].to_f, role: params[:role].presence }.compact ]
+  end
+
+  def to_position
+    return if params[:to_position_id].nil?
+    raise Operations::Base::ParameterError, "Give to_unit_id or to_position_id, not both" unless params[:to_unit_id].nil?
+
+    uuid!(:to_position_id)
   end
 
   def from_unit = unit_param(:from_unit_id)
 
-  def to_unit = unit_param(:to_unit_id)
+  def to_unit = params[:to_unit_id].nil? ? nil : unit_param(:to_unit_id)
 
   def unit_param(name) = params[name] == UNASSIGNED ? UNASSIGNED : uuid!(name)
 end
