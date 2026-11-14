@@ -16,7 +16,7 @@ class Operations::TeamPlanning::Plan < Operations::Base
   # @return [Hash] `{ plan_id, name, base_on, role, frozen }`
   def perform
     plan = plan!
-    { plan_id: plan.id, name: plan.name, base_on: plan.base_on.iso8601, role: plan.role_of(context.person.id),
+    { plan_id: plan.id, name: plan.name&.reveal, base_on: plan.base_on.iso8601, role: plan.role_of(context.person.id),
       frozen: PlanPolicy.frozen?(plan) }
   end
 end

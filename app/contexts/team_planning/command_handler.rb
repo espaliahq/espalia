@@ -42,7 +42,7 @@ class TeamPlanning::CommandHandler
   def rename_plan(plan_id, name)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.rename(name, renamed_by_id: actor_id!)
+      plan.rename(name, current: TeamPlanningPlan.find_by(id: plan_id)&.name&.reveal, renamed_by_id: actor_id!)
     end
   end
 

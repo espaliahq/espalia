@@ -52,7 +52,7 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
     error = assert_raises(TeamPlanning::Error) do
       handler(@editor).fork_scenario(@plan_id, SecureRandom.uuid_v7, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
     end
-    assert_equal "Next year has been deleted", error.message
+    assert_equal "This plan has been deleted", error.message
   end
 
   private

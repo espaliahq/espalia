@@ -27,13 +27,13 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
 
   def periods
     TeamPlanningScenario.where(plan_id: @plan_id).order(:created_at, :id)
-      .pluck(:name, :starts_on, :ends_on).map { |name, starts_on, ends_on| [ name, starts_on.iso8601, ends_on&.iso8601 ] }
+      .map { [ it.name.reveal, it.starts_on.iso8601, it.ends_on&.iso8601 ] }
   end
 
   should "give every plan a baseline on its base date" do
     baseline = TeamPlanningScenario.find(@plan_id)
     assert baseline.baseline?
-    assert_equal [ "Baseline", Date.new(2027, 1, 1), nil, nil ], [ baseline.name, baseline.starts_on, baseline.ends_on, baseline.relation ]
+    assert_equal [ "Baseline", Date.new(2027, 1, 1), nil, nil ], [ baseline.name.reveal, baseline.starts_on, baseline.ends_on, baseline.relation ]
   end
 
   should "keep each period as the tree gives it, as ends move" do

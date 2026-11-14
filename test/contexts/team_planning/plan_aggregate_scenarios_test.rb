@@ -27,7 +27,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       q1 = fork(name: "  Q1   plan ", ends_on: "2027-03-31")
 
       assert_kind_of TeamPlanning::Events::ScenarioForked, last_event
-      assert_equal({ plan_id: @plan_id, scenario_id: q1, parent_id: @plan_id, relation: "then", name: "Q1 plan",
+      assert_equal({ plan_id: @plan_id, scenario_id: q1, parent_id: @plan_id, relation: "then", name: Shreddable::Value.new("Q1 plan"),
                      starts_on: "2027-01-01", ends_on: "2027-03-31", forked_by_id: @editor_id }, last_event.data)
       assert_equal %w[2027-01-01 2027-03-31], period(q1)
     end
@@ -51,14 +51,14 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     should "refuse a period that doesn't fit the tree" do
       q1 = fork(ends_on: "2027-03-31")
 
-      assert_equal "A step after Q1 starts on 2027-04-01, the day it begins",
+      assert_equal "A step after its parent starts on 2027-04-01, the day it begins",
                    refusal { fork(q1, name: "Q2", starts_on: "2027-04-02", ends_on: "2027-06-30") }
       assert_equal "Say when this step ends", refusal { fork(q1, name: "Q2") }
       assert_equal "This step would end on 2027-03-30, before it starts on 2027-04-01",
                    refusal { fork(q1, name: "Q2", ends_on: "2027-03-30") }
-      assert_equal "An alternative covers Q1's period, 2027-01-01 to 2027-03-31",
+      assert_equal "An alternative covers its parent's period, 2027-01-01 to 2027-03-31",
                    refusal { fork(q1, relation: "instead", ends_on: "2027-04-30") }
-      assert_equal "An alternative covers Q1's period, 2027-01-01 to 2027-03-31",
+      assert_equal "An alternative covers its parent's period, 2027-01-01 to 2027-03-31",
                    refusal { fork(q1, relation: "instead", starts_on: "2027-01-02") }
     end
 
@@ -66,9 +66,9 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       q1 = fork(ends_on: "2027-03-31")
       fork(q1, name: "Q2", ends_on: "2027-06-30")
 
-      assert_equal "Q2 already follows Q1: fork an alternative to it instead",
+      assert_equal "Its parent already has a next step: fork an alternative to that step instead",
                    refusal { fork(q1, name: "Other Q2", ends_on: "2027-06-30") }
-      assert_equal "Q1 already follows the baseline: fork an alternative to it instead",
+      assert_equal "The baseline already has a next step: fork an alternative to that step instead",
                    refusal { fork(name: "Other Q1", ends_on: "2027-03-31") }
     end
 
@@ -91,7 +91,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
 
     should "refuse once the plan is deleted" do
       @plan.delete(deleted_by_id: @editor_id)
-      assert_equal "Next year has been deleted", refusal { fork(ends_on: "2027-03-31") }
+      assert_equal "This plan has been deleted", refusal { fork(ends_on: "2027-03-31") }
     end
   end
 
@@ -124,12 +124,12 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       assert_equal Date.new(2027, 1, 1), @plan.period_of(@q1).begin
     end
 
-    should "refuse a move that leaves a later step ending before it starts, naming it" do
-      assert_equal "Lean Q2 would end on 2027-05-31, before it starts on 2027-06-01",
+    should "refuse a move that leaves a step ending before it starts" do
+      assert_equal "A scenario after it would end on 2027-05-31, before it starts on 2027-06-01",
                    refusal { @plan.set_scenario_period(@q1, ends_on: "2027-05-31", set_by_id: @editor_id) }
-      assert_equal "Q2 would end on 2027-06-30, before it starts on 2027-07-01",
+      assert_equal "A scenario after it would end on 2027-06-30, before it starts on 2027-07-01",
                    refusal { @plan.set_scenario_period(@q1, ends_on: "2027-06-30", set_by_id: @editor_id) }
-      assert_equal "Q1 would end on 2026-12-31, before it starts on 2027-01-01",
+      assert_equal "This scenario would end on 2026-12-31, before it starts on 2027-01-01",
                    refusal { @plan.set_scenario_period(@q1, ends_on: "2026-12-31", set_by_id: @editor_id) }
       assert_equal %w[2027-01-01 2027-03-31], period(@q1)
     end
@@ -143,7 +143,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     should "refuse the baseline, an alternative and an unknown scenario" do
       assert_equal "The baseline stands on the base date and has no period",
                    refusal { @plan.set_scenario_period(@plan_id, ends_on: "2027-03-31", set_by_id: @editor_id) }
-      assert_equal "Lean Q1 is an alternative: it takes its period from Q1",
+      assert_equal "This scenario is an alternative: it takes its period from its parent",
                    refusal { @plan.set_scenario_period(@lean, ends_on: "2027-03-31", set_by_id: @editor_id) }
       assert_equal "This plan has no such scenario",
                    refusal { @plan.set_scenario_period(SecureRandom.uuid_v7, ends_on: "2027-03-31", set_by_id: @editor_id) }
@@ -158,7 +158,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     end
 
     should "refuse a scenario others fork from, saying how many" do
-      assert_equal "2 scenarios fork from Q1: remove them first", refusal { @plan.remove_scenario(@q1, removed_by_id: @editor_id) }
+      assert_equal "2 scenarios fork from this one: remove them first", refusal { @plan.remove_scenario(@q1, removed_by_id: @editor_id) }
     end
 
     should "remove a leaf, and never reuse its id" do
@@ -166,7 +166,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
 
       assert_equal({ plan_id: @plan_id, scenario_id: @q2, removed_by_id: @editor_id }, last_event.data)
       assert_not @plan.scenario?(@q2)
-      assert_equal "1 scenario forks from Q1: remove it first", refusal { @plan.remove_scenario(@q1, removed_by_id: @editor_id) }
+      assert_equal "1 scenario forks from this one: remove it first", refusal { @plan.remove_scenario(@q1, removed_by_id: @editor_id) }
       assert_equal "This plan already has that scenario",
                    refusal { @plan.fork_scenario(@q2, parent_id: @q1, relation: "instead", name: "Again", forked_by_id: @editor_id) }
       assert_equal "This plan has no such scenario", refusal { @plan.remove_scenario(@q2, removed_by_id: @editor_id) }

@@ -248,6 +248,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form | 2.2 |
 | 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
 | 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6) | 2.2 |
+| [#209](https://github.com/espaliahq/espalia/issues/209) | Plan and scenario names are sealed under the plan's key, and the names written before are sealed in place, the one rewrite of stored events | 2.3 |
 
 ### P3 Scenarios and changes
 

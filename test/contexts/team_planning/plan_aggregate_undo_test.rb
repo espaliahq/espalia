@@ -142,8 +142,8 @@ class TeamPlanning::PlanAggregateUndoTest < ActiveSupport::TestCase
     assert_equal "That change isn't undone, so there is nothing to redo", refusal { redo_change(@lean, change) }
     undo_change(@lean, change)
     assert_equal "That change is already undone", refusal { undo_change(@lean, change) }
-    assert_equal "Lean has no such change", refusal { undo_change(@lean, SecureRandom.uuid_v7) }
-    assert_equal "Lean has no such change", refusal { undo_change(@q1, change) }
+    assert_equal "This scenario has no such change", refusal { undo_change(@lean, SecureRandom.uuid_v7) }
+    assert_equal "This scenario has no such change", refusal { undo_change(@q1, change) }
     assert_equal "This plan has no such scenario", refusal { undo_change(SecureRandom.uuid_v7, change) }
   end
 
@@ -200,9 +200,9 @@ class TeamPlanning::PlanAggregateUndoTest < ActiveSupport::TestCase
     change = set(@lean, "Lead Engineer")
     @plan.delete(deleted_by_id: @ada_id)
 
-    assert_equal "Next year has been deleted", refusal { undo_change(@lean, change) }
-    assert_equal "Next year has been deleted", refusal { @plan.last_undoable_by(@lean, @ada_id) }
-    assert_equal "Next year has been deleted", refusal { @plan.last_redoable_by(@lean, @ada_id) }
+    assert_equal "This plan has been deleted", refusal { undo_change(@lean, change) }
+    assert_equal "This plan has been deleted", refusal { @plan.last_undoable_by(@lean, @ada_id) }
+    assert_equal "This plan has been deleted", refusal { @plan.last_redoable_by(@lean, @ada_id) }
   end
 
   should "rebuild what stands undone from the stream" do

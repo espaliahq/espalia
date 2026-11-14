@@ -14,9 +14,7 @@ class TeamPlanning::Projections::Scenarios
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
-
-  BASELINE_NAME = "Baseline"
+  CODE_VERSION = 2
 
   # @return [Array<Class>]
   def self.handled_events
@@ -37,7 +35,7 @@ class TeamPlanning::Projections::Scenarios
       data = event.data
       case event
       when TeamPlanning::Events::PlanCreated
-        write(data[:plan_id], event, plan_id: data[:plan_id], name: BASELINE_NAME, starts_on: data[:base_on])
+        write(data[:plan_id], event, plan_id: data[:plan_id], starts_on: data[:base_on])
       when TeamPlanning::Events::PlanDeleted then TeamPlanningScenario.where(plan_id: data[:plan_id]).delete_all
       when TeamPlanning::Events::ScenarioForked
         write(data[:scenario_id], event, **data.slice(:plan_id, :parent_id, :relation, :name, :starts_on, :ends_on, :forked_by_id))

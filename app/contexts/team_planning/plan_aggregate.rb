@@ -32,11 +32,12 @@ class TeamPlanning::PlanAggregate
   RELATIONS = %w[then instead].freeze
 
   # A scenario as the plan holds it. `ends_on` is held only for a `then`
-  # scenario; {#period_of} works out every period.
-  Scenario = Data.define(:id, :parent_id, :relation, :name, :ends_on)
+  # scenario; {#period_of} works out every period. Names are shreddable, so
+  # the plan holds none: a replay without keys must decide the same.
+  Scenario = Data.define(:id, :parent_id, :relation, :ends_on)
 
   # @return [String, nil]
-  attr_reader :plan_id, :name, :base_on, :created_by_id
+  attr_reader :plan_id, :base_on, :created_by_id
 
   def initialize
     @members = {}
@@ -66,18 +67,20 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
-  # Renames the plan. The same name writes nothing.
+  # Renames the plan. The plan holds no name, so the caller says what it is
+  # called now; the same name writes nothing.
   #
   # @param name [String]
+  # @param current [String, nil] the name it has now
   # @param renamed_by_id [String]
   # @raise [TeamPlanning::Error] if the plan is gone, or the name is blank or too long
-  def rename(name, renamed_by_id:)
+  def rename(name, current:, renamed_by_id:)
     ensure_open!
     name = require_name(name)
-    return if name == @name
+    return if name == current
 
     apply(TeamPlanning::Events::PlanRenamed.new(data: {
-      plan_id: @plan_id, name: name, previous_name: @name, renamed_by_id: renamed_by_id
+      plan_id: @plan_id, name: name, previous_name: current, renamed_by_id: renamed_by_id
     }))
   end
 
@@ -173,7 +176,7 @@ class TeamPlanning::PlanAggregate
     scenario = @scenarios[live_scenario!(scenario_id)]
     raise TeamPlanning::Error, "The baseline stands on the base date and has no period" unless scenario
     if scenario.relation == "instead"
-      raise TeamPlanning::Error, "#{scenario.name} is an alternative: it takes its period from #{name_of(scenario.parent_id)}"
+      raise TeamPlanning::Error, "This scenario is an alternative: it takes its period from #{parent_of(scenario.parent_id)}"
     end
 
     ends_on = require_date(ends_on)
@@ -200,7 +203,7 @@ class TeamPlanning::PlanAggregate
     children = children_of(scenario_id).size
     if children.positive?
       raise TeamPlanning::Error,
-            "#{children} #{children == 1 ? "scenario forks" : "scenarios fork"} from #{scenario.name}: remove #{children == 1 ? "it" : "them"} first"
+            "#{children} #{children == 1 ? "scenario forks" : "scenarios fork"} from this one: remove #{children == 1 ? "it" : "them"} first"
     end
 
     apply(TeamPlanning::Events::ScenarioRemoved.new(data: {
@@ -385,7 +388,7 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "The baseline inherits nothing to pin" if live_scenario!(scenario_id) == @plan_id
     return unless own_change?(scenario_id, key)
 
-    raise TeamPlanning::Error, "#{name_of(scenario_id)} already changes this: clear it to follow its parent, or set it"
+    raise TeamPlanning::Error, "#{this(scenario_id)} already changes this: clear it to follow its parent, or set it"
   end
 
   # The change that wins for each subject and facet along the scenario's
@@ -468,7 +471,6 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::PlanCreated do |event|
     @plan_id = event.data[:plan_id]
-    @name = event.data[:name]
     @base_on = Date.iso8601(event.data[:base_on])
     @created_by_id = event.data[:created_by_id]
     @members[@created_by_id] = "editor"
@@ -482,8 +484,8 @@ class TeamPlanning::PlanAggregate
     @members.delete(event.data[:person_id])
   end
 
-  on TeamPlanning::Events::PlanRenamed do |event|
-    @name = event.data[:name]
+  # The plan holds no name.
+  on TeamPlanning::Events::PlanRenamed do |_event|
   end
 
   on TeamPlanning::Events::PlanDeleted do |_event|
@@ -494,7 +496,7 @@ class TeamPlanning::PlanAggregate
     data = event.data
     ends_on = Date.iso8601(data[:ends_on]) if data[:relation] == "then"
     @scenarios[data[:scenario_id]] = Scenario.new(id: data[:scenario_id], parent_id: data[:parent_id],
-                                                  relation: data[:relation], name: data[:name], ends_on:)
+                                                  relation: data[:relation], ends_on:)
   end
 
   on TeamPlanning::Events::ScenarioPeriodSet do |event|
@@ -559,7 +561,7 @@ class TeamPlanning::PlanAggregate
   def own_change?(scenario_id, key) = changes_in(scenario_id).any? { it.key == key }
 
   def ensure_overrides!(scenario_id, key)
-    raise TeamPlanning::Error, "#{name_of(scenario_id)} doesn't change this, so there is nothing to clear" unless own_change?(scenario_id, key)
+    raise TeamPlanning::Error, "#{this(scenario_id)} doesn't change this, so there is nothing to clear" unless own_change?(scenario_id, key)
   end
 
   # A pin resolves as a change of the kind it keeps.
@@ -569,7 +571,7 @@ class TeamPlanning::PlanAggregate
 
   def log_entry!(scenario_id, event_id)
     @logs.fetch(scenario_id, []).find { it.event_id == event_id } or
-      raise TeamPlanning::Error, "#{name_of(scenario_id)} has no such change"
+      raise TeamPlanning::Error, "#{this(scenario_id)} has no such change"
   end
 
   def key_of(entry)
@@ -605,7 +607,7 @@ class TeamPlanning::PlanAggregate
 
   def ensure_open!
     raise TeamPlanning::Error, "No such plan" unless exists?
-    raise TeamPlanning::Error, "#{@name} has been deleted" if deleted?
+    raise TeamPlanning::Error, "This plan has been deleted" if deleted?
   end
 
   def require_date(value)
@@ -646,13 +648,13 @@ class TeamPlanning::PlanAggregate
   end
 
   def next_step(parent_id, starts_on, ends_on)
-    if (taken = children_of(parent_id).find { it.relation == "then" })
-      raise TeamPlanning::Error, "#{taken.name} already follows #{name_of(parent_id)}: fork an alternative to it instead"
+    if children_of(parent_id).any? { it.relation == "then" }
+      raise TeamPlanning::Error, "#{parent_of(parent_id).upcase_first} already has a next step: fork an alternative to that step instead"
     end
 
     start = parent_id == @plan_id ? @base_on : period_of(parent_id).end + 1
     if starts_on && starts_on != start
-      raise TeamPlanning::Error, "A step after #{name_of(parent_id)} starts on #{start.iso8601}, the day it begins"
+      raise TeamPlanning::Error, "A step after #{parent_of(parent_id)} starts on #{start.iso8601}, the day it begins"
     end
     raise TeamPlanning::Error, "Say when this step ends" if ends_on.nil?
     raise TeamPlanning::Error, "This step would end on #{ends_on.iso8601}, before it starts on #{start.iso8601}" if ends_on < start
@@ -666,7 +668,7 @@ class TeamPlanning::PlanAggregate
     period = period_of(parent_id)
     unless [ starts_on || period.begin, ends_on || period.end ] == [ period.begin, period.end ]
       raise TeamPlanning::Error,
-            "An alternative covers #{name_of(parent_id)}'s period, #{period.begin.iso8601} to #{period.end.iso8601}"
+            "An alternative covers #{parent_of(parent_id)}'s period, #{period.begin.iso8601} to #{period.end.iso8601}"
     end
 
     period
@@ -680,9 +682,11 @@ class TeamPlanning::PlanAggregate
       next unless period.end < period.begin
 
       raise TeamPlanning::Error,
-            "#{@scenarios[id].name} would end on #{period.end.iso8601}, before it starts on #{period.begin.iso8601}"
+            "#{ends.key?(id) ? "This scenario" : "A scenario after it"} would end on #{period.end.iso8601}, before it starts on #{period.begin.iso8601}"
     end
   end
 
-  def name_of(scenario_id) = scenario_id == @plan_id ? "the baseline" : @scenarios.fetch(scenario_id).name
+  def parent_of(scenario_id) = scenario_id == @plan_id ? "the baseline" : "its parent"
+
+  def this(scenario_id) = scenario_id == @plan_id ? "The baseline" : "This scenario"
 end
