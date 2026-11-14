@@ -57,7 +57,6 @@ class Tenant::ExchangeRatesController < ApplicationController
     raise ActiveRecord::RecordNotFound
   end
 
-  # A rate arrives as typed, so the spaces a person types around it are dropped here.
   def rate_params
     values = params.expect(exchange_rate: FIELDS).to_h.symbolize_keys
     values[:rate] = values[:rate].to_s.delete(" ") if values.key?(:rate)

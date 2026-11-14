@@ -16,6 +16,5 @@ module Currency
 
   INVALID = "must be an ISO 4217 currency code, such as AUD"
 
-  # Trims and upper-cases a typed code, so " aud " reads as AUD.
   NORMALIZE = ->(code) { code.to_s.strip.upcase }
 end
