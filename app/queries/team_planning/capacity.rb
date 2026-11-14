@@ -180,7 +180,8 @@ class TeamPlanning::Capacity
   # position they fill.
   def facts(seats)
     level_ids = seats.to_h { |seat, _| [ seat.id, (@own_levels || {})[seat.id] || seat.places.filter_map(&:level_id).first ] }
-    ordinal_of = FrameworkState::Level.where(tenant_id: @plan.tenant_id, level_id: level_ids.values.compact.uniq).pluck(:level_id, :ordinal).to_h
+    every_level = level_ids.values + seats.flat_map { |seat, _| seat.places.map(&:level_id) }
+    ordinal_of = FrameworkState::Level.where(tenant_id: @plan.tenant_id, level_id: every_level.compact.uniq).pluck(:level_id, :ordinal).to_h
     Model::Facts.new(level_of: level_ids.transform_values { ordinal_of[it] }.compact, ordinal_of:,
                      role_ids_of: seats.to_h { |seat, _| [ seat.id, seat.places.filter_map(&:role_id).uniq ] },
                      open_fte: seats.select { |seat, _| seat.kind == "position" }.to_h { |seat, _| [ seat.id, seat.fte ] })

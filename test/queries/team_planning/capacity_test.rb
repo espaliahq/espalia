@@ -241,6 +241,16 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_equal({ "units" => Rational("3.9") }, report.totals)
   end
 
+  should "price a place in a position at the position's level, though the person's own level differs" do
+    choose(families: { @engineering_family.role_family_id => { model: "units" } })
+    e3 = as_tenant { create(:framework_level, role_id: @engineer.role_id, ordinal: 3, title: "SWE") }
+    position_id = open_position(level: e3, fte: 1)
+    place_in(@ada, [ { position_id:, allocation: 1 } ])
+
+    place = seat(capacity, @ada.id).places.first
+    assert_equal [ nil, Rational("1.0") ], [ place.reason, place.figure.amount ]
+  end
+
   should "price a leaver as nothing, and charge their reports to the position backfilling them" do
     choose(families: { @engineering_family.role_family_id => { model: "units" } })
     as_tenant do
