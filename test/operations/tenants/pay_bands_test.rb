@@ -64,6 +64,12 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_equal [ nil, "Testonia" ], call(:PayBands)[:pay_bands].pluck(:location)
   end
 
+  should "read a band with no location as the band for any location" do
+    added = call(:AddPayBand, level_id: @level.level_id, currency: "AUD", period: "year", **FIGURES)
+
+    assert_nil added[:location]
+  end
+
   should "refuse a level outside the framework" do
     error = assert_raises(Operations::Base::ParameterError) { add(level_id: SecureRandom.uuid_v7) }
 

@@ -18,7 +18,7 @@ class PayBand < ApplicationRecord
   belongs_to :tenant
   belongs_to :updated_by, class_name: "User", optional: true
 
-  normalizes :location, with: ->(location) { known_spelling(location.to_s.squish) }
+  normalizes :location, with: ->(location) { known_spelling(location.to_s.squish) }, apply_to_nil: true
   normalizes :currency, with: ->(currency) { currency.to_s.strip.upcase }
 
   before_validation { self.location_key = self.class.location_key(location) }
