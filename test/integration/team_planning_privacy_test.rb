@@ -108,7 +108,8 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
                ends_on: "2027-04-30", position_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
                level_id: SecureRandom.uuid_v7, unit_id: SecureRandom.uuid_v7, fte: 1, basis: "new", predecessor_ids: [ UNIT_ID ],
                successor_ids: [ UNIT_ID ],
-               placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap" }
+               placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap",
+               rule: "capacity_model", value: {} }
     values.slice(*operation.parameters.keys)
   end
 

@@ -264,7 +264,10 @@ object. The first kind is `capacity_model` (7.1, below); 5.2 and 8.1 bring more.
 
 `RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
 that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
-on one subject both land. `Map#rule(name, unit_id:)` reads a rule in this order:
+on one subject both land. A plan editor sets one with `team_planning_set_rule`, which takes
+any registered kind, so a story that adds a kind adds no tool; `team_planning_clear_change`
+with facet `rule:<name>` hands it back to the parent. `Map#rule(name, unit_id:)` reads a
+rule in this order:
 
 1. The unit, then each unit above it on the scenario's map.
 2. The plan-wide value.
