@@ -126,21 +126,28 @@ class Views::Plans::Timeline < Views::Base
     @row += 1
   end
 
+  # A leaver and their backfill share the step the leaver goes in, so a bar
+  # that overlaps one before it takes a row of its own.
   def wide_lane(lane_id, &in_block)
     lane = lanes_by_id.fetch(lane_id)
-    bars = lane[:bars].select(&in_block)
-    return if bars.empty?
+    rows = lane[:bars].select(&in_block).each_with_object([]) do |bar, packed|
+      row = packed.find { |bars| bars.none? { it[:to] >= bar[:from] && bar[:to] >= it[:from] } }
+      row ? row << bar : packed << [ bar ]
+    end
+    rows.each do |bars|
+      div(class: "px-3 py-1.5 text-xs font-medium uppercase text-muted", style: cell(@row, 1)) { lane_label(bars.first) }
+      bars.each { wide_bar(lane, it) }
+      @row += 1
+    end
+  end
 
-    div(class: "px-3 py-1.5 text-xs font-medium uppercase text-muted", style: cell(@row, 1)) { lane_label(bars.first) }
-    bars.each do |bar|
-      div(class: "px-1 py-1", style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
-        bar_box(lane, bar) do
-          span(class: "sr-only") { "#{span_of(bar)}: " }
-          bar_text(lane, bar, starts: bar[:from], ends: bar[:to])
-        end
+  def wide_bar(lane, bar)
+    div(class: "px-1 py-1", style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
+      bar_box(lane, bar) do
+        span(class: "sr-only") { "#{span_of(bar)}: " }
+        bar_text(lane, bar, starts: bar[:from], ends: bar[:to])
       end
     end
-    @row += 1
   end
 
   def cell(row, column) = "grid-row: #{row}; grid-column: #{column}"

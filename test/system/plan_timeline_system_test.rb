@@ -68,6 +68,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         assert_selector "[data-timeline-lane]", text: /Bo\s+Reyes\s+to\s+Growth/
         assert_selector "[data-timeline-lane]", text: /from\s+Payments\s+Bo\s+Reyes/
       end
+      assert_leaver_clear_of_backfill
       assert_text "One other path runs through this plan"
       assert_no_sideways_overflow
     end
@@ -141,5 +142,19 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       context = AuthorizationContext.new(user: account.user, tenant_user: account, person: account.person)
       operation.call(context:, params:)
     end
+  end
+
+  # Ada and her backfill share Q1 hires, the step she leaves in.
+  def assert_leaver_clear_of_backfill
+    overlap = page.evaluate_script(<<~JS)
+      (() => {
+        const grid = document.querySelector("[data-timeline-grid]")
+        const box = (text) => [...grid.querySelectorAll("[data-timeline-lane]")]
+          .find((el) => el.textContent.includes(text)).getBoundingClientRect()
+        const a = box("leaves in"), b = box("Replaces Ada Quill")
+        return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+      })()
+    JS
+    assert_not overlap, "Ada's bar and her backfill's are drawn over each other"
   end
 end
