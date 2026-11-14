@@ -1,0 +1,79 @@
+{
+  "name": "tenants_change_budget_line",
+  "description": "Change a line of the tenant's approved budget, by budget_line_id from tenants_budget_lines. Give every field as the line reads afterwards: a field left out is cleared. Every plan reads the budget live. Give an amount, a head count or both. An amount needs a currency (ISO 4217) and a period, year or month, and is kept as entered, never converted; a line with no amount reads as no amount, never zero. Figures are decimal strings with at most two decimal places. origin is existing (a person's seat), replacement or new; approved_on applies to a new position only. role_id and level_id (from frameworks_get) are optional, as are location and cost_centre. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "budget_line_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "starts_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "ends_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "origin": {
+        "type": "string",
+        "enum": [
+          "existing",
+          "replacement",
+          "new"
+        ]
+      },
+      "approved_on": {
+        "type": "string",
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "amount": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "currency": {
+        "type": "string"
+      },
+      "period": {
+        "type": "string",
+        "enum": [
+          "year",
+          "month"
+        ]
+      },
+      "head_count": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "role_id": {
+        "type": "string"
+      },
+      "level_id": {
+        "type": "string"
+      },
+      "location": {
+        "type": "string"
+      },
+      "cost_centre": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "budget_line_id",
+      "starts_on",
+      "ends_on",
+      "origin"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

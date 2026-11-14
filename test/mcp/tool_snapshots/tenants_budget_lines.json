@@ -1,0 +1,20 @@
+{
+  "name": "tenants_budget_lines",
+  "description": "List the active tenant's approved budget lines: each line's period (starts_on, ends_on), origin (existing, replacement or new) and approved_on, amount with its currency and period (year or month) as entered and never converted, head count, and the role, level, location and cost centre it was approved for, where it names them. amount is null for a line with no amount, never zero. Give budget_line_id to read one line. Refused unless the caller is a tenant admin; a plan member reads lines through team_planning_budget_lines.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "budget_line_id": {
+        "type": "string"
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
