@@ -111,6 +111,48 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # @param plan_id [String]
+  # @param scenario_id [String] UUID minted by the caller
+  # @param parent_id [String] a scenario in the plan, or the plan's id for the baseline
+  # @param relation [String] "then" or "instead"
+  # @param name [String]
+  # @param ends_on [Date, String, nil]
+  # @param starts_on [Date, String, nil]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#fork_scenario
+  def fork_scenario(plan_id, scenario_id, parent_id:, relation:, name:, ends_on: nil, starts_on: nil)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.fork_scenario(scenario_id, parent_id:, relation:, name:, ends_on:, starts_on:, forked_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param ends_on [Date, String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#set_scenario_period
+  def set_scenario_period(plan_id, scenario_id, ends_on:)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.set_scenario_period(scenario_id, ends_on:, set_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#remove_scenario
+  def remove_scenario(plan_id, scenario_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.remove_scenario(scenario_id, removed_by_id: actor_id!)
+    end
+  end
+
   private
 
   # Someone who has left may still be made a viewer of a plan they are in, so
