@@ -291,9 +291,33 @@ the plan is a pin, and follow reality is a clear.
 
 ### Undo
 
-Undo and redo are events that point at the event they reverse. The stream is never
-edited. A scenario's history, with who made each change, is the stream filtered by
-scenario.
+Undo and redo are events that point at the event they reverse: `ChangeUndone` and
+`ChangeRedone` name it, with its scenario, subject and facet, and the change or pin then
+in effect there (`in_effect_event_id`), so the overrides projection writes it without
+replaying the stream. The stream is never edited.
+An undone change stays in the log and drops out of what the scenario resolves to, so the
+change before it, or the parent's value, shows through. Undoing a clear brings back what
+it cleared, and undoing a pin hands the facet back to the parent.
+
+Undo works on one subject and facet at a time, newest first. A change a later one
+replaced can't be undone until the later one is, and the refusal names it. Redo is
+refused the same way once a newer change lands on that facet. Undo with no change named
+takes back the caller's own latest change that can still be undone; Redo restores what
+their latest undo took back. Each person redoes only their own undos, and a change they
+make ends what they can redo, as in an editor. Undo and redo are for editors, like any
+other change.
+
+A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
+undo and redo, in order, with who made it and, while it stands undone, who undid it.
+`team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
+a former member.
+Production already holds changes, pins and clears, so the deploy that ships the history
+needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeploy's
+`verify` stops the deploy. The
+history and overrides projections read events through one mapping,
+`TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
+never reaches either table: the history names the field in `sealed_fields` and leaves
+the value out. Removing a scenario drops its history.
 
 ### Two people editing at once
 

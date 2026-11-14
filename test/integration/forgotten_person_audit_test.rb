@@ -93,6 +93,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "team_planning_plan_members"
     assert_includes reached, "team_planning_baseline"
     assert_includes reached, "team_planning_overrides"
+    assert_includes reached, "team_planning_history"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
 
     editors = Operations::OrgGraph::Editors.call(context: lead_context, params: {})

@@ -1,0 +1,104 @@
+# frozen_string_literal: true
+
+require "test_helper"
+require_relative "../../../support/projection_replay"
+
+class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
+  include ProjectionReplayHelpers
+
+  CAP = "rule:test_headcount_cap"
+
+  class HeadcountCap < TeamPlanning::RuleKind
+    def self.rule_name = "test_headcount_cap"
+    def self.description = "The most people a unit may hold"
+    def self.default = { "cap" => 10 }
+  end
+
+  setup do
+    TeamPlanning::RuleKinds.register(HeadcountCap)
+    @tenant = create(:tenant)
+    ActsAsTenant.current_tenant = @tenant
+    @person = create(:person, tenant: @tenant)
+    user = create(:user)
+    tenant_user = create(:tenant_user, tenant: @tenant, user:, person: @person, role: :admin)
+    @handler = TeamPlanning::CommandHandler.new(actor: AuthorizationContext.new(user:, tenant_user:, person: @person))
+    @plan_id = SecureRandom.uuid_v7
+    @handler.create_plan(@plan_id, name: "Next year", base_on: "2027-01-01")
+    @q1 = fork(@plan_id, "then", "Q1", ends_on: "2027-03-31")
+    @lean = fork(@q1, "instead", "Lean Q1")
+  end
+
+  teardown do
+    ActsAsTenant.current_tenant = nil
+    TeamPlanning::RuleKinds.unregister(HeadcountCap)
+  end
+
+  def fork(parent_id, relation, name, ends_on: nil)
+    SecureRandom.uuid_v7.tap { @handler.fork_scenario(@plan_id, it, parent_id:, relation:, name:, ends_on:) }
+  end
+
+  def set_cap(scenario_id, cap)
+    @handler.set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id:, subject_id: @plan_id,
+                                                                 end_state: { rule: "test_headcount_cap", value: { cap: } })
+  end
+
+  def history(scenario_id) = TeamPlanningHistoryEntry.where(scenario_id:).order(:position)
+
+  should "record each change, pin and clear in order, with its facet and who made it" do
+    set_cap(@q1, 8)
+    @handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
+    @handler.clear_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
+
+    assert_equal [ [ 1, "set", CAP, @person.id ] ], history(@q1).pluck(:position, :action, :facet, :actor_id)
+    assert_equal [ [ 1, "pin", @q1 ], [ 2, "clear", nil ] ], history(@lean).pluck(:position, :action, :pinned_from_scenario_id)
+    assert_equal({ "rule" => "test_headcount_cap", "value" => { "cap" => 8 } }, history(@q1).sole.end_state)
+  end
+
+  should "keep an undone entry, marked with who undid it, and unmark it on redo" do
+    set_cap(@q1, 8)
+    undone = @handler.undo_change(@plan_id, scenario_id: @q1)
+
+    set, undo = history(@q1).to_a
+    assert_equal [ undone, @person.id ], [ set.id, set.undone_by_id ]
+    assert_not_nil set.undone_at
+    assert_equal [ "undo", undone ], [ undo.action, undo.reverses_event_id ]
+
+    @handler.redo_change(@plan_id, scenario_id: @q1)
+    assert_equal [ [ "set", false ], [ "undo", false ], [ "redo", false ] ], history(@q1).map { [ it.action, it.undone? ] }
+  end
+
+  should "drop a removed scenario's history, and every entry of a deleted plan" do
+    set_cap(@q1, 8)
+    set_cap(@lean, 5)
+
+    @handler.remove_scenario(@plan_id, @lean)
+    assert_equal [ @q1 ], TeamPlanningHistoryEntry.distinct.pluck(:scenario_id)
+
+    @handler.delete_plan(@plan_id)
+    assert_empty TeamPlanningHistoryEntry.all
+  end
+
+  context "rebuild contract" do
+    should "reset! + replay produce identical read-model state, including the stable ids" do
+      set_cap(@q1, 8)
+      set_cap(@q1, 6)
+      @handler.undo_change(@plan_id, scenario_id: @q1)
+      @handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
+      @handler.redo_change(@plan_id, scenario_id: @q1)
+
+      before = snapshot_read_models(TeamPlanning::Projections::History, @tenant)
+      assert_equal 5, before[:history].size
+
+      TeamPlanning::Projections::History.reset!(tenant: @tenant)
+      assert_equal 0, TeamPlanningHistoryEntry.count
+      Projections::Replayer.replay(projection_class: TeamPlanning::Projections::History, tenant: @tenant)
+
+      assert_equal before, snapshot_read_models(TeamPlanning::Projections::History, @tenant)
+    end
+  end
+
+  should "keep one tenant's history out of another's" do
+    set_cap(@q1, 8)
+    ActsAsTenant.with_tenant(create(:tenant)) { assert_empty TeamPlanningHistoryEntry.all }
+  end
+end

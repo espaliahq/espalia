@@ -1,0 +1,52 @@
+# frozen_string_literal: true
+
+# What one plan event did to one facet of one subject in a scenario, as a read
+# model records it. The overrides and history projections both read events
+# through it, so they agree on what each event did.
+#
+# A shreddable value never leaves the event: {#end_state} holds only the
+# fields in clear, and {#sealed_fields} names the rest.
+TeamPlanning::ChangeEntry = Data.define(
+  :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
+  :actor_id, :at, :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id
+) do
+  # @param event [RubyEventStore::Event]
+  # @return [TeamPlanning::ChangeEntry, nil] nil for an event that changes no facet
+  def self.from(event)
+    fields = fields_of(event) or return nil
+
+    new(event_id: event.event_id, plan_id: event.data[:plan_id], scenario_id: event.data[:scenario_id],
+        at: event.timestamp, subject_id: nil, facet: nil, kind: nil, end_state: nil, sealed_fields: [],
+        pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, **fields)
+  end
+
+  def self.fields_of(event)
+    data = event.data
+    case event
+    when TeamPlanning::Events::Change
+      { action: "set", subject_id: data[:subject_id], facet: event.key.last, kind: event.class.name,
+        actor_id: data[:set_by_id], **split(data.except(*TeamPlanning::Events::Change::FIELDS)) }
+    when TeamPlanning::Events::ChangePinned
+      { action: "pin", **data.slice(:subject_id, :facet, :kind, :pinned_from_scenario_id, :pinned_from_event_id),
+        actor_id: data[:pinned_by_id], **split(data[:end_state].to_h) }
+    when TeamPlanning::Events::ChangeCleared
+      { action: "clear", **data.slice(:subject_id, :facet), actor_id: data[:cleared_by_id] }
+    when TeamPlanning::Events::ChangeUndone
+      { action: "undo", **data.slice(:subject_id, :facet), reverses_event_id: data[:undone_event_id], actor_id: data[:undone_by_id] }
+    when TeamPlanning::Events::ChangeRedone
+      { action: "redo", **data.slice(:subject_id, :facet), reverses_event_id: data[:redone_event_id], actor_id: data[:redone_by_id] }
+    end
+  end
+
+  def self.split(end_state)
+    sealed, clear = end_state.partition { |_, value| value.is_a?(Shreddable::Value) }
+    { end_state: clear.to_h, sealed_fields: sealed.map { it.first.to_s } }
+  end
+  private_class_method :fields_of, :split
+
+  # @return [Boolean] whether it sets an end state: a set or a pin
+  def sets? = %w[set pin].include?(action)
+
+  # @return [Boolean] whether it reverses another entry
+  def reverses? = !reverses_event_id.nil?
+end
