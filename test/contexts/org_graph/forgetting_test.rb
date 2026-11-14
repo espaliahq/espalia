@@ -115,8 +115,27 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert @leaver.reload.forgotten?
     end
 
+    should "destroy their key in every plan at once, and no other" do
+      plans = Array.new(2) { SecureRandom.uuid_v7 }
+      theirs = plans.map { PlanKeyStore.person_identifier(@tenant.id, it, @leaver.id) }
+      someone_elses = PlanKeyStore.person_identifier(@tenant.id, plans.first, create(:person, tenant: @tenant).id)
+      plan_key = PlanKeyStore.plan_identifier(@tenant.id, plans.first)
+      [ *theirs, someone_elses, plan_key ].each { PlanKeyStore.new.create(it) }
+
+      forgetting.forget_due(on: TODAY)
+
+      theirs.each { assert_nil PlanKeyStore.new.key_of(it) }
+      assert PlanKeyStore.new.key_of(someone_elses)
+      assert PlanKeyStore.new.key_of(plan_key)
+      assert_raises(PlanKeyStore::Destroyed) do
+        PlanKeyStore.new.create(PlanKeyStore.person_identifier(@tenant.id, SecureRandom.uuid_v7, @leaver.id))
+      end
+    end
+
     should "roll the person back whole when the last step fails" do
       member = create(:tenant_user, tenant: @tenant, person: @leaver)
+      plan_key = PlanKeyStore.person_identifier(@tenant.id, SecureRandom.uuid_v7, @leaver.id)
+      PlanKeyStore.new.create(plan_key)
       run = forgetting
       erase_identifiers = run.method(:erase_identifiers)
       failing = lambda do |person|
@@ -131,6 +150,7 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_equal [ @leaver.id, nil ], [ member.reload.person_id, member.forgotten_at ]
       assert_not_instance_of OrgGraph::Events::PersonForgotten, last_event(@leaver)
       assert OrgLeaver.where(person_id: @leaver.id).exists?
+      assert PlanKeyStore.new.key_of(plan_key)
     end
 
     should "spare a leaver whose retention period grew after the run began" do

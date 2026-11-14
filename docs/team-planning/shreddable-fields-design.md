@@ -79,7 +79,8 @@ tenant-<tenant_id>/plan-<plan_id>/person-<person_id>
 - **`destroy_plan` and `destroy_person` write in the caller's transaction** and queue
   nothing, so the transaction that writes `PlanDeleted` or `PersonForgotten` can destroy
   the keys too, and a plan or person is never half forgotten. `OrgGraph::Forgetting`
-  will call `destroy_person` inside its own per-person transaction.
+  calls `destroy_person` inside its own per-person transaction, after it writes
+  `PersonForgotten`.
 - **A destroyed key stays destroyed.** Its row keeps no key material, and `create`
   refuses a new key for a deleted plan or a forgotten person, including a plan that never
   held a key for them.

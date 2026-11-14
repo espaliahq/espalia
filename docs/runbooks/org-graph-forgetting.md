@@ -2,7 +2,7 @@
 
 Use this to turn on a tenant's scheduled forgetting, to forget one leaver on request, and to know what a database restore does to people already forgotten (story 8.2). The design is in [org-graph-design.md → Forgetting a person](../team-planning/org-graph-design.md#forgetting-a-person-r7).
 
-Forgetting erases a leaver's email, external id and raw HRIS payload from their `people` row, replaces their name with "Former member", unlinks their tenant membership from its login and Slack id, deletes their own notifications in the tenant, removes their name from the notifications others received, drops them from their reports' stored HRIS payloads and from skipped feedback-exchange records, and writes `PersonForgotten` to their person stream. It cannot be undone from inside the app. Every command and log line names people by id and gives counts, never a name or an email.
+Forgetting erases a leaver's email, external id and raw HRIS payload from their `people` row, replaces their name with "Former member", unlinks their tenant membership from its login and Slack id, deletes their own notifications in the tenant, removes their name from the notifications others received, drops them from their reports' stored HRIS payloads and from skipped feedback-exchange records, destroys their key in every Team Planning plan, and writes `PersonForgotten` to their person stream. It cannot be undone from inside the app. Every command and log line names people by id and gives counts, never a name or an email.
 
 ## How a former member reads
 
@@ -63,7 +63,7 @@ Each person is one transaction: the row, the membership, the notifications, the 
 
 ## Restoring from a backup
 
-**A restore can undo forgetting.** It brings back the name, email and external id of everyone forgotten after the backup was taken, and removes their `PersonForgotten`.
+**A restore can undo forgetting.** It brings back the name, email and external id of everyone forgotten after the backup was taken, and removes their `PersonForgotten`. It also brings back their keys in every plan, so what plans held about them reads again until they are forgotten again.
 
 - **People forgotten because their period ended** are forgotten again by the next scheduled run, since their leaving dates are in the restored events. That happens only if the tenant's schedule is on.
 - **People forgotten on request before their due date are not forgotten again** after a restore until their own period ends. Nothing in the app records the request outside the database you restored.

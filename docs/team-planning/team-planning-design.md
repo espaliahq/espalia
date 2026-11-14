@@ -483,8 +483,8 @@ yet. Three properties of the events keep it possible, and must not be given up:
 
 ## Decided, with a known cost
 
-**Erasure inside a live plan.** When the Org Graph forgets a person, a handler on
-`PersonForgotten` destroys that person's key in every plan at once. Every value a plan
+**Erasure inside a live plan.** When the Org Graph forgets a person, the same
+transaction that writes `PersonForgotten` destroys that person's key in every plan at once. Every value a plan
 held about them, such as their pay, a corrected level or a planned promotion, becomes
 unreadable. They stay in each plan's history as a former member with no identity.
 
