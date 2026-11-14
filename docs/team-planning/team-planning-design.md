@@ -841,9 +841,10 @@ and a list on a phone. Each drift change links the scenarios whose plan it meets
 Drift and status each give a change's `sources`, from `TeamPlanning::SourceOfTruth`: who
 supplies what the change moves, so the place someone goes to make it happen. A person fact
 comes from its `OrgFactProvider`, or from Espalia where nobody chose one. A level, a manager
-and a departure move a person fact. A membership, a unit and a succession come from the
-providers of the units they touch, as a unit mirrored from an HRIS takes its members from
-the sync. A unit only the plan holds is Espalia's. Drift's `names` cover units as well as
+and a departure move a person fact. A membership the Org Graph holds comes from whoever
+supplied it, as Espalia can hold one in a unit an HRIS mirrors. A unit, a succession and a
+planned placement come from the providers of the units they touch, as a unit mirrored from
+an HRIS takes its members from the sync. A unit only the plan holds is Espalia's. Drift's `names` cover units as well as
 people, so a move reads "from Payments to Growth".
 
 ## Plan-held data

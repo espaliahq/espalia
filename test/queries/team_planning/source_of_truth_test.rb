@@ -40,8 +40,12 @@ class TeamPlanning::SourceOfTruthTest < ActiveSupport::TestCase
   end
 
   context "a membership, a unit or a succession" do
+    should "come from whoever supplied the membership, as Espalia can hold one in a mirrored unit" do
+      assert_equal %w[espalia], @sources.of_drift(change(:membership_started, unit_id: @sales))
+      assert_equal %w[hibob], @sources.of_drift(change(:moved, unit_id: @payments, from_unit_id: @sales, provider: "hibob"))
+    end
+
     should "come from the providers of the units it touches" do
-      assert_equal %w[espalia hibob], @sources.of_drift(change(:moved, unit_id: @payments, from_unit_id: @sales))
       assert_equal %w[hibob], @sources.of_drift(change(:unit_renamed, unit_id: @sales))
       assert_equal %w[espalia], @sources.of_drift(change(:unit_succeeded, succession_id: @split))
       assert_equal %w[hibob], @sources.of_plan("assignment", unit_ids: [ @sales, @sales ])

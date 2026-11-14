@@ -14,7 +14,7 @@ class Operations::TeamPlanning::Drift < Operations::Base
               "date) and to (today). A change it no longer believes comes back withdrawn. Each change carries `meets`, the " \
               "plan's latest change to the facet it moves, one per scenario that holds one (a scenario_id equal " \
               "to the plan_id is the baseline), `from_plan`, true when the change was applied from this plan, and `sources`, who supplies what it " \
-              "moves: the provider of a person fact, or of the units a membership, unit or succession touches " \
+              "moves: the provider of a person fact, whoever supplied a membership, or the providers of the units a unit or succession touches " \
               "(\"espalia\" for one Espalia supplies, or an HRIS such as \"hibob\"). " \
               "A person's placements are one facet, so a move in one placement meets the plan's whole list. " \
               "People are named by id, and `names` maps every person and unit id the changes name to a name; a forgotten " \
