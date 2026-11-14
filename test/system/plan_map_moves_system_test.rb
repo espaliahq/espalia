@@ -78,6 +78,11 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
         click_button_with_js_fallback("Save move", expect_text: "Move saved.")
 
         within(position) { assert_text "Cy Loose · 100%" }
+
+        click_selector_with_js_fallback("button[aria-label='Move Cy Loose']", expect_text: "Moving Cy Loose")
+        within("#move-person-modal") do
+          assert_equal Views::Plans::MoveDialog.position_choice(@position), find_field("To").value
+        end
       end
 
       should "move a position to another unit in the scenario shown, with Move…" do

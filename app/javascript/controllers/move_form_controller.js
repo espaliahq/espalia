@@ -1,9 +1,10 @@
 // Fills one of the scenario map's move dialogs from the button that opened
 // it: "Move" for a person, "Move position" for a position. On the window
 // `modal:open` event it points the form at what moves, and picks the
-// destination: where a drag dropped (`data-move-to`), or where it is now. In
-// the person dialog, moving to Unassigned hides the allocation and role, which
-// a place there doesn't have; the position dialog has neither.
+// destination: where a drag dropped (`data-move-to`), or where it is now
+// (`data-move-at`: a person's position, else the unit). In the person dialog,
+// moving to Unassigned hides the allocation and role, which a place there
+// doesn't have; the position dialog has neither.
 //
 // Usage:
 //   <form data-controller="move-form" data-move-form-unassigned-value="unassigned">…</form>
@@ -45,7 +46,7 @@ export default class extends BaseController {
 
     this.element.action = data.moveAction
     this.nameTarget.textContent = data.moveName || ""
-    this.toTarget.value = data.moveTo || data.moveFrom || ""
+    this.toTarget.value = data.moveTo || data.moveAt || data.moveFrom || ""
     if (this.hasFromTarget) this.fromTarget.value = data.moveFrom || ""
     if (this.hasFromPositionTarget) this.fromPositionTarget.value = data.moveFromPosition || ""
     if (this.hasAllocationTarget) this.allocationTarget.value = data.moveAllocation || "100"

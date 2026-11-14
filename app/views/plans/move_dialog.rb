@@ -24,7 +24,7 @@ class Views::Plans::MoveDialog < Views::Base
   # @return [Hash]
   def self.trigger(url:, name:, from:, place:, share: nil)
     { action: "click->modal#open", modal_target_id: ID, move_action: url, move_name: name, move_from: from,
-      move_from_position: place&.dig(:position_id).to_s, move_role: place&.dig(:role).to_s, move_allocation: percent(share) }
+      move_from_position: place&.dig(:position_id).to_s, move_at: place&.dig(:position_id) ? position_choice(place[:position_id]) : from, move_role: place&.dig(:role).to_s, move_allocation: percent(share) }
   end
 
   # @param share [Rational, nil]
