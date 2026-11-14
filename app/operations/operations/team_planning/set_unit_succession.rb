@@ -25,17 +25,17 @@ class Operations::TeamPlanning::SetUnitSuccession < Operations::Base
 
   # @return [Hash] `{ plan_id, scenario_id, succession_id, predecessor_ids, successor_ids, retired_ids }`
   def perform
-    plan = editable_plan!
-    scenario_id = scenario_for(plan)
-    map = resolved(plan, scenario_id)
-    succession_id = succession_for(map)
+    scenario_id = scenario_for
     predecessor_ids, successor_ids = ids(:predecessor_ids), ids(:successor_ids)
-    check!(map, succession_id, predecessor_ids, successor_ids)
-    retiring = map.units.select { predecessor_ids.include?(it.id) }
-    check_retirable!(map, retiring.map(&:id))
-
-    refusing_bad_plans { handler.set_changes(plan.id, changes(scenario_id, succession_id, predecessor_ids, successor_ids, retiring)) }
-    { plan_id: plan.id, scenario_id:, succession_id:, predecessor_ids: predecessor_ids.sort,
+    succession_id = retiring = nil
+    set_unit_changes!(scenario_id) do |map|
+      succession_id = succession_for(map)
+      check!(map, succession_id, predecessor_ids, successor_ids)
+      retiring = map.units.select { predecessor_ids.include?(it.id) }
+      check_retirable!(map, retiring.map(&:id))
+      changes(scenario_id, succession_id, predecessor_ids, successor_ids, retiring)
+    end
+    { plan_id: plan_id!, scenario_id:, succession_id:, predecessor_ids: predecessor_ids.sort,
       successor_ids: successor_ids.sort, retired_ids: retiring.map(&:id).sort }
   end
 

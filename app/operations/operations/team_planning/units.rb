@@ -18,8 +18,8 @@ class Operations::TeamPlanning::Units < Operations::Base
   # @return [Hash] `{ plan_id, scenario_id, units, retired_units, successions }`
   def perform
     plan = plan!
-    scenario_id = scenario_for(plan)
-    map = resolved(plan, scenario_id)
+    scenario_id = scenario_for
+    map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure }
     { plan_id: plan.id, scenario_id:, units: map.units.map { unit_row(it) }, retired_units: map.retired_units.map { unit_row(it) },
       successions: map.successions.map { { succession_id: it.id, predecessor_ids: it.predecessor_ids, successor_ids: it.successor_ids } } }
   end

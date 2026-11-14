@@ -17,16 +17,13 @@ class Operations::TeamPlanning::RetireUnit < Operations::Base
 
   # @return [Hash] `{ plan_id, scenario_id, unit_id }`
   def perform
-    plan = editable_plan!
-    scenario_id = scenario_for(plan)
-    map = resolved(plan, scenario_id)
-    unit = live_unit!(map, uuid!(:unit_id))
-    refuse!("Move or retire its sub-units first") if map.units.any? { it.parent_id == unit.id }
-
-    refusing_bad_plans do
-      handler.set_change(plan.id, ::TeamPlanning::Events::UnitRetired, scenario_id:, subject_id: unit.id,
-                                                                                   end_state: as_it_stands(unit))
+    scenario_id = scenario_for
+    unit_id = uuid!(:unit_id)
+    set_unit_changes!(scenario_id) do |map|
+      unit = live_unit!(map, unit_id)
+      refuse!("Move or retire its sub-units first") if map.units.any? { it.parent_id == unit.id }
+      [ { kind: ::TeamPlanning::Events::UnitRetired, scenario_id:, subject_id: unit.id, end_state: as_it_stands(unit) } ]
     end
-    { plan_id: plan.id, scenario_id:, unit_id: unit.id }
+    { plan_id: plan_id!, scenario_id:, unit_id: }
   end
 end

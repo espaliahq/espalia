@@ -1,32 +1,28 @@
 # frozen_string_literal: true
 
-# What the unit tools share: the scenario they name, resolved, and the checks
-# the Org Graph would make, run against that scenario. An ancestor's later
-# edit can still break them; the change resolves anyway, and a misfit marks it.
+# What the unit tools share: the write, with the checks the Org Graph would
+# make run under the plan's lock against the scenario as it then resolves. An
+# ancestor's later edit can still break them; the change resolves anyway, and
+# a misfit marks it.
 module Operations::TeamPlanning::UnitChange
   include Operations::TeamPlanning::PlanRead
 
   private
 
-  # Refuses a viewer before the checks run, so a change reads the same to
-  # them as to an outsider, whatever its parameters.
-  #
-  # @return [TeamPlanningPlan]
-  # @raise [Operations::Base::ParameterError] "No such plan" unless the caller is an editor
-  def editable_plan!
-    plan = plan!
-    return plan if PlanPolicy.new(context, plan).update?
-
-    raise Operations::Base::ParameterError, "No such plan"
-  end
-
-  # @param plan [TeamPlanningPlan]
   # @return [String] the scenario_id parameter, or the baseline's id
-  def scenario_for(plan) = scenario_id!(:scenario_id) || plan.id
+  def scenario_for = scenario_id!(:scenario_id) || plan_id!
 
-  # @return [TeamPlanning::Baseline::Map] the scenario by id, with no names
-  def resolved(plan, scenario_id)
-    refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure }
+  # Stores the changes the block returns in one write. The block runs once the
+  # caller may edit the plan, so a viewer or outsider gets "No such plan"
+  # before any check.
+  #
+  # @yieldparam map [TeamPlanning::Baseline::Map] the scenario by id, with no names
+  # @yieldreturn [Array<Hash>] each `{ kind:, scenario_id:, subject_id:, end_state: }`
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  def set_unit_changes!(scenario_id)
+    refusing_bad_plans do
+      handler.set_changes(plan_id!) { yield ::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id:).structure }
+    end
   end
 
   # @return [TeamPlanning::Baseline::Unit]

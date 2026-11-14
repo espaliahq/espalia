@@ -24,26 +24,25 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
 
   # @return [Hash] `{ plan_id, scenario_id, unit_id, name, parent_id, level_id }`
   def perform
-    plan = editable_plan!
-    scenario_id = scenario_for(plan)
-    map = resolved(plan, scenario_id)
+    scenario_id = scenario_for
     unit_id = params[:unit_id] && uuid!(:unit_id)
-    current = unit_id && (map.units + map.retired_units).find { it.id == unit_id }
-    refuse!("There is no such unit in this scenario") if unit_id && !current
-
-    level_id = params[:level_id] ? uuid!(:level_id) : current&.level_id
-    parent_id = parent_for(current)
-    check_level!(map, current, level_id, parent_id)
-    unit_id ||= SecureRandom.uuid_v7
-    end_state = { name: params[:name] || current&.name, parent_id:, level_id: }
-
-    stored = refusing_bad_plans do
-      handler.set_change(plan.id, ::TeamPlanning::Events::UnitSet, scenario_id:, subject_id: unit_id, end_state:)
+    subject_id = unit_id || SecureRandom.uuid_v7
+    stored = set_unit_changes!(scenario_id) do |map|
+      [ { kind: ::TeamPlanning::Events::UnitSet, scenario_id:, subject_id:, end_state: end_state_in(map, unit_id) } ]
     end
-    { plan_id: plan.id, scenario_id:, unit_id:, **stored.changes_in(scenario_id).last.data.slice(:name, :parent_id, :level_id) }
+    { plan_id: plan_id!, scenario_id:, unit_id: subject_id,
+      **stored.changes_in(scenario_id).last.data.slice(:name, :parent_id, :level_id) }
   end
 
   private
+
+  def end_state_in(map, unit_id)
+    current = unit_id && ((map.units + map.retired_units).find { it.id == unit_id } || refuse!("There is no such unit in this scenario"))
+    level_id = params[:level_id] ? uuid!(:level_id) : current&.level_id
+    parent_id = parent_for(current)
+    check_level!(map, current, level_id, parent_id)
+    { name: params[:name] || current&.name, parent_id:, level_id: }
+  end
 
   def parent_for(current)
     refuse!("Give parent_id or top_level, not both") if params[:top_level] && params[:parent_id]

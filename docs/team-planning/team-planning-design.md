@@ -151,12 +151,14 @@ merge. `team_planning_set_unit_succession` retires each live predecessor in the 
 as the Org Graph's own succession does. People stay where they are until an assignment moves
 them.
 
-The checks the Org Graph makes run in the operations, against the scenario as it resolves
-before the write: the level is in the taxonomy and below the parent's, the parent is live,
-no unit moves beneath itself, no unit retires with live sub-units, and no succession loops
-back. Two edits can still break them: an ancestor's later change, and another editor's write
-landing between the resolve and this one, since the plan's lock is taken only for the write.
-The change resolves anyway, and 3.8 marks it.
+The checks the Org Graph makes run in the operations, under the plan's lock, against the
+scenario as it then resolves: the level is in the taxonomy and below the parent's, the parent
+is live, no unit moves beneath itself, no unit retires with live sub-units, and no succession
+loops back. A rename or move fills what the caller leaves out from that same resolve, so it
+can't undo another editor's change. Only an ancestor's later edit can still break the checks;
+the change resolves anyway, and 3.8 marks it. The unit tools write through
+`CommandHandler#set_changes`, whose block returns the changes, since a succession lands with
+the retirements it implies.
 
 ### Positions as built
 

@@ -72,11 +72,21 @@ class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
   should "store a batch of changes together, or none of them when one is refused" do
     changes = [ { kind: TitleSet, scenario_id: @q1, subject_id: @ada, end_state: { title: "Lead" } },
                 { kind: SiteSet, scenario_id: SecureRandom.uuid_v7, subject_id: @ada, end_state: { site: "York" } } ]
-    assert_raises(TeamPlanning::Error) { handler(@editor).set_changes(@plan_id, changes) }
+    assert_raises(TeamPlanning::Error) { handler(@editor).set_changes(@plan_id) { changes } }
     assert_empty TeamPlanning::Repository.new.load_plan(@plan_id).changes_in(@q1)
 
-    handler(@editor).set_changes(@plan_id, [ changes.first, changes.last.merge(scenario_id: @q1) ])
+    handler(@editor).set_changes(@plan_id) { [ changes.first, changes.last.merge(scenario_id: @q1) ] }
     assert_equal [ TitleSet, SiteSet ], TeamPlanning::Repository.new.load_plan(@plan_id).changes_in(@q1).map(&:class)
+  end
+
+  should "work a batch out under the plan's lock, so its checks can't race another edit" do
+    held = nil
+    handler(@editor).set_changes(@plan_id) do
+      held = try_lock_from_another_session
+      [ { kind: TitleSet, scenario_id: @q1, subject_id: @ada, end_state: { title: "Lead" } } ]
+    end
+
+    assert_equal false, held
   end
 
   should "hold the plan's lock from load to store, so a second editor's change loads after the first lands" do
