@@ -1,0 +1,62 @@
+# frozen_string_literal: true
+
+# Where a unit stands in a scenario and what it is called: a unit the plan
+# creates, or an Org Graph unit renamed or moved. It shares its facet with
+# {UnitRetired}, so a later UnitSet brings a retired unit back.
+#
+# @!attribute [r] data
+#   @return [Hash] the fields every {Change} holds, plus:
+#   @option data [String] :name
+#   @option data [String, nil] :parent_id nil for a unit at the top
+#   @option data [String] :level_id an Org Graph taxonomy level
+class TeamPlanning::Events::UnitSet < TeamPlanning::Events::Change
+  FACET = "unit"
+  ID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+
+  def self.facet = FACET
+
+  # @param end_state [Hash] `{ name:, parent_id:, level_id: }`
+  # @return [Hash]
+  # @raise [TeamPlanning::Error] for a blank or long name, or a level or parent that isn't an id
+  def self.end_state(end_state)
+    name = end_state[:name].to_s.squish
+    raise TeamPlanning::Error, "A unit needs a name" if name.empty?
+
+    limit = TeamPlanning::PlanAggregate::NAME_LIMIT
+    raise TeamPlanning::Error, "A unit's name can be at most #{limit} characters" if name.length > limit
+
+    { name:, parent_id: TeamPlanning::Events::UnitSet.id_or_nil(end_state[:parent_id], "parent"),
+      level_id: TeamPlanning::Events::UnitSet.id_or_nil(end_state[:level_id], "level") ||
+        raise(TeamPlanning::Error, "A unit needs a level") }
+  end
+
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param data [Hash]
+  # @return [TeamPlanning::Baseline::Map] with the unit live, as this change left it
+  def self.apply_to(map, data)
+    id = data[:subject_id]
+    known = (map.units + map.retired_units).find { it.id == id }
+    unit = TeamPlanning::Baseline::Unit.new(id:, name: data[:name], parent_id: data[:parent_id], level_id: data[:level_id],
+                                            owner_ids: known&.owner_ids || [])
+    map.with(units: (map.units.reject { it.id == id } + [ unit ]).sort_by { [ it.name, it.id ] },
+             retired_units: map.retired_units.reject { it.id == id })
+  end
+
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param subject_id [String]
+  # @return [Hash, nil] the unit as it stands, nil unless it is live
+  def self.read_from(map, subject_id:, facet: self.facet)
+    map.units.find { it.id == subject_id }&.to_h&.slice(:name, :parent_id, :level_id)
+  end
+
+  # @param value [String, nil]
+  # @param what [String] named in the refusal
+  # @return [String, nil] the id, downcased
+  # @raise [TeamPlanning::Error] unless blank or a UUID
+  def self.id_or_nil(value, what)
+    return nil if value.blank?
+    return value.downcase if value.is_a?(String) && value.match?(ID)
+
+    raise TeamPlanning::Error, "The #{what} must be an id"
+  end
+end

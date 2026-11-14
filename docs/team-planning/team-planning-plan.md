@@ -247,7 +247,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 2.2 | Shreddable fields on events, and the aggregate guard: an aggregate never decides on a shreddable value | 2.1 |
 | 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form | 2.2 |
 | 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
-| 2.5 | A handler on `PersonForgotten` destroys that person's key in every plan at once (decision 6) | 2.2 |
+| 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6) | 2.2 |
 
 ### P3 Scenarios and changes
 

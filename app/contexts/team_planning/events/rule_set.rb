@@ -31,6 +31,24 @@ class TeamPlanning::Events::RuleSet < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map]
   def self.apply_to(map, data) = map.with(rules: map.rules.with_rule(data[:subject_id], data[:rule], data[:value]))
 
+  # The value the subject follows on the map, set there or inherited. The
+  # subject is the plan's id or a unit on the map.
+  #
+  # @param map [TeamPlanning::Baseline::Map]
+  # @param subject_id [String]
+  # @param facet [String] "rule:<name>"
+  # @return [Hash, nil] `{ rule:, value: }`, or nil for a unit not on the map
+  def self.read_from(map, subject_id:, facet: self.facet)
+    rule = facet.delete_prefix("#{self.facet}:")
+    return unless subject_id == map.rules.plan_id || map.units.any? { it.id == subject_id }
+
+    { rule:, value: map.rule(rule, unit_id: subject_id == map.rules.plan_id ? nil : subject_id) }
+  end
+
+  # @param facet [String]
+  # @return [Boolean] whether it names a rule
+  def self.holds?(facet) = facet.start_with?("#{self.facet}:")
+
   # @return [Array(String, String)] the subject and this rule, so each rule wins on its own
   def key = [ data[:subject_id], "#{self.class.facet}:#{data[:rule]}" ]
 end

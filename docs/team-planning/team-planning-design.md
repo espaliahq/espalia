@@ -113,7 +113,9 @@ descendants. A descendant shows the change because its state is resolved at read
 
 The last change for a subject and facet wins. A facet is the part of a subject one kind
 of event sets: a person's assignment, their level and their reporting line are three
-facets, so `LevelSet` never competes with `AssignmentSet`. "Rebase" is this resolution run over a new base, so
+facets, so `LevelSet` never competes with `AssignmentSet`. Two kinds may share a facet on
+purpose: `PositionSet` and `PositionClosed` both set `position`, so a later set reopens a
+closed position. "Rebase" is this resolution run over a new base, so
 nothing has to be rewritten in storage. A descendant's explicit change survives an
 ancestor's edit because it is later in the chain, not because anything protected it.
 
@@ -136,6 +138,30 @@ says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
 
+### Unit changes as built
+
+`UnitSet` carries a unit's whole end state: its name, its parent and its level. It creates a
+unit (the plan mints the id), renames one or moves one, and a later `UnitSet` brings a
+retired unit back. `UnitRetired` shares its facet, `unit`, so whichever of the two comes
+later wins. Since winning drops any earlier `UnitSet`, a retirement carries the unit as it
+stood, so a unit the plan created, or renamed, retires as the plan had it. A unit's level never changes, as in the Org Graph: a unit at a new level is a new
+unit with a succession.
+
+`UnitSuccessionSet` is its own subject, with the facet `succession`. It names which units
+carry on from which: one predecessor and several successors is a split, several and one is a
+merge. `team_planning_set_unit_succession` retires each live predecessor in the same write,
+as the Org Graph's own succession does. People stay where they are until an assignment moves
+them.
+
+The checks the Org Graph makes run in the operations, under the plan's lock, against the
+scenario as it then resolves: the level is in the taxonomy and below the parent's, the parent
+is live, no unit moves beneath itself, no unit retires with live sub-units, and no succession
+loops back. A rename or move fills what the caller leaves out from that same resolve, so it
+can't undo another editor's change. Only an ancestor's later edit can still break the checks;
+the change resolves anyway, and 3.8 marks it. The unit tools write through
+`CommandHandler#set_changes`, whose block returns the changes, since a succession lands with
+the retirements it implies.
+
 ### Positions as built
 
 `PositionSet` and `PositionClosed` share the facet `position`, so the later one wins and a
@@ -145,6 +171,29 @@ mapping, and the write checks that the level belongs to the role. `basis` is `ba
 which is committed budget, or `new`, which is planned; the map reads it as the position's
 budget. A position's unit is not checked at write: a position in a retired unit still
 resolves, and 3.8 marks it. The baseline has no positions, so every one starts in a plan.
+
+### Assignments as built
+
+`AssignmentSet` ([#229](https://github.com/espaliahq/espalia/issues/229)) has the facet
+`assignment`, and its subject is a person. It holds the person's whole placement list:
+each placement is in a position or a unit, never both, with an allocation above 0 and at
+most 1 and an optional role. An empty list leaves the person unassigned. A child scenario
+that changes one placement owns the whole list from then on, so a later edit to the
+parent's list no longer reaches it.
+
+- **Totals are read, not refused.** A person's `allocation_total` may pass 1, and 4.6
+  flags it. A total is `nil`, which means unknown, when the HRIS gave a place no
+  allocation. A check must not read unknown as under-allocated.
+- **Unassigned is derived.** After the changes apply, `Map#settled` gives each position
+  placement its position's unit, then lists everyone in no live unit as unassigned. A
+  placement in a closed position keeps its `position_id` with no unit, and a placement in
+  a unit gone from the map counts for nothing.
+- **Open FTE** is a position's FTE less each occupant's allocation times their FTE, an
+  unknown FTE counting as full time. It goes below 0 when a position is overfilled.
+- **A person not on the map is never placed, but never silently.** The map lists them in
+  `unresolved` with `why`: "joined after the base date", which updating the plan to today
+  (4.2) fixes, or "has left", for a leaver by the base date or a forgotten person. 3.8
+  marks them and the changes tab shows them.
 
 ### Adding a change kind
 
@@ -161,7 +210,9 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    resolver.
 3. **The map.** If the kind adds something the map doesn't hold, add it to
    `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
-   any names it needs in `Baseline#named`, never in `apply_to`.
+   any names it needs in `Baseline#named`, never in `apply_to`. Anything derived from
+   several kinds, such as who is unassigned, belongs in `Map#settled`, which `Resolution`
+   runs once every change has applied.
 4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
    `ChangeWrite` and calls `set_change!`. Put the checks the aggregate can't make, such as
    whether a framework role exists, in the block you pass it, since the aggregate reads no
@@ -205,6 +256,38 @@ A rule's value may one day be sensitive: an on-cost rate, a guardrail on pay. So
 names what is wrong and never repeats the value. A kind declares `shreddable?`, and until
 [#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
 yes is refused at registration.
+
+### Clearing and pinning
+
+`ChangeCleared` hands one facet of one subject back to the scenario's parent. The aggregate
+keeps every change, pin and clear a scenario makes in one ordered log, and works out what is
+in effect from it, so a clear hides the earlier changes for its key and resolution reads the
+parent's value again. Nothing leaves the log, so undoing a clear (3.10) can bring them back.
+Once `AssignmentSet` lands (3.6), clearing a person's assignment clears their whole
+placement list, since the list is one facet.
+
+`ChangePinned` keeps what a scenario inherits for a facet as it resolves now, so a later
+change in the parent no longer reaches it. It records the end state, the kind of change it
+stands for, and where the value came from: the ancestor scenario and the event that set
+it, or neither when the parent's resolved map gave it (a rule above the subject, or the
+baseline). The aggregate replays a pin as a change of that kind. The baseline has no
+parent, so it pins nothing, and a scenario can't pin a facet it already changes.
+
+To pin a value the baseline gives, a kind reads its end state off a map with
+`Change.read_from(map, subject_id:, facet:)`. The caller chooses the map: the parent's
+resolved map for a pin, and a map built from the Org Graph today for a change's status
+(4.3). A kind that doesn't implement it can still be pinned from an ancestor's change.
+
+`TeamPlanning::ChangeKinds.all` finds every kind of change: each `Change` subclass in
+`app/contexts/team_planning/events`, so a new kind touches only its own file. It loads that
+directory before it looks, since the projections subscribe before production eager-loads. A
+test checks every kind is complete. A clear or a pin acts on a subject and facet, whichever
+kind last set it; pinning a baseline value asks each readable kind of the facet in turn. The overrides
+projection subscribes through it and writes
+`team_planning_overrides`: one row per scenario, subject and facet the scenario sets or
+pinned. `team_planning_overrides` lists them, each beside what the scenario would inherit
+without it, and says when a pin's parent has moved on. Reconcile (4.5) reuses both: keep
+the plan is a pin, and follow reality is a clear.
 
 ### Undo
 
@@ -261,6 +344,24 @@ anyone `PlanPolicy#show?` refuses. It returns a `Map`:
 a plan's changes before anything is named. `call` joins the names last from the
 `people` table, for the people, their managers and the units' owners, so anyone forgotten
 reads "Former member". The forgotten-person audit walks it.
+
+### The drift reader
+
+`TeamPlanning::Drift` reads `OrgGraph::ChangesBetween` by learned date, from the day
+before the base date to today, so it covers exactly what the baseline leaves out. A
+backdated correction learned since the base shows with the day it took effect. A plan
+whose base is still to come has no drift.
+
+Each change says what it meets in the plan: for each scenario, the latest planned change
+to the facet it moves. Each kind decides which Org Graph changes move its facet, through
+`Change.subject_moved_by`, which returns the subject's id or nil. A person's placements
+are one facet, so a move in one placement meets the plan's whole list for that person.
+A change applied from this plan comes back `from_plan`, matched through the `plan_id` on
+its event; nothing sets one until approval exists. Whether a planned change is done,
+pending or conflicting is 4.3's status, below.
+
+`team_planning_drift` gives the same report to MCP, with people by id and a `names` map
+beside them.
 
 ## Status is derived, never stored
 
@@ -529,10 +630,10 @@ yet. Three properties of the events keep it possible, and must not be given up:
 
 ## Decided, with a known cost
 
-**Erasure inside a live plan.** When the Org Graph forgets a person, a handler on
-`PersonForgotten` destroys that person's key in every plan at once. Every value a plan
-held about them, such as their pay, a corrected level or a planned promotion, becomes
-unreadable. They stay in each plan's history as a former member with no identity.
+**Erasure inside a live plan.** When the Org Graph forgets a person, the transaction
+that writes `PersonForgotten` destroys that person's key in every plan at once. Every
+value a plan held about them, such as their pay, a corrected level or a planned
+promotion, becomes unreadable. They stay in each plan's history as a former member with no identity.
 
 One thing can still name them: a note. A note is free text under the plan's key, so one
 that mentions the person stays readable to the plan's members until the plan is

@@ -82,7 +82,8 @@ tenant-<tenant_id>/plan-<plan_id>/person-<person_id>
   `TeamPlanning::SyncHandlers::DeletedPlanKeys` calls `destroy_plan` in the transaction
   that appends `PlanDeleted`, after the append, so it covers every path that deletes a
   plan and a later shreddable field on that event still finds its key. `OrgGraph::Forgetting`
-  will call `destroy_person` inside its own per-person transaction.
+  calls `destroy_person` inside its own per-person transaction, after it writes
+  `PersonForgotten`.
 - **A destroyed key stays destroyed.** Its row keeps no key material, and `create`
   refuses a new key for a deleted plan or a forgotten person, including a plan that never
   held a key for them.
