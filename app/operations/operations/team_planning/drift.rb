@@ -22,27 +22,29 @@ class Operations::TeamPlanning::Drift < Operations::Base
 
   parameter :plan_id, String, required: true
 
-  # @return [Hash] `{ plan_id, from, to, changes, names }`
-  def perform
-    plan = plan!
-    report = ::TeamPlanning::Drift.new(context:, plan:).call
-    { plan_id: plan.id, from: report.from.iso8601, to: report.to.iso8601,
-      changes: report.changes.map { serialize(it) },
-      names: names_for(report) }
+  # @param report [TeamPlanning::Drift::Report]
+  # @return [Hash] `{ from, to, changes, names }`, the shape team_planning_rebase_preview shares
+  def self.payload(report)
+    { from: report.from.iso8601, to: report.to.iso8601, changes: report.changes.map { serialize(it) }, names: names_for(report) }
   end
 
-  private
-
   # Every id the changes name, so a client never meets an id it can't name.
-  def names_for(report)
+  def self.names_for(report)
     ids = report.changes.flat_map { [ it.change.person_id, it.change.before&.dig("manager_id"), it.change.after&.dig("manager_id") ] }
     ids.compact.uniq.index_with { report.name_of(it) }
   end
 
-  def serialize(drifted)
+  def self.serialize(drifted)
     change = drifted.change
     change.to_h.merge(kind: change.kind.to_s, effective_on: change.effective_on.iso8601,
                       learned_at: change.learned_at&.utc&.iso8601,
                       from_plan: drifted.from_plan, meets: drifted.meets.map(&:to_h))
+  end
+  private_class_method :names_for, :serialize
+
+  # @return [Hash] `{ plan_id, from, to, changes, names }`
+  def perform
+    plan = plan!
+    { plan_id: plan.id, **self.class.payload(::TeamPlanning::Drift.new(context:, plan:).call) }
   end
 end

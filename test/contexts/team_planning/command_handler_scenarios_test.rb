@@ -30,6 +30,16 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
     assert(events.all? { it.metadata[:tenant_id] == @tenant.id })
   end
 
+  should "let an editor describe a scenario, writing nothing when it already holds the text" do
+    q1 = SecureRandom.uuid_v7
+    handler(@editor).fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+    handler(@editor).describe_scenario(@plan_id, q1, description: "Hire two seniors")
+    handler(@editor).describe_scenario(@plan_id, q1, description: "Hire two seniors", current: -> { "Hire two seniors" })
+
+    described = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).of_type([ TeamPlanning::Events::ScenarioDescribed ]).to_a
+    assert_equal [ [ "Hire two seniors", @editor.person.id ] ], described.map { [ it.data[:description].reveal, it.data[:described_by_id] ] }
+  end
+
   should "read as missing to a viewer, an outsider, and anyone once every editor has gone" do
     q1 = SecureRandom.uuid_v7
     handler(@editor).fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
@@ -37,6 +47,7 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
     commands = lambda do |actor|
       [ -> { handler(actor).fork_scenario(@plan_id, SecureRandom.uuid_v7, parent_id: q1, relation: "instead", name: "Mine") },
         -> { handler(actor).rename_scenario(@plan_id, q1, name: "Mine") },
+        -> { handler(actor).describe_scenario(@plan_id, q1, description: "Mine") },
         -> { handler(actor).set_scenario_period(@plan_id, q1, ends_on: "2027-04-30") },
         -> { handler(actor).remove_scenario(@plan_id, q1) } ]
     end
@@ -48,6 +59,23 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
     @editor.person.update!(status: "inactive")
     commands.call(@editor).each { assert_equal "No such plan", assert_raises(TeamPlanning::Error, &it).message }
     assert_equal 1, event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).of_type([ TeamPlanning::Events::ScenarioForked ]).count
+  end
+
+  should "let an editor move the base, moving the first step and its alternative and noting it in the baseline's history" do
+    q1 = SecureRandom.uuid_v7
+    lean = SecureRandom.uuid_v7
+    handler(@editor).fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+    handler(@editor).fork_scenario(@plan_id, lean, parent_id: q1, relation: "instead", name: "Lean Q1")
+    assert_equal "No such plan",
+                 assert_raises(TeamPlanning::Error) { handler(@viewer).rebase_plan(@plan_id, base_on: "2027-02-01", expected_base_on: "2027-01-01", conflicts: []) }.message
+
+    handler(@editor).rebase_plan(@plan_id, base_on: "2027-02-01", expected_base_on: "2027-01-01", conflicts: [])
+
+    assert_equal Date.new(2027, 2, 1), TeamPlanningPlan.find(@plan_id).base_on
+    assert_equal [ Date.new(2027, 2, 1) ] * 3, TeamPlanningScenario.where(id: [ @plan_id, q1, lean ]).pluck(:starts_on)
+    entry = TeamPlanningHistoryEntry.find_by!(scenario_id: @plan_id)
+    assert_equal [ "rebase", @editor.person.id, { "base_on" => "2027-02-01", "previous_base_on" => "2027-01-01", "conflicts" => [] } ],
+                 [ entry.action, entry.actor_id, entry.end_state ]
   end
 
   should "refuse a scenario in a deleted plan" do

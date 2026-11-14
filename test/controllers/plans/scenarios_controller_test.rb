@@ -45,20 +45,38 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       assert_nil scenario_named("Nope")
     end
 
-    should "rename a scenario and go back where they were" do
-      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "Lean Q1" } },
+    should "rename and describe a scenario and go back where they were" do
+      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "Lean Q1", description: "Hire two seniors" } },
                                                headers: { "HTTP_REFERER" => map_plan_url(@plan_id, scenario: @q1) }
 
       assert_redirected_to map_plan_url(@plan_id, scenario: @q1)
-      assert_equal "Renamed to Lean Q1.", flash[:notice]
+      assert_equal "Saved Lean Q1.", flash[:notice]
+      assert_equal "Hire two seniors", scenario_named("Lean Q1")&.description&.reveal
       assert_equal "Lean Q1", scenario_named("Lean Q1")&.name&.reveal
     end
 
-    should "say why a rename was refused" do
+    should "clear a description with a blank" do
+      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "Q1 hires", description: "Hire two seniors" } }
+      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "Q1 hires", description: "" } }
+
+      assert_nil scenario_named("Q1 hires").description&.reveal
+    end
+
+    should "say why an edit was refused" do
       patch plan_scenario_path(@plan_id, @plan_id), params: { scenario: { name: "Now" } }
 
       assert_redirected_to plan_path(@plan_id)
-      assert_equal "Couldn't rename the scenario: The baseline can't be renamed", flash[:alert]
+      assert_equal "Couldn't save the scenario: The baseline can't be renamed", flash[:alert]
+
+      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { description: "x" * 501 } }
+      assert_equal "Couldn't save the scenario: A scenario's description can be at most 500 characters", flash[:alert]
+    end
+
+    should "say the name was saved when only the description is refused" do
+      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "First quarter", description: "x" * 501 } }
+
+      assert_equal "Saved First quarter, but couldn't save its description: " \
+                   "A scenario's description can be at most 500 characters", flash[:alert]
     end
 
     should "be offered the controls on the plan page and the map" do
@@ -67,19 +85,20 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       assert_select "form[action='#{plan_scenarios_path(@plan_id)}']"
 
       get map_plan_path(@plan_id, scenario: @q1)
-      assert_select "button[data-rename-name='Q1 hires']", text: "Rename…"
+      assert_select "button[data-rename-name='Q1 hires']", text: "Edit…"
     end
   end
 
   context "a viewer" do
     setup { sign_in @viewer.user }
 
-    should "be refused a fork and a rename" do
+    should "be refused a fork and an edit" do
       post plan_scenarios_path(@plan_id), params: { scenario: { parent_id: @q1, relation: "then", name: "Q2 hires", ends_on: "2027-06-30" } }
       assert_redirected_to root_path
-      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "Lean Q1" } }
+      patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "Lean Q1", description: "Mine" } }
       assert_redirected_to root_path
 
+      assert_nil scenario_named("Q1 hires").description&.reveal
       assert_nil scenario_named("Q2 hires")
       assert_nil scenario_named("Lean Q1")
     end
@@ -90,7 +109,7 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-modal-target-id]", count: 0
 
       get map_plan_path(@plan_id, scenario: @q1)
-      assert_select "button", text: "Rename…", count: 0
+      assert_select "button", text: "Edit…", count: 0
     end
   end
 

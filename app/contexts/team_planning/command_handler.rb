@@ -144,6 +144,22 @@ class TeamPlanning::CommandHandler
 
   # @param plan_id [String]
   # @param scenario_id [String]
+  # @param description [String, nil]
+  # @param current [#call] gives the description the scenario holds now, or
+  #   {TeamPlanning::PlanAggregate::UNKNOWN}; called under the plan's lock,
+  #   once the actor is allowed and the command valid
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#describe_scenario
+  def describe_scenario(plan_id, scenario_id, description:, current: -> { TeamPlanning::PlanAggregate::UNKNOWN })
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.describe_scenario(scenario_id, description:, described_by_id: actor_id!, current:)
+    end
+  end
+
+  # @param plan_id [String]
+  # @param scenario_id [String]
   # @param ends_on [Date, String]
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
@@ -152,6 +168,25 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       plan.set_scenario_period(scenario_id, ends_on:, set_by_id: actor_id!)
+    end
+  end
+
+  # A block, when given, finds the conflicts under the plan's lock, so a change
+  # made since the preview can't slip past. It isn't called once the base has
+  # moved, so the refusal names the move.
+  #
+  # @param plan_id [String]
+  # @param conflicts [Array<Hash>] used when no block is given
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the plan's lock, once the actor may edit it
+  # @yieldreturn [Array<Hash>] the conflicts, as {TeamPlanning::PlanAggregate#rebase} takes them
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#rebase
+  def rebase_plan(plan_id, base_on:, expected_base_on:, conflicts: [])
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      conflicts = yield(plan) if block_given? && plan.base_on.to_s == expected_base_on.to_s
+      plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!)
     end
   end
 
