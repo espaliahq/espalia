@@ -51,6 +51,13 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [Hash, nil] the end state as {.end_state} stores it, or nil when the map doesn't hold the subject
   def self.read_from(map, subject_id:, facet: self.facet) = raise(NotImplementedError, "#{name} can't read its end state off a map")
 
+  # The subject whose facet of this kind an Org Graph change moves, for the
+  # drift report. A kind that meets no Org Graph change keeps the default.
+  #
+  # @param change [OrgGraph::ChangesBetween::Change]
+  # @return [String, nil] the subject's id, nil when it moves none
+  def self.subject_moved_by(change) = nil
+
   # @return [Boolean] whether this kind names its facet and says how it lands
   def self.complete? = %i[facet apply_to].all? { overrides?(it) }
 
