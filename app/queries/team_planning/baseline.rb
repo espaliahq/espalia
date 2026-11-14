@@ -194,11 +194,14 @@ class TeamPlanning::Baseline
   # scenario whose step they leave in, and `position_id`, their backfill.
   #
   # What the plan holds about them stays sealed: `planned_level`, a promotion;
-  # `plan_data`, the plan's corrections by field; and for a hire the plan
+  # `plan_data`, the plan's corrections by field; `capacity_overrides`, a
+  # planner's capacity figure by position or unit id; and for a hire the plan
   # added, `placeholder`, its label. Read a value through {#planned_or_own}.
   Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
-                       :memberships, :manager_position_id, :departure, :planned_level, :plan_data, :placeholder) do
-    def initialize(manager_position_id: nil, departure: nil, planned_level: nil, plan_data: {}, placeholder: nil, **) = super
+                       :memberships, :manager_position_id, :departure, :planned_level, :plan_data, :placeholder,
+                       :capacity_overrides) do
+    def initialize(manager_position_id: nil, departure: nil, planned_level: nil, plan_data: {}, placeholder: nil,
+                   capacity_overrides: {}, **) = super
 
     # A hire the plan added, which no Org Graph id names.
     #

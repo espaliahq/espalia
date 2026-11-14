@@ -144,6 +144,22 @@ class TeamPlanning::CommandHandler
 
   # @param plan_id [String]
   # @param scenario_id [String]
+  # @param description [String, nil]
+  # @param current [#call] gives the description the scenario holds now, or
+  #   {TeamPlanning::PlanAggregate::UNKNOWN}; called under the plan's lock,
+  #   once the actor is allowed and the command valid
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#describe_scenario
+  def describe_scenario(plan_id, scenario_id, description:, current: -> { TeamPlanning::PlanAggregate::UNKNOWN })
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.describe_scenario(scenario_id, description:, described_by_id: actor_id!, current:)
+    end
+  end
+
+  # @param plan_id [String]
+  # @param scenario_id [String]
   # @param ends_on [Date, String]
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor

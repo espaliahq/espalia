@@ -5,13 +5,15 @@
 # Projected from the plan streams by {TeamPlanning::Projections::Scenarios},
 # and nothing else writes it. Its id is the scenario's, so a rebuild keeps it.
 # The baseline shares its plan's id, has no parent or relation, and starts on
-# the plan's base date with no end. The name is sealed under the plan's key.
+# the plan's base date with no end. The name and description are sealed under
+# the plan's key.
 #
 class TeamPlanningScenario < ApplicationRecord
   include Shreddable::Column
 
   acts_as_tenant :tenant
   shreddable_column :name, by: :plan
+  shreddable_column :description, by: :plan
 
   belongs_to :tenant
   # Optional, so a projection never fails on a row it doesn't own.

@@ -30,6 +30,16 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
     assert(events.all? { it.metadata[:tenant_id] == @tenant.id })
   end
 
+  should "let an editor describe a scenario, writing nothing when it already holds the text" do
+    q1 = SecureRandom.uuid_v7
+    handler(@editor).fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+    handler(@editor).describe_scenario(@plan_id, q1, description: "Hire two seniors")
+    handler(@editor).describe_scenario(@plan_id, q1, description: "Hire two seniors", current: -> { "Hire two seniors" })
+
+    described = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).of_type([ TeamPlanning::Events::ScenarioDescribed ]).to_a
+    assert_equal [ [ "Hire two seniors", @editor.person.id ] ], described.map { [ it.data[:description].reveal, it.data[:described_by_id] ] }
+  end
+
   should "read as missing to a viewer, an outsider, and anyone once every editor has gone" do
     q1 = SecureRandom.uuid_v7
     handler(@editor).fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
@@ -37,6 +47,7 @@ class TeamPlanning::CommandHandlerScenariosTest < ActiveSupport::TestCase
     commands = lambda do |actor|
       [ -> { handler(actor).fork_scenario(@plan_id, SecureRandom.uuid_v7, parent_id: q1, relation: "instead", name: "Mine") },
         -> { handler(actor).rename_scenario(@plan_id, q1, name: "Mine") },
+        -> { handler(actor).describe_scenario(@plan_id, q1, description: "Mine") },
         -> { handler(actor).set_scenario_period(@plan_id, q1, ends_on: "2027-04-30") },
         -> { handler(actor).remove_scenario(@plan_id, q1) } ]
     end

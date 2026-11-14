@@ -28,6 +28,17 @@ class TeamPlanning::PlanAggregate
   )
 
   NAME_LIMIT = 120
+  DESCRIPTION_LIMIT = 500
+  # A description the caller couldn't read, so {#describe_scenario} writes.
+  UNKNOWN = Object.new.freeze
+
+  # A browser submits each line break as CRLF but counts it as one character
+  # against the field's maxlength, so the limit counts it as one too.
+  #
+  # @param text [String, nil]
+  # @return [String, nil] the description as stored, nil for a blank
+  def self.normalise_description(text) = text.to_s.gsub("\r\n", "\n").strip.presence
+
   ROLES = %w[editor viewer].freeze
   RELATIONS = %w[then instead].freeze
   # A conflict an update carries: where it was read, its key, and the change it read.
@@ -229,6 +240,33 @@ class TeamPlanning::PlanAggregate
 
     apply(TeamPlanning::Events::ScenarioRenamed.new(data: {
       plan_id: @plan_id, scenario_id: scenario_id, name: name, previous_name: current, renamed_by_id: renamed_by_id
+    }))
+  end
+
+  # Says what a scenario is for, or clears it with a blank. The aggregate
+  # never sees a description once written, so the caller says what the
+  # scenario holds now, read from a projection, and the same text writes
+  # nothing. {UNKNOWN}, when the caller can't be sure, always writes.
+  #
+  # @param scenario_id [String]
+  # @param description [String, nil]
+  # @param described_by_id [String]
+  # @param current [#call] gives the description now, or {UNKNOWN}; called
+  #   only once the command passes its checks
+  # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown or
+  #   the baseline, or the description too long
+  def describe_scenario(scenario_id, description:, described_by_id:, current: -> { UNKNOWN })
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline can't be described" unless @scenarios[live_scenario!(scenario_id)]
+
+    description = self.class.normalise_description(description)
+    if description && description.length > DESCRIPTION_LIMIT
+      raise TeamPlanning::Error, "A scenario's description can be at most #{DESCRIPTION_LIMIT} characters"
+    end
+    return if description == current.call
+
+    apply(TeamPlanning::Events::ScenarioDescribed.new(data: {
+      plan_id: @plan_id, scenario_id: scenario_id, description: description, described_by_id: described_by_id
     }))
   end
 
@@ -585,6 +623,9 @@ class TeamPlanning::PlanAggregate
   end
 
   on TeamPlanning::Events::ScenarioRenamed do |_event|
+  end
+
+  on TeamPlanning::Events::ScenarioDescribed do |_event|
   end
 
   on TeamPlanning::Events::ScenarioPeriodSet do |event|
