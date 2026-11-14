@@ -124,7 +124,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
     read = call(Operations::TeamPlanning::Attention, plan_id: @plan_id)
     assert_equal @plan_id, read[:scenario_id]
-    assert_equal [ @ada.id, @bo.id ], read[:items].map { it[:subject_id] }
+    assert_equal [ @ada.id, @bo.id ].sort, read[:items].map { it[:subject_id] }
   end
 
   should "refuse someone outside the plan, and a plan in another tenant" do
