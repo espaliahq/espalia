@@ -26,7 +26,32 @@ class RebuildLockTest < ActiveSupport::TestCase
     assert_equal [ 0 ], locks_at_close
   end
 
+  should "keep the test's own failure when the unlock fails too" do
+    error = assert_raises(RuntimeError) do
+      with_failing_unlock { while_rebuilding(create(:tenant)) { raise "the test's failure" } }
+    end
+
+    assert_equal "the test's failure", error.message
+  end
+
+  should "raise a failed unlock when nothing else failed" do
+    assert_raises(PG::ConnectionBad) { with_failing_unlock { while_rebuilding(create(:tenant)) { } } }
+  end
+
   private
+
+  def with_failing_unlock(&)
+    failing_unlock = Module.new do
+      define_method(:exec) do |sql, &block|
+        raise PG::ConnectionBad, "server closed the connection" if sql.include?("unlock_all")
+
+        super(sql, &block)
+      end
+    end
+    connect = PG.method(:connect)
+
+    PG.stub(:connect, ->(*args) { connect.call(*args).tap { it.singleton_class.prepend(failing_unlock) } }, &)
+  end
 
   def advisory_locks_held_by(pid)
     ActiveRecord::Base.connection.select_value(
