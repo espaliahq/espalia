@@ -56,12 +56,32 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
       assert_equal [ 1, 1 ], result.units.map(&:people)
     end
 
-    should "count only the active people Espalia holds from that HRIS" do
+    should "leave out a row Espalia holds as inactive, and one held from another HRIS" do
       @people["hb-2"].update!(status: "inactive")
       create(:person, tenant: @tenant, hris_source: "bamboohr", external_id: "hb-9")
 
       result = preview({ "hb-1" => value("Payments", id: "7"), "hb-2" => value("Payments", id: "7"),
-                         "hb-9" => value("Payments", id: "7"), "hb-404" => value("Payments", id: "7") }, target: "level")
+                         "hb-9" => value("Payments", id: "7") }, target: "level")
+
+      assert_equal 1, result.people
+    end
+
+    should "count the people the next sync adds, as the mirror places them in the same run" do
+      create(:person, tenant: @tenant, email: "sam@example.com", external_id: nil, hris_source: nil)
+
+      result = preview({ "hb-1" => value("Payments", id: "7"), "hb-404" => value("Payments", id: "7"),
+                         "hb-405" => value("Growth", id: "9") }, target: "level")
+
+      assert_equal [ [ "Payments", 2 ], [ "Growth", 1 ] ], result.units.map { [ it.label, it.people ] }
+      assert_equal 3, result.people
+    end
+
+    should "leave out a person Espalia has forgotten" do
+      create(:person, tenant: @tenant, hris_source: "hibob").update_columns(
+        name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current, status: "inactive",
+        forgotten_external_id_digest: OrgGraph::Forgetting.digest(@tenant, "hibob", "hb-404"))
+
+      result = preview({ "hb-1" => value("Payments", id: "7"), "hb-404" => value("Payments", id: "7") }, target: "level")
 
       assert_equal 1, result.people
     end
@@ -81,6 +101,13 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
 
       assert_equal [ 5, 3, 1, 1 ], [ result.people, result.with_value, result.blank, result.withheld ]
       assert_equal 3, result.would_change, "a new value, a value cleared and a first value change; a match does not"
+    end
+
+    should "count a first value for someone the next sync adds as a change" do
+      result = preview({ "hb-404" => value("Platform"), "hb-405" => Hris::FieldValue.blank },
+        target: "cost_centre", field: CENTRE)
+
+      assert_equal [ 2, 1 ], [ result.people, result.would_change ]
     end
 
     should "read each person's stream in the tenant it was given, whatever tenant is current" do
