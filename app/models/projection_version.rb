@@ -93,12 +93,16 @@ class ProjectionVersion < ApplicationRecord
   end
 
   # A failed statement aborts the transaction around it, and an aborted
-  # transaction runs nothing more, an unlock included, until it rolls back.
+  # transaction runs nothing more, an unlock included, until it ends. A caller
+  # that rescues the failure ends it with COMMIT, which Postgres runs as a
+  # rollback, so the unlock waits on either.
   def self.release_shared(keys)
     keys.each_with_index do |key, index|
       advisory("pg_advisory_unlock_shared", key)
     rescue ActiveRecord::StatementInvalid
-      current_transaction.after_rollback { release_shared(keys.drop(index)) }
+      remaining = keys.drop(index)
+      current_transaction.after_commit { release_shared(remaining) }
+      current_transaction.after_rollback { release_shared(remaining) }
       break
     end
   end

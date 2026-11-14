@@ -169,3 +169,26 @@ class ProjectionVersionTest < ActiveSupport::TestCase
     end
   end
 end
+
+# A real COMMIT needs a transaction of its own, outside the one each
+# transactional test runs in. These tests take locks and write no rows.
+class ProjectionVersionCommitTest < ActiveSupport::TestCase
+  self.use_transactional_tests = false
+
+  should "let go of the rebuild guard once a caller that rescued the failure commits the aborted transaction" do
+    config = ActiveRecord::Base.connection_db_config.configuration_hash
+    other = PG.connect({ dbname: config[:database], user: config[:username], password: config[:password],
+                         host: config[:host], port: config[:port] }.compact)
+    key = ProjectionVersion.lock_key("some/projection")
+
+    ActiveRecord::Base.transaction do
+      ProjectionVersion.unless_rebuilding("some/projection") { ActiveRecord::Base.connection.execute("SELECT 1/0") }
+    rescue ActiveRecord::StatementInvalid
+      nil
+    end
+
+    assert_equal "t", other.exec("SELECT pg_try_advisory_lock(#{key})").getvalue(0, 0)
+  ensure
+    other&.close
+  end
+end
