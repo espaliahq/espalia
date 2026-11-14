@@ -25,7 +25,7 @@ class Views::Plans::ScenarioTable < Views::Base
   # @param plan_id [String]
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param extra_columns [Array<Column>]
-  # @param can_edit [Boolean] whether each row offers a menu to fork and rename
+  # @param can_edit [Boolean] whether each row offers a menu to fork and edit
   def initialize(plan_id:, scenarios:, extra_columns: [], can_edit: false)
     @plan_id = plan_id
     @scenarios = scenarios
@@ -68,6 +68,7 @@ class Views::Plans::ScenarioTable < Views::Base
             end
           end
           p(class: "text-muted") { "The Org Graph. Nothing set by this plan." } if baseline
+          render Components::Kit::Prose.new(scenario[:description], class: "mt-0.5 text-muted") if scenario[:description]
           div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
             span { period(scenario) }
             state(baseline)
@@ -90,8 +91,8 @@ class Views::Plans::ScenarioTable < Views::Base
       menu.menu(width: "w-56") do
         menu.item(data: Views::Plans::ScenarioDialogs.fork_trigger(scenario[:scenario_id])) { "New scenario from here…" }
         unless baseline
-          menu.item(data: Views::Plans::ScenarioDialogs.rename_trigger(plan_scenario_path(@plan_id, scenario[:scenario_id]), scenario[:name])) do
-            "Rename…"
+          menu.item(data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@plan_id, scenario[:scenario_id]), scenario)) do
+            "Edit…"
           end
         end
       end

@@ -1,0 +1,30 @@
+{
+  "name": "team_planning_describe_scenario",
+  "description": "Say what a scenario in a Team Planning plan is for, such as 'Hire two seniors before Q3'. A blank description clears it. Deleting the plan forgets it. Refused for the baseline, or unless the caller is one of its editors. `description` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "description"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
