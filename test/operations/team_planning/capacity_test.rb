@@ -59,6 +59,7 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_match(/\A0\.3333/, place[:capacity])
     assert_equal "0.5", result[:seats].find { it[:kind] == "position" }[:places].first[:capacity]
     assert_equal [ "per_fte" ], result[:totals].keys
+    assert_equal({ "per_fte" => { symbol: "FTE", description: TeamPlanning::CapacityModels::PerFte.description } }, result[:models])
     assert_equal [ { unit_id: @unit_id, name: "Payments", totals: result[:totals] } ], result[:units]
     assert_equal({ @ada.id => "Ada Quill" }, result[:names])
     assert_empty result[:unclassified]
@@ -87,6 +88,7 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     result = capacity
 
     assert_empty result[:totals]
+    assert_empty result[:models]
     assert_equal [ [ @ada.id, "person", @unit_id, "no_model" ] ],
                  result[:unclassified].map { it.values_at(:seat_id, :kind, :unit_id, :reason) }
     assert_equal TeamPlanning::Capacity::REASONS["no_model"], result[:unclassified].first[:reason_text]
