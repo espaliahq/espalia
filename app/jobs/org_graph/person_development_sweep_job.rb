@@ -23,11 +23,10 @@ class OrgGraph::PersonDevelopmentSweepJob < ApplicationJob
   #   `skipped_while_rebuilding` and `errors`
   def perform(tenant, correlation_id: nil)
     counts = Hash.new(0)
-    feed = OrgGraph::PersonDevelopmentFeed.new(tenant)
     ActsAsTenant.with_tenant(tenant) do
       AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id || job_id) do
         AuditMetadata.wrap_event_store do
-          sweepable.each { |person_id| sweep(tenant, feed, person_id, counts) }
+          sweepable.each { |person_id| sweep(tenant, person_id, counts) }
         end
       end
     end
@@ -45,13 +44,15 @@ class OrgGraph::PersonDevelopmentSweepJob < ApplicationJob
       .ids
   end
 
-  def sweep(tenant, feed, person_id, counts)
+  # A feed per person, so a rebuild that ends mid-run leaves no one planned
+  # from the framework, roles and levels read before it.
+  def sweep(tenant, person_id, counts)
     OrgGraph::PeopleCutover.hold_off(tenant) do
       next unless tenant.person_development_fed?
 
       changes = ActiveRecord::Base.transaction do
         OrgGraph::Repository.new.lock_person(person_id)
-        feed.reconcile(person_id)
+        OrgGraph::PersonDevelopmentFeed.new(tenant).reconcile(person_id)
       end
       changes.each { counts[it] += 1 }
     end
