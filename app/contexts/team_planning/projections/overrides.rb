@@ -6,7 +6,10 @@
 #
 # Writes `team_planning_overrides`, and nothing else writes it. A clear
 # removes the row, as does a removed scenario or a deleted plan; the stream
-# keeps them all. It hears every kind in {TeamPlanning::ChangeKinds}.
+# keeps them all. An undo or redo puts back the change or pin its event names
+# as then in effect for its subject and facet, or removes the row. It reads
+# each event through {TeamPlanning::ChangeEntry} and hears every kind
+# in {TeamPlanning::ChangeKinds}.
 #
 class TeamPlanning::Projections::Overrides
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -19,6 +22,7 @@ class TeamPlanning::Projections::Overrides
   # @return [Array<Class>]
   def self.handled_events
     TeamPlanning::ChangeKinds.all + [ TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangePinned,
+                                      TeamPlanning::Events::ChangeUndone, TeamPlanning::Events::ChangeRedone,
                                       TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanDeleted ]
   end
 
@@ -29,29 +33,41 @@ class TeamPlanning::Projections::Overrides
     ActsAsTenant.with_tenant(tenant) { TeamPlanningOverride.where(tenant_id: tenant.id).delete_all }
   end
 
+  # @param event_store [RubyEventStore::Client] where an undo or redo reads the change it puts back
+  def initialize(event_store: Rails.configuration.event_store)
+    @event_store = event_store
+  end
+
   # @param event [RubyEventStore::Event]
   def call(event)
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
-      data = event.data
       case event
-      when TeamPlanning::Events::Change
-        write(event, facet: event.key.last, kind: event.class.name, end_state: data.except(*TeamPlanning::Events::Change::FIELDS),
-                     pinned: false, pinned_from_scenario_id: nil, pinned_from_event_id: nil, set_by_id: data[:set_by_id])
-      when TeamPlanning::Events::ChangePinned
-        write(event, **data.slice(:facet, :kind, :end_state, :pinned_from_scenario_id, :pinned_from_event_id),
-                     pinned: true, set_by_id: data[:pinned_by_id])
-      when TeamPlanning::Events::ChangeCleared
-        TeamPlanningOverride.where(data.slice(:scenario_id, :subject_id, :facet)).delete_all
-      when TeamPlanning::Events::ScenarioRemoved then TeamPlanningOverride.where(scenario_id: data[:scenario_id]).delete_all
-      when TeamPlanning::Events::PlanDeleted then TeamPlanningOverride.where(plan_id: data[:plan_id]).delete_all
+      when TeamPlanning::Events::ScenarioRemoved then TeamPlanningOverride.where(scenario_id: event.data[:scenario_id]).delete_all
+      when TeamPlanning::Events::PlanDeleted then TeamPlanningOverride.where(plan_id: event.data[:plan_id]).delete_all
+      else apply(TeamPlanning::ChangeEntry.from(event), event)
       end
     end
   end
 
   private
 
-  def write(event, facet:, **attributes)
-    row = TeamPlanningOverride.find_or_initialize_by(**event.data.slice(:scenario_id, :subject_id), facet:)
-    row.update!(**attributes, plan_id: event.data[:plan_id], event_id: event.event_id, set_at: event.timestamp)
+  def apply(entry, event)
+    if entry.reverses? then restore(entry, event)
+    elsif entry.sets? then write(entry)
+    else TeamPlanningOverride.where(entry.to_h.slice(:scenario_id, :subject_id, :facet)).delete_all
+    end
+  end
+
+  def write(entry)
+    row = TeamPlanningOverride.find_or_initialize_by(**entry.to_h.slice(:scenario_id, :subject_id, :facet))
+    row.update!(**entry.to_h.slice(:plan_id, :kind, :end_state, :pinned_from_scenario_id, :pinned_from_event_id),
+                pinned: entry.action == "pin", set_by_id: entry.actor_id, event_id: entry.event_id, set_at: entry.at)
+  end
+
+  def restore(entry, event)
+    in_effect_event_id = event.data[:in_effect_event_id] or
+      return TeamPlanningOverride.where(entry.to_h.slice(:scenario_id, :subject_id, :facet)).delete_all
+
+    write(TeamPlanning::ChangeEntry.from(@event_store.read.event(in_effect_event_id)))
   end
 end
