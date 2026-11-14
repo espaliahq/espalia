@@ -11,7 +11,8 @@ class Operations::TeamPlanning::SetUnitSuccession < Operations::Base
               "predecessor, several successors), a merge (several predecessors, one successor) or a " \
               "replacement. Every live predecessor retires in the same write. Successors must be live, no unit " \
               "can succeed itself, and no chain of successions may loop back. Without succession_id it records " \
-              "a new succession; with one it restates it. scenario_id defaults to the baseline, whose id is the " \
+              "a new succession; with one it restates it, and a unit the old statement retired stays retired until " \
+              "team_planning_set_unit sets it again. scenario_id defaults to the baseline, whose id is the " \
               "plan's. Refused unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
