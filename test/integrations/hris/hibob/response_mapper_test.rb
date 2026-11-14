@@ -228,6 +228,21 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
     end
   end
 
+  context "#manager_supplied?" do
+    should "be true for a manager and for an explicit null" do
+      assert Hris::Hibob::ResponseMapper.new(@fixture["employees"][0]).manager_supplied?
+      assert Hris::Hibob::ResponseMapper.new(@fixture["employees"][1]).manager_supplied?
+    end
+
+    should "be false when the field is withheld or unreadable" do
+      [ {}, { "work" => {} }, { "work" => { "reportsTo" => "bob-002" } }, { "work" => { "reportsTo" => {} } } ].each do |extra|
+        employee = { "id" => "1", "email" => "a@b.com", "firstName" => "A", "surname" => "B" }.merge(extra)
+
+        assert_not Hris::Hibob::ResponseMapper.new(employee).manager_supplied?, extra.inspect
+      end
+    end
+  end
+
   context "#org_graph_facts" do
     should "read site, FTE, employment type and dates from a fixture employee" do
       facts = Hris::Hibob::ResponseMapper.new(@fixture["employees"][0]).org_graph_facts

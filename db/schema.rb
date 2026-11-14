@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1038,6 +1038,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
     t.index ["tenant_id"], name: "index_recorded_reporting_managers_on_tenant_id"
   end
 
+  create_table "team_planning_plan_members", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.uuid "person_id", null: false
+    t.string "role", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["plan_id", "person_id"], name: "index_team_planning_plan_members_on_plan_id_and_person_id", unique: true
+    t.index ["tenant_id", "person_id"], name: "index_team_planning_plan_members_on_tenant_id_and_person_id"
+  end
+
   create_table "team_planning_plans", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "name", null: false
@@ -1058,6 +1069,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
     t.uuid "user_id"
     t.boolean "org_graph_editor", default: false, null: false
     t.datetime "forgotten_at"
+    t.boolean "team_planner", default: false, null: false
     t.index ["person_id"], name: "index_tenant_users_on_person_id"
     t.index ["tenant_id", "user_id"], name: "index_tenant_users_on_tenant_id_and_user_id", unique: true
     t.index ["tenant_id"], name: "index_tenant_users_on_tenant_id"
@@ -1091,6 +1103,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
     t.string "custom_domain"
     t.datetime "org_graph_people_projected_at"
     t.jsonb "org_graph_config", default: {}, null: false
+    t.datetime "person_development_fed_at"
     t.index ["custom_domain"], name: "index_tenants_on_custom_domain", unique: true
     t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"
     t.index ["previous_inbound_key_id"], name: "index_tenants_on_previous_inbound_key_id", where: "(previous_inbound_key_id IS NOT NULL)"
@@ -1199,6 +1212,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_090000) do
   add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "plan_encryption_keys", "tenants"
   add_foreign_key "recorded_reporting_managers", "tenants"
+  add_foreign_key "team_planning_plan_members", "tenants"
   add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"

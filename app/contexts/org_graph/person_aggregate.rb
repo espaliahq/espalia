@@ -333,6 +333,16 @@ class OrgGraph::PersonAggregate
     fact_point(key.to_sym, normalize_date(on, :on))&.value
   end
 
+  # @param key [Symbol, String] one of the person facts
+  # @param on [Date, String] the day to read it for
+  # @return [String, nil] who supplied the value in force that day, blank
+  #   included; nil when no provider has supplied one, such as a fact the
+  #   person was recorded without
+  def fact_supplier(key, on: Date.current)
+    point = fact_point(key.to_sym, normalize_date(on, :on))
+    point.provider if point&.supplied
+  end
+
   # @return [Boolean] whether the Org Graph has seen this person yet
   def recorded?
     !@employment_status.nil?
@@ -489,17 +499,21 @@ class OrgGraph::PersonAggregate
     apply(event_class.new(data: data.merge(facts)))
   end
 
-  FactPoint = Data.define(:on, :value, :provider)
+  FactPoint = Data.define(:on, :value, :provider, :supplied)
   private_constant :FactPoint
 
   # Each fact keeps its dated values, so a backdated one fills in the days
   # before a later one without replacing it, and a later one on the same date
   # replaces the earlier.
-  def hold_facts(data, keys)
+  #
+  # A recording holds every fact, so a blank one there means only that none
+  # was given; a blank in a change means the provider cleared it.
+  def hold_facts(data, keys, recording: false)
     keys.each do |key|
       points = (@fact_points[key] ||= [])
       points.reject! { it.on == data[:effective_on] }
-      points << FactPoint.new(on: data[:effective_on], value: data[key], provider: data[:provider])
+      points << FactPoint.new(on: data[:effective_on], value: data[key], provider: data[:provider],
+                              supplied: !recording || !data[key].nil?)
       points.sort_by!(&:on)
     end
   end
@@ -563,7 +577,7 @@ class OrgGraph::PersonAggregate
     @started_on = event.data[:started_on]
     @left_on = event.data[:left_on]
     @fact_points = {}
-    hold_facts(event.data, FACT_KEYS)
+    hold_facts(event.data, FACT_KEYS, recording: true)
   end
 
   {

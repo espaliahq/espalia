@@ -3,6 +3,7 @@
 # Retires a unit Espalia holds, ending every membership in it.
 class Operations::OrgGraph::RetireUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   description "Retire a unit in the Org Graph from effective_on (today by default), ending every membership " \
               "in it. Its people with no other live unit then show as in no team. A unit with live sub-units " \
@@ -19,7 +20,7 @@ class Operations::OrgGraph::RetireUnit < Operations::Base
     without_live_children!(unit)
     ended = active_memberships(unit).count
 
-    structure_handler(cause_id: SecureRandom.uuid_v7).retire_unit(unit.id, effective_on: effective_on)
+    structure_handler(cause_id: SecureRandom.uuid_v7).retire_unit(unit.id, effective_on: effective_on, **plan)
     { unit_id: unit.id, memberships_ended: ended, effective_on: effective_on }
   end
 end

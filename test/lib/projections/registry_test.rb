@@ -24,6 +24,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           org_graph/leavers
           org_graph/history
           team_planning/plans
+          team_planning/plan_members
         ].sort,
         Projections::Registry.names.sort
       )
@@ -55,6 +56,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
         Frameworks::SyncHandlers::FrameworkVersionMigrationSync,
         OrgGraph::SyncHandlers::RetiredUnitMemberships,
         OrgGraph::SyncHandlers::LeaverMemberships,
+        OrgGraph::SyncHandlers::PersonDevelopmentFeed,
         FeedbackExchange::AssignmentRetry
       ]
       assert_empty(Projections::Registry.classes & forbidden)
