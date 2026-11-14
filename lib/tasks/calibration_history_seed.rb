@@ -176,29 +176,36 @@ class CalibrationHistorySeed
   # Both halves matter: the live org chart moves, and the fact is recorded
   # on the person's stream, because manager-rating authority reads the
   # recorded fact first (see authorization.md).
+  #
+  # A rater keeps at least one report: one left with nobody enrolled drops
+  # out of the demo session.
   def move_reporting_lines(cycle)
-    movers(cycle).each do |person|
+    people = population(cycle)
+    return if people.empty?
+
+    quota = [ (people.size * MOVER_SHARE).ceil, 1 ].max
+    reports = people.map(&:manager_id).tally
+    move_order(cycle, people).each do |person|
+      break if quota.zero?
+      next if reports[person.manager_id].to_i < 2
+
       sibling = sibling_rater_for(person)
       next unless sibling
 
+      reports[person.manager_id] -= 1
+      reports[sibling.id] = reports[sibling.id].to_i + 1
       person.update!(manager_id: sibling.id)
       @development.record_reporting_manager(
         person.id, @framework.framework_id, sibling.id, source: "hris"
       )
       @stats[:reporting_moves] += 1
+      quota -= 1
     end
   end
 
-  # The population slice that changes rater this time — at least one whenever
-  # there is anyone to move. Drawn by cycle name and person identity, not ids:
-  # every seed run mints fresh ids, so drawing by id moved different people
-  # each run, and now and then all of one rater's reports, which drops that
-  # rater from the demo session (#155).
-  def movers(cycle)
-    people = population(cycle).sort_by { |person| weight("move", cycle.name, identity(person)) }
-    return [] if people.empty?
-
-    people.first([ (people.size * MOVER_SHARE).ceil, 1 ].max)
+  # Ranked by cycle name and email, because every seed run mints fresh ids.
+  def move_order(cycle, people)
+    people.sort_by { |person| weight("move", cycle.name, identity(person)) }
   end
 
   # Another rater in the same department, reporting to the same person as
@@ -209,11 +216,9 @@ class CalibrationHistorySeed
     current = person.manager
     return nil unless current&.manager_id
 
-    # Ordered: an unordered read gives Postgres licence to return rows in a
-    # different sequence per run, which would pick a different sibling and
-    # break the convergence this class promises.
+    # Sorted in Ruby: Postgres collation can order emails differently per database.
     candidates = Person.where(manager_id: current.manager_id, department: current.department)
-      .where.not(id: current.id).order(:email, :id).to_a
+      .where.not(id: current.id).sort_by { |candidate| identity(candidate) }
     return nil if candidates.empty?
 
     candidates[(weight("sibling", identity(person)) * candidates.size).floor.clamp(0, candidates.size - 1)]

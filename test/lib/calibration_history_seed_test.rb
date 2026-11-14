@@ -152,10 +152,24 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
     cycle = AssessmentCycle.new(name: CalibrationHistorySeed::FUTURE_CYCLES.first)
     draw = lambda do
       people = Array.new(20) { |i| build(:person, id: SecureRandom.uuid_v7, email: "person#{i}@seed.example") }
-      seed.stub(:population, people) { seed.send(:movers, cycle).map(&:email) }
+      seed.send(:move_order, cycle, people).map(&:email)
     end
 
     assert_equal draw.call, draw.call
+  end
+
+  should "never move a rater's last report" do
+    mia, raj, = @ems
+    mias = @reports.select { |person| person.manager_id == mia.id }
+    mias.drop(1).each { |person| person.update!(manager: raj) }
+    seed = CalibrationHistorySeed.new(tenant: @tenant, framework: @framework, io: StringIO.new)
+    cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
+
+    first_in_line = ->(_cycle, people) { people.sort_by { |person| person == mias.first ? 0 : 1 } }
+
+    seed.stub(:move_order, first_in_line) { seed.send(:move_reporting_lines, cycle) }
+
+    assert_equal mia.id, mias.first.reload.manager_id
   end
 
   should "leave a live session on the current cycle" do
@@ -173,12 +187,8 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
     raters = members.participants.pluck(:person_id)
     calibrants = members.calibrants.pluck(:person_id)
 
-    # NOT every EM: the reporting-line moves can leave one with no enrolled
-    # reports, and a rater with nobody to be calibrated on is correctly out
-    # of the room. Assert the rule, not the roster — which is also why this
-    # passed locally and failed on CI, where different ids ranked differently.
-    assert_equal [], raters - @ems.map(&:id), "only the EMs can be raters"
-    assert raters.any?, "the room needs someone in it"
+    # Every EM: the moves never take a rater's last report.
+    assert_equal @ems.map(&:id).sort, raters.sort
     assert_equal [], raters & calibrants, "a rater is never their own calibrant"
     assert_not_includes calibrants, @head.id, "the facilitator is not calibrated"
     assert_equal [], calibrants - @reports.map(&:id), "only reports are calibrated"
