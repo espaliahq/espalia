@@ -12,6 +12,7 @@
 class TeamPlanning::Events::UnitSet < TeamPlanning::Events::Change
   FACET = "unit"
   ID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+  MOVED_BY = %i[unit_created unit_renamed unit_moved unit_retired].freeze
 
   def self.facet = FACET
 
@@ -48,6 +49,10 @@ class TeamPlanning::Events::UnitSet < TeamPlanning::Events::Change
   def self.read_from(map, subject_id:, facet: self.facet)
     map.units.find { it.id == subject_id }&.to_h&.slice(:name, :parent_id, :level_id)
   end
+
+  # @param change [OrgGraph::ChangesBetween::Change]
+  # @return [String, nil] the unit an Org Graph change creates, renames, moves or retires
+  def self.subject_moved_by(change) = (change.unit_id if MOVED_BY.include?(change.kind))
 
   # @param value [String, nil]
   # @param what [String] named in the refusal

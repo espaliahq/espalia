@@ -43,7 +43,7 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     @tenant = create(:tenant)
     @org = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    squads = SecureRandom.uuid_v7
+    @squads = squads = SecureRandom.uuid_v7
     @payments, @platform = Array.new(2) { SecureRandom.uuid_v7 }
 
     travel_to Time.utc(2026, 2, 1, 9)
@@ -161,6 +161,18 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     on(Time.utc(2026, 3, 10, 9)) { @org.leave(@brook.id, **ESPALIA, effective_on: "2026-03-10") }
 
     assert_equal %i[pending conflicting], status.statuses.map(&:status)
+  end
+
+  should "read a unit the plan renames done once the Org Graph renames it, and conflicting once it retires it" do
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    plan(TeamPlanning::Events::UnitSet, @payments, name: "Payments Core", parent_id: nil, level_id: @squads)
+    assert_equal :pending, statuses(status)[[ @payments, "unit" ]]
+
+    on(Time.utc(2026, 3, 10, 9)) { structure.rename_unit(@payments, "Payments Core", effective_on: "2026-03-10") }
+    assert_equal :done, statuses(status)[[ @payments, "unit" ]]
+
+    on(Time.utc(2026, 3, 20, 9)) { structure.retire_unit(@payments, effective_on: "2026-03-20") }
+    assert_equal :conflicting, statuses(status)[[ @payments, "unit" ]]
   end
 
   should "leave out a kind the Org Graph never moves, which would read pending forever" do
