@@ -219,12 +219,8 @@ class TeamPlanning::PlanAggregate
 
     ensure_open!
     live_scenario!(scenario_id)
-    fields = kind.end_state(end_state.to_h.symbolize_keys)
-    if (taken = fields.keys & TeamPlanning::Events::Change::FIELDS).any?
-      raise ArgumentError, "An end state can't set #{taken.join(", ")}"
-    end
-
-    apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **fields, set_by_id: }))
+    fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
+    apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }))
   end
 
   # @param scenario_id [String]
@@ -341,6 +337,15 @@ class TeamPlanning::PlanAggregate
   end
 
   private
+
+  # Checked on the caller's fields and on the kind's, so a kind that filters
+  # its input can't let a caller's plan_id through unrefused.
+  def own_fields!(fields)
+    taken = fields.keys & TeamPlanning::Events::Change::FIELDS
+    raise ArgumentError, "An end state can't set #{taken.join(", ")}" if taken.any?
+
+    fields
+  end
 
   def record_change(event)
     (@changes[event.data[:scenario_id]] ||= []) << event

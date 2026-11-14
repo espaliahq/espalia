@@ -9,6 +9,12 @@ class TeamPlanning::PlanAggregateChangesTest < ActiveSupport::TestCase
     def self.apply_to(map, _data) = map
   end
 
+  class Filtering < TeamPlanning::Events::Change
+    def self.facet = "title"
+    def self.end_state(end_state) = end_state.slice(:title)
+    def self.apply_to(map, _data) = map
+  end
+
   class Unfinished < TeamPlanning::Events::Change
     def self.facet = "title"
   end
@@ -68,6 +74,9 @@ class TeamPlanning::PlanAggregateChangesTest < ActiveSupport::TestCase
                                  end_state: { title: "Lead", "set_by_id" => "someone else", plan_id: "another" })
     end
     assert_equal "An end state can't set set_by_id, plan_id", taken.message
+    assert_raises(ArgumentError, "a kind that drops unknown fields must not hide a reserved one") do
+      @plan.set_change(Filtering, scenario_id: @q1, subject_id: "ada", set_by_id: @editor_id, end_state: { title: "Lead", plan_id: "another" })
+    end
 
     @plan.delete(deleted_by_id: @editor_id)
     assert_equal "Next year has been deleted", refusal { set(@q1, "Senior Engineer") }
