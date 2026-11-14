@@ -17,7 +17,7 @@
 // its trigger while open in this mode (it would otherwise detach from it).
 
 import BaseController from "controllers/base_controller"
-import { useClickOutside, useTransition } from "stimulus-use"
+import { useClickOutside } from "stimulus-use"
 
 export default class extends BaseController {
   static targets = ["menu", "trigger"]
@@ -29,7 +29,6 @@ export default class extends BaseController {
   connect() {
     super.connect()
     useClickOutside(this)
-    useTransition(this, { element: this.menuTarget })
     this._onAnyScroll = this.#onAnyScroll.bind(this)
     // A menu item that opens a modal leaves this menu open behind it — and the
     // menu (z-50) outranks the overlay (z-40), so it renders over the dialog it
@@ -48,7 +47,10 @@ export default class extends BaseController {
     this._toggling = true
     const opening = this.menuTarget.classList.contains("hidden")
     if (this.fixedValue && opening) this.#positionFixed()
-    this.toggleTransition()
+    // Shown and hidden in the same task, never over animation frames: a menu
+    // still visible two frames after it closed reads as open, and a toggle
+    // in that gap reopened it just before the late hide landed (#295).
+    this.menuTarget.classList.toggle("hidden", !opening)
     if (this.fixedValue) {
       if (opening) {
         window.addEventListener("scroll", this._onAnyScroll, true)
@@ -64,16 +66,14 @@ export default class extends BaseController {
   }
 
   close() {
-    this.leave()
+    this.menuTarget.classList.add("hidden")
     window.removeEventListener("scroll", this._onAnyScroll, true)
     this.#setExpanded(false)
   }
 
   clickOutside() {
     if (this._toggling) return
-    this.leave()
-    window.removeEventListener("scroll", this._onAnyScroll, true)
-    this.#setExpanded(false)
+    this.close()
   }
 
   // private
@@ -148,9 +148,6 @@ export default class extends BaseController {
     }
   }
 
-  // Set from intent, not from the menu's `hidden` class: useTransition only
-  // adds `hidden` once the leave transition ends, so reading it here left
-  // aria-expanded "true" after every close.
   #setExpanded(expanded) {
     if (this.hasTriggerTarget) this.triggerTarget.setAttribute("aria-expanded", expanded)
   }

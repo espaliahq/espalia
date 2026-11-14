@@ -189,6 +189,24 @@ class PlanScenariosSystemTest < ApplicationSystemTestCase
     assert_selector EDIT, visible: true
   end
 
+  should "reopen a row menu toggled in the same moment it closed" do
+    sign_in_as(@planner.user)
+    visit plan_path(@plan_id)
+    row = "tr[data-scenario-id='#{@q1}']"
+    wait_for_stimulus "dropdown", scope: row
+
+    page.execute_script(<<~JS, find("#{row} [data-action='dropdown#toggle']"))
+      const trigger = arguments[0]
+      trigger.click()
+      window.dispatchEvent(new CustomEvent("modal:open"))
+      trigger.click()
+    JS
+
+    assert_selector "#{row} [data-action='dropdown#toggle'][aria-expanded='true']"
+    sleep 0.2 # past the two animation frames the old close took to hide the menu
+    assert_selector "#{row} [data-dropdown-target='menu']", visible: true, wait: 0
+  end
+
   private
 
   def open_dialog(button, dialog)
