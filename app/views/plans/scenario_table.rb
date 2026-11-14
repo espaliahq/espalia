@@ -41,6 +41,9 @@ class Views::Plans::ScenarioTable < Views::Base
 
   private
 
+  # A plan's baseline scenario has the plan's id.
+  def plan_id = @scenarios.find { it[:parent_id].nil? }[:scenario_id]
+
   def row(scenario, depth)
     baseline = scenario[:parent_id].nil?
     tr(data: { scenario_id: scenario[:scenario_id] }) do
@@ -48,7 +51,9 @@ class Views::Plans::ScenarioTable < Views::Base
         div(style: ("padding-left: #{depth * 1.25}rem" if depth.positive?)) do
           p(class: "font-medium text-default") do
             span(class: "text-muted font-normal") { "#{scenario[:relation]} " } if scenario[:relation]
-            plain(baseline ? "Today" : scenario[:name])
+            a(href: map_plan_path(plan_id, scenario: (scenario[:scenario_id] unless baseline)), class: "text-link underline") do
+              baseline ? "Today" : scenario[:name]
+            end
           end
           p(class: "text-muted") { "The Org Graph. Nothing set by this plan." } if baseline
           div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
