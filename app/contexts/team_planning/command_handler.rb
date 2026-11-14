@@ -168,7 +168,60 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Hands one facet of one subject back to the scenario's parent. Reconcile
+  # (4.5) calls this to follow reality.
+  #
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param subject_id [String]
+  # @param facet [String] the second half of the change's key, such as "rule:<name>"
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#clear_change
+  def clear_change(plan_id, scenario_id:, subject_id:, facet:)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.clear_change(scenario_id:, subject_id:, facet: facet.to_s, cleared_by_id: actor_id!)
+    end
+  end
+
+  # Keeps what a scenario inherits for one facet of one subject, as it
+  # resolves now. Reconcile (4.5) calls this to keep the plan.
+  #
+  # A change in the parent's chain is kept as it was made. With none, the
+  # value comes from the baseline, read off the parent's resolved map by the
+  # kind that holds the facet.
+  #
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param subject_id [String]
+  # @param facet [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if nothing can be pinned
+  # @see TeamPlanning::PlanAggregate#pin_change
+  def pin_change(plan_id, scenario_id:, subject_id:, facet:)
+    facet = facet.to_s
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      kind, end_state, pinned_from = inherited(plan, scenario_id, subject_id, facet)
+      plan.pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_from:, pinned_by_id: actor_id!)
+    end
+  end
+
   private
+
+  def inherited(plan, scenario_id, subject_id, facet)
+    from_id, change = plan.inherited_change(scenario_id, [ subject_id, facet ])
+    return [ change.class, change.data.except(*TeamPlanning::Events::Change::FIELDS), [ from_id, change.event_id ] ] if change
+
+    kind = TeamPlanning::ChangeKinds.holding(facet)
+    raise TeamPlanning::Error, "This can't be pinned to the baseline yet" unless kind.readable?
+
+    parent_id = plan.scenarios.fetch(scenario_id) { raise TeamPlanning::Error, "The baseline inherits nothing to pin" }.parent_id
+    map = TeamPlanning::Resolution.new(context: @actor, plan: TeamPlanningPlan.find(plan.plan_id), scenario_id: parent_id).structure
+    end_state = kind.read_from(map, subject_id:, facet:) or raise TeamPlanning::Error, "The baseline doesn't hold this"
+    [ kind, end_state, nil ]
+  end
 
   # Someone who has left may still be made a viewer of a plan they are in, so
   # an editor can step a former co-editor down; nobody gone, and nobody
