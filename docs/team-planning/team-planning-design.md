@@ -163,8 +163,10 @@ yes is refused at registration.
 ### Clearing and pinning
 
 `ChangeCleared` hands one facet of one subject back to the scenario's parent. The aggregate
-drops the scenario's own changes for that key, so resolution reads the parent's value
-again. The changes stay in the stream. Clearing a person's `assignment` clears their whole
+keeps every change, pin and clear a scenario makes in one ordered log, and works out what is
+in effect from it, so a clear hides the earlier changes for its key and resolution reads the
+parent's value again. Nothing leaves the log, so undoing a clear (3.10) can bring them back.
+Once `AssignmentSet` lands (3.6), clearing a person's assignment clears their whole
 placement list, since the list is one facet.
 
 `ChangePinned` keeps what a scenario inherits for a facet as it resolves now, so a later

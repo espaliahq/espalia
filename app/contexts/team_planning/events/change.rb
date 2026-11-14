@@ -39,8 +39,10 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
 
   # Reads this kind's end state for one subject back off a map, so a caller
   # can keep what a map already holds. The caller chooses the map: a pin
-  # (#239) reads the parent's resolved map, and status per change (#235) a
-  # map built from today's Org Graph. Applying an end state and reading it
+  # ([#239](https://github.com/espaliahq/espalia/issues/239)) reads the
+  # parent's resolved map, and status per change
+  # ([#235](https://github.com/espaliahq/espalia/issues/235)) a map built from
+  # today's Org Graph. Applying an end state and reading it
   # back gives the same end state.
   #
   # @param map [TeamPlanning::Baseline::Map]
