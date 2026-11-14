@@ -26,6 +26,11 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
       description: "Units, their members, and the people in no team."
     },
     {
+      label: "Pay bands",
+      path: :tenant_pay_bands_path,
+      description: "What each level pays, by country. Plans price positions from them."
+    },
+    {
       label: "Integrations",
       path: :tenant_integrations_path,
       description: "HRIS sync and other external systems."
