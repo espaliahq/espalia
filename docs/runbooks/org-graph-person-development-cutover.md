@@ -47,7 +47,7 @@ No deploy step: the change adds one nullable column and no projection.
 - A manager is recorded when the HRIS names one, and cleared only when the HRIS itself recorded none. A withheld or unreadable manager field leaves it alone.
 - A title mapping edited between syncs lands with the next sync's sweep.
 - A command the domain refuses rolls back alone, is logged, and is counted under `errors`; the sweep tries again after the next sync.
-- While a projection the feed reads is rebuilt, every reconcile is refused. The sweep counts these under `skipped_while_rebuilding`, and the next sync's sweep catches them up.
+- While a projection the feed reads is rebuilt, every reconcile is refused. The sweep skips everyone, since the rebuild empties the assignments it picks from, and counts them under `skipped_while_rebuilding`; the next sync's sweep catches them up.
 
 ## Reverting
 

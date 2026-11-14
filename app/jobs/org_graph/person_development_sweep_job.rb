@@ -7,9 +7,9 @@
 # Each person is one short transaction under their stream lock and the
 # cut-over hold, so the run never holds the sync's lock and a revert waits
 # for one person, not the whole sweep. Running it twice changes nothing the
-# second time. A person whose reconcile a projection rebuild refuses is
-# counted under `skipped_while_rebuilding`, and the next sync's sweep takes
-# them up. The log holds counts and person ids only.
+# second time. A projection rebuild refuses the sweep, or a person's
+# reconcile, and those it skips are counted under `skipped_while_rebuilding`;
+# the next sync's sweep takes them up. The log holds counts and person ids only.
 #
 # @example
 #   OrgGraph::PersonDevelopmentSweepJob.perform_later(tenant)
@@ -26,7 +26,7 @@ class OrgGraph::PersonDevelopmentSweepJob < ApplicationJob
     ActsAsTenant.with_tenant(tenant) do
       AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id || job_id) do
         AuditMetadata.wrap_event_store do
-          sweepable.each { |person_id| sweep(tenant, person_id, counts) }
+          sweepable(counts).each { |person_id| sweep(tenant, person_id, counts) }
         end
       end
     end
@@ -37,11 +37,17 @@ class OrgGraph::PersonDevelopmentSweepJob < ApplicationJob
 
   private
 
-  # A leaver with no assignment has nothing left to reconcile until they return.
-  def sweepable
-    Person.hris_managed.where(status: "active")
-      .or(Person.hris_managed.where(id: PersonFrameworkAssignment.select(:person_id)))
-      .ids
+  # A leaver with no assignment has nothing left to reconcile until they
+  # return. A rebuild empties the assignments first, so it skips everyone.
+  def sweepable(counts)
+    ProjectionVersion.unless_rebuilding(*OrgGraph::PersonDevelopmentFeed::PLANNED_FROM) do
+      Person.hris_managed.where(status: "active")
+        .or(Person.hris_managed.where(id: PersonFrameworkAssignment.select(:person_id)))
+        .ids
+    end
+  rescue ProjectionVersion::Rebuilding
+    counts[:skipped_while_rebuilding] = Person.hris_managed.count
+    []
   end
 
   # A feed per person, so a rebuild that ends mid-run leaves no one planned

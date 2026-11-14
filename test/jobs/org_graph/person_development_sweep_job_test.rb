@@ -53,6 +53,21 @@ class OrgGraph::PersonDevelopmentSweepJobTest < ActiveSupport::TestCase
       replay(@tenant, PersonDevelopment::Projections::CurrentAssessment)
       assert_equal({ assign: 1 }, sweep)
     end
+
+    should "skip a leaver while the assignments rebuild, then offboard them" do
+      sweep
+      skipped = while_rebuilding(@tenant, PersonDevelopment::Projections::CurrentAssessment) do
+        as_tenant { OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).leave(@ada.id, provider: "hibob", effective_on: "2026-06-30") }
+        @ada.update!(status: "inactive")
+        sweep
+      end
+
+      assert_equal({ skipped_while_rebuilding: 1 }, skipped)
+      assert held.assigned?
+      replay(@tenant, PersonDevelopment::Projections::CurrentAssessment)
+      assert_equal({ unassign: 1 }, sweep)
+      assert_not held.assigned?
+    end
   end
 
   private
