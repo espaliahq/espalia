@@ -39,6 +39,20 @@ class TeamPlanning::Events::AssignmentSetTest < ActiveSupport::TestCase
     assert_nil TeamPlanning::Events::AssignmentSet.read_from(map, subject_id: "p2")
   end
 
+  should "read a position placement back by its position alone once the map settles it into the position's unit" do
+    person = TeamPlanning::Baseline::Member.new(id: "p1", title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil,
+                                                fte: nil, employment_type: nil, memberships: [])
+    position = TeamPlanning::Baseline::Position.new(id: "0190a1b2-0000-7000-8000-000000000007", role_id: nil, level_id: nil,
+                                                    unit_id: UNIT.downcase, fte: 1.0, basis: "new", role_name: nil, level_name: nil)
+    map = TeamPlanning::Baseline::Map.new(base_on: Date.current, known_on: Date.current, units: [], people: [ person ], unassigned_ids: [],
+                                          positions: [ position ], names: {}, rules: nil)
+    state = end_state({ position_id: position.id, allocation: 1.0 })
+    settled = TeamPlanning::Events::AssignmentSet.apply_to(map, { subject_id: "p1", **state }).settled
+
+    assert_equal UNIT.downcase, settled.people.sole.memberships.sole.unit_id
+    assert_equal state, end_state(*TeamPlanning::Events::AssignmentSet.read_from(settled, subject_id: "p1")[:placements])
+  end
+
   should "hold two placement lists in another order the same, and a different allocation not" do
     one = { unit_id: UNIT.downcase, allocation: 0.5, role: nil, position_id: nil }
     two = { unit_id: "0190a1b2-0000-7000-8000-000000000009", allocation: 0.5, role: nil, position_id: nil }

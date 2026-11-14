@@ -43,7 +43,13 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   # @return [Hash, nil] the person's placements in the shape {.end_state} gives, nil when the map hasn't them
   def self.read_from(map, subject_id:, facet: self.facet)
     person = map.people.find { it.id == subject_id }
-    { placements: person.memberships.map { it.to_h.slice(*PLACES, :allocation, :role) } } if person
+    { placements: person.memberships.map { placement_of(it) } } if person
+  end
+
+  # A settled map gives a position placement its position's unit; the placement names only the position.
+  def self.placement_of(membership)
+    placement = membership.to_h.slice(*PLACES, :allocation, :role)
+    placement[:position_id] ? placement.merge(unit_id: nil) : placement
   end
 
   # A person holds each place once, so two lists in another order are the same placements.
@@ -97,5 +103,5 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "An allocation is above 0 and at most 1"
   end
 
-  private_class_method :placement!, :allocation!, :in_order
+  private_class_method :placement!, :allocation!, :in_order, :placement_of
 end
