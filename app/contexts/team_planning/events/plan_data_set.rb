@@ -38,7 +38,7 @@ class TeamPlanning::Events::PlanDataSet < TeamPlanning::Events::Change
   # @raise [TeamPlanning::Error] for a field the plan can't hold, or a value that field can't take
   def self.end_state(end_state)
     field = end_state[:field].to_s
-    check = FIELDS.fetch(field) { raise TeamPlanning::Error, "A plan holds a person's #{FIELDS.keys.to_sentence(last_word_connector: ' or ')}, not #{field.presence || 'nothing'}" }
+    check = FIELDS.fetch(field) { raise TeamPlanning::Error, "A plan holds a person's #{FIELDS.keys.to_sentence(two_words_connector: ' or ', last_word_connector: ' or ')}, not #{field.presence || 'nothing'}" }
 
     { field:, value: check.call(end_state[:value]) }
   end
