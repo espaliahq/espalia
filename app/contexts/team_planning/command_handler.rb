@@ -114,12 +114,13 @@ class TeamPlanning::CommandHandler
   private
 
   # Someone who has left may still be made a viewer of a plan they are in, so
-  # an editor can step a former co-editor down; nobody gone joins or edits.
+  # an editor can step a former co-editor down; nobody gone, and nobody
+  # without an account here, joins or edits.
   def ensure_can_join!(plan, person_id, role)
     return if PlanPolicy.reachable_ids([ person_id ]).any?
     return if role.to_s == "viewer" && plan.member?(person_id)
 
-    raise TeamPlanning::Error, "Only someone active in this organisation can join a plan"
+    raise TeamPlanning::Error, "Only someone active in this organisation, with an account here, can join a plan"
   end
 
   # The stream counts an editor who has since left; this counts only those

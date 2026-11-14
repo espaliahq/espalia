@@ -8,6 +8,7 @@ class PlanPolicyTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = @tenant
     @editor = create(:person, tenant: @tenant)
     @viewer = create(:person, tenant: @tenant)
+    [ @editor, @viewer ].each { |person| create(:tenant_user, tenant: @tenant, person:) }
     @plan = TeamPlanning::PlanAggregate.new
     @plan.create(SecureRandom.uuid_v7, name: "Next year", base_on: "2026-11-14", created_by_id: @editor.id)
     @plan.add_member(@viewer.id, role: "viewer", added_by_id: @editor.id)
@@ -94,6 +95,12 @@ class PlanPolicyTest < ActiveSupport::TestCase
       assert PlanPolicy.frozen?(@plan)
       @editor.update!(status: "active")
       assert_not PlanPolicy.frozen?(@plan)
+    end
+
+    should "be frozen once its only editor has no account here, though still active" do
+      @editor.update!(status: "active")
+      TenantUser.where(person: @editor).update_all(forgotten_at: Time.current)
+      assert PlanPolicy.frozen?(@plan)
     end
 
     should "let a tenant admin delete it, and still not open it" do
