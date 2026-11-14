@@ -16,9 +16,10 @@ class Operations::TeamPlanning::PlanMembers < Operations::Base
   def perform
     plan = plan!
     names = Person.where(id: plan.members.map(&:person_id)).pluck(:id, :name).to_h
-    members = plan.members.sort_by { [ it.role, it.person_id ] }.map do
+    members = plan.members.map do
       { person_id: it.person_id, name: names.fetch(it.person_id, Person::FORMER_MEMBER), role: it.role }
     end
+    members.sort_by! { it.values_at(:role, :name, :person_id) }
     { plan_id: plan.id, members: members }
   end
 end

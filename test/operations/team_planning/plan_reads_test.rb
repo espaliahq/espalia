@@ -61,6 +61,15 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
     assert_includes read(Operations::TeamPlanning::PlanMembers)[:members].pluck(:name), Person::FORMER_MEMBER
   end
 
+  should "list members by role, then name" do
+    ActsAsTenant.with_tenant(@tenant) do
+      @aaron = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant, name: "Aaron Bell"))
+    end
+    call(Operations::TeamPlanning::AddPlanMember, as: @editor, plan_id: @plan_id, person_id: @aaron.person_id, role: "editor")
+
+    assert_equal [ "Aaron Bell", "Edie Marsh", "Vic Arden" ], read(Operations::TeamPlanning::PlanMembers)[:members].pluck(:name)
+  end
+
   should "give the baseline by id, with the names in one map beside it" do
     map = read(Operations::TeamPlanning::Baseline)
 
