@@ -121,6 +121,14 @@ class TeamPlanning::PlanDataTest < ActiveSupport::TestCase
     assert_equal "Placeholder hire", as_tenant { names_for(map) }.fetch(@hire)
   end
 
+  should "name a placeholder by its label wherever the map names people, as capacity does" do
+    add_hire
+    place_hire
+    report = as_tenant { TeamPlanning::Capacity.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @q1).call }
+
+    assert_equal "Payments engineer", report.map.name_of(@hire)
+  end
+
   should "show sealed values in the map payload by value, and a removed one as removed" do
     promote_and_correct
     add_hire

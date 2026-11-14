@@ -46,16 +46,11 @@ module Operations::TeamPlanning::MapPayload
     end
   end
 
-  def names_for(map)
-    labels = map.people.select(&:placeholder?).to_h { [ it.id, it.placeholder ] }
-    map.person_ids.to_h { |id| [ id, labels.key?(id) ? placeholder_name(labels[id]) : map.name_of(id) ] }
-  end
+  def names_for(map) = map.person_ids.index_with { map.name_of(it) }
 
   def sealed_payload(value)
     return nil if value.nil?
 
     value.removed? ? { removed: true } : { value: value.reveal }
   end
-
-  def placeholder_name(label) = label.removed? ? "Placeholder hire" : label.reveal
 end

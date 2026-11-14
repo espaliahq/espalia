@@ -275,6 +275,8 @@ class TeamPlanning::Baseline
     def budget = self.class.budget_of(basis)
   end
 
+  PLACEHOLDER_NAME = "Placeholder hire"
+
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
   def initialize(context:, plan:)
@@ -319,13 +321,15 @@ class TeamPlanning::Baseline
   end
 
   # Joins the names of everyone the map names ({Map#person_ids}) and of each
-  # position's role and level.
+  # position's role and level. A placeholder hire is named by its label, or
+  # {PLACEHOLDER_NAME} once the plan's key is gone.
   #
   # @param map [Map]
   # @return [Map]
   def named(map)
-    map.with(names: ::Person.where(tenant_id: @plan.tenant_id, id: map.person_ids).pluck(:id, :name).to_h,
-             positions: named_positions(map.positions))
+    people = ::Person.where(tenant_id: @plan.tenant_id, id: map.person_ids).pluck(:id, :name).to_h
+    hires = map.people.select(&:placeholder?).to_h { [ it.id, it.placeholder.removed? ? PLACEHOLDER_NAME : it.placeholder.reveal ] }
+    map.with(names: people.merge(hires), positions: named_positions(map.positions))
   end
 
   private
