@@ -401,8 +401,11 @@ conflicting before the plan starts.
 
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
-Org Graph can move (it implements `subject_moved_by`) has a status. A rule is plan-only:
-today would always read the tenant's default, so it would be pending forever. Names come
+Org Graph can move (it implements `subject_moved_by`) has a status: today, a unit set and
+an assignment. A rule, a position and a succession are plan-only, so each would read
+pending forever. A retirement has none yet either: the Org Graph's as-of read gives only
+live units, so today's map can't show a unit retired. A placement in a position never
+reads done, since the Org Graph places people in units, not positions. Names come
 last and from today, so a forgotten person reads "Former member", a renamed unit its new
 name, and a subject only the plan holds has none. `Raised` will join these once
 `ChangeRaised` exists. `team_planning_status` gives the same read over MCP.
