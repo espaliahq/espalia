@@ -709,6 +709,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal %w[1618 3141], read_department(employees).keys
     end
 
+    should "keep a held person's email when HiBob leaves it out" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
+      employees = [ { "id" => "1618" }, { "id" => "3141", "email" => "old@example.com" } ]
+
+      assert_equal [ "1618" ], read_department(employees).keys
+    end
+
     should "follow an email a leaver moves to, without reading the leaver" do
       create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "old@example.com")
       employees = [ { "id" => "1618", "isActive" => false, "email" => "new@example.com" },
