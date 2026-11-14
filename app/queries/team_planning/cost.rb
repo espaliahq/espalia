@@ -117,24 +117,45 @@ class TeamPlanning::Cost
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] a scenario, never the root, which has no period
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
+  # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already
+  #   read by a caller pricing several scenarios over the same one
+  # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
+    @base = base
+    @aggregate = aggregate
+  end
+
+  # Every scenario of the plan priced, reading the Org Graph and the plan once.
+  #
+  # @return [Hash{String => Report, TeamPlanning::Error}] by scenario id, the
+  #   root left out; a scenario that can't be priced maps to its error
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  def self.every_scenario(context:, plan:, repository: TeamPlanning::Repository.new)
+    aggregate = repository.load_plan(plan.id)
+    base = TeamPlanning::Baseline.new(context:, plan:).structure
+    (aggregate.scenarios.keys - [ plan.id ]).index_with do |scenario_id|
+      new(context:, plan:, scenario_id:, repository:, base:, aggregate:).call
+    rescue TeamPlanning::Error => e
+      e
+    end
   end
 
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for the root, or a scenario the plan doesn't have
   def call
-    aggregate = @repository.load_plan(@plan.id)
+    aggregate = @aggregate ||= @repository.load_plan(@plan.id)
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
     raise TeamPlanning::Error, "The baseline has no period to cost, so cost one of the plan's scenarios" if @scenario_id == @plan.id
 
     @period = aggregate.period_of(@scenario_id)
     @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
     @factors = {}
+    @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     scenario = priced(resolved(@scenario_id))
     baseline = priced(resolved(@plan.id))
     Report.new(period: @period, reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
@@ -158,7 +179,10 @@ class TeamPlanning::Cost
 
   private
 
-  def resolved(scenario_id) = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository).call
+  def resolved(scenario_id)
+    resolution = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository, base: @base)
+    resolution.call(@aggregate)
+  end
 
   def priced(map)
     @map = map

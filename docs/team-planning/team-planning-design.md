@@ -513,6 +513,10 @@ same days, so the two compare ([#288](https://github.com/espaliahq/espalia/issue
 The baseline has no period of its own, so it is never the scenario costed.
 `team_planning_cost` sends the totals, each unit and each cost centre, and the working of
 every seat only for a unit the caller names.
+`team_planning_scenario_costs` sends only the totals, for every scenario at once, reading
+the Org Graph once for the plan: the Scenarios table's Cost column reads it
+([#316](https://github.com/espaliahq/espalia/issues/316)). A single cost read also reads
+it once, for the scenario and the baseline together.
 
 - **A seat** is a person, or the FTE a position's occupants leave open, as capacity counts it.
 - **Its level** is the person's own, a planned one winning. When theirs resolves to none,
