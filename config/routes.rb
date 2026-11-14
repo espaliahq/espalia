@@ -109,6 +109,12 @@ Rails.application.routes.draw do
       resources :members, only: [ :create, :update, :destroy ], controller: "org_unit_members"
     end
 
+    # The person drawer (#132): `show` opens it over the Units view, and each
+    # membership change posts to its own resource, keyed by the unit.
+    resources :org_people, only: :show, path: "org_graph/people" do
+      resources :memberships, only: [ :create, :update, :destroy ], controller: "org_person_memberships"
+    end
+
     # Feedback export for monthly reporting (#458): `new` is the picker,
     # `index.csv` the download.
     resources :feedback_exports, only: [ :index, :new ]
