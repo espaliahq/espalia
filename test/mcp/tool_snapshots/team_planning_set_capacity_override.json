@@ -12,8 +12,7 @@
         "description": "The scenario, or the plan's id for the baseline."
       },
       "person_id": {
-        "type": "string",
-        "description": "A person, or a placeholder hire's id."
+        "type": "string"
       },
       "position_id": {
         "type": "string",

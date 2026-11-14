@@ -138,6 +138,8 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
                  refusal(person_id: @ada.id, unit_id: @unit_id, position_id: SecureRandom.uuid_v7, amount: "1")
     assert_match "must be a UUID", refusal(person_id: @ada.id, unit_id: "payments", amount: "1")
     assert_equal "No such person", refusal(person_id: SecureRandom.uuid_v7, unit_id: @unit_id, amount: "1")
+    hire = write(Operations::TeamPlanning::SetPlaceholderHire, label: "Payments engineer")[:placeholder_id]
+    assert_equal "No such person", refusal(person_id: hire, unit_id: @unit_id, amount: "1")
 
     other = create(:tenant)
     outsider = as_tenant(other) { create(:tenant_user, tenant: other, role: :admin, person: create(:person, tenant: other)) }

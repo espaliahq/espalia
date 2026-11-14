@@ -8,7 +8,9 @@
 # team_planning_capacity. team_planning_clear_change drops it, by the facet
 # `capacity:<place id>`. Pinning one to a parent is refused for now. A place
 # the person no longer holds is flagged in team_planning_attention rather than
-# refused, as a later step may move them.
+# refused, as a later step may move them. A placeholder hire is refused, as
+# for a planned level: its amount would seal under a person key no one can
+# forget.
 class Operations::TeamPlanning::SetCapacityOverride < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
 
@@ -26,7 +28,7 @@ class Operations::TeamPlanning::SetCapacityOverride < Operations::Base
 
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
-  parameter :person_id, String, required: true, schema: { description: "A person, or a placeholder hire's id." }
+  parameter :person_id, String, required: true
   parameter :position_id, String, schema: { description: "The position the override is for. Give this or unit_id, not both." }
   parameter :unit_id, String, schema: { description: "The unit, for a place in no position." }
   parameter :amount, String, required: true, allow_blank: false,
@@ -38,19 +40,11 @@ class Operations::TeamPlanning::SetCapacityOverride < Operations::Base
   def perform
     person_id = uuid!(:person_id)
     places = KIND::PLACES.index_with { params[it].presence && uuid!(it) }
-    stored = nil
-    set_change!(KIND, subject_id: person_id, end_state: { **places, amount: params[:amount] }) do |plan|
-      stored = KIND.end_state(**places, amount: params[:amount])
-      raise Operations::Base::ParameterError, "No such person" unless known?(plan, person_id)
+    end_state = { **places, amount: params[:amount] }
+    set_change!(KIND, subject_id: person_id, end_state:) do
+      raise Operations::Base::ParameterError, "No such person" unless ::Person.exists?(tenant_id: ActsAsTenant.current_tenant&.id, id: person_id)
     end
 
-    { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), person_id:, **stored }
-  end
-
-  private
-
-  def known?(plan, person_id)
-    ::Person.exists?(tenant_id: ActsAsTenant.current_tenant&.id, id: person_id) ||
-      winning_change(plan, person_id, ::TeamPlanning::Events::PlaceholderSet.facet).present?
+    { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), person_id:, **KIND.end_state(end_state) }
   end
 end
