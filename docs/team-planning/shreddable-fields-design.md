@@ -78,6 +78,9 @@ tenant-<tenant_id>/plan-<plan_id>/person-<person_id>
 - **A destroyed key stays destroyed.** Its row keeps no key material, and `create`
   refuses a new key for a deleted plan or a forgotten person, including a plan that never
   held a key for them.
+- **It caches nothing**, so a destroyed key is gone for every reader at once. A read
+  that loads many events under the same few keys may memoise them for that read only;
+  a cache that outlives it would outlive a destroy too.
 - **Without Active Record encryption keys**, reading or minting a key raises
   `PlanKeyStore::Unavailable` with a plain reason. Destroying keys needs no key
   material, so forgetting still works, and nothing outside plans is affected.
