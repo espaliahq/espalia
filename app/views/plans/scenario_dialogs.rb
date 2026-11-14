@@ -62,7 +62,8 @@ class Views::Plans::ScenarioDialogs < Views::Base
                                       dirty_guard: "Discard this scenario?") do |m|
       m.body { fork_form }
     end
-    render Components::Kit::Modal.new(id: EDIT_ID, title: "Edit scenario", size: :md, standalone: false) do |m|
+    render Components::Kit::Modal.new(id: EDIT_ID, title: "Edit scenario", size: :md, standalone: false,
+                                      dirty_guard: "Discard your changes?") do |m|
       m.body { edit_form }
     end
   end

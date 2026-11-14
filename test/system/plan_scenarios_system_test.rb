@@ -169,6 +169,26 @@ class PlanScenariosSystemTest < ApplicationSystemTestCase
     assert_no_selector FORK, visible: true
   end
 
+  should "close the edit dialog on Esc, asking first only about text typed since it opened" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    ActsAsTenant.with_tenant(@tenant) do
+      call(Operations::TeamPlanning::DescribeScenario, @planner, plan_id: @plan_id, scenario_id: @q1, description: "Hire two seniors")
+    end
+    sign_in_as(@planner.user)
+    visit plan_path(@plan_id)
+    assert_selector "h1", text: "Pay review 2027"
+    page.execute_script("window.confirm = () => false")
+
+    row_action(@q1, Views::Plans::ScenarioDialogs::EDIT_ID)
+    press_escape(scope: EDIT)
+    assert_no_selector EDIT, visible: true
+
+    row_action(@q1, Views::Plans::ScenarioDialogs::EDIT_ID)
+    js_fill_in "Description", with: "Hire three seniors"
+    press_escape(scope: EDIT)
+    assert_selector EDIT, visible: true
+  end
+
   private
 
   def open_dialog(button, dialog)

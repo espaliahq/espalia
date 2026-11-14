@@ -38,10 +38,17 @@ export default class extends BaseController {
     if (data.renameAction === undefined || !this.element.closest(`#${CSS.escape(data.modalTargetId || "")}`)) return
 
     this.element.action = data.renameAction
-    this.nameTarget.value = data.renameName || ""
-    if (this.hasDescriptionTarget) this.descriptionTarget.value = data.renameDescription || ""
+    this.#seed(this.nameTarget, data.renameName)
+    if (this.hasDescriptionTarget) this.#seed(this.descriptionTarget, data.renameDescription)
     // The modal focuses the first field; selecting the name makes "type a new
     // one" a single gesture.
     requestAnimationFrame(() => this.nameTarget.select())
+  }
+
+  // The default too, so the modal's dirty guard asks only about text typed
+  // since the dialog opened.
+  #seed(field, value) {
+    field.defaultValue = value || ""
+    field.value = value || ""
   }
 }
