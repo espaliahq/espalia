@@ -29,7 +29,7 @@ class Operations::TeamPlanning::SetRule < Operations::Base
     subject_id = params[:unit_id].nil? ? plan_id! : uuid!(:unit_id)
     stored = nil
     set_change!(RULE, subject_id:, end_state: { rule: params[:rule], value: params[:value] }) do
-      live_unit!(subject_id) unless subject_id == plan_id!
+      live_unit!(subject_id) unless params[:unit_id].nil?
       stored = RULE.end_state(rule: params[:rule], value: params[:value])
     end
 

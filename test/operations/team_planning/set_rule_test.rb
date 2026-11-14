@@ -94,9 +94,10 @@ class Operations::TeamPlanning::SetRuleTest < ActiveSupport::TestCase
 
   should "refuse a unit that isn't live in the scenario, writing nothing" do
     before = stream_size
-    refused = assert_raises(Operations::Base::ParameterError) { set_cap(@q1, { cap: 3 }, unit_id: SecureRandom.uuid_v7) }
-
-    assert_equal "There is no such live unit in this scenario", refused.message
+    [ SecureRandom.uuid_v7, @plan_id ].each do |unit_id|
+      refused = assert_raises(Operations::Base::ParameterError) { set_cap(@q1, { cap: 3 }, unit_id:) }
+      assert_equal "There is no such live unit in this scenario", refused.message
+    end
     assert_equal before, stream_size
   end
 
