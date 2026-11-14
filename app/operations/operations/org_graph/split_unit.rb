@@ -4,6 +4,7 @@
 # successor, anyone unplaced leaves it, and the unit retires.
 class Operations::OrgGraph::SplitUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
+  prepend Operations::OrgGraph::PlanWrite
 
   PLACEMENTS_SCHEMA = {
     type: "object",
@@ -71,10 +72,10 @@ class Operations::OrgGraph::SplitUnit < Operations::Base
     handler = structure_handler(cause_id: SecureRandom.uuid_v7)
     ActiveRecord::Base.transaction do
       successors.each do |name, id|
-        handler.create_unit(id, name, level_id: unit.level_id, parent_id: unit.parent_id, effective_on: effective_on)
+        handler.create_unit(id, name, level_id: unit.level_id, parent_id: unit.parent_id, effective_on: effective_on, **plan)
       end
       handler.apply_succession(SecureRandom.uuid_v7, predecessor_ids: [ unit.id ], successor_ids: successors.values,
-                                                     effective_on: effective_on, placements: placements)
+                                                     effective_on: effective_on, placements: placements, **plan)
     end
   end
 end

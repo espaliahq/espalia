@@ -36,6 +36,16 @@ class PersonDevelopment::Projections::AssessmentAuthorityTest < ActiveSupport::T
         assert_equal 1, RecordedReportingManager.where(person_id: @person_id).count
       end
     end
+
+    should "remove the row when the manager is cleared" do
+      emit(PersonDevelopment::Events::ReportingManagerRecorded, manager_id: @manager_id, source: "hris")
+      emit(PersonDevelopment::Events::ReportingManagerRecorded,
+        manager_id: nil, previous_manager_id: @manager_id, source: "hris")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil RecordedReportingManager.manager_id_for(@person_id, @framework_id)
+      end
+    end
   end
 
   context "delegation lifecycle" do

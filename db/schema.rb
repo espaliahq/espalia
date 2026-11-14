@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1005,6 +1005,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
     t.index ["tenant_id"], name: "index_person_framework_assignments_on_tenant_id"
   end
 
+  create_table "plan_encryption_keys", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.uuid "person_id"
+    t.string "cipher", null: false
+    t.text "key_material"
+    t.datetime "destroyed_at"
+    t.string "destroyed_reason"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "person_id"], name: "index_plan_keys_on_person", where: "(person_id IS NOT NULL)"
+    t.index ["tenant_id", "plan_id", "person_id"], name: "index_plan_keys_one_per_person_in_plan", unique: true, where: "(person_id IS NOT NULL)"
+    t.index ["tenant_id", "plan_id"], name: "index_plan_keys_one_per_plan", unique: true, where: "(person_id IS NULL)"
+    t.check_constraint "destroyed_at IS NULL AND key_material IS NOT NULL OR destroyed_at IS NOT NULL AND key_material IS NULL AND destroyed_reason IS NOT NULL", name: "plan_encryption_keys_live_or_destroyed"
+  end
+
   create_table "projection_versions", primary_key: "name", id: :string, force: :cascade do |t|
     t.datetime "applied_at", null: false
     t.integer "version", null: false
@@ -1041,6 +1057,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["tenant_id", "created_by_id"], name: "index_team_planning_plans_on_tenant_id_and_created_by_id"
+  end
+
+  create_table "team_planning_scenarios", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.uuid "parent_id"
+    t.string "relation"
+    t.string "name", null: false
+    t.date "starts_on", null: false
+    t.date "ends_on"
+    t.uuid "forked_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "plan_id"], name: "index_team_planning_scenarios_on_tenant_id_and_plan_id"
   end
 
   create_table "tenant_users", id: :uuid, default: nil, force: :cascade do |t|
@@ -1087,6 +1117,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
     t.string "custom_domain"
     t.datetime "org_graph_people_projected_at"
     t.jsonb "org_graph_config", default: {}, null: false
+    t.datetime "person_development_fed_at"
     t.index ["custom_domain"], name: "index_tenants_on_custom_domain", unique: true
     t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"
     t.index ["previous_inbound_key_id"], name: "index_tenants_on_previous_inbound_key_id", where: "(previous_inbound_key_id IS NOT NULL)"
@@ -1193,9 +1224,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
   add_foreign_key "person_development_comments", "person_development_comments", column: "parent_id", on_delete: :restrict
   add_foreign_key "person_development_comments", "tenants"
   add_foreign_key "person_framework_assignments", "tenants"
+  add_foreign_key "plan_encryption_keys", "tenants"
   add_foreign_key "recorded_reporting_managers", "tenants"
   add_foreign_key "team_planning_plan_members", "tenants"
   add_foreign_key "team_planning_plans", "tenants"
+  add_foreign_key "team_planning_scenarios", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
   add_foreign_key "tenant_users", "users"

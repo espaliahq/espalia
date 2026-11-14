@@ -62,11 +62,11 @@ class PersonDevelopment::Projections::AssessmentAuthority
   end
 
   def handle_reporting_manager_recorded(event)
-    record = RecordedReportingManager.find_or_initialize_by(
-      tenant_id: event.metadata[:tenant_id],
-      person_id: event.metadata[:person_id],
-      framework_id: event.metadata[:framework_id]
-    )
+    scope = { tenant_id: event.metadata[:tenant_id], person_id: event.metadata[:person_id],
+              framework_id: event.metadata[:framework_id] }
+    return RecordedReportingManager.where(scope).delete_all if event.data[:manager_id].nil?
+
+    record = RecordedReportingManager.find_or_initialize_by(scope)
     record.manager_id = event.data[:manager_id]
     record.source = event.data[:source]
     record.save!

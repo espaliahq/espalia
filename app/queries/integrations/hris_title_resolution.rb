@@ -31,6 +31,20 @@ class Integrations::HrisTitleResolution
     def attention_rows = rows.select { |row| row.changes_on_sync? || row.stale_assignment? }
   end
 
+  # What one title and level resolve to.
+  Target = Data.define(:title, :mapping, :role, :level, :ordinal) do
+    # @return [Symbol] why it resolves to nothing, or :resolved
+    def status
+      return Integrations::HrisPersonRow::STATUS_NO_TITLE if title.blank?
+      return Integrations::HrisPersonRow::STATUS_UNMAPPED if mapping.nil?
+      return Integrations::HrisPersonRow::STATUS_MISSING_ROLE if role.nil?
+      return Integrations::HrisPersonRow::STATUS_MISSING_ORDINAL if ordinal.nil?
+      return Integrations::HrisPersonRow::STATUS_MISSING_LEVEL if level.nil?
+
+      :resolved
+    end
+  end
+
   # @param tenant [Tenant]
   def initialize(tenant)
     @tenant = tenant
@@ -46,15 +60,25 @@ class Integrations::HrisTitleResolution
       .includes(:role, :level).index_by(&:person_id)
 
     people.map do |person|
-      mapping = person.job_title.present? ? title_lookup[HrisRoleMapping.normalize_title(person.job_title)] : nil
-      role = mapping && roles_by_code[mapping.framework_role_code]
-      ordinal = mapping && (mapping.level_ordinal || person.hris_level_ordinal)
-      level = role && ordinal && levels_by_role_and_ordinal[[ role.role_id, ordinal ]]
-
+      target = target(person.job_title, person.hris_level_ordinal)
       Integrations::HrisPersonRow.new(
-        person: person, mapping: mapping, role: role, level: level, assignment: assignments[person.id]
+        person: person, mapping: target.mapping, role: target.role, level: target.level, assignment: assignments[person.id]
       )
     end
+  end
+
+  # The role and level a title and HRIS level resolve to, through the
+  # tenant's mapping. The rows and the Org Graph feed both resolve here.
+  #
+  # @param title [String, nil]
+  # @param hris_level_ordinal [Integer, nil] the HRIS level, used when the mapping fixes none
+  # @return [Target]
+  def target(title, hris_level_ordinal)
+    mapping = title.present? ? title_lookup[HrisRoleMapping.normalize_title(title)] : nil
+    role = mapping && roles_by_code[mapping.framework_role_code]
+    ordinal = mapping && (mapping.level_ordinal || hris_level_ordinal)
+    level = role && ordinal && levels_by_role_and_ordinal[[ role.role_id, ordinal ]]
+    Target.new(title:, mapping:, role:, level:, ordinal:)
   end
 
   # Distinct titles held by active HRIS people, unmapped first, then by title.

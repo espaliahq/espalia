@@ -361,7 +361,10 @@ tenant is cut over once every person has a stream that starts with `PersonRecord
 rebuild reproduces every row ([runbook](../runbooks/org-graph-people-cutover.md)). Until
 then the sync writes those columns itself. The other non-identifier columns stay with the
 sync for now: `department` until a level is mirrored from an HRIS field (6.7), and
-`level_id`, `role_id` and `hris_level_ordinal` until E9 moves the framework mapping.
+`level_id`, `role_id` and `hris_level_ordinal` until E9 moves the framework mapping. Story
+9.1 starts that move: once a tenant is fed, Person Development's assignments, role and level
+moves, offboarding and reporting managers follow the Org Graph
+([runbook](../runbooks/org-graph-person-development-cutover.md)).
 
 The existing Person Development events (`PersonRoleChanged`, `PersonLevelChanged`,
 `ReportingManagerRecorded`) are about a person's place in a framework and stay. They
@@ -523,6 +526,10 @@ Every command takes the plan change it came from as two opaque ids, `plan_id` an
 `plan_change_id`, and writes both on each event it produces. A retirement's member
 moves carry them too. A direct edit carries neither, nor does any event written before
 the reference existed. The Org Graph never reads them.
+
+The Org Graph Operations for the changes a plan makes take the same reference and a cause
+([#193](https://github.com/espaliahq/espalia/issues/193)). They refuse it unless the caller may apply
+that plan's changes, which nobody may until the may-approve right (Team Planning 8.1).
 
 The approval is the cause. A handler built with `cause_id:` gives every event it writes,
 a sync handler's included, that id as its `correlation_id`. Without one, events keep the
