@@ -37,3 +37,39 @@ namespace :org_graph do
     end
   end
 end
+
+# Feeds one tenant's Person Development from the Org Graph (story 9.1), or
+# hands it back to the HRIS sync. Prints counts and person ids only. See
+# docs/runbooks/org-graph-person-development-cutover.md.
+#
+# Usage:
+#   bin/rails "org_graph:person_development:cut_over[<tenant id>]"                   # dry run
+#   bin/rails "org_graph:person_development:cut_over[<tenant id>,<manager clears>]"  # apply
+#   bin/rails "org_graph:person_development:revert[<tenant id>]"
+namespace :org_graph do
+  namespace :person_development do
+    desc "Feed a tenant's Person Development from the Org Graph (dry run unless the manager clear count is given)"
+    task :cut_over, %i[tenant_id clears] => :environment do |_, args|
+      tenant = Tenant.find(args.fetch(:tenant_id) { abort "Usage: org_graph:person_development:cut_over[<tenant id>]" })
+      apply = args[:clears].present?
+      report = OrgGraph::PersonDevelopmentCutover.new(tenant).run(apply:, confirm_clears: (Integer(args[:clears]) if apply))
+
+      report.changes.each do |kind, ids|
+        puts "#{kind.to_s.tr('_', ' ')}#{' (unexpected)' unless OrgGraph::PersonDevelopmentCutover::EXPECTED.include?(kind)}: #{ids.size}"
+        ids.each { |id| puts "  #{id}" }
+      end
+      puts "changes: none" if report.changes.empty?
+      puts "could not be read: #{report.failed.size}"
+      report.failed.each { |id, reason| puts "  #{id}: #{reason}" }
+      puts "refused: #{report.refusal}" if report.refusal
+      puts report.applied ? "fed from the Org Graph: yes" : "fed from the Org Graph: no, nothing was kept"
+    end
+
+    desc "Hand a tenant's Person Development back to the HRIS sync"
+    task :revert, [ :tenant_id ] => :environment do |_, args|
+      tenant = Tenant.find(args.fetch(:tenant_id) { abort "Usage: org_graph:person_development:revert[<tenant id>]" })
+      OrgGraph::PersonDevelopmentCutover.new(tenant).revert!
+      puts "reverted: the next sync assigns, moves and offboards people"
+    end
+  end
+end
