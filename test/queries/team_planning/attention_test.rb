@@ -57,6 +57,20 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ nil ], TeamPlanning::Attention.new(map(units: [ unit(ROOT, nil), orphan ]), {}).call.map(&:change)
   end
 
+  should "name the later of two retirements behind one reason" do
+    other = SecureRandom.uuid_v7
+    first, last = [ RETIRED, other ].map { change(TeamPlanning::Events::UnitRetired, it, name: "Unit", parent_id: ROOT, level_id: LEVEL) }
+    changes = { first.key => first, last.key => last }
+    person = B::Member.new(id: PERSON, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: 1,
+                           employment_type: nil,
+                           memberships: [ RETIRED, other ].map { B::Membership.new(unit_id: it, allocation: 0.5, role: nil) })
+    succession = B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [], successor_ids: [ RETIRED, other ])
+    retired_units = [ unit(RETIRED, ROOT), unit(other, ROOT) ]
+
+    assert_equal [ last, last ],
+                 TeamPlanning::Attention.new(map(retired_units:, people: [ person ], successions: [ succession ]), changes).call.map(&:change)
+  end
+
   should "read a small overfill at the precision open FTE keeps" do
     position = B::Position.new(id: SecureRandom.uuid_v7, role_id: nil, level_id: LEVEL, unit_id: LIVE, fte: 1.0, basis: "new",
                                role_name: nil, level_name: nil)

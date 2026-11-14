@@ -49,15 +49,14 @@ class TeamPlanning::Attention
   def placements
     open = @map.positions.to_set(&:id)
     @map.people.flat_map do |person|
-      person.memberships.filter_map do |place|
+      breaks = person.memberships.filter_map do |place|
         if place.position_id
-          next if open.include?(place.position_id)
-
-          item(person.id, ASSIGNMENT, "Placed in a closed position", broken_by: [ [ place.position_id, POSITION ] ])
+          [ "Placed in a closed position", [ place.position_id, POSITION ] ] unless open.include?(place.position_id)
         elsif !@live.include?(place.unit_id)
-          item(person.id, ASSIGNMENT, "Placed in #{gone(place.unit_id)}", broken_by: [ [ place.unit_id, UNIT ] ])
+          [ "Placed in #{gone(place.unit_id)}", [ place.unit_id, UNIT ] ]
         end
-      end.uniq(&:reason)
+      end
+      breaks.group_by(&:first).map { |reason, pairs| item(person.id, ASSIGNMENT, reason, broken_by: pairs.map(&:last)) }
     end
   end
 
@@ -88,9 +87,9 @@ class TeamPlanning::Attention
       gone_before = succession.predecessor_ids.reject { @live.include?(it) || @retired.include?(it) }
       still_live = succession.predecessor_ids.select { @live.include?(it) }
       gone_after = succession.successor_ids.reject { @live.include?(it) }
-      [ (item(succession.id, SUCCESSION, "It carries on from a unit no longer in this scenario", broken_by: [ [ gone_before.first, UNIT ] ]) if gone_before.any?),
-        (item(succession.id, SUCCESSION, "It carries on from a unit that is still live", broken_by: [ [ still_live.first, UNIT ] ]) if still_live.any?),
-        (item(succession.id, SUCCESSION, "It is carried on by #{gone(gone_after.first)}", broken_by: [ [ gone_after.first, UNIT ] ]) if gone_after.any?) ].compact
+      [ (item(succession.id, SUCCESSION, "It carries on from a unit no longer in this scenario", broken_by: gone_before.map { [ it, UNIT ] }) if gone_before.any?),
+        (item(succession.id, SUCCESSION, "It carries on from a unit that is still live", broken_by: still_live.map { [ it, UNIT ] }) if still_live.any?),
+        (item(succession.id, SUCCESSION, "It is carried on by #{gone(gone_after.first)}", broken_by: gone_after.map { [ it, UNIT ] }) if gone_after.any?) ].compact
     end
   end
 
