@@ -106,7 +106,7 @@ class Views::Plans::Timeline < Views::Base
         @row = 1
         header_row
         @timeline[:blocks].each { wide_block(it) }
-        wide_unassigned if unassigned_lanes.any?
+        wide_unassigned if @moving || unassigned_lanes.any?
       end
     end
   end
@@ -141,7 +141,9 @@ class Views::Plans::Timeline < Views::Base
   def drop_cells(unit_in)
     first = @row
     yield
-    return unless @moving && @row > first
+    return unless @moving
+
+    empty_row if @row == first
 
     (1...columns.size).each do |index|
       unit_id = unit_in.(index)
@@ -150,6 +152,12 @@ class Views::Plans::Timeline < Views::Base
       div(class: "z-0 border-l border-subtle data-[drop-over]:bg-brand-subtle", style: "grid-row: #{first} / #{@row}; grid-column: #{index + 2}",
           data: { map_unit: unit_id, map_step: index, action: "dragover->map-move#over dragleave->map-move#leave drop->map-move#drop" })
     end
+  end
+
+  # A block with nobody in it still needs a row to drop on.
+  def empty_row
+    div(class: "min-h-10", style: cell(@row, 1))
+    @row += 1
   end
 
   def block_heading(title, subtitle:)

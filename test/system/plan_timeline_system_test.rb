@@ -162,6 +162,19 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       assert_not drag("[draggable][data-map-person='#{@ada.id}']", "[data-map-unit='#{@growth}'][data-map-step='2']"), "Ada leaves in Q1 hires, so Q2 settle has no bar of hers to move"
     end
 
+    should "take a drop on Unassigned while nobody is unassigned" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit timeline_plan_path(@plan_id)
+      wait_for_stimulus "map-move"
+      wait_for_stimulus "move-form"
+
+      drag("[draggable][data-map-person='#{@bo.id}']", "[data-map-unit='#{Views::Plans::MoveDialog::UNASSIGNED}'][data-map-step='2']")
+      within("#move-person-modal-2") do
+        assert_text "Moving Bo Reyes in Q2 settle"
+        assert_select "To", selected: "Unassigned"
+      end
+    end
+
     should "move a person on a phone from the bar's Move…, in the step shown" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit timeline_plan_path(@plan_id, step: 1)
