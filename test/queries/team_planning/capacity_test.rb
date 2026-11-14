@@ -229,6 +229,35 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_equal [ "no_model" ], seat(capacity, @brook.id).places.map(&:reason).uniq
   end
 
+  should "price in units, charging a manager for their reports before splitting the seat, with a working that reaches each figure" do
+    as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).change_manager(@ada.id, @brook.id, **ESPALIA) }
+    choose(families: { @engineering_family.role_family_id => { model: "units" } })
+    report = capacity
+
+    brook = seat(report, @brook.id)
+    assert_equal [ Rational(1, 2), Rational(1, 2) ], brook.places.map { it.figure.amount }
+    assert_equal [ [ "Report, direct, L5", @ada.id ] ], brook.places.first.figure.working.filter_map { [ it.label, it.subject_id ] if it.subject_id }
+    assert_equal Rational("1.45"), seat(report, @ada.id).places.first.figure.amount
+    assert_equal({ "units" => Rational("3.9") }, report.totals)
+  end
+
+  should "price a leaver as nothing, and charge their reports to the position backfilling them" do
+    choose(families: { @engineering_family.role_family_id => { model: "units" } })
+    as_tenant do
+      people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+      people.change_manager(@dee.id, @ada.id, **ESPALIA)
+      people.change_manager(@brook.id, @cy.id, **ESPALIA)
+    end
+    backfill = open_position(unit_id: @engineering)
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, position_id: backfill)
+    report = capacity
+
+    assert_equal [ "leaving" ], seat(report, @ada.id).places.map(&:reason)
+    working = seat(report, backfill).places.first.figure.working
+    assert_equal [ @dee.id ], working.filter_map(&:subject_id)
+    assert_equal "Fixed cost of managing at L5", working.second.label
+  end
+
   should "refuse someone who isn't on the plan" do
     stranger = as_tenant { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
 
