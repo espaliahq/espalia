@@ -172,6 +172,26 @@ class TeamPlanning::PlanAggregateUndoTest < ActiveSupport::TestCase
     assert_equal title, @plan.last_undoable_by(@lean, @ada_id)
   end
 
+  should "leave Redo to whoever undid a change last" do
+    mine = set(@lean, "Lead Engineer")
+    undo_change(@lean, mine)
+    redo_change(@lean, mine, by: @grace_id)
+    undo_change(@lean, mine, by: @grace_id)
+
+    assert_nil @plan.last_redoable_by(@lean, @ada_id)
+    assert_equal mine, @plan.last_redoable_by(@lean, @grace_id)
+  end
+
+  should "end what a person can redo once they make a change" do
+    title = set(@lean, "Lead Engineer")
+    undo_change(@lean, title)
+    set(@lean, "Platform", kind: TeamSet, by: @grace_id)
+    assert_equal title, @plan.last_redoable_by(@lean, @ada_id)
+
+    set(@lean, "Platform", kind: TeamSet)
+    assert_nil @plan.last_redoable_by(@lean, @ada_id)
+  end
+
   should "refuse undo and redo on a deleted plan" do
     change = set(@lean, "Lead Engineer")
     @plan.delete(deleted_by_id: @ada_id)

@@ -44,7 +44,7 @@ class TeamPlanning::PlanAggregate
     @removed_scenario_ids = Set.new
     @logs = {}
     @undone = Set.new
-    @reversals = {}
+    @redo_stacks = {}
   end
 
   # Opens the plan.
@@ -310,7 +310,8 @@ class TeamPlanning::PlanAggregate
   end
 
   # What a Redo button restores for one person: the change of their latest
-  # undo in the scenario that still stands and can be redone.
+  # undo in the scenario that still stands and can be redone. A change they
+  # make after undoing ends what they can redo, as in an editor.
   #
   # @param scenario_id [String] the root or a live scenario
   # @param person_id [String]
@@ -318,14 +319,10 @@ class TeamPlanning::PlanAggregate
   def last_redoable_by(scenario_id, person_id)
     ensure_open!
     log = @logs.fetch(live_scenario!(scenario_id), [])
-    @reversals.fetch(scenario_id, []).reverse_each do |undo|
-      next unless undo.data[:undone_by_id] == person_id
-
-      event_id = undo.data[:undone_event_id]
+    redo_stack(scenario_id, person_id).reverse.find do |event_id|
       entry = log.find { it.event_id == event_id }
-      return event_id if undone?(event_id) && entry && later_in_effect(log, entry).nil?
+      undone?(event_id) && entry && later_in_effect(log, entry).nil?
     end
-    nil
   end
 
   # Stops a scenario overriding one facet of one subject, so it follows its
@@ -525,17 +522,18 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::ChangeUndone do |event|
     @undone << event.data[:undone_event_id]
-    (@reversals[event.data[:scenario_id]] ||= []) << event
+    redo_stack(event.data[:scenario_id], event.data[:undone_by_id]) << event.data[:undone_event_id]
   end
 
   on TeamPlanning::Events::ChangeRedone do |event|
     @undone.delete(event.data[:redone_event_id])
+    @redo_stacks.fetch(event.data[:scenario_id], {}).each_value { it.delete(event.data[:redone_event_id]) }
   end
 
   on TeamPlanning::Events::ScenarioRemoved do |event|
     @scenarios.delete(event.data[:scenario_id])
     @logs.delete(event.data[:scenario_id])
-    @reversals.delete(event.data[:scenario_id])
+    @redo_stacks.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
@@ -586,7 +584,10 @@ class TeamPlanning::PlanAggregate
 
   def record_change(event)
     (@logs[event.data[:scenario_id]] ||= []) << event
+    redo_stack(event.data[:scenario_id], actor_of(event)).clear
   end
+
+  def redo_stack(scenario_id, person_id) = (@redo_stacks[scenario_id] ||= {})[person_id] ||= []
 
   def ensure_editor_remains!(person_id)
     return unless editor_ids == [ person_id ]
