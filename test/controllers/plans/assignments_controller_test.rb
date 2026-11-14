@@ -70,7 +70,7 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-map-position='#{position}'] [data-map-occupant='#{@ada.id}']"
     end
 
-    should "name each position choice by its level, and number ones that still read alike" do
+    should "name each position choice by its level, and number ones that still read alike as the map does" do
       ActsAsTenant.with_tenant(@tenant) do
         role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
         level = create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 2, title: "Engineer II")
@@ -82,8 +82,14 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
 
       get map_plan_path(@plan_id, scenario: @q1)
 
-      assert_equal [ "Growth › New position: Software Engineer · Engineer II (1)", "Growth › New position: Software Engineer · Engineer II (2)" ],
-                   css_select("#move-to option[value^='#{Views::Plans::MoveDialog::POSITION}']").map(&:text)
+      choices = css_select("#move-to option[value^='#{Views::Plans::MoveDialog::POSITION}']")
+      assert_equal [ "Growth › New position: Software Engineer (1) · Engineer II", "Growth › New position: Software Engineer (2) · Engineer II" ],
+                   choices.map(&:text)
+      choices.each_with_index do |choice, index|
+        position = choice["value"].delete_prefix(Views::Plans::MoveDialog::POSITION)
+        assert_select "[data-map-position='#{position}'] span.font-medium", text: "New position: Software Engineer (#{index + 1})"
+        assert_select "[data-map-position='#{position}'] button[aria-label='Move New position: Software Engineer (#{index + 1}) in Growth']"
+      end
     end
 
     should "refuse Today and say why" do

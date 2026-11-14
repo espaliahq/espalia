@@ -22,6 +22,20 @@ class Views::Plans::ScenarioMap < Views::Base
     position[:role_name] ? "#{kind}: #{position[:role_name]}" : kind
   end
 
+  # Positions in a unit that share a label and level are numbered oldest first,
+  # so the map row and the move dialog's choice name each one the same way.
+  #
+  # @param positions [Array<Hash>] one unit's positions
+  # @return [Hash{String => String}] each position's name, by position id
+  def self.position_names(positions)
+    alike = positions.group_by { [ position_label(it), it[:level_id] ] }.transform_values { |group| group.sort_by { it[:position_id] } }
+    positions.to_h do |position|
+      label = position_label(position)
+      group = alike[[ label, position[:level_id] ]]
+      [ position[:position_id], group.size > 1 ? "#{label} (#{group.index(position) + 1})" : label ]
+    end
+  end
+
   # @param map [Hash] from `team_planning_scenario_map`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param unit_marks [#call] unit hash => components beside the unit's name
@@ -250,7 +264,7 @@ class Views::Plans::ScenarioMap < Views::Base
   def position_row(position)
     div(data: position_data(position), draggable: ("true" if movable?(position)), class: "px-4 py-2#{' cursor-grab' if movable?(position)}") do
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-dashed border-default px-2 py-1 text-sm #{DROP_OVER}") do
-        span(class: "font-medium text-default") { self.class.position_label(position) }
+        span(class: "font-medium text-default") { position_name(position) }
         open_fte_note(position[:open_fte])
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
         position.fetch(:occupants, []).sort_by { name(it[:person_id]) }.each do |occupant|
@@ -274,7 +288,7 @@ class Views::Plans::ScenarioMap < Views::Base
   end
 
   def move_position_button(position)
-    label = self.class.position_label(position)
+    label = position_name(position)
     render Components::Kit::Button.new(
       variant: :ghost, size: :sm, aria_label: "Move #{label} in #{units_by_id[position[:unit_id]][:name]}",
       data: Views::Plans::MovePositionDialog.trigger(url: plan_position_path(@map[:plan_id], position[:position_id]), name: label,
@@ -343,6 +357,11 @@ class Views::Plans::ScenarioMap < Views::Base
   def positions_in(unit_id)
     @positions ||= @map[:positions].group_by { it[:unit_id] }
     @positions.fetch(unit_id, [])
+  end
+
+  def position_name(position)
+    @position_names ||= @map[:positions].group_by { it[:unit_id] }.each_value.reduce({}) { |names, group| names.merge(self.class.position_names(group)) }
+    @position_names.fetch(position[:position_id])
   end
 
   # Positions whose unit isn't on the map, such as one a later scenario retired.

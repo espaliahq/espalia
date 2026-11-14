@@ -103,16 +103,11 @@ class Views::Plans::MoveDialog < Views::Base
     end
   end
 
-  # Each position as the map names it, with its level; positions that still
-  # read alike are numbered in map order, so no two choices look the same.
+  # Each position as the map names it, with its level.
   def position_options(unit_id)
     positions = @positions.fetch(unit_id, [])
-    labels = positions.map { [ Views::Plans::ScenarioMap.position_label(it), it[:level_name] ].compact.join(" · ") }
-    counts = labels.tally
-    seen = Hash.new(0)
-    positions.zip(labels).map do |position, label|
-      [ position, counts[label] > 1 ? "#{label} (#{seen[label] += 1})" : label ]
-    end
+    names = Views::Plans::ScenarioMap.position_names(positions)
+    positions.map { [ it, [ names.fetch(it[:position_id]), it[:level_name] ].compact.join(" · ") ] }
   end
 
   def field(id, text)
