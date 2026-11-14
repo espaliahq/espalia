@@ -178,6 +178,27 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal [ 100_000r ], amounts(scenario, seat)
   end
 
+  should "hold a backfill for the whole step when any leaver it backfills has no date" do
+    seat = open_position(basis: "backfill")
+    operation(Operations::TeamPlanning::SetAssignment, person_id: @dee.id, placements: [])
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, position_id: seat, leaves_on: "2026-07-01")
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @dee.id, position_id: seat)
+
+    assert_equal BASE_ON..Date.new(2026, 12, 31), lines(cost.scenario, seat).sole.held
+  end
+
+  should "never hold a backfill before its step starts, when a moved period leaves the leaving date behind it" do
+    later = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, parent_id: @year, relation: "then", name: "2027",
+                                                              ends_on: "2027-12-31")[:scenario_id]
+    seat = open_position(basis: "backfill")
+    operation(Operations::TeamPlanning::SetDeparture, scenario_id: later, person_id: @ada.id, position_id: seat, leaves_on: "2027-03-31")
+    operation(Operations::TeamPlanning::SetScenarioPeriod, ends_on: "2027-06-30")
+    scenario = cost(later).scenario
+
+    assert_equal Date.new(2027, 7, 1)..Date.new(2027, 12, 31), lines(scenario, seat).sole.held
+    assert_equal [ 0 ], lines(scenario, @ada.id).map(&:days)
+  end
+
   should "set the scenario beside the baseline over the same days, with the difference" do
     open_position(unit_id: @payments, fte: 0.5)
     report = cost

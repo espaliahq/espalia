@@ -236,14 +236,14 @@ class TeamPlanning::Cost
     last && (@period.begin..[ last, @period.end ].min)
   end
 
+  # A leaver with no date costs nothing in the step, so their backfill holds
+  # all of it, whatever the other leavers' dates.
   def backfill_held(leavers)
-    return @period if leavers.empty?
+    dates = leavers.map { TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) }
+    return @period if dates.empty? || dates.any?(&:nil?)
+    return nil if dates.max >= @period.end
 
-    last = leavers.filter_map { TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) }.max
-    return @period unless last
-    return nil if last >= @period.end
-
-    (last + 1)..@period.end
+    [ dates.max + 1, @period.begin ].max..@period.end
   end
 
   def fte_of(member)
