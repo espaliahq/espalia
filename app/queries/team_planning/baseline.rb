@@ -73,6 +73,6 @@ class TeamPlanning::Baseline
   # Everyone the map names: its people, their managers and the units' owners.
   def names_for(map)
     ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids)
-    ::Person.where(id: ids.compact.uniq).pluck(:id, :name).to_h
+    ::Person.where(tenant_id: @plan.tenant_id, id: ids.compact.uniq).pluck(:id, :name).to_h
   end
 end
