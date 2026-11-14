@@ -138,6 +138,30 @@ says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
 
+### Unit changes as built
+
+`UnitSet` carries a unit's whole end state: its name, its parent and its level. It creates a
+unit (the plan mints the id), renames one or moves one, and a later `UnitSet` brings a
+retired unit back. `UnitRetired` shares its facet, `unit`, so whichever of the two comes
+later wins. Since winning drops any earlier `UnitSet`, a retirement carries the unit as it
+stood, so a unit the plan created, or renamed, retires as the plan had it. A unit's level never changes, as in the Org Graph: a unit at a new level is a new
+unit with a succession.
+
+`UnitSuccessionSet` is its own subject, with the facet `succession`. It names which units
+carry on from which: one predecessor and several successors is a split, several and one is a
+merge. `team_planning_set_unit_succession` retires each live predecessor in the same write,
+as the Org Graph's own succession does. People stay where they are until an assignment moves
+them.
+
+The checks the Org Graph makes run in the operations, under the plan's lock, against the
+scenario as it then resolves: the level is in the taxonomy and below the parent's, the parent
+is live, no unit moves beneath itself, no unit retires with live sub-units, and no succession
+loops back. A rename or move fills what the caller leaves out from that same resolve, so it
+can't undo another editor's change. Only an ancestor's later edit can still break the checks;
+the change resolves anyway, and 3.8 marks it. The unit tools write through
+`CommandHandler#set_changes`, whose block returns the changes, since a succession lands with
+the retirements it implies.
+
 ### Positions as built
 
 `PositionSet` and `PositionClosed` share the facet `position`, so the later one wins and a

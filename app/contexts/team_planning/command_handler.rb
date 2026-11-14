@@ -169,6 +169,26 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Records the changes the block returns in one write, so they land together
+  # or not at all. The block works them out under the plan's lock, so they
+  # can't race another edit.
+  #
+  # @param plan_id [String]
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the plan's lock, once the actor may edit it
+  # @yieldreturn [Array<Hash>] each `{ kind:, scenario_id:, subject_id:, end_state: }`
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#set_change
+  def set_changes(plan_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      yield(plan).each do |change|
+        plan.set_change(change.fetch(:kind), scenario_id: change.fetch(:scenario_id), subject_id: change.fetch(:subject_id),
+                                             set_by_id: actor_id!, end_state: change.fetch(:end_state, {}))
+      end
+    end
+  end
+
   # Hands one facet of one subject back to the scenario's parent. Reconcile
   # (4.5) calls this to follow reality.
   #
