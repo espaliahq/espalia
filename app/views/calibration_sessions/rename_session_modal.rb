@@ -2,7 +2,7 @@
 
 # The calibration list's shared "Rename session" dialog — one per page,
 # opened from each card's kebab, which passes the session's rename URL and
-# current name through the trigger dataset (read by the `rename-session-form`
+# current name through the trigger dataset (read by the `rename-form`
 # controller). Closed and archived sessions have no reason to be opened just
 # to rename them. Submits to {CalibrationSessions::NamesController#update},
 # which redirects back here.
@@ -21,7 +21,7 @@ class Views::CalibrationSessions::RenameSessionModal < Views::Base
     form(
       method: "post",
       class: "space-y-4",
-      data: { controller: "rename-session-form", action: "turbo:submit-end->modal#submitted" }
+      data: { controller: "rename-form", action: "turbo:submit-end->modal#submitted" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch")
@@ -34,7 +34,7 @@ class Views::CalibrationSessions::RenameSessionModal < Views::Base
           # a redirect that closes the dialog — is left for a real race.
           required: true, pattern: ".*\\S.*", title: "The name can’t be blank", autocomplete: "off",
           class: Components::Kit::Field::INPUT,
-          data: { rename_session_form_target: "name" }
+          data: { rename_form_target: "name" }
         )
       end
       div(class: "flex items-center gap-3") do

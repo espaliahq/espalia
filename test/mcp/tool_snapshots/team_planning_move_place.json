@@ -1,0 +1,78 @@
+{
+  "name": "team_planning_move_place",
+  "description": "Move one of a person's places in a scenario of a Team Planning plan to another unit, or to Unassigned, keeping their other places. from_unit_id names the place: a unit, with from_position_id for a place in a position, or 'unassigned' for a person in no live unit. Give exactly one of to_unit_id or to_position_id; giving both or neither is refused. to_unit_id is the unit they move to, or 'unassigned' to drop the place; to_position_id instead places them in a position, even a full one, which the scenario then reports as overfilled. allocation (above 0, at most 1) and role describe the new place; a place they already hold in that unit, or in that position, is replaced. Written as one AssignmentSet. Refused on the baseline, and unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
+      },
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "A scenario of the plan. Not the baseline."
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "from_unit_id": {
+        "type": "string",
+        "description": "The unit the place is in, or 'unassigned'."
+      },
+      "from_position_id": {
+        "type": "string",
+        "description": "The position the place is in, when it is in one."
+      },
+      "to_unit_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "The unit to move to, or 'unassigned'. Give exactly one of this or to_position_id."
+      },
+      "to_position_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "A position of the scenario to place them in. Give exactly one of this or to_unit_id."
+      },
+      "allocation": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1,
+        "description": "The new place's allocation. Required unless moving to 'unassigned'."
+      },
+      "role": {
+        "type": "string",
+        "description": "The person's role in the new place, such as Lead."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "person_id",
+      "from_unit_id"
+    ],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "to_unit_id"
+        ]
+      },
+      {
+        "required": [
+          "to_position_id"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

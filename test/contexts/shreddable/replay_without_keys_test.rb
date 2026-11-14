@@ -52,7 +52,7 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     AssessmentCycles::CalibrationSessionAggregate => ->(session, _) { session.rename("Renamed", renamed_by_id: ACTOR_ID) },
     OrgGraph::PersonAggregate => ->(person, _) { person.set_membership(ACTOR_ID, provider: "espalia", effective_on: EFFECTIVE_ON) },
     OrgGraph::StructureAggregate => ->(structure, _) { structure.add_level(ACTOR_ID, "Band", effective_on: EFFECTIVE_ON) },
-    TeamPlanning::PlanAggregate => ->(plan, _) { plan.rename("Renamed", renamed_by_id: ACTOR_ID) }
+    TeamPlanning::PlanAggregate => ->(plan, _) { plan.rename("Renamed", current: "Plan", renamed_by_id: ACTOR_ID) }
   }.freeze
 
   setup do
@@ -73,7 +73,15 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
       user = create(:user)
       admin = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, tenant: @tenant, user:, person:, role: :admin), person:)
       @plan_id = SecureRandom.uuid_v7
-      TeamPlanning::CommandHandler.new(actor: admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
+      planner = TeamPlanning::CommandHandler.new(actor: admin)
+      planner.create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
+      planner.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @plan_id, subject_id: person.id, end_state: { level: "4" })
+      planner.set_change(@plan_id, TeamPlanning::Events::PlanDataSet, scenario_id: @plan_id, subject_id: person.id, end_state: { field: "fte", value: 0.8 })
+      planner.set_change(@plan_id, TeamPlanning::Events::PlaceholderSet, scenario_id: @plan_id, subject_id: SecureRandom.uuid_v7,
+                                                                       end_state: { label: "Payments engineer", level: "3", fte: 1 })
+      q1 = SecureRandom.uuid_v7
+      planner.fork_scenario(@plan_id, q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+      planner.describe_scenario(@plan_id, q1, description: "Hire two seniors before Q3")
     end
     write_note(@tenant, @plan_id)
   end

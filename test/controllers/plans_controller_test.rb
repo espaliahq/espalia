@@ -52,10 +52,23 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       get map_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
       assert_response :not_found
     end
+
+    should "get a 404 for a timeline to a scenario that isn't in the plan" do
+      get timeline_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
+      assert_response :not_found
+    end
+
+    should "open the timeline on the path to the first leaf, its steps shown though nobody is placed yet" do
+      get timeline_plan_path(@plan_id)
+      assert_response :success
+      assert_includes response.body, "No one is placed on this path yet."
+      assert_select "[data-timeline-step]", 2
+      assert_select "[data-timeline-step='1']", text: /Q1 hires/
+    end
   end
 
   context "someone outside the plan" do
-    should "not see it in the index, and get a 404 for its page and map, even as a tenant admin" do
+    should "not see it in the index, and get a 404 for its page, map and timeline, even as a tenant admin" do
       [ @outsider, @admin ].each do |account|
         sign_in account.user
         get plans_path
@@ -65,6 +78,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
         get plan_path(@plan_id)
         assert_response :not_found
         get map_plan_path(@plan_id)
+        assert_response :not_found
+        get timeline_plan_path(@plan_id)
         assert_response :not_found
         sign_out account.user
       end
@@ -95,7 +110,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
 
     should "start a plan and land on it" do
       post plans_path, params: { plan: { name: "Reorg 2027", base_on: "2026-11-01" } }
-      plan = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find_by!(name: "Reorg 2027") }
+      plan = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.order(:created_at).last }
+      assert_equal "Reorg 2027", plan.name.reveal
       assert_redirected_to plan_path(plan.id)
     end
 

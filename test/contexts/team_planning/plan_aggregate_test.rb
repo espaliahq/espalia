@@ -19,7 +19,7 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
 
       event = @plan.unpublished_events.sole
       assert_kind_of TeamPlanning::Events::PlanCreated, event
-      assert_equal({ plan_id: @plan_id, name: "Next year", base_on: "2026-11-14", created_by_id: @creator_id }, event.data)
+      assert_equal({ plan_id: @plan_id, name: Shreddable::Value.new("Next year"), base_on: "2026-11-14", created_by_id: @creator_id }, event.data)
       assert_equal Date.new(2026, 11, 14), @plan.base_on
       assert_equal @creator_id, @plan.created_by_id
     end
@@ -47,23 +47,23 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
     setup { create_plan }
 
     should "record the new name and the one it replaces" do
-      @plan.rename("Two-year plan", renamed_by_id: @creator_id)
+      @plan.rename("Two-year plan", current: "Next year", renamed_by_id: @creator_id)
 
       event = @plan.unpublished_events.to_a.last
       assert_kind_of TeamPlanning::Events::PlanRenamed, event
-      assert_equal "Next year", event.data[:previous_name]
-      assert_equal "Two-year plan", @plan.name
+      assert_equal "Next year", event.data[:previous_name].reveal
+      assert_equal "Two-year plan", event.data[:name].reveal
     end
 
     should "write nothing for the same name" do
-      @plan.rename(" Next year ", renamed_by_id: @creator_id)
+      @plan.rename(" Next year ", current: "Next year", renamed_by_id: @creator_id)
       assert_equal 1, @plan.unpublished_events.count
     end
 
     should "refuse once the plan is deleted" do
       @plan.delete(deleted_by_id: @creator_id)
-      error = assert_raises(TeamPlanning::Error) { @plan.rename("Again", renamed_by_id: @creator_id) }
-      assert_equal "Next year has been deleted", error.message
+      error = assert_raises(TeamPlanning::Error) { @plan.rename("Again", current: "Next year", renamed_by_id: @creator_id) }
+      assert_equal "This plan has been deleted", error.message
     end
   end
 

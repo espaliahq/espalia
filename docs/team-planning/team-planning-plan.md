@@ -97,7 +97,8 @@ flowchart LR
     s310[3.10 Undo and history]
     s311[3.11 Fork on the plan page]
     s312[3.12 Edit on the map]
-    s313[3.13 Notes, descriptions]
+    s313a[3.13a Scenario descriptions]
+    s313b[3.13b Notes on changes]
     s314[3.14 Plan-held data]
   end
   subgraph P4[P4 Keep up with reality]
@@ -171,12 +172,12 @@ flowchart LR
   s12 & s13 --> s14
   s14 --> s15 & s16
   s21 --> s22 & s24
-  s22 --> s23 & s25 & s313 & s314 & s56 & s61
+  s22 --> s23 & s25 & s313a & s313b & s314 & s56 & s61
   s33 --> s61
   s31 --> s32 & s311
   s15 --> s311
   s13 --> s32
-  s32 --> s33 & s34 & s35 & s39 & s310 & s313 & s41 & s43 & s82
+  s32 --> s33 & s34 & s35 & s39 & s310 & s313a & s313b & s41 & s43 & s82
   s35 --> s36
   s36 --> s37 & s312 & s314 & s91 & s111 & s113
   s34 & s36 --> s38
@@ -248,6 +249,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form | 2.2 |
 | 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
 | 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6) | 2.2 |
+| [#209](https://github.com/espaliahq/espalia/issues/209) | Plan and scenario names are sealed under the plan's key, and the names written before are sealed in place, the one rewrite of stored events | 2.3 |
 
 ### P3 Scenarios and changes
 
@@ -264,8 +266,9 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 3.9 | `ChangeCleared` and `ChangePinned`, and the overrides projection behind the one override mark | 3.2 |
 | 3.10 | `ChangeUndone` and `ChangeRedone`, and a scenario's history with who made each change | 3.2 |
 | 3.11 | Fork, rename and switch scenarios from the plan page | 3.1, 1.5 |
-| 3.12 | Edit on the map: drag a person or position, drop on the Unassigned bucket, set allocation as they land | 3.6, 1.6 |
-| 3.13 | Notes on changes and `ScenarioDescribed`, shreddable under the plan key | 3.2, 2.2 |
+| 3.12 | Edit on the map: drag a person or position, drop on the Unassigned bucket, set allocation as they land. Moving a person, by drag or Move…, writes through `MovePlace`, which can also place them in a position; moving a position writes through `MovePosition`, and the people in it go with it ([#285](https://github.com/espaliahq/espalia/issues/285)) | 3.6, 1.6 |
+| 3.13a | `ScenarioDescribed`: what a scenario is for, shreddable under the plan key ([#272](https://github.com/espaliahq/espalia/issues/272)) | 3.2, 2.2 |
+| 3.13b | Notes on changes, shreddable under the subject's key: the person's for a change to a person, else the plan's. Settle one sealed note on the `Change` base first ([#273](https://github.com/espaliahq/espalia/issues/273)). [Design: Notes](team-planning-design.md#notes) | 3.2, 2.2 |
 | 3.14 | `PlanDataSet` for a corrected level or FTE and a placeholder hire, and `LevelSet` for a planned promotion, each shreddable under the person's key | 3.6, 2.2 |
 
 ### P4 Keep up with reality
@@ -297,8 +300,8 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
-| 6.1 | Budget lines: `BudgetLineSet` and `BudgetLineCut`, amounts shreddable, the tenant's approved budget as the root's default | 2.2, 3.3 |
-| 6.2 | Cost centre rules: an ordered list of matchers. A filled position takes its person's cost centre from `AsOf::Person` | 3.3, 3.5 |
+| 6.1 | Budget lines: the tenant's approved budget as a table and Budget page held by tenant admins ([#302](https://github.com/espaliahq/espalia/issues/302)), read live as the root's default; `BudgetLineSet` and `BudgetLineCut`, amounts shreddable | 2.2, 3.3 |
+| 6.2 | Cost centre rules: an ordered list of matchers. A filled position takes its person's cost centre from `AsOf::Person`. Adds the position's own cost-centre label, which 5.4 left out | 3.3, 3.5 |
 | 6.3 | Funding: the most specific matching budget line, draw order, and `PositionFundingSet` for trades | 6.1, 6.2, 5.4 |
 | 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated | 6.3 |
 | 6.5 | Strictness: position control, envelope, or the dimensions that must match | 6.3 |
@@ -310,7 +313,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | # | Story | Needs |
 |---|---|---|
 | 7.1 | Capacity model interface, chosen per role family and overridable per role, as a rule. [Design: Capacity as built](team-planning-design.md#capacity-as-built) | 3.3 |
-| 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph | 7.1, 3.7 |
+| 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph. [Design: The units model](team-planning-design.md#the-units-model) | 7.1, 3.7 |
 | 7.3 | Override a person's capacity in an assignment, with the calculated figure behind it | 7.2, 3.9 |
 | 7.4 | Capacity per model, per unit and per scenario, each figure with its working, and the unclassified role check | 7.2 |
 
@@ -361,7 +364,7 @@ edits the change, then approves again.
 | # | Story | Needs |
 |---|---|---|
 | 9.1 | Timeline projection: one path from the baseline to a leaf, with lanes and moves | 3.6 |
-| 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives | 9.1 |
+| 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.1 |
 | 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later | 9.2, 3.12 |
 | 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit | 9.1 |
 | 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |

@@ -37,7 +37,7 @@ class Operations::TeamPlanning::ForkScenario < Operations::Base
     end
     scenario = plan.scenarios.fetch(scenario_id)
     period = plan.period_of(scenario_id)
-    { plan_id:, scenario_id:, parent_id:, relation: scenario.relation, name: scenario.name,
+    { plan_id:, scenario_id:, parent_id:, relation: scenario.relation, name: params[:name].squish,
       starts_on: period.begin.iso8601, ends_on: period.end.iso8601 }
   end
 end

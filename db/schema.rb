@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_214711) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -159,6 +159,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
     t.index ["person_id", "framework_id"], name: "index_assessment_level_ratings_on_person_id_and_framework_id"
     t.index ["seeded_from_cycle_id"], name: "idx_assessment_ratings_seeded_from_cycle_id", where: "(seeded_from_cycle_id IS NOT NULL)"
     t.index ["tenant_id"], name: "index_assessment_level_ratings_on_tenant_id"
+  end
+
+  create_table "budget_lines", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.date "starts_on", null: false
+    t.date "ends_on", null: false
+    t.decimal "amount", precision: 14, scale: 2
+    t.string "currency"
+    t.string "period"
+    t.decimal "head_count", precision: 8, scale: 2
+    t.uuid "role_id"
+    t.uuid "level_id"
+    t.string "role_name"
+    t.string "level_name"
+    t.string "location", default: "", null: false
+    t.string "cost_centre", default: "", null: false
+    t.string "origin", null: false
+    t.date "approved_on"
+    t.uuid "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id"], name: "index_budget_lines_on_tenant_id"
+    t.index ["updated_by_id"], name: "index_budget_lines_on_updated_by_id"
+    t.check_constraint "amount IS NOT NULL OR head_count IS NOT NULL", name: "budget_lines_amount_or_head_count"
+    t.check_constraint "amount IS NULL OR amount >= 0::numeric AND currency IS NOT NULL AND period IS NOT NULL", name: "budget_lines_amount_has_currency"
+    t.check_constraint "head_count IS NULL OR head_count > 0::numeric", name: "budget_lines_head_count_positive"
+    t.check_constraint "starts_on <= ends_on", name: "budget_lines_period_ordered"
   end
 
   create_table "calibration_session_members", id: :uuid, default: nil, force: :cascade do |t|
@@ -1094,6 +1121,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
     t.datetime "undone_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "note"
+    t.uuid "noted_event_id"
     t.index ["scenario_id", "position"], name: "idx_on_scenario_id_position_e9b21b3bad", unique: true
     t.index ["tenant_id", "plan_id"], name: "index_team_planning_history_entries_on_tenant_id_and_plan_id"
   end
@@ -1114,6 +1143,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
     t.datetime "set_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "note"
     t.index ["scenario_id", "subject_id", "facet"], name: "idx_on_scenario_id_subject_id_facet_ac0f7b0215", unique: true
     t.index ["tenant_id", "plan_id", "scenario_id"], name: "idx_on_tenant_id_plan_id_scenario_id_59115d760f"
   end
@@ -1131,7 +1161,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
 
   create_table "team_planning_plans", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
-    t.string "name", null: false
+    t.jsonb "name", null: false
     t.date "base_on", null: false
     t.uuid "created_by_id", null: false
     t.datetime "created_at", null: false
@@ -1144,12 +1174,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
     t.uuid "plan_id", null: false
     t.uuid "parent_id"
     t.string "relation"
-    t.string "name", null: false
+    t.jsonb "name"
     t.date "starts_on", null: false
     t.date "ends_on"
     t.uuid "forked_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "description"
     t.index ["tenant_id", "plan_id"], name: "index_team_planning_scenarios_on_tenant_id_and_plan_id"
   end
 
@@ -1198,6 +1229,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
     t.datetime "org_graph_people_projected_at"
     t.jsonb "org_graph_config", default: {}, null: false
     t.datetime "person_development_fed_at"
+    t.datetime "pay_bands_changed_at"
     t.index ["custom_domain"], name: "index_tenants_on_custom_domain", unique: true
     t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"
     t.index ["previous_inbound_key_id"], name: "index_tenants_on_previous_inbound_key_id", where: "(previous_inbound_key_id IS NOT NULL)"
@@ -1232,6 +1264,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_120803) do
   add_foreign_key "assessment_cycles", "tenants"
   add_foreign_key "assessment_explorations", "tenants"
   add_foreign_key "assessment_level_ratings", "tenants"
+  add_foreign_key "budget_lines", "tenants"
+  add_foreign_key "budget_lines", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "calibration_session_members", "tenants"
   add_foreign_key "calibration_sessions", "tenants"
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"

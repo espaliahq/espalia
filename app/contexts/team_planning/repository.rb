@@ -31,6 +31,19 @@ class TeamPlanning::Repository
     plan
   end
 
+  # Holds the plan's lock while the block runs, so a write that first reads the
+  # plan's state sees no other write land between its read and its store.
+  # {#with_plan} inside the block takes the same lock again, which Postgres allows.
+  #
+  # @param plan_id [String]
+  # @return [Object] what the block returns
+  def holding_plan(plan_id)
+    ActiveRecord::Base.transaction do
+      lock_stream(EventStreamNaming.plan_stream(plan_id))
+      yield
+    end
+  end
+
   # Loads a plan to read, taking no lock and storing nothing.
   #
   # @param plan_id [String]
@@ -39,6 +52,21 @@ class TeamPlanning::Repository
   def load_plan(plan_id)
     current_tenant!
     @repository.load(TeamPlanning::PlanAggregate.new, EventStreamNaming.plan_stream(plan_id))
+  end
+
+  # The aggregate never holds a shreddable value, so its changes come
+  # without one. A reader that shows the value swaps each change whose end
+  # state is sealed for the event as stored, still sealed. A note alone
+  # decides nothing a reader of the end state shows, so it isn't fetched.
+  #
+  # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] as {PlanAggregate#winning_changes} gives them
+  # @return [Hash{Array(String, String) => TeamPlanning::Events::Change}] the same keys, in the same order
+  def sealed(changes)
+    ids = changes.values.select { it.class.seals_end_state? }.map(&:event_id)
+    return changes if ids.empty?
+
+    stored = @event_store.read.events(ids).to_a.index_by(&:event_id)
+    changes.transform_values { stored.fetch(it.event_id, it) }
   end
 
   private

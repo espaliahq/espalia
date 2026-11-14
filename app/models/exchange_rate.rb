@@ -37,19 +37,47 @@ class ExchangeRate < ApplicationRecord
   # @raise [MissingRate] naming the pair and the date when no rate is in force
   # @raise [ArgumentError] without a tenant, which would read every tenant's rates, or without a date
   def self.convert(amount, from:, to:, on:)
-    raise ArgumentError, "ExchangeRate.convert needs a current tenant" unless ActsAsTenant.current_tenant
-    raise ArgumentError, "ExchangeRate.convert needs the Date the amount is for" unless on.is_a?(Date)
-
     amount = BigDecimal(amount.to_s)
+    rate, from = rate_between(from, to, on)
+    return amount unless rate
+
+    rate.from_currency == from ? amount * rate.rate : amount / rate.rate
+  end
+
+  # What one unit of a currency is worth in another, exactly, so a report
+  # can convert a Rational without rounding it.
+  #
+  # @param from [String]
+  # @param to [String]
+  # @param on [Date]
+  # @return [Rational]
+  # @raise [MissingRate] as {.convert} does
+  # @raise [ArgumentError] as {.convert} does
+  def self.factor(from:, to:, on:)
+    rate, from = rate_between(from, to, on)
+    return 1r unless rate
+
+    rate.from_currency == from ? rate.rate.to_r : 1 / rate.rate.to_r
+  end
+
+  # @return [Array(ExchangeRate, String), Array(nil, String)] the rate in force and the normalised
+  #   from currency, or no rate when the currencies are one
+  # @raise [MissingRate]
+  # @raise [ArgumentError] without a tenant or a Date
+  def self.rate_between(from, to, on)
+    raise ArgumentError, "Converting a currency needs a current tenant" unless ActsAsTenant.current_tenant
+    raise ArgumentError, "Converting a currency needs the Date the amount is for" unless on.is_a?(Date)
+
     from = Currency::NORMALIZE.call(from)
     to = Currency::NORMALIZE.call(to)
-    return amount if from == to
+    return [ nil, from ] if from == to
 
     rate = in_force(from, to, on)
     raise MissingRate, "There is no exchange rate from #{from} to #{to} in force on #{on.iso8601}" unless rate
 
-    rate.from_currency == from ? amount * rate.rate : amount / rate.rate
+    [ rate, from ]
   end
+  private_class_method :rate_between
 
   # @return [ExchangeRate, nil] the latest-dated rate for the pair either way round
   def self.in_force(from, to, on)

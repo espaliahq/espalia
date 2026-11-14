@@ -31,6 +31,11 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
       description: "What each level pays, by country. Plans price positions from them."
     },
     {
+      label: "Budget",
+      path: :tenant_budget_lines_path,
+      description: "The approved headcount budget. Every plan starts from it."
+    },
+    {
       label: "Integrations",
       path: :tenant_integrations_path,
       description: "HRIS sync and other external systems."

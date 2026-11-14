@@ -13,6 +13,14 @@
 # resolves them), never through today's framework assignment, which would
 # mix dates.
 #
+# A planner's override replaces a priced place's figure, and the working
+# ends with it, so a reader sees the calculated figure behind it. An override
+# the plan can no longer read, because its person was forgotten, leaves the
+# place counting nowhere: falling back to the model would state a figure the
+# planner chose to replace. A place that counts nowhere for another reason,
+# such as a leaver's, keeps that reason, and is marked overridden so the
+# override doesn't vanish.
+#
 # A place whose role no model covers counts nowhere and is listed as
 # unclassified, with why. A place in a unit gone from the map is still
 # counted for the plan, under no unit. Figures stay exact Rationals.
@@ -30,8 +38,11 @@ class TeamPlanning::Capacity
     "unmapped_title" => "The person's title maps to no role",
     "unknown_role" => "The role isn't in the framework",
     "closed_position" => "The position this place is in has closed",
+    "leaving" => "The person leaves in this step, so a backfill position carries the seat if the plan gives one",
+    "no_level" => "The level resolves to none, so the model has nothing to price",
     "no_model" => "No capacity model is chosen for the role or its family",
-    "unknown_model" => "The chosen capacity model isn't available"
+    "unknown_model" => "The chosen capacity model isn't available",
+    "override_unknown" => "A planner overrode this figure, and the override can't be read since the person was forgotten"
   }.freeze
 
   TITLE_REASONS = {
@@ -58,7 +69,11 @@ class TeamPlanning::Capacity
   # @!attribute chosen_for [String, nil] "role" or "family"
   # @!attribute figure [TeamPlanning::CapacityModel::Figure, nil] nil when unclassified
   # @!attribute reason [String, nil] a {REASONS} key when unclassified
-  Place = Data.define(:place, :model, :chosen_for, :figure, :reason) do
+  # @!attribute calculated [TeamPlanning::CapacityModel::Figure, nil] the model's figure, when an override replaced it
+  # @!attribute overridden [Boolean] the plan holds an override for the place, applied or not
+  Place = Data.define(:place, :model, :chosen_for, :figure, :reason, :calculated, :overridden) do
+    def initialize(calculated: nil, overridden: false, **) = super
+
     # @return [Boolean]
     def unclassified? = reason.present?
 
@@ -80,11 +95,13 @@ class TeamPlanning::Capacity
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
     @map = @resolution.call
-    @positions = @rules = nil
+    @positions = @rules = @own_levels = nil
+    @overrides = @map.people.to_h { [ it.id, it.capacity_overrides ] }
     @live = @map.units.to_set(&:id)
     people = @map.people.map { person_seat(it) }
     seats = people + open_positions(people)
     families = family_ids(seats)
+    @facts = facts(seats)
     priced = seats.map { |seat, reasons| Seat.new(seat:, places: seat.places.zip(reasons).map { |place, reason| price(seat, place, reason, families) }) }
     Report.new(map: @map, seats: priced, **sums(priced))
   end
@@ -92,11 +109,14 @@ class TeamPlanning::Capacity
   private
 
   def person_seat(member)
-    fte = member.fte.nil? ? 1r : exact(member.fte)
-    own = titles.target(member.title, Integer(member.level, exception: false))
+    fte_known = ![ nil, TeamPlanning::Baseline::UNKNOWN ].include?(member.planned_or_own(:fte))
+    fte = exact(member.fte_or_one)
+    own = member.own_target(titles)
     placements = member.memberships.presence || [ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]
-    places, reasons = allocations(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
-    [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known: !member.fte.nil?, places:), reasons ]
+    places, reasons = TeamPlanning::Baseline::Membership.shares(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
+    reasons = reasons.map { "leaving" } if member.leaving?
+    (@own_levels ||= {})[member.id] = own.level&.level_id
+    [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]
   end
 
   def person_place(placement, allocation, known, own)
@@ -111,19 +131,12 @@ class TeamPlanning::Capacity
     end
   end
 
-  # An allocation the HRIS didn't give shares what the seat's other places leave.
-  def allocations(placements)
-    known = placements.reject { it.allocation.nil? }.sum(0r) { exact(it.allocation) }
-    unknown = placements.count { it.allocation.nil? }
-    share = unknown.zero? ? 0r : [ 1r - known, 0r ].max / unknown
-    placements.map { [ it, it.allocation.nil? ? share : exact(it.allocation), !it.allocation.nil? ] }
-  end
-
   # A position counts only for the FTE its occupants leave open, so a filled
   # one is counted once, through the people in it.
   def open_positions(people)
     filled = Hash.new(0r)
-    people.each { |seat, _| seat.places.each { filled[it.position_id] += seat.fte * it.allocation if it.position_id } }
+    backfill = @map.people.to_h { [ it.id, it.backfill_id ] }
+    people.each { |seat, _| seat.places.each { filled[it.position_id] += seat.fte * it.allocation if it.position_id && it.position_id != backfill[seat.id] } }
     positions.values.sort_by(&:id).filter_map do |position|
       open = exact(position.fte) - filled[position.id]
       next unless open.positive?
@@ -135,6 +148,15 @@ class TeamPlanning::Capacity
   end
 
   def price(seat, place, reason, families)
+    priced = model_price(seat, place, reason, families)
+    override = @overrides.dig(seat.id, place.position_id || place.unit_id)
+    return priced unless override
+    return priced.with(overridden: true) if priced.unclassified?
+
+    overridden(priced, override)
+  end
+
+  def model_price(seat, place, reason, families)
     return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason:) if reason
     return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "unknown_role") unless families.key?(place.role_id)
 
@@ -144,8 +166,19 @@ class TeamPlanning::Capacity
     model, chosen_for = choice.values_at("model", "chosen_for")
     return Place.new(place:, model:, chosen_for:, figure: nil, reason: "unknown_model") unless TeamPlanning::CapacityModels.registered?(model)
 
-    figure = TeamPlanning::CapacityModels.fetch(model).capacity_of(seat, place:, params: choice["params"], map: @map)
+    figure = TeamPlanning::CapacityModels.fetch(model).capacity_of(seat, place:, params: choice["params"], map: @map, facts: @facts)
+    return Place.new(place:, model:, chosen_for:, figure: nil, reason: figure.reason) if figure.reason
+
     Place.new(place:, model:, chosen_for:, figure:, reason: nil)
+  end
+
+  def overridden(priced, override)
+    return priced.with(figure: nil, reason: "override_unknown", calculated: priced.figure, overridden: true) if override.removed?
+
+    calculated = priced.figure
+    amount = exact(override.reveal)
+    step = Model::Step.new(label: "Planner's override, in place of #{decimal(calculated.amount)}", amount:, op: "=")
+    priced.with(figure: Model::Figure.new(amount:, working: calculated.working + [ step ]), calculated:, overridden: true)
   end
 
   # A unit gone from the map takes its rules with it, so its places follow
@@ -168,9 +201,22 @@ class TeamPlanning::Capacity
     FrameworkState::Role.where(tenant_id: @plan.tenant_id, role_id: role_ids).pluck(:role_id, :role_family_id).to_h
   end
 
+  # A person's level is their own, or failing that the level of the first
+  # position they fill.
+  def facts(seats)
+    level_ids = seats.to_h { |seat, _| [ seat.id, (@own_levels || {})[seat.id] || seat.places.filter_map(&:level_id).first ] }
+    every_level = level_ids.values + seats.flat_map { |seat, _| seat.places.map(&:level_id) }
+    ordinal_of = FrameworkState::Level.where(tenant_id: @plan.tenant_id, level_id: every_level.compact.uniq).pluck(:level_id, :ordinal).to_h
+    Model::Facts.new(level_of: level_ids.transform_values { ordinal_of[it] }.compact, ordinal_of:,
+                     role_ids_of: seats.to_h { |seat, _| [ seat.id, seat.places.filter_map(&:role_id).uniq ] },
+                     open_fte: seats.select { |seat, _| seat.kind == "position" }.to_h { |seat, _| [ seat.id, seat.fte ] })
+  end
+
   def positions = @positions ||= @map.positions.index_by(&:id)
 
   def titles = @titles ||= Integrations::HrisTitleResolution.new(@plan.tenant)
 
   def exact(value) = Rational(value.to_s)
+
+  def decimal(value) = BigDecimal(value, 20).round(4).to_s("F").delete_suffix(".0")
 end

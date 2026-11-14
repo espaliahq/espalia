@@ -5,7 +5,8 @@
 # outsider gets "No such plan" whatever the placements say. Fit is read,
 # never refused: a place in a closed position resolves with no unit, and a
 # total over 1 is left to the checks. Only a position the scenario never had
-# is refused [#229](https://github.com/espaliahq/espalia/issues/229).
+# is refused [#229](https://github.com/espaliahq/espalia/issues/229). A
+# placeholder hire the scenario holds is placed like anyone else.
 class Operations::TeamPlanning::SetAssignment < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
 
@@ -32,7 +33,7 @@ class Operations::TeamPlanning::SetAssignment < Operations::Base
               "with an allocation above 0 and at most 1 and an optional role. The person's places become exactly " \
               "this list, and an empty list leaves them unassigned. A place in a position follows the position " \
               "if it moves. Allocations may total over 1; the scenario map shows the total. Steps after the " \
-              "scenario, and its alternatives, inherit the list unless they set it again. Refused unless the " \
+              "scenario, and its alternatives, inherit the list unless they set it again. A placeholder hire is placed by its id. Refused unless the " \
               "caller is one of the plan's editors."
   category :write
   approval :mcp_client
@@ -48,7 +49,7 @@ class Operations::TeamPlanning::SetAssignment < Operations::Base
     stored = nil
     set_change!(ASSIGNMENT, subject_id: person_id, end_state: { placements: params[:placements] }) do |plan|
       stored = ASSIGNMENT.end_state(placements: params[:placements])
-      raise Operations::Base::ParameterError, "No such person" unless ::Person.exists?(tenant_id: ActsAsTenant.current_tenant&.id, id: person_id)
+      raise Operations::Base::ParameterError, "No such person" unless placeable?(plan, person_id)
 
       stored[:placements].each { place!(plan, it) }
     end
@@ -66,5 +67,10 @@ class Operations::TeamPlanning::SetAssignment < Operations::Base
     return if winning_change(plan, placement[:position_id], ::TeamPlanning::Events::PositionSet.facet)
 
     raise Operations::Base::ParameterError, "This scenario has no such position"
+  end
+
+  def placeable?(plan, person_id)
+    ::Person.exists?(tenant_id: ActsAsTenant.current_tenant&.id, id: person_id) ||
+      winning_change(plan, person_id, ::TeamPlanning::Events::PlaceholderSet.facet).present?
   end
 end

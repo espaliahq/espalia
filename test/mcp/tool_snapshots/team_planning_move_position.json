@@ -1,0 +1,36 @@
+{
+  "name": "team_planning_move_position",
+  "description": "Move a position to another unit in a scenario of a Team Planning plan, keeping its role, level, FTE and basis. The people in the position move with it. Written as one PositionSet. Refused on the baseline, and unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "A scenario of the plan. Not the baseline."
+      },
+      "position_id": {
+        "type": "string"
+      },
+      "to_unit_id": {
+        "type": "string",
+        "description": "The unit the position moves to."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "position_id",
+      "to_unit_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

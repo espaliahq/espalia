@@ -1,9 +1,13 @@
 {
   "name": "team_planning_set_unit_succession",
-  "description": "Say which units carry on from which in a scenario of a Team Planning plan: a split (one predecessor, several successors), a merge (several predecessors, one successor) or a replacement. Every live predecessor retires in the same write. Successors must be live, no unit can succeed itself, and no chain of successions may loop back. Without succession_id it records a new succession; with one it restates it, and a unit the old statement retired stays retired until team_planning_set_unit sets it again. scenario_id defaults to the baseline, whose id is the plan's. Refused unless the caller is one of the plan's editors.",
+  "description": "Say which units carry on from which in a scenario of a Team Planning plan: a split (one predecessor, several successors), a merge (several predecessors, one successor) or a replacement. Every live predecessor retires in the same write. Successors must be live, no unit can succeed itself, and no chain of successions may loop back. Without succession_id it records a new succession; with one it restates it, and a unit the old statement retired stays retired until team_planning_set_unit sets it again. scenario_id defaults to the baseline, whose id is the plan's. Refused unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
+      },
       "plan_id": {
         "type": "string"
       },

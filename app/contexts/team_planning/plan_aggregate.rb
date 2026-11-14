@@ -28,15 +28,30 @@ class TeamPlanning::PlanAggregate
   )
 
   NAME_LIMIT = 120
+  NOTE_LIMIT = 2_000
+  DESCRIPTION_LIMIT = 500
+  # A description the caller couldn't read, so {#describe_scenario} writes.
+  UNKNOWN = Object.new.freeze
+
+  # A browser submits each line break as CRLF but counts it as one character
+  # against the field's maxlength, so the limit counts it as one too.
+  #
+  # @param text [String, nil]
+  # @return [String, nil] the description as stored, nil for a blank
+  def self.normalise_description(text) = text.to_s.gsub("\r\n", "\n").strip.presence
+
   ROLES = %w[editor viewer].freeze
   RELATIONS = %w[then instead].freeze
+  # A conflict an update carries: where it was read, its key, and the change it read.
+  CONFLICT_FIELDS = %i[scenario_id subject_id facet change_id].freeze
 
   # A scenario as the plan holds it. `ends_on` is held only for a `then`
-  # scenario; {#period_of} works out every period.
-  Scenario = Data.define(:id, :parent_id, :relation, :name, :ends_on)
+  # scenario; {#period_of} works out every period. Names are shreddable, so
+  # the plan holds none: a replay without keys must decide the same.
+  Scenario = Data.define(:id, :parent_id, :relation, :ends_on)
 
   # @return [String, nil]
-  attr_reader :plan_id, :name, :base_on, :created_by_id
+  attr_reader :plan_id, :base_on, :created_by_id
 
   def initialize
     @members = {}
@@ -45,6 +60,7 @@ class TeamPlanning::PlanAggregate
     @logs = {}
     @undone = Set.new
     @redo_stacks = {}
+    @carried = {}
   end
 
   # Opens the plan.
@@ -66,18 +82,20 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
-  # Renames the plan. The same name writes nothing.
+  # Renames the plan. The plan holds no name, so the caller says what it is
+  # called now; the same name writes nothing.
   #
   # @param name [String]
+  # @param current [String, nil] the name it has now
   # @param renamed_by_id [String]
   # @raise [TeamPlanning::Error] if the plan is gone, or the name is blank or too long
-  def rename(name, renamed_by_id:)
+  def rename(name, current:, renamed_by_id:)
     ensure_open!
     name = require_name(name)
-    return if name == @name
+    return if name == current
 
     apply(TeamPlanning::Events::PlanRenamed.new(data: {
-      plan_id: @plan_id, name: name, previous_name: @name, renamed_by_id: renamed_by_id
+      plan_id: @plan_id, name: name, previous_name: current, renamed_by_id: renamed_by_id
     }))
   end
 
@@ -92,6 +110,54 @@ class TeamPlanning::PlanAggregate
     apply(TeamPlanning::Events::PlanDeleted.new(data: {
       plan_id: @plan_id, deleted_by_id: deleted_by_id, reason: reason.to_s.squish.presence
     }.compact))
+  end
+
+  # Moves the plan's base to a later day. Every scenario re-resolves over the
+  # Org Graph on the new base; nothing else is written. A `then` step under
+  # the baseline starts on the base, so its start moves too.
+  #
+  # @param base_on [Date, String] the new base, today when a planner updates
+  # @param expected_base_on [Date, String] the base the caller last read, so a
+  #   move made since refuses rather than hiding drift they never saw
+  # @param conflicts [Array<Hash>] `{ scenario_id, subject_id, facet, change_id }`
+  #   for each change reading conflicting now: the scenario it was read in, and
+  #   the change that scenario resolved to then
+  # @param rebased_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone, moved since, already on
+  #   that day or later, a first step would end before the new base, or a
+  #   conflict names a scenario the plan doesn't have
+  # @raise [Date::Error] for a date that isn't YYYY-MM-DD
+  def rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id:)
+    ensure_open!
+    base_on = require_date(base_on)
+    if require_date(expected_base_on) != @base_on
+      raise TeamPlanning::Error, "This plan has moved since you looked: it now stands on #{@base_on.iso8601}"
+    end
+    raise TeamPlanning::Error, "This plan already stands on #{@base_on.iso8601}" if base_on == @base_on
+    raise TeamPlanning::Error, "This plan stands on #{@base_on.iso8601}, after #{base_on.iso8601}: a base only moves forward" if base_on < @base_on
+
+    ensure_first_steps_reach!(base_on)
+    apply(TeamPlanning::Events::PlanRebased.new(data: {
+      plan_id: @plan_id, base_on: base_on.iso8601, previous_base_on: @base_on.iso8601,
+      conflicts: conflict_keys!(conflicts), rebased_by_id:
+    }))
+  end
+
+  # The conflicts the last update to today found in a scenario that still
+  # stand: the scenario still resolves the key to the change the update saw.
+  # A set, pin, clear or undo along its chain ends one, and a redo brings it
+  # back.
+  #
+  # @param scenario_id [String] the scenario the conflict was read in
+  # @return [Hash{Array(String, String) => Date}] subject and facet => the base the update that first found it moved to
+  def carried_conflicts(scenario_id)
+    carried = @carried.fetch(scenario_id, {})
+    return {} if carried.empty?
+
+    winning = winning_changes(scenario_id)
+    carried.each_with_object({}) do |(key, (change_id, since)), open|
+      open[key] = since if winning[key]&.event_id == change_id
+    end
   end
 
   # Makes someone a member, or gives a member another role. The role they
@@ -158,6 +224,53 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
+  # Renames a scenario. The same name writes nothing.
+  #
+  # @param scenario_id [String]
+  # @param name [String]
+  # @param current [String, nil] the name it has now: the plan holds no name, so the caller says
+  # @param renamed_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown or
+  #   the baseline, or the name is blank or too long
+  def rename_scenario(scenario_id, name:, current:, renamed_by_id:)
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline can't be renamed" unless @scenarios[live_scenario!(scenario_id)]
+
+    name = require_name(name, "scenario")
+    return if name == current
+
+    apply(TeamPlanning::Events::ScenarioRenamed.new(data: {
+      plan_id: @plan_id, scenario_id: scenario_id, name: name, previous_name: current, renamed_by_id: renamed_by_id
+    }))
+  end
+
+  # Says what a scenario is for, or clears it with a blank. The aggregate
+  # never sees a description once written, so the caller says what the
+  # scenario holds now, read from a projection, and the same text writes
+  # nothing. {UNKNOWN}, when the caller can't be sure, always writes.
+  #
+  # @param scenario_id [String]
+  # @param description [String, nil]
+  # @param described_by_id [String]
+  # @param current [#call] gives the description now, or {UNKNOWN}; called
+  #   only once the command passes its checks
+  # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown or
+  #   the baseline, or the description too long
+  def describe_scenario(scenario_id, description:, described_by_id:, current: -> { UNKNOWN })
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline can't be described" unless @scenarios[live_scenario!(scenario_id)]
+
+    description = self.class.normalise_description(description)
+    if description && description.length > DESCRIPTION_LIMIT
+      raise TeamPlanning::Error, "A scenario's description can be at most #{DESCRIPTION_LIMIT} characters"
+    end
+    return if description == current.call
+
+    apply(TeamPlanning::Events::ScenarioDescribed.new(data: {
+      plan_id: @plan_id, scenario_id: scenario_id, description: description, described_by_id: described_by_id
+    }))
+  end
+
   # Moves a `then` scenario's end. Its start stays where the tree puts it, and
   # the steps after it start from the new end. The same end writes nothing.
   #
@@ -173,7 +286,7 @@ class TeamPlanning::PlanAggregate
     scenario = @scenarios[live_scenario!(scenario_id)]
     raise TeamPlanning::Error, "The baseline stands on the base date and has no period" unless scenario
     if scenario.relation == "instead"
-      raise TeamPlanning::Error, "#{scenario.name} is an alternative: it takes its period from #{name_of(scenario.parent_id)}"
+      raise TeamPlanning::Error, "This scenario is an alternative: it takes its period from #{parent_of(scenario.parent_id)}"
     end
 
     ends_on = require_date(ends_on)
@@ -200,7 +313,7 @@ class TeamPlanning::PlanAggregate
     children = children_of(scenario_id).size
     if children.positive?
       raise TeamPlanning::Error,
-            "#{children} #{children == 1 ? "scenario forks" : "scenarios fork"} from #{scenario.name}: remove #{children == 1 ? "it" : "them"} first"
+            "#{children} #{children == 1 ? "scenario forks" : "scenarios fork"} from this one: remove #{children == 1 ? "it" : "them"} first"
     end
 
     apply(TeamPlanning::Events::ScenarioRemoved.new(data: {
@@ -215,19 +328,21 @@ class TeamPlanning::PlanAggregate
   # @param subject_id [String]
   # @param set_by_id [String] person_id of the actor
   # @param end_state [Hash] the kind's own fields, none of them a field every change holds
+  # @param note [String, nil] why, kept apart from the end state; blank for none
   # @yieldparam plan [TeamPlanning::PlanAggregate] once the plan is open and the scenario known, for the
   #   caller's own checks, such as one against a projection, which this aggregate never reads
-  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the end state refused
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the end state refused or the note too long
   # @raise [ArgumentError] for a kind that is not a change, or an end state naming a field every change holds
-  def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {})
+  def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {}, note: nil)
     raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change
     raise ArgumentError, "#{kind} must name its facet and say how it lands on a map" unless kind.complete?
 
     ensure_open!
     live_scenario!(scenario_id)
+    note = require_note(note)
     yield self if block_given?
     fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
-    apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }))
+    apply(kind.new(data: with_note({ plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }, note)))
   end
 
   # Every change, pin and clear a scenario made, in order. A pin is the change
@@ -282,6 +397,29 @@ class TeamPlanning::PlanAggregate
     subject_id, facet = key_of(entry)
     in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone - [ event_id ])
     apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id:, in_effect_event_id: }))
+  end
+
+  # Writes, rewrites or clears the note on a change or pin, which must still
+  # stand in its scenario: not undone, not cleared and not replaced.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param event_id [String] the change's or pin's event id
+  # @param note [String, nil] blank clears it
+  # @param noted_by_id [String] person_id of the actor
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the change not in its log or no
+  #   longer standing, or the note too long
+  def note_change(scenario_id:, event_id:, note:, noted_by_id:)
+    ensure_open!
+    entry = log_entry!(live_scenario!(scenario_id), event_id)
+    raise TeamPlanning::Error, "That change is undone: redo it to note it" if undone?(event_id)
+
+    subject_id, facet = key_of(entry)
+    unless changes_in(scenario_id).reverse_each.find { it.key == [ subject_id, facet ] }&.event_id == event_id
+      raise TeamPlanning::Error, "That change no longer stands in #{this(scenario_id).downcase}, so it takes no note"
+    end
+
+    apply(TeamPlanning::Events::ChangeNoted.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, noted_event_id: event_id,
+                                                        note: require_note(note), noted_by_id: }))
   end
 
   # What an Undo button takes back for one person: their latest entry in the
@@ -358,21 +496,24 @@ class TeamPlanning::PlanAggregate
   # @param end_state [Hash] what the scenario inherits, as the kind stores it
   # @param pinned_by_id [String] person_id of the actor
   # @param pinned_from [Array(String, String), nil] the scenario and event id of the change it keeps; nil for the baseline
-  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the root, or it already changes that facet
+  # @param note [String, nil] why the scenario keeps it; blank for none
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the root, it already changes that facet,
+  #   or the note is too long
   # @raise [ArgumentError] for a kind that is not a change, or an end state that doesn't make that key
-  def pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from: nil)
+  def pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from: nil, note: nil)
     raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change && kind.complete?
 
     ensure_pinnable!(scenario_id, [ subject_id, facet ])
+    note = require_note(note)
     end_state = own_fields!(end_state.to_h.symbolize_keys)
     pinned = pinned_change(kind, { plan_id: @plan_id, scenario_id:, subject_id:, set_by_id: pinned_by_id }, end_state)
     raise ArgumentError, "That end state doesn't make a #{facet} change" unless pinned.key == [ subject_id, facet ]
 
     from_scenario_id, from_event_id = pinned_from
-    apply(TeamPlanning::Events::ChangePinned.new(data: {
+    apply(TeamPlanning::Events::ChangePinned.new(data: with_note({
       plan_id: @plan_id, scenario_id:, subject_id:, facet:, kind: kind.name, end_state: end_state.to_h,
       pinned_from_scenario_id: from_scenario_id, pinned_from_event_id: from_event_id, pinned_by_id:
-    }))
+    }, note)))
   end
 
   # Refuses a pin before anyone works out what it would keep.
@@ -385,7 +526,7 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "The baseline inherits nothing to pin" if live_scenario!(scenario_id) == @plan_id
     return unless own_change?(scenario_id, key)
 
-    raise TeamPlanning::Error, "#{name_of(scenario_id)} already changes this: clear it to follow its parent, or set it"
+    raise TeamPlanning::Error, "#{this(scenario_id)} already changes this: clear it to follow its parent, or set it"
   end
 
   # The change that wins for each subject and facet along the scenario's
@@ -468,10 +609,23 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::PlanCreated do |event|
     @plan_id = event.data[:plan_id]
-    @name = event.data[:name]
     @base_on = Date.iso8601(event.data[:base_on])
     @created_by_id = event.data[:created_by_id]
     @members[@created_by_id] = "editor"
+  end
+
+  on TeamPlanning::Events::PlanRebased do |event|
+    base_on = Date.iso8601(event.data[:base_on])
+    conflicts = event.data[:conflicts].map { it.to_h.symbolize_keys }
+    @carried = conflicts.group_by { it[:scenario_id] }.to_h do |scenario_id, found|
+      earlier = carried_conflicts(scenario_id)
+      carried = found.to_h do |conflict|
+        key = conflict.values_at(:subject_id, :facet)
+        [ key, [ conflict[:change_id], earlier.fetch(key, base_on) ] ]
+      end
+      [ scenario_id, carried ]
+    end
+    @base_on = base_on
   end
 
   on TeamPlanning::Events::PlanMemberAdded do |event|
@@ -482,8 +636,8 @@ class TeamPlanning::PlanAggregate
     @members.delete(event.data[:person_id])
   end
 
-  on TeamPlanning::Events::PlanRenamed do |event|
-    @name = event.data[:name]
+  # The plan holds no name.
+  on TeamPlanning::Events::PlanRenamed do |_event|
   end
 
   on TeamPlanning::Events::PlanDeleted do |_event|
@@ -494,7 +648,13 @@ class TeamPlanning::PlanAggregate
     data = event.data
     ends_on = Date.iso8601(data[:ends_on]) if data[:relation] == "then"
     @scenarios[data[:scenario_id]] = Scenario.new(id: data[:scenario_id], parent_id: data[:parent_id],
-                                                  relation: data[:relation], name: data[:name], ends_on:)
+                                                  relation: data[:relation], ends_on:)
+  end
+
+  on TeamPlanning::Events::ScenarioRenamed do |_event|
+  end
+
+  on TeamPlanning::Events::ScenarioDescribed do |_event|
   end
 
   on TeamPlanning::Events::ScenarioPeriodSet do |event|
@@ -523,10 +683,14 @@ class TeamPlanning::PlanAggregate
     @redo_stacks.fetch(event.data[:scenario_id], {}).each_value { it.delete(event.data[:redone_event_id]) }
   end
 
+  on TeamPlanning::Events::ChangeNoted do |_event|
+  end
+
   on TeamPlanning::Events::ScenarioRemoved do |event|
     @scenarios.delete(event.data[:scenario_id])
     @logs.delete(event.data[:scenario_id])
     @redo_stacks.delete(event.data[:scenario_id])
+    @carried.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
@@ -559,7 +723,7 @@ class TeamPlanning::PlanAggregate
   def own_change?(scenario_id, key) = changes_in(scenario_id).any? { it.key == key }
 
   def ensure_overrides!(scenario_id, key)
-    raise TeamPlanning::Error, "#{name_of(scenario_id)} doesn't change this, so there is nothing to clear" unless own_change?(scenario_id, key)
+    raise TeamPlanning::Error, "#{this(scenario_id)} doesn't change this, so there is nothing to clear" unless own_change?(scenario_id, key)
   end
 
   # A pin resolves as a change of the kind it keeps.
@@ -569,7 +733,7 @@ class TeamPlanning::PlanAggregate
 
   def log_entry!(scenario_id, event_id)
     @logs.fetch(scenario_id, []).find { it.event_id == event_id } or
-      raise TeamPlanning::Error, "#{name_of(scenario_id)} has no such change"
+      raise TeamPlanning::Error, "#{this(scenario_id)} has no such change"
   end
 
   def key_of(entry)
@@ -605,7 +769,7 @@ class TeamPlanning::PlanAggregate
 
   def ensure_open!
     raise TeamPlanning::Error, "No such plan" unless exists?
-    raise TeamPlanning::Error, "#{@name} has been deleted" if deleted?
+    raise TeamPlanning::Error, "This plan has been deleted" if deleted?
   end
 
   def require_date(value)
@@ -613,6 +777,16 @@ class TeamPlanning::PlanAggregate
     raise Date::Error, "invalid date: #{value.inspect}" unless value.to_s.match?(/\A\d{4}-\d{2}-\d{2}\z/)
 
     Date.iso8601(value)
+  end
+
+  # A change without a note holds no note field, so it is stored as it was before notes.
+  def with_note(data, note) = note ? data.merge(note:) : data
+
+  def require_note(note)
+    note = note.to_s.strip.presence or return nil
+    raise TeamPlanning::Error, "A note can be at most #{NOTE_LIMIT} characters" if note.length > NOTE_LIMIT
+
+    note
   end
 
   def require_name(name, kind = "plan")
@@ -646,13 +820,13 @@ class TeamPlanning::PlanAggregate
   end
 
   def next_step(parent_id, starts_on, ends_on)
-    if (taken = children_of(parent_id).find { it.relation == "then" })
-      raise TeamPlanning::Error, "#{taken.name} already follows #{name_of(parent_id)}: fork an alternative to it instead"
+    if children_of(parent_id).any? { it.relation == "then" }
+      raise TeamPlanning::Error, "#{parent_of(parent_id).upcase_first} already has a next step: fork an alternative to that step instead"
     end
 
     start = parent_id == @plan_id ? @base_on : period_of(parent_id).end + 1
     if starts_on && starts_on != start
-      raise TeamPlanning::Error, "A step after #{name_of(parent_id)} starts on #{start.iso8601}, the day it begins"
+      raise TeamPlanning::Error, "A step after #{parent_of(parent_id)} starts on #{start.iso8601}, the day it begins"
     end
     raise TeamPlanning::Error, "Say when this step ends" if ends_on.nil?
     raise TeamPlanning::Error, "This step would end on #{ends_on.iso8601}, before it starts on #{start.iso8601}" if ends_on < start
@@ -666,10 +840,26 @@ class TeamPlanning::PlanAggregate
     period = period_of(parent_id)
     unless [ starts_on || period.begin, ends_on || period.end ] == [ period.begin, period.end ]
       raise TeamPlanning::Error,
-            "An alternative covers #{name_of(parent_id)}'s period, #{period.begin.iso8601} to #{period.end.iso8601}"
+            "An alternative covers #{parent_of(parent_id)}'s period, #{period.begin.iso8601} to #{period.end.iso8601}"
     end
 
     period
+  end
+
+  def ensure_first_steps_reach!(base_on)
+    step = children_of(@plan_id).find { it.relation == "then" && it.ends_on < base_on } or return
+
+    raise TeamPlanning::FirstStepEndsTooSoon.new(scenario_id: step.id, ends_on: step.ends_on, base_on:)
+  end
+
+  def conflict_keys!(conflicts)
+    conflicts.map { it.to_h.symbolize_keys.slice(*CONFLICT_FIELDS) }.uniq.each do |conflict|
+      unless conflict.size == CONFLICT_FIELDS.size && conflict.values.all?(String)
+        raise TeamPlanning::Error, "A conflict needs a scenario_id, subject_id, facet and change_id"
+      end
+
+      live_scenario!(conflict[:scenario_id])
+    end
   end
 
   # Refuses ends that would leave any live scenario ending before it starts,
@@ -680,9 +870,11 @@ class TeamPlanning::PlanAggregate
       next unless period.end < period.begin
 
       raise TeamPlanning::Error,
-            "#{@scenarios[id].name} would end on #{period.end.iso8601}, before it starts on #{period.begin.iso8601}"
+            "#{ends.key?(id) ? "This scenario" : "A scenario after it"} would end on #{period.end.iso8601}, before it starts on #{period.begin.iso8601}"
     end
   end
 
-  def name_of(scenario_id) = scenario_id == @plan_id ? "the baseline" : @scenarios.fetch(scenario_id).name
+  def parent_of(scenario_id) = scenario_id == @plan_id ? "the baseline" : "its parent"
+
+  def this(scenario_id) = scenario_id == @plan_id ? "The baseline" : "This scenario"
 end

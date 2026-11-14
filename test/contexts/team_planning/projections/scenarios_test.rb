@@ -27,13 +27,13 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
 
   def periods
     TeamPlanningScenario.where(plan_id: @plan_id).order(:created_at, :id)
-      .pluck(:name, :starts_on, :ends_on).map { |name, starts_on, ends_on| [ name, starts_on.iso8601, ends_on&.iso8601 ] }
+      .map { [ it.name.reveal, it.starts_on.iso8601, it.ends_on&.iso8601 ] }
   end
 
   should "give every plan a baseline on its base date" do
     baseline = TeamPlanningScenario.find(@plan_id)
     assert baseline.baseline?
-    assert_equal [ "Baseline", Date.new(2027, 1, 1), nil, nil ], [ baseline.name, baseline.starts_on, baseline.ends_on, baseline.relation ]
+    assert_equal [ "Baseline", Date.new(2027, 1, 1), nil, nil ], [ baseline.name.reveal, baseline.starts_on, baseline.ends_on, baseline.relation ]
   end
 
   should "keep each period as the tree gives it, as ends move" do
@@ -60,6 +60,47 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
     assert_equal [ [ "Q1", "2027-01-01", "2027-02-28" ], [ "Q2", "2027-03-01", "2027-06-30" ] ], periods
   end
 
+  should "follow a renamed scenario" do
+    q1 = fork(ends_on: "2027-03-31")
+    @handler.rename_scenario(@plan_id, q1, name: "First quarter")
+
+    assert_equal %w[Baseline First\ quarter], periods.map(&:first)
+  end
+
+  should "hold a scenario's description in clear, and clear it on a blank" do
+    q1 = fork(ends_on: "2027-03-31")
+    @handler.describe_scenario(@plan_id, q1, description: "Hire two seniors")
+    assert_equal "Hire two seniors", TeamPlanningScenario.find(q1).description&.reveal
+
+    @handler.describe_scenario(@plan_id, q1, description: "")
+    assert_nil TeamPlanningScenario.find(q1).description&.reveal
+  end
+
+  should "rebuild a description as none once the plan's key is destroyed" do
+    q1 = fork(ends_on: "2027-03-31")
+    @handler.describe_scenario(@plan_id, q1, description: "Hire two seniors")
+    PlanKeyStore.new.destroy_plan(@plan_id)
+
+    TeamPlanning::Projections::Scenarios.reset!(tenant: @tenant)
+    Projections::Replayer.replay(projection_class: TeamPlanning::Projections::Scenarios, tenant: @tenant)
+
+    assert_nil TeamPlanningScenario.find(q1).description&.reveal
+  end
+
+  should "store a renamed scenario's name sealed, unreadable once the plan's key is gone" do
+    q1 = fork(ends_on: "2027-03-31")
+    @handler.rename_scenario(@plan_id, q1, name: "First quarter")
+
+    stored = TeamPlanningScenario.connection.select_value(
+      TeamPlanningScenario.sanitize_sql_array([ "SELECT name::text FROM team_planning_scenarios WHERE id = ?", q1 ])
+    )
+    assert_not_includes stored, "First quarter"
+
+    PlanKeyStore.new.destroy_plan(@plan_id)
+
+    assert_predicate TeamPlanningScenario.find(q1).name, :removed?
+  end
+
   should "drop a removed scenario, and every scenario of a deleted plan" do
     q1 = fork(ends_on: "2027-03-31")
     q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")
@@ -76,6 +117,8 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
       fork(q1, relation: "instead", name: "Lean Q1")
       q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")
       @handler.set_scenario_period(@plan_id, q1, ends_on: "2027-04-30")
+      @handler.rename_scenario(@plan_id, q1, name: "First quarter")
+      @handler.describe_scenario(@plan_id, q1, description: "Hire two seniors")
       @handler.remove_scenario(@plan_id, q2)
       gone = SecureRandom.uuid_v7
       @handler.create_plan(gone, name: "Gone", base_on: "2027-01-01")

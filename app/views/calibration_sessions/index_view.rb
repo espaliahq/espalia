@@ -229,8 +229,8 @@ class Views::CalibrationSessions::IndexView < Views::Base
       data: {
         action: "click->modal#open",
         modal_target_id: Views::CalibrationSessions::RenameSessionModal::ID,
-        rename_session_action: name_calibration_session_path(session),
-        rename_session_name: session.name
+        rename_action: name_calibration_session_path(session),
+        rename_name: session.name
       }
     ) { "Rename…" }
   end

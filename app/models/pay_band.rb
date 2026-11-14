@@ -11,6 +11,7 @@
 # the person's country.
 class PayBand < ApplicationRecord
   PERIODS = %w[year month hour].freeze
+  PER_YEAR = { "year" => 1, "month" => 12 }.freeze
   FIGURES = %i[minimum midpoint maximum].freeze
 
   acts_as_tenant :tenant
@@ -22,6 +23,9 @@ class PayBand < ApplicationRecord
   normalizes :currency, with: Currency::NORMALIZE
 
   before_validation { self.location_key = self.class.location_key(location) }
+  # A removed band leaves no row, so the tenant keeps when the bands last
+  # changed: every plan reprices live, and a cost says as of when.
+  after_commit { tenant.update_column(:pay_bands_changed_at, Time.current) }
 
   validates :level_id, presence: true
   validates :role_name, :level_name, presence: true
@@ -54,6 +58,17 @@ class PayBand < ApplicationRecord
     current_sites.distinct.pluck(Arel.sql("value->>'country'"))
                  .filter_map { it.to_s.squish.presence }
                  .uniq { location_key(it) }.sort
+  end
+
+  # The band that prices a seat in a country: the one naming it, else the
+  # band for any location.
+  #
+  # @param bands [Array<PayBand>] one level's bands
+  # @param country [String, nil] as the Org Graph holds it
+  # @return [PayBand, nil]
+  def self.covering(bands, country)
+    key = location_key(country)
+    bands.find { !it.any_location? && it.location_key == key } || bands.find(&:any_location?)
   end
 
   # @return [ActiveRecord::Relation<OrgFactPeriod>] each person's site in effect today, not one scheduled
@@ -93,6 +108,16 @@ class PayBand < ApplicationRecord
   def figure(name)
     whole, fraction = public_send(name).to_s("F").split(".")
     "#{whole}.#{fraction.to_s.ljust(2, '0')}"
+  end
+
+  # A figure for a full-time year, exactly.
+  #
+  # @param name [Symbol] :minimum, :midpoint or :maximum
+  # @param hours_per_year [Rational] for an hourly band
+  # @return [Rational]
+  def yearly(name, hours_per_year:)
+    figure = public_send(name).to_r
+    period == "hour" ? figure * hours_per_year : figure * PER_YEAR.fetch(period)
   end
 
   # @return [String] the location as the screen reads it

@@ -24,11 +24,12 @@ class TeamPlanning::Attention
   #   nil only when no change explains it
   Item = Data.define(:subject_id, :facet, :reason, :change)
 
-  CHECKS = %i[placements positions units unresolved successions].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
   SUCCESSION = TeamPlanning::Events::UnitSuccessionSet.facet
+  CAPACITY = TeamPlanning::Events::CapacitySet.facet
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
@@ -90,6 +91,17 @@ class TeamPlanning::Attention
       [ (item(succession.id, SUCCESSION, "It carries on from a unit no longer in this scenario", broken_by: gone_before.map { [ it, UNIT ] }) if gone_before.any?),
         (item(succession.id, SUCCESSION, "It carries on from a unit that is still live", broken_by: still_live.map { [ it, UNIT ] }) if still_live.any?),
         (item(succession.id, SUCCESSION, "It is carried on by #{gone(gone_after.first)}", broken_by: gone_after.map { [ it, UNIT ] }) if gone_after.any?) ].compact
+    end
+  end
+
+  # Capacity prices a place in a position by the position, so an override on
+  # the unit around it is one no place reads.
+  def capacity_overrides
+    @map.people.flat_map do |person|
+      held = person.memberships.to_set { it.position_id || it.unit_id }
+      person.capacity_overrides.keys.reject { held.include?(it) }.sort.map do |place_id|
+        item(person.id, "#{CAPACITY}:#{place_id}", "Overrides capacity in a place they don't hold", broken_by: [ [ person.id, ASSIGNMENT ] ])
+      end
     end
   end
 

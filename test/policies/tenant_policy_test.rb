@@ -22,6 +22,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.forget_person?
       assert_not policy.export_feedback?
       assert_not policy.manage_pay_bands?
+      assert_not policy.manage_budget_lines?
       assert_not policy.manage_planning_rules?
     end
   end
@@ -44,6 +45,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.forget_person?
       assert_not policy.export_feedback?
       assert_not policy.manage_pay_bands?
+      assert_not policy.manage_budget_lines?
       assert_not policy.manage_planning_rules?
     end
   end
@@ -63,6 +65,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
 
     should "deny keeping pay bands" do
       assert_not policy.manage_pay_bands?
+      assert_not policy.manage_budget_lines?
       assert_not policy.manage_planning_rules?
     end
   end
@@ -84,6 +87,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.manage_org_graph_editors?
       assert policy.forget_person?
       assert policy.manage_pay_bands?
+      assert policy.manage_budget_lines?
       assert policy.manage_planning_rules?
     end
 
@@ -113,6 +117,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.manage_org_graph_editors?
       assert policy.forget_person?
       assert policy.manage_pay_bands?
+      assert policy.manage_budget_lines?
       assert policy.manage_planning_rules?
     end
 

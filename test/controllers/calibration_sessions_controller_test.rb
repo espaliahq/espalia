@@ -488,7 +488,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#calibration-session-card-#{@live.id} form[action=?]",
                     archive_calibration_session_path(@live), count: 0
       [ @live, @closed ].each do |record|
-        assert_select "#calibration-session-card-#{record.id} [data-rename-session-action=?]",
+        assert_select "#calibration-session-card-#{record.id} [data-rename-action=?]",
                       name_calibration_session_path(record)
       end
       assert_select "##{Views::CalibrationSessions::RenameSessionModal::ID}"

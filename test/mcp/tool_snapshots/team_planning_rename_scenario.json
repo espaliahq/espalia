@@ -1,0 +1,32 @@
+{
+  "name": "team_planning_rename_scenario",
+  "description": "Rename a scenario in a Team Planning plan. Names are plain text kept in the plan's history, so leave people's names out of them. Refused for the baseline, or unless the caller is one of its editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

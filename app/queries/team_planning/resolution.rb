@@ -14,8 +14,11 @@ class TeamPlanning::Resolution
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] the plan's id for the root
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
+  # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already
+  #   read by a caller resolving several scenarios over the same one
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil)
     @baseline = TeamPlanning::Baseline.new(context:, plan:)
+    @base = base
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
@@ -41,9 +44,10 @@ class TeamPlanning::Resolution
   private
 
   def resolved(aggregate = @repository.load_plan(@plan.id))
-    winning = aggregate.winning_changes(@scenario_id)
-    base = @baseline.structure.with(step_ids: step_of(aggregate))
-    map = winning.values.reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
+    winning = @repository.sealed(aggregate.winning_changes(@scenario_id))
+    base = (@base || @baseline.structure).with(step_ids: step_of(aggregate))
+    hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
+    map = (hires + others).reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
     [ explained(map.settled), winning ]
   end
 

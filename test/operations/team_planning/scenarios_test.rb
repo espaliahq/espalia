@@ -21,6 +21,8 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
 
   def fork(**params) = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, **params)
 
+  def described_count = Rails.configuration.event_store.read.of_type([ TeamPlanning::Events::ScenarioDescribed ]).count
+
   def refusal(operation, as: @admin, **params)
     assert_raises(Operations::Base::ParameterError) { call(operation, as:, plan_id: @plan_id, **params) }.message
   end
@@ -54,21 +56,52 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
       call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28")
 
       assert_equal({ plan_id: @plan_id, scenarios: [
-        { scenario_id: @plan_id, parent_id: nil, relation: nil, name: "Baseline", starts_on: "2027-01-01", ends_on: nil },
-        { scenario_id: @q1, parent_id: @plan_id, relation: "then", name: "Q1", starts_on: "2027-01-01", ends_on: "2027-02-28" },
-        { scenario_id: @lean, parent_id: @q1, relation: "instead", name: "Lean Q1", starts_on: "2027-01-01", ends_on: "2027-02-28" }
+        { scenario_id: @plan_id, parent_id: nil, relation: nil, name: "Baseline", description: nil, starts_on: "2027-01-01", ends_on: nil },
+        { scenario_id: @q1, parent_id: @plan_id, relation: "then", name: "Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28" },
+        { scenario_id: @lean, parent_id: @q1, relation: "instead", name: "Lean Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28" }
       ] }, call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id))
     end
 
     should "move a step's end and say the period it now has" do
       assert_equal({ plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-04-30" },
                    call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-04-30"))
-      assert_equal "Lean Q1 is an alternative: it takes its period from Q1",
+      assert_equal "This scenario is an alternative: it takes its period from its parent",
                    refusal(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: @lean, ends_on: "2027-04-30")
     end
 
+    should "rename a scenario, and refuse the baseline" do
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, name: "First quarter" },
+                   call(Operations::TeamPlanning::RenameScenario, plan_id: @plan_id, scenario_id: @q1, name: " First quarter "))
+      assert_equal "First quarter", call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].second[:name]
+      assert_equal "The baseline can't be renamed", refusal(Operations::TeamPlanning::RenameScenario, scenario_id: @plan_id, name: "Now")
+      assert_equal "name can't be blank", refusal(Operations::TeamPlanning::RenameScenario, scenario_id: @q1, name: "")
+    end
+
+    should "describe a scenario, writing nothing for the same text, and refuse the baseline" do
+      describe = ->(text) { call(Operations::TeamPlanning::DescribeScenario, plan_id: @plan_id, scenario_id: @q1, description: text) }
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, description: "Hire two seniors" }, describe.(" Hire two seniors "))
+      assert_equal "Hire two seniors", call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].second[:description]
+
+      assert_no_difference -> { described_count } do
+        describe.("Hire two seniors")
+      end
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, description: nil }, describe.(""))
+      assert_nil call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].second[:description]
+      assert_equal "The baseline can't be described",
+                   refusal(Operations::TeamPlanning::DescribeScenario, scenario_id: @plan_id, description: "Now")
+    end
+
+    should "write rather than guess while a rebuild holds the scenarios" do
+      call(Operations::TeamPlanning::DescribeScenario, plan_id: @plan_id, scenario_id: @q1, description: "Hire two seniors")
+      ProjectionVersion.stub(:unless_rebuilding, ->(*) { raise ProjectionVersion::Rebuilding, "busy" }) do
+        assert_difference -> { described_count } do
+          call(Operations::TeamPlanning::DescribeScenario, plan_id: @plan_id, scenario_id: @q1, description: "Hire two seniors")
+        end
+      end
+    end
+
     should "remove a leaf, and refuse a scenario others fork from" do
-      assert_equal "1 scenario forks from Q1: remove it first",
+      assert_equal "1 scenario forks from this one: remove it first",
                    refusal(Operations::TeamPlanning::RemoveScenario, scenario_id: @q1)
       assert_equal({ plan_id: @plan_id, scenario_id: @lean, removed: true },
                    call(Operations::TeamPlanning::RemoveScenario, plan_id: @plan_id, scenario_id: @lean))
@@ -78,6 +111,8 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
     should "read as missing to an admin outside the plan" do
       [ [ Operations::TeamPlanning::Scenarios, {} ],
         [ Operations::TeamPlanning::ForkScenario, { parent_id: @q1, relation: "instead", name: "Mine" } ],
+        [ Operations::TeamPlanning::RenameScenario, { scenario_id: @q1, name: "Mine" } ],
+        [ Operations::TeamPlanning::DescribeScenario, { scenario_id: @q1, description: "Mine" } ],
         [ Operations::TeamPlanning::SetScenarioPeriod, { scenario_id: @q1, ends_on: "2027-04-30" } ],
         [ Operations::TeamPlanning::RemoveScenario, { scenario_id: @lean } ] ].each do |operation, params|
         assert_equal "No such plan", refusal(operation, as: @other_admin, **params), operation.name

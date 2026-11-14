@@ -80,7 +80,8 @@ module Shreddable::Column
     # @param field [Symbol] a jsonb column
     # @param by [Symbol] :plan for the plan's own key, :person for one person's key
     # @param plan [Symbol] the column that holds the plan's id
-    # @param person [Symbol] the column that holds the person's id
+    # @param person [Symbol, #call] the column that holds the person's id, or
+    #   a callable that takes the row and gives the id, or nil for the plan's key
     # @raise [ArgumentError] for an unknown key
     def shreddable_column(field, by:, plan: :plan_id, person: :person_id)
       Shreddable.check_key!(by)
@@ -125,7 +126,8 @@ module Shreddable::Column
     # @param row [Hash{Symbol => String}] the row's tenant_id and the columns
     #   that name its plan and person
     # @return [Hash, nil]
-    # @raise [PlanKeyStore::Destroyed] for a value in clear whose key is gone
+    # @raise [PlanKeyStore::Destroyed] for a value in clear whose key is gone,
+    #   outside a rebuild
     def seal_column(field, value, **row)
       Shreddable::Column.seal(value, -> { shreddable_identifier(field, row) })
     end
@@ -135,7 +137,7 @@ module Shreddable::Column
     # @return [String] the identifier of the key that should seal the field
     def shreddable_identifier(field, row)
       rule = shreddable_columns.fetch(field)
-      Shreddable.identifier(rule, row[:tenant_id], row[rule[:plan]], row[rule[:person]])
+      Shreddable.identifier(rule, row[:tenant_id], row[rule[:plan]], Shreddable.person_of(rule, row) { row[it] })
     end
   end
 
@@ -144,11 +146,14 @@ module Shreddable::Column
   def self.stored?(value) = value.is_a?(Hash) && STORED_KEYS.include?(value.keys.map(&:to_s).sort)
 
   # A value the mapper just encrypted under the row's key keeps the mapper's
-  # stored form, so a live write and a rebuild store the same bytes.
+  # stored form, so a live write and a rebuild store the same bytes. A value
+  # in clear whose key is destroyed seals as removed.
   #
   # @param value [Shreddable::Value, Object, nil]
   # @param identifier [#call] gives the identifier of the row's key
   # @return [Hash, nil]
+  # @raise [PlanKeyStore::Destroyed] for a value in clear whose key is gone,
+  #   outside a rebuild
   def self.seal(value, identifier)
     return if value.nil?
     return value if stored?(value)
@@ -164,6 +169,12 @@ module Shreddable::Column
     return sealed if sealed && sealed["identifier"] == id && sealed_by&.key == key.key
 
     Shreddable.encrypt(Shreddable::Value.wrap(value).reveal, id, key)
+  rescue PlanKeyStore::Destroyed
+    # A rebuild meets a value stored in clear before its field was declared
+    # shreddable, for a plan since deleted. A live write still raises.
+    raise unless Projections::Replayer.replay_mode?
+
+    REMOVED
   end
 
   # The condition of a `where`, without the values bound into it, in either
