@@ -13,7 +13,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
   EXEMPT = {
     "integrations_hris_field_preview" => "reads the live HRIS, which no longer holds a forgotten person",
     "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person",
-    "team_planning_scenarios" => "returns scenario ids, periods and names; a name is free text editors are asked to keep people out of, not shredded until #209"
+    "team_planning_scenarios" => "returns scenario ids, periods and names; a name is free text editors are asked to keep people out of, not shredded until #209",
+    "team_planning_units" => "returns unit and level ids and unit names, never a person; a planned name is free text, not shredded until #209"
   }.freeze
 
   setup do

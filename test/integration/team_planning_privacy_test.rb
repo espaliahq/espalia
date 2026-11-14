@@ -20,6 +20,8 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
 
   teardown { ActsAsTenant.current_tenant = nil }
 
+  UNIT_ID = "0193a1b2-0000-7000-8000-000000000001"
+
   OPERATIONS = -> { Operations::Registry.all.select { it.name.start_with?("Operations::TeamPlanning::") } }
 
   should "walk at least the plan tools 1.2 ships" do
@@ -103,7 +105,7 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
   def params_for(operation)
     values = { plan_id: @plan_id, name: "Taken over", person_id: @viewer.person.id, role: "editor", reason: "Curious",
                base_on: "2026-11-14", scenario_id: @scenario_id, parent_id: @scenario_id, relation: "instead",
-               ends_on: "2027-04-30" }
+               ends_on: "2027-04-30", unit_id: UNIT_ID, predecessor_ids: [ UNIT_ID ], successor_ids: [ UNIT_ID ] }
     values.slice(*operation.parameters.keys)
   end
 
