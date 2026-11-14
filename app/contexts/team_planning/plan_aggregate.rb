@@ -571,7 +571,7 @@ class TeamPlanning::PlanAggregate
 
   def log_entry!(scenario_id, event_id)
     @logs.fetch(scenario_id, []).find { it.event_id == event_id } or
-      raise TeamPlanning::Error, "#{name_of(scenario_id)} has no such change"
+      raise TeamPlanning::Error, "#{this(scenario_id)} has no such change"
   end
 
   def key_of(entry)
