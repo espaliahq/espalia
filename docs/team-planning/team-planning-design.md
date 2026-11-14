@@ -143,10 +143,12 @@ they can never disagree with the Org Graph.
 ## Plan-held data
 
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not
-in the HRIS yet) are `PlanDataSet` events. The value, every note and every scenario
-description are shreddable under a key per plan. Deleting the plan deletes the key. The
-events remain and still say that something was set; what it was is unreadable at once,
-and gone for good once the backups taken before the deletion have expired.
+in the HRIS yet) are `PlanDataSet` events. A value about a named person, such as their
+pay or a corrected level, is shreddable under that person's key in the plan. Every other
+value, every note and every scenario description are shreddable under the plan's key.
+Deleting the plan deletes every key it holds. The events remain and still say that
+something was set; what it was is unreadable at once, and gone for good once the backups
+taken before the deletion have expired.
 
 Two consequences of [the aggregate guard](shreddable-fields-design.md):
 
@@ -252,8 +254,8 @@ The assumptions in a first version:
 
 What stays planned: `PositionSet` carries a hiring status and a target start date,
 plan-held until a hiring system is the provider of open positions. `LevelSet` is a
-planned promotion for a named person. Its level is shreddable under the plan's key,
-because it is the plan's statement about a person. A pay figure typed into the plan is a
+planned promotion for a named person. Its level is shreddable under that person's key
+in the plan, because it is the plan's statement about them. A pay figure typed into the plan is a
 `PlanDataSet`, as before.
 
 Forecast promotions and pay increases draw on a pool: a budget line approved for
@@ -263,9 +265,10 @@ Two of these forecasts add a dependency this module did not have before.
 
 | # | Required of assessments |
 |---|---|
-| A1 | For a person on a date: where their ratings place them against their level, in a form that maps to a place in a pay band. |
-| A2 | For a person on a date: promotion readiness for the next level. |
+| A1 | For a person on a date, as known at the end of the day before: where their ratings place them against their level, in a form that maps to a place in a pay band. |
+| A2 | For a person on a date, as known at the end of the day before: promotion readiness for the next level. |
 | A3 | Whether a given viewer may open that person's assessment. |
+| A4 | The assessment changes recorded between two dates, for the drift report. |
 
 The forecast is served as totals under the cohort rule. A3 gates the per-person
 breakdown: the Operation returns it only for people whose assessments the viewer may

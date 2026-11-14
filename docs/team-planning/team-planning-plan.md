@@ -375,7 +375,7 @@ edits the change, then approves again.
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out | 10.1 |
 | 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |
-| 10.5 | An Operation for promotion readiness and place in band for a person on a date, from `PersonDevelopment::Scoring`, gated by `AssessmentPolicy#show?` | none |
+| 10.5 | An Operation for promotion readiness and place in band for a person on a date, as known at the end of the day before, from `PersonDevelopment::Scoring`, gated by `AssessmentPolicy#show?`; and the assessment changes recorded between two dates, for the drift report | none |
 | 10.6 | Forecast promotions per unit and level, under the cohort minimum of `Reporting::CapabilityAttainment`, drawing on a pool | 10.1, 10.5, 6.1 |
 | 10.7 | Pay increases: a flat rate, then movement toward each person's place in band | 10.1, 5.6 |
 | 10.8 | A closed step shows its forecast beside what happened | 10.2, 8.7 |
@@ -427,9 +427,10 @@ Tal decided all seven on 14 Nov 2026, each as recommended.
    plan standing on today would move under its users as edits land later today, and two
    edits that day would show only the last. Standing on the day before closes the base.
    Edits made on the base date arrive as drift, because 4.1 lists changes by learned date
-   from the day before, and `ChangesBetween` excludes its start and includes its end. Two
-   edits that day are two rows in the drift report, and the plan reads the later one once
-   it updates to today. Shapes 1.3 and 4.1.
+   from the day before, and `ChangesBetween` excludes its start and includes its end. It
+   reports one net change per fact, so two edits to one fact that day are one row in the
+   drift report, showing the later value; the earlier one is not reported. Shapes 1.3 and
+   4.1.
 4. **What approval requires.** Decided: the may-approve right, plus edit rights in the
    Org Graph on every unit and membership the scenario changes (`edit_unit?`,
    `edit_membership?`, `record_succession?`). A scenario is approved whole, tenant
@@ -440,6 +441,8 @@ Tal decided all seven on 14 Nov 2026, each as recommended.
 6. **People who leave or are forgotten mid-plan.** Decided: forgetting a person destroys
    their key in every plan at once, so every value a plan held about them becomes
    unreadable. They stay in each plan's history as a former member with no identity.
+   Notes and scenario descriptions use the plan's key, so one that names them stays
+   readable to the plan's members until the plan is deleted.
    Someone who leaves stays in the plan and shows as conflicting wherever the plan still
    places them. The data design's "Erasure inside a live plan" section says the same.
    Shapes 2.1 and 2.5.
