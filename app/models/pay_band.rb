@@ -67,8 +67,8 @@ class PayBand < ApplicationRecord
                  .uniq { location_key(it) }.sort
   end
 
-  # @return [ActiveRecord::Relation<OrgFactPeriod>] each person's site in effect now
-  def self.current_sites = OrgFactPeriod.current.where(subject_type: "person", fact: "site", effective_to: nil)
+  # @return [ActiveRecord::Relation<OrgFactPeriod>] each person's site in effect today, not one scheduled
+  def self.current_sites = OrgFactPeriod.current.in_effect_on(Date.current).where(subject_type: "person", fact: "site")
 
   # Where a band sits on the screen: by role, then from the lowest level,
   # then the any-location band before the countries. A band whose level has

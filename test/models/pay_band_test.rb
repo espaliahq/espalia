@@ -17,9 +17,9 @@ class PayBandTest < ActiveSupport::TestCase
                 period: "year", minimum: 100, midpoint: 150, maximum: 200, **attrs)
   end
 
-  def site(country)
-    OrgFactPeriod.create!(subject_type: "person", subject_id: SecureRandom.uuid_v7, fact: "site", value: { country: },
-                          effective_from: Date.current, learned_at: Time.current,
+  def site(country, from: Date.current, to: nil, person_id: SecureRandom.uuid_v7)
+    OrgFactPeriod.create!(subject_type: "person", subject_id: person_id, fact: "site", value: { country: },
+                          effective_from: from, effective_to: to, learned_at: Time.current,
                           event_id: SecureRandom.uuid_v7, learned_by_event_id: SecureRandom.uuid_v7)
   end
 
@@ -79,5 +79,13 @@ class PayBandTest < ActiveSupport::TestCase
 
     assert_equal %w[Fixtureland Testonia], PayBand.known_countries.map(&:capitalize).uniq.sort
     assert_equal 2, PayBand.known_countries.size
+  end
+
+  should "offer the country a person is in today, not one they move to later" do
+    person_id = SecureRandom.uuid_v7
+    site("Fixtureland", from: 1.month.ago.to_date, to: 1.month.from_now.to_date, person_id:)
+    site("Testonia", from: 1.month.from_now.to_date, person_id:)
+
+    assert_equal %w[Fixtureland], PayBand.known_countries
   end
 end
