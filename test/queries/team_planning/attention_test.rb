@@ -127,6 +127,18 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ "Their manager shares no unit with them" ], reasons(map(units:, people: [ member, lead, report, stray ]))
   end
 
+  should "name the manager's own change when it is the one that moved them away" do
+    far = SecureRandom.uuid_v7
+    lead = member(SecureRandom.uuid_v7, places: [ [ far, 1 ] ], manager_id: PERSON)
+    report = member(SecureRandom.uuid_v7, manager_id: lead.id)
+    line = change(TeamPlanning::Events::ReportingLineSet, report.id, manager_id: lead.id)
+    moved = change(TeamPlanning::Events::AssignmentSet, lead.id, memberships: [])
+
+    items = TeamPlanning::Attention.new(map(units: [ unit(ROOT, nil), unit(LIVE, ROOT), unit(far, ROOT) ], people: [ member, lead, report ]),
+                                        { line.key => line, moved.key => moved }).call
+    assert_equal [ [ report.id, moved ] ], items.select { it.facet == "reporting_line" }.map { [ it.subject_id, it.change ] }
+  end
+
   should "mark a manager or a manager's position that is no longer in the scenario" do
     position = B::Position.new(id: SecureRandom.uuid_v7, role_id: nil, level_id: LEVEL, unit_id: ROOT, fte: 1.0, basis: "new",
                                role_name: nil, level_name: nil)

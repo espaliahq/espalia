@@ -34,6 +34,7 @@ class TeamPlanning::Attention
   SUCCESSION = TeamPlanning::Events::UnitSuccessionSet.facet
   LINE = TeamPlanning::Events::ReportingLineSet.facet
   CAPACITY = TeamPlanning::Events::CapacitySet.facet
+  DEPARTURE = TeamPlanning::Events::DepartureSet.facet
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
@@ -147,8 +148,14 @@ class TeamPlanning::Attention
     @owned = @map.units.each_with_object(Hash.new { |hash, id| hash[id] = Set.new }) { |unit, owned| unit.owner_ids.each { owned[it] << unit.id } }
     @map.people.filter_map do |person|
       reason = manager_reason(person, by_id, positions, heads)
-      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ] ]) if reason
+      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *manager_keys(person.line) ]) if reason
     end
+  end
+
+  def manager_keys(line)
+    return [] unless line
+
+    line.person_id ? [ [ line.person_id, ASSIGNMENT ], [ line.person_id, DEPARTURE ] ] : [ [ line.position_id, POSITION ] ]
   end
 
   def manager_reason(person, by_id, positions, heads)
