@@ -507,11 +507,15 @@ conflicting before the plan starts.
 
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
-Org Graph can move (it implements `subject_moved_by`) has a status: today, a unit set and
-an assignment. A rule, a position and a succession are plan-only, so each would read
+Org Graph can move (it implements `subject_moved_by`) has a status: today, a unit set,
+an assignment and a reporting line. A rule, a position and a succession are plan-only, so each would read
 pending forever. A retirement and a succession have none yet either: the Org Graph's
 as-of read gives only live units and holds no successions, so today's map can't show a
-unit retired or succeeded.
+unit retired or succeeded. Nor does a departure: the as-of read drops a leaver, so today's
+map can't tell someone gone from someone staying.
+
+A reporting line to a position reads done once the Org Graph names, as the person's
+manager, someone the scenario seats in that position.
 
 The Org Graph can't say which position someone fills, only where they are. So a placement
 in a position is held against the place it settles to on the scenario's map: the
