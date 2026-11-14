@@ -42,7 +42,11 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
         render Components::Kit::SectionHeading.new(
           "Org Graph",
           subtitle: "Units and who is in each, as the Org Graph knows them today. Open a unit to change it."
-        )
+        ) do |heading|
+          heading.action do
+            render Components::Kit::Button.new(variant: :outline, tone: :neutral, size: :sm, href: tenant_org_graph_settings_path) { "Settings" }
+          end
+        end
         render @comparison_bar if @comparison_bar
 
         if @overview.any_units?

@@ -639,7 +639,7 @@ the sync's result as split, for someone to resolve. Espalia never picks a majori
 `Hris::LevelHandover` compares a level Espalia holds with the field it would come from,
 then switches it. The operations are `integrations_hris_level_handover` (the comparison),
 `integrations_hand_over_hris_level` and `integrations_hand_back_hris_level`. The settings
-screen (6.9) hosts them.
+screen (6.9, below) hosts them.
 
 - **Suggested by name, confirmed by a person.** Each unit gets the value whose label
   matches its name, and the values its members hold, with how many hold each. Nothing is
@@ -670,6 +670,30 @@ screen (6.9) hosts them.
 - **Handing back undoes no history.** The level and its units become Espalia's again and
   lose their references. Units and memberships stay as they are; successions and
   retirements made by the handover stand. The brake does not apply in reverse.
+
+#### The settings screen (6.9)
+
+`/tenant/org_graph/settings` gathers the Org Graph's settings on one page
+([#126](https://github.com/espaliahq/espalia/issues/126)). Only a tenant admin reaches it,
+and the Units view links to it. Each panel writes through the Operations above, so the
+screen and MCP share one implementation.
+
+- **Where each fact comes from.** Each fact's provider, and, for a fact the HRIS supplies,
+  the field it is read from. A field is previewed before it is chosen.
+- **Levels.** Each level's provider and live units. An empty level is read from a field
+  directly. Adding and reordering levels is [#127](https://github.com/espaliahq/espalia/issues/127).
+- **Handing a level over.** A level with units is compared with a field. Each unit gets
+  one call: match a value, succeed into another unit, or retire. The calls start from the
+  suggested value, and the switch appears only once the calls are compared and nothing is
+  left to decide. The switch carries that comparison's fingerprint, and over the brake it
+  asks for both counts. A level the HRIS holds is handed back from the same panel.
+- **Keeping facts fresh.** The staleness threshold, and how many facts have passed it.
+- **Forgetting.** The retention period, who reaches their date today, and the schedule.
+  Without a forgetting key the panel says forgetting isn't set up and offers no switch.
+  There is no button to forget one person.
+- **Who may edit.** The Org Graph editors, added and removed by name.
+
+Frames that read the HRIS load eagerly, so the page never waits on it.
 
 #### What the sync needs for this
 
