@@ -50,8 +50,9 @@ class OrgGraph::StructureCommandHandler
 
   # @see OrgGraph::StructureAggregate#remove_level
   def remove_level(level_id, **options)
+    plan, options = OrgGraph::PlanReference.extract(options)
     authorize_taxonomy!
-    with_structure(OrgGraph::PlanReference.new) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
+    with_structure(plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
   end
 
   # @see OrgGraph::StructureAggregate#set_level_provider

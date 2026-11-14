@@ -145,6 +145,16 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_equal @actor, structure_events.last.data[:defined_by_id]
       assert_raises(ArgumentError) { as_tenant { @handler.remove_level(guild, effective_on: @today) } }
     end
+
+    should "carry the plan that removed a level" do
+      guild, plan_id, plan_change_id = Array.new(3) { SecureRandom.uuid_v7 }
+      as_tenant do
+        @handler.add_level(guild, "Guild", effective_on: @today)
+        @handler.remove_level(guild, effective_on: @today, plan_id:, plan_change_id:)
+      end
+
+      assert_equal [ plan_id, plan_change_id ], structure_events.last.data.values_at(:plan_id, :plan_change_id)
+    end
   end
 
   context "#create_unit" do
