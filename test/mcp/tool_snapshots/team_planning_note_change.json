@@ -1,0 +1,34 @@
+{
+  "name": "team_planning_note_change",
+  "description": "Write, rewrite or clear the note on a change or pin in a scenario of a Team Planning plan: why it is in the plan. Give event_id as team_planning_history lists it, and leave note out or blank to clear it. A note never changes what the scenario resolves to, can't be undone, and follows its change through undo and redo. Refused for a change since undone, cleared or replaced in its scenario, for a note over 2000 characters, or unless the caller is an editor. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      },
+      "event_id": {
+        "type": "string"
+      },
+      "note": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "event_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

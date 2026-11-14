@@ -7,12 +7,13 @@
 # It reads the person's places from the resolved map, swaps the one named for
 # the new one, and writes the whole list through {SetAssignment}, so the change
 # is an ordinary AssignmentSet. A place the HRIS gave no allocation is written
-# with the share {TeamPlanning::Baseline::Membership.shares} reads it as.
+# with the share {TeamPlanning::Baseline::Membership.shares} reads it as. Its
+# note is the AssignmentSet's, so a move without one leaves none.
 #
 # The baseline is Today and is refused here, whatever the caller: the map
 # edits a scenario, never the Org Graph's own picture.
 class Operations::TeamPlanning::MovePlace < Operations::Base
-  include Operations::TeamPlanning::PlanWrite
+  include Operations::TeamPlanning::ChangeWrite
 
   UNASSIGNED = "unassigned"
 
@@ -48,7 +49,7 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
       person = map[:people].find { it[:id] == person_id } or raise Operations::Base::ParameterError, "This scenario has no such person"
 
       Operations::TeamPlanning::SetAssignment.call(
-        context:, params: { plan_id: plan_id!, scenario_id:, person_id:, placements: placements(person, map) }
+        context:, params: { plan_id: plan_id!, scenario_id:, person_id:, placements: placements(person, map), note: params[:note] }
       )
     end
   end

@@ -80,7 +80,8 @@ module Shreddable::Column
     # @param field [Symbol] a jsonb column
     # @param by [Symbol] :plan for the plan's own key, :person for one person's key
     # @param plan [Symbol] the column that holds the plan's id
-    # @param person [Symbol] the column that holds the person's id
+    # @param person [Symbol, #call] the column that holds the person's id, or
+    #   a callable that takes the row and gives the id, or nil for the plan's key
     # @raise [ArgumentError] for an unknown key
     def shreddable_column(field, by:, plan: :plan_id, person: :person_id)
       Shreddable.check_key!(by)
@@ -136,7 +137,7 @@ module Shreddable::Column
     # @return [String] the identifier of the key that should seal the field
     def shreddable_identifier(field, row)
       rule = shreddable_columns.fetch(field)
-      Shreddable.identifier(rule, row[:tenant_id], row[rule[:plan]], row[rule[:person]])
+      Shreddable.identifier(rule, row[:tenant_id], row[rule[:plan]], Shreddable.person_of(rule, row) { row[it] })
     end
   end
 

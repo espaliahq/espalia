@@ -1,9 +1,13 @@
 {
   "name": "team_planning_set_departure",
-  "description": "Have a person leave in a scenario of a Team Planning plan, optionally naming the position that backfills them: it carries the budget and the headcount, and the leaver never counts as filling it. In this scenario's step they stay on the map marked as leaving; in the steps after it they are gone and the position stands alone. A leaving date within the step splits its cost: the leaver costs up to that day and the backfill from the day after; without one, the backfill carries the whole step. team_planning_withdraw_departure has them stay. Refused unless the caller is one of the plan's editors.",
+  "description": "Have a person leave in a scenario of a Team Planning plan, optionally naming the position that backfills them: it carries the budget and the headcount, and the leaver never counts as filling it. In this scenario's step they stay on the map marked as leaving; in the steps after it they are gone and the position stands alone. A leaving date within the step splits its cost: the leaver costs up to that day and the backfill from the day after; without one, the backfill carries the whole step. team_planning_withdraw_departure has them stay. Refused unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
+      },
       "plan_id": {
         "type": "string"
       },

@@ -76,7 +76,7 @@ Every change event has the same shape:
   scenario_id:,
   subject:,     # what the change is about: a person, a position, a unit, a rule, a budget line
   state:,       # where the subject ends up; never a step from a previous state
-  note:,        # why; shreddable under the plan key
+  note:,        # why; shreddable under the subject's key: a person's in the plan, else the plan's
   set_by:
 }
 ```
@@ -93,6 +93,7 @@ Every change event has the same shape:
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
 | Undo | `ChangeUndone`, `ChangeRedone`, each naming the event it reverses |
+| Notes | `ChangeNoted`: a change's or pin's note written, rewritten or cleared |
 | The Org Graph | `PlanRebased` (the date the plan now stands on, the one before, and the conflicts it carries) |
 | Reality | `StepClosed`, `PlanApproved`, `ChangeRaised`, `ChangeApplied` |
 
@@ -582,7 +583,7 @@ make ends what they can redo, as in an editor. Undo and redo are for editors, li
 other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
-undo and redo, in order, with who made it and, while it stands undone, who undid it.
+undo, redo and note, in order, with who made it and, while it stands undone, who undid it.
 The baseline's history also lists each update to today, with the base it left and the
 conflicts it carried.
 `team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
@@ -593,7 +594,58 @@ needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeplo
 history and overrides projections read events through one mapping,
 `TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
 never reaches either table: the history names the field in `sealed_fields` and leaves
-the value out. Removing a scenario drops its history.
+the value out. The note is the one exception, held in a sealed column (see below).
+Removing a scenario drops its history.
+
+### Notes
+
+**As built in 3.13b** ([#273](https://github.com/espaliahq/espalia/issues/273)): every
+change and pin may carry a `note`, the planner's reason, such as why someone moves.
+**The note follows the key of the change's subject.**
+
+- **A note on a change to a person seals under that person's key in the plan.** A kind
+  whose subject is a person declares `about_a_person`: `AssignmentSet`, `CapacitySet`,
+  `DepartureSet`, `DepartureWithdrawn`, `LevelSet`, `PlanDataSet` and `ReportingLineSet`. Forgetting the
+  person removes the note with the level, the pay and the rest. An assignment of a
+  placeholder hire seals under the placeholder's id, a key only deleting the plan
+  destroys.
+- **Any other note seals under the plan's key**: on a unit, a position, a rule, a
+  placeholder hire or a succession. The `Change` base declares `shreddable :note, by:
+  :plan`, so a new kind gets that with nothing declared. Forgetting a person leaves such a
+  note readable, the accepted limit of free text
+  ([#110](https://github.com/espaliahq/espalia/issues/110)), so the tools ask planners to
+  keep personal details out of it.
+- **Every copy chooses the same key.** `ChangePinned`, `ChangeNoted` and both read models
+  seal through `TeamPlanning::ChangeKinds::NOTED_PERSON`, which reads the subject and
+  facet: the subject's key when the facet's kinds are about a person, else the plan's.
+  Kinds that share a facet share a subject, and a test holds them to it.
+- **Deleting the plan removes every note**, since it destroys every key the plan holds.
+  Destroying the plan's own key alone would leave notes on people readable under theirs.
+- **Once removed, a note reads as `{ removed: true }`**, as a value does. The history still
+  shows that a note was written, by whom and when.
+- **A note is never part of the end state.** `note` is in `Change::FIELDS`, which every end
+  state leaves out, so resolution, `same_end_state?`, status and drift read two changes
+  that differ only in their notes as the same. An end state can't set `note`.
+- **Every write tool takes `note`,** at most 2,000 characters, through
+  `Operations::TeamPlanning::ChangeWrite`. A blank note is none, and a change without one
+  stores no note field, as it did before notes.
+- **`ChangeNoted` rewrites or clears a note** on a change or pin that still stands in its
+  scenario: not undone, not cleared and not replaced. It carries the noted event's id, its
+  subject and facet, the note (nil clears it) and who wrote it. It is not an entry of the
+  log, so it can't be undone and doesn't end what anyone can redo. `team_planning_note_change`
+  exposes it; it is for editors, like any other change, so a frozen plan refuses it.
+- **The note follows its change.** The overrides row holds the note of the change in
+  effect. An undo or redo that brings a change back brings the last note written on it
+  before then, read from the plan stream.
+- **Both read models seal the note.** `team_planning_overrides.note` and
+  `team_planning_history_entries.note` are shreddable columns under the same key as their
+  event, copying the sealed form from it, so forgetting the person or deleting the plan
+  makes every copy unreadable at once. A history row for a change or pin keeps the note
+  it was made with; each `note` row keeps one rewrite and names the change in
+  `noted_event_id`. `team_planning_overrides` and `team_planning_history` show it as
+  `{ value: }`.
+- **No rebuild.** No stored event held a note before 3.13b and the new columns start empty,
+  so neither projection's `CODE_VERSION` moved.
 
 ### Two people editing at once
 
@@ -772,7 +824,9 @@ name, and a subject only the plan holds has none. `Raised` will join these once
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not
 in the HRIS yet) are `PlanDataSet` events. A value about a named person, such as their
 pay or a corrected level, is shreddable under that person's key in the plan. Every other
-value, every note and every scenario description are shreddable under the plan's key.
+value, every note on a change whose subject is not a person and every scenario
+description are shreddable under the plan's key. A note follows its subject's key, so a
+note on a change to a person seals under that person's key in the plan.
 Deleting the plan deletes every key it holds. The events remain and still say that
 something was set; what it was is unreadable at once, and gone for good once the backups
 taken before the deletion have expired.
@@ -1052,6 +1106,9 @@ that writes `PersonForgotten` destroys that person's key in every plan at once. 
 value a plan held about them, such as their pay, a corrected level or a planned
 promotion, becomes unreadable. They stay in each plan's history as a former member with no identity.
 
-One thing can still name them: a note. A note is free text under the plan's key, so one
-that mentions the person stays readable to the plan's members until the plan is
-deleted. Deleting the plan is the remedy when that is not acceptable.
+Notes on changes to them go too, since a note follows the key of its change's subject.
+One thing can still name them: a note on another change, such as a unit's or a rule's.
+That note is free text under the plan's key, so one that mentions the person stays
+readable to the plan's members until the plan is deleted
+([#110](https://github.com/espaliahq/espalia/issues/110)). The note tools tell planners
+to keep personal details out of it. Deleting the plan is the remedy when that is not acceptable.

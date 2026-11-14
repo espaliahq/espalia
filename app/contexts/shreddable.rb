@@ -12,6 +12,8 @@
 #     extend Shreddable
 #     shreddable :note, by: :plan
 #     shreddable :pay, by: :person
+#     # The subject's key when it is a person, else the plan's.
+#     shreddable :reason, by: :person, person: ->(data) { data[:subject_id] if data[:about] == "person" }
 #   end
 module Shreddable
   KEYS = %i[plan person].freeze
@@ -33,7 +35,9 @@ module Shreddable
   # @param fields [Array<Symbol>]
   # @param by [Symbol] :plan for the plan's own key, :person for one person's
   #   key in the plan
-  # @param person [Symbol] the data key that holds that person's id
+  # @param person [Symbol, #call] the data key that holds that person's id,
+  #   or a callable that takes the data and gives the id, or nil for the
+  #   plan's own key
   # @raise [ArgumentError] for an unknown key
   def shreddable(*fields, by:, person: :person_id)
     Shreddable.check_key!(by)
@@ -59,7 +63,7 @@ module Shreddable
   # @return [String] the identifier of the key that encrypts the field
   def shreddable_identifier(tenant_id, data, field)
     rule = shreddable_fields.fetch(field)
-    Shreddable.identifier(rule, tenant_id, data.fetch(:plan_id), rule[:by] == :person ? data.fetch(rule[:person]) : nil)
+    Shreddable.identifier(rule, tenant_id, data.fetch(:plan_id), Shreddable.person_of(rule, data) { data.fetch(it) })
   end
 
   # @param clear [Object] a JSON value
@@ -73,13 +77,28 @@ module Shreddable
       "identifier" => identifier, "iv" => Base64.strict_encode64(iv) }
   end
 
-  # @param rule [Hash] the declaration, with :by
+  # @param rule [Hash] the declaration, with :by and :person
+  # @param data [#[]] an event's data or a read model's row
+  # @yieldparam key [Symbol] the key that holds the person's id, for a rule
+  #   that names one
+  # @yieldreturn [String, nil] the id it holds
+  # @return [String, nil] the person whose key the rule names, or nil for the plan's key
+  def self.person_of(rule, data)
+    return if rule[:by] == :plan
+    return rule[:person].call(data) if rule[:person].respond_to?(:call)
+
+    yield rule[:person]
+  end
+
+  # @param rule [Hash] the declaration, with :by and :person
   # @param tenant_id [String]
   # @param plan_id [String]
-  # @param person_id [String, nil] for a person's key
+  # @param person_id [String, nil] for a person's key; nil from a callable
+  #   rule names the plan's key
   # @return [String] the identifier of the key the rule names
   def self.identifier(rule, tenant_id, plan_id, person_id = nil)
     return PlanKeyStore.plan_identifier(tenant_id, plan_id) if rule[:by] == :plan
+    return PlanKeyStore.plan_identifier(tenant_id, plan_id) if person_id.nil? && rule[:person].respond_to?(:call)
 
     PlanKeyStore.person_identifier(tenant_id, plan_id, person_id)
   end
