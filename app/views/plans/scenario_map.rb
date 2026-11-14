@@ -140,9 +140,17 @@ class Views::Plans::ScenarioMap < Views::Base
     div(data: { map_position: position[:position_id] }, class: "px-4 py-2") do
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-dashed border-default px-2 py-1 text-sm") do
         span(class: "font-medium text-default") { position_label(position) }
-        span(class: "text-muted") { "#{fte(position[:open_fte])} FTE open" } if position[:open_fte].positive?
+        open_fte_note(position[:open_fte])
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
       end
+    end
+  end
+
+  def open_fte_note(open)
+    if open.positive?
+      span(class: "text-muted") { "#{fte(open)} FTE open" }
+    elsif open.negative?
+      span(class: "text-muted") { "#{fte(-open)} FTE over" }
     end
   end
 
@@ -156,7 +164,7 @@ class Views::Plans::ScenarioMap < Views::Base
   end
 
   def unit_summary(unit, people)
-    parts = [ count(people.size, "person", "people") ]
+    parts = [ count(people.map { |person, _| person[:id] }.uniq.size, "person", "people") ]
     parts << "#{fte(fte_of(people))} FTE" unless people.any? { |_, place| place[:allocation].nil? }
     owners = unit[:owner_ids].map { name(it) }
     parts << "owned by #{owners.to_sentence}" if owners.any?
