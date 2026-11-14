@@ -40,9 +40,15 @@ class OrgGraph::SyncHandlers::RetiredUnitMemberships
     [ Date.iso8601(on.to_s), membership.member_since, changed_on ].compact.max
   end
 
+  # Refuses, and so rolls the retirement back, while the member list is
+  # rebuilt: it reads the members from that list.
+  #
   # @param event [OrgGraph::Events::UnitRetired]
+  # @raise [ProjectionVersion::Rebuilding]
   def call(event)
-    ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) { handle(event.data) }
+    ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
+      ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Members::PROJECTION_NAME) { handle(event.data) }
+    end
   end
 
   private

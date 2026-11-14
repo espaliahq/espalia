@@ -3606,6 +3606,77 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_create_plan",
+        "description" => "Create a Team Planning plan, a private draft of the organisation built on the Org Graph " \
+                         "as it stood on base_on (today by default). Only its creator sees it. Refused unless the " \
+                         "caller is a tenant admin linked to a person.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "name" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "base_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          "required" => [ "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "team_planning_delete_plan",
+        "description" => "Delete a Team Planning plan. It cannot be restored. Refused unless the caller created the plan.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "plan_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "team_planning_rename_plan",
+        "description" => "Rename a Team Planning plan. Refused unless the caller created the plan.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "name" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "plan_id", "name" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "tenants_disable_scheduled_forgetting",
         "description" => "Turn off scheduled forgetting for the active tenant. Anyone already forgotten stays forgotten.",
         "inputSchema" => { "type" => "object", "properties" => {}, "required" => [], "additionalProperties" => false },
