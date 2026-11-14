@@ -526,7 +526,7 @@ the reference existed. The Org Graph never reads them.
 
 The Org Graph Operations for the changes a plan makes take the same reference and a cause
 ([#193](https://github.com/espaliahq/espalia/issues/193)). They refuse it unless the caller may apply
-that plan's changes, which nobody may until plans exist.
+that plan's changes, which nobody may until the may-approve right (Team Planning 8.1).
 
 The approval is the cause. A handler built with `cause_id:` gives every event it writes,
 a sync handler's included, that id as its `correlation_id`. Without one, events keep the

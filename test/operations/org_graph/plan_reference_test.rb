@@ -41,8 +41,8 @@ class Operations::OrgGraph::PlanReferenceTest < ActiveSupport::TestCase
     Rails.configuration.event_store.read.to_a.drop(position)
   end
 
-  should "take a plan reference on every write a plan change makes, and on no other" do
-    takes_plan = Operations::Registry.all.select { it.parameters.key?(:plan_id) }
+  should "take a plan reference on every Org Graph write a plan change makes, and on no other" do
+    takes_plan = Operations::Registry.all.select { it.name.start_with?("Operations::OrgGraph::") && it.parameters.key?(:plan_id) }
 
     assert_equal PLAN_OPERATIONS.map(&:name).sort, takes_plan.map(&:name).sort
     PLAN_OPERATIONS.each do |operation|
@@ -61,7 +61,7 @@ class Operations::OrgGraph::PlanReferenceTest < ActiveSupport::TestCase
     assert_not_equal first.metadata[:correlation_id], second.metadata[:correlation_id]
   end
 
-  context "until plans exist" do
+  context "until the may-approve right exists" do
     should "refuse every plan reference, as it would a plan the caller can't see" do
       error = assert_raises(Operations::Base::ParameterError) { rename(plan_id: @plan_id) }
 

@@ -24,8 +24,8 @@ module Operations::OrgGraph::PlanWrite
     base.dependent_required :cause_id, requires: :plan_id
   end
 
-  # No plan exists until Team Planning 1.1, and who may act for one is
-  # 1.2's PlanPolicy, so for now nobody may and every reference is refused.
+  # Applying a plan's changes takes the may-approve right, which Team
+  # Planning 8.1 adds, so until then nobody may and every reference is refused.
   #
   # @param context [AuthorizationContext]
   # @param plan_id [String]
@@ -69,7 +69,7 @@ module Operations::OrgGraph::PlanWrite
   # Changing a group back undoes every change in it, so a plan can't join
   # one a direct edit or another plan started. This reads the activity feed,
   # which a rebuild empties for a while and which misses events no unit
-  # shows; Team Planning 1.1's plan stream will say which causes a plan owns.
+  # shows; once approval lands (8.4), the plan's stream will say which causes it owns.
   def shared_cause!(cause_id, plan_id)
     ActiveRecord::Base.connection.select_value(
       ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "org-graph-cause:#{cause_id}" ])
