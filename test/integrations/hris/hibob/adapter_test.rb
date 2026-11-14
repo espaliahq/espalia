@@ -1295,6 +1295,16 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal "inactive", stray.reload.status
       end
 
+      should "record someone with no stream as having left while a Structure rebuild has emptied the fact providers" do
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst", manager: @alice)
+        OrgGraph::Projections::Structure.reset!(tenant: @tenant)
+
+        result = build_adapter(@fixture["employees"]).sync_people
+
+        assert_not_includes result[:errors].pluck(:person_id), stray.id
+        assert_equal [ "left", "Analyst", @alice.id ], recorded(stray).values_at(:employment_status, :title, :manager_id)
+      end
+
       should "date a leaver with no stream by the termination date their stored HiBob record holds" do
         stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst",
                                 hris_raw_data: { "id" => "bob-009", "internal" => { "terminationDate" => "2019-03-15" } })
