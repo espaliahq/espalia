@@ -17,6 +17,9 @@
 #   The kind adds its end state alongside these.
 #
 class TeamPlanning::Events::Change < RubyEventStore::Event
+  # The fields every change holds, which no end state may set.
+  FIELDS = %i[plan_id scenario_id subject_id set_by_id].freeze
+
   # @return [String] the part of a subject this kind sets
   def self.facet = raise(NotImplementedError, "#{name} must name its facet")
 

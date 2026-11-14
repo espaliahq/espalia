@@ -36,7 +36,7 @@ class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
   teardown { ActsAsTenant.current_tenant = nil }
 
   should "store an editor's change in the plan's stream, naming who made it" do
-    handler(@editor).set_change(@plan_id, TitleSet, scenario_id: @q1, subject_id: @ada, title: "Senior Engineer")
+    handler(@editor).set_change(@plan_id, TitleSet, scenario_id: @q1, subject_id: @ada, end_state: { title: "Senior Engineer" })
 
     event = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).last
     assert_kind_of TitleSet, event
@@ -45,7 +45,7 @@ class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
 
   should "read as missing to a viewer" do
     error = assert_raises(TeamPlanning::Error) do
-      handler(@viewer).set_change(@plan_id, TitleSet, scenario_id: @q1, subject_id: @ada, title: "Senior Engineer")
+      handler(@viewer).set_change(@plan_id, TitleSet, scenario_id: @q1, subject_id: @ada, end_state: { title: "Senior Engineer" })
     end
     assert_equal "No such plan", error.message
   end
@@ -54,8 +54,8 @@ class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
     held = nil
     pausing = PausingRepository.new(-> { held = try_lock_from_another_session })
     TeamPlanning::CommandHandler.new(actor: @editor, repository: pausing)
-      .set_change(@plan_id, TitleSet, scenario_id: @q1, subject_id: @ada, title: "Senior Engineer")
-    handler(@editor).set_change(@plan_id, SiteSet, scenario_id: @q1, subject_id: @ada, site: "York")
+      .set_change(@plan_id, TitleSet, scenario_id: @q1, subject_id: @ada, end_state: { title: "Senior Engineer" })
+    handler(@editor).set_change(@plan_id, SiteSet, scenario_id: @q1, subject_id: @ada, end_state: { site: "York" })
 
     assert_equal false, held, "another session must wait while a change is stored"
     plan = TeamPlanning::Repository.new.load_plan(@plan_id)

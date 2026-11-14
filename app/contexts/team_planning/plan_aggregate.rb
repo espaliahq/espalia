@@ -219,14 +219,20 @@ class TeamPlanning::PlanAggregate
   # @param scenario_id [String] the root or a live scenario
   # @param subject_id [String]
   # @param set_by_id [String] person_id of the actor
-  # @param end_state [Hash] the kind's own fields
+  # @param end_state [Hash] the kind's own fields, none of them a field every change holds
   # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the end state refused
-  def set_change(kind, scenario_id:, subject_id:, set_by_id:, **end_state)
-    raise ArgumentError, "#{kind} is not a kind of change" unless kind < TeamPlanning::Events::Change
+  # @raise [ArgumentError] for a kind that is not a change, or an end state naming a field every change holds
+  def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {})
+    raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change
 
     ensure_open!
     live_scenario!(scenario_id)
-    apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **kind.end_state(end_state), set_by_id: }))
+    fields = kind.end_state(end_state.to_h.symbolize_keys)
+    if (taken = fields.keys & TeamPlanning::Events::Change::FIELDS).any?
+      raise ArgumentError, "An end state can't set #{taken.join(", ")}"
+    end
+
+    apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **fields, set_by_id: }))
   end
 
   # @param scenario_id [String]

@@ -161,10 +161,10 @@ class TeamPlanning::CommandHandler
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
   # @see TeamPlanning::PlanAggregate#set_change
-  def set_change(plan_id, kind, scenario_id:, subject_id:, **end_state)
+  def set_change(plan_id, kind, scenario_id:, subject_id:, end_state: {})
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.set_change(kind, scenario_id:, subject_id:, set_by_id: actor_id!, **end_state)
+      plan.set_change(kind, scenario_id:, subject_id:, set_by_id: actor_id!, end_state:)
     end
   end
 

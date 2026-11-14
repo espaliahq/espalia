@@ -49,7 +49,7 @@ class TeamPlanning::ResolutionTest < ActiveSupport::TestCase
   end
 
   def set(kind, scenario_id, **end_state)
-    as_tenant { handler.set_change(@plan_id, kind, scenario_id:, subject_id: @ada.id, **end_state) }
+    as_tenant { handler.set_change(@plan_id, kind, scenario_id:, subject_id: @ada.id, end_state:) }
   end
 
   def resolve(scenario_id, as: @planner, names: false)

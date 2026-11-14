@@ -25,7 +25,7 @@ class TeamPlanning::PlanAggregateChangesTest < ActiveSupport::TestCase
     end
   end
 
-  def set(scenario_id, title, subject_id: "ada") = @plan.set_change(TitleSet, scenario_id:, subject_id:, set_by_id: @editor_id, title:)
+  def set(scenario_id, title, subject_id: "ada") = @plan.set_change(TitleSet, scenario_id:, subject_id:, set_by_id: @editor_id, end_state: { title: })
 
   def refusal(&) = assert_raises(TeamPlanning::Error, &).message
 
@@ -54,6 +54,12 @@ class TeamPlanning::PlanAggregateChangesTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) do
       @plan.set_change(TeamPlanning::Events::ScenarioRemoved, scenario_id: @q1, subject_id: "ada", set_by_id: @editor_id)
     end
+
+    taken = assert_raises(ArgumentError) do
+      @plan.set_change(TitleSet, scenario_id: @q1, subject_id: "ada", set_by_id: @editor_id,
+                                 end_state: { title: "Lead", "set_by_id" => "someone else", plan_id: "another" })
+    end
+    assert_equal "An end state can't set set_by_id, plan_id", taken.message
 
     @plan.delete(deleted_by_id: @editor_id)
     assert_equal "Next year has been deleted", refusal { set(@q1, "Senior Engineer") }
