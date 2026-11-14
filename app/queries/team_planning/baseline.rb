@@ -18,20 +18,20 @@ class TeamPlanning::Baseline
   # @!attribute base_on [Date] the day it shows
   # @!attribute known_on [Date] read as known at the end of this day
   # @!attribute units [Array<Unit>] the live units, by name
-  # @!attribute people [Array<Person>] the people employed that day, by id
+  # @!attribute people [Array<Member>] the people employed that day, by id
   # @!attribute unassigned_ids [Array<String>] the people in no live unit
   # @!attribute names [Hash{String => String}] person id => name, empty until joined
   Map = Data.define(:base_on, :known_on, :units, :people, :unassigned_ids, :names) do
     # @param person_id [String]
     # @return [String]
-    def name_of(person_id) = names.fetch(person_id, ::Person::FORMER_MEMBER)
+    def name_of(person_id) = names.fetch(person_id, Person::FORMER_MEMBER)
   end
 
   # A live unit. `parent_id` is nil at the root.
   Unit = Data.define(:id, :name, :parent_id, :level_id, :owner_ids)
 
   # A person and their facts that day, with each place they hold.
-  Person = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
+  Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
                        :memberships)
 
   # A person's place in one unit.
@@ -67,7 +67,7 @@ class TeamPlanning::Baseline
 
   def person_from(person, memberships)
     places = memberships.map { Membership.new(**it.to_h.slice(*Membership.members)) }
-    Person.new(**person.to_h.slice(*Person.members), memberships: places)
+    Member.new(**person.to_h.slice(*Member.members), memberships: places)
   end
 
   # Everyone the map names: its people, their managers and the units' owners.
