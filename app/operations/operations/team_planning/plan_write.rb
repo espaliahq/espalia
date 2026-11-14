@@ -14,11 +14,18 @@ module Operations::TeamPlanning::PlanWrite
 
   # @return [String] the plan_id parameter, downcased
   # @raise [Operations::Base::ParameterError] unless it is a UUID
-  def plan_id!
-    value = params[:plan_id]
+  def plan_id! = uuid!(:plan_id)
+
+  # @param name [Symbol] a scenario id parameter
+  # @return [String, nil] the parameter, downcased; nil when not given
+  # @raise [Operations::Base::ParameterError] unless it is a UUID
+  def scenario_id!(name) = params[name].nil? ? nil : uuid!(name)
+
+  def uuid!(name)
+    value = params[name]
     return value.downcase if value.is_a?(String) && value.match?(UUID_RE)
 
-    raise Operations::Base::ParameterError, "plan_id must be a UUID, got #{value.inspect}"
+    raise Operations::Base::ParameterError, "#{name} must be a UUID, got #{value.inspect}"
   end
 
   # Runs the block, turning the plan's own refusals into a bad-parameter error.

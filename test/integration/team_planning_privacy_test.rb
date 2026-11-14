@@ -14,6 +14,8 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
     @viewer = account(role: :member)
     @plan_id = call(Operations::TeamPlanning::CreatePlan, @editor, name: "Pay review 2027")[:plan_id]
     call(Operations::TeamPlanning::AddPlanMember, @editor, plan_id: @plan_id, person_id: @viewer.person.id, role: "viewer")
+    @scenario_id = call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, relation: "then", name: "Q1",
+                                                                         ends_on: "2027-03-31")[:scenario_id]
   end
 
   teardown { ActsAsTenant.current_tenant = nil }
@@ -90,7 +92,8 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
 
   def params_for(operation)
     values = { plan_id: @plan_id, name: "Taken over", person_id: @viewer.person.id, role: "editor", reason: "Curious",
-               base_on: "2026-11-14" }
+               base_on: "2026-11-14", scenario_id: @scenario_id, parent_id: @scenario_id, relation: "instead",
+               ends_on: "2027-04-30" }
     values.slice(*operation.parameters.keys)
   end
 
