@@ -216,13 +216,16 @@ class TeamPlanning::CommandHandler
     from_id, change = plan.inherited_change(scenario_id, [ subject_id, facet ])
     return [ change.class, change.data.except(*TeamPlanning::Events::Change::FIELDS), [ from_id, change.event_id ] ] if change
 
-    kind = TeamPlanning::ChangeKinds.holding(facet)
-    raise TeamPlanning::Error, "This can't be pinned to the baseline yet" unless kind.readable?
+    kinds = TeamPlanning::ChangeKinds.holding(facet).select(&:readable?)
+    raise TeamPlanning::Error, "This can't be pinned to the baseline yet" if kinds.empty?
 
     parent_id = plan.scenarios.fetch(scenario_id) { raise TeamPlanning::Error, "The baseline inherits nothing to pin" }.parent_id
     map = TeamPlanning::Resolution.new(context: @actor, plan: TeamPlanningPlan.find(plan.plan_id), scenario_id: parent_id).structure
-    end_state = kind.read_from(map, subject_id:, facet:) or raise TeamPlanning::Error, "The baseline doesn't hold this"
-    [ kind, end_state, nil ]
+    kinds.each do |kind|
+      end_state = kind.read_from(map, subject_id:, facet:)
+      return [ kind, end_state, nil ] if end_state
+    end
+    raise TeamPlanning::Error, "The baseline doesn't hold this"
   end
 
   # Someone who has left may still be made a viewer of a plan they are in, so

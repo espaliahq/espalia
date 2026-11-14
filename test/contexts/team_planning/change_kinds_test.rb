@@ -12,20 +12,17 @@ class TeamPlanning::ChangeKindsTest < ActiveSupport::TestCase
     assert_equal defined.sort_by(&:name), TeamPlanning::ChangeKinds.all
   end
 
-  should "make every kind clearable and pinnable: complete, with a facet only it holds" do
-    TeamPlanning::ChangeKinds.all.each do |kind|
-      assert kind.complete?, "#{kind} names a facet and says how it lands on a map"
-      others = TeamPlanning::ChangeKinds.all - [ kind ]
-      assert others.none? { it.holds?(kind.facet) || kind.holds?(it.facet) }, "#{kind} shares a facet with another kind"
-    end
+  should "make every kind clearable and pinnable: complete" do
+    TeamPlanning::ChangeKinds.all.each { assert it.complete?, "#{it} names a facet and says how it lands on a map" }
   end
 
   should "subscribe the overrides projection to every kind" do
     assert_empty TeamPlanning::ChangeKinds.all - TeamPlanning::Projections::Overrides.handled_events
   end
 
-  should "find the kind that holds a facet, and refuse one no kind holds" do
-    assert_equal TeamPlanning::Events::RuleSet, TeamPlanning::ChangeKinds.holding("rule:test_cap")
+  should "find every kind that holds a facet, and refuse one no kind holds" do
+    assert_equal [ TeamPlanning::Events::RuleSet ], TeamPlanning::ChangeKinds.holding("rule:test_cap")
+    assert_equal [ TeamPlanning::Events::PositionClosed, TeamPlanning::Events::PositionSet ], TeamPlanning::ChangeKinds.holding("position")
     assert_equal "No kind of change holds rule", assert_raises(TeamPlanning::Error) { TeamPlanning::ChangeKinds.holding("rule") }.message
   end
 end

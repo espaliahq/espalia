@@ -113,7 +113,9 @@ descendants. A descendant shows the change because its state is resolved at read
 
 The last change for a subject and facet wins. A facet is the part of a subject one kind
 of event sets: a person's assignment, their level and their reporting line are three
-facets, so `LevelSet` never competes with `AssignmentSet`. "Rebase" is this resolution run over a new base, so
+facets, so `LevelSet` never competes with `AssignmentSet`. Two kinds may share a facet on
+purpose: `PositionSet` and `PositionClosed` both set `position`, so a later set reopens a
+closed position. "Rebase" is this resolution run over a new base, so
 nothing has to be rewritten in storage. A descendant's explicit change survives an
 ancestor's edit because it is later in the chain, not because anything protected it.
 
@@ -230,7 +232,8 @@ resolved map for a pin, and a map built from the Org Graph today for a change's 
 `TeamPlanning::ChangeKinds.all` finds every kind of change: each `Change` subclass in
 `app/contexts/team_planning/events`, so a new kind touches only its own file. It loads that
 directory before it looks, since the projections subscribe before production eager-loads. A
-test checks every kind is complete and holds a facet no other kind holds. The overrides
+test checks every kind is complete. A clear or a pin acts on a subject and facet, whichever
+kind last set it; pinning a baseline value asks each readable kind of the facet in turn. The overrides
 projection subscribes through it and writes
 `team_planning_overrides`: one row per scenario, subject and facet the scenario sets or
 pinned. `team_planning_overrides` lists them, each beside what the scenario would inherit

@@ -18,8 +18,13 @@ module TeamPlanning::ChangeKinds
     TeamPlanning::Events::Change.descendants.select { it.name&.start_with?("TeamPlanning::Events::") }.sort_by(&:name)
   end
 
+  # Kinds may share a facet, as PositionSet and PositionClosed do, so the
+  # last change there wins whichever kind it is.
+  #
   # @param facet [String] the second half of a change's key
-  # @return [Class<TeamPlanning::Events::Change>]
+  # @return [Array<Class<TeamPlanning::Events::Change>>] every kind that holds it, sorted by name
   # @raise [TeamPlanning::Error] when no kind holds it
-  def self.holding(facet) = all.find { it.holds?(facet.to_s) } || raise(TeamPlanning::Error, "No kind of change holds #{facet}")
+  def self.holding(facet)
+    all.select { it.holds?(facet.to_s) }.presence || raise(TeamPlanning::Error, "No kind of change holds #{facet}")
+  end
 end

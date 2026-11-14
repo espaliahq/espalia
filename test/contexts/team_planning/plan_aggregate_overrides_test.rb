@@ -8,6 +8,12 @@ class TeamPlanning::PlanAggregateOverridesTest < ActiveSupport::TestCase
     def self.apply_to(map, _data) = map
   end
 
+  class TitleDropped < TeamPlanning::Events::Change
+    def self.facet = "title"
+    def self.end_state(_end_state) = {}
+    def self.apply_to(map, _data) = map
+  end
+
   setup do
     @plan_id = SecureRandom.uuid_v7
     @editor_id = SecureRandom.uuid_v7
@@ -119,6 +125,23 @@ class TeamPlanning::PlanAggregateOverridesTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) do
       @plan.pin_change(TeamPlanning::Events::ScenarioRemoved, scenario_id: @q1, subject_id: "ada", facet: "title", end_state: {}, pinned_by_id: @editor_id)
     end
+  end
+
+  should "clear and pin a facet two kinds share, whichever kind set it last" do
+    set(@q1, "Senior Engineer")
+    @plan.set_change(TitleDropped, scenario_id: @q1, subject_id: "ada", set_by_id: @editor_id)
+    set(@lean, "Lead Engineer")
+    @plan.set_change(TitleDropped, scenario_id: @lean, subject_id: "ada", set_by_id: @editor_id)
+
+    assert_equal [ TitleSet, TitleDropped ], @plan.changes_in(@lean).map(&:class)
+    clear(@lean)
+    assert_empty @plan.changes_in(@lean)
+
+    _, inherited = @plan.inherited_change(@lean, %w[ada title])
+    @plan.pin_change(inherited.class, scenario_id: @lean, subject_id: "ada", facet: "title", end_state: {}, pinned_by_id: @editor_id,
+                                      pinned_from: [ @q1, inherited.event_id ])
+    assert_equal [ TitleDropped, @q1 ], [ inherited.class, @plan.inherited_change(@lean, %w[ada title]).first ]
+    assert_equal [ TitleDropped ], @plan.changes_in(@lean).map(&:class)
   end
 
   should "rebuild clears and pins from the stream" do

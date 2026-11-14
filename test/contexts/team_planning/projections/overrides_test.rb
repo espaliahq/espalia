@@ -66,6 +66,21 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
     assert_equal [ @q1 ], overrides.map(&:first)
   end
 
+  should "keep one row for a facet two kinds share, of whichever kind came last" do
+    position = { subject_id: SecureRandom.uuid_v7 }
+    @handler.set_change(@plan_id, TeamPlanning::Events::PositionSet, scenario_id: @q1, **position,
+                                                                     end_state: { role_id: "r", level_id: "l", unit_id: "u", fte: 1, basis: "new" })
+    @handler.set_change(@plan_id, TeamPlanning::Events::PositionClosed, scenario_id: @q1, **position)
+
+    assert_equal [ [ "position", "TeamPlanning::Events::PositionClosed", {} ] ], TeamPlanningOverride.pluck(:facet, :kind, :end_state)
+
+    @handler.pin_change(@plan_id, scenario_id: @lean, **position, facet: "position")
+    assert_equal "TeamPlanning::Events::PositionClosed", TeamPlanningOverride.find_by(scenario_id: @lean).kind
+
+    @handler.clear_change(@plan_id, scenario_id: @q1, **position, facet: "position")
+    assert_equal [ @lean ], overrides.map(&:first)
+  end
+
   should "drop a removed scenario's rows, and every row of a deleted plan" do
     set_cap(@q1, 8)
     set_cap(@lean, 5)
