@@ -169,11 +169,17 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
 
   def joined_units(change) = change.after&.fetch("memberships", {})&.keys || []
 
-  # A joiner's first teams already show on their joining line.
-  def joined_with?(change) = joinings.include?([ change.person_id, change.unit_id ])
+  # A joiner's first teams already show on their joining line. A team recorded
+  # while they were pending can start before the joining day, so compare by "on or before".
+  def joined_with?(change)
+    joined_on = joinings[[ change.person_id, change.unit_id ]]
+    joined_on.present? && change.effective_on <= joined_on
+  end
 
   def joinings
-    @joinings ||= @changes.select { it.kind == :joined }.flat_map { |change| joined_units(change).map { [ change.person_id, it ] } }.to_set
+    @joinings ||= @changes.select { it.kind == :joined }
+                          .flat_map { |change| joined_units(change).map { [ [ change.person_id, it ], change.effective_on ] } }
+                          .group_by(&:first).transform_values { |pairs| pairs.map(&:last).max }
   end
 
   # A leaving ends the leaver's memberships the same day, and those show on the

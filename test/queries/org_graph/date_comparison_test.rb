@@ -138,6 +138,18 @@ class OrgGraph::DateComparisonTest < ActiveSupport::TestCase
     assert_includes comparison.unit_marks(unit(:checkout)), "succeeds Payments"
   end
 
+  should "show a joiner added back to their first team after being removed from it" do
+    reorganise
+    as_tenant do
+      @handler.end_membership(@uma.id, @org[:checkout], **ESPALIA, effective_on: "2026-11-08")
+      @handler.set_membership(@uma.id, @org[:checkout], **ESPALIA, effective_on: "2026-11-10", allocation: 1.0)
+    end
+    travel_to TODAY
+
+    assert_equal [ "Uma Reyes joined 5 Nov", "Uma Reyes removed 8 Nov", "Uma Reyes added 10 Nov" ],
+                 lines(compare("2026-10-01"), :checkout).grep(/Uma/)
+  end
+
   should "by learned date, count a change withdrawn in the window apart from the changes still believed" do
     as_tenant { @structure.rename_unit(@org[:platform], "Core", effective_on: "2026-10-07") }
     travel_to Time.zone.parse("2026-11-10 09:00")
