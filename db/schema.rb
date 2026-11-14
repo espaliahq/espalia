@@ -1074,6 +1074,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_142700) do
     t.index ["updated_by_id"], name: "index_reference_currencies_on_updated_by_id"
   end
 
+  create_table "team_planning_history_entries", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.uuid "scenario_id", null: false
+    t.integer "position", null: false
+    t.string "action", null: false
+    t.string "subject_id"
+    t.string "facet"
+    t.string "kind"
+    t.jsonb "end_state"
+    t.string "sealed_fields", default: [], null: false, array: true
+    t.uuid "pinned_from_scenario_id"
+    t.uuid "pinned_from_event_id"
+    t.uuid "reverses_event_id"
+    t.uuid "actor_id"
+    t.datetime "at", null: false
+    t.uuid "undone_by_id"
+    t.datetime "undone_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["scenario_id", "position"], name: "idx_on_scenario_id_position_e9b21b3bad", unique: true
+    t.index ["tenant_id", "plan_id"], name: "index_team_planning_history_entries_on_tenant_id_and_plan_id"
+  end
+
   create_table "team_planning_overrides", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "plan_id", null: false

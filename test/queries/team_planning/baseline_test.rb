@@ -89,6 +89,16 @@ class TeamPlanning::BaselineTest < ActiveSupport::TestCase
     assert_equal [ @grace.id ], map.unassigned_ids
   end
 
+  should "read the organisation on another day, as known now, in the baseline's shape" do
+    travel_to Time.utc(2026, 3, 2, 10)
+    as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: BASE_ON) }
+
+    map = as_tenant { TeamPlanning::Baseline.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)).map_on(BASE_ON) }
+    assert_equal [ BASE_ON, nil ], [ map.base_on, map.known_on ]
+    assert_equal "Senior Engineer", person(map, @ada).title
+    assert_empty map.names
+  end
+
   should "show the later of two changes to one fact taking effect on the base date, both known before it" do
     travel_to Time.utc(2026, 2, 10, 9)
     as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: BASE_ON) }

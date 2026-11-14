@@ -1,0 +1,83 @@
+# frozen_string_literal: true
+
+# Team Planning's plans index, plan page (#226) and map (#227). Every read goes through
+# the Team Planning Operations, as the MCP tools do, so a plan someone isn't
+# in is a 404 here and "No such plan" there.
+class PlansController < ApplicationController
+  # GET /planning
+  def index
+    authorize TeamPlanningPlan, :index?, policy_class: PlanPolicy
+    render index_view
+  end
+
+  # POST /planning
+  def create
+    authorize TeamPlanningPlan, :create?, policy_class: PlanPolicy
+    draft = params.expect(plan: [ :name, :base_on ]).to_h.symbolize_keys
+    plan = Operations::TeamPlanning::CreatePlan.call(context: pundit_user, params: draft)
+    redirect_to plan_path(plan[:plan_id]), notice: "Plan created."
+  rescue Operations::Base::ParameterError => e
+    render index_view(error: e.message, draft:), status: :unprocessable_content
+  end
+
+  # GET /planning/:id
+  def show
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    render plan_page(plan, open_tab: :scenarios)
+  end
+
+  # GET /planning/:id/map?scenario=:scenario_id
+  #
+  # One scenario's organisation, read-only (#227). The baseline, whose id is
+  # the plan's, is the default.
+  def map
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = params[:scenario].presence || plan[:plan_id]
+    map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
+    render plan_page(plan, scenarios:, open_tab: :map,
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:))
+  end
+
+  private
+
+  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil)
+    Views::Plans::ShowView.new(
+      plan:,
+      scenarios:,
+      members: read(Operations::TeamPlanning::PlanMembers)[:members],
+      tabs: [ Views::Plans::ShowView::Tab.new(key: :scenarios, label: "Scenarios", href: plan_path(plan[:plan_id])),
+              Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])) ],
+      open_tab:,
+      body:,
+      **layout
+    )
+  end
+
+  def index_view(error: nil, draft: {})
+    Views::Plans::IndexView.new(
+      plans: Operations::TeamPlanning::Plans.call(context: pundit_user)[:plans],
+      can_create: policy_for(TeamPlanningPlan).create?,
+      error:,
+      draft:,
+      **layout
+    )
+  end
+
+  # The Operations decide who may open a plan, so their "No such plan" is
+  # this page's 404, as it is the MCP tools' refusal.
+  def read(operation, **extra)
+    operation.call(context: pundit_user, params: { plan_id: params.expect(:id), **extra })
+  rescue Operations::Base::ParameterError => e
+    raise ActiveRecord::RecordNotFound, e.message
+  end
+
+  def policy_for(record) = PlanPolicy.new(pundit_user, record)
+
+  def layout
+    { user: current_user, current_tenant: ActsAsTenant.current_tenant,
+      tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a } }
+  end
+end

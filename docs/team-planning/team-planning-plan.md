@@ -235,7 +235,7 @@ because a binding budget guardrail needs them.
 | 1.3 | Baseline reader: the root scenario resolved over `OrgGraph::AsOf` on the plan's base date, joined to names, with "Former member" for anyone forgotten | 1.1 |
 | 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes | 1.2, 1.3 |
 | 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
-| 1.6 | Read-only map of the baseline: units, people with their allocation and role from `AsOf::Membership`, and the Unassigned bucket | 1.4 |
+| 1.6 | Read-only map of any scenario, the baseline by default: units, people with their allocation and role, open positions, and the Unassigned bucket, read through `team_planning_scenario_map` | 1.4 |
 
 ### P2 Shreddable plan fields
 
@@ -288,7 +288,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 5.1 | Pay bands as tenant configuration: role and level from the framework, location, currency. Held by tenant admins | none |
 | 5.2 | On-cost models (flat, by country, itemised) as rules with a tenant default | 5.1, 3.3 |
 | 5.3 | Exchange rates and a reference currency, applied once at report time | 5.1 |
-| 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? | 5.2, 5.3, 3.5 |
+| 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). | 5.2, 5.3, 3.5, 3.7 |
 | 5.5 | The see-pay right per plan member. Without it, band midpoints only | 5.4, 1.2 |
 | 5.6 | Plan-held pay: `PlanDataSet` for a person's actual cost, shreddable under their key | 5.5, 2.2 |
 | 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Never written to the Org Graph | 5.6 |
@@ -310,7 +310,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
-| 7.1 | Capacity model interface, chosen per role family and overridable per role, as a rule | 3.3 |
+| 7.1 | Capacity model interface, chosen per role family and overridable per role, as a rule. [Design: Capacity as built](team-planning-design.md#capacity-as-built) | 3.3 |
 | 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph | 7.1, 3.7 |
 | 7.3 | Override a person's capacity in an assignment, with the calculated figure behind it | 7.2, 3.9 |
 | 7.4 | Capacity per model, per unit and per scenario, each figure with its working, and the unclassified role check | 7.2 |

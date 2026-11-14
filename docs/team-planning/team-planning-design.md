@@ -86,7 +86,7 @@ Every change event has the same shape:
 | Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
-| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet`, `DepartureSet` (person, linked position), `LevelSet` (person, level: a planned promotion) |
+| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
 | Budget | `BudgetLineSet`, `BudgetLineCut`, `PositionFundingSet` (position draws on budget lines) |
 | Plan data | `PlanDataSet` (subject, field, value) |
 | Rules | `RuleSet` (configuration, capacity model, budget strictness, guardrail, assumption) |
@@ -195,6 +195,62 @@ parent's list no longer reaches it.
   (4.2) fixes, or "has left", for a leaver by the base date or a forgotten person. 3.8
   marks them and the changes tab shows them.
 
+### Reporting lines as built
+
+`ReportingLineSet` ([#256](https://github.com/espaliahq/espalia/issues/256)) has the facet
+`reporting_line`, and its subject is a person. Its end state points at a person
+(`manager_id`) or at a position (`manager_position_id`), never both, or at neither for no
+manager.
+
+- **A graph of its own.** The baseline line is the Org Graph's manager fact. Lines are never
+  read from units, so placing someone never moves their line.
+- **A manager being hired.** A team whose manager is being hired reports to the open manager
+  position, so it isn't credited to whoever the HRIS still lists. `Map#reports_of(id)` gives
+  the people pointed at a person or a position: for a vacant seat, the span 7.2 charges it for.
+- **Loops.** The write refuses a line that closes a loop in the scenario as it resolves then.
+  An ancestor's later edit can still make one, so `Map#managers_above` stops at a repeat and
+  4.6 marks it. It also stops at a position, which has no line of its own.
+- **Fit is read.** A line to a closed position or to someone who has left still resolves.
+
+### Departures as built
+
+`DepartureSet` ([#256](https://github.com/espaliahq/espalia/issues/256)) has the facet
+`departure`, and its subject is a person. It names the backfill position, or none when the
+seat isn't backfilled, and the step the person leaves in. `DepartureWithdrawn` shares the
+facet, so a later step or an alternative can have the person stay.
+
+- **Leaving, then gone.** In the step that sets the departure, and in its alternatives, the
+  person stays on the map marked as leaving. In the steps after it they are in the map's
+  `departed`, out of the people, Unassigned and every total. `Resolution` gives the map the
+  step's scenario ids, `apply_to` only marks the person, and `Map#settled` decides.
+- **The step is stored.** A pin replays a change under the pinning scenario, so the end state
+  names the step the person leaves in, and a pin in a later step keeps them gone.
+- **The backfill.** The leaver never counts as filling it. The link lives only on the
+  departure, so withdrawing, clearing or undoing it drops the link. A position reads as a
+  backfill for the people whose departures name it, through `Map#backfills`, and as a
+  backfill for nobody when none does.
+- **Planned, not Org Graph leavers.** Someone the Org Graph has leave by the base date is off
+  the map from the start, and the plan shows where it still places them (decision 6 in the
+  plan). A departure is the plan's own statement.
+- **The step is the date for now.** Costing part of a period (5.4) adds an optional leaving
+  date within the step.
+
+### Needing attention as built
+
+A write refuses only a malformed change. Fit is read, never refused
+([#257](https://github.com/espaliahq/espalia/issues/257)). `TeamPlanning::Attention` walks a
+resolved scenario and lists what no longer fits. `Resolution#attention` runs it on the settled
+map and the changes that won, and nothing is stored. Each item has the subject and facet, a
+reason a planner can read, and the change it belongs to: the later to land of the subject's own
+winning change and the change that broke it, such as its unit's `UnitRetired`.
+
+It marks a placement in a closed position, or in a retired unit or one gone from the scenario;
+a position in such a unit, or overfilled; a unit under a retired parent; anyone in
+`unresolved`; and a succession that lost a predecessor or whose successor is no longer live. A
+position in a retired unit is the position's item, not each occupant's. `team_planning_attention`
+reads it, and the checks projection (4.6) and the changes tab (4.4) will too. Marking a reporting
+line or a departure that no longer fits (3.8, 4.6) adds its checks here.
+
 ### Adding a change kind
 
 Several lanes add kinds at once, so each adds one the same way. `PositionSet`
@@ -205,6 +261,10 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    checks the kind's own fields and returns them as stored; it raises `TeamPlanning::Error`
    with a sentence a planner can read. Give it `apply_to(map, data)`, which must not depend
    on another kind having landed. The kind's fields may not reuse `Change::FIELDS`.
+   If the Org Graph holds its facet, also give it `subject_moved_by(change)`, naming the
+   subject an Org Graph change moves, and `read_from(map, subject_id:, facet:)`, reading
+   its end state back off a map. Without the first it meets no drift; without both it has
+   no status. Test both in the drift and status tests, as their test-only kinds do.
 2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
    and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
    resolver.
@@ -212,7 +272,9 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
    any names it needs in `Baseline#named`, never in `apply_to`. Anything derived from
    several kinds, such as who is unassigned, belongs in `Map#settled`, which `Resolution`
-   runs once every change has applied.
+   runs once every change has applied. If a later change elsewhere can leave the kind's end
+   state standing on something gone, add a check to `TeamPlanning::Attention` rather than
+   refusing the write.
 4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
    `ChangeWrite` and calls `set_change!`. Put the checks the aggregate can't make, such as
    whether a framework role exists, in the block you pass it, since the aggregate reads no
@@ -238,7 +300,7 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. No kind ships yet: the first come with 5.2, 7.1 and 8.1.
+object. The first kind is `capacity_model` (7.1, below); 5.2 and 8.1 bring more.
 
 `RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
 that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
@@ -256,6 +318,48 @@ A rule's value may one day be sensitive: an on-cost rate, a guardrail on pay. So
 names what is wrong and never repeats the value. A kind declares `shreddable?`, and until
 [#213](https://github.com/espaliahq/espalia/issues/213) brings shredding, a kind that says
 yes is refused at registration.
+
+### Capacity as built
+
+A capacity model prices a seat. `TeamPlanning::CapacityModel` is the interface and
+`TeamPlanning::CapacityModels` the registry, built like the rule kinds. A model names
+itself, checks its params and returns a `Figure` for one place: an exact `Rational` and the
+`Step`s of its working, which a person's card can list. The only model so far is `per_fte`,
+one unit per FTE, there to prove the plumbing; the units model is 7.2.
+
+The `capacity_model` rule chooses a model per role family, and a role can choose another.
+Its default chooses nothing, so a plan counts nothing until a tenant or plan says how. Read
+at a seat's unit, a unit can choose differently for its subtree.
+
+`TeamPlanning::Capacity` reads the settled scenario map. A seat is a person, or the FTE a
+position's occupants leave open, and each place it holds (a unit or a position, and its
+share of the seat) is priced on its own:
+
+- **A place in a position** does that position's work, so it takes the position's role
+  and level, whether a person fills it or it stands open. A position counts only for the
+  FTE its occupants leave, so a filled one is counted once, through its people, and an
+  open one is priced exactly as a filled one would be.
+- **A person placed straight in a unit** takes their own role and level: their title and
+  level as the map holds them, through the tenant's title mapping, as the HRIS sync
+  resolves them (`Integrations::HrisTitleResolution`). Never through
+  `PersonFrameworkAssignment`, whose dates are not the scenario's. 3.14, which changes a
+  person's role or level in a scenario, must put the change on the map's `Member`, so
+  capacity follows it.
+- **An FTE the map doesn't hold** counts as 1, and the working says so.
+- **An allocation the HRIS didn't give** shares what the person's other places leave, and
+  the working says so.
+- **A leaver** will count nowhere: 3.7 keeps them on the map while a backfill position
+  carries the headcount, so the query drops them before it builds seats.
+
+A place no model covers counts nowhere and is listed as unclassified with its reason: no
+title, a title mapped to no role, a role not in the framework, a position since closed, no
+model chosen, or a model no longer registered. A place in a unit gone from the map counts
+for the scenario but under no unit.
+
+A model gets the whole map with each seat, so 7.2 can find who reports to a seat by its id,
+a person's or a position's, without the interface changing. Totals are kept per model, per unit and for the scenario, and never
+summed across models. Figures stay exact; `team_planning_capacity` sends them as decimal
+strings, and only the display rounds.
 
 ### Clearing and pinning
 
@@ -291,9 +395,33 @@ the plan is a pin, and follow reality is a clear.
 
 ### Undo
 
-Undo and redo are events that point at the event they reverse. The stream is never
-edited. A scenario's history, with who made each change, is the stream filtered by
-scenario.
+Undo and redo are events that point at the event they reverse: `ChangeUndone` and
+`ChangeRedone` name it, with its scenario, subject and facet, and the change or pin then
+in effect there (`in_effect_event_id`), so the overrides projection writes it without
+replaying the stream. The stream is never edited.
+An undone change stays in the log and drops out of what the scenario resolves to, so the
+change before it, or the parent's value, shows through. Undoing a clear brings back what
+it cleared, and undoing a pin hands the facet back to the parent.
+
+Undo works on one subject and facet at a time, newest first. A change a later one
+replaced can't be undone until the later one is, and the refusal names it. Redo is
+refused the same way once a newer change lands on that facet. Undo with no change named
+takes back the caller's own latest change that can still be undone; Redo restores what
+their latest undo took back. Each person redoes only their own undos, and a change they
+make ends what they can redo, as in an editor. Undo and redo are for editors, like any
+other change.
+
+A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
+undo and redo, in order, with who made it and, while it stands undone, who undid it.
+`team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
+a former member.
+Production already holds changes, pins and clears, so the deploy that ships the history
+needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeploy's
+`verify` stops the deploy. The
+history and overrides projections read events through one mapping,
+`TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
+never reaches either table: the history names the field in `sealed_fields` and leaves
+the value out. Removing a scenario drops its history.
 
 ### Two people editing at once
 
@@ -376,6 +504,44 @@ Each planned change is compared with the Org Graph as it stands now:
 
 Only `Raised` rests on an event (`ChangeRaised`). The rest are read by comparison, so
 they can never disagree with the Org Graph.
+
+### The status reader
+
+`TeamPlanning::Status` takes a plan and a scenario and gives one status for each subject
+and facet the scenario resolves, down its resolution chain, so a change an alternative
+overrides takes the alternative's end state. It reads two maps in the baseline's shape:
+today's, from `Baseline#map_on(today)` as known now, and the baseline itself. Each kind
+reads its end state off both with `read_from`.
+
+- **Done**: today reads the planned end state. A change that plans no change from the
+  base is done.
+- **Pending**: today still reads what the base held, or what the step before the change's
+  own step plans: once Q1's move lands, Q2's next move for the same person waits its turn.
+  So is a subject only the plan holds, such as a new unit: neither map has it.
+- **Conflicting**: today reads none of these, as when someone the plan moves has left.
+
+A plan whose base is still to come holds every change against today, so nothing reads
+conflicting before the plan starts.
+
+A person's placements are one facet, so a planned list is done only when the whole list
+matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
+Org Graph can move (it implements `subject_moved_by`) has a status: today, a unit set,
+an assignment and a reporting line. A rule, a position and a succession are plan-only, so each would read
+pending forever. A retirement and a succession have none yet either: the Org Graph's
+as-of read gives only live units and holds no successions, so today's map can't show a
+unit retired or succeeded. Nor does a departure: the as-of read drops a leaver, so today's
+map can't tell someone gone from someone staying.
+
+A reporting line to a position reads done once the Org Graph names, as the person's
+manager, someone the scenario seats in that position.
+
+The Org Graph can't say which position someone fills, only where they are. So a placement
+in a position is held against the place it settles to on the scenario's map: the
+position's unit, at the placement's allocation, with its role only when the plan names
+one. It reads done once the person is in that unit at that allocation. Names come
+last and from today, so a forgotten person reads "Former member", a renamed unit its new
+name, and a subject only the plan holds has none. `Raised` will join these once
+`ChangeRaised` exists. `team_planning_status` gives the same read over MCP.
 
 ## Plan-held data
 
