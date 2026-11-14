@@ -24,12 +24,13 @@ class TeamPlanning::Attention
   #   nil only when no change explains it
   Item = Data.define(:subject_id, :facet, :reason, :change)
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
   SUCCESSION = TeamPlanning::Events::UnitSuccessionSet.facet
   CAPACITY = TeamPlanning::Events::CapacitySet.facet
+  BUDGET_LINE = TeamPlanning::Events::BudgetLineSet.facet
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
@@ -102,6 +103,14 @@ class TeamPlanning::Attention
       person.capacity_overrides.keys.reject { held.include?(it) }.sort.map do |place_id|
         item(person.id, "#{CAPACITY}:#{place_id}", "Overrides capacity in a place they don't hold", broken_by: [ [ person.id, ASSIGNMENT ] ])
       end
+    end
+  end
+
+  # The tenant removed a line the plan changed or cut, so the change stands on nothing.
+  def budget_lines
+    @map.orphaned_line_ids.map do |line_id|
+      cut = @changes[[ line_id, BUDGET_LINE ]].is_a?(TeamPlanning::Events::BudgetLineCut)
+      item(line_id, BUDGET_LINE, "#{cut ? 'Cuts' : 'Changes'} a budget line the organisation has since removed")
     end
   end
 
