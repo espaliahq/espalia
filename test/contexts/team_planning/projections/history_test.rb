@@ -37,9 +37,9 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     SecureRandom.uuid_v7.tap { @handler.fork_scenario(@plan_id, it, parent_id:, relation:, name:, ends_on:) }
   end
 
-  def set_cap(scenario_id, cap)
+  def set_cap(scenario_id, cap, note: nil)
     @handler.set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id:, subject_id: @plan_id,
-                                                                 end_state: { rule: "test_headcount_cap", value: { cap: } })
+                                                                 end_state: { rule: "test_headcount_cap", value: { cap: } }, note:)
   end
 
   def history(scenario_id) = TeamPlanningHistoryEntry.where(scenario_id:).order(:position)
@@ -52,6 +52,16 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal [ [ 1, "set", CAP, @person.id ] ], history(@q1).pluck(:position, :action, :facet, :actor_id)
     assert_equal [ [ 1, "pin", @q1 ], [ 2, "clear", nil ] ], history(@lean).pluck(:position, :action, :pinned_from_scenario_id)
     assert_equal({ "rule" => "test_headcount_cap", "value" => { "cap" => 8 } }, history(@q1).sole.end_state)
+  end
+
+  should "keep the note a change or pin was made with, sealed under the plan's key" do
+    set_cap(@q1, 8, note: "Hiring freeze until the spring")
+    @handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP, note: "Lean keeps the freeze")
+
+    assert_equal [ "Hiring freeze until the spring", "Lean keeps the freeze" ], [ @q1, @lean ].map { history(it).sole.note.reveal }
+
+    PlanKeyStore.new.destroy_plan(@plan_id)
+    assert [ @q1, @lean ].all? { history(it).sole.reload.note.removed? }
   end
 
   should "keep an undone entry, marked with who undid it, and unmark it on redo" do
@@ -80,14 +90,18 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
 
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
-      set_cap(@q1, 8)
+      set_cap(@q1, 8, note: "Hiring freeze until the spring")
       set_cap(@q1, 6)
       @handler.undo_change(@plan_id, scenario_id: @q1)
+      @handler.note_change(@plan_id, scenario_id: @q1, event_id: history(@q1).first.id, note: "Until the spring")
       @handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
       @handler.redo_change(@plan_id, scenario_id: @q1)
+      @handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @q1, subject_id: @person.id,
+                                                                    end_state: { level: "4" }, note: "Ready since the launch")
+      @handler.note_change(@plan_id, scenario_id: @q1, event_id: history(@q1).last.id, note: "Ready, and asked for it")
 
       before = snapshot_read_models(TeamPlanning::Projections::History, @tenant)
-      assert_equal 5, before[:history].size
+      assert_equal 8, before[:history].size
 
       TeamPlanning::Projections::History.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningHistoryEntry.count

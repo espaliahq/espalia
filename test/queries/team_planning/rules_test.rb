@@ -174,10 +174,10 @@ class TeamPlanning::RulesTest < ActiveSupport::TestCase
     error = assert_raises(TeamPlanning::Error) do
       as_tenant do
         handler.set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id: @q1, subject_id: @plan_id,
-                                                                     end_state: { rule: "test_headcount_cap", value: { cap: 1 }, note: "x" })
+                                                                     end_state: { rule: "test_headcount_cap", value: { cap: 1 }, reason: "x" })
       end
     end
-    assert_equal "A rule takes only rule and value, not note", error.message
+    assert_equal "A rule takes only rule and value, not reason", error.message
   end
 
   should "refuse to read a rule no kind names" do

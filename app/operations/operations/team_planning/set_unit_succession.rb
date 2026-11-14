@@ -4,6 +4,7 @@
 # predecessors in the same write, as the Org Graph's own succession does.
 class Operations::TeamPlanning::SetUnitSuccession < Operations::Base
   include Operations::TeamPlanning::UnitChange
+  include Operations::TeamPlanning::ChangeWrite
 
   IDS = { type: "array", items: { type: "string" }, minItems: 1 }.freeze
 

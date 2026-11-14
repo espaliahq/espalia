@@ -1,8 +1,10 @@
-// Fills the scenario map's "Move" dialog from the button that opened it. On
-// the window `modal:open` event it points the form at the person, notes the
-// place being moved, and picks the destination: the unit a drag dropped on
-// (`data-move-to`), or the unit the place is in. Moving to Unassigned hides
-// the allocation and role, which a place there doesn't have.
+// Fills one of the scenario map's move dialogs from the button that opened
+// it: "Move" for a person, "Move position" for a position. On the window
+// `modal:open` event it points the form at what moves, and picks the
+// destination: where a drag dropped (`data-move-to`), or where it is now
+// (`data-move-at`: a person's position, else the unit). In the person dialog,
+// moving to Unassigned hides the allocation and role, which a place there
+// doesn't have; the position dialog has neither.
 //
 // Usage:
 //   <form data-controller="move-form" data-move-form-unassigned-value="unassigned">…</form>
@@ -28,6 +30,8 @@ export default class extends BaseController {
   }
 
   sync() {
+    if (!this.hasPlaceFieldsTarget) return
+
     const leaving = this.toTarget.value === this.unassignedValue
     this.placeFieldsTarget.hidden = leaving
     this.allocationTarget.disabled = leaving
@@ -42,11 +46,11 @@ export default class extends BaseController {
 
     this.element.action = data.moveAction
     this.nameTarget.textContent = data.moveName || ""
-    this.fromTarget.value = data.moveFrom || ""
-    this.fromPositionTarget.value = data.moveFromPosition || ""
-    this.toTarget.value = data.moveTo || data.moveFrom || ""
-    this.allocationTarget.value = data.moveAllocation || "100"
-    this.roleTarget.value = data.moveRole || ""
+    this.toTarget.value = data.moveTo || data.moveAt || data.moveFrom || ""
+    if (this.hasFromTarget) this.fromTarget.value = data.moveFrom || ""
+    if (this.hasFromPositionTarget) this.fromPositionTarget.value = data.moveFromPosition || ""
+    if (this.hasAllocationTarget) this.allocationTarget.value = data.moveAllocation || "100"
+    if (this.hasRoleTarget) this.roleTarget.value = data.moveRole || ""
     this.sync()
   }
 }

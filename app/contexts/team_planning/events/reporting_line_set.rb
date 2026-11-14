@@ -14,6 +14,8 @@
 #   Plus {TeamPlanning::Events::Change::FIELDS}.
 #
 class TeamPlanning::Events::ReportingLineSet < TeamPlanning::Events::Change
+  about_a_person
+
   TARGETS = %i[manager_id manager_position_id].freeze
 
   # @return [String]

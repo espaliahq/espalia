@@ -7,7 +7,8 @@
 # Writes `team_planning_overrides`, and nothing else writes it. A clear
 # removes the row, as does a removed scenario or a deleted plan; the stream
 # keeps them all. An undo or redo puts back the change or pin its event names
-# as then in effect for its subject and facet, or removes the row. It reads
+# as then in effect for its subject and facet, with the note it last had, or
+# removes the row. A note rewrites the note of the row its change made. It reads
 # each event through {TeamPlanning::ChangeEntry} and hears every kind
 # in {TeamPlanning::ChangeKinds}.
 #
@@ -23,6 +24,7 @@ class TeamPlanning::Projections::Overrides
   def self.handled_events
     TeamPlanning::ChangeKinds.all + [ TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangePinned,
                                       TeamPlanning::Events::ChangeUndone, TeamPlanning::Events::ChangeRedone,
+                                      TeamPlanning::Events::ChangeNoted,
                                       TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanDeleted ]
   end
 
@@ -53,21 +55,32 @@ class TeamPlanning::Projections::Overrides
 
   def apply(entry, event)
     if entry.reverses? then restore(entry, event)
+    elsif entry.notes? then TeamPlanningOverride.find_by(scenario_id: entry.scenario_id, event_id: entry.noted_event_id)&.update!(note: entry.note)
     elsif entry.sets? then write(entry)
     else TeamPlanningOverride.where(entry.to_h.slice(:scenario_id, :subject_id, :facet)).delete_all
     end
   end
 
-  def write(entry)
+  def write(entry, note: entry.note)
     row = TeamPlanningOverride.find_or_initialize_by(**entry.to_h.slice(:scenario_id, :subject_id, :facet))
     row.update!(**entry.to_h.slice(:plan_id, :kind, :end_state, :pinned_from_scenario_id, :pinned_from_event_id),
-                pinned: entry.action == "pin", set_by_id: entry.actor_id, event_id: entry.event_id, set_at: entry.at)
+                pinned: entry.action == "pin", set_by_id: entry.actor_id, event_id: entry.event_id, set_at: entry.at, note:)
   end
 
   def restore(entry, event)
     in_effect_event_id = event.data[:in_effect_event_id] or
       return TeamPlanningOverride.where(entry.to_h.slice(:scenario_id, :subject_id, :facet)).delete_all
 
-    write(TeamPlanning::ChangeEntry.from(@event_store.read.event(in_effect_event_id)))
+    restored = TeamPlanning::ChangeEntry.from(@event_store.read.event(in_effect_event_id))
+    write(restored, note: note_before(event, restored))
+  end
+
+  # The note the restored change had when the undo or redo came: its last
+  # rewrite before then, or the note it was made with.
+  def note_before(event, restored)
+    stream = EventStreamNaming.plan_stream(restored.plan_id)
+    noted = @event_store.read.stream(stream).backward.from(event.event_id).of_type(TeamPlanning::Events::ChangeNoted)
+                        .each.find { it.data[:noted_event_id] == restored.event_id }
+    noted ? noted.data[:note] : restored.note
   end
 end

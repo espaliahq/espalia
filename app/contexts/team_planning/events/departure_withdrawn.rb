@@ -8,6 +8,8 @@
 #   @option data [String] :subject_id the person's id
 #
 class TeamPlanning::Events::DepartureWithdrawn < TeamPlanning::Events::Change
+  about_a_person
+
   # @return [String]
   def self.facet = TeamPlanning::Events::DepartureSet.facet
 

@@ -11,6 +11,11 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
 
   class Copied < RubyEventStore::Event; end
 
+  class AsideWritten < RubyEventStore::Event
+    extend Shreddable
+    shreddable :aside, by: :person, person: ->(data) { data[:person_id] if data[:about] == "person" }
+  end
+
   class SalaryNoteWritten < NoteWritten; end
 
   setup do
@@ -83,6 +88,15 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
     in_tenant { PlanKeyStore.new.destroy_plan(@plan_id) }
 
     assert read_back.data.values_at(:note, :pay).all?(&:removed?)
+  end
+
+  should "seal under the key of the person a callable names, or the plan's when it names none" do
+    identifiers = %w[person unit].map do |about|
+      event = publish(AsideWritten.new(data: { plan_id: @plan_id, person_id: @person.id, about:, aside: "Moving" }))
+      in_tenant { @event_store.read.event(event.event_id) }.data[:aside].envelope["identifier"]
+    end
+
+    assert_equal [ PlanKeyStore.person_identifier(@tenant.id, @plan_id, @person.id), PlanKeyStore.plan_identifier(@tenant.id, @plan_id) ], identifiers
   end
 
   should "refuse to write for a plan already deleted" do

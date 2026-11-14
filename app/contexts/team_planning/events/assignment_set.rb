@@ -18,6 +18,8 @@
 #   Plus {TeamPlanning::Events::Change::FIELDS}.
 #
 class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
+  about_a_person
+
   PLACES = %i[position_id unit_id].freeze
   MOVED_BY = %i[membership_started membership_ended membership_changed moved].freeze
 

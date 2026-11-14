@@ -28,6 +28,7 @@ class TeamPlanning::PlanAggregate
   )
 
   NAME_LIMIT = 120
+  NOTE_LIMIT = 2_000
   DESCRIPTION_LIMIT = 500
   # A description the caller couldn't read, so {#describe_scenario} writes.
   UNKNOWN = Object.new.freeze
@@ -327,19 +328,21 @@ class TeamPlanning::PlanAggregate
   # @param subject_id [String]
   # @param set_by_id [String] person_id of the actor
   # @param end_state [Hash] the kind's own fields, none of them a field every change holds
+  # @param note [String, nil] why, kept apart from the end state; blank for none
   # @yieldparam plan [TeamPlanning::PlanAggregate] once the plan is open and the scenario known, for the
   #   caller's own checks, such as one against a projection, which this aggregate never reads
-  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the end state refused
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the end state refused or the note too long
   # @raise [ArgumentError] for a kind that is not a change, or an end state naming a field every change holds
-  def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {})
+  def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {}, note: nil)
     raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change
     raise ArgumentError, "#{kind} must name its facet and say how it lands on a map" unless kind.complete?
 
     ensure_open!
     live_scenario!(scenario_id)
+    note = require_note(note)
     yield self if block_given?
     fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
-    apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }))
+    apply(kind.new(data: with_note({ plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }, note)))
   end
 
   # Every change, pin and clear a scenario made, in order. A pin is the change
@@ -394,6 +397,29 @@ class TeamPlanning::PlanAggregate
     subject_id, facet = key_of(entry)
     in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone - [ event_id ])
     apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id:, in_effect_event_id: }))
+  end
+
+  # Writes, rewrites or clears the note on a change or pin, which must still
+  # stand in its scenario: not undone, not cleared and not replaced.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param event_id [String] the change's or pin's event id
+  # @param note [String, nil] blank clears it
+  # @param noted_by_id [String] person_id of the actor
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the change not in its log or no
+  #   longer standing, or the note too long
+  def note_change(scenario_id:, event_id:, note:, noted_by_id:)
+    ensure_open!
+    entry = log_entry!(live_scenario!(scenario_id), event_id)
+    raise TeamPlanning::Error, "That change is undone: redo it to note it" if undone?(event_id)
+
+    subject_id, facet = key_of(entry)
+    unless changes_in(scenario_id).reverse_each.find { it.key == [ subject_id, facet ] }&.event_id == event_id
+      raise TeamPlanning::Error, "That change no longer stands in #{this(scenario_id).downcase}, so it takes no note"
+    end
+
+    apply(TeamPlanning::Events::ChangeNoted.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, noted_event_id: event_id,
+                                                        note: require_note(note), noted_by_id: }))
   end
 
   # What an Undo button takes back for one person: their latest entry in the
@@ -470,21 +496,24 @@ class TeamPlanning::PlanAggregate
   # @param end_state [Hash] what the scenario inherits, as the kind stores it
   # @param pinned_by_id [String] person_id of the actor
   # @param pinned_from [Array(String, String), nil] the scenario and event id of the change it keeps; nil for the baseline
-  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the root, or it already changes that facet
+  # @param note [String, nil] why the scenario keeps it; blank for none
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the root, it already changes that facet,
+  #   or the note is too long
   # @raise [ArgumentError] for a kind that is not a change, or an end state that doesn't make that key
-  def pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from: nil)
+  def pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from: nil, note: nil)
     raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change && kind.complete?
 
     ensure_pinnable!(scenario_id, [ subject_id, facet ])
+    note = require_note(note)
     end_state = own_fields!(end_state.to_h.symbolize_keys)
     pinned = pinned_change(kind, { plan_id: @plan_id, scenario_id:, subject_id:, set_by_id: pinned_by_id }, end_state)
     raise ArgumentError, "That end state doesn't make a #{facet} change" unless pinned.key == [ subject_id, facet ]
 
     from_scenario_id, from_event_id = pinned_from
-    apply(TeamPlanning::Events::ChangePinned.new(data: {
+    apply(TeamPlanning::Events::ChangePinned.new(data: with_note({
       plan_id: @plan_id, scenario_id:, subject_id:, facet:, kind: kind.name, end_state: end_state.to_h,
       pinned_from_scenario_id: from_scenario_id, pinned_from_event_id: from_event_id, pinned_by_id:
-    }))
+    }, note)))
   end
 
   # Refuses a pin before anyone works out what it would keep.
@@ -654,6 +683,9 @@ class TeamPlanning::PlanAggregate
     @redo_stacks.fetch(event.data[:scenario_id], {}).each_value { it.delete(event.data[:redone_event_id]) }
   end
 
+  on TeamPlanning::Events::ChangeNoted do |_event|
+  end
+
   on TeamPlanning::Events::ScenarioRemoved do |event|
     @scenarios.delete(event.data[:scenario_id])
     @logs.delete(event.data[:scenario_id])
@@ -745,6 +777,16 @@ class TeamPlanning::PlanAggregate
     raise Date::Error, "invalid date: #{value.inspect}" unless value.to_s.match?(/\A\d{4}-\d{2}-\d{2}\z/)
 
     Date.iso8601(value)
+  end
+
+  # A change without a note holds no note field, so it is stored as it was before notes.
+  def with_note(data, note) = note ? data.merge(note:) : data
+
+  def require_note(note)
+    note = note.to_s.strip.presence or return nil
+    raise TeamPlanning::Error, "A note can be at most #{NOTE_LIMIT} characters" if note.length > NOTE_LIMIT
+
+    note
   end
 
   def require_name(name, kind = "plan")

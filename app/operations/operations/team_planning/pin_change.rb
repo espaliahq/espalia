@@ -4,7 +4,7 @@
 # now. Reconcile (4.5) calls it to keep the plan
 # [#239](https://github.com/espaliahq/espalia/issues/239).
 class Operations::TeamPlanning::PinChange < Operations::Base
-  include Operations::TeamPlanning::PlanWrite
+  include Operations::TeamPlanning::ChangeWrite
 
   description "Pin what a scenario of a Team Planning plan inherits for one facet of one subject, as it resolves " \
               "now, so a later change in its parent no longer reaches it: the 'keep the plan' answer when " \
@@ -23,7 +23,7 @@ class Operations::TeamPlanning::PinChange < Operations::Base
   def perform
     plan_id = plan_id!
     scenario_id = scenario_id!(:scenario_id)
-    refusing_bad_plans { handler.pin_change(plan_id, scenario_id:, subject_id: params[:subject_id], facet: params[:facet]) }
+    refusing_bad_plans { handler.pin_change(plan_id, scenario_id:, subject_id: params[:subject_id], facet: params[:facet], note: params[:note]) }
     plan = TeamPlanningPlan.find(plan_id)
     key = { subject_id: params[:subject_id], facet: params[:facet] }
     pinned = Operations::TeamPlanning::Overrides.listed(context:, plan:, scenario_id:).find { it.slice(:subject_id, :facet) == key }
