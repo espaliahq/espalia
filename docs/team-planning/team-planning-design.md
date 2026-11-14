@@ -367,19 +367,32 @@ taken before the seat splits across places. A cost past the base floors at zero 
 the figure overloaded, with the excess. Each step names what it charges for.
 
 `Units::Graph` reads who a seat manages from reporting lines, never from unit owners:
+ownership says who may edit a unit, not who manages it. One principle runs through the
+rules: a vacant seat and a filled one must stay comparable, so leaving a seat empty never
+flatters a scenario.
 
 - **A manager seat** is one with line reports, or a backfill of a leaver who had them, or a
   role in `manager_role_ids`.
-- **A line to a position** goes to the one person in it, or to the open seat while nobody is.
+- **A line to a position** goes to the one person in it, and to the open seat only while
+  nobody is. A position two people share sends it to neither, and the report reads as
+  unmanaged. Otherwise a part-filled position would take every report and leave the person
+  in it managing nobody, and a shared one would need a split the map can't give.
 - **An open position**, a manager's included, counts against the nearest unit, walking up
   from its own, holding exactly one other manager seat: a filled one as a future direct
   report at its open FTE, or a vacant one as part of its span. Two in the nearest unit that
-  has any, or none up the tree, and it counts against nobody, with a note saying which. A
-  manager above a vacant manager seat pays for its team at skip level and below.
-- **A vacant manager position** also takes, as direct reports, the people the same walk
-  leads to who have no manager on the map. Anyone a staffed manager holds stays theirs, and
-  someone who already manages the seat, as the head of the tree does, is never its report.
-- **A leaver** is never a report. Their reports pass to their backfill, or to nobody.
+  has any, or none up the tree, and it counts against nobody, with a note saying which.
+- **A vacant manager position counts against the manager above it**, which pays its open
+  seat as a direct report and its team at skip level and below, as if the seat were filled.
+  Otherwise a director with an open manager seat would pay nothing for that team.
+- **A vacant manager position also takes, as direct reports, the people the same walk
+  leads to who have no manager on the map.** Anyone a staffed manager holds stays theirs.
+- **A vacant manager seat never takes its own manager as a report.** The head of the tree
+  has no manager, so without this an open seat beneath them would take them, and with them
+  everyone.
+- **A leaver is never a report.** Their reports pass to their backfill, or to nobody.
+- **A leaver keeps the positions they fill filled for the step**, so their capacity goes to
+  their backfill or nowhere. Reopening those positions too would count the seat twice
+  whenever a backfill exists.
 
 ### Clearing and pinning
 
