@@ -299,8 +299,14 @@ class TeamPlanning::PlanAggregate
   # @return [String, nil] its event id
   def last_undoable_by(scenario_id, person_id)
     ensure_open!
-    log = @logs.fetch(live_scenario!(scenario_id), [])
-    log.reverse_each.find { !undone?(it.event_id) && actor_of(it) == person_id && later_in_effect(log, it).nil? }&.event_id
+    replaced = Set.new
+    @logs.fetch(live_scenario!(scenario_id), []).reverse_each do |entry|
+      next if undone?(entry.event_id)
+      return entry.event_id if actor_of(entry) == person_id && !replaced.include?(key_of(entry))
+
+      replaced << key_of(entry)
+    end
+    nil
   end
 
   # What a Redo button restores for one person: the change of their latest

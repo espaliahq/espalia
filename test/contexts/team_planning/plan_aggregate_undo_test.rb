@@ -164,6 +164,14 @@ class TeamPlanning::PlanAggregateUndoTest < ActiveSupport::TestCase
     assert_nil @plan.last_undoable_by(@lean, @ada_id)
   end
 
+  should "fall back to a person's older change on another facet once their latest was replaced" do
+    title = set(@lean, "Lead Engineer")
+    set(@lean, "Platform", kind: TeamSet)
+    set(@lean, "Data", kind: TeamSet, by: @grace_id)
+
+    assert_equal title, @plan.last_undoable_by(@lean, @ada_id)
+  end
+
   should "refuse undo and redo on a deleted plan" do
     change = set(@lean, "Lead Engineer")
     @plan.delete(deleted_by_id: @ada_id)
