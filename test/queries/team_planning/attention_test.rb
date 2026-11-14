@@ -148,6 +148,17 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ [ report.id, moved ] ], items.select { it.facet == "reporting_line" }.map { [ it.subject_id, it.change ] }
   end
 
+  should "name the unit change that moved a report's team away from their manager" do
+    team, far = Array.new(2) { SecureRandom.uuid_v7 }
+    lead = member(SecureRandom.uuid_v7, manager_id: PERSON)
+    report = member(SecureRandom.uuid_v7, places: [ [ team, 1 ] ], manager_id: lead.id)
+    moved = change(TeamPlanning::Events::UnitSet, team, name: "Unit", parent_id: far, level_id: LEVEL)
+
+    items = TeamPlanning::Attention.new(map(units: [ unit(ROOT, nil), unit(LIVE, ROOT), unit(far, ROOT), unit(team, far) ], people: [ member, lead, report ]),
+                                        { moved.key => moved }).call
+    assert_equal [ [ report.id, moved ] ], items.select { it.facet == "reporting_line" }.map { [ it.subject_id, it.change ] }
+  end
+
   should "mark a manager or a manager's position that is no longer in the scenario" do
     position = B::Position.new(id: SecureRandom.uuid_v7, role_id: nil, level_id: LEVEL, unit_id: ROOT, fte: 1.0, basis: "new",
                                role_name: nil, level_name: nil)

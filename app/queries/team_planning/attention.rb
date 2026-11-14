@@ -151,7 +151,8 @@ class TeamPlanning::Attention
     @owned = @map.units.each_with_object(Hash.new { |hash, id| hash[id] = Set.new }) { |unit, owned| unit.owner_ids.each { owned[it] << unit.id } }
     @map.people.filter_map do |person|
       reason = manager_reason(person, by_id, positions, heads)
-      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *manager_keys(person.line) ]) if reason
+      broken_by = [ [ person.id, ASSIGNMENT ], *near_units(person).map { [ it, UNIT ] }, *manager_keys(person.line) ]
+      item(person.id, LINE, reason, broken_by:) if reason
     end
   end
 
