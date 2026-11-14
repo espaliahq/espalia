@@ -20,7 +20,7 @@ class TeamPlanning::Projections::Scenarios
   def self.handled_events
     [ TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanDeleted, TeamPlanning::Events::ScenarioForked,
       TeamPlanning::Events::ScenarioRenamed, TeamPlanning::Events::ScenarioDescribed,
-      TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved ]
+      TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanRebased ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -45,7 +45,10 @@ class TeamPlanning::Projections::Scenarios
       when TeamPlanning::Events::ScenarioDescribed
         TeamPlanningScenario.find_by(id: data[:scenario_id])&.update!(description: data[:description], updated_at: event.timestamp)
       when TeamPlanning::Events::ScenarioPeriodSet
-        follow_tree(data[:plan_id], event, moved: data[:scenario_id], ends_on: Date.iso8601(data[:ends_on]))
+        follow_tree(data[:plan_id], event) { it[data[:scenario_id]]&.ends_on = Date.iso8601(data[:ends_on]) }
+      when TeamPlanning::Events::PlanRebased
+        write(data[:plan_id], event, plan_id: data[:plan_id], starts_on: data[:base_on])
+        follow_tree(data[:plan_id], event) { it[data[:plan_id]].starts_on = Date.iso8601(data[:base_on]) }
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningScenario.where(id: data[:scenario_id]).delete_all
       end
     end
@@ -59,12 +62,13 @@ class TeamPlanning::Projections::Scenarios
     row.update!(**attributes, updated_at: event.timestamp)
   end
 
-  # Moves one step's end, then sets every start from the tree and each
-  # alternative's end from its parent. A row whose parent row is missing, as in
-  # a plan created before this projection was rebuilt, keeps its own period.
-  def follow_tree(plan_id, event, moved:, ends_on:)
+  # Moves a step's end or the baseline's start, as the block does, then sets
+  # every start from the tree and each alternative's end from its parent. A
+  # row whose parent row is missing, as in a plan created before this
+  # projection was rebuilt, keeps its own period.
+  def follow_tree(plan_id, event)
     rows = TeamPlanningScenario.where(plan_id:).index_by(&:id)
-    rows[moved]&.ends_on = ends_on
+    yield rows
     periods = {}
     period = lambda do |row|
       periods[row.id] ||=

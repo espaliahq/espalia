@@ -102,7 +102,7 @@ class TeamPlanning::Baseline
     # @param occupants [Array<Array(Member, Membership)>] from {#occupants}
     # @return [Float]
     def open_fte(position, occupants)
-      filled = occupants.sum { |person, placement| placement.allocation.to_f * (person.fte || 1).to_f }
+      filled = occupants.sum { |person, placement| placement.allocation.to_f * person.fte_or_one.to_f }
       (position.fte.to_f - filled).round(4)
     end
 
@@ -183,14 +183,55 @@ class TeamPlanning::Baseline
   # Units that carry on from others: a split, a merge or a replacement.
   Succession = Data.define(:id, :predecessor_ids, :successor_ids)
 
+  # What {Member#planned_or_own} gives for a value the plan held and has
+  # since lost to a destroyed key.
+  UNKNOWN = :unknown
+
   # A person and their facts that day, with each place they hold. Their
   # line points at `manager_id` (the Org Graph's manager fact, or a plan's
   # change) or at `manager_position_id`, a vacant manager seat, or at
   # neither. `departure` is set while they are leaving: `leaves_in_id`, the
   # scenario whose step they leave in, and `position_id`, their backfill.
+  #
+  # What the plan holds about them stays sealed: `planned_level`, a promotion;
+  # `plan_data`, the plan's corrections by field; and for a hire the plan
+  # added, `placeholder`, its label. Read a value through {#planned_or_own}.
   Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
-                       :memberships, :manager_position_id, :departure) do
-    def initialize(manager_position_id: nil, departure: nil, **) = super
+                       :memberships, :manager_position_id, :departure, :planned_level, :plan_data, :placeholder) do
+    def initialize(manager_position_id: nil, departure: nil, planned_level: nil, plan_data: {}, placeholder: nil, **) = super
+
+    # A hire the plan added, which no Org Graph id names.
+    #
+    # @param id [String] minted by the plan
+    # @param label [Shreddable::Value]
+    # @return [Member]
+    def self.placeholder(id, label)
+      new(id:, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: nil,
+          employment_type: nil, memberships: [], placeholder: label)
+    end
+
+    # The plan's value for a field where it holds one, else the Org Graph's.
+    # A planned promotion wins over a corrected level. A value whose key is
+    # gone reads as {UNKNOWN}, never as the Org Graph's: the plan said
+    # something here, and nobody can now say what.
+    #
+    # @param field [Symbol] :level or :fte
+    # @return [Object, Symbol] the value, nil when nobody holds one, or {UNKNOWN}
+    def planned_or_own(field)
+      value = (planned_level if field == :level) || plan_data[field]
+      return public_send(field) unless value
+
+      value.removed? ? UNKNOWN : value.reveal
+    end
+
+    # @return [Boolean]
+    def placeholder? = !placeholder.nil?
+
+    # @return [Numeric] the FTE the plan counts, 1 when nobody knows it
+    def fte_or_one
+      fte = planned_or_own(:fte)
+      fte.nil? || fte == UNKNOWN ? 1 : fte
+    end
 
     # @return [Line, nil] nil when they report to nobody
     def line = manager_id || manager_position_id ? Line.new(person_id: manager_id, position_id: manager_position_id) : nil
@@ -213,6 +254,18 @@ class TeamPlanning::Baseline
   # the position's unit when the map settles, and none once it closes.
   # `allocation` is nil when the HRIS gave none.
   Membership = Data.define(:unit_id, :allocation, :role, :position_id) do
+    # An allocation the HRIS didn't give shares what the person's other
+    # memberships leave.
+    #
+    # @param memberships [Array<Membership>]
+    # @return [Array<(Membership, Rational, Boolean)>] each membership, its share, and whether it was recorded
+    def self.shares(memberships)
+      known = memberships.reject { it.allocation.nil? }.sum(0r) { Rational(it.allocation.to_s) }
+      unknown = memberships.count { it.allocation.nil? }
+      rest = unknown.zero? ? 0r : [ 1r - known, 0r ].max / unknown
+      memberships.map { [ it, it.allocation.nil? ? rest : Rational(it.allocation.to_s), !it.allocation.nil? ] }
+    end
+
     def initialize(position_id: nil, **) = super
   end
 
@@ -233,6 +286,8 @@ class TeamPlanning::Baseline
     # @return [String] see {.budget_of}
     def budget = self.class.budget_of(basis)
   end
+
+  PLACEHOLDER_NAME = "Placeholder hire"
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -278,13 +333,15 @@ class TeamPlanning::Baseline
   end
 
   # Joins the names of everyone the map names ({Map#person_ids}) and of each
-  # position's role and level.
+  # position's role and level. A placeholder hire is named by its label, or
+  # {PLACEHOLDER_NAME} once the plan's key is gone.
   #
   # @param map [Map]
   # @return [Map]
   def named(map)
-    map.with(names: ::Person.where(tenant_id: @plan.tenant_id, id: map.person_ids).pluck(:id, :name).to_h,
-             positions: named_positions(map.positions))
+    people = ::Person.where(tenant_id: @plan.tenant_id, id: map.person_ids).pluck(:id, :name).to_h
+    hires = map.people.select(&:placeholder?).to_h { [ it.id, it.placeholder.removed? ? PLACEHOLDER_NAME : it.placeholder.reveal ] }
+    map.with(names: people.merge(hires), positions: named_positions(map.positions))
   end
 
   private

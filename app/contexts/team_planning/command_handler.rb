@@ -171,6 +171,25 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # A block, when given, finds the conflicts under the plan's lock, so a change
+  # made since the preview can't slip past. It isn't called once the base has
+  # moved, so the refusal names the move.
+  #
+  # @param plan_id [String]
+  # @param conflicts [Array<Hash>] used when no block is given
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the plan's lock, once the actor may edit it
+  # @yieldreturn [Array<Hash>] the conflicts, as {TeamPlanning::PlanAggregate#rebase} takes them
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#rebase
+  def rebase_plan(plan_id, base_on:, expected_base_on:, conflicts: [])
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      conflicts = yield(plan) if block_given? && plan.base_on.to_s == expected_base_on.to_s
+      plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!)
+    end
+  end
+
   # @param plan_id [String]
   # @param scenario_id [String]
   # @return [TeamPlanning::PlanAggregate] the plan as stored
@@ -303,6 +322,10 @@ class TeamPlanning::CommandHandler
   end
 
   def inherited(plan, scenario_id, subject_id, facet)
+    if TeamPlanning::ChangeKinds.holding(facet).any? { it.is_a?(Shreddable) }
+      raise TeamPlanning::Error, "This holds a value the plan keeps private, which can't be pinned yet: set it in this scenario instead"
+    end
+
     from_id, change = plan.inherited_change(scenario_id, [ subject_id, facet ])
     return [ change.class, change.data.except(*TeamPlanning::Events::Change::FIELDS), [ from_id, change.event_id ] ] if change
 

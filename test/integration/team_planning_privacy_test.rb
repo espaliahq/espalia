@@ -8,6 +8,7 @@ require "test_helper"
 # out, and nothing is written. A new tool joins the walk on its own.
 class TeamPlanningPrivacyTest < ActiveSupport::TestCase
   setup do
+    travel_to Time.utc(2026, 12, 1, 9)
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
     @editor = account(role: :member, team_planner: true)
@@ -108,7 +109,8 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
                ends_on: "2027-04-30", position_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
                level_id: SecureRandom.uuid_v7, unit_id: SecureRandom.uuid_v7, fte: 1, basis: "new", predecessor_ids: [ UNIT_ID ],
                successor_ids: [ UNIT_ID ],
-               placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap" }
+               placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap",
+               level: "4", label: "Payments lead", field: "fte", value: "1" }
     values.slice(*operation.parameters.keys)
   end
 

@@ -64,6 +64,25 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_empty result[:unclassified]
   end
 
+  should "show each working step's op and subject, and a figure's overload and notes, as the units model gives them" do
+    ActsAsTenant.with_tenant(@tenant) do
+      context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+      TeamPlanning::CommandHandler.new(actor: context).set_change(
+        @plan_id, TeamPlanning::Events::RuleSet, scenario_id: @plan_id, subject_id: @plan_id,
+                                                 end_state: { rule: "capacity_model", value: { families: { @family.role_family_id => { model: "units" } } } }
+      )
+    end
+    position_id = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @plan_id, role_id: @engineer.role_id,
+                                                              level_id: @e5.level_id, unit_id: @unit_id, fte: 1, basis: "new")[:position_id]
+    open_seat = capacity[:seats].find { it[:seat_id] == position_id }[:places].first
+
+    assert_equal [ { label: "Base at L5", amount: "1.45", op: "+", subject_id: nil }, { label: "Units", amount: "1.45", op: "=", subject_id: nil } ],
+                 open_seat[:working]
+    assert_equal [ false, "0" ], open_seat.values_at(:overloaded, :excess)
+    assert_equal [ "unattributed_no_manager" ], open_seat[:notes].map { it[:note] }
+    assert_match "counts against nobody", open_seat[:notes].first[:text]
+  end
+
   should "list every seat as unclassified, with why, until a model is chosen" do
     result = capacity
 

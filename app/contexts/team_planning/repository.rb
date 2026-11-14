@@ -41,6 +41,20 @@ class TeamPlanning::Repository
     @repository.load(TeamPlanning::PlanAggregate.new, EventStreamNaming.plan_stream(plan_id))
   end
 
+  # The aggregate never holds a shreddable value, so its changes come
+  # without one. A reader that shows the value swaps each such change for the
+  # event as stored, still sealed.
+  #
+  # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] as {PlanAggregate#winning_changes} gives them
+  # @return [Hash{Array(String, String) => TeamPlanning::Events::Change}] the same keys, in the same order
+  def sealed(changes)
+    ids = changes.values.select { it.class.is_a?(Shreddable) }.map(&:event_id)
+    return changes if ids.empty?
+
+    stored = @event_store.read.events(ids).to_a.index_by(&:event_id)
+    changes.transform_values { stored.fetch(it.event_id, it) }
+  end
+
   private
 
   # The expected version catches a write only between load and store; the
