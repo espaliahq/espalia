@@ -80,7 +80,11 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     assert_equal @before.size, after.size
     @before.zip(after).each do |was, now|
       assert_equal was.except("data", "metadata"), now.except("data", "metadata"), "id, type and timestamps"
-      fields = JSON.parse(now["metadata"])["shreddable"]&.keys or next assert_equal(was, now)
+      fields = JSON.parse(now["metadata"])["shreddable"]&.keys
+      names = JSON.parse(was["data"]).slice("name", "previous_name").compact.keys
+      next assert_equal(was, now) if names.empty?
+
+      assert_equal names.sort, Array(fields).sort, "#{was['event_type']} seals every name it holds"
 
       old_data, new_data = JSON.parse(was["data"]), JSON.parse(now["data"])
       assert_equal JSON.generate(old_data.except(*fields)), JSON.generate(new_data.except(*fields))
