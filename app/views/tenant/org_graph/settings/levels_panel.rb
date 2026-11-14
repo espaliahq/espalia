@@ -37,8 +37,8 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
     render Components::Kit::Card.new(title: "Levels", heading_level: :h2, id: "org-graph-levels") do |card|
       card.body do
         p(class: "text-sm text-muted") do
-          "From the top of the organisation down. Levels an HRIS supplies sit above the ones Espalia holds. " \
-            "A new level starts at the bottom; move it into place."
+          plain "From the top of the organisation down. Levels an HRIS supplies sit above the ones Espalia holds."
+          plain " A new level starts at the bottom; move it into place." if @can_edit_taxonomy
         end
         if @levels.empty?
           p(class: "mt-4 text-sm text-default") { "No levels yet." }
@@ -63,7 +63,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
         end
         div(id: "org-graph-level-actions-#{level[:id]}", class: "flex shrink-0 items-center gap-2") do
           hand_back_form(level) if level[:live_units].zero? && level[:provider] != ESPALIA
-          move_buttons(level, index) if @can_edit_taxonomy && level[:provider] == ESPALIA
+          move_buttons(level, index) if @can_edit_taxonomy && movable?(index)
         end
       end
       next unless connected?
@@ -86,27 +86,32 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
     end
   end
 
-  def move_buttons(level, index)
-    div(class: "flex items-center gap-1") do
-      move_button(level, index, index - 1, "up")
-      move_button(level, index, index + 1, "down")
-    end
-  end
+  def movable?(index) = can_swap?(index, index - 1) || can_swap?(index, index + 1)
 
   # Swapping two levels that both hold units would put a unit above its
   # parent's level, and a level an HRIS supplies keeps its place, so those
   # moves get no button.
-  def move_button(level, from, to, direction)
-    other = @levels[to] if to >= 0
-    if other.nil? || other[:provider] != ESPALIA || (level[:live_units].positive? && other[:live_units].positive?)
-      span(class: "size-8 shrink-0", aria: { hidden: "true" })
-      return
-    end
+  def can_swap?(index, other_index)
+    return false if other_index.negative?
 
-    order = @levels.map { it[:id] }
-    order[from], order[to] = order[to], order[from]
+    level = @levels[index]
+    other = @levels[other_index]
+    return false if other.nil? || level[:provider] != ESPALIA || other[:provider] != ESPALIA
+
+    !(level[:live_units].positive? && other[:live_units].positive?)
+  end
+
+  def move_buttons(level, index)
+    div(class: "flex items-center gap-1") do
+      move_button(level, can_swap?(index, index - 1), "up")
+      move_button(level, can_swap?(index, index + 1), "down")
+    end
+  end
+
+  def move_button(level, allowed, direction)
+    return span(class: "size-8 shrink-0", aria: { hidden: "true" }) unless allowed
+
     settings_form(tenant_org_graph_settings_level_order_path, method: :patch, class: "contents") do
-      order.each { input(type: "hidden", name: "level_ids[]", value: it) }
       input(type: "hidden", name: "level_id", value: level[:id])
       input(type: "hidden", name: "direction", value: direction)
       render Components::Kit::Button.new(
@@ -117,11 +122,13 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   def add_form
-    settings_form(tenant_org_graph_settings_levels_path, class: "mt-4 flex flex-col sm:flex-row gap-2") do
-      label(for: "org-graph-new-level", class: "sr-only") { "Name of the new level" }
-      input(id: "org-graph-new-level", name: "name", type: "text", required: true, autocomplete: "off",
-            class: "#{Components::Kit::Field::INPUT} sm:flex-1 min-w-0")
-      render Components::Kit::Button.new(variant: :outline, tone: :neutral, type: :submit) { "Add a level" }
+    settings_form(tenant_org_graph_settings_levels_path, class: "mt-4") do
+      label(for: "org-graph-new-level", class: "block text-sm font-medium text-default") { "Name of the new level" }
+      div(class: "mt-1 flex flex-col sm:flex-row gap-2") do
+        input(id: "org-graph-new-level", name: "name", type: "text", required: true, autocomplete: "off",
+              class: "#{Components::Kit::Field::INPUT} sm:flex-1 min-w-0")
+        render Components::Kit::Button.new(variant: :outline, tone: :neutral, type: :submit) { "Add a level" }
+      end
     end
   end
 

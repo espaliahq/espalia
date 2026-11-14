@@ -53,7 +53,7 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
 
     should "move an empty level past one that holds units" do
       patch tenant_org_graph_settings_level_order_path,
-            params: { level_ids: [ @tribe_id, @team_id, @squad_id ], level_id: @squad_id, direction: "down" }
+            params: { level_id: @squad_id, direction: "down" }
 
       assert_redirected_to tenant_org_graph_settings_path
       assert_equal "Squad moved down.", flash[:notice]
@@ -61,11 +61,41 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
     end
 
     should "say why two levels that both hold units keep their order" do
-      patch tenant_org_graph_settings_level_order_path,
-            params: { level_ids: [ @squad_id, @team_id, @tribe_id ], level_id: @tribe_id, direction: "down" }
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .reorder_levels([ @tribe_id, @team_id, @squad_id ], effective_on: Date.current)
+      end
 
-      assert_equal "Tribe did not move: Tribe and Team both hold units, so Tribe must stay above Team", flash[:alert]
+      patch tenant_org_graph_settings_level_order_path, params: { level_id: @team_id, direction: "up" }
+
+      assert_equal "Team did not move: Tribe and Team both hold units, so Tribe must stay above Team", flash[:alert]
+      assert_equal %w[Tribe Team Squad], level_names
+    end
+
+    should "move from the order as it stands, not the order the page showed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .reorder_levels([ @tribe_id, @team_id, @squad_id ], effective_on: Date.current)
+      end
+
+      patch tenant_org_graph_settings_level_order_path, params: { level_id: @squad_id, direction: "up" }
+
+      assert_equal "Squad moved up.", flash[:notice]
       assert_equal %w[Tribe Squad Team], level_names
+    end
+
+    should "say a level at the bottom can't move down" do
+      patch tenant_org_graph_settings_level_order_path, params: { level_id: @team_id, direction: "down" }
+
+      assert_equal "Team did not move: it is already at the bottom.", flash[:alert]
+      assert_equal %w[Tribe Squad Team], level_names
+    end
+
+    should "refuse a move without a level" do
+      patch tenant_org_graph_settings_level_order_path, params: { direction: "up" }
+
+      assert_redirected_to tenant_org_graph_settings_path
+      assert_equal "That level no longer exists.", flash[:alert]
     end
 
     should "offer only the moves the levels allow" do
@@ -89,7 +119,7 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_equal "You are not authorized to perform this action.", flash[:alert]
 
       patch tenant_org_graph_settings_level_order_path,
-            params: { level_ids: [ @tribe_id, @team_id, @squad_id ], level_id: @squad_id, direction: "down" }
+            params: { level_id: @squad_id, direction: "down" }
       assert_equal "You are not authorized to perform this action.", flash[:alert]
       assert_equal %w[Tribe Squad Team], level_names
     end
