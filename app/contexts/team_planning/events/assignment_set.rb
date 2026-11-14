@@ -19,6 +19,7 @@
 #
 class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   PLACES = %i[position_id unit_id].freeze
+  MOVED_BY = %i[membership_started membership_ended membership_changed moved].freeze
 
   # @return [String]
   def self.facet = "assignment"
@@ -38,6 +39,60 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   end
 
   # @param map [TeamPlanning::Baseline::Map]
+  # @param subject_id [String]
+  # @return [Hash, nil] the person's placements in the shape {.end_state} gives, nil when the map hasn't them
+  def self.read_from(map, subject_id:, facet: self.facet)
+    person = map.people.find { it.id == subject_id }
+    { placements: person.memberships.map { placement_of(it) } } if person
+  end
+
+  # A settled map gives a position placement its position's unit; the placement names only the position.
+  def self.placement_of(membership)
+    placement = membership.to_h.slice(*PLACES, :allocation, :role)
+    placement[:position_id] ? placement.merge(unit_id: nil) : placement
+  end
+
+  # A person holds each place once, so two lists in another order are the same placements.
+  #
+  # @param left [Hash, nil]
+  # @param right [Hash, nil]
+  # @return [Boolean]
+  def self.same_end_state?(left, right) = super(in_order(left), in_order(right))
+
+  # The Org Graph can't say which position someone fills, only where they are, so a placement in
+  # a position shows as a place in the position's unit on the plan's map, at its allocation, with
+  # its role only when the plan names one.
+  #
+  # @param read [Hash, nil] the placements read off the Org Graph
+  # @param planned [Hash, nil]
+  # @param map [TeamPlanning::Baseline::Map] settled, so each position has its unit
+  # @return [Boolean]
+  def self.shows?(read, planned, map:)
+    return same_end_state?(read, planned) unless read && planned
+
+    units = map.positions.to_h { [ it.id, it.unit_id ] }
+    places = read.as_json.fetch("placements").dup
+    wanted = planned.as_json.fetch("placements")
+    return false unless wanted.size == places.size
+
+    wanted.all? do |want|
+      index = places.index { shows_place?(it, want, units) }
+      index && places.delete_at(index)
+    end
+  end
+
+  # @param change [OrgGraph::ChangesBetween::Change]
+  # @return [String, nil] the person an Org Graph change places, moves or takes out of a unit
+  def self.subject_moved_by(change) = (change.person_id if MOVED_BY.include?(change.kind))
+
+  def self.in_order(end_state)
+    return end_state unless end_state
+
+    placements = end_state.as_json.fetch("placements")
+    { "placements" => placements.sort_by { [ it["unit_id"].to_s, it["position_id"].to_s ] } }
+  end
+
+  # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
   # @return [TeamPlanning::Baseline::Map] for a person the map doesn't have, the placement
   #   waits in `unresolved`, its reason given when the resolution settles
@@ -50,6 +105,13 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
 
     memberships = data[:placements].map { TeamPlanning::Baseline::Membership.new(**it.to_h.symbolize_keys.slice(*TeamPlanning::Baseline::Membership.members)) }
     map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(memberships:) : it })
+  end
+
+  def self.shows_place?(place, wanted, units)
+    return place == wanted unless wanted["position_id"]
+
+    place["unit_id"] == units[wanted["position_id"]] && !place["unit_id"].nil? && place["allocation"] == wanted["allocation"] &&
+      (wanted["role"].nil? || place["role"] == wanted["role"])
   end
 
   def self.placement!(placement)
@@ -70,5 +132,5 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "An allocation is above 0 and at most 1"
   end
 
-  private_class_method :placement!, :allocation!
+  private_class_method :placement!, :allocation!, :in_order, :placement_of, :shows_place?
 end
