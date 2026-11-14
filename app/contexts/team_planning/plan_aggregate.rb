@@ -200,10 +200,11 @@ class TeamPlanning::PlanAggregate
   # @param scenario_id [String]
   # @param description [String, nil]
   # @param described_by_id [String]
-  # @param current [String, nil, Object] the description now, or {UNKNOWN}
+  # @param current [#call] gives the description now, or {UNKNOWN}; called
+  #   only once the command passes its checks
   # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown or
   #   the baseline, or the description too long
-  def describe_scenario(scenario_id, description:, described_by_id:, current: UNKNOWN)
+  def describe_scenario(scenario_id, description:, described_by_id:, current: -> { UNKNOWN })
     ensure_open!
     raise TeamPlanning::Error, "The baseline can't be described" unless @scenarios[live_scenario!(scenario_id)]
 
@@ -211,7 +212,7 @@ class TeamPlanning::PlanAggregate
     if description && description.length > DESCRIPTION_LIMIT
       raise TeamPlanning::Error, "A scenario's description can be at most #{DESCRIPTION_LIMIT} characters"
     end
-    return if description == current
+    return if description == current.call
 
     apply(TeamPlanning::Events::ScenarioDescribed.new(data: {
       plan_id: @plan_id, scenario_id: scenario_id, description: description, described_by_id: described_by_id

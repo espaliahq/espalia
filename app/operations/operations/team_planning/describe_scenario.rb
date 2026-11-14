@@ -26,16 +26,16 @@ class Operations::TeamPlanning::DescribeScenario < Operations::Base
     plan_id = plan_id!
     scenario_id = scenario_id!(:scenario_id)
     refusing_bad_plans do
-      handler.describe_scenario(plan_id, scenario_id, description: params[:description], current: -> { current(scenario_id) })
+      handler.describe_scenario(plan_id, scenario_id, description: params[:description], current: -> { current(plan_id, scenario_id) })
     end
     { plan_id:, scenario_id:, description: ::TeamPlanning::PlanAggregate.normalise_description(params[:description]) }
   end
 
   private
 
-  def current(scenario_id)
+  def current(plan_id, scenario_id)
     row = ProjectionVersion.unless_rebuilding(::TeamPlanning::Projections::Scenarios::PROJECTION_NAME) do
-      TeamPlanningScenario.find_by(id: scenario_id)
+      TeamPlanningScenario.find_by(id: scenario_id, plan_id:)
     end
     row ? row.description&.reveal : ::TeamPlanning::PlanAggregate::UNKNOWN
   rescue ProjectionVersion::Rebuilding

@@ -198,16 +198,24 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     end
 
     should "clear a description with a blank" do
-      @plan.describe_scenario(@q1, description: " ", described_by_id: @editor_id, current: "Hire two seniors")
+      @plan.describe_scenario(@q1, description: " ", described_by_id: @editor_id, current: -> { "Hire two seniors" })
 
       assert_nil last_event.data[:description]
     end
 
     should "write nothing when the caller says the scenario already holds the text" do
       assert_no_difference -> { @plan.unpublished_events.count } do
-        @plan.describe_scenario(@q1, description: " Hire two seniors ", described_by_id: @editor_id, current: "Hire two seniors")
-        @plan.describe_scenario(@q1, description: "", described_by_id: @editor_id, current: nil)
+        @plan.describe_scenario(@q1, description: " Hire two seniors ", described_by_id: @editor_id, current: -> { "Hire two seniors" })
+        @plan.describe_scenario(@q1, description: "", described_by_id: @editor_id, current: -> { nil })
       end
+    end
+
+    should "not ask what the scenario holds for a command it refuses" do
+      asked = false
+      assert_raises(TeamPlanning::Error) do
+        @plan.describe_scenario(@plan_id, description: "Now", described_by_id: @editor_id, current: -> { asked = true })
+      end
+      assert_not asked
     end
 
     should "write when the caller can't say what the scenario holds" do
