@@ -32,4 +32,15 @@ class Shreddable::ValueTest < ActiveSupport::TestCase
     assert_nil Shreddable::Value.wrap(nil)
     assert_equal @value, Shreddable::Value.wrap("Moving to the platform team")
   end
+
+  should "refuse a value that would read back differently from JSON" do
+    [ { amount: 182_000 }, :platform, Date.new(2026, 11, 14), [ { "at" => Time.current } ] ].each do |value|
+      assert_raises(ArgumentError, value.inspect) { Shreddable::Value.new(value) }
+    end
+  end
+
+  should "accept a JSON value with string keys" do
+    assert_equal({ "amount" => 182_000, "bands" => [ 1.5, nil, true ] },
+                 Shreddable::Value.new({ "amount" => 182_000, "bands" => [ 1.5, nil, true ] }).reveal)
+  end
 end

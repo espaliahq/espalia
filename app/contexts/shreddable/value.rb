@@ -19,8 +19,17 @@ class Shreddable::Value
   #   and what an aggregate always sees
   def self.removed = REMOVED
 
-  # @param value [Object] a JSON value: a string, number, boolean, array or hash
+  # A subscriber sees the value as written, and a replay sees it as JSON
+  # parsed it back, so only a value that survives that trip is accepted.
+  #
+  # @param value [Object] a JSON value: a string, number, boolean, array, or
+  #   hash with string keys
+  # @raise [ArgumentError] for anything JSON would read back differently
   def initialize(value, removed: false)
+    unless removed || JSON.parse(JSON.generate(value)) == value
+      raise ArgumentError, "A shreddable value must read back the same from JSON: use string keys, and no symbols, dates or times"
+    end
+
     @value = value
     @removed = removed
     freeze
