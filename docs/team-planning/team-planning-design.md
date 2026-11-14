@@ -146,6 +146,29 @@ which is committed budget, or `new`, which is planned; the map reads it as the p
 budget. A position's unit is not checked at write: a position in a retired unit still
 resolves, and 3.8 marks it. The baseline has no positions, so every one starts in a plan.
 
+### Assignments as built
+
+`AssignmentSet` ([#229](https://github.com/espaliahq/espalia/issues/229)) has the facet
+`assignment`, and its subject is a person. It holds the person's whole placement list:
+each placement is in a position or a unit, never both, with an allocation above 0 and at
+most 1 and an optional role. An empty list leaves the person unassigned. A child scenario
+that changes one placement owns the whole list from then on, so a later edit to the
+parent's list no longer reaches it.
+
+- **Totals are read, not refused.** A person's `allocation_total` may pass 1, and 4.6
+  flags it. A total is `nil`, which means unknown, when the HRIS gave a place no
+  allocation. A check must not read unknown as under-allocated.
+- **Unassigned is derived.** After the changes apply, `Map#settled` gives each position
+  placement its position's unit, then lists everyone in no live unit as unassigned. A
+  placement in a closed position keeps its `position_id` with no unit, and a placement in
+  a unit gone from the map counts for nothing.
+- **Open FTE** is a position's FTE less each occupant's allocation times their FTE, an
+  unknown FTE counting as full time. It goes below 0 when a position is overfilled.
+- **A person not on the map is never placed, but never silently.** The map lists them in
+  `unresolved` with `why`: "joined after the base date", which updating the plan to today
+  (4.2) fixes, or "has left", for a leaver by the base date or a forgotten person. 3.8
+  marks them and the changes tab shows them.
+
 ### Adding a change kind
 
 Several lanes add kinds at once, so each adds one the same way. `PositionSet`
@@ -161,7 +184,9 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    resolver.
 3. **The map.** If the kind adds something the map doesn't hold, add it to
    `TeamPlanning::Baseline::Map` with an empty default in `Baseline#structure`, and join
-   any names it needs in `Baseline#named`, never in `apply_to`.
+   any names it needs in `Baseline#named`, never in `apply_to`. Anything derived from
+   several kinds, such as who is unassigned, belongs in `Map#settled`, which `Resolution`
+   runs once every change has applied.
 4. **The write.** An operation in `app/operations/operations/team_planning/` that includes
    `ChangeWrite` and calls `set_change!`. Put the checks the aggregate can't make, such as
    whether a framework role exists, in the block you pass it, since the aggregate reads no

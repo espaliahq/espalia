@@ -50,7 +50,8 @@ class Operations::TeamPlanning::PositionsTest < ActiveSupport::TestCase
                    level_id: @e2.level_id, unit_id: @unit_id, fte: 0.5, basis: "backfill", budget: "committed" }, opened)
 
     assert_equal [ { position_id: opened[:position_id], role_id: @engineer.role_id, level_id: @e2.level_id, unit_id: @unit_id,
-                     fte: 0.5, basis: "backfill", role_name: "Software Engineer", level_name: "Engineer II", budget: "committed" } ],
+                     fte: 0.5, basis: "backfill", role_name: "Software Engineer", level_name: "Engineer II", budget: "committed",
+                     occupants: [], open_fte: 0.5 } ],
                  positions(@q1)
 
     planned = open_position(@q1)[:position_id]

@@ -6,6 +6,7 @@
 # audit.
 class Operations::TeamPlanning::Baseline < Operations::Base
   include Operations::TeamPlanning::PlanRead
+  include Operations::TeamPlanning::MapPayload
 
   description "Get the baseline of a Team Planning plan the caller is in: the organisation on the plan's base " \
               "date, as known at the end of the day before. Units carry their parent, level and owners; people " \
@@ -17,21 +18,9 @@ class Operations::TeamPlanning::Baseline < Operations::Base
 
   parameter :plan_id, String, required: true
 
-  # @return [Hash] `{ plan_id, base_on, known_on, units, people, unassigned_ids, names }`
+  # @return [Hash] `{ plan_id, base_on, known_on, units, people, unassigned_ids, positions, unresolved, names }`
   def perform
     plan = plan!
-    map = ::TeamPlanning::Baseline.new(context:, plan:).call
-    { plan_id: plan.id, base_on: map.base_on.iso8601, known_on: map.known_on.iso8601,
-      units: map.units.map(&:to_h),
-      people: map.people.map { it.to_h.merge(memberships: it.memberships.map(&:to_h)) },
-      unassigned_ids: map.unassigned_ids, names: names_for(map) }
-  end
-
-  private
-
-  # Every id the map uses, so a client never meets an id it can't name.
-  def names_for(map)
-    ids = map.people.flat_map { [ it.id, it.manager_id ] } + map.units.flat_map(&:owner_ids)
-    ids.compact.uniq.to_h { [ it, map.name_of(it) ] }
+    { plan_id: plan.id, **map_payload(::TeamPlanning::Baseline.new(context:, plan:).call) }
   end
 end
