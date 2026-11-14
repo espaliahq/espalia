@@ -211,6 +211,16 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
     assert_not graph.manager?("pair")
   end
 
+  should "send a line to a position two people share to neither, leaving the report unmanaged" do
+    @positions << position("pair", "squad")
+    @people += [ member("o1", "squad", position_id: "pair"), member("o2", "squad", position_id: "pair"),
+                 member("r", "squad", manager_position_id: "pair") ]
+    graph = Units::Graph.new(map:, facts:, manager_role_ids: [])
+
+    assert_not(%w[o1 o2 pair a c m].any? { graph.span(it).map(&:id).include?("r") })
+    assert_not(%w[o1 o2 pair].any? { graph.manager?(it) })
+  end
+
   should "never make the head of the tree a report of a vacant manager seat beneath them" do
     @people << member("ceo", "root")
     @people.map! { it.id == "m" ? it.with(manager_id: "ceo") : it }
