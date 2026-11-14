@@ -191,10 +191,10 @@ Projections and handlers do read these values. They receive them wrapped.
 Two shared specs, in `test/contexts/shreddable/replay_without_keys_test.rb`, run over
 streams from every context built through the real handlers.
 
-- **Aggregates.** Replay with keys and without, and expect the same state, compared as
-  Marshal bytes so a value still in clear raises. The same state makes the same
-  decisions, so the same commands give the same new events. Layer 1 should make this
-  always pass. It catches a handler that bypasses the base class.
+- **Aggregates.** Replay every aggregate with keys and without, and expect the same
+  state, compared as Marshal bytes so a value still in clear raises. Each then runs one
+  new command, and the new events must match too. Layer 1 should make this always pass.
+  It catches a handler that bypasses the base class.
 - **Projections.** Rebuild with every key forgotten and expect nothing to raise.
 
 ## Forgetting

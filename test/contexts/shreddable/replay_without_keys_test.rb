@@ -14,13 +14,19 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     shreddable :note, by: :plan
   end
 
+  class NotesSummarised < RubyEventStore::Event; end
+
   # Decides from the note, so replay would differ if it ever saw the value.
   class Notebook
     include Shreddable::AggregateRoot
 
+    def summarise = apply(NotesSummarised.new(data: { notes: @notes }))
+
     on NoteWritten do |event|
       (@notes ||= []) << [ event.data[:note].removed?, event.data[:note].to_s, event.data[:note].reveal ]
     end
+
+    on(NotesSummarised) { |_| nil }
   end
 
   AGGREGATES = {
@@ -34,6 +40,21 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     %r{/Plan-} => TeamPlanning::PlanAggregate
   }.freeze
 
+  ACTOR_ID = "0193a0f0-0000-7000-8000-000000000001"
+  EFFECTIVE_ON = Date.new(2026, 11, 14)
+
+  # One new command per aggregate, so replay must also decide the same.
+  COMMANDS = {
+    Notebook => ->(notebook, _) { notebook.summarise },
+    Frameworks::Aggregate => ->(framework, stream) { framework.rename(stream[/Framework-(.+)\z/, 1], "Renamed") },
+    PersonDevelopment::Aggregate => ->(development, _) { development.record_reporting_manager(ACTOR_ID) },
+    AssessmentCycles::Aggregate => ->(cycle, _) { cycle.rename("Renamed", updated_by: ACTOR_ID) },
+    AssessmentCycles::CalibrationSessionAggregate => ->(session, _) { session.rename("Renamed", renamed_by_id: ACTOR_ID) },
+    OrgGraph::PersonAggregate => ->(person, _) { person.set_membership(ACTOR_ID, provider: "espalia", effective_on: EFFECTIVE_ON) },
+    OrgGraph::StructureAggregate => ->(structure, _) { structure.add_level(ACTOR_ID, "Band", effective_on: EFFECTIVE_ON) },
+    TeamPlanning::PlanAggregate => ->(plan, _) { plan.rename("Renamed", renamed_by_id: ACTOR_ID) }
+  }.freeze
+
   setup do
     @tenant = create(:tenant)
     @event_store = Rails.configuration.event_store
@@ -42,7 +63,12 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     write_note(@other_tenant, SecureRandom.uuid_v7)
     ActsAsTenant.with_tenant(@tenant) do
       Frameworks::CommandHandler.new.create_framework(SecureRandom.uuid_v7, "Engineering Growth")
-      enrol_in_role_lens_framework(create(:person, tenant: @tenant), build_role_lens_framework(tenant: @tenant), tenant: @tenant)
+      lens = build_role_lens_framework(tenant: @tenant)
+      enrol_in_role_lens_framework(create(:person, tenant: @tenant), lens, tenant: @tenant)
+      AssessmentCycles::CalibrationCommandHandler.new.define_session(
+        SecureRandom.uuid_v7, SecureRandom.uuid_v7, lens.framework_id, "Engineering calibration", 1,
+        facilitator_id: create(:person, tenant: @tenant).id
+      )
       person = create(:person, tenant: @tenant)
       user = create(:user)
       admin = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, tenant: @tenant, user:, person:, role: :admin), person:)
@@ -68,13 +94,18 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     )
   end
 
+  # @return [Array<Array(String, Class, String, Array)>] each stream's aggregate,
+  #   its state, and the events one new command makes from that state
   def replay_every_aggregate
     repository = AggregateRoot::Repository.new(@event_store)
     ActsAsTenant.with_tenant(@tenant) do
       streams.filter_map do |stream|
-        aggregate = AGGREGATES.find { |pattern, _| stream.match?(pattern) }&.last or next
+        klass = AGGREGATES.find { |pattern, _| stream.match?(pattern) }&.last or next
+        aggregate = repository.load(klass.new, stream)
         # Marshal also refuses any value still in clear.
-        [ stream, Marshal.dump(repository.load(aggregate.new, stream).marshal_dump) ]
+        state = Marshal.dump(aggregate.marshal_dump)
+        COMMANDS.fetch(klass).call(aggregate, stream)
+        [ stream, klass, state, aggregate.unpublished_events.map { [ it.class.name, it.data ] } ]
       end.sort_by(&:first)
     end
   end
@@ -84,12 +115,13 @@ class Shreddable::ReplayWithoutKeysTest < ActiveSupport::TestCase
     assert_empty PlanEncryptionKey.unscoped.live.where(tenant: @tenant)
   end
 
-  should "replay every aggregate to the same state once every key is destroyed" do
+  should "replay every aggregate to the same state and the same new events once every key is destroyed" do
+    freeze_time
     with_keys = replay_every_aggregate
     destroy_every_key
 
-    assert_equal AGGREGATES.values.sort_by(&:name) - [ AssessmentCycles::CalibrationSessionAggregate ],
-                 with_keys.map { |stream, _| AGGREGATES.find { |pattern, _| stream.match?(pattern) }.last }.uniq.sort_by(&:name)
+    assert_equal AGGREGATES.values.sort_by(&:name), with_keys.map(&:second).uniq.sort_by(&:name)
+    with_keys.each { |stream, _, _, events| assert_not_empty events, "#{stream} made no new event" }
     assert_equal with_keys, replay_every_aggregate
   end
 
