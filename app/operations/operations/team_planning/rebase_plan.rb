@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # Updates a plan to today ([#263](https://github.com/espaliahq/espalia/issues/263)).
-# The conflicts it records are found afresh at the moment of the update, so a
-# preview read earlier can't leave one out.
+# The conflicts it records are found afresh under the plan's lock, so neither
+# a preview read earlier nor a change made since can leave one out.
 class Operations::TeamPlanning::RebasePlan < Operations::Base
   include Operations::TeamPlanning::PlanRead
   include Operations::OrgGraph::DateParameter
@@ -28,10 +28,13 @@ class Operations::TeamPlanning::RebasePlan < Operations::Base
     raise Operations::Base::ParameterError, "No such plan" unless PlanPolicy.new(context, plan).update?
 
     expected_base_on = parse_date(:base_on)
+    today = Time.now.utc.to_date
     refusing_bad_plans do
-      preview = ::TeamPlanning::RebasePreview.new(context:, plan:).call
-      handler.rebase_plan(plan.id, base_on: preview.to, expected_base_on:, conflicts: preview.conflicts)
-      { plan_id: plan.id, base_on: preview.to.iso8601, previous_base_on: plan.base_on.iso8601, conflicts: preview.conflicts }
+      conflicts = []
+      handler.rebase_plan(plan.id, base_on: today, expected_base_on:) do
+        conflicts = ::TeamPlanning::RebasePreview.new(context:, plan: plan.reload, today:).call.conflicts
+      end
+      { plan_id: plan.id, base_on: today.iso8601, previous_base_on: expected_base_on.iso8601, conflicts: }
     end
   end
 end

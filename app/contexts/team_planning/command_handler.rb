@@ -141,13 +141,21 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # A block, when given, finds the conflicts under the plan's lock, so a change
+  # made since the preview can't slip past. It isn't called once the base has
+  # moved, so the refusal names the move.
+  #
   # @param plan_id [String]
+  # @param conflicts [Array<Hash>] used when no block is given
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the plan's lock, once the actor may edit it
+  # @yieldreturn [Array<Hash>] the conflicts, as {TeamPlanning::PlanAggregate#rebase} takes them
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
   # @see TeamPlanning::PlanAggregate#rebase
-  def rebase_plan(plan_id, base_on:, expected_base_on:, conflicts:)
+  def rebase_plan(plan_id, base_on:, expected_base_on:, conflicts: [])
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      conflicts = yield(plan) if block_given? && plan.base_on.to_s == expected_base_on.to_s
       plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!)
     end
   end
