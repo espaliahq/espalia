@@ -107,6 +107,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_equal Person::FORMER_MEMBER, baseline[:names].fetch(@quinn.id)
     changes = Operations::OrgGraph::ChangesBetween.call(context: lead_context, params: params_for("org_graph_changes_between"))
     assert_includes changes[:changes].map { it[:person_id] }, @quinn.id, "org_graph_changes_between reads an empty Org Graph here"
+    rates = Operations::Tenants::ExchangeRates.call(context: lead_context, params: {})
+    assert_equal Person::FORMER_MEMBER, rates[:reference_currency][:updated_by], "tenants_exchange_rates names the reference currency's editor"
   end
 
   private
@@ -143,6 +145,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     PayBand.create!(level: @fx.e_levels.fetch(2), currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
                     updated_by: erased)
     ExchangeRate.create!(from_currency: "NZD", to_currency: "AUD", rate: 1, applies_from: Date.current, updated_by: erased)
+    ReferenceCurrency.create!(currency: "AUD", updated_by: erased)
     PlanningRuleDefault.create!(rule: "test_headcount_cap", value: { cap: 4 }, updated_by: erased)
   end
 
