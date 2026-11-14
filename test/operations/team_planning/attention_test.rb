@@ -1,0 +1,127 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
+  ESPALIA = { provider: "espalia" }.freeze
+
+  setup do
+    @tenant = create(:tenant)
+    handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    @department, @squad, @team = Array.new(3) { SecureRandom.uuid_v7 }
+    @engineering, @payments, @growth = Array.new(3) { SecureRandom.uuid_v7 }
+
+    travel_to Time.utc(2026, 2, 1, 9)
+    ActsAsTenant.with_tenant(@tenant) do
+      @editor = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
+      @outsider = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
+      @ada = create(:person, tenant: @tenant, name: "Ada Quill")
+      @bo = create(:person, tenant: @tenant, name: "Bo Reyes")
+      @newcomer = create(:person, tenant: @tenant, name: "Nia Newcomer")
+      @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+      @e2 = create(:framework_level, tenant: @tenant, role_id: @engineer.role_id, ordinal: 2, title: "Engineer II")
+      structure.define_taxonomy([ { level_id: @department, name: "Department" }, { level_id: @squad, name: "Squad" },
+                                  { level_id: @team, name: "Team" } ],
+                                effective_on: "2026-01-01")
+      structure.create_unit(@engineering, "Engineering", level_id: @department, effective_on: "2026-01-01")
+      structure.create_unit(@payments, "Payments", level_id: @squad, parent_id: @engineering, effective_on: "2026-01-01")
+      structure.create_unit(@growth, "Growth", level_id: @squad, parent_id: @engineering, effective_on: "2026-01-01")
+      handler.record_person(@ada.id, **ESPALIA, effective_on: "2026-02-01", employment_status: "employed", fte: 0.8)
+      handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-01", allocation: 1.0)
+      handler.record_person(@bo.id, **ESPALIA, effective_on: "2026-02-01", employment_status: "employed")
+      handler.set_membership(@bo.id, @payments, **ESPALIA, effective_on: "2026-02-01", allocation: 1.0)
+    end
+    @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-03-02")[:plan_id]
+    @q1 = fork(relation: "then", name: "Q1", ends_on: "2026-06-30")
+    @q2 = fork(parent_id: @q1, relation: "then", name: "Q2", ends_on: "2026-09-30")
+  end
+
+  def call(operation, as: @editor, **params)
+    ActsAsTenant.with_tenant(@tenant) do
+      operation.call(context: AuthorizationContext.new(user: as.user, tenant_user: as, person: as.person), params:)
+    end
+  end
+
+  def fork(**params) = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, **params)[:scenario_id]
+
+  def write(operation, scenario_id, **params) = call(operation, plan_id: @plan_id, scenario_id:, **params)
+
+  def assign(scenario_id, person, *placements) = write(Operations::TeamPlanning::SetAssignment, scenario_id, person_id: person.id, placements:)
+
+  def open_position(scenario_id, unit_id: @growth)
+    write(Operations::TeamPlanning::SetPosition, scenario_id, role_id: @engineer.role_id, level_id: @e2.level_id, unit_id:,
+                                                              fte: 1, basis: "new")[:position_id]
+  end
+
+  def attention(scenario_id = @q2, as: @editor) = call(Operations::TeamPlanning::Attention, as:, plan_id: @plan_id, scenario_id:)
+
+  def items(scenario_id = @q2) = attention(scenario_id)[:items].map { it.values_at(:subject_id, :facet, :reason) }
+
+  def change_of(subject_id, scenario_id = @q2) = attention(scenario_id)[:items].find { it[:subject_id] == subject_id }[:change]
+
+  should "read a scenario that fits as needing nothing" do
+    assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
+
+    assert_equal({ plan_id: @plan_id, scenario_id: @q2, items: [], names: {} }, attention)
+  end
+
+  should "mark a step's changes once an earlier step retires the unit they stand on" do
+    assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
+    risk = write(Operations::TeamPlanning::SetUnit, @q2, name: "Risk", parent_id: @growth, level_id: @team)[:unit_id]
+    write(Operations::TeamPlanning::RetireUnit, @q1, unit_id: @growth)
+
+    assert_equal [ [ @ada.id, "assignment", "Placed in a retired unit" ], [ risk, "unit", "Its parent is a retired unit" ] ], items
+    assert_equal({ kind: "AssignmentSet", scenario_id: @q2 }, change_of(@ada.id).except(:event_id))
+    assert_equal({ kind: "UnitSet", scenario_id: @q2 }, change_of(risk).except(:event_id))
+    assert_equal({ @ada.id => "Ada Quill" }, attention[:names])
+    assert_empty items(@q1)
+  end
+
+  should "name the retirement for someone no scenario moved" do
+    write(Operations::TeamPlanning::RetireUnit, @q1, unit_id: @payments)
+
+    assert_equal [ [ @ada.id, "assignment", "Placed in a retired unit" ], [ @bo.id, "assignment", "Placed in a retired unit" ] ], items(@q1)
+    assert_equal({ kind: "UnitRetired", scenario_id: @q1 }, change_of(@bo.id, @q1).except(:event_id))
+    assert_match Operations::TeamPlanning::PlanWrite::UUID_RE, change_of(@bo.id, @q1)[:event_id]
+  end
+
+  should "mark a placement in a position an earlier step closed, and a position someone overfilled" do
+    position = open_position(@q1)
+    assign(@q2, @ada, { position_id: position, allocation: 1 })
+    assign(@q2, @bo, { position_id: position, allocation: 1 })
+    assert_equal [ [ position, "position", "Overfilled by 0.8 FTE" ] ], items
+
+    write(Operations::TeamPlanning::ClosePosition, @q1, position_id: position)
+    assert_equal [ [ @ada.id, "assignment", "Placed in a closed position" ], [ @bo.id, "assignment", "Placed in a closed position" ] ], items
+  end
+
+  should "mark a position in a unit an earlier step retired" do
+    position = open_position(@q2)
+    write(Operations::TeamPlanning::RetireUnit, @q1, unit_id: @growth)
+
+    assert_equal [ [ position, "position", "In a retired unit" ] ], items
+    assert_equal "PositionSet", change_of(position)[:kind]
+  end
+
+  should "mark someone placed who isn't on the map" do
+    assign(@q2, @newcomer, { unit_id: @growth, allocation: 1 })
+
+    assert_equal [ [ @newcomer.id, "assignment", "Placed, but joined after the base date" ] ], items
+    assert_equal({ @newcomer.id => "Nia Newcomer" }, attention[:names])
+  end
+
+  should "refuse someone outside the plan, and a plan in another tenant" do
+    assert_equal "No such plan", assert_raises(Operations::Base::ParameterError) { attention(as: @outsider) }.message
+
+    other = create(:tenant)
+    stranger = ActsAsTenant.with_tenant(other) { create(:tenant_user, tenant: other, role: :admin, person: create(:person, tenant: other)) }
+    refused = assert_raises(Operations::Base::ParameterError) do
+      ActsAsTenant.with_tenant(other) do
+        Operations::TeamPlanning::Attention.call(context: AuthorizationContext.new(user: stranger.user, tenant_user: stranger, person: stranger.person),
+                                                 params: { plan_id: @plan_id, scenario_id: @q2 })
+      end
+    end
+    assert_equal "No such plan", refused.message
+  end
+end

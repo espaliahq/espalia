@@ -1,0 +1,41 @@
+# frozen_string_literal: true
+
+# What no longer fits in a scenario, from {TeamPlanning::Resolution#attention}
+# [#257](https://github.com/espaliahq/espalia/issues/257). An item on a person
+# names them, so the forgotten-person audit walks it.
+class Operations::TeamPlanning::Attention < Operations::Base
+  include Operations::TeamPlanning::PlanRead
+
+  description "List what needs attention in a scenario of a Team Planning plan the caller is in: changes that " \
+              "still resolve but no longer fit, often because a scenario it follows changed later. Each item has " \
+              "the subject_id and facet that no longer fit (a person's assignment, a position, a unit, a " \
+              "succession), a reason, and the change it belongs to: its kind, the scenario that made it and its " \
+              "event_id. That is the subject's own change, or, for a subject no scenario changed, the change that " \
+              "broke it, such as a parent unit's retirement; change is null when nothing in the plan explains it. " \
+              "Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
+              "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
+              "the caller is a member."
+  category :read
+  approval :none
+
+  parameter :plan_id, String, required: true
+  parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
+
+  # @return [Hash] `{ plan_id, scenario_id, items, names }`
+  def perform
+    plan = plan!
+    scenario_id = scenario_id!(:scenario_id)
+    resolution = ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:)
+    items, map = refusing_bad_plans { [ resolution.attention, resolution.call ] }
+    people = items.select { it.facet == ::TeamPlanning::Attention::ASSIGNMENT }.map(&:subject_id).uniq
+    { plan_id: plan.id, scenario_id:, items: items.map { item_row(it) }, names: people.to_h { [ it, map.name_of(it) ] } }
+  end
+
+  private
+
+  def item_row(item)
+    change = item.change && { kind: item.change.class.name.demodulize, scenario_id: item.change.data[:scenario_id],
+                              event_id: item.change.event_id }
+    { subject_id: item.subject_id, facet: item.facet, reason: item.reason, change: }
+  end
+end
