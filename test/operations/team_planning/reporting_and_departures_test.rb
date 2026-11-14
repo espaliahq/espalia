@@ -166,6 +166,7 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
       leaver = person_in(step, @ada)
       assert leaver[:leaving], step
       assert_equal seat, leaver[:backfill_position_id]
+      assert_nil leaver[:leaves_on]
       position = map(step)[:positions].find { it[:position_id] == seat }
       assert_equal [], position[:occupants], "a leaver never fills their backfill"
       assert_in_delta 1.0, position[:open_fte]
@@ -236,6 +237,7 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
   should "hold a leaving date within the step, and carry it with them once they've gone" do
     seat = open_position(@q1)
     assert_equal "2026-04-30", depart(@q1, @ada, position_id: seat, leaves_on: "2026-04-30")[:leaves_on]
+    assert_equal [ true, "2026-04-30" ], person_in(@q1, @ada).values_at(:leaving, :leaves_on), "the step they leave in shows when"
     call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @q2, subject_id: @ada.id, facet: "departure")
 
     depart(@q1, @cy)

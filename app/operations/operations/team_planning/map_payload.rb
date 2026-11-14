@@ -31,7 +31,7 @@ module Operations::TeamPlanning::MapPayload
       person.to_h.except(:departure, :planned_level, :plan_data, :placeholder)
             .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
                    placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
-                   leaving: person.leaving?, backfill_position_id: person.backfill_id)
+                   leaving: person.leaving?, leaves_on: (person.departure[:leaves_on] if person.leaving?), backfill_position_id: person.backfill_id)
     end
   end
 
