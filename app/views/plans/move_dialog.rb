@@ -8,6 +8,11 @@
 class Views::Plans::MoveDialog < Views::Base
   ID = "move-person-modal"
   UNASSIGNED = Operations::TeamPlanning::MovePlace::UNASSIGNED
+  POSITION = "position:"
+
+  # @param position_id [String]
+  # @return [String] the "To" choice that places someone in the position
+  def self.position_choice(position_id) = "#{POSITION}#{position_id}"
 
   # The data a person row's "Move…" button carries.
   #
@@ -34,10 +39,12 @@ class Views::Plans::MoveDialog < Views::Base
   # @param scenario_id [String]
   # @param scenario_name [String]
   # @param units [Array<Array(Hash, Array<String>)>] each unit with the names above it, in map order
-  def initialize(scenario_id:, scenario_name:, units:)
+  # @param positions [Hash{String => Array<Hash>}] each unit's positions, by unit id
+  def initialize(scenario_id:, scenario_name:, units:, positions: {})
     @scenario_id = scenario_id
     @scenario_name = scenario_name
     @units = units
+    @positions = positions
   end
 
   def view_template
@@ -61,7 +68,8 @@ class Views::Plans::MoveDialog < Views::Base
         strong(class: "text-default", data: { move_form_target: "name" })
         plain " in "
         strong(class: "text-default") { @scenario_name }
-        plain ". Their other places stay as they are, except one they already hold in the unit they move to, which this replaces."
+        plain ". Their other places stay as they are, except one they already hold in the unit or position they move to, " \
+              "which this replaces."
       end
       field("move-to", "To") { to_select }
       div(class: "grid grid-cols-2 gap-3", data: { move_form_target: "placeFields" }) do
@@ -82,9 +90,15 @@ class Views::Plans::MoveDialog < Views::Base
   end
 
   def to_select
-    select(id: "move-to", name: "move[to_unit_id]", class: Components::Kit::Field::SELECT,
+    select(id: "move-to", name: "move[to]", class: Components::Kit::Field::SELECT,
            data: { move_form_target: "to", action: "change->move-form#sync" }) do
-      @units.each { |unit, path| option(value: unit[:id]) { (path + [ unit[:name] ]).join(" › ") } }
+      @units.each do |unit, path|
+        trail = path + [ unit[:name] ]
+        option(value: unit[:id]) { trail.join(" › ") }
+        @positions.fetch(unit[:id], []).each do |position|
+          option(value: self.class.position_choice(position[:position_id])) { (trail + [ Views::Plans::ScenarioMap.position_label(position) ]).join(" › ") }
+        end
+      end
       option(value: UNASSIGNED) { "Unassigned" }
     end
   end

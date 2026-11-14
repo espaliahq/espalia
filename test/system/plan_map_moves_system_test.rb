@@ -24,11 +24,15 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
       handler.record_person(@ada.id, **ESPALIA, effective_on: since, employment_status: "employed")
       handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0, role: "ENG")
       handler.record_person(@cy.id, **ESPALIA, effective_on: since, employment_status: "employed")
+      @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+      @e2 = create(:framework_level, tenant: @tenant, role_id: @engineer.role_id, ordinal: 2, title: "Engineer II")
     end
 
     @plan_id = call(Operations::TeamPlanning::CreatePlan, @planner, name: "Pay review 2027", base_on: (Date.current + 1).iso8601)[:plan_id]
     @q1 = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, relation: "then", name: "Q1 hires",
                                                                  ends_on: (Date.current + 120).iso8601)[:scenario_id]
+    @position = call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id,
+                                                                      level_id: @e2.level_id, unit_id: @payments, fte: 1, basis: "backfill")[:position_id]
     sign_in_as(@planner.user)
   end
 
@@ -40,7 +44,7 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
         open_move("Ada Quill")
         within("#move-person-modal") do
           assert_text "Moving Ada Quill in Q1 hires"
-          assert_text "except one they already hold in the unit they move to, which this replaces"
+          assert_text "except one they already hold in the unit or position they move to, which this replaces"
           select "Growth", from: "To"
           js_fill_in "Allocation (%)", with: "50"
         end
@@ -50,7 +54,7 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
           assert_text "Ada Quill"
           assert_text "50%"
         end
-        within(unit("Payments")) { assert_text "Nobody yet." }
+        within(unit("Payments")) { assert_no_text "Ada Quill" }
         assert_no_sideways_overflow
       end
 
@@ -64,6 +68,34 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
 
         within(unit("Unassigned")) { assert_text "Ada Quill" }
       end
+
+      should "place a person in a position, with Move…" do
+        open_move("Cy Loose")
+        within("#move-person-modal") do
+          select "Payments › Backfill: Software Engineer", from: "To"
+          js_fill_in "Allocation (%)", with: "100"
+        end
+        click_button_with_js_fallback("Save move", expect_text: "Move saved.")
+
+        within(position) { assert_text "Cy Loose · 100%" }
+      end
+
+      should "move a position to another unit in the scenario shown, with Move…" do
+        visit map_plan_path(@plan_id, scenario: @q1)
+        assert_text "Drag a person or a position to another unit"
+        wait_for_stimulus "move-form"
+        click_selector_with_js_fallback("button[aria-label='Move Backfill: Software Engineer in Payments']",
+                                        expect_text: "Moving Backfill: Software Engineer in Q1 hires")
+        within("#move-position-modal") do
+          assert_text "The people in it move with it, and their reporting lines stay as they are."
+          select "Growth", from: "To"
+        end
+        click_button_with_js_fallback("Save move", expect_text: "Position moved.")
+
+        within(unit("Growth")) { assert_text "Backfill: Software Engineer" }
+        within(unit("Payments")) { assert_no_text "Backfill: Software Engineer" }
+        assert_no_sideways_overflow
+      end
     end
   end
 
@@ -71,16 +103,7 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     visit map_plan_path(@plan_id, scenario: @q1)
     wait_for_stimulus "map-move"
-    page.execute_script(<<~JS, @cy.id, @growth)
-      const row = document.querySelector(`[data-map-person="${arguments[0]}"]`)
-      const target = document.querySelector(`[data-map-unit="${arguments[1]}"]`)
-      const dataTransfer = new DataTransfer()
-      const fire = (element, type) => element.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer }))
-      fire(row, "dragstart")
-      fire(target, "dragover")
-      fire(target, "drop")
-      fire(row, "dragend")
-    JS
+    drag("[data-map-person='#{@cy.id}']", "[data-map-unit='#{@growth}']")
 
     within("#move-person-modal") do
       assert_text "Moving Cy Loose in Q1 hires"
@@ -89,6 +112,34 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
     end
     click_button_with_js_fallback("Save move", expect_text: "Move saved.")
     within(unit("Growth")) { assert_text "Cy Loose" }
+  end
+
+  should "open the move dialog on the position a person is dropped on" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit map_plan_path(@plan_id, scenario: @q1)
+    wait_for_stimulus "map-move"
+    drag("[data-map-person='#{@cy.id}']", "[data-map-position='#{@position}']")
+
+    within("#move-person-modal") do
+      assert_text "Moving Cy Loose in Q1 hires"
+      assert_equal Views::Plans::MoveDialog.position_choice(@position), find_field("To").value
+    end
+    click_button_with_js_fallback("Save move", expect_text: "Move saved.")
+    within(position) { assert_text "Cy Loose · 100%" }
+  end
+
+  should "open the position dialog on the unit a position is dropped on" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit map_plan_path(@plan_id, scenario: @q1)
+    wait_for_stimulus "map-move"
+    drag("[data-map-position='#{@position}']", "[data-map-unit='#{@growth}']")
+
+    within("#move-position-modal") do
+      assert_text "Moving Backfill: Software Engineer in Q1 hires"
+      assert_equal @growth, find_field("To").value
+    end
+    click_button_with_js_fallback("Save move", expect_text: "Position moved.")
+    within(unit("Growth")) { assert_text "Backfill: Software Engineer" }
   end
 
   should "start the allocation of a place the HRIS gave none at the share it counts for" do
@@ -119,9 +170,25 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
 
   private
 
+  # Selenium can't drive HTML5 drag and drop, so the events are dispatched.
+  def drag(from, to)
+    page.execute_script(<<~JS, from, to)
+      const row = document.querySelector(arguments[0])
+      const target = document.querySelector(arguments[1])
+      const dataTransfer = new DataTransfer()
+      const fire = (element, type) => element.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer }))
+      fire(row, "dragstart")
+      fire(target, "dragover")
+      fire(target, "drop")
+      fire(row, "dragend")
+    JS
+  end
+
+  def position = find("[data-map-position='#{@position}']")
+
   def open_move(name)
     visit map_plan_path(@plan_id, scenario: @q1)
-    assert_text "Drag a person to another unit"
+    assert_text "Drag a person or a position to another unit"
     wait_for_stimulus "move-form"
     click_selector_with_js_fallback("button[aria-label='Move #{name}']", expect_text: "Moving #{name}")
   end
