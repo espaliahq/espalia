@@ -18,7 +18,9 @@ class Operations::TeamPlanning::Status < Operations::Base
               "conflict an update to today carried forward still reads 'conflicting', with since the day of the " \
               "update that first found it, while the scenario still resolves to the same change: a set, pin, " \
               "clear or undo ends it. A change that reads done or unknown keeps that status; otherwise since is " \
-              "null. A person's placements are one facet, so a placement list is " \
+              "null. Each status carries `sources`, who supplies what the change moves: the provider of a " \
+              "person fact (level, manager, leaving), or of the units an assignment, unit or succession touches, " \
+              "today and as planned (\"espalia\" for one Espalia supplies, or an HRIS such as \"hibob\"). A person's placements are one facet, so a placement list is " \
               "done only when the whole list matches. The Org Graph can't say which position someone fills, only " \
               "where they are, so a placement in a position is done once the person is in the position's unit at " \
               "its allocation, with its role only when the plan names one. A change the Org Graph never holds, " \

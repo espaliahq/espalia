@@ -51,7 +51,8 @@ class TeamPlanning::Status
   # @!attribute facet [String]
   # @!attribute status [Symbol] :done, :pending, :conflicting or :unknown
   # @!attribute since [Date, nil] for a conflict an update to today carried forward, the day of that update
-  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since)
+  # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
+  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since, :sources)
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -81,6 +82,7 @@ class TeamPlanning::Status
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
     now, base = maps
+    @sources = TeamPlanning::SourceOfTruth.new(tenant_id: @plan.tenant_id)
     statuses = changes.map { |key, change| entry(change, key, base:, now:) }
     Report.new(on: @today, statuses:, names: names_for(statuses.map(&:subject_id), base, now))
   end
@@ -114,7 +116,19 @@ class TeamPlanning::Status
     status = status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before)
     since = @carried[key] unless %i[done unknown].include?(status)
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
-              status: since ? :conflicting : status, since:)
+              status: since ? :conflicting : status, since:, sources: @sources.of_plan(facet, unit_ids: units_of(change, key, now)))
+  end
+
+  # A move touches the units someone is in today and the ones the scenario places them in.
+  def units_of(change, key, now)
+    subject_id, facet = key
+    case facet
+    when TeamPlanning::Events::AssignmentSet.facet
+      [ now, resolved(@scenario_id) ].flat_map { |map| map.people.find { it.id == subject_id }&.memberships.to_a.map(&:unit_id) }
+    when TeamPlanning::Events::UnitSuccessionSet.facet then change.data.values_at(:predecessor_ids, :successor_ids).flatten.compact
+    when TeamPlanning::Events::UnitSet.facet then [ subject_id ]
+    else []
+    end
   end
 
   def removed?(end_state) = end_state.values.any? { it.is_a?(Shreddable::Value) && it.removed? }

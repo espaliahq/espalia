@@ -115,8 +115,8 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
     drift = read(Operations::TeamPlanning::Drift)
     assert_equal [ @plan_id, "2026-03-01", "2026-03-10" ], drift.values_at(:plan_id, :from, :to)
     change = drift[:changes].sole
-    assert_equal [ "fact_changed", "2026-03-10", "2026-03-10T09:00:00Z", false, false, [] ],
-                 change.values_at(:kind, :effective_on, :learned_at, :withdrawn, :from_plan, :meets)
+    assert_equal [ "fact_changed", "2026-03-10", "2026-03-10T09:00:00Z", false, false, [], %w[espalia] ],
+                 change.values_at(:kind, :effective_on, :learned_at, :withdrawn, :from_plan, :meets, :sources)
     assert_equal({ @ada.id => "Ada Quill" }, drift[:names])
   end
 
@@ -140,7 +140,8 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
 
     status = call(Operations::TeamPlanning::Status, as: @viewer, plan_id: @plan_id, scenario_id: @plan_id)
     assert_equal [ @plan_id, @plan_id, "2026-03-10" ], status.values_at(:plan_id, :scenario_id, :on)
-    assert_equal [ @plan_id, @ada.id, "title", "pending" ], status[:statuses].sole.values_at(:scenario_id, :subject_id, :facet, :status)
+    assert_equal [ @plan_id, @ada.id, "title", "pending", %w[espalia] ],
+                 status[:statuses].sole.values_at(:scenario_id, :subject_id, :facet, :status, :sources)
     assert_equal({ @ada.id => "Ada Quill" }, status[:names])
   end
 

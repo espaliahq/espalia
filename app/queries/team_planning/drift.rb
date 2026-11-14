@@ -26,7 +26,8 @@ class TeamPlanning::Drift
   # @!attribute change [OrgGraph::ChangesBetween::Change]
   # @!attribute from_plan [Boolean] whether it was applied from this plan
   # @!attribute meets [Array<Met>] the plan's changes to the facet it moves
-  Drifted = Data.define(:change, :from_plan, :meets)
+  # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
+  Drifted = Data.define(:change, :from_plan, :meets, :sources)
 
   # @!attribute scenario_id [String] the plan's id for the root
   # @!attribute change_id [String] the planned change's event id
@@ -60,7 +61,10 @@ class TeamPlanning::Drift
 
     planned = planned_changes
     from_plan = plan_ids(changes.map(&:event_id))
-    drifted = changes.map { Drifted.new(change: it, from_plan: from_plan[it.event_id] == @plan.id, meets: meeting(planned, it)) }
+    sources = TeamPlanning::SourceOfTruth.new(tenant_id: @plan.tenant_id)
+    drifted = changes.map do
+      Drifted.new(change: it, from_plan: from_plan[it.event_id] == @plan.id, meets: meeting(planned, it), sources: sources.of_drift(it))
+    end
     Report.new(from:, to: @today, changes: drifted, names: names_for(changes))
   end
 
