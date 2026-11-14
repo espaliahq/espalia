@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 class OrgGraph::PersonDevelopmentFeedTest < ActiveSupport::TestCase
+  include RebuildLock
+
   HIBOB = { provider: "hibob", effective_on: "2026-02-01" }.freeze
 
   setup do
@@ -119,6 +122,13 @@ class OrgGraph::PersonDevelopmentFeedTest < ActiveSupport::TestCase
     end
 
     assert_empty reconcile(@ada)
+  end
+
+  should "refuse while the assignments it plans from are rebuilt" do
+    while_rebuilding(@tenant, PersonDevelopment::Projections::CurrentAssessment) do
+      assert_raises(ProjectionVersion::Rebuilding) { reconcile(@ada) }
+    end
+    assert_not held(@ada).assigned?
   end
 
   context "the handler" do

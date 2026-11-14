@@ -8,7 +8,7 @@ Only HRIS-held people are fed. Someone Espalia holds keeps the assignment people
 
 The tenant's people must be cut over first ([org-graph-people-cutover.md](org-graph-people-cutover.md)); the cut-over refuses otherwise.
 
-The cut-over and its revert refuse to run while that tenant's sync is running. If one says `A sync is running`, wait for the sync to end and run it again.
+The cut-over and its revert refuse to run while that tenant's sync is running. If one says `A sync is running`, wait for the sync to end and run it again. The cut-over also refuses while `person_development/current_assessment`, `assessment_cycles/current_state` or `frameworks/published_state` is rebuilt; run it again once the rebuild ends.
 
 No deploy step: the change adds one nullable column and no projection.
 
@@ -45,6 +45,7 @@ No deploy step: the change adds one nullable column and no projection.
 - A manager is recorded when the HRIS names one, and cleared only when the HRIS itself recorded none. A withheld or unreadable manager field leaves it alone.
 - A title mapping edited between syncs lands with the next sync's sweep.
 - A command the domain refuses rolls back alone, is logged, and is counted under `errors`; the sweep tries again after the next sync.
+- While a projection the feed reads is rebuilt, every reconcile is refused. The sweep counts these under `skipped_while_rebuilding`, and the next sync's sweep catches them up.
 
 ## Reverting
 

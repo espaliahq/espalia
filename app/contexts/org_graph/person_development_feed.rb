@@ -22,6 +22,14 @@ class OrgGraph::PersonDevelopmentFeed
   # The reason a leaver's withdrawal and unassignment carry, as the sync's.
   OFFBOARD_REASON = "left_company"
 
+  # The projections a reconcile plans from: assignments, open enrollments,
+  # and the framework the title mapping resolves into.
+  PLANNED_FROM = [
+    PersonDevelopment::Projections::CurrentAssessment::PROJECTION_NAME,
+    AssessmentCycles::Projections::CurrentState::PROJECTION_NAME,
+    Frameworks::Projections::PublishedState::PROJECTION_NAME
+  ].freeze
+
   # @param tenant [Tenant]
   # @param apply [Boolean] issue the commands; false only reports them
   # @param org_graph [OrgGraph::Repository]
@@ -39,7 +47,14 @@ class OrgGraph::PersonDevelopmentFeed
 
   # @param person_id [String]
   # @return [Array<Symbol>] the changes made, or that would be made, from {KINDS}
+  # @raise [ProjectionVersion::Rebuilding] while a projection in {PLANNED_FROM} rebuilds
   def reconcile(person_id)
+    ProjectionVersion.unless_rebuilding(*PLANNED_FROM) { reconcile_unguarded(person_id) }
+  end
+
+  private
+
+  def reconcile_unguarded(person_id)
     person = Person.hris_managed.find_by(id: person_id)
     return [] if person.nil?
 
@@ -54,8 +69,6 @@ class OrgGraph::PersonDevelopmentFeed
     placed = place(person_id, stream, held)
     placed + manager(person, stream, held, assigned: held.assigned? || placed.include?(:assign))
   end
-
-  private
 
   # Every open cycle and every framework, as the sync's own sweep did, not
   # only the framework the title mapping assigns into.

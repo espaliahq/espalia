@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 class OrgGraph::PersonDevelopmentCutoverTest < ActiveSupport::TestCase
+  include RebuildLock
+
   HIBOB = { provider: "hibob", effective_on: "2026-02-01" }.freeze
 
   setup do
@@ -40,6 +43,13 @@ class OrgGraph::PersonDevelopmentCutoverTest < ActiveSupport::TestCase
 
     @tenant.update!(org_graph_people_projected_at: Time.current, person_development_fed_at: Time.current)
     assert_raises(ArgumentError) { @cutover.run(apply: false) }
+  end
+
+  should "refuse while a projection the feed reads is rebuilt" do
+    while_rebuilding(@tenant, AssessmentCycles::Projections::CurrentState) do
+      assert_raises(ProjectionVersion::Rebuilding) { @cutover.run(apply: true) }
+    end
+    assert_not @tenant.reload.person_development_fed?
   end
 
   should "refuse when the Org Graph disagrees beyond a manager clear" do

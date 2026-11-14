@@ -43,7 +43,30 @@ class OrgGraph::PersonDevelopmentCutover
   # @param confirm_clears [Integer, nil] the manager clears the operator saw counted
   # @return [Report]
   # @raise [ArgumentError] if the tenant is already fed or its people are not cut over
+  # @raise [ProjectionVersion::Rebuilding] while a projection the feed plans from rebuilds
   def run(apply:, confirm_clears: nil)
+    unless_rebuilding { run_unguarded(apply:, confirm_clears:) }
+  end
+
+  # Hands assignments, moves, offboarding and managers back to the HRIS
+  # sync. The next sync applies the title mapping as it did before.
+  def revert!
+    ActiveRecord::Base.transaction do
+      raise "A sync is running for this tenant; try again once it ends" unless exclusive_lock
+
+      @tenant.update!(person_development_fed_at: nil)
+    end
+  end
+
+  private
+
+  def unless_rebuilding(&)
+    ProjectionVersion.unless_rebuilding(*OrgGraph::PersonDevelopmentFeed::PLANNED_FROM, &)
+  rescue ProjectionVersion::Rebuilding
+    raise ProjectionVersion::Rebuilding, "A projection the feed reads is being rebuilt; run this again once the rebuild ends"
+  end
+
+  def run_unguarded(apply:, confirm_clears:)
     report = nil
     ActiveRecord::Base.transaction do
       @tenant.lock!
@@ -63,18 +86,6 @@ class OrgGraph::PersonDevelopmentCutover
     @tenant.reload
     report
   end
-
-  # Hands assignments, moves, offboarding and managers back to the HRIS
-  # sync. The next sync applies the title mapping as it did before.
-  def revert!
-    ActiveRecord::Base.transaction do
-      raise "A sync is running for this tenant; try again once it ends" unless exclusive_lock
-
-      @tenant.update!(person_development_fed_at: nil)
-    end
-  end
-
-  private
 
   def preview
     feed = OrgGraph::PersonDevelopmentFeed.new(@tenant, apply: false)

@@ -7,7 +7,9 @@
 # Each person is one short transaction under their stream lock and the
 # cut-over hold, so the run never holds the sync's lock and a revert waits
 # for one person, not the whole sweep. Running it twice changes nothing the
-# second time. The log holds counts and person ids only.
+# second time. A person whose reconcile a projection rebuild refuses is
+# counted under `skipped_while_rebuilding`, and the next sync's sweep takes
+# them up. The log holds counts and person ids only.
 #
 # @example
 #   OrgGraph::PersonDevelopmentSweepJob.perform_later(tenant)
@@ -17,7 +19,8 @@ class OrgGraph::PersonDevelopmentSweepJob < ApplicationJob
 
   # @param tenant [Tenant]
   # @param correlation_id [String, nil] the sync run it follows
-  # @return [Hash{Symbol => Integer}] a count for each change kind made, and `errors`
+  # @return [Hash{Symbol => Integer}] a count for each change kind made,
+  #   `skipped_while_rebuilding` and `errors`
   def perform(tenant, correlation_id: nil)
     counts = Hash.new(0)
     feed = OrgGraph::PersonDevelopmentFeed.new(tenant)
@@ -52,6 +55,8 @@ class OrgGraph::PersonDevelopmentSweepJob < ApplicationJob
       end
       changes.each { counts[it] += 1 }
     end
+  rescue ProjectionVersion::Rebuilding
+    counts[:skipped_while_rebuilding] += 1
   rescue => e
     Rails.logger.warn("[OrgGraph::PersonDevelopmentSweep] tenant=#{tenant.id} person=#{person_id} refused: #{e.class}: #{e.message}")
     counts[:errors] += 1

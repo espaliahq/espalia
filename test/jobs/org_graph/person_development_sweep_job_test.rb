@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 class OrgGraph::PersonDevelopmentSweepJobTest < ActiveSupport::TestCase
+  include RebuildLock
+
   HIBOB = { provider: "hibob", effective_on: "2026-02-01" }.freeze
 
   setup do
@@ -40,6 +43,15 @@ class OrgGraph::PersonDevelopmentSweepJobTest < ActiveSupport::TestCase
 
       assert_equal({ change_level: 1 }, sweep)
       assert_equal @e7.level_id, held.level_id
+    end
+
+    should "skip everyone while the assignments rebuild, then catch up" do
+      skipped = while_rebuilding(@tenant, PersonDevelopment::Projections::CurrentAssessment) { sweep }
+
+      assert_equal({ skipped_while_rebuilding: 1 }, skipped)
+      assert_not held.assigned?
+      replay(@tenant, PersonDevelopment::Projections::CurrentAssessment)
+      assert_equal({ assign: 1 }, sweep)
     end
   end
 
