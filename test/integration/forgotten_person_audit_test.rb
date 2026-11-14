@@ -2,19 +2,30 @@
 
 require "test_helper"
 
+# Each read's params, or its reason for being exempt, live in one file per tool
+# under forgotten_person_audit/, so lanes adding reads don't edit a shared hash.
+module ForgottenPersonAudit
+  WALKS = {}
+  EXEMPT = {}
+
+  ADD_A_FILE = <<~MSG
+    Add test/integration/forgotten_person_audit/<tool>.rb holding either
+    `ForgottenPersonAudit.walk("<tool>") { { ...params } }` or `ForgottenPersonAudit.exempt "<tool>", "<reason>"`.
+    (Before #218 these sat in one hash in this test; each read now has its own file.)
+  MSG
+
+  def self.walk(tool, &params) = WALKS[tool] = params
+  def self.exempt(tool, reason) = EXEMPT[tool] = reason
+end
+
+Dir[File.join(__dir__, "forgotten_person_audit/*.rb")].each { require it }
+
 # Every MCP read, run over data a forgotten person took part in, must show
 # them as a former member: never a blank name, an error or the erased name.
 # A new read operation fails here until it is walked or exempted.
 class ForgottenPersonAuditTest < ActiveSupport::TestCase
   ERASED_NAME = "Quinn Leaver"
   ERASED_EMAIL = "quinn.leaver@example.com"
-
-  # Reads that cannot meet a forgotten person, with the reason.
-  EXEMPT = {
-    "integrations_hris_field_preview" => "reads the live HRIS, which no longer holds a forgotten person",
-    "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person",
-    "team_planning_scenarios" => "returns scenario ids, periods and names; a name is free text editors are asked to keep people out of, not shredded until #209"
-  }.freeze
 
   setup do
     @tenant = create(:tenant)
@@ -42,16 +53,16 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
 
   should "show a forgotten person as a former member in every read" do
     reads = Operations::Registry.all.select { |op| op.category == :read }
-    unwalked = reads.map { |op| Operations::Registry.tool_name_for(op) } - params_by_tool.keys - EXEMPT.keys
-    assert_empty unwalked, "walk these reads here, or exempt them with a reason"
-    stale = params_by_tool.keys + EXEMPT.keys - reads.map { |op| Operations::Registry.tool_name_for(op) }
-    assert_empty stale, "these reads are gone: drop them here"
+    names = reads.map { |op| Operations::Registry.tool_name_for(op) }
+    covered = ForgottenPersonAudit::WALKS.keys + ForgottenPersonAudit::EXEMPT.keys
+    assert_empty names - covered, "These reads have no audit file. #{ForgottenPersonAudit::ADD_A_FILE}"
+    assert_empty covered - names, "These reads are gone: delete their files from test/integration/forgotten_person_audit"
 
     reached = reads.filter_map do |op|
       tool = Operations::Registry.tool_name_for(op)
-      next if EXEMPT.key?(tool)
+      next if ForgottenPersonAudit::EXEMPT.key?(tool)
 
-      output = op.call(context: lead_context, params: params_by_tool.fetch(tool)).as_json
+      output = op.call(context: lead_context, params: params_for(tool)).as_json
       json = output.to_json
       assert_no_match(/#{ERASED_NAME}|#{Regexp.escape(ERASED_EMAIL)}/o, json, "#{tool} shows the erased identity")
       blank = blank_names(output)
@@ -76,13 +87,13 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     planners = Operations::TeamPlanning::Planners.call(context: lead_context, params: {})
     assert_equal [ @lead.id ], (planners[:planners] + planners[:admins]).map { it[:person_id] }, "team_planning_planners lists a forgotten planner"
 
-    as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_by_tool.fetch("org_graph_as_of"))
+    as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_for("org_graph_as_of"))
     assert_equal [ @quinn.id ], as_of[:people].map { it[:id] }, "org_graph_as_of reads an empty Org Graph here"
     baseline = Operations::TeamPlanning::Baseline.call(context: lead_context, params: { plan_id: @plan_id })
     assert_equal [ @quinn.id ], baseline[:people].map { it[:id] }, "team_planning_baseline reads an empty Org Graph here"
     assert_equal [ @quinn.id ], baseline[:units].sole[:owner_ids]
     assert_equal Person::FORMER_MEMBER, baseline[:names].fetch(@quinn.id)
-    changes = Operations::OrgGraph::ChangesBetween.call(context: lead_context, params: params_by_tool.fetch("org_graph_changes_between"))
+    changes = Operations::OrgGraph::ChangesBetween.call(context: lead_context, params: params_for("org_graph_changes_between"))
     assert_includes changes[:changes].map { it[:person_id] }, @quinn.id, "org_graph_changes_between reads an empty Org Graph here"
   end
 
@@ -167,62 +178,12 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     TenantUser.where(person_id: @quinn.id).update_all(person_id: nil, user_id: nil, forgotten_at: Time.current)
   end
 
-  def params_by_tool
-    @params_by_tool ||= begin
-      assessment = { assignment_id: @assignment.id }
-      cell = { **assessment, capability_stable_id: @fx.shared.stable_id, level_ordinal: 2 }
-      framework = { framework_id: @fx.framework_id }
-      cycle = { cycle_id: @cycle_id }
-      {
-        "assessments_capability_get" => { **assessment, capability_id: @fx.shared.stable_id },
-        "assessments_comments_list" => { **cell, evidence_id: @evidence_id },
-        "assessments_evidence_list" => cell,
-        "assessments_evidence_requests_list" => {},
-        "assessments_evidence_suggestions_list" => assessment,
-        "assessments_explorations_list" => assessment,
-        "assessments_feedback_recipients" => { query: "former" },
-        "assessments_feedback_to_place" => {},
-        "assessments_get" => assessment,
-        "assessments_mine" => {},
-        "assessments_recent_activity" => {},
-        "assessments_timeline" => assessment,
-        "calibration_sessions_get" => { session_id: @session_id },
-        "calibration_sessions_list" => cycle,
-        "calibration_sessions_overview" => { session_id: @session_id },
-        "frameworks_capability_get" => { **framework, capability_id: @fx.shared.stable_id },
-        "frameworks_draft_changes" => framework,
-        "frameworks_get" => framework,
-        "frameworks_list" => {},
-        "frameworks_recent_activity" => framework,
-        "frameworks_suggestion_get" => { framework_id: @suggested_framework_id, suggestion_id: @suggestion_id },
-        "integrations_ai_model_status" => {},
-        "integrations_feedback_exchange_status" => {},
-        "integrations_hris_titles" => {},
-        "org_graph_activity" => { unit_id: @unit_id },
-        "org_graph_as_of" => { date: Date.current.iso8601, mode: "full" },
-        "org_graph_changes_between" => { from: 1.month.ago.to_date.iso8601, to: Date.current.iso8601, mode: "full" },
-        "org_graph_editors" => {},
-        "org_graph_person_get" => { person_id: @quinn.id },
-        "org_graph_sources" => {},
-        "org_graph_stale_facts" => { person_ids: [ @quinn.id ] },
-        "org_graph_units" => {},
-        "reporting_capability_attainment" => cycle,
-        "reporting_cycle_cohort" => { **cycle, mode: "full" },
-        "reporting_cycles_list" => {},
-        "reporting_evidence_coverage" => { **cycle, mode: "full" },
-        "reporting_feedback_export" => cycle,
-        "system_whoami" => {},
-        "team_planning_baseline" => { plan_id: @plan_id },
-        "team_planning_frozen_plans" => {},
-        "team_planning_plan" => { plan_id: @plan_id },
-        "team_planning_plan_members" => { plan_id: @plan_id },
-        "team_planning_planners" => {},
-        "team_planning_plans" => {},
-        "tenants_pay_bands" => {},
-        "tenants_forgetting_dry_run" => {}
-      }
-    end
-  end
+  def params_for(tool) = instance_exec(&ForgottenPersonAudit::WALKS.fetch(tool))
+
+  def assessment = { assignment_id: @assignment.id }
+  def cell = { **assessment, capability_stable_id: @fx.shared.stable_id, level_ordinal: 2 }
+  def framework = { framework_id: @fx.framework_id }
+  def cycle = { cycle_id: @cycle_id }
 
   # Paths to a name beside the forgotten person's id that is blank.
   def blank_names(node, path = [])

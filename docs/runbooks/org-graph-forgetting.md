@@ -8,7 +8,7 @@ Forgetting erases a leaver's email, external id and raw HRIS payload from their 
 
 Every screen, export, MCP read and report shows a forgotten person as "Former member". The name is stored that way, and a check constraint on `people` holds every forgotten row to it, so a query that plucks the column reads the stand-in too. Name searches skip forgotten people, so typing "former" offers none of them.
 
-A new MCP read must join the audit in `test/integration/forgotten_person_audit_test.rb`, or be exempted there with a reason. A read model that copies a person's name instead of joining `people` would keep the erased name, so join instead.
+A new MCP read must join the audit with a file of its own in `test/integration/forgotten_person_audit/`, walking it with params or exempting it with a reason. A read model that copies a person's name instead of joining `people` would keep the erased name, so join instead.
 
 ## What is not erased
 
