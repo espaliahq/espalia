@@ -200,4 +200,15 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
     assert read.eql?(written)
     assert_equal written.hash, read.hash
   end
+
+  should "keep a number read back eql? only to a number that hashes the same" do
+    publish(note_written(note: { "hours" => 1, "split" => [ 2 ] }))
+    read = read_back.data[:note]
+
+    assert read.eql?(Shreddable::Value.new({ "hours" => 1, "split" => [ 2 ] }))
+    assert_equal read, Shreddable::Value.new({ "hours" => 1.0, "split" => [ 2.0 ] })
+    assert_not read.eql?(Shreddable::Value.new({ "hours" => 1.0, "split" => [ 2 ] }))
+    assert_not read.eql?(Shreddable::Value.new({ "hours" => 1, "split" => [ 2.0 ] }))
+    assert_equal 1, { read => true, Shreddable::Value.new({ "hours" => 1, "split" => [ 2 ] }) => true }.size
+  end
 end

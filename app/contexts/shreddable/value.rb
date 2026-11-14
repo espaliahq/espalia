@@ -73,11 +73,22 @@ class Shreddable::Value
   #
   # @param other [Object]
   # @return [Boolean]
-  def ==(other) = other.is_a?(Shreddable::Value) && other.removed? == removed? && other.reveal == reveal
-  alias eql? ==
+  def ==(other) = same_state?(other) && other.reveal == reveal
+
+  # Stricter than {#==}, as a Hash key must be: 1 and 1.0 are equal but hash apart.
+  #
+  # @param other [Object]
+  # @return [Boolean]
+  def eql?(other) = same_state?(other) && other.reveal.eql?(reveal)
 
   # @return [Integer]
   def hash = [ Shreddable::Value, @removed, @value ].hash
+
+  private
+
+  def same_state?(other) = other.is_a?(Shreddable::Value) && other.removed? == removed?
+
+  public
 
   REMOVED = new(nil, removed: true)
 end
