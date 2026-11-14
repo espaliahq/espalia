@@ -22,16 +22,23 @@ class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
     end
   end
 
+  # Sets up without the lock: a transactional test holds a lock it takes until
+  # the test ends, which would hide whether the write under test takes it.
+  class UnlockedRepository < TeamPlanning::Repository
+    private def lock_stream(_stream) = nil
+  end
+
   setup do
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
     @editor = context_for(create(:person, tenant: @tenant), role: :admin)
     @viewer = context_for(create(:person, tenant: @tenant))
     @plan_id = SecureRandom.uuid_v7
-    handler(@editor).create_plan(@plan_id, name: "Next year", base_on: "2027-01-01")
-    handler(@editor).add_member(@plan_id, @viewer.person.id, role: "viewer")
+    unlocked = TeamPlanning::CommandHandler.new(actor: @editor, repository: UnlockedRepository.new)
+    unlocked.create_plan(@plan_id, name: "Next year", base_on: "2027-01-01")
+    unlocked.add_member(@plan_id, @viewer.person.id, role: "viewer")
     @q1 = SecureRandom.uuid_v7
-    handler(@editor).fork_scenario(@plan_id, @q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+    unlocked.fork_scenario(@plan_id, @q1, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
     @ada = SecureRandom.uuid_v7
   end
 
@@ -53,6 +60,7 @@ class TeamPlanning::CommandHandlerChangesTest < ActiveSupport::TestCase
   end
 
   should "hold the plan's lock from load to store, so a second editor's change loads after the first lands" do
+    assert try_lock_from_another_session, "nothing may hold the lock before the write"
     held = nil
     pausing = PausingRepository.new(-> { held = try_lock_from_another_session })
     TeamPlanning::CommandHandler.new(actor: @editor, repository: pausing)
