@@ -313,8 +313,10 @@ name with it. Left in clear, every name written before [#209](https://github.com
 events Espalia sanctions. Don't take it as precedent: the event store is append-only, and
 everything else here depends on that. It was acceptable once because:
 
-- **It touched little.** Three event types, `PlanCreated`, `PlanRenamed` and
-  `ScenarioForked`, all in one context, and only the name fields within them.
+- **It touched little.** Four event types, `PlanCreated`, `PlanRenamed`,
+  `ScenarioForked` and `ScenarioRenamed`, all in one context, and only the name fields
+  within them. No deployed build ever wrote a `ScenarioRenamed`: renaming shipped broken
+  and was fixed with its names sealed. The type is listed so a stray one can't stay in clear.
 - **It changes nothing a reader relies on.** Each record keeps its id, type, stream,
   order and timestamps, and every byte but the name fields and the `shreddable` entries
   in its metadata. A test compares the rest byte for byte.
@@ -328,10 +330,12 @@ everything else here depends on that. It was acceptable once because:
   migration.
 
 Run it once, after the deploy that ships [#209](https://github.com/espaliahq/espalia/issues/209),
-while no one is renaming a plan. The task takes no lock a rename waits on, so a rename
-during its rebuild can leave the old name in the plans read model. A second run won't
-repair that, as it finds nothing in clear and skips the rebuild; rebuild
-`team_planning/plans` instead.
+while no one is renaming a plan or scenario. The task takes no lock a rename waits on, so a
+rename during its rebuild can leave the old name in the plans or scenarios read model. A
+scenario rename reads the current name from that read model, so it can also record no
+previous name, or skip a rename it took for a repeat. A second run won't repair that, as it
+finds nothing in clear and skips the rebuild; rebuild `team_planning/plans` and
+`team_planning/scenarios` instead.
 
 ```bash
 bin/rails team_planning:names:dry_run
