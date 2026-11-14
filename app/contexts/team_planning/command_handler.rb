@@ -230,7 +230,47 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Takes back a change, pin or clear in a scenario. Without an event id, takes
+  # back the actor's own latest one that can be undone, as an Undo button does.
+  #
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param event_id [String, nil] the change's event id, from the scenario's history
+  # @return [String] the event id undone
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to undo
+  # @see TeamPlanning::PlanAggregate#undo_change
+  def undo_change(plan_id, scenario_id:, event_id: nil)
+    reverse(plan_id, scenario_id, event_id, :last_undoable_by, "You have nothing here to undo") do |plan, id|
+      plan.undo_change(scenario_id:, event_id: id, undone_by_id: actor_id!)
+    end
+  end
+
+  # Restores an undone change, pin or clear in a scenario. Without an event id,
+  # restores what the actor's own latest undo took back, as a Redo button does.
+  #
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param event_id [String, nil] the undone change's event id
+  # @return [String] the event id redone
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to redo
+  # @see TeamPlanning::PlanAggregate#redo_change
+  def redo_change(plan_id, scenario_id:, event_id: nil)
+    reverse(plan_id, scenario_id, event_id, :last_redoable_by, "You have nothing here to redo") do |plan, id|
+      plan.redo_change(scenario_id:, event_id: id, redone_by_id: actor_id!)
+    end
+  end
+
   private
+
+  def reverse(plan_id, scenario_id, event_id, pick, nothing)
+    chosen = nil
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      chosen = event_id.presence || plan.public_send(pick, scenario_id, actor_id!) or raise TeamPlanning::Error, nothing
+      yield plan, chosen
+    end
+    chosen
+  end
 
   def inherited(plan, scenario_id, subject_id, facet)
     from_id, change = plan.inherited_change(scenario_id, [ subject_id, facet ])

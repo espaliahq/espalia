@@ -82,6 +82,7 @@ class Components::Shell::PageLayout < Components::Base
       links << assessment_link if assessment_link
       links << { label: "Feedback / Evidence", href: "/evidence" } if show_evidence_link?
       links << { label: "Calibration", href: "/calibration_sessions" } if show_calibration_link?
+      links << { label: "Planning", href: "/planning" } if show_planning_link?
       links << { label: "Cycles", href: "/assessment_cycles" } if show_cycles_link?
       links << { label: "Admin", href: "/tenant" } if show_admin_link?
       mark_current(links)
@@ -103,6 +104,19 @@ class Components::Shell::PageLayout < Components::Base
   # @return [Boolean]
   def show_evidence_link?
     resolve_tenant_user&.person_id.present?
+  end
+
+  # Whether to show Planning: to those who may start a plan, and to anyone
+  # already in one. Asks {PlanPolicy}, so the link and the index agree.
+  #
+  # @return [Boolean]
+  def show_planning_link?
+    tenant_user = resolve_tenant_user
+    return false unless @current_tenant && tenant_user
+
+    context = AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: tenant_user.person)
+    PlanPolicy.new(context, TeamPlanningPlan).create? ||
+      PlanPolicy::Scope.new(context, TeamPlanningPlan.all).resolve.exists?
   end
 
   # Whether the current viewer can manage assessment cycles.

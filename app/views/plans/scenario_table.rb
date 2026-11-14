@@ -1,0 +1,90 @@
+# frozen_string_literal: true
+
+# A plan's scenarios as a tree (#226): the baseline first, read-only, and each
+# scenario under the one it follows or replaces.
+#
+# Later stories add columns (cost and capacity) through `extra_columns:`,
+# each a heading and a block that draws its cell for a scenario.
+class Views::Plans::ScenarioTable < Views::Base
+  # A column a later story adds: a heading, and how to draw its cell.
+  Column = Data.define(:heading, :cell)
+
+  # Columns beside the name show from `sm` up; below it they stack under the name.
+  WIDE = "hidden sm:table-cell"
+
+  # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
+  # @param extra_columns [Array<Column>]
+  def initialize(scenarios:, extra_columns: [])
+    @scenarios = scenarios
+    @extra_columns = extra_columns
+  end
+
+  def view_template
+    render Components::Kit::Card.new(variant: :flush) do |card|
+      card.body do
+        div(class: "overflow-x-auto") do
+          table(class: "w-full text-sm") do
+            thead do
+              tr(class: "border-b border-default text-left text-muted") do
+                th(scope: "col", class: "px-4 py-2 font-medium") { "Scenario" }
+                th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { "Period" }
+                @extra_columns.each { |column| th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { column.heading } }
+                th(scope: "col", class: "#{WIDE} px-4 py-2 font-medium") { "State" }
+              end
+            end
+            tbody(class: "divide-y divide-subtle") { ordered.each { |scenario, depth| row(scenario, depth) } }
+          end
+        end
+      end
+    end
+  end
+
+  private
+
+  def row(scenario, depth)
+    baseline = scenario[:parent_id].nil?
+    tr(data: { scenario_id: scenario[:scenario_id] }) do
+      td(class: "px-4 py-3 align-top") do
+        div(style: ("padding-left: #{depth * 1.25}rem" if depth.positive?)) do
+          p(class: "font-medium text-default") do
+            span(class: "text-muted font-normal") { "#{scenario[:relation]} " } if scenario[:relation]
+            plain(baseline ? "Today" : scenario[:name])
+          end
+          p(class: "text-muted") { "The Org Graph. Nothing set by this plan." } if baseline
+          div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
+            span { period(scenario) }
+            state(baseline)
+          end
+        end
+      end
+      td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period(scenario) }
+      @extra_columns.each { |column| td(class: "#{WIDE} px-4 py-3 align-top") { column.cell.call(scenario) } }
+      td(class: "#{WIDE} px-4 py-3 align-top") { state(baseline) }
+    end
+  end
+
+  def state(baseline)
+    render Components::Kit::Badge.new(baseline ? "Read only" : "Draft", tone: baseline ? :neutral : :info)
+  end
+
+  def period(scenario)
+    starts = Date.iso8601(scenario[:starts_on])
+    return "As of #{starts.strftime('%-d %b %Y')}" if scenario[:parent_id].nil?
+    return "From #{starts.strftime('%-d %b %Y')}" unless scenario[:ends_on]
+
+    ends = Date.iso8601(scenario[:ends_on])
+    whole_months = starts.day == 1 && ends == ends.end_of_month
+    unit = whole_months ? "%b" : "%-d %b"
+    return starts.strftime("%b %Y") if whole_months && starts.month == ends.month && starts.year == ends.year
+
+    first = starts.year == ends.year ? starts.strftime(unit) : starts.strftime("#{unit} %Y")
+    "#{first} to #{ends.strftime("#{unit} %Y")}"
+  end
+
+  # Depth-first from the baseline, so each scenario sits under its parent.
+  def ordered
+    children = @scenarios.group_by { it[:parent_id] }
+    walk = ->(scenario, depth) { [ [ scenario, depth ], *(children[scenario[:scenario_id]] || []).flat_map { walk.(it, depth + 1) } ] }
+    (children[nil] || []).flat_map { walk.(it, 0) }
+  end
+end
