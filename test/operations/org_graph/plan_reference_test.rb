@@ -53,10 +53,12 @@ class Operations::OrgGraph::PlanReferenceTest < ActiveSupport::TestCase
 
   should "leave a direct edit unattributed, under its own cause" do
     rename
+    call(Operations::OrgGraph::RenameUnit, unit_id: @org[:checkout], name: "Till")
 
-    event = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitRenamed).last
-    assert_nil event.data[:plan_id]
-    assert_nil event.data[:plan_change_id]
+    first, second = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitRenamed).to_a.last(2)
+    assert_nil first.data[:plan_id]
+    assert_nil first.data[:plan_change_id]
+    assert_not_equal first.metadata[:correlation_id], second.metadata[:correlation_id]
   end
 
   context "until plans exist" do
@@ -94,6 +96,20 @@ class Operations::OrgGraph::PlanReferenceTest < ActiveSupport::TestCase
       assert written.size > 1
       assert_equal [ @cause_id ], written.map { it.metadata[:correlation_id] }.uniq
       assert_equal [ @plan_id ], written.map { it.data[:plan_id] }.uniq
+    end
+
+    should "carry the plan through a split, its leavers' ended memberships included" do
+      before = Rails.configuration.event_store.read.count
+      with_plan_access do
+        call(Operations::OrgGraph::SplitUnit, unit_id: @org[:platform], successor_names: %w[Core Edge],
+                                              placements: { @org[:ada].id => "Core" },
+                                              plan_id: @plan_id, plan_change_id: @plan_change_id, cause_id: @cause_id)
+      end
+
+      written = events_since(before)
+      assert_includes written.map(&:class), OrgGraph::Events::MembershipEnded
+      assert_equal [ @cause_id ], written.map { it.metadata[:correlation_id] }.uniq
+      assert_equal [ [ @plan_id, @plan_change_id ] ], written.map { it.data.values_at(:plan_id, :plan_change_id) }.uniq
     end
 
     should "stamp the reference on a membership a plan places" do
