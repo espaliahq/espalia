@@ -36,8 +36,9 @@ module Operations::TeamPlanning::MapPayload
   def people_payload(map)
     totals = map.allocation_totals
     map.people.map do |person|
-      person.to_h.except(:departure, :planned_level, :plan_data, :placeholder)
+      person.to_h.except(:departure, :planned_level, :plan_data, :placeholder, :capacity_overrides)
             .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
+                   capacity_overrides: person.capacity_overrides.transform_values { sealed_payload(it) },
                    placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
                    leaving: person.leaving?, backfill_position_id: person.backfill_id)
     end

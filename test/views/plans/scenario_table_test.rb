@@ -38,6 +38,17 @@ class Views::Plans::ScenarioTableTest < ActiveSupport::TestCase
     end
   end
 
+  should "show a scenario's description under its name, as prose" do
+    baseline = { scenario_id: "plan", parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-14", ends_on: nil }
+    q1 = step("2027-01-01", "2027-03-31").merge(name: "Q1 hires", description: "Hire **two** seniors")
+    html = Nokogiri::HTML5.fragment(render_view(Views::Plans::ScenarioTable.new(plan_id: "plan", scenarios: [ baseline, q1 ])))
+
+    prose = html.css("tbody tr")[1].at_css("td .md-prose")
+    assert_equal "Hire two seniors", prose.text.strip
+    assert prose.at_css("strong")
+    assert_nil html.css("tbody tr")[0].at_css(".md-prose")
+  end
+
   should "draw a visible kebab on each row's menu, sized to stay inside the table" do
     baseline = { scenario_id: "plan", parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-14", ends_on: nil }
     html = Nokogiri::HTML5.fragment(render_view(Views::Plans::ScenarioTable.new(plan_id: "plan", scenarios: [ baseline ], can_edit: true)))

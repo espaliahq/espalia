@@ -1,9 +1,10 @@
 # Shreddable event fields — design
 
 > Status: partly built. The plan key store, the declaration and the guard are built;
-> [What is built](#what-is-built) says what they do. Team Planning's plan and scenario
-> names, plan-held values and notes on changes declare shreddable fields.
-> [The index](README.md) lists the companion designs, the mockups and the plan.
+> [What is built](#what-is-built) says what they do. Plan and scenario names and scenario
+> descriptions are shreddable under the plan's key, as are plan-held values. A note on a
+> change seals under its subject's key: a person's for a change about a person, the plan's
+> otherwise. [The index](README.md) lists the companion designs, the mockups and the plan.
 
 Events are immutable. Some of what they should hold must be forgettable: a salary pasted
 into a plan, a note about why someone is moving, a reason for a change in hours. A
@@ -61,6 +62,12 @@ We supply:
 - **The guard** described below.
 
 ## What is built
+
+**A scenario's description is sealed in `TeamPlanning::Events::ScenarioDescribed`** and
+in the scenarios read model's `description` column. The plan aggregate never sees the text
+it wrote, so `Operations::TeamPlanning::DescribeScenario` reads what the scenario holds
+from that row, by id, under the plan's lock, and the aggregate writes nothing for the same
+text. While a rebuild holds the read model the operation writes rather than guess.
 
 `PlanKeyStore` holds the keys in the `plan_encryption_keys` table, one row per key, and
 answers RailsEventStore's key repository interface: `key_of`, `create` and `forget`.

@@ -16,9 +16,11 @@ class Operations::TeamPlanning::History < Operations::Base
   description "List the history of a scenario of a Team Planning plan the caller is in, oldest first, " \
               "#{PER_PAGE} entries a page, with next_page true when another follows: every " \
               "change it set, pin and clear it made, every undo and redo of one, and every note written on one, with " \
-              "who did it and when. action is set, pin, clear, undo, redo or note; an undo or redo names the entry " \
+              "who did it and when. action is set, pin, clear, undo, redo, note or rebase; an undo or redo names the entry " \
               "it reverses in reverses_event_id, and a note names the change it notes in noted_event_id, with " \
-              "no note when it cleared it. An entry that stands undone says who undid it. A change, pin or note entry shows its note " \
+              "no note when it cleared it. The baseline's history also lists each update to today as action rebase, " \
+              "whose end_state holds base_on, previous_base_on and the conflicts it carried forward. " \
+              "An entry that stands undone says who undid it. A change, pin or note entry shows its note " \
               "as note: { value }, or { removed: true } once the plan is deleted. Any other value " \
               "that can be erased is never shown here: sealed_fields names any such field. A forgotten person reads as " \
               "\"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the caller is a member."

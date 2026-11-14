@@ -13,8 +13,12 @@ class Operations::TeamPlanning::Status < Operations::Base
               "facet the scenario resolves, from its own changes and those it inherits from the scenarios it " \
               "follows; scenario_id says which scenario made it (the plan_id is the baseline). 'done' when today " \
               "reads the planned end state, 'pending' when today still reads what the plan's base held or what " \
-              "the step before plans, 'conflicting' when it reads none of these, 'unknown' when the plan's value was private and has since been removed; before the plan's base date " \
-              "nothing reads conflicting. A person's placements are one facet, so a placement list is " \
+              "the step before plans, 'conflicting' when it reads none of these, 'unknown' when the plan's value " \
+              "was private and has since been removed; before the plan's base date nothing reads conflicting. A " \
+              "conflict an update to today carried forward still reads 'conflicting', with since the day of the " \
+              "update that first found it, while the scenario still resolves to the same change: a set, pin, " \
+              "clear or undo ends it. A change that reads done or unknown keeps that status; otherwise since is " \
+              "null. A person's placements are one facet, so a placement list is " \
               "done only when the whole list matches. The Org Graph can't say which position someone fills, only " \
               "where they are, so a placement in a position is done once the person is in the position's unit at " \
               "its allocation, with its role only when the plan names one. A change the Org Graph never holds, " \
@@ -38,7 +42,7 @@ class Operations::TeamPlanning::Status < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Status.new(context:, plan:, scenario_id:).call }
     { plan_id: plan.id, scenario_id:, on: report.on.iso8601,
-      statuses: report.statuses.map { it.to_h.merge(status: it.status.to_s) },
+      statuses: report.statuses.map { it.to_h.merge(status: it.status.to_s, since: it.since&.iso8601) },
       names: report.names }
   end
 end

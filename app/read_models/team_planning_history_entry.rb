@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-# One entry of a scenario's history: a change, pin or clear it made, or an
-# undo or redo of one, with who did it and when.
+# One entry of a scenario's history: a change, pin or clear it made, an
+# undo or redo of one, or, in the baseline, an update to today, with who did
+# it and when.
 #
 # Projected from the plan streams by {TeamPlanning::Projections::History},
 # and nothing else writes it. Its id is the event's, so a rebuild keeps it.
@@ -13,7 +14,7 @@
 class TeamPlanningHistoryEntry < ApplicationRecord
   include Shreddable::Column
 
-  ACTIONS = %w[set pin clear undo redo note].freeze
+  ACTIONS = %w[set pin clear undo redo note rebase].freeze
 
   shreddable_column :note, by: :person, person: TeamPlanning::ChangeKinds::NOTED_PERSON
 
