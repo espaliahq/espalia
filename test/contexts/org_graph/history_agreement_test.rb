@@ -220,6 +220,31 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
       assert_equal({ @payments => 0.8 }, allocations_as_of("2026-04-16"))
       assert_equal({ @payments => 0.8 }, live_allocations)
     end
+
+    should "refuse to change back a set that moved the day she joined earlier, and write nothing" do
+      later("2026-04-15") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-01-10", allocation: 0.5) }
+      change_back = OrgGraph::ChangeBackHandler.new(actor: SYSTEM)
+      entry = as_tenant { OrgUnitActivity.for_unit(@payments).first }
+      reason = "This moved the day they joined earlier, which can't be undone yet"
+
+      assert_equal reason, as_tenant { change_back.refusal(entry) }
+      error = assert_raises(RuntimeError) { later("2026-04-16") { change_back.change_back(entry) } }
+      assert_equal reason, error.message
+      assert_not as_tenant { entry.reload.changed_back? }
+      assert_equal 0.5, history("membership", "2026-01-15", key: @payments)["allocation"]
+      assert_equal on("2026-01-10"), as_tenant { OrgMembership.find_by!(person_id: @ada.id, unit_id: @payments).member_since }
+    end
+
+    should "change back a change of terms dated the day she joined" do
+      later("2026-03-01") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8) }
+      later("2026-04-15") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-01", allocation: 1.0) }
+
+      later("2026-04-16") do
+        OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back(OrgUnitActivity.for_unit(@payments).first)
+      end
+
+      assert_equal [ 0.5, 0.8 ], %w[2026-02-15 2026-03-15].map { history("membership", it, key: @payments)["allocation"] }
+    end
   end
 
   context "a membership ended on a date" do

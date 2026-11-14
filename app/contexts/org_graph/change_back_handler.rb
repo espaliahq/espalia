@@ -144,29 +144,38 @@ class OrgGraph::ChangeBackHandler
       raise "This change has already been changed back" if entry.changed_back?
       raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA
     end
-    return if entries.all? { |entry| entry.latest?(apart_from:) }
+    raise "A later change has replaced this one; change that back first" unless entries.all? { |entry| entry.latest?(apart_from:) }
+    return unless entries.any? { |entry| moved_start_earlier?(entry) }
 
-    raise "A later change has replaced this one; change that back first"
+    raise "This moved the day they joined earlier, which can't be undone yet"
+  end
+
+  # A set dated before the membership it changed gave that membership an
+  # earlier start. No command withdraws those days (#154), so its inverse
+  # would only set the same terms on the same day again.
+  def moved_start_earlier?(entry)
+    entry.event_type == "MembershipSet" && entry.before && terms_known_before(entry).nil?
   end
 
   def undo_membership_set(entry, options)
     return @people.end_membership(entry.person_id, entry.unit_id, provider: ESPALIA, **options) unless entry.before
 
-    terms = (terms_replaced_by(entry) || entry.before).symbolize_keys.slice(:allocation, :role)
+    terms = terms_known_before(entry).symbolize_keys.slice(:allocation, :role)
     @people.set_membership(entry.person_id, entry.unit_id, **terms, provider: ESPALIA, **options)
   end
 
-  # The entry's `before` is the change learned before it, which a backdated
-  # change sits ahead of. The terms it replaced are those history held for
-  # its own date until it was learned, whether they took effect earlier or
-  # on that same date.
-  def terms_replaced_by(entry)
-    OrgFactPeriod.where(learned_at: ...entry.learned_at)
-                 .where("superseded_at IS NULL OR superseded_at >= ?", entry.learned_at)
-                 .in_effect_on(entry.effective_on)
-                 .where(subject_type: OrgGraph::Projections::History::PERSON, subject_id: entry.person_id,
+  # The terms in effect on the entry's day as the history knew them just before
+  # it. The entry's `before` is the change learned before it, which a backdated
+  # change sits ahead of. Event ids, not timestamps, since events can share one.
+  def terms_known_before(entry)
+    membership_periods(entry).where.not(learned_by_event_id: entry.event_id)
+                             .where("superseded_by_event_id IS NULL OR superseded_by_event_id = ?", entry.event_id)
+                             .in_effect_on(entry.effective_on).pick(:value)
+  end
+
+  def membership_periods(entry)
+    OrgFactPeriod.where(subject_type: OrgGraph::Projections::History::PERSON, subject_id: entry.person_id,
                         fact: "membership", key: entry.unit_id)
-                 .pick(:value)
   end
 
   def undo_membership_ended(entry, options)
