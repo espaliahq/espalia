@@ -142,4 +142,16 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
 
     assert_predicate damaged, :removed?
   end
+
+  should "refuse a shreddable write outside a transaction, so its key stays locked until the append" do
+    PlanEncryptionKey.connection.stub(:transaction_open?, false) do
+      assert_raises(ArgumentError) { publish(note_written) }
+    end
+  end
+
+  should "write an event that declares nothing outside a transaction" do
+    PlanEncryptionKey.connection.stub(:transaction_open?, false) do
+      assert_nothing_raised { publish(Copied.new(data: { plan_id: @plan_id })) }
+    end
+  end
 end

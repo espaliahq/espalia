@@ -33,7 +33,8 @@ class Shreddable::Mapper
 
   # @param events [Array<RubyEventStore::Event>]
   # @return [Array<RubyEventStore::Record>]
-  # @raise [ArgumentError] for a removed value, or an event without a tenant
+  # @raise [ArgumentError] for a removed value, an event without a tenant, or
+  #   a shreddable event written outside a transaction
   # @raise [PlanKeyStore::Destroyed] for a deleted plan or a forgotten person
   def events_to_records(events) = @inner.events_to_records(events.map { encrypt(it) })
 
@@ -52,6 +53,10 @@ class Shreddable::Mapper
     return event if fields.empty?
 
     tenant_id = event.metadata[:tenant_id] or raise ArgumentError, "A shreddable event needs a tenant"
+    # The key's lock lasts until the transaction commits, and the append runs
+    # after this returns, so without one a destroy could land in between.
+    raise ArgumentError, "Publish a shreddable event inside a transaction" unless PlanEncryptionKey.connection.transaction_open?
+
     keys = {}
     data = event.data.dup
     description = fields.to_h do |field|
