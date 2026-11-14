@@ -13,6 +13,14 @@
 # resolves them), never through today's framework assignment, which would
 # mix dates.
 #
+# A planner's override replaces a priced place's figure, and the working
+# ends with it, so a reader sees the calculated figure behind it. An override
+# the plan can no longer read, because its person was forgotten, leaves the
+# place counting nowhere: falling back to the model would state a figure the
+# planner chose to replace. A place that counts nowhere for another reason,
+# such as a leaver's, keeps that reason, and is marked overridden so the
+# override doesn't vanish.
+#
 # A place whose role no model covers counts nowhere and is listed as
 # unclassified, with why. A place in a unit gone from the map is still
 # counted for the plan, under no unit. Figures stay exact Rationals.
@@ -33,7 +41,8 @@ class TeamPlanning::Capacity
     "leaving" => "The person leaves in this step, so a backfill position carries the seat if the plan gives one",
     "no_level" => "The level resolves to none, so the model has nothing to price",
     "no_model" => "No capacity model is chosen for the role or its family",
-    "unknown_model" => "The chosen capacity model isn't available"
+    "unknown_model" => "The chosen capacity model isn't available",
+    "override_unknown" => "A planner overrode this figure, and the override can't be read since the person was forgotten"
   }.freeze
 
   TITLE_REASONS = {
@@ -60,7 +69,11 @@ class TeamPlanning::Capacity
   # @!attribute chosen_for [String, nil] "role" or "family"
   # @!attribute figure [TeamPlanning::CapacityModel::Figure, nil] nil when unclassified
   # @!attribute reason [String, nil] a {REASONS} key when unclassified
-  Place = Data.define(:place, :model, :chosen_for, :figure, :reason) do
+  # @!attribute calculated [TeamPlanning::CapacityModel::Figure, nil] the model's figure, when an override replaced it
+  # @!attribute overridden [Boolean] the plan holds an override for the place, applied or not
+  Place = Data.define(:place, :model, :chosen_for, :figure, :reason, :calculated, :overridden) do
+    def initialize(calculated: nil, overridden: false, **) = super
+
     # @return [Boolean]
     def unclassified? = reason.present?
 
@@ -83,6 +96,7 @@ class TeamPlanning::Capacity
   def call
     @map = @resolution.call
     @positions = @rules = @own_levels = nil
+    @overrides = @map.people.to_h { [ it.id, it.capacity_overrides ] }
     @live = @map.units.to_set(&:id)
     people = @map.people.map { person_seat(it) }
     seats = people + open_positions(people)
@@ -97,23 +111,12 @@ class TeamPlanning::Capacity
   def person_seat(member)
     fte_known = ![ nil, TeamPlanning::Baseline::UNKNOWN ].include?(member.planned_or_own(:fte))
     fte = exact(member.fte_or_one)
-    own = own_target(member)
+    own = member.own_target(titles)
     placements = member.memberships.presence || [ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]
     places, reasons = TeamPlanning::Baseline::Membership.shares(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
     reasons = reasons.map { "leaving" } if member.leaving?
     (@own_levels ||= {})[member.id] = own.level&.level_id
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]
-  end
-
-  # A level the plan holds wins over a title mapping's fixed level, so one it
-  # can't resolve, removed or not a level ordinal, leaves the level unresolved.
-  def own_target(member)
-    level = member.planned_or_own(:level)
-    ordinal = Integer(level, exception: false)
-    return titles.target(member.title, ordinal) unless member.planned_level || member.plan_data[:level]
-
-    own = titles.target(member.title, ordinal, planned_ordinal: ordinal)
-    ordinal ? own : own.with(level: nil, ordinal: nil)
   end
 
   def person_place(placement, allocation, known, own)
@@ -145,6 +148,15 @@ class TeamPlanning::Capacity
   end
 
   def price(seat, place, reason, families)
+    priced = model_price(seat, place, reason, families)
+    override = @overrides.dig(seat.id, place.position_id || place.unit_id)
+    return priced unless override
+    return priced.with(overridden: true) if priced.unclassified?
+
+    overridden(priced, override)
+  end
+
+  def model_price(seat, place, reason, families)
     return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason:) if reason
     return Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "unknown_role") unless families.key?(place.role_id)
 
@@ -158,6 +170,15 @@ class TeamPlanning::Capacity
     return Place.new(place:, model:, chosen_for:, figure: nil, reason: figure.reason) if figure.reason
 
     Place.new(place:, model:, chosen_for:, figure:, reason: nil)
+  end
+
+  def overridden(priced, override)
+    return priced.with(figure: nil, reason: "override_unknown", calculated: priced.figure, overridden: true) if override.removed?
+
+    calculated = priced.figure
+    amount = exact(override.reveal)
+    step = Model::Step.new(label: "Planner's override, in place of #{decimal(calculated.amount)}", amount:, op: "=")
+    priced.with(figure: Model::Figure.new(amount:, working: calculated.working + [ step ]), calculated:, overridden: true)
   end
 
   # A unit gone from the map takes its rules with it, so its places follow
@@ -196,4 +217,6 @@ class TeamPlanning::Capacity
   def titles = @titles ||= Integrations::HrisTitleResolution.new(@plan.tenant)
 
   def exact(value) = Rational(value.to_s)
+
+  def decimal(value) = BigDecimal(value, 20).round(4).to_s("F").delete_suffix(".0")
 end

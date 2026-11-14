@@ -86,7 +86,7 @@ Every change event has the same shape:
 | Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
-| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
+| People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
 | Budget | `BudgetLineSet`, `BudgetLineCut`, `PositionFundingSet` (position draws on budget lines) |
 | Plan data | `PlanDataSet` (person, field, value), `PlaceholderSet` (a hire the HRIS doesn't know: label, level, FTE) |
 | Rules | `RuleSet` (configuration, capacity model, budget strictness, guardrail, assumption) |
@@ -137,6 +137,34 @@ In code, each change kind subclasses `TeamPlanning::Events::Change`, names its f
 says how its end state lands on a map. `TeamPlanning::Resolution` reads
 `TeamPlanning::Baseline#structure`, applies the winning change for each subject and facet
 along the resolution chain, and joins names last.
+
+### The timeline as built
+
+`TeamPlanning::Timeline` (the `team_planning_timeline` tool) reads one timeline path and
+stores nothing. It resolves each step as the map does, then lays the steps out as columns.
+The tab ([#289](https://github.com/espaliahq/espalia/issues/289)) draws what it returns and
+decides none of these rules:
+
+- **Blocks.** A unit is one block across the columns it lives in, so a rename changes the
+  label, not the block. A unit that succeeds exactly one other continues that block. A split
+  or a merge starts new blocks that name the ones they carry on from.
+- **Lanes.** A lane belongs to a person and lasts while they are on the map, placed or not.
+  Someone in two places at once has one lane with two bars, and that is no move.
+- **Moves.** A move names the units a person left and joined between two columns. Carrying
+  on into a unit's successor in the same block is no move. Placed in
+  no live unit reads as Unassigned, so a lane never vanishes because its person lost a place.
+- **Backfills.** A leaver's lane records the step they leave in, and the position that
+  backfills them carries on in it, naming who it replaces. A new position gets a lane of its
+  own, and the first person to fill it takes that lane, so a seat and its hire read as one head.
+  A seat shared by two hires gives its lane to one of them. A backfill shared by two leavers
+  runs in the lane of the first, the one its `replaces_id` names.
+- **Order.** Blocks come in the order they first appear. Lanes come by the column they first
+  appear in, people before positions, then by name and id.
+- **Names.** Lanes and blocks carry ids, and names come from the map's own lookup, so a
+  forgotten person keeps their lane under Person::FORMER_MEMBER.
+
+The baseline is read once and every step resolves over it, so each column sees the same Org
+Graph and the read costs one Org Graph query whatever the path's length.
 
 ### Unit changes as built
 
@@ -232,8 +260,12 @@ facet, so a later step or an alternative can have the person stay.
 - **Planned, not Org Graph leavers.** Someone the Org Graph has leave by the base date is off
   the map from the start, and the plan shows where it still places them (decision 6 in the
   plan). A departure is the plan's own statement.
-- **The step is the date for now.** Costing part of a period (5.4) adds an optional leaving
-  date within the step.
+- **A leaving date is optional.** `leaves_on` names their last day, within the step's
+  period, and cost splits the step there: the leaver costs up to it, the backfill from the
+  day after. Without one the step is the date, so the leaver costs nothing in it and the
+  backfill carries the whole step. A departure set before dates existed carries no
+  `leaves_on` and reads the same way. The baseline has no period, so a departure there
+  takes no date.
 
 ### Needing attention as built
 
@@ -301,7 +333,7 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. The kinds so far are `capacity_model` (7.1) and `on_cost` (5.2), both below; 8.1 brings more.
+object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2) and `working_hours` (5.4), all below; 8.1 brings more.
 
 `RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
 that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
@@ -342,9 +374,13 @@ once, at report time (5.3).
 
 The `on_cost` rule chooses the model and its params. Its default adds nothing, so a plan
 costs base pay alone until a tenant or plan chooses. Read at a seat's unit, a unit can
-price its subtree differently. 5.4 prices positions with
+price its subtree differently. Cost prices each seat with
 `TeamPlanning::RuleKinds::OnCost.on_cost_of`. Rates are tenant configuration, as pay bands
 are, not a person's data, so the rule is not shreddable.
+
+The `working_hours` rule says how many hours a full-time seat works in a year, so an
+hourly pay band can price a year. Its default is 40 hours a week for 52 weeks: 2,080.
+A month band is twelve months; a year band is itself.
 
 ### Capacity as built
 
@@ -382,6 +418,19 @@ A place no model covers counts nowhere and is listed as unclassified with its re
 title, a title mapped to no role, a role not in the framework, a position since closed, no
 model chosen, or a model no longer registered. A place in a unit gone from the map counts
 for the scenario but under no unit.
+
+**A planner's override** (7.3, `CapacitySet`) replaces one place's figure: a person's
+capacity in a position, or straight in a unit, as a number in that place's model's units.
+Each place is its own facet, `capacity:<position or unit id>`, so clearing one keeps the
+others. The model still prices the place: its figure rides along as `calculated`, and the
+working ends with an "=" step naming it, so a reader sees what the planner replaced. An
+override applies only to a place a model prices, so it never turns an unclassified place
+or a leaver into a count; such a place keeps its reason and is marked `overridden`, so the
+override stays visible. The amount is the plan's judgement about a named person, so it
+seals under their key like a planned level. Once they are forgotten the place counts
+nowhere, with the reason "override_unknown", and never falls back to the model's figure.
+The write refuses only a malformed override; one on a place the person doesn't hold in the
+step is an Attention item.
 
 A model gets the whole map with each seat, and `Facts`: each seat's level ordinal, its
 roles and an open seat's FTE. Totals are kept per model, per unit and for the scenario, and never
@@ -443,6 +492,44 @@ flatters a scenario.
 - **A leaver keeps the positions they fill filled for the step**, so their capacity goes to
   their backfill or nowhere. Reopening those positions too would count the seat twice
   whenever a backfill exists.
+
+### Cost as built
+
+`TeamPlanning::Cost` prices a scenario over its period and prices the baseline over the
+same days, so the two compare ([#288](https://github.com/espaliahq/espalia/issues/288)).
+The baseline has no period of its own, so it is never the scenario costed.
+`team_planning_cost` sends the totals, each unit and each cost centre, and the working of
+every seat only for a unit the caller names.
+
+- **A seat** is a person, or the FTE a position's occupants leave open, as capacity counts it.
+- **Its level** is the person's own, a planned one winning. When theirs resolves to none,
+  the position's level prices it, and the working says so (`level_source`). An open seat
+  takes its position's level.
+- **Its band** is the one for that level and the person's country, else the band for any
+  location. An open seat has no country, so it takes the band for any location.
+- **Its figure** is the band's midpoint for a full-time year (`working_hours` for an hourly
+  band), times FTE, times its place's share of the seat, times the days held out of 365.
+  The `on_cost` rule at its unit adds on-cost. A person's places always share their whole
+  seat, so units and cost centres sum to the plan's total.
+- **A leaver and their backfill** split one seat at the leaving date and never overlap:
+  the leaver costs up to it, the backfill from the next day. A leaver with no date costs
+  nothing in the period, and their backfill holds the whole of it. A backfill for several
+  leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
+  period any FTE no leaver opens.
+- **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
+  until positions carry a cost-centre label in 6.2. No cost centre is a bucket of its own,
+  counted like any other.
+- **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
+  that refuses it, or a level or FTE lost with a forgotten person's key), never counted
+  as zero.
+
+Every figure stays in its band's currency, exact, and the totals hold one sum per currency.
+Each converts once, at the read, at the rate in force on the period's first day. A missing
+rate leaves the converted total empty and names the pair and the date. Only the display
+rounds. Plans reprice live: a changed band changes every plan's cost, and the report says
+when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
+time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
+to a rate, reprices plans too but does not move the stamp.
 
 ### Clearing and pinning
 
@@ -920,7 +1007,7 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 | Cost and budget | Approved, funded, remaining and unfunded, per unit and cost centre. |
 | Capacity | Per model, per unit, with each person's working. |
 | Capability profile | Per unit and per position, under the existing cohort rule. |
-| Timeline | One path through the scenario tree, with lanes and moves. |
+| Timeline | One path through the scenario tree, with lanes and moves. Read on demand by `TeamPlanning::Timeline`, not stored. |
 | Headcount walk | Per step and unit: opening, hires, known and expected departures, transfers, closing. Drawn as a lane of the timeline. |
 | Checks | Every warning, with guardrail checks marked. |
 | Change list | The approved changes with their derived status. |

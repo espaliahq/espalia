@@ -20,8 +20,14 @@ class Operations::TeamPlanning::Capacity < Operations::Base
               "model covers counts nowhere and is listed in `unclassified` with its reason. Each working step has " \
               "an op (+, × or =) and, where it charges for someone or an open seat, a subject_id. A figure is " \
               "overloaded when what the seat costs to manage beats its base, by `excess`, and its notes say what a " \
-              "reader should know, such as an open seat that counts against no manager. Figures are decimal " \
-              "strings. People are named by id, and `names` maps each to a name. Refused, as an unknown plan, " \
+              "reader should know, such as an open seat that counts against no manager. A planner's override " \
+              "(team_planning_set_capacity_override) replaces a place's capacity, its working ends with the override, " \
+              "and `calculated` carries the model's figure, with that figure's overloaded, excess and notes in " \
+              "`calculated_diagnostics` while the top-level ones describe the planner's figure. An override the " \
+              "plan can't read, since its person was forgotten, leaves the place unclassified with the model's " \
+              "figure still in `calculated`. `overridden` marks every place the plan holds an override for, so one " \
+              "on a place that counts nowhere for another reason, such as a leaver's, stays visible. Figures are " \
+              "decimal strings. People are named by id, and `names` maps each to a name. Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
   approval :none
@@ -63,20 +69,26 @@ class Operations::TeamPlanning::Capacity < Operations::Base
     { unit_id: place.unit_id, position_id: place.position_id, allocation: decimal(place.allocation),
       allocation_known: place.allocation_known, role_id: place.role_id, level_id: place.level_id,
       model: priced.model, chosen_for: priced.chosen_for, capacity: priced.figure && decimal(priced.figure.amount),
-      **figure(priced), reason: priced.reason, reason_text: ::TeamPlanning::Capacity::REASONS[priced.reason] }
+      calculated: priced.calculated && decimal(priced.calculated.amount), overridden: priced.overridden,
+      calculated_diagnostics: priced.calculated && diagnostics(priced.calculated, priced.model), **figure(priced), reason: priced.reason, reason_text: ::TeamPlanning::Capacity::REASONS[priced.reason] }
   end
 
   def figure(priced)
     figure = priced.figure
     return { working: nil, overloaded: nil, excess: nil, notes: [] } unless figure
 
-    texts = ::TeamPlanning::CapacityModels.fetch(priced.model).notes
     { working: figure.working.map { { label: it.label, amount: decimal(it.amount), op: it.op, subject_id: it.subject_id } },
-      overloaded: figure.overloaded, excess: decimal(figure.excess), notes: figure.notes.map { { note: it, text: texts[it] } } }
+      **diagnostics(figure, priced.model) }
+  end
+
+  def diagnostics(figure, model)
+    texts = ::TeamPlanning::CapacityModels.fetch(model).notes
+    { overloaded: figure.overloaded, excess: decimal(figure.excess), notes: figure.notes.map { { note: it, text: texts[it] } } }
   end
 
   def unclassified(seat, place)
-    { seat_id: seat.seat.id, kind: seat.seat.kind, unit_id: place.unit_id, allocation: decimal(place.place.allocation), reason: place.reason,
+    { seat_id: seat.seat.id, kind: seat.seat.kind, unit_id: place.unit_id, allocation: decimal(place.place.allocation),
+      overridden: place.overridden, reason: place.reason,
       reason_text: ::TeamPlanning::Capacity::REASONS.fetch(place.reason) }
   end
 

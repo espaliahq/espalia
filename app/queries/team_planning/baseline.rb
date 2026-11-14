@@ -194,11 +194,14 @@ class TeamPlanning::Baseline
   # scenario whose step they leave in, and `position_id`, their backfill.
   #
   # What the plan holds about them stays sealed: `planned_level`, a promotion;
-  # `plan_data`, the plan's corrections by field; and for a hire the plan
+  # `plan_data`, the plan's corrections by field; `capacity_overrides`, a
+  # planner's capacity figure by position or unit id; and for a hire the plan
   # added, `placeholder`, its label. Read a value through {#planned_or_own}.
   Member = Data.define(:id, :title, :level, :manager_id, :cost_centre, :site, :country, :fte, :employment_type,
-                       :memberships, :manager_position_id, :departure, :planned_level, :plan_data, :placeholder) do
-    def initialize(manager_position_id: nil, departure: nil, planned_level: nil, plan_data: {}, placeholder: nil, **) = super
+                       :memberships, :manager_position_id, :departure, :planned_level, :plan_data, :placeholder,
+                       :capacity_overrides) do
+    def initialize(manager_position_id: nil, departure: nil, planned_level: nil, plan_data: {}, placeholder: nil,
+                   capacity_overrides: {}, **) = super
 
     # A hire the plan added, which no Org Graph id names.
     #
@@ -224,6 +227,24 @@ class TeamPlanning::Baseline
       value.removed? ? UNKNOWN : value.reveal
     end
 
+    # @return [Boolean] whether the plan holds a level for them
+    def planned_level? = !(planned_level || plan_data[:level]).nil?
+
+    # Their role and level through the tenant's title mapping. A level the
+    # plan holds wins over a mapping's fixed level, so one it can't resolve,
+    # removed or not a level ordinal, leaves the level unresolved. Capacity
+    # and cost both read it, so they price a person at one level.
+    #
+    # @param titles [Integrations::HrisTitleResolution]
+    # @return [Integrations::HrisTitleResolution::Target]
+    def own_target(titles)
+      ordinal = Integer(planned_or_own(:level), exception: false)
+      return titles.target(title, ordinal) unless planned_level?
+
+      own = titles.target(title, ordinal, planned_ordinal: ordinal)
+      ordinal ? own : own.with(level: nil, ordinal: nil)
+    end
+
     # @return [Boolean]
     def placeholder? = !placeholder.nil?
 
@@ -247,8 +268,14 @@ class TeamPlanning::Baseline
   Line = Data.define(:person_id, :position_id)
 
   # Someone a departure in an earlier step took off the map, the step they
-  # left in, and the position backfilling them, if any.
-  Departed = Data.define(:person_id, :leaves_in_id, :position_id)
+  # left in, the position backfilling them, if any, and the date within the
+  # step, if the plan gave one.
+  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on) do
+    def initialize(leaves_on: nil, **) = super
+
+    # @return [Hash] as {TeamPlanning::Events::DepartureSet} set it, `leaves_on` only when given
+    def departure = { leaves_in_id:, position_id: }.merge(leaves_on ? { leaves_on: } : {})
+  end
 
   # A person's place in a unit, or in a position. A position's place takes
   # the position's unit when the map settles, and none once it closes.
