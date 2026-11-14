@@ -3590,6 +3590,34 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_add_plan_member",
+        "description" => "Make an active person a member of a Team Planning plan as an editor or a viewer, or change a member's role. A plan keeps at least one editor. Refused, as an unknown plan, unless the caller is one of its editors.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "role" => {
+              "type" => "string",
+              "enum" => [ "editor", "viewer" ]
+            }
+          },
+          "required" => [ "plan_id", "person_id", "role" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "team_planning_add_planner",
         "description" => "Make an active person with an account in this organisation a planner, so they may create Team Planning plans. It opens no plan they aren't a member of. Admins already may create plans. Returns the list as team_planning_planners reads it.",
         "inputSchema" => {
@@ -3637,6 +3665,30 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_delete_frozen_plan",
+        "description" => "Delete a frozen Team Planning plan, one with no editor left in the organisation, without opening it. It cannot be restored. Give the reason; it is kept with who deleted it. Refused, as an unknown plan, unless the plan is frozen and the caller a tenant admin.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "reason" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "plan_id", "reason" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => true,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "team_planning_delete_plan",
         "description" => "Delete a Team Planning plan. It cannot be restored. Refused unless the caller is one of its editors.",
         "inputSchema" => {
@@ -3656,6 +3708,40 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "team_planning_frozen_plans",
+        "description" => "List the Team Planning plans that are frozen because none of their editors is still in the organisation. Each is a plan id, the day it froze and its number of viewers; never its name, contents or members. Tenant admins only, who may then delete one.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_plan_members",
+        "description" => "List the members of a Team Planning plan the caller is in, each a person id and a role (editor or viewer). Refused, as an unknown plan, unless the caller is a member.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "plan_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "team_planning_planners",
         "description" => "List who may create Team Planning plans: the planners an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
         "inputSchema" => {
@@ -3668,6 +3754,45 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_plans",
+        "description" => "List the Team Planning plans the caller is a member of, with each one's name, base date and the caller's role in it (editor or viewer). Being a tenant admin or a planner adds no plans.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "team_planning_remove_plan_member",
+        "description" => "Take a member off a Team Planning plan. An editor may remove anyone, and any member may remove themselves, except its last editor. Refused, as an unknown plan, unless the caller may.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "plan_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "plan_id", "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {

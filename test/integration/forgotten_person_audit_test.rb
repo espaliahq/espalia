@@ -12,7 +12,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
   # Reads that cannot meet a forgotten person, with the reason.
   EXEMPT = {
     "integrations_hris_field_preview" => "reads the live HRIS, which no longer holds a forgotten person",
-    "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person"
+    "integrations_hris_level_handover" => "needs the live HRIS, and returns counts and unit labels, never a person",
+    "team_planning_plan_members" => "returns person ids and roles, never a name, until story 1.4 brings names"
   }.freeze
 
   setup do
@@ -192,7 +193,9 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "reporting_evidence_coverage" => { **cycle, mode: "full" },
         "reporting_feedback_export" => cycle,
         "system_whoami" => {},
+        "team_planning_frozen_plans" => {},
         "team_planning_planners" => {},
+        "team_planning_plans" => {},
         "tenants_forgetting_dry_run" => {}
       }
     end

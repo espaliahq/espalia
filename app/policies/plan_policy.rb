@@ -16,6 +16,25 @@
 # @example
 #   PlanPolicy.new(context, plan).update?
 class PlanPolicy < ApplicationPolicy
+  # The plans the caller is a member of, and no others, whatever else they
+  # are. {#show?} and this scope must agree; a policy test holds them together.
+  class Scope
+    # @param context [AuthorizationContext]
+    # @param scope [ActiveRecord::Relation<TeamPlanningPlan>]
+    def initialize(context, scope)
+      @context = context
+      @scope = scope
+    end
+
+    # @return [ActiveRecord::Relation<TeamPlanningPlan>]
+    def resolve
+      person = @context.person
+      return @scope.none unless @context.tenant_user && person&.status == "active" && !person.forgotten?
+
+      @scope.where(id: TeamPlanningPlanMember.where(person_id: person.id).select(:plan_id))
+    end
+  end
+
   # Whether the caller may work on plans at all; each plan then asks its own.
   # @return [Boolean]
   def index? = tenant_member?

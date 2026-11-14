@@ -110,6 +110,27 @@ class PlanPolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "Scope" do
+    should "agree with show? for members, leavers and outsiders" do
+      plan_id = SecureRandom.uuid_v7
+      admin = create(:person, tenant: @tenant)
+      handler = TeamPlanning::CommandHandler.new(actor: context_for(@editor, role: :admin))
+      handler.create_plan(plan_id, name: "Next year", base_on: "2026-11-14")
+      handler.add_member(plan_id, @viewer.id, role: "viewer")
+      @editor.update!(status: "inactive")
+
+      [ @editor, @viewer, admin ].each do |person|
+        [ :member, :admin ].each do |role|
+          context = context_for(person, role:)
+          listed = PlanPolicy::Scope.new(context, TeamPlanningPlan).resolve.pluck(:id)
+          shown = PlanPolicy.new(context, TeamPlanningPlan.includes(:members).find(plan_id)).show?
+          assert_equal shown, listed.include?(plan_id), "#{person.id} as #{role}"
+        end
+      end
+      assert_equal [ plan_id ], PlanPolicy::Scope.new(context_for(@viewer), TeamPlanningPlan).resolve.pluck(:id)
+    end
+  end
+
   context "someone outside the tenant" do
     should "do nothing" do
       policy = PlanPolicy.new(AuthorizationContext.new(user: create(:user), tenant_user: nil, person: @editor), @plan)
