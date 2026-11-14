@@ -19,12 +19,12 @@ class Operations::TeamPlanning::Attention < Operations::Base
   approval :none
 
   parameter :plan_id, String, required: true
-  parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
+  parameter :scenario_id, String, schema: { description: "The scenario, or the plan's id for the baseline. Omit it for the baseline." }
 
   # @return [Hash] `{ plan_id, scenario_id, items, names }`
   def perform
     plan = plan!
-    scenario_id = scenario_id!(:scenario_id)
+    scenario_id = scenario_id!(:scenario_id) || plan.id
     items = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).attention }
     { plan_id: plan.id, scenario_id:, items: items.map { item_row(it) }, names: names_of(plan, items) }
   end

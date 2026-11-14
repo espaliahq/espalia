@@ -9,12 +9,11 @@
       },
       "scenario_id": {
         "type": "string",
-        "description": "The scenario, or the plan's id for the baseline."
+        "description": "The scenario, or the plan's id for the baseline. Omit it for the baseline."
       }
     },
     "required": [
-      "plan_id",
-      "scenario_id"
+      "plan_id"
     ],
     "additionalProperties": false
   },

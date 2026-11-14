@@ -119,6 +119,14 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal({ @newcomer.id => "Nia Newcomer" }, attention[:names])
   end
 
+  should "read the baseline when no scenario is given" do
+    write(Operations::TeamPlanning::RetireUnit, @plan_id, unit_id: @payments)
+
+    read = call(Operations::TeamPlanning::Attention, plan_id: @plan_id)
+    assert_equal @plan_id, read[:scenario_id]
+    assert_equal [ @ada.id, @bo.id ], read[:items].map { it[:subject_id] }
+  end
+
   should "refuse someone outside the plan, and a plan in another tenant" do
     assert_equal "No such plan", assert_raises(Operations::Base::ParameterError) { attention(as: @outsider) }.message
 
