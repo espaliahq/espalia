@@ -101,6 +101,19 @@ class Shreddable::MapperTest < ActiveSupport::TestCase
     assert_raises(Shreddable::Value::Unserialisable) { publish(Copied.new(data: { plan_id: @plan_id, note: value })) }
   end
 
+  should "read without raising in a release that predates shreddable fields" do
+    publish(note_written)
+    record = in_tenant { @event_store.read.stream(@stream).to_a.sole }
+    stored = Shreddable::Mapper.json_client_default.records_to_events([ RubyEventStore::SerializedRecord.new(
+      event_id: record.event_id, event_type: "TeamPlanning::Events::NotYetKnown",
+      data: stored_row["data"].to_json, metadata: stored_row["metadata"].to_json,
+      timestamp: record.timestamp.iso8601(6), valid_at: record.valid_at.iso8601(6)
+    ).deserialize(JSON) ]).sole
+
+    assert_instance_of RubyEventStore::Event, stored
+    assert_match(/\A[A-Za-z0-9+\/]+=*\z/, stored.data["note"] || stored.data[:note])
+  end
+
   should "refuse to write a removed value again" do
     assert_raises(ArgumentError) { publish(note_written(note: Shreddable::Value.removed)) }
   end

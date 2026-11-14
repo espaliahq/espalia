@@ -53,6 +53,13 @@ class Shreddable::AggregateRootTest < ActiveSupport::TestCase
     assert_equal with_key, replayed.seen
   end
 
+  should "publish the real event to subscribers, never the redacted copy" do
+    seen = []
+    @event_store.within { write_note }.subscribe(->(event) { seen << event.data[:note] }, to: [ NoteWritten ]).call
+
+    assert_equal "Moving to the platform team", seen.sole.reveal
+  end
+
   should "pass an event that declares nothing to its handler as it is" do
     event = RubyEventStore::Event.new(data: { plan_id: @plan_id })
 
