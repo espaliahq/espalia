@@ -21,7 +21,7 @@ No deploy step: the change adds one nullable column and no projection.
    ```
 
    It reconciles every HRIS-held person without issuing anything and prints, for each kind of change, how many people it would touch and their ids, never names or emails:
-   - **clear manager**: people whose HRIS recorded that they have no manager while Person Development still holds one. The old sync never cleared a lost manager, so these are expected.
+   - **clear manager**: people whose HRIS recorded that they have no manager while Person Development still holds one. The old sync never cleared a lost manager, so these are expected. Before this release a withheld `reportsTo` was written as "no manager", so check each id against HiBob before you confirm the count. If HiBob names a manager for one, stop: the next sync cannot correct it, so raise it before cutting over.
    - anything else, marked **(unexpected)**: an assignment, move or offboarding the old sync should already have made. Any of these stops the cut-over.
    - **could not be read**: each id with its reason. Any entry here stops the cut-over too.
 

@@ -150,7 +150,7 @@ When you do bump, the predeploy guard (`events:projections:verify`) will fail th
 
 ## Sync handlers must not be replayed
 
-Cross-stream handlers that dispatch domain commands — currently `AssessmentCycles::SyncHandlers::PersonEnrollmentSync`, `AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments`, `AssessmentCycles::SyncHandlers::FrameworkVersionRollSync`, and `Frameworks::SyncHandlers::FrameworkVersionMigrationSync` — are deliberately NOT in `Projections::Registry::REPLAYABLE`. Replaying them would re-fire enrollments / re-roll cycles / re-migrate person streams against already-applied state. The aggregates each carry their own idempotency guard so an accidental replay is mostly a no-op, but the registry guard at `test/lib/projections/registry_test.rb` keeps them out at the source.
+Cross-stream handlers that dispatch domain commands — currently `AssessmentCycles::SyncHandlers::PersonEnrollmentSync`, `AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments`, `AssessmentCycles::SyncHandlers::FrameworkVersionRollSync`, `Frameworks::SyncHandlers::FrameworkVersionMigrationSync` and `OrgGraph::SyncHandlers::PersonDevelopmentFeed` — are deliberately NOT in `Projections::Registry::REPLAYABLE`. Replaying them would re-fire enrollments / re-roll cycles / re-migrate person streams against already-applied state. The aggregates each carry their own idempotency guard so an accidental replay is mostly a no-op, but the registry guard at `test/lib/projections/registry_test.rb` keeps them out at the source.
 
 If you add another sync-style cross-stream handler:
 
