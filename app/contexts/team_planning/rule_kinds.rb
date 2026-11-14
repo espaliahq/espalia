@@ -3,7 +3,7 @@
 # The kinds of rule a plan may set ({TeamPlanning::RuleKind}). A story that
 # adds a kind names its class in {BUILT_IN}.
 class TeamPlanning::RuleKinds
-  BUILT_IN = [].freeze
+  BUILT_IN = %w[TeamPlanning::RuleKinds::Capacity].freeze
   NAME = /\A[a-z][a-z0-9_]*\z/
 
   @registered = []

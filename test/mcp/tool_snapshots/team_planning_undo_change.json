@@ -1,0 +1,29 @@
+{
+  "name": "team_planning_undo_change",
+  "description": "Undo a change, pin or clear in a scenario of a Team Planning plan, so the scenario resolves as if it had not been made. Give event_id, as team_planning_history lists it, or leave it out to undo your own latest change in the scenario that can still be undone. Refused when a later change to the same subject and facet replaced it (the refusal names that change: undo it first), when it is already undone, or unless the caller is an editor. Nothing is deleted: the history keeps it, marked undone.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      },
+      "event_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

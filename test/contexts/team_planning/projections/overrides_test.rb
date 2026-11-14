@@ -81,6 +81,38 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
     assert_equal [ @lean ], overrides.map(&:first)
   end
 
+  should "bring back the change before an undone one, and the undone one on redo" do
+    set_cap(@q1, 8)
+    set_cap(@q1, 6)
+    @handler.undo_change(@plan_id, scenario_id: @q1)
+    assert_equal({ "rule" => "test_headcount_cap", "value" => { "cap" => 8 } }, TeamPlanningOverride.sole.end_state)
+
+    @handler.redo_change(@plan_id, scenario_id: @q1)
+    assert_equal({ "rule" => "test_headcount_cap", "value" => { "cap" => 6 } }, TeamPlanningOverride.sole.end_state)
+  end
+
+  should "drop the row when the only change is undone, and restore a cleared one when the clear is undone" do
+    set_cap(@lean, 5)
+    @handler.undo_change(@plan_id, scenario_id: @lean)
+    assert_empty overrides
+
+    @handler.redo_change(@plan_id, scenario_id: @lean)
+    @handler.clear_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
+    assert_empty overrides
+    @handler.undo_change(@plan_id, scenario_id: @lean)
+    assert_equal [ [ @lean, CAP, false, { "rule" => "test_headcount_cap", "value" => { "cap" => 5 } } ] ], overrides
+  end
+
+  should "restore a pin's row, pin fields and all, when what replaced it is undone" do
+    set_cap(@q1, 8)
+    @handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
+    pinned = TeamPlanningOverride.find_by(scenario_id: @lean).attributes.slice("event_id", "pinned", "pinned_from_event_id")
+    set_cap(@lean, 3)
+
+    @handler.undo_change(@plan_id, scenario_id: @lean)
+    assert_equal pinned, TeamPlanningOverride.find_by(scenario_id: @lean).attributes.slice("event_id", "pinned", "pinned_from_event_id")
+  end
+
   should "drop a removed scenario's rows, and every row of a deleted plan" do
     set_cap(@q1, 8)
     set_cap(@lean, 5)
@@ -100,6 +132,8 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
       gone = fork(@q1, "instead", "Gone")
       set_cap(gone, 2)
       @handler.clear_change(@plan_id, scenario_id: gone, subject_id: @plan_id, facet: CAP)
+      set_cap(@lean, 4)
+      @handler.undo_change(@plan_id, scenario_id: @lean)
 
       before = snapshot_read_models(TeamPlanning::Projections::Overrides, @tenant)
       assert_equal 2, before[:overrides].size
