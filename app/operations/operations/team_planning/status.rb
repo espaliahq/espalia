@@ -19,9 +19,9 @@ class Operations::TeamPlanning::Status < Operations::Base
               "where they are, so a placement in a position is done once the person is in the position's unit at " \
               "its allocation, with its role only when the plan names one. A change the Org Graph never holds, " \
               "such as a rule or a position, has no status: it would read pending forever. A unit retirement is " \
-              "done once the Org Graph has retired the unit. A unit succession is matched by its sides: done " \
-              "when the Org Graph holds one with the same predecessors and successors, conflicting when one " \
-              "shares a predecessor and names other successors. Subjects are named by id, and `names` maps each the Org Graph " \
+              "done once the Org Graph has retired the unit. A unit succession is held against every succession " \
+              "the Org Graph recorded since the base that shares a planned predecessor, joined: done when they " \
+              "join to the planned sides, conflicting when they don't. Subjects are named by id, and `names` maps each the Org Graph " \
               "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \
               "plan holds has none. Refused, as an unknown plan, unless " \
               "the caller is a member."

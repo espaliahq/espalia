@@ -480,9 +480,11 @@ has retired and the successions it holds, from `OrgGraph::AsOf`'s `retired_units
 retirement reads done once the Org Graph has retired the unit, whatever it last looked
 like, and pending while the unit is live. The Org Graph mints its own succession ids, so
 a kind reads its end state off today's map through `Change.read_org_graph`, which a
-succession overrides to find the Org Graph's succession by its sides: one with the same
-predecessors and successors reads done, one sharing a predecessor and naming other
-successors reads conflicting, and none reads pending.
+succession overrides to find the Org Graph's successions by their predecessors. It joins
+every one that shares a planned predecessor, as the Org Graph may record a merge in parts.
+The joined sides read done when they match the plan, conflicting when they don't, and
+pending when there are none. A succession the Org Graph held on the base date came before
+the plan, so today's map leaves it out.
 
 The Org Graph can't say which position someone fills, only where they are. So a placement
 in a position is held against the place it settles to on the scenario's map: the

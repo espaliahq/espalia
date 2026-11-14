@@ -68,8 +68,7 @@ class TeamPlanning::Status
     changes = tracked_changes
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
-    now = @baseline.map_on(@today, history: true)
-    base = @today < @plan.base_on ? now : @baseline.structure
+    now, base = maps
     statuses = changes.map { |key, change| entry(change, key, base:, now:) }
     Report.new(on: @today, statuses:, names: names_for(statuses.map(&:subject_id), base, now))
   end
@@ -78,6 +77,16 @@ class TeamPlanning::Status
 
   def tracked_changes
     @aggregate.winning_changes(@scenario_id).select { |_, change| change.class.tracked? }
+  end
+
+  # Today, and the base to hold it against. A succession the Org Graph held on
+  # the base date came before the plan, so today leaves it out.
+  def maps
+    now = @baseline.map_on(@today, history: true)
+    return [ now, now ] if @today < @plan.base_on
+
+    base = @baseline.map_on(@plan.base_on, known_on: @plan.base_on - 1, history: true)
+    [ now.with(successions: now.successions - base.successions), base.with(retired_units: [], successions: []) ]
   end
 
   def entry(change, key, base:, now:)

@@ -39,16 +39,17 @@ class TeamPlanning::Events::UnitSuccessionSet < TeamPlanning::Events::Change
   end
 
   # The Org Graph mints its own succession ids, so a planned succession is
-  # found by its predecessors: the succession that has them all and the same
-  # successors, or else one that shares a predecessor.
+  # found by its predecessors. Every succession that shares one is joined, as
+  # the Org Graph may record a merge in parts.
   #
   # @param map [TeamPlanning::Baseline::Map] read off the Org Graph
   # @param change [TeamPlanning::Events::UnitSuccessionSet]
-  # @return [Hash, nil] that succession's two sides
+  # @return [Hash, nil] their two sides, nil when none shares a predecessor
   def self.read_org_graph(map, change)
-    planned = change.data.slice(:predecessor_ids, :successor_ids)
-    sides = map.successions.map { it.to_h.slice(:predecessor_ids, :successor_ids) }
-    sides.find { same_end_state?(it, planned) } || sides.find { it[:predecessor_ids].intersect?(planned[:predecessor_ids]) }
+    met = map.successions.select { it.predecessor_ids.intersect?(change.data[:predecessor_ids]) }
+    return if met.empty?
+
+    { predecessor_ids: met.flat_map(&:predecessor_ids).uniq.sort, successor_ids: met.flat_map(&:successor_ids).uniq.sort }
   end
 
   def self.ids!(values, what)
