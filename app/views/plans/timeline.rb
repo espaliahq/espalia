@@ -279,8 +279,9 @@ class Views::Plans::Timeline < Views::Base
     "leaves in #{step_name(leaving[:column])}" if leaving
   end
 
-  def joined?(move, bar) = bar[:unit_id].nil? ? move[:joined_unit_ids].empty? : move[:joined_unit_ids].include?(bar[:unit_id])
-  def left?(move, bar) = bar[:unit_id].nil? ? move[:left_unit_ids].empty? : move[:left_unit_ids].include?(bar[:unit_id])
+  # A move names Unassigned as nil, as a bar does.
+  def joined?(move, bar) = move[:joined_unit_ids].include?(bar[:unit_id])
+  def left?(move, bar) = move[:left_unit_ids].include?(bar[:unit_id])
 
   def units_named(column, unit_ids)
     return UNASSIGNED if unit_ids.empty?
