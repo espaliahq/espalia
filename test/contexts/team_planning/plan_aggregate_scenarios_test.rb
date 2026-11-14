@@ -154,27 +154,34 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     setup { @q1 = fork(ends_on: "2027-03-31") }
 
     should "rename a scenario, keeping the name it had" do
-      @plan.rename_scenario(@q1, name: "  First   quarter ", renamed_by_id: @editor_id)
+      @plan.rename_scenario(@q1, name: "  First   quarter ", current: "Q1", renamed_by_id: @editor_id)
 
       assert_kind_of TeamPlanning::Events::ScenarioRenamed, last_event
-      assert_equal({ plan_id: @plan_id, scenario_id: @q1, name: "First quarter", previous_name: "Q1", renamed_by_id: @editor_id },
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, name: Shreddable::Value.new("First quarter"), previous_name: Shreddable::Value.new("Q1"),
+                     renamed_by_id: @editor_id },
                    last_event.data)
-      assert_equal "First quarter", @plan.scenarios.fetch(@q1).name
     end
 
     should "write nothing for the same name" do
       assert_no_difference -> { @plan.unpublished_events.count } do
-        @plan.rename_scenario(@q1, name: " Q1 ", renamed_by_id: @editor_id)
+        @plan.rename_scenario(@q1, name: " Q1 ", current: "Q1", renamed_by_id: @editor_id)
       end
     end
 
+    should "rename when the current name is unknown, as after it was forgotten" do
+      @plan.rename_scenario(@q1, name: "Q1", current: nil, renamed_by_id: @editor_id)
+
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, name: Shreddable::Value.new("Q1"), previous_name: nil, renamed_by_id: @editor_id },
+                   last_event.data)
+    end
+
     should "refuse the baseline, an unknown scenario and a bad name" do
-      assert_equal "The baseline can't be renamed", refusal { @plan.rename_scenario(@plan_id, name: "Now", renamed_by_id: @editor_id) }
+      assert_equal "The baseline can't be renamed", refusal { @plan.rename_scenario(@plan_id, name: "Now", current: "Q1", renamed_by_id: @editor_id) }
       assert_equal "This plan has no such scenario",
-                   refusal { @plan.rename_scenario(SecureRandom.uuid_v7, name: "Q9", renamed_by_id: @editor_id) }
-      assert_equal "A scenario needs a name", refusal { @plan.rename_scenario(@q1, name: " ", renamed_by_id: @editor_id) }
+                   refusal { @plan.rename_scenario(SecureRandom.uuid_v7, name: "Q9", current: "Q1", renamed_by_id: @editor_id) }
+      assert_equal "A scenario needs a name", refusal { @plan.rename_scenario(@q1, name: " ", current: "Q1", renamed_by_id: @editor_id) }
       assert_equal "A scenario's name can be at most 120 characters",
-                   refusal { @plan.rename_scenario(@q1, name: "x" * 121, renamed_by_id: @editor_id) }
+                   refusal { @plan.rename_scenario(@q1, name: "x" * 121, current: "Q1", renamed_by_id: @editor_id) }
     end
   end
 
@@ -211,7 +218,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     lean = fork(q1, relation: "instead", name: "Lean Q1")
     q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")
     @plan.set_scenario_period(q1, ends_on: "2027-02-28", set_by_id: @editor_id)
-    @plan.rename_scenario(lean, name: "Lean first quarter", renamed_by_id: @editor_id)
+    @plan.rename_scenario(lean, name: "Lean first quarter", current: "Q1", renamed_by_id: @editor_id)
     @plan.remove_scenario(q2, removed_by_id: @editor_id)
 
     replayed = TeamPlanning::PlanAggregate.new

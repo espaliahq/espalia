@@ -20,9 +20,14 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     @deleted_plan = SecureRandom.uuid_v7
     [ @tenant, @other ].each do |tenant|
       LEGACY.each { store(tenant, it["event_type"], it["data"], it["metadata"]) }
+      scenario_id = SecureRandom.uuid_v7
       store(tenant, "TeamPlanning::Events::ScenarioForked", JSON.generate(
-        "plan_id" => LIVE_PLAN, "scenario_id" => SecureRandom.uuid_v7, "parent_id" => LIVE_PLAN, "relation" => "then",
+        "plan_id" => LIVE_PLAN, "scenario_id" => scenario_id, "parent_id" => LIVE_PLAN, "relation" => "then",
         "name" => "Lean Q1", "starts_on" => "2026-11-14", "ends_on" => "2027-03-31", "forked_by_id" => ACTOR
+      ))
+      store(tenant, "TeamPlanning::Events::ScenarioRenamed", JSON.generate(
+        "plan_id" => LIVE_PLAN, "scenario_id" => scenario_id, "name" => "Lean Q1", "previous_name" => "Lean Q1",
+        "renamed_by_id" => ACTOR
       ))
       store(tenant, "TeamPlanning::Events::PlanCreated", JSON.generate(
         "plan_id" => @deleted_plan, "name" => "Closing the office", "base_on" => "2026-11-14", "created_by_id" => ACTOR
@@ -64,7 +69,7 @@ class TeamPlanning::NameSealingTest < ActiveSupport::TestCase
     counts = sealing.dry_run
 
     assert_equal({ "TeamPlanning::Events::PlanCreated" => 3, "TeamPlanning::Events::PlanRenamed" => 1,
-                   "TeamPlanning::Events::ScenarioForked" => 1 }, counts)
+                   "TeamPlanning::Events::ScenarioForked" => 1, "TeamPlanning::Events::ScenarioRenamed" => 1 }, counts)
     assert_equal @before, rows(@tenant)
   end
 

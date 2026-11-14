@@ -7,8 +7,10 @@
 #   @option data [String] :plan_id
 #   @option data [String] :scenario_id
 #   @option data [String] :name the new name
-#   @option data [String] :previous_name
+#   @option data [String, nil] :previous_name
 #   @option data [String] :renamed_by_id person_id of the actor
 #
 class TeamPlanning::Events::ScenarioRenamed < RubyEventStore::Event
+  extend Shreddable
+  shreddable :name, :previous_name, by: :plan
 end
