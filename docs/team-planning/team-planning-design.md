@@ -93,7 +93,7 @@ Every change event has the same shape:
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
 | Undo | `ChangeUndone`, `ChangeRedone`, each naming the event it reverses |
-| The Org Graph | `PlanRebased` (the date the plan now stands on) |
+| The Org Graph | `PlanRebased` (the date the plan now stands on, the one before, and the conflicts it carries) |
 | Reality | `StepClosed`, `PlanApproved`, `ChangeRaised`, `ChangeApplied` |
 
 Subjects the plan creates (a position, a unit, a placeholder hire, a budget line) get an id
@@ -496,6 +496,8 @@ other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
 undo and redo, in order, with who made it and, while it stands undone, who undid it.
+The baseline's history also lists each update to today, with the base it left and the
+conflicts it carried.
 `team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
 a former member.
 Production already holds changes, pins and clears, so the deploy that ships the history
@@ -539,6 +541,37 @@ Two things can happen on one date, and the plan treats them differently:
 
 A plan whose base date is still to come reads what the Org Graph knows now, until the
 day before its base date has passed. Until then its base moves as edits land.
+
+### Updating to today
+
+`team_planning_rebase_plan` moves a plan's base to today, a UTC day, and nothing else.
+Every scenario keeps its changes and resolves them over the Org Graph as of the new base,
+so someone who joined since the old base comes onto the map, and someone who left drops
+off it, with "has left" against any change that still places them. The first step after
+the baseline starts on the new base.
+
+A base only moves forward. The update is refused when the plan already stands on today,
+or on a day still to come, which already reads the Org Graph as known now. It is refused
+when the first step would end before today, naming the step, and when the plan has moved
+since the caller looked: `team_planning_rebase_preview` returns the base it read, and the
+update must pass it back. Undo never reverses an update.
+
+The preview shows the drift being taken in, in the drift report's own shape, and counts,
+for the baseline and each scenario, the changes that read done, pending and conflicting.
+It lists the conflicts too. It reads all of this over one base, and is refused if the
+plan moves while it reads.
+
+Once the base is today, a change that disagreed with the Org Graph would read pending:
+today and the base say the same thing. So `PlanRebased` records each conflict found at
+that moment, as the scenario it read conflicting in, its subject, its facet and the
+change that scenario resolved to, never a value. A change's status depends on the
+scenario read, since a step can reshape what an inherited change lands on, so each
+scenario keeps its own. The update finds them afresh rather than trusting the preview,
+and a change made after that read never inherits a conflict it didn't have. The
+conflict stays open while the scenario still resolves to the same change. A set, pin,
+clear or undo along its chain ends it, a redo of the same change brings it back, and a
+later update replaces the set, keeping the date a conflict was first found. Nothing stores the result: it is derived from the stream on
+each load.
 
 ### The baseline reader
 
@@ -607,6 +640,12 @@ reads its end state off both with `read_from`.
 
 A plan whose base is still to come holds every change against today, so nothing reads
 conflicting before the plan starts.
+
+A conflict an update carried forward (see *Updating to today*) reads conflicting, with
+`since` set to the day of the update that first found it, while the scenario still
+resolves to the same change. A change that reads done reads done, and if the Org Graph
+then moves off its end state, the carried conflict shows again: the plan stores no
+record that it was ever done.
 
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
