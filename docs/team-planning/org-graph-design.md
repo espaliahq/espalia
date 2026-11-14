@@ -448,6 +448,10 @@ Graph could no longer say what it knew before. From it:
   counts it apart. A correction to an earlier value leaves a later change standing unless
   it turns that change into another kind or into no change at all. MCP clients read it
   through `org_graph_changes_between`.
+- The Units view's "Compare with a date" (5.7) reads through `ChangesBetween`, in either
+  mode. `OrgGraph::DateComparison` marks units new, renamed, moved or succeeded in today's
+  tree, lists who joined, left or moved on each unit's card, counts each kind and lists the
+  units retired in the window. The window lives in the URL, so a comparison can be shared.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what
 was known last Tuesday, even if a backdated correction arrived since. The correction
@@ -476,6 +480,12 @@ The dates follow the events:
 - A change-back on the same date as the change it reverses withdraws that change, as
   though it never took effect. On a later date it is an ordinary change.
 - `PersonForgotten` changes nothing here. The rows hold ids, and the history stays.
+
+Two rules hold across history, `AsOf`, `ChangesBetween` and the live tables
+(`org_memberships`, the `people` columns). First, a fact dated before one already held
+fills in the days before it and leaves the later fact in force; on the same date, the
+fact learned last wins. Second, a membership counts on its end date and not the day
+after, and a move counts the person in the new unit only, from its date.
 
 Production already holds events of every type it reads, so the deploy that ships it needs
 `REBUILD_ON_DEPLOY=org_graph/history` to fill it. Without it, predeploy's `verify` stops

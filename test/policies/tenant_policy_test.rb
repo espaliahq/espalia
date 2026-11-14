@@ -18,6 +18,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_theme?
       assert_not policy.update_scoring_vocabulary?
       assert_not policy.update_retention_period?
+      assert_not policy.manage_org_graph_editors?
       assert_not policy.forget_person?
       assert_not policy.export_feedback?
     end
@@ -37,8 +38,23 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_theme?
       assert_not policy.update_scoring_vocabulary?
       assert_not policy.update_retention_period?
+      assert_not policy.manage_org_graph_editors?
       assert_not policy.forget_person?
       assert_not policy.export_feedback?
+    end
+  end
+
+  context "as an Org Graph editor" do
+    setup do
+      @user = create(:user)
+      @tu = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: @user, role: :member, org_graph_editor: true)
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tu, person: nil)
+    end
+
+    should "deny choosing who else may edit the Org Graph" do
+      assert_not policy.manage_org_graph_editors?
     end
   end
 
@@ -56,6 +72,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.update_theme?
       assert policy.update_scoring_vocabulary?
       assert policy.update_retention_period?
+      assert policy.manage_org_graph_editors?
       assert policy.forget_person?
     end
 
@@ -82,6 +99,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.update_theme?
       assert policy.update_scoring_vocabulary?
       assert policy.update_retention_period?
+      assert policy.manage_org_graph_editors?
       assert policy.forget_person?
     end
 
