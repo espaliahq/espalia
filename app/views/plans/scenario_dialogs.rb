@@ -34,18 +34,26 @@ class Views::Plans::ScenarioDialogs < Views::Base
   # @param scenarios [Array<Hash>]
   # @return [String] a scenario id
   def self.default_parent(plan_id, scenarios)
-    nexts = scenarios.select { it[:relation] == "then" }.to_h { [ it[:parent_id], it[:scenario_id] ] }
+    nexts = next_steps(scenarios)
     id = plan_id
     seen = Set.new
     id = nexts[id] while nexts.key?(id) && seen.add?(id)
     id
   end
 
+  # Each scenario that has one, with the scenario that comes after it. A
+  # scenario has at most one.
+  #
+  # @param scenarios [Array<Hash>]
+  # @return [Hash{String => String}]
+  def self.next_steps(scenarios) = scenarios.select { it[:relation] == "then" }.to_h { [ it[:parent_id], it[:scenario_id] ] }
+
   # @param plan_id [String]
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   def initialize(plan_id:, scenarios:)
     @plan_id = plan_id
     @scenarios = scenarios
+    @next_steps = self.class.next_steps(scenarios)
   end
 
   def view_template
@@ -90,7 +98,7 @@ class Views::Plans::ScenarioDialogs < Views::Base
     end
   end
 
-  def followed?(scenario) = @scenarios.any? { it[:parent_id] == scenario[:scenario_id] && it[:relation] == "then" }
+  def followed?(scenario) = @next_steps.key?(scenario[:scenario_id])
 
   def relation_choice
     fieldset do
