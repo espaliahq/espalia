@@ -56,34 +56,15 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
       assert_equal [ 1, 1 ], result.units.map(&:people)
     end
 
-    should "leave out a row Espalia holds as inactive, and one held from another HRIS" do
+    should "count everyone the adapter reads, with a row or yet to have one" do
       @people["hb-2"].update!(status: "inactive")
       create(:person, tenant: @tenant, hris_source: "bamboohr", external_id: "hb-9")
 
       result = preview({ "hb-1" => value("Payments", id: "7"), "hb-2" => value("Payments", id: "7"),
-                         "hb-9" => value("Payments", id: "7") }, target: "level")
+                         "hb-9" => value("Payments", id: "7"), "hb-404" => value("Growth", id: "9") }, target: "level")
 
-      assert_equal 1, result.people
-    end
-
-    should "count the people the next sync adds, as the mirror places them in the same run" do
-      create(:person, tenant: @tenant, email: "sam@example.com", external_id: nil, hris_source: nil)
-
-      result = preview({ "hb-1" => value("Payments", id: "7"), "hb-404" => value("Payments", id: "7"),
-                         "hb-405" => value("Growth", id: "9") }, target: "level")
-
-      assert_equal [ [ "Payments", 2 ], [ "Growth", 1 ] ], result.units.map { [ it.label, it.people ] }
-      assert_equal 3, result.people
-    end
-
-    should "leave out a person Espalia has forgotten" do
-      create(:person, tenant: @tenant, hris_source: "hibob").update_columns(
-        name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current, status: "inactive",
-        forgotten_external_id_digest: OrgGraph::Forgetting.digest(@tenant, "hibob", "hb-404"))
-
-      result = preview({ "hb-1" => value("Payments", id: "7"), "hb-404" => value("Payments", id: "7") }, target: "level")
-
-      assert_equal 1, result.people
+      assert_equal [ [ "Payments", 3 ], [ "Growth", 1 ] ], result.units.map { [ it.label, it.people ] }
+      assert_equal 4, result.people
     end
   end
 

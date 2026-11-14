@@ -650,7 +650,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         { "id" => "2718" },
         { "work" => { "customColumns" => { "column_team" => "9" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id root.isActive work.customColumns.column_team], show_inactive: true)
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.customColumns.column_team], show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
       values = adapter.read_field("column_team", kind: :list)
@@ -667,7 +667,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         { "id" => "3141", "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
         { "id" => "2718", "work" => { "customColumns" => { "column_country" => "Australia" } } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id root.isActive work.customColumns.column_country work.site],
+      client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.customColumns.column_country work.site],
         show_inactive: true)
       adapter.instance_variable_set(:@client, client)
 
@@ -679,17 +679,39 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
 
     should "read everyone the sync keeps, such as a person on leave, and leave out a leaver" do
-      adapter = Hris::Hibob::Adapter.new(@tenant)
-      client = Minitest::Mock.new
       employees = [
         { "id" => "3141", "isActive" => true, "internal" => { "status" => "Inactive" }, "work" => { "department" => "Sales" } },
         { "id" => "2718", "isActive" => false, "work" => { "department" => "Sales" } }
       ]
-      client.expect(:search_people, employees, fields: %w[root.id root.isActive work.department], show_inactive: true)
-      adapter.instance_variable_set(:@client, client)
 
-      assert_equal [ "3141" ], adapter.read_field("work.department", kind: :text).keys
-      client.verify
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "read a newcomer the sync creates, but not one whose email another HRIS id holds" do
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "1618", email: "held@example.com")
+      employees = [ { "id" => "3141", "email" => "new@example.com" }, { "id" => "2718", "email" => "Held@example.com" } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "read a rehired leaver only once their new start date comes" do
+      %w[3141 2718].each do |external_id|
+        person = create(:person, tenant: @tenant, hris_source: "hibob", external_id:)
+        OrgLeaver.create!(tenant: @tenant, person:, left_on: Date.current - 30)
+      end
+      employees = [ { "id" => "3141", "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "2718", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
+    end
+
+    should "read a forgotten person only once they are back at work" do
+      forget_row("3141")
+      forget_row("2718")
+      employees = [ { "id" => "3141", "work" => { "startDate" => (Date.current - 1).iso8601 } },
+                    { "id" => "2718", "work" => { "startDate" => (Date.current + 7).iso8601 } } ]
+
+      assert_equal [ "3141" ], read_department(employees).keys
     end
   end
 
@@ -1539,6 +1561,17 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current, status: "inactive",
                           forgotten_external_id_digest: OrgGraph::Forgetting.digest(@tenant, "hibob", external_id))
     person
+  end
+
+  # @param employees [Array<Hash>] what HiBob answers
+  # @return [Hash{String => Hris::FieldValue}] the department read for each
+  def read_department(employees)
+    adapter = Hris::Hibob::Adapter.new(@tenant)
+    client = Minitest::Mock.new
+    client.expect(:search_people, employees, fields: %w[root.id root.isActive root.email work.startDate work.department],
+      show_inactive: true)
+    adapter.instance_variable_set(:@client, client)
+    adapter.read_field("work.department", kind: :text).tap { client.verify }
   end
 
   def build_adapter(employees)

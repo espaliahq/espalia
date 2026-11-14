@@ -60,26 +60,16 @@ class Integrations::HrisFieldPreview
     adapter.field_catalogue.find { it.id == id } or raise UnknownField, "The HRIS has no field #{field_id}"
   end
 
-  # The people the next sync places: those whose row it holds from this
-  # HRIS, while that row is active, and those it will create or link by
-  # email, who have no row by that id yet. A forgotten person stays out.
+  # Each person the adapter read, whom the next sync places, beside their
+  # value. The adapter applies the sync's rule; this only finds their row,
+  # matched by id as the sync matches it.
   #
   # @param by_external_id [Hash{String => Hris::FieldValue}]
-  # @return [Array<(String, Hris::FieldValue)>] a held person's id, or nil
-  #   for one the sync has yet to create, beside their value
+  # @return [Array<(String, Hris::FieldValue)>] the row's id, or nil for a
+  #   person the sync has yet to create or link by email, beside their value
   def held_values(by_external_id)
-    ActsAsTenant.with_tenant(tenant) do
-      rows = Person.where(external_id: by_external_id.keys).pluck(:external_id, :id, :hris_source, :status)
-      held = rows.select { |_, _, source, status| source == adapter.provider_name && status == "active" }
-                 .map { |external_id, id| [ id, by_external_id.fetch(external_id) ] }
-      newcomers = by_external_id.except(*rows.map(&:first)).reject { |external_id, _| forgotten?(external_id) }
-      held + newcomers.values.map { [ nil, it ] }
-    end
-  end
-
-  def forgotten?(external_id)
-    @forgotten_digests ||= Person.where.not(forgotten_external_id_digest: nil).pluck(:forgotten_external_id_digest).to_set
-    @forgotten_digests.any? && @forgotten_digests.include?(OrgGraph::Forgetting.digest(tenant, adapter.provider_name, external_id))
+    rows = ActsAsTenant.with_tenant(tenant) { Person.where(external_id: by_external_id.keys).pluck(:external_id, :id).to_h }
+    by_external_id.map { |external_id, value| [ rows[external_id], value ] }
   end
 
   def level(field, values)
