@@ -74,11 +74,19 @@ class Tenant::PayBandsController < ApplicationController
     raise ActiveRecord::RecordNotFound
   end
 
-  # Figures arrive as typed, so the thousands separators a person types are dropped here.
+  # Commas only in thousands groups, so a decimal comma such as 52,50 is refused rather than read as 5250.
+  GROUPED = /\A\d{1,3}(,\d{3})+(\.\d+)?\z/
+
+  # Figures arrive as typed, so the spaces and thousands separators a person types are dropped here.
   def band_params
     values = params.expect(pay_band: FIELDS).to_h.symbolize_keys
-    PayBand::FIGURES.each { |name| values[name] = values[name].to_s.delete(", ") if values.key?(name) }
+    PayBand::FIGURES.each { |name| values[name] = ungrouped(values[name]) if values.key?(name) }
     values
+  end
+
+  def ungrouped(figure)
+    figure = figure.to_s.delete(" ")
+    figure.match?(GROUPED) ? figure.delete(",") : figure
   end
 
   def location_name(band) = band[:location] || "any location"

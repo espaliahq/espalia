@@ -64,6 +64,14 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       assert_equal 0, ActsAsTenant.with_tenant(@tenant) { PayBand.count }
     end
 
+    should "refuse a decimal comma rather than read it as a thousands separator" do
+      post tenant_pay_bands_path, params: band_params(minimum: "52,50", midpoint: "60,50", maximum: "70,50")
+
+      assert_response :unprocessable_content
+      assert_select "#pay-band-minimum[value='52,50']"
+      assert_equal 0, ActsAsTenant.with_tenant(@tenant) { PayBand.count }
+    end
+
     should "change a band's figures and keep its key" do
       band = stored_band
 
