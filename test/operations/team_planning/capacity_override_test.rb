@@ -90,6 +90,8 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
 
     place = TeamPlanning::CapacityModels.stub(:fetch, floored) { place_of_ada }
     assert_equal [ "0.8", "0", false, "0", [] ], place.values_at(:capacity, :calculated, :overloaded, :excess, :notes)
+    assert_equal [ true, "1", [ "unattributed_no_manager" ] ],
+                 place[:calculated_diagnostics].values_at(:overloaded, :excess).push(place[:calculated_diagnostics][:notes].pluck(:note))
     assert_equal "Planner's override, in place of 0", place[:working].last[:label]
   end
 
