@@ -24,7 +24,9 @@ class PlansController < ApplicationController
   def show
     plan = read(Operations::TeamPlanning::Plan)
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
-    render plan_page(plan, open_tab: :scenarios)
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?, extra_columns: cost_columns)
+    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table)
   end
 
   # GET /planning/:id/map?scenario=:scenario_id
@@ -38,7 +40,7 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
     render plan_page(plan, scenarios:, open_tab: :map,
-                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?))
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?, **cost_hooks(plan, map)))
   end
 
   # GET /planning/:id/timeline?scenario=:scenario_id&step=:index
@@ -57,6 +59,28 @@ class PlansController < ApplicationController
   end
 
   private
+
+  # Today has no period, so only a scenario is priced. Cost shows once a pay
+  # band prices something; a scenario that can't be priced keeps its map.
+  def cost_hooks(plan, map)
+    return {} if map[:scenario_id] == plan[:plan_id]
+
+    marks = Views::Plans::CostMarks.new(cost: read(Operations::TeamPlanning::Cost, scenario_id: map[:scenario_id]), map:)
+    marks.priced? ? { unit_marks: marks.unit_marks, summary: Views::Plans::CostStrip.new(marks:) } : {}
+  rescue ActiveRecord::RecordNotFound
+    {}
+  end
+
+  def cost_columns
+    costs = read(Operations::TeamPlanning::ScenarioCosts)
+    rows = costs[:scenarios].index_by { it[:scenario_id] }
+    priced = rows.values.any? { |row| row[:total]&.values_at(:scenario, :baseline)&.any? { it[:native].any? } }
+    return [] unless priced
+
+    [ Views::Plans::ScenarioTable::Column.new(heading: "Cost", cell: ->(scenario) {
+      Views::Plans::CostCell.new(row: rows[scenario[:scenario_id]], reference: costs[:reference_currency])
+    }) ]
+  end
 
   def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil)
     members = read(Operations::TeamPlanning::PlanMembers)[:members]
