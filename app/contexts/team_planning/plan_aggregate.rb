@@ -768,7 +768,7 @@ class TeamPlanning::PlanAggregate
   def ensure_first_steps_reach!(base_on)
     step = children_of(@plan_id).find { it.relation == "then" && it.ends_on < base_on } or return
 
-    raise TeamPlanning::Error, "The first step ends on #{step.ends_on.iso8601}, before #{base_on.iso8601}: end it later or remove it first"
+    raise TeamPlanning::FirstStepEndsTooSoon.new(scenario_id: step.id, ends_on: step.ends_on, base_on:)
   end
 
   def conflict_keys!(conflicts)

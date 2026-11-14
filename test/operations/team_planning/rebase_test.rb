@@ -161,7 +161,7 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
 
   should "refuse an update that would leave the first step ending before today, naming it" do
     travel_to Time.utc(2026, 7, 2, 9)
-    assert_equal "The first step ends on 2026-06-30, before 2026-07-02: end it later or remove it first", refusal { rebase }
+    assert_equal "Q1 ends on 2026-06-30, before 2026-07-02: end it later or remove it first", refusal { rebase }
   end
 
   should "bring in someone who joined in the window, and keep someone who left unresolved" do
