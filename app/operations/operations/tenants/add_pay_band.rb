@@ -27,6 +27,6 @@ class Operations::Tenants::AddPayBand < Operations::Base
 
     band = PayBand.new(level:, location: params[:location],
                        currency: params[:currency], period: params[:period], **figures)
-    band_payload(save_band!(band), level)
+    band_payload(save_setting!(band), level)
   end
 end

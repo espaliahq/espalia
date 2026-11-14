@@ -213,6 +213,8 @@ class TeamPlanning::PlanAggregate
   # @param subject_id [String]
   # @param set_by_id [String] person_id of the actor
   # @param end_state [Hash] the kind's own fields, none of them a field every change holds
+  # @yieldparam plan [TeamPlanning::PlanAggregate] once the plan is open and the scenario known, for the
+  #   caller's own checks, such as one against a projection, which this aggregate never reads
   # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown or the end state refused
   # @raise [ArgumentError] for a kind that is not a change, or an end state naming a field every change holds
   def set_change(kind, scenario_id:, subject_id:, set_by_id:, end_state: {})
@@ -221,6 +223,7 @@ class TeamPlanning::PlanAggregate
 
     ensure_open!
     live_scenario!(scenario_id)
+    yield self if block_given?
     fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
     apply(kind.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }))
   end
@@ -313,6 +316,17 @@ class TeamPlanning::PlanAggregate
     return unless own_change?(scenario_id, key)
 
     raise TeamPlanning::Error, "#{name_of(scenario_id)} already changes this: clear it to follow its parent, or set it"
+  end
+
+  # The change that wins for each subject and facet along the scenario's
+  # resolution chain: the last one made, nearest the scenario.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @return [Hash{Array(String, String) => TeamPlanning::Events::Change}] by {TeamPlanning::Events::Change#key}, in the order they land
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def winning_changes(scenario_id)
+    resolution_chain(scenario_id).flat_map { changes_in(it) }
+      .each_with_object({}) { |change, latest| latest.delete(change.key); latest[change.key] = change }
   end
 
   # The scenarios whose changes a scenario resolves through, root first and
