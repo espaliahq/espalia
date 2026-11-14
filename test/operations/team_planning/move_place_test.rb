@@ -85,11 +85,13 @@ class Operations::TeamPlanning::MovePlaceTest < ActiveSupport::TestCase
     assert_equal [ { unit_id: @platform, allocation: 1.0 } ], places(@ada)
   end
 
-  should "refuse Today, a viewer, a place the person doesn't hold and a move with no allocation" do
+  should "refuse Today, a viewer, a place the person doesn't hold, a unit the scenario lacks and a move with no allocation" do
     assert_match "Today can't be edited", refusal(scenario_id: @plan_id, from_unit_id: @payments, to_unit_id: @growth, allocation: 1)
     assert_equal "No such plan", refusal(as: @viewer, from_unit_id: @payments, to_unit_id: @growth, allocation: 1)
     assert_equal "Ada Quill holds no such place", refusal(from_unit_id: @growth, to_unit_id: @payments, allocation: 1)
     assert_equal "allocation is required", refusal(from_unit_id: @payments, to_unit_id: @growth)
+    assert_equal "Ada Quill holds no such place", refusal(from_unit_id: "unassigned", to_unit_id: @growth, allocation: 1)
+    assert_equal "This scenario has no such unit", refusal(from_unit_id: @payments, to_unit_id: SecureRandom.uuid_v7, allocation: 1)
     assert_equal [ @payments, @platform ].sort, places(@ada).pluck(:unit_id).sort
   end
 end

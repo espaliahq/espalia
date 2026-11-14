@@ -36,12 +36,14 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
   # @return [Hash] `{ plan_id, scenario_id, person_id, placements }`
   def perform
     editor_scenario!
-    map = Operations::TeamPlanning::ScenarioMap.call(context:, params: { plan_id: plan_id!, scenario_id: })
-    person = map[:people].find { it[:id] == person_id } or raise Operations::Base::ParameterError, "This scenario has no such person"
+    ::TeamPlanning::Repository.new.holding_plan(plan_id!) do
+      map = Operations::TeamPlanning::ScenarioMap.call(context:, params: { plan_id: plan_id!, scenario_id: })
+      person = map[:people].find { it[:id] == person_id } or raise Operations::Base::ParameterError, "This scenario has no such person"
 
-    Operations::TeamPlanning::SetAssignment.call(
-      context:, params: { plan_id: plan_id!, scenario_id:, person_id:, placements: placements(person, map) }
-    )
+      Operations::TeamPlanning::SetAssignment.call(
+        context:, params: { plan_id: plan_id!, scenario_id:, person_id:, placements: placements(person, map) }
+      )
+    end
   end
 
   private
@@ -60,7 +62,8 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
     live = map[:units].to_set { it[:id] }
     held = ::TeamPlanning::Baseline::Membership.shares(person[:memberships].map { ::TeamPlanning::Baseline::Membership.new(**it) })
     moved, kept = held.partition { |place, _, _| from?(place, live) }
-    raise Operations::Base::ParameterError, "#{map[:names][person_id]} holds no such place" if moved.empty? && from_unit != UNASSIGNED
+    raise Operations::Base::ParameterError, "#{map[:names][person_id]} holds no such place" if no_such_place?(moved, kept, live)
+    raise Operations::Base::ParameterError, "This scenario has no such unit" unless to_unit == UNASSIGNED || live.include?(to_unit)
 
     kept.reject! { |place, _, _| place.position_id.nil? && place.unit_id == to_unit }
     kept.map { |place, share, _| written(place, share) } + arriving
@@ -69,8 +72,17 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
   def from?(place, live)
     return !live.include?(place.unit_id) if from_unit == UNASSIGNED
 
-    place.unit_id == from_unit && place.position_id == params[:from_position_id].presence
+    place.unit_id == from_unit && place.position_id == from_position
   end
+
+  # Someone is in Unassigned only while they hold no place in a live unit.
+  def no_such_place?(moved, kept, live)
+    return kept.any? { |place, _, _| live.include?(place.unit_id) } if from_unit == UNASSIGNED
+
+    moved.empty?
+  end
+
+  def from_position = params[:from_position_id].presence && uuid!(:from_position_id)
 
   def written(place, share)
     raise Operations::Base::ParameterError, "A place with no allocation has nothing left to share. Set its allocation first." unless share.positive?
