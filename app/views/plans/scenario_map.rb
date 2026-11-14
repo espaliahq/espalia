@@ -153,6 +153,9 @@ class Views::Plans::ScenarioMap < Views::Base
         span(class: "font-medium text-default") { position_label(position) }
         open_fte_note(position[:open_fte])
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
+        position.fetch(:occupants, []).sort_by { name(it[:person_id]) }.each do |occupant|
+          span(data: { map_occupant: occupant[:person_id] }, class: "text-muted") { "#{name(occupant[:person_id])} · #{allocation(occupant)}" }
+        end
       end
     end
   end

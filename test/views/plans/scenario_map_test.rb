@@ -50,6 +50,19 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
     end
   end
 
+  should "name who fills each position under that position" do
+    grace = "01a1da48-c64a-7529-af90-0f97e41cdaa5"
+    second = "01a1da48-c64a-7529-af90-0f97e41cdaa6"
+    positions = [ position(0.5).merge(occupants: [ { person_id: ADA, allocation: 0.5, role: "ENG" } ]),
+                  position(0.0).merge(position_id: second, occupants: [ { person_id: grace, allocation: 1.0, role: "ENG" } ]) ]
+    rows = render_map(positions:).css("[data-map-position]").to_h { [ it["data-map-position"], it.text ] }
+
+    assert_includes rows[POSITION], "Ada Quill · 50%"
+    assert_not_includes rows[POSITION], "100%"
+    assert_includes rows[second], "#{Person::FORMER_MEMBER} · 100%"
+    assert_not_includes rows[second], "Ada Quill"
+  end
+
   context "the units" do
     should "still show units whose parents loop" do
       growth = "01a1da48-c64a-7529-af90-0f97e41cdaa4"
