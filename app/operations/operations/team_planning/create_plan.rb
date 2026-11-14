@@ -23,8 +23,7 @@ class Operations::TeamPlanning::CreatePlan < Operations::Base
   # @return [Hash] `{ plan_id, name, base_on }`
   def perform
     plan_id = SecureRandom.uuid_v7
-    refusing_bad_plans { handler.create_plan(plan_id, name: params[:name], base_on: base_on) }
-    plan = ::TeamPlanning::Repository.new.load_plan(plan_id)
+    plan = refusing_bad_plans { handler.create_plan(plan_id, name: params[:name], base_on: base_on) }
     { plan_id: plan_id, name: plan.name, base_on: plan.base_on.iso8601 }
   end
 

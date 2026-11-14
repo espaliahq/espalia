@@ -17,23 +17,18 @@ class TeamPlanning::Repository
   #
   # @param plan_id [String]
   # @yield [TeamPlanning::PlanAggregate]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [ArgumentError] if no tenant context is available
   def with_plan(plan_id, &block)
     stream = EventStreamNaming.plan_stream(plan_id)
+    plan = TeamPlanning::PlanAggregate.new
     with_tenant_metadata do
       ActiveRecord::Base.transaction do
         lock_stream(stream)
-        @repository.with_aggregate(TeamPlanning::PlanAggregate.new, stream, &block)
+        @repository.with_aggregate(plan, stream, &block)
       end
     end
-  end
-
-  # Loads a plan without storing anything.
-  #
-  # @param plan_id [String]
-  # @return [TeamPlanning::PlanAggregate]
-  def load_plan(plan_id)
-    @repository.load(TeamPlanning::PlanAggregate.new, EventStreamNaming.plan_stream(plan_id))
+    plan
   end
 
   private

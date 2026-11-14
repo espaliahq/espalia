@@ -23,6 +23,7 @@ class TeamPlanning::CommandHandler
   # @param plan_id [String] UUID minted by the caller
   # @param name [String]
   # @param base_on [Date, String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [Pundit::NotAuthorizedError] unless the actor may create a plan
   # @see TeamPlanning::PlanAggregate#create
   def create_plan(plan_id, name:, base_on:)
@@ -34,6 +35,7 @@ class TeamPlanning::CommandHandler
 
   # @param plan_id [String]
   # @param name [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor created it
   # @see TeamPlanning::PlanAggregate#rename
   def rename_plan(plan_id, name)
@@ -44,6 +46,7 @@ class TeamPlanning::CommandHandler
   end
 
   # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor created it
   # @see TeamPlanning::PlanAggregate#delete
   def delete_plan(plan_id)
