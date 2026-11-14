@@ -5,7 +5,6 @@
 # allocation parse. The including concern supplies `drawer_path`.
 module OrgGraphDrawer
   extend ActiveSupport::Concern
-  include OrgGraphComparison
 
   # What every drawer write can raise: a refusal, a bad parameter, or a guard
   # in the aggregate such as another provider holding the fact.

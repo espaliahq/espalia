@@ -5,6 +5,7 @@
 module OrgUnitDrawer
   extend ActiveSupport::Concern
   include OrgGraphDrawer
+  include OrgGraphComparison
 
   included do
     before_action :set_unit
