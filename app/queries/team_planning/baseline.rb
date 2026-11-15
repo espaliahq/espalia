@@ -33,9 +33,12 @@ class TeamPlanning::Baseline
   # @!attribute step_ids [Array<String>] the scenarios of the step on screen: it and those it is an
   #   alternative of. A departure set in one of them marks the person leaving; one set earlier takes them off
   # @!attribute departed [Array<Departed>] the people a departure in an earlier step took off the map
+  # @!attribute budget_lines [Array<BudgetLine>] the tenant's approved lines, read live, with the plan's changes on top
+  # @!attribute orphaned_lines [Hash{String => String}] each tenant line the tenant has since removed, by id, to "set" or "cut", whichever change came last
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
-                    :rules, :unresolved, :step_ids, :departed, :left_ids) do
-    def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], **) = super
+                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines) do
+    def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
+                   orphaned_lines: {}, **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -314,6 +317,37 @@ class TeamPlanning::Baseline
     def budget = self.class.budget_of(basis)
   end
 
+  BUDGET_FIGURES = %i[starts_on ends_on origin approved_on amount currency period head_count role_id level_id role_name level_name
+                      location cost_centre].freeze
+
+  # A budget line as a scenario holds it. A plan's own amount stays sealed
+  # until {#revealed}.
+  #
+  # @!attribute source [String] "tenant" as approved, "changed" by the plan, or "plan" for one the plan added
+  BudgetLine = Data.define(:id, :starts_on, :ends_on, :origin, :approved_on, :amount, :currency, :period, :head_count,
+                           :role_id, :level_id, :role_name, :level_name, :location, :cost_centre, :source) do
+    # @param line [::BudgetLine]
+    # @return [BudgetLine]
+    def self.approved(line)
+      new(id: line.id, **BUDGET_FIGURES.to_h { [ it, line.public_send(it) ] }, source: "tenant")
+    end
+
+    # @param id [String]
+    # @param figures [Hash] a {TeamPlanning::Events::BudgetLineSet} end state
+    # @param source [String]
+    # @return [BudgetLine]
+    def self.planned(id, figures, source:)
+      dates = %i[starts_on ends_on approved_on].to_h { [ it, figures[it] && Date.iso8601(figures[it].to_s) ] }
+      new(id:, **BUDGET_FIGURES.to_h { [ it, figures[it] ] }.merge(dates), source:)
+    end
+
+    # @return [BigDecimal, nil] the amount, nil when the line has none or the plan's key is gone
+    def revealed_amount
+      value = amount.is_a?(Shreddable::Value) ? (amount.removed? ? nil : amount.reveal) : amount
+      value.nil? ? nil : BigDecimal(value.to_s)
+    end
+  end
+
   PLACEHOLDER_NAME = "Placeholder hire"
 
   # @param context [AuthorizationContext]
@@ -351,7 +385,7 @@ class TeamPlanning::Baseline
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
     map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: [], positions: [], names: {},
-                  step_ids: [ @plan.id ],
+                  step_ids: [ @plan.id ], budget_lines: approved_budget,
                   rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
     return map unless history
 
@@ -372,6 +406,9 @@ class TeamPlanning::Baseline
   end
 
   private
+
+  # Configuration, so every day a reader asks for reads the lines as they are now.
+  def approved_budget = @approved_budget ||= ::BudgetLine.where(tenant_id: @plan.tenant_id).order(:starts_on, :id).map { BudgetLine.approved(it) }
 
   def named_positions(positions)
     return positions if positions.empty?
