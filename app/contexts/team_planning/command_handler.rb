@@ -534,9 +534,11 @@ class TeamPlanning::CommandHandler
   end
 
   # A unit retired since the plan chose it may stay, so widening never asks to drop it.
+  # Postgres reads a UUID without its hyphens too, so only the hyphenated form
+  # is taken: the plan compares the ids it keeps as written.
   def known_units!(unit_ids, kept: [])
     unit_ids = Array(unit_ids).map { it.to_s.strip.downcase }.compact_blank.uniq
-    return unit_ids if OrgUnit.live.where(id: unit_ids - kept).count == (unit_ids - kept).size
+    return unit_ids if unit_ids.all?(OrgGraph::StructureAggregate::UUID) && OrgUnit.live.where(id: unit_ids - kept).count == (unit_ids - kept).size
 
     raise TeamPlanning::Error, "A plan covers units the organisation has"
   end

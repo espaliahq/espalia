@@ -294,6 +294,12 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
   end
 
   context "changing the scope" do
+    should "refuse a unit id written without its hyphens, so the ids a plan keeps compare as written" do
+      error = assert_raises(Operations::Base::ParameterError) { set_scope(@plan_id, [ @engineering, @sales.delete("-") ]) }
+      assert_equal "A plan covers units the organisation has", error.message
+      assert_equal [ @engineering ], scope_of(@plan_id)
+    end
+
     should "always let a plan widen, and narrow while nothing it plans falls outside" do
       assert_equal [ "Engineering", "Sales" ], set_scope(@plan_id, [ @engineering, @sales ])[:scope][:units].map { it[:name] }.sort
       assert_equal({ whole_organisation: true, units: [] }, set_scope(@plan_id, [])[:scope])
