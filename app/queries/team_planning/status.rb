@@ -150,7 +150,7 @@ class TeamPlanning::Status
     change.data[:placements].to_a.map { it.to_h.symbolize_keys }.map { it[:unit_id] || positions[it[:position_id]] }
   end
 
-  def units_of_positions(map) = (@position_units ||= {}.compare_by_identity)[map] ||= map.positions.to_h { [ it.id, it.unit_id ] }
+  def units_of_positions(map) = (@position_units ||= {}.compare_by_identity)[map] ||= map.position_units
 
   def people_of(map) = (@people ||= {}.compare_by_identity)[map] ||= map.people.index_by(&:id)
 

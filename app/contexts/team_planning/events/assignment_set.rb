@@ -76,7 +76,7 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   def self.shows?(read, planned, map:)
     return same_end_state?(read, planned) unless read && planned
 
-    units = map.positions.to_h { [ it.id, it.unit_id ] }
+    units = map.position_units
     places = read.as_json.fetch("placements").dup
     wanted = planned.as_json.fetch("placements")
     return false unless wanted.size == places.size

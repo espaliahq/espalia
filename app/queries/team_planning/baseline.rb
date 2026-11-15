@@ -37,10 +37,12 @@ class TeamPlanning::Baseline
   # @!attribute orphaned_lines [Hash{String => String}] each tenant line the tenant has since removed, by id, to "set" or "cut", whichever change came last
   # @!attribute scope_ids [Array<String>, nil] the units the plan covers, each with everything under it; nil for the whole organisation
   # @!attribute outside [Array<Member>] the people outside the plan's scope, kept so a change can bring one in. Never shown
+  # @!attribute cut_positions [Array<Position>] the positions in units outside the plan's scope. Never shown
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
-                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :scope_ids, :outside) do
+                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :scope_ids, :outside,
+                    :cut_positions) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
-                   orphaned_lines: {}, scope_ids: nil, outside: [], **) = super
+                   orphaned_lines: {}, scope_ids: nil, outside: [], cut_positions: [], **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -54,7 +56,7 @@ class TeamPlanning::Baseline
     #
     # @return [Map]
     def settled
-      unit_of = positions.to_h { [ it.id, it.unit_id ] }
+      unit_of = position_units
       placed = ->(person) { person.with(memberships: person.memberships.map { it.position_id ? it.with(unit_id: unit_of[it.position_id]) : it }) }
       map = with(people: people.map(&placed), outside: outside.map(&placed))
       map = map.cut if scope_ids
@@ -72,8 +74,15 @@ class TeamPlanning::Baseline
       inside = ->(person, was_on) { person.memberships.any? { known.include?(it.unit_id) } || (was_on && person.memberships.none?(&:unit_id)) }
       people, leaving = map.people.partition { inside.(it, true) }
       joining, outside = map.outside.partition { inside.(it, false) }
-      map.with(people: people + joining, outside: leaving + outside, positions: map.positions.select { it.unit_id.nil? || known.include?(it.unit_id) })
+      kept, gone = map.positions.partition { it.unit_id.nil? || known.include?(it.unit_id) }
+      map.with(people: people + joining, outside: leaving + outside, positions: kept, cut_positions: (gone + cut_positions).uniq(&:id))
     end
+
+    # A position the cut took off the map still places its people outside,
+    # so a later settle doesn't read them as placed in no unit.
+    #
+    # @return [Hash{String => String, nil}] each position's unit, by position id
+    def position_units = (cut_positions + positions).to_h { [ it.id, it.unit_id ] }
 
     # @return [Set<String>] the units on the map, live or retired
     def known_unit_ids = (units + retired_units).to_set(&:id)

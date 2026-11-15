@@ -260,6 +260,22 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_equal "done", statuses.find { it[:subject_id] == @ada.id && it[:facet] == "assignment" }[:status].to_s
   end
 
+  should "keep a place in a position outside the scope outside, however often the map settles, and read it as done once it shows" do
+    sales_seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @plan_id, role_id: @engineer.role_id,
+                                                             level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @plan_id, person_id: @brook.id,
+                                                  placements: [ { unit_id: @payments, allocation: 0.5 }, { position_id: sales_seat, allocation: 0.5 } ])
+
+    map = resolve(@plan_id, @plan_id)
+    brook = map.people.find { it.id == @brook.id }
+    resettled = map.settled.people.find { it.id == @brook.id }
+    assert_equal [ @sales ], map.outside_places(brook).map(&:unit_id)
+    assert_equal map.outside_places(brook), map.outside_places(resettled)
+
+    statuses = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @plan_id)[:statuses]
+    assert_equal "done", statuses.find { it[:subject_id] == @brook.id && it[:facet] == "assignment" }[:status].to_s
+  end
+
   context "changing the scope" do
     should "always let a plan widen, and narrow while nothing it plans falls outside" do
       assert_equal [ "Engineering", "Sales" ], set_scope(@plan_id, [ @engineering, @sales ])[:scope][:units].map { it[:name] }.sort
