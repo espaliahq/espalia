@@ -105,6 +105,15 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
                  { "from" => result[:drift][:from], "names" => result[:drift][:names][@brook.id] })
   end
 
+  should "count a plan-only change in no scenario's work, though status lists it" do
+    drift_brook
+    call(:SetRule, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments, rule: "on_cost",
+                   value: { "model" => "flat", "params" => { "percent" => "10" } })
+
+    assert_equal({ scenario_id: @q1, done: 0, pending: 1, conflicting: 1 }, preview[:scenarios].find { it[:scenario_id] == @q1 })
+    assert_equal [ "plan_only" ], call(:Status, plan_id: @plan_id, scenario_id: @q1)[:statuses].select { it[:facet] == "rule:on_cost" }.pluck(:status)
+  end
+
   should "update the plan to today, record the conflicts, and start the first step on the new base" do
     drift_brook
     expected = brook_conflicts

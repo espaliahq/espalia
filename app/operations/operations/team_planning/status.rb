@@ -2,9 +2,9 @@
 
 # Where each of a scenario's planned changes stands against the Org Graph
 # today ([#235](https://github.com/espaliahq/espalia/issues/235)), compared
-# by `TeamPlanning::Status` on every read. A kind has a status only when it
-# reads its end state off a map and the Org Graph can move its facet. Walked
-# by the privacy test and the forgotten-person audit.
+# by `TeamPlanning::Status` on every read. A change is compared only when the
+# Org Graph could show it; any other reads plan_only. Walked by the privacy
+# test and the forgotten-person audit.
 class Operations::TeamPlanning::Status < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
@@ -14,17 +14,19 @@ class Operations::TeamPlanning::Status < Operations::Base
               "follows; scenario_id says which scenario made it (the plan_id is the baseline). 'done' when today " \
               "reads the planned end state, 'pending' when today still reads what the plan's base held or what " \
               "the step before plans, 'conflicting' when it reads none of these, 'unknown' when the plan's value " \
-              "was private and has since been removed; before the plan's base date nothing reads conflicting. A " \
+              "was private and has since been removed, and 'plan_only' for a change the Org Graph never holds, " \
+              "such as a rule, a position, a capacity, a budget line, a hire the plan adds or a person's pay: it is " \
+              "never compared, so it is no Org Graph work still to do, and has no sources. Before the plan's base " \
+              "date nothing reads conflicting. A " \
               "conflict an update to today carried forward still reads 'conflicting', with since the day of the " \
               "update that first found it, while the scenario still resolves to the same change: a set, pin, " \
-              "clear or undo ends it. A change that reads done or unknown keeps that status; otherwise since is " \
+              "clear or undo ends it. A change that reads done, unknown or plan_only keeps that status; otherwise since is " \
               "null. Each status carries `sources`, who supplies what the change moves: the provider of a " \
               "person fact (level, manager, leaving), or of the units an assignment, unit or succession touches, " \
               "today and as planned (\"espalia\" for one Espalia supplies, or an HRIS such as \"hibob\"). A person's placements are one facet, so a placement list is " \
               "done only when the whole list matches. The Org Graph can't say which position someone fills, only " \
               "where they are, so a placement in a position is done once the person is in the position's unit at " \
-              "its allocation, with its role only when the plan names one. A change the Org Graph never holds, " \
-              "such as a rule or a position, has no status: it would read pending forever. A unit retirement is " \
+              "its allocation, with its role only when the plan names one. A unit retirement is " \
               "done once the Org Graph has retired the unit. A unit succession is held against every succession " \
               "the Org Graph recorded since the base that shares a planned predecessor, joined: done when they " \
               "join to the planned sides, conflicting when they don't. A departure is done once the Org Graph has " \

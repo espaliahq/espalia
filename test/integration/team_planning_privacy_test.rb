@@ -111,9 +111,10 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
                successor_ids: [ UNIT_ID ],
                placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap",
                rule: "capacity_model", level: "4", label: "Payments lead", field: "fte", value: "1", amount: "1",
-               from_unit_id: "unassigned", to_unit_id: "unassigned", event_id: SecureRandom.uuid,
+               from_unit_id: "unassigned", to_unit_id: "unassigned", event_id: SecureRandom.uuid, event_ids: [ SecureRandom.uuid ],
                budget_line_id: SecureRandom.uuid_v7, starts_on: "2026-12-01", origin: "new", head_count: "1",
                currency: "AUD", period: "year", draws: [ { budget_line_id: SecureRandom.uuid_v7 } ] }
+    values[:basis] = "full_time" if operation == Operations::TeamPlanning::SetActualPay
     values[:value] = {} if operation == Operations::TeamPlanning::SetRule
     values.delete(:unit_id) if operation.category == :read
     values.slice(*operation.parameters.keys)

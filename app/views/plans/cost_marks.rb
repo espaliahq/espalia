@@ -2,7 +2,9 @@
 
 # One scenario's cost on the map, from `team_planning_cost`
 # ([#316](https://github.com/espaliahq/espalia/issues/316)): the figures the
-# strip and each unit card draw, against Today over the same days.
+# strip and each unit card draw, against Today over the same days. Today's
+# own map shows its yearly run rate, which stands alone
+# ([#318](https://github.com/espaliahq/espalia/issues/318)).
 class Views::Plans::CostMarks
   # How money reads on the plan's pages. The read sends exact decimal
   # strings; only this rounds.
@@ -50,6 +52,9 @@ class Views::Plans::CostMarks
       value.round.to_i.to_s
     end
 
+    # @return [String] such as "EUR 1.2m a year"
+    def yearly(text) = "#{text} a year"
+
     def significant(value) = ActiveSupport::NumberHelper.number_to_rounded(value, precision: 3, significant: true, strip_insignificant_zeros: true)
   end
 
@@ -63,9 +68,12 @@ class Views::Plans::CostMarks
   end
 
   # @return [Boolean] whether any band prices anything in the scenario or Today
-  def priced? = [ total[:scenario], total[:baseline] ].any? { it[:native].any? }
+  def priced? = total.values_at(:scenario, :baseline).compact.any? { it[:native].any? }
 
-  # @return [Hash] `{ scenario:, baseline:, difference: }`, each a sum
+  # @return [Boolean] whether this is Today's yearly run rate, never compared with anything
+  def run_rate? = @cost[:basis] == "run_rate"
+
+  # @return [Hash] `{ scenario:, baseline:, difference: }`, each a sum; only `scenario` for a run rate
   def total = @cost[:total]
 
   # @return [String, nil]
@@ -85,7 +93,7 @@ class Views::Plans::CostMarks
   # @return [#call] the map's `unit_marks` hook
   def unit_marks
     rows = @cost[:units].index_by { it[:unit_id] }
-    ->(unit) { (row = rows[unit[:id]]) ? [ Views::Plans::CostUnitTotal.new(row:, reference:) ] : [] }
+    ->(unit) { (row = rows[unit[:id]]) ? [ Views::Plans::CostUnitTotal.new(row:, reference:, run_rate: run_rate?) ] : [] }
   end
 
   private

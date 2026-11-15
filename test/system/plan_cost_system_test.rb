@@ -26,6 +26,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
       end
       people.record_person(cy.id, **ESPALIA, effective_on: since, employment_status: "employed", title: "Juggler", level: "5", fte: 1.0)
       [ ada, cy ].each { people.set_membership(it.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0) }
+      @ada_id = ada.id
 
       PayBand.create!(level: e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_000)
       ReferenceCurrency.create!(currency: "EUR")
@@ -49,7 +50,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         sign_in_as(@planner.user)
         visit plan_path(@plan_id)
         assert_selector "[data-cost-cell='#{@year}']", text: "EUR 250k"
-        assert_text "No period of its own"
+        assert_selector "[data-cost-cell='#{@plan_id}']", text: /EUR 200k a year\s+\(run rate\)/
         assert_no_sideways_overflow
 
         visit map_plan_path(@plan_id, scenario: @year)
@@ -62,6 +63,28 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         end
         assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 150k"
         assert_no_text "177"
+        assert_no_sideways_overflow
+      end
+
+      should "say in the strip that the plan's actual pay priced a seat, for a holder" do
+        call(Operations::TeamPlanning::SetActualPay, plan_id: @plan_id, scenario_id: @year, person_id: @ada_id,
+                                                     amount: "90000", currency: "EUR", period: "year", basis: "full_time")
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id, scenario: @year)
+
+        within("[data-cost-strip]") { assert_text "Priced from the actual pay the plan holds for 1 seat here, and at pay band midpoints for the rest" }
+      end
+
+      should "show Today's map at its yearly run rate, with no change beside it" do
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id)
+        within("[data-cost-strip]") do
+          assert_selector "[data-cost-total]", text: "EUR 200k a year"
+          assert_selector "[data-cost-run-rate]", text: "yearly run rate"
+          assert_no_selector "[data-cost-change]"
+        end
+        assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 100k a year"
+        assert_no_text "vs Today"
         assert_no_sideways_overflow
       end
     end

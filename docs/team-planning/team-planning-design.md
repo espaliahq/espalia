@@ -332,9 +332,11 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    on another kind having landed. The kind's fields may not reuse `Change::FIELDS`.
    If the Org Graph holds its facet, also give it `subject_moved_by(change)`, naming the
    subject an Org Graph change moves, and `read_from(map, subject_id:, facet:)`, reading
-   its end state back off a map. Without the first it meets no drift; without both it has
-   no status, unless the Org Graph holds the subject under an id of its own and the kind
-   overrides `read_org_graph` to find it, as a succession does (`Change.tracked?`). Test both in the drift and status tests, as their test-only kinds do.
+   its end state back off a map. Without the first it meets no drift; without both its
+   status reads `plan_only`, never compared, unless the Org Graph holds the subject under an
+   id of its own and the kind overrides `read_org_graph` to find it, as a succession does
+   (`Change.tracked?`). A kind that holds some fields the Org Graph never does overrides
+   `Change.tracks?(change)`, as `PlanDataSet` does for pay. Test both in the drift and status tests, as their test-only kinds do.
 2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
    and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
    resolver.
@@ -545,7 +547,11 @@ flatters a scenario.
 
 `TeamPlanning::Cost` prices a scenario over its period and prices the baseline over the
 same days, so the two compare ([#288](https://github.com/espaliahq/espalia/issues/288)).
-The baseline has no period of its own, so it is never the scenario costed.
+Today has no period of its own, so its cost is a yearly run rate: every seat it holds priced
+from the plan's `base_on` to the day before the same date a year on, so a leap year counts
+366 days ([#318](https://github.com/espaliahq/espalia/issues/318)). The read says `basis:
+"run_rate"`, returns the two dates it used, and sets the run rate against nothing: a
+scenario's difference stays against Today over the scenario's own days.
 `team_planning_cost` sends the totals, each unit and each cost centre, and the working of
 every seat only for a unit the caller names.
 `team_planning_scenario_costs` sends only the totals, for every scenario at once, reading
@@ -590,8 +596,8 @@ A scenario's map opens with a Cost strip: its total, the difference from Today o
 same days, the period and what it is priced at, what sits in no unit on the map, and a
 list of the seats left out. Each unit card shows its own places' cost beside its name.
 The units and the no-unit figure add up to the strip's total, and the Scenarios table's
-Cost column shows that same total. Today's row reads "No period of its own", and Today's
-map shows no cost. The strip and column appear only once a band prices something, and a
+Cost column shows that same total. Today's row and map read its yearly run rate, "EUR 200k
+a year", with no change beside it, since a run rate and a period total are different bases. The strip and column appear only once a band prices something, and a
 scenario that can't be priced keeps its map and reads "Can't be priced" in the table.
 Figures round to three significant figures (`Views::Plans::CostMarks::Format`); no band
 minimum or maximum shows on either page.
@@ -601,11 +607,13 @@ minimum or maximum shows on either page.
 A member holds the see-pay right or not
 ([#300](https://github.com/espaliahq/espalia/issues/300)). Two plan events carry it,
 `SeePayGranted` and `SeePayWithdrawn`, each naming who made the change. `PlanPolicy#see_pay?`
-answers for the caller, and every read of band ranges or actual pay asks it. Today that is
-`team_planning_cost`, which gives a holder each band's minimum and maximum beside its
-midpoint and everyone else the midpoint, and says which in `pay_view` (`band_ranges` or
-`band_midpoints`). Totals are the same in both, since midpoints price every seat until
-actual pay arrives in 5.6. An agent over MCP gets the view of the person it acts for.
+answers for the caller, and every read of band ranges or actual pay asks it.
+`team_planning_cost` gives a holder each band's minimum and maximum beside its midpoint, and
+prices from [actual pay](#actual-pay-as-built) where the plan holds it. Everyone else gets
+midpoints throughout. `pay_view` names which (`band_ranges` or `band_midpoints`), each seat's
+`pay_source` says whether actual pay or a midpoint priced it, and the two views total
+differently once a plan holds pay. An agent over MCP gets the view of the person
+it acts for.
 
 - **Who changes it.** Only a holder grants or withdraws, and only for a member. The creator
   holds it from the start, and plans from before the right have their creator only.
@@ -630,6 +638,40 @@ actual pay arrives in 5.6. An agent over MCP gets the view of the person it acts
 
 The `team_planning/plan_members` projection carries the right, so its version moved to 2
 and it needs a rebuild on deploy.
+
+
+### Actual pay as built
+
+A plan can hold what a person is paid
+([#317](https://github.com/espaliahq/espalia/issues/317)). It is a `PlanDataSet` on facet
+`data:pay`, sealed under the person's key in the plan, whose value is
+`{ amount, currency, period, basis }`. The amount is base pay, so cost adds the unit's
+on-cost on top.
+
+- **The basis is required, with no default.** `full_time` means a full-time figure, which
+  the person's FTE scales. `actual` means what they are paid, already pro-rated, which FTE
+  leaves alone. Many HR exports pro-rate a part-timer's pay, so guessing either way would
+  misprice someone. An hourly amount is a rate, so its basis is always `full_time`. The
+  upload in 5.7 asks for the basis once per file.
+- **Writing needs an editor with the see-pay right.** `team_planning_set_actual_pay` is its
+  own tool, and `team_planning_set_plan_value` refuses `pay`. Clearing, pinning, noting,
+  undoing and redoing a `data:pay` change need the right too. The refusal says only that pay
+  needs the see-pay right, which status already tells any member: they can see that a
+  `data:pay` change exists, never its value. The tool's approval is `:mcp_client`, since an
+  `:in_app` approval would store its arguments in clear until confirmed.
+- **Pricing.** For a holder, a person with held pay is priced from it: made yearly (a month
+  is 1/12, an hour takes the `working_hours` rule), scaled by FTE only for `full_time`, by
+  the days held out of 365, plus on-cost. Held pay needs no level or band. The seat's
+  `pay_source` says `actual` or `band_midpoint`, `basis` says which basis, and
+  `actual_pay_seats` counts the seats priced from pay, for holders only.
+- **Forgotten pay is unpriced.** Pay the plan lost with the person's key leaves the seat
+  unpriced as `pay_unknown`. The midpoint never stands in, since a total that silently
+  swapped forgotten pay for a midpoint would look complete when it isn't.
+- **Where it never goes.** The scenario map carries `plan_data.pay` only for holders. History
+  and overrides show its end state as `{ field: "pay" }`, the value sealed out. `pay` and
+  `amount` are filtered from the log. `test/integration/team_planning_pay_privacy_test.rb`
+  walks every plan read as a viewer and as an editor without the right, then checks the
+  log, the read models and the event store for the amount in clear.
 
 ### Clearing and pinning
 
@@ -881,6 +923,9 @@ reads its end state off both with `read_from`.
   own step plans: once Q1's move lands, Q2's next move for the same person waits its turn.
   So is a subject only the plan holds, such as a new unit: neither map has it.
 - **Conflicting**: today reads none of these, as when someone the plan moves has left.
+- **Plan only**: the Org Graph never holds what the change plans, so it is never compared
+  and counts as no Org Graph work: a rule, a position, a capacity, a budget line, a hire
+  the plan adds, or a person's pay. It still shows, so an editor sees the change exists.
 
 A plan whose base is still to come holds every change against today, so nothing reads
 conflicting before the plan starts.
@@ -894,9 +939,9 @@ record that it was ever done.
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
 Org Graph can move (it implements `subject_moved_by`) or find (it overrides
-`read_org_graph`) has a status: a unit set, a retirement, a succession, an assignment, a
-reporting line and a departure. A rule and a position are plan-only, so each would read
-pending forever.
+`read_org_graph`) is compared: a unit set, a retirement, a succession, an assignment, a
+reporting line, a departure, and a planned level or FTE. Anything else reads plan only,
+since held against the Org Graph it would read pending forever.
 
 Today's map is `Baseline#map_on(today, history: true)`, which adds the units the Org Graph
 has retired, the successions it holds and the people who have left, from `OrgGraph::AsOf`'s
@@ -1213,11 +1258,18 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
   3 and later to 4, moving only the 4 would leave the 3 behind to win. The earlier
   changes for the same subject and facet go across with it.
 - The two parts cover the same period. This is a third relation beside `then` and
-  `instead`: the rest sits on top of the agreed part. The timeline shows them as one
+  `instead`, named `on`: the rest sits on the agreed part. The timeline shows them as one
   column with the agreed part marked.
 - The agreed part must stand without the rest. A change cannot move across if it depends
   on one that stays, such as a person placed in a unit the rest creates. The split says
   which changes block it.
+- Only a split makes `on`. A fork is `then` or `instead`, and the next step forks from the
+  rest, which keeps the original's id, its alternatives and its next step.
+- A split step is one step. Cost, capacity and the headcount walk count the pair once over
+  the one period, and the timeline gives it one column. A split part can be split again.
+- `team_planning_split_scenario` splits from an MCP client. It takes the moving changes'
+  event ids as `team_planning_history` lists them, and its refusal names the event ids
+  that block the split.
 - The agreed part can then be approved and carried out. As its changes are done they leave
   the difference, and the rest is what remains to be argued.
 

@@ -4,7 +4,8 @@
 #
 # Writes `team_planning_scenarios`, and nothing else writes it. A plan's
 # baseline row comes with `PlanCreated`; a deleted plan's scenarios go with
-# it. A fork carries its own period. Only a `then` scenario's end is held, so
+# it. A fork carries its own period, and a split puts the agreed part in the
+# original's place with the original on it. Only a `then` scenario's end is held, so
 # when one moves the plan's starts, and its alternatives' ends, are worked out
 # again. Names and descriptions are held sealed, as the events hold them.
 #
@@ -20,7 +21,8 @@ class TeamPlanning::Projections::Scenarios
   def self.handled_events
     [ TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanDeleted, TeamPlanning::Events::ScenarioForked,
       TeamPlanning::Events::ScenarioRenamed, TeamPlanning::Events::ScenarioDescribed,
-      TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanRebased ]
+      TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanRebased,
+      TeamPlanning::Events::ScenarioSplit ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -49,12 +51,23 @@ class TeamPlanning::Projections::Scenarios
       when TeamPlanning::Events::PlanRebased
         write(data[:plan_id], event, plan_id: data[:plan_id], starts_on: data[:base_on])
         follow_tree(data[:plan_id], event) { it[data[:plan_id]].starts_on = Date.iso8601(data[:base_on]) }
+      when TeamPlanning::Events::ScenarioSplit then split(event)
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningScenario.where(id: data[:scenario_id]).delete_all
       end
     end
   end
 
   private
+
+  def split(event)
+    data = event.data
+    original = TeamPlanningScenario.find_by(id: data[:scenario_id]) or return
+    return if TeamPlanningScenario.exists?(id: data[:agreed_id])
+
+    write(data[:agreed_id], event, **original.slice(:plan_id, :parent_id, :relation, :starts_on, :ends_on).symbolize_keys,
+                                   name: data[:name], forked_by_id: data[:split_by_id])
+    original.update!(parent_id: data[:agreed_id], relation: "on", updated_at: event.timestamp)
+  end
 
   def write(id, event, **attributes)
     row = TeamPlanningScenario.find_or_initialize_by(id:)
@@ -73,10 +86,13 @@ class TeamPlanning::Projections::Scenarios
     period = lambda do |row|
       periods[row.id] ||=
         if row.baseline? || !rows.key?(row.parent_id) then [ row.starts_on, row.ends_on ]
-        elsif row.relation == "instead" then period.call(rows[row.parent_id])
         else
-          parent = rows[row.parent_id]
-          [ parent.baseline? ? parent.starts_on : period.call(parent).last + 1, row.ends_on ]
+          case row.relation
+          in "instead" | "on" then period.call(rows[row.parent_id])
+          in "then"
+            parent = rows[row.parent_id]
+            [ parent.baseline? ? parent.starts_on : period.call(parent).last + 1, row.ends_on ]
+          end
         end
     end
     rows.each_value do |row|

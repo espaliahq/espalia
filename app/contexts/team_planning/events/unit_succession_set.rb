@@ -11,6 +11,10 @@
 class TeamPlanning::Events::UnitSuccessionSet < TeamPlanning::Events::Change
   def self.facet = "succession"
 
+  # @param data [Hash]
+  # @return [Array<String>] the units on both sides
+  def self.refers_to(data) = Array(data[:predecessor_ids]) + Array(data[:successor_ids])
+
   # @param end_state [Hash] `{ predecessor_ids:, successor_ids: }`
   # @return [Hash]
   # @raise [TeamPlanning::Error] for an empty side, an id that isn't one, or a unit on both sides

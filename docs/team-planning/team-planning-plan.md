@@ -119,6 +119,7 @@ flowchart LR
     s56[5.6 Plan-held pay]
     s57[5.7 Upload actual pay]
     s58[5.8 Cost on the plan page]
+    s59[5.9 Today's run rate]
   end
   subgraph P6[P6 Budget]
     s61[6.1 Budget lines]
@@ -194,6 +195,7 @@ flowchart LR
   s55 --> s56
   s56 --> s57
   s54 --> s58
+  s54 & s58 --> s59
   s33 & s35 --> s62
   s61 & s62 & s54 --> s63
   s63 --> s64 & s65
@@ -293,8 +295,9 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). | 5.2, 5.3, 3.5, 3.7 |
 | 5.5 | The see-pay right per plan member. Without it, band midpoints only | 5.4, 1.2 |
 | 5.6 | Plan-held pay: `PlanDataSet` for a person's actual cost, shreddable under their key | 5.5, 2.2 |
-| 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Never written to the Org Graph | 5.6 |
+| 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Ask once per file whether amounts are actual pay or full-time figures. Never written to the Org Graph | 5.6 |
 | 5.8 | Cost on the plan page and the map, with the difference from the baseline | 5.4 |
+| 5.9 | Today's yearly run rate: every seat Today holds priced for a year from the plan's start, shown on Today's map and row and never set against a scenario's period total | 5.4, 5.8 |
 
 ### P6 Budget
 
@@ -322,7 +325,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | # | Story | Needs |
 |---|---|---|
 | 8.1 | The may-approve right, and tenant guardrails as rules that are binding at approval | 6.5, 4.6 |
-| 8.2 | `ScenarioSplit`: move the agreed changes into a new scenario beneath, with what they overwrite, and name any change that blocks the split | 3.2 |
+| 8.2 | `ScenarioSplit`: move the agreed changes into a new scenario beneath, with what they overwrite, and name any change that blocks the split. [Design: Splitting a scenario](team-planning-design.md#splitting-a-scenario) | 3.2 |
 | 8.3 | Org Graph Operations accept a plan reference and a cause, and pass them to the handlers. A change made this way shows "From plan" in the activity feed | none |
 | 8.4 | `PlanApproved` pins a point and applies every change Espalia holds, with `ChangeApplied` for each (see below) | 8.1, 8.3 |
 | 8.5 | The change list Operation for an approved point, with a stable id per entry, and `ChangeRaised` with the upstream reference | 8.4 |
