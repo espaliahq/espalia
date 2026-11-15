@@ -56,12 +56,14 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                 successions: [ B::Succession.new(id: "s1", predecessor_ids: [ RETIRED, GONE ], successor_ids: [ LIVE ]) ],
                 names: { PERSON => "Ada Quill" })
     forgotten = SecureRandom.uuid_v7
+    forgotten_seat = SecureRandom.uuid_v7
     items = [ [ PERSON, "assignment" ], [ forgotten, "reporting_line" ], [ RETIRED, "unit" ], [ GONE, "unit" ], [ "p1", "position" ],
-              [ "p2", "position" ], [ "s1", "succession" ], [ "p1", "capacity:#{LIVE}" ] ]
+              [ "p2", "position" ], [ "s1", "succession" ], [ "p1", "capacity:#{LIVE}" ],
+              [ forgotten_seat, "capacity:unassigned" ] ]
             .map { |subject_id, facet| TeamPlanning::Attention::Item.new(subject_id:, facet:, reason: "", change: nil) }
 
     assert_equal({ PERSON => "Ada Quill", forgotten => Person::FORMER_MEMBER, RETIRED => "Risk", "p1" => "Backfill: Engineer",
-                   "s1" => "Risk, A removed unit → Payments" }, TeamPlanning::Attention.names_of(named, items))
+                   "s1" => "Risk, A removed unit → Payments", forgotten_seat => Person::FORMER_MEMBER }, TeamPlanning::Attention.names_of(named, items))
   end
 
   should "name the check that found each item" do

@@ -94,7 +94,7 @@ class TeamPlanning::Attention
       when UNIT then units[id]
       when POSITION then positions[id]
       when SUCCESSION then successions[id]&.then { succession_name(it, units) }
-      when CAPACITY then positions[id] || map.names[id]
+      when CAPACITY then positions[id] || map.name_of(id)
       end
       [ id, name ] if name
     end.to_h
