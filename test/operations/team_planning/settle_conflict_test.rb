@@ -59,6 +59,30 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
 
   def refusal(&) = assert_raises(Operations::Base::ParameterError, &).message
 
+  def settle_pay(as:)
+    as_tenant do
+      TeamPlanning::CommandHandler.new(actor: context_for(as))
+                                  .settle_conflict(@plan_id, scenario_id: @q1, subject_id: @brook.id, facet: "data:pay", choice: "plan")
+    end
+  end
+
+  def pay_refusal(&) = assert_raises(TeamPlanning::Error, &).message
+
+  # Pay isn't tracked, so no update carries a pay conflict: the plan is made to report one for Q1.
+  def with_pay_conflict_carried(&)
+    real_new = TeamPlanning::PlanAggregate.method(:new)
+    scenario_id = @q1
+    key = [ @brook.id, "data:pay" ]
+    forcing = lambda do
+      real_new.call.tap do |plan|
+        plan.define_singleton_method(:carried_conflicts) do |id|
+          id == scenario_id ? super(id).merge(key => BASE_ON) : super(id)
+        end
+      end
+    end
+    TeamPlanning::PlanAggregate.stub(:new, forcing, &)
+  end
+
   should "keep the plan in the scenario that made the change, which status reads as settled and history as kept" do
     rebase
     assert_equal "conflicting", brook(@q1)[:status].to_s
@@ -112,17 +136,26 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
     assert_equal "conflicting", brook(@q1)[:status].to_s
   end
 
-  should "refuse, in the handler, to settle pay for an editor without the see-pay right" do
-    rebase
-    colleague = as_tenant { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant)) }
-    as_tenant { handler.add_member(@plan_id, colleague.person_id, role: "editor") }
-    error = assert_raises(TeamPlanning::Error) do
-      as_tenant do
-        TeamPlanning::CommandHandler.new(actor: context_for(colleague))
-                                    .settle_conflict(@plan_id, scenario_id: @q1, subject_id: @brook.id, facet: "data:pay", choice: "plan")
-      end
+  context "a pay conflict, which no update carries today, so the test forces one" do
+    setup do
+      call(:SetActualPay, plan_id: @plan_id, scenario_id: @q1, person_id: @brook.id, amount: "91234", currency: "AUD", period: "year", basis: "actual")
+      rebase
+      @colleague = as_tenant { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant)) }
+      as_tenant { handler.add_member(@plan_id, @colleague.person_id, role: "editor") }
     end
-    assert_equal "Only a member with the see-pay right can change pay", error.message
+
+    should "refuse an editor without the see-pay right, saying nothing about the conflict or the pay, and let a holder keep the plan" do
+      forced = pay_refusal { with_pay_conflict_carried { settle_pay(as: @colleague) } }
+      unforced = pay_refusal { settle_pay(as: @colleague) }
+
+      assert_equal "Only a member with the see-pay right can change pay", forced
+      assert_equal unforced, forced
+      assert_not_includes forced, "91234"
+
+      with_pay_conflict_carried { settle_pay(as: @editor) }
+      entry = call(:History, plan_id: @plan_id, scenario_id: @q1)[:entries].last
+      assert_equal [ "data:pay", "set", { "since" => BASE_ON.iso8601, "choice" => "plan" } ], entry.values_at(:facet, :action, :settles)
+    end
   end
 
   should "refuse a choice that is neither keeping the plan nor following reality, before reading the plan" do
