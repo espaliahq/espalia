@@ -202,10 +202,14 @@ class TeamPlanning::Attention
 
   # Capacity prices a place in a position by the position, so an override on
   # the unit around it is one no place reads.
+  #
+  # A scoped plan never names a place outside it, as the map leaves those out.
   def capacity_overrides
+    known = @map.known_unit_ids
+    outside = ->(place_id) { @map.scope_ids && !known.include?(place_id) && !@position_units.key?(place_id) }
     @map.people.flat_map do |person|
       held = person.memberships.to_set { it.position_id || it.unit_id }
-      person.capacity_overrides.keys.reject { held.include?(it) }.sort.map do |place_id|
+      person.capacity_overrides.keys.reject { held.include?(it) || outside.(it) }.sort.map do |place_id|
         item(person.id, "#{CAPACITY}:#{place_id}", "Overrides capacity in a place they don't hold", broken_by: [ [ person.id, ASSIGNMENT ] ])
       end
     end
