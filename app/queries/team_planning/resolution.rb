@@ -41,10 +41,11 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def attention
-    map, changes = resolved
+    aggregate = @repository.load_plan(@plan.id)
+    map, changes = resolved(aggregate)
     capacity = TeamPlanning::Capacity.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository)
                                      .report_for(map)
-    TeamPlanning::Attention.new(map, changes, left_ids: left_since(map),
+    TeamPlanning::Attention.new(map, changes, left_ids: left_since(map), closed_units: closed_position_units(aggregate, changes),
                                               unclassified: capacity.configured? ? capacity.unclassified : []).call
   end
 
@@ -56,6 +57,17 @@ class TeamPlanning::Resolution
     hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
     map = (hires + others).reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
     [ explained(map.settled), winning ]
+  end
+
+  # A closed position is off the map, so its unit comes from the last
+  # PositionSet the chain made for it.
+  def closed_position_units(aggregate, winning)
+    closed = winning.values.select { it.is_a?(TeamPlanning::Events::PositionClosed) }.to_set { it.data[:subject_id] }
+    return {} if closed.empty?
+
+    aggregate.resolution_chain(@scenario_id).flat_map { aggregate.changes_in(it) }
+             .select { it.is_a?(TeamPlanning::Events::PositionSet) && closed.include?(it.data[:subject_id]) }
+             .to_h { [ it.data[:subject_id], it.data[:unit_id] ] }
   end
 
   # The scenario and those it is an alternative of: the chain after the step
