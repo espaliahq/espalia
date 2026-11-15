@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_214711) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_15_032158) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1123,6 +1123,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_214711) do
     t.datetime "updated_at", null: false
     t.jsonb "note"
     t.uuid "noted_event_id"
+    t.jsonb "settles"
     t.index ["scenario_id", "position"], name: "idx_on_scenario_id_position_e9b21b3bad", unique: true
     t.index ["tenant_id", "plan_id"], name: "index_team_planning_history_entries_on_tenant_id_and_plan_id"
   end

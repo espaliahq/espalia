@@ -60,7 +60,8 @@ class TeamPlanning::Projections::History
     TeamPlanningHistoryEntry.create!(
       id: entry.event_id, position: next_position(entry.scenario_id),
       **entry.to_h.slice(:plan_id, :scenario_id, :action, :kind, :end_state, :sealed_fields, :actor_id, :at, :note,
-                         :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :noted_event_id, :subject_id, :facet)
+                         :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :noted_event_id, :subject_id, :facet,
+                         :settles)
     )
   end
 
