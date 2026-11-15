@@ -72,6 +72,8 @@ class PlansController < ApplicationController
   end
 
   def cost_columns
+    return [] unless PayBand.exists?
+
     costs = read(Operations::TeamPlanning::ScenarioCosts)
     rows = costs[:scenarios].index_by { it[:scenario_id] }
     priced = rows.values.any? { |row| row[:total]&.values_at(:scenario, :baseline)&.any? { it[:native].any? } }
