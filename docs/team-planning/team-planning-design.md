@@ -915,6 +915,14 @@ its own, its position's, a succession's, the places of someone over or under all
 place a capacity item names, or the retired unit that broke it. A capacity item for someone in
 no unit falls back to Espalia.
 
+Each planned change shows its note beside it ([#292](https://github.com/espaliahq/espalia/issues/292)),
+rendered as prose. `team_planning_status` gives an entry its `note`, read off the override
+the change projects, so it holds the latest one written. A removed note reads "Note removed"
+rather than vanishing, so the change doesn't look as if nobody explained it. An editor writes,
+rewrites or clears a note in place, through `team_planning_note_change`, on the scenario that
+made the change. For an inherited change that is not the scenario shown. Rules and positions
+have no status, so their notes don't appear here.
+
 ## Plan-held data
 
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not
