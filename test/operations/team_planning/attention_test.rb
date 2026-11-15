@@ -119,6 +119,18 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal({ @newcomer.id => "Nia Newcomer" }, attention[:names])
   end
 
+  should "name where to fix each item: the employment status provider for a newcomer, else the units it touches" do
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                       .set_fact_provider("employment_status", "hibob", effective_on: "2026-01-01")
+    end
+    assign(@q2, @newcomer, { unit_id: @growth, allocation: 1 })
+    write(Operations::TeamPlanning::RetireUnit, @q1, unit_id: @payments)
+
+    sources = attention[:items].to_h { [ it[:subject_id], it[:sources] ] }
+    assert_equal({ @newcomer.id => %w[hibob], @ada.id => %w[espalia], @bo.id => %w[espalia] }, sources)
+  end
+
   should "read the baseline when no scenario is given" do
     write(Operations::TeamPlanning::RetireUnit, @plan_id, unit_id: @payments)
 

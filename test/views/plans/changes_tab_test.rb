@@ -102,14 +102,15 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
 
   context "what needs attention" do
     should "list each item with its reason" do
-      html = render_tab(items: [ { subject_id: ADA, facet: "assignment", reason: "Placed, but has left", change: nil } ])
+      html = render_tab(items: [ { subject_id: ADA, facet: "assignment", reason: "Placed, but has left", change: nil, sources: %w[hibob] } ])
       row = html.at_css("[data-attention-item='assignment']")
       assert_equal [ "Ada Quill · Placement", "Placed, but has left" ], row.css("p").map { it.text.squish }
+      assert_includes row.text, "Source: HiBob"
     end
 
     should "name a unit it can, and never call one it can't only the plan's" do
-      html = render_tab(items: [ { subject_id: PAYMENTS, facet: "unit", reason: "Its parent was retired", change: nil },
-                                 { subject_id: "elsewhere", facet: "unit", reason: "Its parent was retired", change: nil } ])
+      html = render_tab(items: [ { subject_id: PAYMENTS, facet: "unit", reason: "Its parent was retired", change: nil, sources: %w[espalia] },
+                                 { subject_id: "elsewhere", facet: "unit", reason: "Its parent was retired", change: nil, sources: %w[espalia] } ])
       assert_equal [ "Payments · Unit", "Unit" ], html.css("[data-attention-item] p:first-child").map { it.text.squish }
     end
   end

@@ -11,7 +11,9 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "the subject_id and facet that no longer fit (a person's assignment, a position, a unit, a " \
               "succession), a reason, and the change it belongs to: its kind, the scenario that made it and its " \
               "event_id. That is the later to land of the subject's own change and the change that broke it, such " \
-              "as a parent unit's retirement; change is null when nothing in the plan explains it. " \
+              "as a parent unit's retirement; change is null when nothing in the plan explains it. `sources` names " \
+              "where to fix it: the provider of employment status for someone the plan can't place, else the " \
+              "providers of the units the item touches (\"espalia\" for a unit only the plan holds). " \
               "Items come grouped by check, in a fixed order, then " \
               "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
@@ -27,7 +29,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id) || plan.id
     items = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).attention }
-    { plan_id: plan.id, scenario_id:, items: items.map { item_row(it) }, names: names_of(plan, items) }
+    sources = ::TeamPlanning::SourceOfTruth.new(tenant_id: plan.tenant_id).preload(unit_ids: items.flat_map(&:unit_ids))
+    { plan_id: plan.id, scenario_id:, items: items.map { item_row(it, sources) }, names: names_of(plan, items) }
   end
 
   private
@@ -38,9 +41,10 @@ class Operations::TeamPlanning::Attention < Operations::Base
     ids.to_h { [ it, known.fetch(it, Person::FORMER_MEMBER) ] }
   end
 
-  def item_row(item)
+  def item_row(item, sources)
     change = item.change && { kind: item.change.class.name.demodulize, scenario_id: item.change.data[:scenario_id],
                               event_id: item.change.event_id }
-    { subject_id: item.subject_id, facet: item.facet, reason: item.reason, change: }
+    { subject_id: item.subject_id, facet: item.facet, reason: item.reason, change:,
+      sources: item.fact ? sources.of_fact(item.fact) : sources.of_units(item.unit_ids) }
   end
 end

@@ -882,6 +882,11 @@ planned placement come from the providers of the units they touch, as a unit mir
 an HRIS takes its members from the sync. A unit only the plan holds is Espalia's. Drift's `names` cover units as well as
 people, so a move reads "from Payments to Growth".
 
+Attention gives each item its `sources` too. Someone the plan can't place, as they joined
+after the base or have left, is fixed where employment status comes from. Every other item
+is fixed in the units it touches: its own, its position's, a succession's, or the retired
+unit that broke it.
+
 ## Plan-held data
 
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not

@@ -150,17 +150,20 @@ class Views::Plans::ChangesTab < Views::Base
   end
 
   def attention_row(item)
-    li(class: "p-3", data: { attention_item: item[:facet] }) do
-      p(class: "text-sm text-default break-words") do
-        facet = FACETS.fetch(item[:facet], item[:facet].humanize)
-        if (name = attention_name(item[:subject_id]))
-          strong(class: "font-medium") { name }
-          plain " · #{facet}"
-        else
-          strong(class: "font-medium") { facet }
+    li(class: "flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between", data: { attention_item: item[:facet] }) do
+      div(class: "min-w-0 space-y-1") do
+        p(class: "text-sm text-default break-words") do
+          facet = FACETS.fetch(item[:facet], item[:facet].humanize)
+          if (name = attention_name(item[:subject_id]))
+            strong(class: "font-medium") { name }
+            plain " · #{facet}"
+          else
+            strong(class: "font-medium") { facet }
+          end
         end
+        p(class: "text-xs text-muted") { item[:reason] }
       end
-      p(class: "mt-1 text-xs text-muted") { item[:reason] }
+      div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") { sources(item[:sources]) }
     end
   end
 

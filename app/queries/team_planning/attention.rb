@@ -22,7 +22,11 @@ class TeamPlanning::Attention
   #   child's placement under an ancestor's retirement names the placement,
   #   and a later retirement under an earlier placement names the retirement;
   #   nil only when no change explains it
-  Item = Data.define(:subject_id, :facet, :reason, :change)
+  # @!attribute unit_ids [Array<String>] the units it touches, whose providers are its source of truth
+  # @!attribute fact [String, nil] the person fact it rests on instead, for someone the plan can't place
+  Item = Data.define(:subject_id, :facet, :reason, :change, :unit_ids, :fact) do
+    def initialize(unit_ids: [], fact: nil, **) = super
+  end
 
   CHECKS = %i[placements positions units unresolved successions capacity_overrides].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
@@ -80,7 +84,7 @@ class TeamPlanning::Attention
   end
 
   def unresolved
-    @map.unresolved.map { item(it.person_id, ASSIGNMENT, "Placed, but #{it.why}") }
+    @map.unresolved.map { item(it.person_id, ASSIGNMENT, "Placed, but #{it.why}", fact: "employment_status") }
   end
 
   def successions
@@ -105,9 +109,20 @@ class TeamPlanning::Attention
     end
   end
 
-  def item(subject_id, facet, reason, broken_by: [])
+  def item(subject_id, facet, reason, broken_by: [], fact: nil)
     keys = [ [ subject_id, facet ], *broken_by ].select { @order.key?(it) }
-    Item.new(subject_id:, facet:, reason:, change: keys.max_by { @order[it] }&.then { @changes[it] })
+    Item.new(subject_id:, facet:, reason:, change: keys.max_by { @order[it] }&.then { @changes[it] },
+             unit_ids: units_touched(subject_id, facet, broken_by), fact:)
+  end
+
+  def units_touched(subject_id, facet, broken_by)
+    own = case facet
+    when UNIT then [ subject_id ]
+    when POSITION then [ @map.positions.find { it.id == subject_id }&.unit_id ]
+    when SUCCESSION then @map.successions.find { it.id == subject_id }&.then { it.predecessor_ids + it.successor_ids }
+    else []
+    end
+    (own.to_a + broken_by.filter_map { |id, broken| id if broken == UNIT }).compact.uniq
   end
 
   def gone(unit_id) = @retired.include?(unit_id) ? "a retired unit" : "a unit no longer in this scenario"
