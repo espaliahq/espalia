@@ -72,6 +72,7 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     platform = line(cost_centre: "Platform")
     line(role_id: @engineer.role_id, level_id: @e5.level_id, location: "Atlantis")
     seat = open_position(cost_centre: "Platform")
+    fill(seat, @brook)
 
     assert_equal [ [ platform ], nil ], drawn_on(funding, seat)
   end
