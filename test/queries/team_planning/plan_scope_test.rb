@@ -293,6 +293,26 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_equal "done", statuses.find { it[:subject_id] == @brook.id && it[:facet] == "assignment" }[:status].to_s
   end
 
+  should "keep a place outside the plan as it was when a move changes one inside, and refuse one with nothing left to keep" do
+    eve = as_tenant do
+      create(:person, tenant: @tenant, name: "Eve Quill").tap do |person|
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(person.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0)
+        people.set_membership(person.id, @payments, **ESPALIA, allocation: 1.0)
+        people.set_membership(person.id, @sales, **ESPALIA)
+      end
+    end
+    move = ->(who) { call(Operations::TeamPlanning::MovePlace, plan_id: @plan_id, scenario_id: @h1, person_id: who.id, from_unit_id: @payments, to_unit_id: @engineering, allocation: 0.5) }
+
+    move.(@brook)
+    brook = resolve(@plan_id, @h1).people.find { it.id == @brook.id }
+    assert_equal [ [ @sales, 0.5 ], [ @engineering, 0.5 ] ], brook.memberships.map { [ it.unit_id, it.allocation.to_f ] }
+
+    error = assert_raises(Operations::Base::ParameterError) { move.(eve) }
+    assert_match "in units this plan doesn't cover", error.message
+    assert_not_includes error.message, "Sales"
+  end
+
   context "changing the scope" do
     should "refuse a unit id written without its hyphens, so the ids a plan keeps compare as written" do
       error = assert_raises(Operations::Base::ParameterError) { set_scope(@plan_id, [ @engineering, @sales.delete("-") ]) }

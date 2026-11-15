@@ -78,7 +78,7 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
     raise Operations::Base::ParameterError, "This scenario has no such position" if to_position && map.positions.none? { it.id == to_position && live.include?(it.unit_id) }
 
     kept.reject! { |place, _, _| replaced?(place) }
-    kept.map { |place, share, _| written(place, share) } + arriving
+    kept.map { |place, share, _| written(place, share, away: away.include?(place)) } + arriving
   end
 
   def replaced?(place)
@@ -102,7 +102,12 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
 
   def from_position = params[:from_position_id].presence && uuid!(:from_position_id)
 
-  def written(place, share)
+  # The plan can't show a place outside its scope, so its refusal names none.
+  def written(place, share, away:)
+    if away && !share.positive?
+      raise Operations::Base::ParameterError, "Part of this person's time is in units this plan doesn't cover, with no allocation " \
+                                               "left to keep. Set that allocation in the Org Graph first."
+    end
     raise Operations::Base::ParameterError, "A place with no allocation has nothing left to share. Set its allocation first." unless share.positive?
 
     spot = place.position_id ? { position_id: place.position_id } : { unit_id: place.unit_id }
