@@ -116,18 +116,24 @@ class TeamPlanning::Attention
   # Someone placed only in a gone unit or a closed position has that item
   # already, so placed nowhere is someone with no place at all. An unknown
   # total is never under-allocated, and someone who has left is the
-  # leavers' item.
+  # leavers' item. A place that drops out of the total can leave the rest
+  # short, so the change that dropped it can explain an under-allocation.
   def allocations
     totals = @map.allocation_totals
     @map.people.filter_map do |person|
       total = totals[person.id]
-      reason = if gone?(person) then nil
-      elsif person.memberships.empty? then "Placed nowhere"
+      if gone?(person) then nil
+      elsif person.memberships.empty? then item(person.id, ASSIGNMENT, "Placed nowhere")
       elsif total.nil? || total.zero? then nil
-      elsif total > 1 then "Over-allocated, at #{percent(total)}"
-      elsif total < 1 then "Under-allocated, at #{percent(total)}"
+      elsif total > 1 then item(person.id, ASSIGNMENT, "Over-allocated, at #{percent(total)}")
+      elsif total < 1 then item(person.id, ASSIGNMENT, "Under-allocated, at #{percent(total)}", broken_by: dropped_keys(person))
       end
-      item(person.id, ASSIGNMENT, reason) if reason
+    end
+  end
+
+  def dropped_keys(person)
+    person.memberships.reject { @live.include?(it.unit_id) }.flat_map do |place|
+      [ ([ place.position_id, POSITION ] if place.position_id), ([ place.unit_id, UNIT ] if place.unit_id) ].compact
     end
   end
 

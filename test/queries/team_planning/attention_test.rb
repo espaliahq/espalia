@@ -103,6 +103,13 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_empty reasons(map(people: [ member(places: [ [ LIVE, 0.5 ], [ ROOT, nil ] ]) ]))
   end
 
+  should "name the retirement that left someone under-allocated" do
+    retired = change(TeamPlanning::Events::UnitRetired, RETIRED, name: "Unit", parent_id: ROOT, level_id: LEVEL)
+    items = TeamPlanning::Attention.new(map(people: [ member(places: [ [ LIVE, 0.5 ], [ RETIRED, 0.5 ] ]) ]), { retired.key => retired }).call
+
+    assert_equal [ [ "Placed in a retired unit", retired ], [ "Under-allocated, at 50%", retired ] ], items.map { [ it.reason, it.change ] }
+  end
+
   should "mark someone the Org Graph has had leave once, placed or not, unless the plan has them leave" do
     leaver = member
     assert_equal [ "Placed, but has since left" ], TeamPlanning::Attention.new(map(people: [ leaver ]), {}, left_ids: [ PERSON ]).call.map(&:reason)
