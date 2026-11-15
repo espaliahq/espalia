@@ -164,7 +164,7 @@ class TeamPlanning::Cost
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
 
     @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
-    @year_days = run_rate ? (@period.end - @period.begin).to_i + 1 : YEAR_DAYS
+    @year_days = run_rate ? @period.count : YEAR_DAYS
     @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
     @factors = {}
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
