@@ -369,12 +369,16 @@ class Views::Plans::Timeline < Views::Base
     return if bar[:from].zero?
 
     move = lane[:moves].find { it[:person_id] == bar[:subject_id] && it[:after] == bar[:from] - 1 && joined?(it, bar) }
-    "from #{units_named(bar[:from] - 1, move[:left_unit_ids])}" if move
+    return unless move
+
+    move[:crossing] == "in" ? "joins this plan" : "from #{units_named(bar[:from] - 1, move[:left_unit_ids])}"
   end
 
   def onward(lane, bar)
     move = lane[:moves].find { it[:person_id] == bar[:subject_id] && it[:after] == bar[:to] && left?(it, bar) }
-    "to #{units_named(bar[:to] + 1, move[:joined_unit_ids])}" if move
+    return unless move
+
+    move[:crossing] == "out" ? "moves out of this plan" : "to #{units_named(bar[:to] + 1, move[:joined_unit_ids])}"
   end
 
   def departure(lane, bar, range)

@@ -71,7 +71,8 @@ class TeamPlanning::Attention
   def placements
     open = @map.positions.to_set(&:id)
     @map.people.flat_map do |person|
-      breaks = person.memberships.filter_map do |place|
+      away = @map.outside_places(person)
+      breaks = (person.memberships - away).filter_map do |place|
         if place.position_id
           [ "Placed in a closed position", [ place.position_id, POSITION ] ] unless open.include?(place.position_id)
         elsif !@live.include?(place.unit_id)
@@ -92,12 +93,15 @@ class TeamPlanning::Attention
     end
   end
 
+  # A unit the plan covers sits under one it doesn't, so its parent is never gone.
   def units
-    @map.units.filter_map do |unit|
-      next if unit.parent_id.nil? || @live.include?(unit.parent_id)
+    roots = @map.scope_ids.to_a.to_set
+    parted = @map.units.filter_map do |unit|
+      next if unit.parent_id.nil? || @live.include?(unit.parent_id) || roots.include?(unit.id)
 
       item(unit.id, UNIT, "Its parent is #{gone(unit.parent_id)}", broken_by: [ [ unit.parent_id, UNIT ] ])
     end
+    parted + (roots - @live - @retired).map { item(it, UNIT, "The plan covers it, but the organisation no longer has it") }
   end
 
   def unresolved
@@ -147,7 +151,7 @@ class TeamPlanning::Attention
   def places_of(person) = person.memberships.map { it.position_id ? @position_units[it.position_id] : it.unit_id }
 
   def dropped_keys(person)
-    person.memberships.reject { @live.include?(it.unit_id) }.flat_map do |place|
+    (person.memberships - @map.outside_places(person)).reject { @live.include?(it.unit_id) }.flat_map do |place|
       [ ([ place.position_id, POSITION ] if place.position_id), ([ place.unit_id, UNIT ] if place.unit_id) ].compact
     end
   end
@@ -201,6 +205,8 @@ class TeamPlanning::Attention
 
     nearby = near_units(person)
     if line.person_id
+      return if @map.outside?(line.person_id)
+
       manager = by_id[line.person_id]
       return "Their manager is no longer in this scenario" unless manager
       return "Their manager has since left" if @left.include?(manager.id)

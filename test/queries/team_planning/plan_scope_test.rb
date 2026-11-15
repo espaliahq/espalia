@@ -1,0 +1,151 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
+  ESPALIA = { provider: "espalia", effective_on: "2025-12-01" }.freeze
+  SYSTEM = OrgGraph::Authorization::SYSTEM
+  BASE_ON = Date.new(2026, 1, 1)
+
+  setup do
+    @tenant = create(:tenant, :with_hibob_config)
+    people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
+    @engineering, @payments, @sales = Array.new(3) { SecureRandom.uuid_v7 }
+
+    travel_to Time.utc(2025, 12, 15, 9)
+    as_tenant do
+      @family = create(:framework_role_family, name: "Engineering")
+      @engineer = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: @family.role_family_id)
+      @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5, title: "Senior SWE")
+
+      structure.define_taxonomy([ { level_id: departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
+      structure.create_unit(@engineering, "Engineering", level_id: departments, effective_on: "2025-01-01")
+      structure.create_unit(@payments, "Payments", level_id: teams, parent_id: @engineering, effective_on: "2025-01-01")
+      structure.create_unit(@sales, "Sales", level_id: departments, effective_on: "2025-01-01")
+
+      @ada, @brook, @cy, @dee = %w[Ada Brook Cy Dee].map { create(:person, tenant: @tenant, name: "#{it} Quill") }
+      [ @ada, @brook, @cy, @dee ].each do |person|
+        people.record_person(person.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0)
+      end
+      people.set_membership(@ada.id, @payments, **ESPALIA, allocation: 1.0)
+      people.set_membership(@brook.id, @payments, **ESPALIA, allocation: 0.5)
+      people.set_membership(@brook.id, @sales, **ESPALIA, allocation: 0.5)
+      people.set_membership(@cy.id, @sales, **ESPALIA, allocation: 1.0)
+      people.set_membership(@dee.id, @sales, **ESPALIA, allocation: 1.0)
+      people.change_manager(@ada.id, @cy.id, **ESPALIA)
+
+      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      ReferenceCurrency.create!(currency: "EUR")
+
+      @planner = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
+      @plan_id, @whole_id = Array.new(2) { SecureRandom.uuid_v7 }
+      handler.create_plan(@plan_id, name: "Engineering next year", base_on: BASE_ON, unit_ids: [ @engineering ])
+      handler.create_plan(@whole_id, name: "Everyone next year", base_on: BASE_ON)
+      [ @plan_id, @whole_id ].each do |plan_id|
+        handler.set_change(plan_id, TeamPlanning::Events::RuleSet, scenario_id: plan_id, subject_id: plan_id,
+                                                                   end_state: { rule: "capacity_model", value: { families: { @family.role_family_id => { model: "per_fte" } }, roles: {} } })
+      end
+    end
+    @h1 = fork(@plan_id, name: "H1", ends_on: "2026-06-30")
+    @h2 = fork(@plan_id, parent_id: @h1, name: "H2", ends_on: "2026-12-31")
+    @whole_h1 = fork(@whole_id, name: "H1", ends_on: "2026-06-30")
+  end
+
+  def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
+
+  def context = AuthorizationContext.new(user: @planner.user, tenant_user: @planner, person: @planner.person)
+
+  def handler = TeamPlanning::CommandHandler.new(actor: context)
+
+  def call(operation, **params) = as_tenant { operation.call(context:, params: params.compact) }
+
+  def fork(plan_id, parent_id: nil, **params)
+    call(Operations::TeamPlanning::ForkScenario, plan_id:, parent_id:, relation: "then", **params)[:scenario_id]
+  end
+
+  def resolve(plan_id, scenario_id)
+    as_tenant { TeamPlanning::Resolution.new(context:, plan: TeamPlanningPlan.find(plan_id), scenario_id:).call }
+  end
+
+  def cost(plan_id, scenario_id) = call(Operations::TeamPlanning::Cost, plan_id:, scenario_id:)
+
+  def capacity(plan_id, scenario_id) = call(Operations::TeamPlanning::Capacity, plan_id:, scenario_id:)
+
+  def scenario_map(plan_id, scenario_id) = call(Operations::TeamPlanning::ScenarioMap, plan_id:, scenario_id:)
+
+  def person(payload, person) = payload[:people].find { it[:id] == person.id }
+
+  def every_read(plan_id, scenario_id)
+    [ scenario_map(plan_id, scenario_id), cost(plan_id, scenario_id), capacity(plan_id, scenario_id),
+      call(Operations::TeamPlanning::Timeline, plan_id:, scenario_id:), call(Operations::TeamPlanning::Attention, plan_id:, scenario_id:),
+      call(Operations::TeamPlanning::Plan, plan_id:) ].to_json
+  end
+
+  should "count a person half in the plan when half their time is in units it covers, in every total" do
+    map = resolve(@plan_id, @h1)
+    assert_equal [ @ada.id, @brook.id ], map.people.map(&:id).sort_by { [ @ada.id, @brook.id ].index(it) }
+    assert_equal [ @cy.id, @dee.id ].sort, map.outside.map(&:id).sort
+
+    priced = cost(@plan_id, @h1)
+    total = priced[:total][:scenario][:converted].to_r
+    everyone = cost(@whole_id, @whole_h1)[:total][:scenario][:converted].to_r
+    assert_in_delta 1.5r / 4, total / everyone, 1e-12, "Ada and half of Brook, of the four people a whole-organisation plan counts"
+    assert_equal total, priced[:units].sum { it[:scenario][:converted].to_r }, "the units add up to the plan's total"
+
+    delivered = capacity(@plan_id, @h1)
+    assert_equal({ "per_fte" => 1.5 }, delivered[:totals].transform_values(&:to_f))
+    assert_equal [ [ @payments, 1.5 ] ], delivered[:units].map { [ it[:unit_id], it[:totals]["per_fte"].to_f ] }
+
+    brook = person(scenario_map(@plan_id, @h1), @brook)
+    assert_equal [ @payments ], brook[:memberships].map { it[:unit_id] }
+    assert_equal({ share: 0.5 }, brook[:outside])
+  end
+
+  should "read a plan covering the whole organisation exactly as before scope existed" do
+    map = resolve(@whole_id, @whole_h1)
+    assert_nil map.scope_ids
+    assert_empty map.outside
+
+    payload = scenario_map(@whole_id, @whole_h1)
+    assert_equal [ @payments, @sales ].sort, person(payload, @brook)[:memberships].map { it[:unit_id] }.sort
+    payload[:people].each { assert_not it.key?(:outside) || it.key?(:manager_outside) }
+    assert_equal @cy.id, person(payload, @ada)[:manager_id]
+    assert_equal({ "per_fte" => 4.0 }, capacity(@whole_id, @whole_h1)[:totals].transform_values(&:to_f))
+  end
+
+  should "never let a unit or person outside the scope reach a plan read, though a whole-organisation plan shows them" do
+    leaked = [ @sales, @cy.id, @dee.id ]
+    scoped = every_read(@plan_id, @h1)
+    leaked.each { assert_not_includes scoped, it }
+
+    whole = every_read(@whole_id, @whole_h1)
+    leaked.each { assert_includes whole, it, "the control proves the reads would carry it" }
+    assert person(scenario_map(@plan_id, @h1), @ada)[:manager_outside]
+  end
+
+  should "bring a person in with the change that places them in scope, and let them go when it's undone" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    assert_includes resolve(@plan_id, @h1).people.map(&:id), @dee.id
+
+    call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1)
+    map = resolve(@plan_id, @h1)
+    assert_not_includes map.people.map(&:id), @dee.id
+    assert_includes map.outside.map(&:id), @dee.id
+  end
+
+  should "show leaving the plan and joining it as moves on the timeline" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h2, person_id: @ada.id,
+                                                  placements: [ { unit_id: @sales, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h2, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    moves = call(Operations::TeamPlanning::Timeline, plan_id: @plan_id, scenario_id: @h2)[:lanes].flat_map { it[:moves] }
+
+    ada = moves.find { it[:person_id] == @ada.id }
+    assert_equal [ "out", [ @payments ], [] ], ada.values_at(:crossing, :left_unit_ids, :joined_unit_ids)
+    dee = moves.find { it[:person_id] == @dee.id }
+    assert_equal [ "in", [], [ @payments ] ], dee.values_at(:crossing, :left_unit_ids, :joined_unit_ids)
+  end
+end

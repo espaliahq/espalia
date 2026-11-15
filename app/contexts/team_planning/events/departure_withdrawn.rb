@@ -20,7 +20,7 @@ class TeamPlanning::Events::DepartureWithdrawn < TeamPlanning::Events::Change
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
   # @return [TeamPlanning::Baseline::Map]
-  def self.apply_to(map, data) = map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(departure: nil) : it })
+  def self.apply_to(map, data) = map.holds?(data[:subject_id]) ? map.updating(data[:subject_id]) { it.with(departure: nil) } : map
 
   # A person on the map who isn't leaving, so a scenario can pin that they
   # stay when nothing it follows has them leave.

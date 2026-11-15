@@ -9,6 +9,13 @@
 #
 # What the plan holds privately reads as `{ value: }`, or `{ removed: true }`
 # once its key is gone, under `planned_level`, `plan_data` and `placeholder`.
+#
+# A plan with a scope never shows anyone or anything outside it
+# [#338](https://github.com/espaliahq/espalia/issues/338). A person keeps only
+# their places in it, with `outside: { share: }` for the rest of their time; a
+# manager outside reads as `manager_outside: true`, and a covered unit's parent
+# or owner outside is left out. A plan covering the whole organisation reads as
+# it always has.
 module Operations::TeamPlanning::MapPayload
   # @param value [Shreddable::Value, nil]
   # @return [Hash, nil] `{ value: }`, or `{ removed: true }` once its key is gone
@@ -24,7 +31,7 @@ module Operations::TeamPlanning::MapPayload
   # @return [Hash] `{ base_on, known_on, units, people, unassigned_ids, positions, unresolved, departed, names }`
   def map_payload(map)
     { base_on: map.base_on.iso8601, known_on: map.known_on.iso8601,
-      units: map.units.map(&:to_h),
+      units: units_payload(map),
       people: people_payload(map),
       unassigned_ids: map.unassigned_ids,
       positions: positions_payload(map),
@@ -33,15 +40,33 @@ module Operations::TeamPlanning::MapPayload
       names: names_for(map) }
   end
 
+  def units_payload(map)
+    return map.units.map(&:to_h) unless map.scope_ids
+
+    on_map = map.units.to_set(&:id)
+    map.units.map do |unit|
+      unit.to_h.merge(parent_id: (unit.parent_id if on_map.include?(unit.parent_id)), owner_ids: unit.owner_ids.reject { map.outside?(it) })
+    end
+  end
+
   def people_payload(map)
     totals = map.allocation_totals
     map.people.map do |person|
-      person.to_h.except(:departure, :planned_level, :plan_data, :placeholder, :capacity_overrides)
-            .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
-                   capacity_overrides: person.capacity_overrides.transform_values { sealed_payload(it) },
-                   placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
-                   leaving: person.leaving?, leaves_on: (person.departure[:leaves_on] if person.leaving?), backfill_position_id: person.backfill_id)
+      payload = person.to_h.except(:departure, :planned_level, :plan_data, :placeholder, :capacity_overrides)
+                      .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
+                             capacity_overrides: person.capacity_overrides.transform_values { sealed_payload(it) },
+                             placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
+                             leaving: person.leaving?, leaves_on: (person.departure[:leaves_on] if person.leaving?), backfill_position_id: person.backfill_id)
+      map.scope_ids ? within_scope(payload, person, map) : payload
     end
+  end
+
+  def within_scope(payload, person, map)
+    away = map.outside_places(person)
+    share = ::TeamPlanning::Baseline::Membership.shares(person.memberships).sum(0r) { |place, part, _| away.include?(place) ? part : 0r }
+    manager_outside = map.outside?(person.manager_id)
+    payload.merge(memberships: (person.memberships - away).map(&:to_h), outside: (away.any? ? { share: share.to_f } : nil),
+                  manager_id: (person.manager_id unless manager_outside), manager_outside:)
   end
 
   def positions_payload(map)

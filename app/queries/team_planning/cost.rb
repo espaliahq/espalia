@@ -201,7 +201,8 @@ class TeamPlanning::Cost
     seat = { seat_id: member.id, kind: "person", cost_centre: member.cost_centre.presence, fte: fte_of(member) || 1r }
     unpriced = ("fte_unknown" unless fte_of(member)) || ("level_unknown" if member.planned_or_own(:level) == TeamPlanning::Baseline::UNKNOWN)
     own_level_id, own_source = person_level(member)
-    fractions(places).map do |placement, fraction|
+    away = @map.outside_places(member)
+    fractions(places).reject { |placement, _| away.include?(placement) }.map do |placement, fraction|
       position = @positions[placement.position_id]
       level_id, source = own_level_id || !position ? [ own_level_id, own_source ] : [ position.level_id, "position" ]
       line(**seat, unit_id: live_unit(placement.unit_id), position_id: placement.position_id, level_id:, level_source: level_id && source,

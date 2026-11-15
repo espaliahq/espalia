@@ -39,7 +39,11 @@ class TeamPlanning::Timeline
   Bar = Data.define(:kind, :subject_id, :from, :to, :unit_id, :position_id, :allocation, :role, :replaces_id, :shares)
 
   # Between column `after` and the next, the units a person left and joined.
-  Move = Data.define(:person_id, :after, :left_unit_ids, :joined_unit_ids)
+  # `crossing` is "out" when they leave the units a scoped plan covers, with
+  # no units joined, and "in" when they join them, with none left.
+  Move = Data.define(:person_id, :after, :left_unit_ids, :joined_unit_ids, :crossing) do
+    def initialize(crossing: nil, **) = super
+  end
 
   # A person leaving in column `column`, and the position backfilling them.
   Departure = Data.define(:person_id, :column, :position_id)
@@ -271,7 +275,7 @@ class TeamPlanning::Timeline
     def person_moves
       @maps.each_cons(2).each_with_index.flat_map do |(before, after), column|
         later = after.people.index_by(&:id)
-        before.people.filter_map do |person|
+        crossings(before, after, column) + before.people.filter_map do |person|
           next unless (next_person = later[person.id])
 
           was = units_of(before, person)
@@ -282,6 +286,15 @@ class TeamPlanning::Timeline
 
           Move.new(person_id: person.id, after: column, left_unit_ids: left, joined_unit_ids: joined)
         end
+      end
+    end
+
+    def crossings(before, after, column)
+      out = before.people.select { after.outside?(it.id) }.map do |person|
+        Move.new(person_id: person.id, after: column, left_unit_ids: units_of(before, person), joined_unit_ids: [], crossing: "out")
+      end
+      out + after.people.select { before.outside?(it.id) }.map do |person|
+        Move.new(person_id: person.id, after: column, left_unit_ids: [], joined_unit_ids: units_of(after, person), crossing: "in")
       end
     end
 
