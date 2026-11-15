@@ -43,11 +43,24 @@ class Views::Plans::ScenarioDialogs < Views::Base
   end
 
   # Each scenario that has one, with the scenario that comes after it. A
-  # scenario has at most one.
+  # scenario has at most one. The agreed part of a split step has the rest,
+  # which sits on it, so it can't take a next step of its own.
   #
   # @param scenarios [Array<Hash>]
   # @return [Hash{String => String}]
-  def self.next_steps(scenarios) = scenarios.select { it[:relation] == "then" }.to_h { [ it[:parent_id], it[:scenario_id] ] }
+  def self.next_steps(scenarios) = scenarios.select { onward?(it) }.to_h { [ it[:parent_id], it[:scenario_id] ] }
+
+  # Whether a scenario carries its parent's path on: as the next step, or as
+  # the rest of a split step. The baseline carries nothing on.
+  #
+  # @param scenario [Hash] from `team_planning_scenarios`
+  # @return [Boolean]
+  def self.onward?(scenario)
+    case scenario[:relation]
+    in "then" | "on" then true
+    in "instead" | nil then false
+    end
+  end
 
   # @param plan_id [String]
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first

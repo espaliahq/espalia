@@ -24,6 +24,13 @@ class TeamPlanning::Events::PositionSet < TeamPlanning::Events::Change
   # @return [String]
   def self.facet = "position"
 
+  # @param data [Hash]
+  # @return [Array<String>] the unit the position sits in
+  def self.refers_to(data) = [ data[:unit_id] ].compact
+
+  # @return [Boolean]
+  def self.creates_subject? = true
+
   # @param end_state [Hash]
   # @return [Hash] the ids downcased, the FTE a Float, the cost centre squished or nil
   # @raise [TeamPlanning::Error] for a missing id, an FTE outside (0, 1], an unknown basis or a long cost centre

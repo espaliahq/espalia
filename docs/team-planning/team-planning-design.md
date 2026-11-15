@@ -1190,11 +1190,18 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
   3 and later to 4, moving only the 4 would leave the 3 behind to win. The earlier
   changes for the same subject and facet go across with it.
 - The two parts cover the same period. This is a third relation beside `then` and
-  `instead`: the rest sits on top of the agreed part. The timeline shows them as one
+  `instead`, named `on`: the rest sits on the agreed part. The timeline shows them as one
   column with the agreed part marked.
 - The agreed part must stand without the rest. A change cannot move across if it depends
   on one that stays, such as a person placed in a unit the rest creates. The split says
   which changes block it.
+- Only a split makes `on`. A fork is `then` or `instead`, and the next step forks from the
+  rest, which keeps the original's id, its alternatives and its next step.
+- A split step is one step. Cost, capacity and the headcount walk count the pair once over
+  the one period, and the timeline gives it one column. A split part can be split again.
+- `team_planning_split_scenario` splits from an MCP client. It takes the moving changes'
+  event ids as `team_planning_history` lists them, and its refusal names the event ids
+  that block the split.
 - The agreed part can then be approved and carried out. As its changes are done they leave
   the difference, and the rest is what remains to be argued.
 

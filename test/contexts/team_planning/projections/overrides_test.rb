@@ -42,6 +42,14 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
                                                                  end_state: { rule: "test_headcount_cap", value: { cap: } }, note:)
   end
 
+  def set_level(scenario_id, level)
+    @handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id:, subject_id: @person.id, end_state: { level: })
+  end
+
+  def split(scenario_id, *event_ids)
+    SecureRandom.uuid_v7.tap { @handler.split_scenario(@plan_id, scenario_id, agreed_id: it, name: "Agreed", event_ids:) }
+  end
+
   def overrides = TeamPlanningOverride.order(:scenario_id).pluck(:scenario_id, :facet, :pinned, :end_state)
 
   should "keep one row per subject and facet, from the last change set there" do
@@ -136,6 +144,17 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
     assert_empty overrides
   end
 
+  should "move the rows of a split's subjects and facets to the agreed part, and leave the rest" do
+    set_cap(@q1, 8)
+    set_level(@q1, "4")
+    level_id = TeamPlanningOverride.find_by!(facet: "level").event_id
+
+    agreed = split(@q1, level_id)
+
+    assert_equal [ [ agreed, "level", level_id ] ], TeamPlanningOverride.where(scenario_id: agreed).pluck(:scenario_id, :facet, :event_id)
+    assert_equal [ CAP ], TeamPlanningOverride.where(scenario_id: @q1).pluck(:facet)
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       set_cap(@q1, 8)
@@ -153,6 +172,7 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
                                                                     end_state: { level: "4" }, note: "Ready since the launch")
       level_id = TeamPlanningOverride.find_by!(scenario_id: @q1, facet: "level").event_id
       @handler.note_change(@plan_id, scenario_id: @q1, event_id: level_id, note: "Ready, and asked for it")
+      split(@q1, level_id)
 
       before = snapshot_read_models(TeamPlanning::Projections::Overrides, @tenant)
       assert_equal 3, before[:overrides].size
