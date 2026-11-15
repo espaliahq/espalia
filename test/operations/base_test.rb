@@ -61,6 +61,16 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  context "mcp DSL" do
+    should "expose an operation by default" do
+      assert Class.new(Operations::Base).mcp
+    end
+
+    should "keep an operation declared web-only off the MCP server" do
+      assert_not Class.new(Operations::Base) { mcp false }.mcp
+    end
+  end
+
   ParamFixture = Class.new(Operations::Base) do
     parameter :framework_id, String, required: true
     parameter :name, String

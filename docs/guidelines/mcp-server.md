@@ -83,6 +83,13 @@ flows). The MCP tool descriptor (`Mcp::OperationToTool.call`) and the
 shared registry (`Operations::Registry`) are derived from these classes
 at boot.
 
+An operation whose inputs shouldn't pass through an agent's context
+declares `mcp false`. The web still calls it; the MCP server neither
+lists nor calls it, and its snapshot goes. `Operations::Registry.tools`
+is the MCP-visible set, while `Registry.all` still holds every operation,
+so the privacy and audit walks cover a web-only one too. Say why in the
+PR, as for any MCP opt-out.
+
 ### 2. Three approval categories
 
 | Approval | When | Examples |

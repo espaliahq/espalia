@@ -238,6 +238,16 @@ class Operations::Base
       @approval || default_approval_for_category
     end
 
+    # Keeps an operation off the MCP server while the web still calls it,
+    # for a surface whose inputs shouldn't pass through an agent's context.
+    #
+    # @param exposed [Boolean, nil] false to keep it off; nil reads the setting
+    # @return [Boolean] whether MCP lists and calls it
+    def mcp(exposed = nil)
+      @mcp = exposed unless exposed.nil?
+      @mcp != false
+    end
+
     # Declares one input parameter.
     #
     # @param name [Symbol]
