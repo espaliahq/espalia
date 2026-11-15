@@ -158,4 +158,14 @@ class Plans::CapacityTest < ActionDispatch::IntegrationTest
     context = AuthorizationContext.new(user: account.user, tenant_user: account, person: account.person)
     ActsAsTenant.with_tenant(@tenant) { operation.call(context:, params:) }
   end
+
+  should "read the Org Graph once for a scenario's map, though it prices the scenario and Today" do
+    choose_per_fte
+    hire_into_growth
+    reads = 0
+    as_of = OrgGraph::AsOf.method(:new)
+    OrgGraph::AsOf.stub(:new, ->(**args) { reads += 1; as_of.call(**args) }) { page_for(map_plan_path(@plan_id, scenario: @q1)) }
+
+    assert_equal 1, reads
+  end
 end

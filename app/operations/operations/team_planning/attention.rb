@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# What no longer fits in a scenario, from {TeamPlanning::Resolution#attention}
+# What no longer fits in a scenario, from {TeamPlanning::Attention.for}
 # [#257](https://github.com/espaliahq/espalia/issues/257). An item on a person
 # names them, so the forgotten-person audit walks it.
 class Operations::TeamPlanning::Attention < Operations::Base
@@ -35,7 +35,7 @@ class Operations::TeamPlanning::Attention < Operations::Base
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id) || plan.id
-    items = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).attention }
+    items = refusing_bad_plans { ::TeamPlanning::Attention.for(context:, plan:, scenario_id:) }
     sources = ::TeamPlanning::SourceOfTruth.new(tenant_id: plan.tenant_id).preload(unit_ids: items.flat_map(&:unit_ids))
     { plan_id: plan.id, scenario_id:, items: items.map { item_row(it, sources) }, names: names_of(plan, items) }
   end
