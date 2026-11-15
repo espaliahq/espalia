@@ -74,6 +74,13 @@ class Tenant::BudgetLinesControllerTest < ActionDispatch::IntegrationTest
       assert_equal 0, ActsAsTenant.with_tenant(@tenant) { BudgetLine.count }
     end
 
+    should "ask for an amount or a head count when a line has neither" do
+      post tenant_budget_lines_path, params: line_params(amount: "", currency: "", head_count: "")
+
+      assert_response :unprocessable_content
+      assert_includes response.body, "The budget line could not be added: A budget line needs an amount, a head count or both."
+    end
+
     should "change a line, every field as it reads afterwards" do
       line = stored_line(cost_centre: "Ops")
 

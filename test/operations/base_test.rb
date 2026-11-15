@@ -92,6 +92,19 @@ class Operations::BaseTest < ActiveSupport::TestCase
       assert_match(/at least one of: name, description, is_entry/, err.message)
     end
 
+    should "refuse in the group's own words when it gives them" do
+      worded = Class.new(Operations::Base) do
+        parameter :name, String
+        parameter :code, String
+        requires_any_of :name, :code, message: "A role needs a name or a code"
+        def policy_check = nil
+        def perform = params
+      end
+
+      err = assert_raises(Operations::Base::ParameterError) { worded.new(context: build_context, params: {}) }
+      assert_equal "A role needs a name or a code", err.message
+    end
+
     # "Supplied" means the key arrived, not that it carries a meaty value —
     # clearing a field is a legitimate partial update, and matches what the
     # emitted JSON Schema `required` asks.
