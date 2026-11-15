@@ -112,6 +112,19 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
     assert_equal "conflicting", brook(@q1)[:status].to_s
   end
 
+  should "refuse, in the handler, to settle pay for an editor without the see-pay right" do
+    rebase
+    colleague = as_tenant { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant)) }
+    as_tenant { handler.add_member(@plan_id, colleague.person_id, role: "editor") }
+    error = assert_raises(TeamPlanning::Error) do
+      as_tenant do
+        TeamPlanning::CommandHandler.new(actor: context_for(colleague))
+                                    .settle_conflict(@plan_id, scenario_id: @q1, subject_id: @brook.id, facet: "data:pay", choice: "plan")
+      end
+    end
+    assert_equal "Only a member with the see-pay right can change pay", error.message
+  end
+
   should "refuse a choice that is neither keeping the plan nor following reality, before reading the plan" do
     rebase
     assert_match(/choice must be one of \["plan", "reality"\], got "keep"/, refusal { settle(@q1, "keep") })

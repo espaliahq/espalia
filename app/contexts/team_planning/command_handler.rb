@@ -383,6 +383,7 @@ class TeamPlanning::CommandHandler
     key = [ subject_id, facet.to_s ]
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      ensure_pay_right!(plan, key.last)
       plan.ensure_settleable!(scenario_id, key)
       change = plan.winning_changes(scenario_id).fetch(key)
       if choice.to_s == "reality" && change.is_a?(TeamPlanning::Events::UnitSuccessionSet)
