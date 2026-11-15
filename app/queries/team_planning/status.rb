@@ -12,6 +12,8 @@
 # - **conflicting**: today reads none of these;
 # - **unknown**: the plan's value is sealed and its key is gone, so nobody can
 #   say what it planned.
+# - **plan_only**: the Org Graph never holds what it plans, such as a rule, a
+#   position, a hire the plan adds or a person's pay, so it is never compared.
 #
 # A plan whose base is still to come holds every change against today, so
 # nothing it plans reads conflicting before the plan starts.
@@ -22,9 +24,9 @@
 # with `since` the day of the update that first found it, while the scenario
 # still resolves to the same change. A change that reads done reads done.
 #
-# Only a kind the Org Graph can show has a status
-# ({TeamPlanning::Events::Change.tracked?}). A plan-only kind, such as a rule,
-# would read pending forever, so it is left out. Today's map holds the units
+# Only a change the Org Graph can show is compared
+# ({TeamPlanning::Events::Change.tracks?}); held against it, a plan-only one
+# would read pending forever. Today's map holds the units
 # the Org Graph retired, its successions and the people who left, read through
 # {TeamPlanning::Events::Change.read_org_graph}, since a succession there has
 # an id the plan never saw.
@@ -49,10 +51,12 @@ class TeamPlanning::Status
   # @!attribute change_id [String] the planned change's event id
   # @!attribute subject_id [String]
   # @!attribute facet [String]
-  # @!attribute status [Symbol] :done, :pending, :conflicting or :unknown
+  # @!attribute status [Symbol] one of {STATUSES}
   # @!attribute since [Date, nil] for a conflict an update to today carried forward, the day of that update
   # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
   Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since, :sources)
+
+  STATUSES = %i[done pending conflicting unknown plan_only].freeze
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -78,23 +82,29 @@ class TeamPlanning::Status
     @carried = @aggregate.carried_conflicts(@scenario_id)
     @resolved = {}
     @winning = {}
-    changes = tracked_changes
+    changes = winning(@scenario_id)
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
+    tracked = tracked(changes)
     now, base = maps
-    units = changes.to_h { |key, change| [ key, units_of(change, key, now) ] }
+    units = tracked.to_h { |key, change| [ key, units_of(change, key, now) ] }
     @sources = TeamPlanning::SourceOfTruth.new(tenant_id: @plan.tenant_id).preload(unit_ids: units.values.flatten)
-    statuses = changes.map { |key, change| entry(change, key, base:, now:, unit_ids: units[key]) }
+    statuses = changes.map do |key, change|
+      tracked.key?(key) ? entry(change, key, base:, now:, unit_ids: units[key]) : plan_only(change, key)
+    end
     Report.new(on: @today, statuses:, names: names_for(statuses.map(&:subject_id), base, now))
   end
 
   private
 
-  # A placeholder hire never reaches the Org Graph, so nothing it holds has a status.
-  def tracked_changes
-    changes = winning(@scenario_id)
+  # A placeholder hire never reaches the Org Graph, so nothing it holds is compared.
+  def tracked(changes)
     hires = changes.keys.filter_map { |subject_id, facet| subject_id if facet == TeamPlanning::Events::PlaceholderSet.facet }
-    changes.select { |(subject_id, _), change| change.class.tracked? && hires.exclude?(subject_id) }
+    changes.select { |(subject_id, _), change| change.class.tracks?(change) && hires.exclude?(subject_id) }
+  end
+
+  def plan_only(change, (subject_id, facet))
+    Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:, status: :plan_only, since: nil, sources: [])
   end
 
   # Today, and the base to hold it against. A succession the Org Graph held on

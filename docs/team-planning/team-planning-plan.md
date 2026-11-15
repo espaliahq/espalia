@@ -135,6 +135,7 @@ flowchart LR
     s72[7.2 Units model]
     s73[7.3 Override]
     s74[7.4 Capacity totals]
+    s75[7.5 Overloaded manager check]
   end
   subgraph P8[P8 Approval and carrying out]
     s81[8.1 Approver, guardrails]
@@ -205,6 +206,7 @@ flowchart LR
   s71 & s37 --> s72
   s72 & s39 --> s73
   s72 --> s74
+  s72 & s46 --> s75
   s65 & s46 --> s81
   s81 & s83 --> s84
   s84 --> s85
@@ -295,7 +297,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). | 5.2, 5.3, 3.5, 3.7 |
 | 5.5 | The see-pay right per plan member. Without it, band midpoints only | 5.4, 1.2 |
 | 5.6 | Plan-held pay: `PlanDataSet` for a person's actual cost, shreddable under their key | 5.5, 2.2 |
-| 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Never written to the Org Graph | 5.6 |
+| 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Ask once per file whether amounts are actual pay or full-time figures. Never written to the Org Graph | 5.6 |
 | 5.8 | Cost on the plan page and the map, with the difference from the baseline | 5.4 |
 | 5.9 | Today's yearly run rate: every seat Today holds priced for a year from the plan's start, shown on Today's map and row and never set against a scenario's period total | 5.4, 5.8 |
 
@@ -319,6 +321,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph. [Design: The units model](team-planning-design.md#the-units-model) | 7.1, 3.7 |
 | 7.3 | Override a person's capacity in an assignment, with the calculated figure behind it | 7.2, 3.9 |
 | 7.4 | Capacity per model, per unit and per scenario, each figure with its working, and the unclassified role check | 7.2 |
+| 7.5 | Attention check for a seat whose reports cost more to manage than it delivers, overridden or open | 7.2, 4.6 |
 
 ### P8 Approval and carrying out
 

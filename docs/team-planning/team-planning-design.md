@@ -332,9 +332,11 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    on another kind having landed. The kind's fields may not reuse `Change::FIELDS`.
    If the Org Graph holds its facet, also give it `subject_moved_by(change)`, naming the
    subject an Org Graph change moves, and `read_from(map, subject_id:, facet:)`, reading
-   its end state back off a map. Without the first it meets no drift; without both it has
-   no status, unless the Org Graph holds the subject under an id of its own and the kind
-   overrides `read_org_graph` to find it, as a succession does (`Change.tracked?`). Test both in the drift and status tests, as their test-only kinds do.
+   its end state back off a map. Without the first it meets no drift; without both its
+   status reads `plan_only`, never compared, unless the Org Graph holds the subject under an
+   id of its own and the kind overrides `read_org_graph` to find it, as a succession does
+   (`Change.tracked?`). A kind that holds some fields the Org Graph never does overrides
+   `Change.tracks?(change)`, as `PlanDataSet` does for pay. Test both in the drift and status tests, as their test-only kinds do.
 2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
    and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
    resolver.
@@ -512,6 +514,12 @@ resolves to none. The figure is max(base − cost, 0) × allocation × FTE: the 
 taken before the seat splits across places. A cost past the base floors at zero and marks
 the figure overloaded, with the excess. Each step names what it charges for.
 
+An overloaded seat is an Attention item (7.5), once per seat under the facet `capacity`,
+whether a person or an open position holds it. A floor hides a smell, so the check reads
+the model's own figure: an override changes the number, not the reports, and the reason
+says the figure is overridden. It credits the latest of the seat's placement and level,
+each report's line to it, and the capacity rule that chose the model.
+
 `Units::Graph` reads who a seat manages from reporting lines, never from unit owners:
 ownership says who may edit a unit, not who manages it. One principle runs through the
 rules: a vacant seat and a filled one must stay comparable, so leaving a seat empty never
@@ -605,11 +613,13 @@ minimum or maximum shows on either page.
 A member holds the see-pay right or not
 ([#300](https://github.com/espaliahq/espalia/issues/300)). Two plan events carry it,
 `SeePayGranted` and `SeePayWithdrawn`, each naming who made the change. `PlanPolicy#see_pay?`
-answers for the caller, and every read of band ranges or actual pay asks it. Today that is
-`team_planning_cost`, which gives a holder each band's minimum and maximum beside its
-midpoint and everyone else the midpoint, and says which in `pay_view` (`band_ranges` or
-`band_midpoints`). Totals are the same in both, since midpoints price every seat until
-actual pay arrives in 5.6. An agent over MCP gets the view of the person it acts for.
+answers for the caller, and every read of band ranges or actual pay asks it.
+`team_planning_cost` gives a holder each band's minimum and maximum beside its midpoint, and
+prices from [actual pay](#actual-pay-as-built) where the plan holds it. Everyone else gets
+midpoints throughout. `pay_view` names which (`band_ranges` or `band_midpoints`), each seat's
+`pay_source` says whether actual pay or a midpoint priced it, and the two views total
+differently once a plan holds pay. An agent over MCP gets the view of the person
+it acts for.
 
 - **Who changes it.** Only a holder grants or withdraws, and only for a member. The creator
   holds it from the start, and plans from before the right have their creator only.
@@ -634,6 +644,40 @@ actual pay arrives in 5.6. An agent over MCP gets the view of the person it acts
 
 The `team_planning/plan_members` projection carries the right, so its version moved to 2
 and it needs a rebuild on deploy.
+
+
+### Actual pay as built
+
+A plan can hold what a person is paid
+([#317](https://github.com/espaliahq/espalia/issues/317)). It is a `PlanDataSet` on facet
+`data:pay`, sealed under the person's key in the plan, whose value is
+`{ amount, currency, period, basis }`. The amount is base pay, so cost adds the unit's
+on-cost on top.
+
+- **The basis is required, with no default.** `full_time` means a full-time figure, which
+  the person's FTE scales. `actual` means what they are paid, already pro-rated, which FTE
+  leaves alone. Many HR exports pro-rate a part-timer's pay, so guessing either way would
+  misprice someone. An hourly amount is a rate, so its basis is always `full_time`. The
+  upload in 5.7 asks for the basis once per file.
+- **Writing needs an editor with the see-pay right.** `team_planning_set_actual_pay` is its
+  own tool, and `team_planning_set_plan_value` refuses `pay`. Clearing, pinning, noting,
+  undoing and redoing a `data:pay` change need the right too. The refusal says only that pay
+  needs the see-pay right, which status already tells any member: they can see that a
+  `data:pay` change exists, never its value. The tool's approval is `:mcp_client`, since an
+  `:in_app` approval would store its arguments in clear until confirmed.
+- **Pricing.** For a holder, a person with held pay is priced from it: made yearly (a month
+  is 1/12, an hour takes the `working_hours` rule), scaled by FTE only for `full_time`, by
+  the days held out of 365, plus on-cost. Held pay needs no level or band. The seat's
+  `pay_source` says `actual` or `band_midpoint`, `basis` says which basis, and
+  `actual_pay_seats` counts the seats priced from pay, for holders only.
+- **Forgotten pay is unpriced.** Pay the plan lost with the person's key leaves the seat
+  unpriced as `pay_unknown`. The midpoint never stands in, since a total that silently
+  swapped forgotten pay for a midpoint would look complete when it isn't.
+- **Where it never goes.** The scenario map carries `plan_data.pay` only for holders. History
+  and overrides show its end state as `{ field: "pay" }`, the value sealed out. `pay` and
+  `amount` are filtered from the log. `test/integration/team_planning_pay_privacy_test.rb`
+  walks every plan read as a viewer and as an editor without the right, then checks the
+  log, the read models and the event store for the amount in clear.
 
 ### Clearing and pinning
 
@@ -927,6 +971,9 @@ reads its end state off both with `read_from`.
   own step plans: once Q1's move lands, Q2's next move for the same person waits its turn.
   So is a subject only the plan holds, such as a new unit: neither map has it.
 - **Conflicting**: today reads none of these, as when someone the plan moves has left.
+- **Plan only**: the Org Graph never holds what the change plans, so it is never compared
+  and counts as no Org Graph work: a rule, a position, a capacity, a budget line, a hire
+  the plan adds, or a person's pay. It still shows, so an editor sees the change exists.
 
 A plan whose base is still to come holds every change against today, so nothing reads
 conflicting before the plan starts.
@@ -940,9 +987,9 @@ record that it was ever done.
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
 Org Graph can move (it implements `subject_moved_by`) or find (it overrides
-`read_org_graph`) has a status: a unit set, a retirement, a succession, an assignment, a
-reporting line and a departure. A rule and a position are plan-only, so each would read
-pending forever.
+`read_org_graph`) is compared: a unit set, a retirement, a succession, an assignment, a
+reporting line, a departure, and a planned level or FTE. Anything else reads plan only,
+since held against the Org Graph it would read pending forever.
 
 Today's map is `Baseline#map_on(today, history: true)`, which adds the units the Org Graph
 has retired, the successions it holds and the people who have left, from `OrgGraph::AsOf`'s

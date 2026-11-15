@@ -17,7 +17,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "neither), still in the plan after the Org Graph has them leave, no manager (except the head of the " \
               "tree), or a manager who is gone, has left, or is in or owns none of their units nor the unit directly above one. " \
               "Once a capacity model is chosen for any role or family, even one no place takes, each place no model covers is listed too, except a leaver's, " \
-              "a forgotten person's override and a closed position's. " \
+              "a forgotten person's override and a closed position's. A seat whose reports cost more to manage than it delivers, " \
+              "a person or an open position, is listed once under the facet capacity, overridden or not. " \
               "`sources` names where to fix each item: the provider of employment status for someone who joined " \
               "after the base or has left, the provider of the manager fact for a manager item, else the providers " \
               "of the units the item touches (\"espalia\" for a unit only the plan holds). " \

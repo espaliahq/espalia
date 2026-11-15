@@ -340,10 +340,14 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :pending, statuses(status)[[ @brook.id, "departure" ]]
   end
 
-  should "leave out a kind the Org Graph never moves, which would read pending forever" do
+  should "name every status it gives in the status tool's description" do
+    TeamPlanning::Status::STATUSES.each { assert_includes Operations::TeamPlanning::Status.description, "'#{it}'" }
+  end
+
+  should "read a kind the Org Graph never moves plan only, never pending forever, with no source to go to" do
     plan(NoteSet, @ada.id, text: "Ask about the move")
 
-    assert_empty status.statuses
+    assert_equal [ [ :plan_only, nil, [] ] ], status.statuses.map { [ it.status, it.since, it.sources ] }
   end
 
   should "name each subject by its name today, a forgotten person a former member, and a subject only the plan holds not at all" do

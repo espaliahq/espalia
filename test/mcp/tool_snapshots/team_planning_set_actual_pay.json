@@ -1,0 +1,66 @@
+{
+  "name": "team_planning_set_actual_pay",
+  "description": "Hold a person's actual pay in a scenario of a Team Planning plan, so cost prices their seat from it for members with the see-pay right; everyone else still sees band midpoints. The amount is base pay, and cost adds the unit's on-cost on top. basis says what the amount is: full_time for a full-time figure that the person's FTE scales, or actual for what they are paid as it is, already pro-rated, which FTE leaves alone. period is year, month or hour; an hourly amount is a rate, made yearly by the working_hours rule, so its basis is always full_time. The plan keeps it private to that person, so once they are forgotten it reads as unknown and their seat goes unpriced. Clear it with team_planning_clear_change on facet data:pay. Refused unless the caller is one of the plan's editors and holds the see-pay right. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
+      },
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario, or the plan's id for the baseline."
+      },
+      "person_id": {
+        "type": "string"
+      },
+      "amount": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "Base pay for one period, such as \"92000\" or \"48.50\"."
+      },
+      "currency": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "An ISO 4217 code, such as AUD."
+      },
+      "period": {
+        "type": "string",
+        "enum": [
+          "year",
+          "month",
+          "hour"
+        ]
+      },
+      "basis": {
+        "type": "string",
+        "enum": [
+          "actual",
+          "full_time"
+        ]
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "person_id",
+      "amount",
+      "currency",
+      "period",
+      "basis"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

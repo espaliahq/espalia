@@ -294,6 +294,7 @@ class TeamPlanning::CommandHandler
   def set_change(plan_id, kind, scenario_id:, subject_id:, end_state: {}, note: nil, &check)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      ensure_pay_right!(plan, facet_set_by(kind, end_state))
       plan.set_change(kind, scenario_id:, subject_id:, set_by_id: actor_id!, end_state:, note:, &check)
     end
   end
@@ -312,6 +313,7 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       yield(plan).each do |change|
+        ensure_pay_right!(plan, facet_set_by(change.fetch(:kind), change.fetch(:end_state, {})))
         plan.set_change(change.fetch(:kind), scenario_id: change.fetch(:scenario_id), subject_id: change.fetch(:subject_id),
                                              set_by_id: actor_id!, end_state: change.fetch(:end_state, {}), note: change[:note])
       end
@@ -330,6 +332,7 @@ class TeamPlanning::CommandHandler
   def clear_change(plan_id, scenario_id:, subject_id:, facet:)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      ensure_pay_right!(plan, facet.to_s)
       plan.clear_change(scenario_id:, subject_id:, facet: facet.to_s, cleared_by_id: actor_id!)
     end
   end
@@ -353,6 +356,7 @@ class TeamPlanning::CommandHandler
     facet = facet.to_s
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      ensure_pay_right!(plan, facet)
       plan.ensure_pinnable!(scenario_id, [ subject_id, facet ])
       kind, end_state, pinned_from = inherited(plan, scenario_id, subject_id, facet)
       plan.pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_from:, pinned_by_id: actor_id!, note:)
@@ -405,6 +409,7 @@ class TeamPlanning::CommandHandler
   def note_change(plan_id, scenario_id:, event_id:, note:)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      ensure_pay_right!(plan, plan.facet_of(scenario_id, event_id))
       plan.note_change(scenario_id:, event_id:, note:, noted_by_id: actor_id!)
     end
   end
@@ -445,7 +450,9 @@ class TeamPlanning::CommandHandler
     chosen = nil
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      chosen = event_id.presence || plan.public_send(pick, scenario_id, actor_id!) or raise TeamPlanning::Error, nothing
+      chosen = event_id.presence || plan.public_send(pick, scenario_id, actor_id!, except_facets: untouchable_facets(plan)) or
+        raise TeamPlanning::Error, nothing
+      ensure_pay_right!(plan, plan.facet_of(scenario_id, chosen))
       yield plan, chosen
     end
     chosen
@@ -530,6 +537,21 @@ class TeamPlanning::CommandHandler
     return if PlanPolicy.reachable_ids(plan.pay_holder_ids - [ person_id ]).any?
 
     raise TeamPlanning::Error, "A plan needs someone who can see pay: give the right to someone else first"
+  end
+
+  # Pay is changed, cleared, noted, undone and redone only by a member who
+  # may see it, as each of those reads or moves what a seat costs.
+  def ensure_pay_right!(plan, facet)
+    return unless facet == TeamPlanning::Events::PlanDataSet::PAY_FACET
+    return if PlanPolicy.new(@actor, plan).see_pay?
+
+    raise TeamPlanning::Error, "Only a member with the see-pay right can change pay"
+  end
+
+  def untouchable_facets(plan) = PlanPolicy.new(@actor, plan).see_pay? ? [] : [ TeamPlanning::Events::PlanDataSet::PAY_FACET ]
+
+  def facet_set_by(kind, end_state)
+    "#{kind.facet}:#{end_state.to_h.symbolize_keys[:field]}" if kind == TeamPlanning::Events::PlanDataSet
   end
 
   # A plan is private to its members, so to anyone else it reads as missing:

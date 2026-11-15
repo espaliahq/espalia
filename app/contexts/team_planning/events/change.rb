@@ -143,6 +143,10 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   #   and the Org Graph either moves its facet or holds its subject under an id of its own
   def self.tracked? = readable? && (meets_org_graph? || overrides?(:read_org_graph))
 
+  # @param change [Change] a change of this kind
+  # @return [Boolean] whether the Org Graph could ever show this change, so it is held against it
+  def self.tracks?(change) = tracked?
+
   # @param facet [String] the second half of a change's {#key}
   # @return [Boolean] whether a change of this kind can have that key
   def self.holds?(facet) = facet == self.facet
