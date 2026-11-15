@@ -94,6 +94,25 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
+      should "keep the model's overload in the working of a figure a planner overrode" do
+        call(Operations::TeamPlanning::SetRule, @planner, plan_id: @plan_id, scenario_id: @plan_id, rule: "capacity_model",
+                                                          value: { roles: { @engineer.role_id => { model: "per_fte" },
+                                                                            @designer.role_id => { model: "units", params: { per_report: { direct: "1" } } } } })
+        call(Operations::TeamPlanning::SetReportingLine, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, manager_id: @cy.id)
+        call(Operations::TeamPlanning::SetCapacityOverride, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @cy.id,
+                                                                      unit_id: @payments, amount: "0.5")
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id, scenario: @q1)
+
+        click_selector_with_js_fallback("[data-map-person='#{@cy.id}'] [data-capacity-figure] summary",
+                                        expect_text: "The model gives 0.0u.")
+        within("[data-map-person='#{@cy.id}'] [data-capacity-figure]") do
+          assert_selector "summary", text: "override"
+          assert_selector "[data-capacity-overloaded]", text: "managing others costs 0.1u more than this seat's base"
+        end
+        assert_no_sideways_overflow
+      end
+
       should "badge an override on someone who leaves, whose place counts nowhere" do
         call(Operations::TeamPlanning::SetCapacityOverride, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
                                                                       unit_id: @payments, amount: "0.5")
