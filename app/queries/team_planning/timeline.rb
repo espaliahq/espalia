@@ -90,10 +90,11 @@ class TeamPlanning::Timeline
     end
   end
 
-  # The agreed part of a split step is part of the step, not another way through it.
+  # Either half of a split step is part of the step, not another way through it.
   def alternatives(aggregate, before, scenario_id)
     @paths ||= aggregate.scenarios.keys.index_with { aggregate.timeline_path(it) }
-    ordered(@paths.keys).select { it != scenario_id && @paths[it] == before + [ it ] && aggregate.resting_on(it).empty? }
+    same_step = [ scenario_id, *aggregate.resting_on(scenario_id) ]
+    ordered(@paths.keys).select { same_step.exclude?(it) && @paths[it] == before + [ it ] && aggregate.resting_on(it).empty? }
   end
 
   def next_ids(aggregate, scenario_id)

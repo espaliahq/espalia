@@ -95,6 +95,15 @@ class TeamPlanning::SplitTest < ActiveSupport::TestCase
     assert_equal before, [ counts, timeline ]
   end
 
+  should "offer no alternative to a split step from its own other half, drawn to either" do
+    agreed = split(change_on(@hire))
+
+    [ agreed, @h1 ].each do |scenario_id|
+      columns = query(TeamPlanning::Timeline, scenario_id).columns
+      assert_equal [ [], [] ], columns.map(&:alternative_ids), "drawn to #{scenario_id == agreed ? 'the agreed part' : 'the rest'}"
+    end
+  end
+
   should "resolve every step byte for byte as before, bar the ids of the step it names, after a split and an undo in the agreed part" do
     hire = change_on(@hire)
     maps = -> { [ @h1, @h2 ].map { resolved(it).with(step_ids: []).to_json } }
