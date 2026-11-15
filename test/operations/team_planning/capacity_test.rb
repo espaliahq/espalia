@@ -66,6 +66,17 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_empty result[:unclassified]
   end
 
+  should "list a unit everyone left, with its negative planned part" do
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "capacity_model",
+                                            value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    year = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: year, person_id: @ada.id, placements: [])
+    payments = call(Operations::TeamPlanning::Capacity, plan_id: @plan_id, scenario_id: year)[:units].find { it[:unit_id] == @unit_id }
+
+    assert_equal({}, payments[:totals])
+    assert_match(/\A-0\.3333/, payments[:parts][:planned]["per_fte"])
+  end
+
   should "show each working step's op and subject, and a figure's overload and notes, as the units model gives them" do
     ActsAsTenant.with_tenant(@tenant) do
       context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)

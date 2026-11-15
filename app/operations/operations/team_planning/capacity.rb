@@ -30,8 +30,9 @@ class Operations::TeamPlanning::Capacity < Operations::Base
               "decimal strings. Each total carries `parts`, which add up to it per model: actual is the baseline's capacity, " \
               "planned is what the plan's changes add or take away (negative where they take away, so someone moved between " \
               "units is negative in the old unit and positive in the new), and forecast is what the plan's forecast " \
-              "assumptions add, zero until a forecast rule is set. The baseline is all actual. A unit gone from the " \
-              "scenario's map counts in the scenario's parts only. `models` maps each model a place uses to its symbol, what follows its figures on " \
+              "assumptions add, zero until a forecast rule is set. The baseline is all actual. `units` lists each unit " \
+              "on the scenario's map that counts in any part, so a unit everyone left still shows its negative planned; " \
+              "a unit gone from the scenario's map counts in the scenario's parts only. `models` maps each model a place uses to its symbol, what follows its figures on " \
               "screen, and its description. People are named by id, and `names` maps each to a name. Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
@@ -66,8 +67,8 @@ class Operations::TeamPlanning::Capacity < Operations::Base
   end
 
   def units(split)
-    names = split.report.map.units.to_h { [ it.id, it.name ] }
-    split.report.units.keys.map { |unit_id| { unit_id:, name: names[unit_id], **totals(split.parts(unit_id)) } }
+    counted = [ *split.report.units.keys, *split.baseline&.units&.keys, *split.forecast.map(&:unit_id) ].to_set
+    split.report.map.units.select { counted.include?(it.id) }.map { |unit| { unit_id: unit.id, name: unit.name, **totals(split.parts(unit.id)) } }
   end
 
   def totals(parts)

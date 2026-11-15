@@ -53,8 +53,10 @@ class TeamPlanning::Forecast
     @map = map
   end
 
+  # Today has no period, so no rows; nor has an id the plan doesn't hold, so a
+  # caller resolves the scenario first.
+  #
   # @return [Array<Row>] every forecast kind's rows, by kind, unit and step
-  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def rows
     step = @aggregate.period_of(@scenario_id) or return []
 

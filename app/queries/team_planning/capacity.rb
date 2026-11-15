@@ -97,10 +97,14 @@ class TeamPlanning::Capacity
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def self.split(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
-    report = new(context:, plan:, scenario_id:, repository:).call
-    baseline = new(context:, plan:, scenario_id: plan.id, repository:).call unless scenario_id == plan.id
-    forecast = TeamPlanning::Forecast.new(aggregate: repository.load_plan(plan.id), scenario_id:, map: report.map).rows
-    Split.new(report:, baseline:, forecast:)
+    aggregate = repository.load_plan(plan.id)
+    price = lambda do |id|
+      resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id: id, repository:)
+      new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(resolution.call(aggregate))
+    end
+    report = price.(scenario_id)
+    baseline = price.(plan.id) unless scenario_id == plan.id
+    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map).rows)
   end
 
   # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named
