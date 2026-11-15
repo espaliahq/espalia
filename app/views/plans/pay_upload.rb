@@ -163,7 +163,6 @@ class Views::Plans::PayUpload < Views::Base
       "Every amount reads as #{BASES.fetch(@preview[:basis]).first.downcase}, in #{scenario_name}."
     end
     render Components::Kit::DescriptionList.new(items: [
-      { term: "Rows read", detail: @preview[:rows_read].to_s },
       { term: "People matched", detail: @preview[:matched_ids].size.to_s },
       { term: "Seats moving from band midpoints to actual pay", detail: @preview[:newly_priced_ids].size.to_s },
       { term: "Seats whose actual pay changes", detail: @preview[:replaced_ids].size.to_s },
