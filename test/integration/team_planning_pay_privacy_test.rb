@@ -51,18 +51,36 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     assert_equal({ removed: true }, ada[:plan_data][:pay])
   end
 
-  should "show a viewer and an editor without the see-pay right no pay from any read" do
-    { "viewer" => @viewer, "editor" => @editor }.each do |who, account|
-      READS.call.each do |operation|
-        tool = Operations::Registry.tool_name_for(operation)
-        output = begin
-          call(operation, account, **params_for(operation)).to_json
-        rescue Operations::Base::ParameterError => e
-          e.message
-        end
-        assert_not_includes output, AMOUNT, "#{tool} as #{who}"
-      end
+  should "show a viewer and an editor without the see-pay right no pay from any read, in a scenario or in Today" do
+    [ @q1, @plan_id ].each { assert_no_pay_read(it) }
+  end
+
+  should "price Today's yearly run rate from held pay for a holder, and never for anyone else" do
+    holder = call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: @plan_id)
+
+    assert_equal [ "run_rate", "band_ranges", { scenario: 1 } ], holder.values_at(:basis, :pay_view, :actual_pay_seats)
+    assert_includes holder.to_json, AMOUNT
+    [ @editor, @viewer ].each do |account|
+      other = call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: @plan_id)
+
+      assert_equal [ "run_rate", "band_midpoints" ], other.values_at(:basis, :pay_view)
+      assert_not_includes other.keys, :actual_pay_seats
+      assert_not_includes other.to_json, AMOUNT
     end
+  end
+
+  should "move a pay change across a split with its value still sealed and read by holders alone" do
+    call(Operations::TeamPlanning::SetPlannedLevel, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "4")
+    split = call(Operations::TeamPlanning::SplitScenario, @holder, plan_id: @plan_id, scenario_id: @q1, event_ids: [ @event_id ], name: "Agreed")
+    agreed = split[:agreed_id]
+
+    assert_equal [ @event_id ], split[:moved_event_ids]
+    assert_not_includes split.to_json, AMOUNT
+    assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: agreed).to_json, AMOUNT
+    assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: @q1).to_json, AMOUNT
+    [ agreed, @q1 ].each { assert_no_pay_read(it) }
+    assert_not_includes @log.string, AMOUNT
+    assert_not_includes event_store_text, AMOUNT
   end
 
   should "read pay as its field alone where an override inherits it off the parent's map, to a holder too" do
@@ -144,6 +162,20 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
   private
 
+  def assert_no_pay_read(scenario_id)
+    { "viewer" => @viewer, "editor" => @editor }.each do |who, account|
+      READS.call.each do |operation|
+        tool = Operations::Registry.tool_name_for(operation)
+        output = begin
+          call(operation, account, **params_for(operation, scenario_id:)).to_json
+        rescue Operations::Base::ParameterError => e
+          e.message
+        end
+        assert_not_includes output, AMOUNT, "#{tool} as #{who} in #{scenario_id == @plan_id ? 'Today' : scenario_id}"
+      end
+    end
+  end
+
   def context_for(account) = AuthorizationContext.new(user: account.user, tenant_user: account, person: account.person)
 
   def set_pay(scenario_id)
@@ -159,8 +191,8 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     ActiveRecord::Base.connection.select_values(sql).join
   end
 
-  def params_for(operation)
-    { plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, subject_id: @ada.id, facet: "data:pay", event_id: @event_id }
+  def params_for(operation, scenario_id: @q1)
+    { plan_id: @plan_id, scenario_id:, person_id: @ada.id, subject_id: @ada.id, facet: "data:pay", event_id: @event_id }
       .slice(*operation.parameters.keys)
   end
 
