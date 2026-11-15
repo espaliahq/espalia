@@ -106,6 +106,18 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                                                        changes.except(at_unit.key), unclassified: uncovered("no_model")).call.sole.change
   end
 
+  should "credit the nearest capacity rule, though the plan-wide one landed after it" do
+    at_unit = change(TeamPlanning::Events::RuleSet, LIVE, rule: "capacity_model", value: { "roles" => {} })
+    plan_wide = change(TeamPlanning::Events::RuleSet, ROOT, rule: "capacity_model", value: {})
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    rules = B::Rules.new(plan_id: ROOT, defaults: {}, by_subject: { ROOT => { "capacity_model" => {} }, LIVE => { "capacity_model" => {} } })
+    changes = { at_unit.key => at_unit, plan_wide.key => plan_wide, [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed }
+
+    %w[no_model unknown_model].each do |reason|
+      assert_same at_unit, TeamPlanning::Attention.new(map(rules:), changes, unclassified: uncovered(reason)).call.sole.change
+    end
+  end
+
   REPORT, OTHER_REPORT = Array.new(2) { SecureRandom.uuid_v7 }
 
   def priced_seat(kind: "person", id: PERSON, units: [ LIVE ], overloaded: true, overridden: false)
