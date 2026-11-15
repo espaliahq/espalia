@@ -15,21 +15,23 @@ class Operations::TeamPlanning::RebasePreview < Operations::Base
               "changes reading done, pending and conflicting, as team_planning_status reads them. Once the base " \
               "is today a conflicting change would read pending, so `conflicts` names each one, by the scenario " \
               "it reads conflicting in, subject_id, facet and change_id: the update records them afresh, and " \
-              "status keeps them conflicting. " \
+              "status keeps them conflicting. `names` gives each conflict's subject a name, as team_planning_status " \
+              "names it. " \
               "Pass base_on to team_planning_rebase_plan. Refused when the plan already stands on today or on a " \
-              "day still to come, when the plan is updated while the preview reads it, and, as an unknown plan, " \
+              "day still to come, when the plan is updated while the preview reads it, when the first step would end " \
+              "before today, naming it, and, as an unknown plan, " \
               "unless the caller is a member."
   category :read
   approval :none
 
   parameter :plan_id, String, required: true
 
-  # @return [Hash] `{ plan_id, base_on, to, scenarios, conflicts, drift }`
+  # @return [Hash] `{ plan_id, base_on, to, scenarios, conflicts, names, drift }`
   def perform
     plan = plan!
     report = refusing_bad_plans { ::TeamPlanning::RebasePreview.new(context:, plan:).call }
     { plan_id: plan.id, base_on: report.base_on.iso8601, to: report.to.iso8601,
-      scenarios: report.scenarios.map(&:to_h), conflicts: report.conflicts,
+      scenarios: report.scenarios.map(&:to_h), conflicts: report.conflicts, names: report.names,
       drift: Operations::TeamPlanning::Drift.payload(report.drift) }
   end
 end

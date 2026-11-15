@@ -25,10 +25,15 @@ class TeamPlanning::Resolution
     @repository = repository
   end
 
+  # @param aggregate [TeamPlanning::PlanAggregate] the plan as loaded
   # @return [TeamPlanning::Baseline::Map] with names joined
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call = CurrentPlanReads.fetch([ :scenario, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @scenario_id ]) { @baseline.named(structure) }
+  def call(aggregate = nil)
+    CurrentPlanReads.fetch([ :scenario, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @scenario_id ]) do
+      @baseline.named(structure(aggregate || @repository.load_plan(@plan.id)))
+    end
+  end
 
   # Reuses every scenario and baseline read inside the block, so a page that
   # shows a scenario's map and prices it, beside the baseline's, reads the
@@ -71,6 +76,21 @@ class TeamPlanning::Resolution
   # @return [Array<String>] the people on the map the Org Graph has had leave by today, a UTC day
   def left_since(map)
     OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..Time.now.utc.to_date).pluck(:person_id)
+  end
+
+  # A closed position is off the map, so its unit comes from the last
+  # PositionSet the chain made for it.
+  #
+  # @param aggregate [TeamPlanning::PlanAggregate]
+  # @param winning [Hash{Array(String, String) => TeamPlanning::Events::Change}]
+  # @return [Hash{String => String}] each closed position's unit, by position id
+  def closed_position_units(aggregate, winning)
+    closed = winning.values.select { it.is_a?(TeamPlanning::Events::PositionClosed) }.to_set { it.data[:subject_id] }
+    return {} if closed.empty?
+
+    aggregate.resolution_chain(@scenario_id).flat_map { aggregate.changes_in(it) }
+             .select { it.is_a?(TeamPlanning::Events::PositionSet) && closed.include?(it.data[:subject_id]) }
+             .to_h { [ it.data[:subject_id], it.data[:unit_id] ] }
   end
 
   private

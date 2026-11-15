@@ -278,7 +278,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 4.1 | Drift report from `OrgGraph::ChangesBetween` by learned date since the base, each change with what it does to the plan | 3.2 |
 | 4.2 | Update to today: `PlanRebased` moves the base. Nothing else is rewritten | 4.1 |
 | 4.3 | Status per change, done, pending or conflicting, by comparing its end state with `OrgGraph::AsOf` today | 3.2 |
-| 4.4 | Changes tab: drift and planned changes, each with its source of truth from `OrgFactProvider`. An Org Graph change that came from this plan is matched through its event's `plan_id` | 4.1, 4.3 |
+| 4.4 | Changes tab: drift and planned changes, each with its source of truth from `OrgFactProvider`. An Org Graph change that came from this plan is matched through its event's `plan_id`. [Design: The changes tab as built](team-planning-design.md#the-changes-tab-as-built) | 4.1, 4.3 |
 | 4.5 | Reconcile a conflict: keep the plan (pin) or follow reality (clear) | 4.4, 3.9 |
 | 4.6 | Checks projection: over- or under-allocated, placed nowhere, placed but left, no manager, a manager sharing no unit | 3.7, 4.3 |
 | 4.7 | Checks tab, with guardrail checks marked | 4.6 |
@@ -365,7 +365,7 @@ edits the change, then approves again.
 |---|---|---|
 | 9.1 | Timeline projection: one path from the baseline to a leaf, with lanes and moves | 3.6 |
 | 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.1 |
-| 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later | 9.2, 3.12 |
+| 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.2, 3.12 |
 | 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit | 9.1 |
 | 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |
 
@@ -465,7 +465,8 @@ forecasts that need no assessments (10.1 to 10.4). Left out on purpose:
   built from them needs the cohort rule tested on plan-sized groups first.
 - **Capabilities in the plan (P11).** The reason to build planning inside Espalia, but
   a plan is useful without it, and it rests on the same cohort question.
-- **Editing in time (9.3).** The map edits every step already.
+- **Moving a change in time (9.3).** The map edits every step already, and the timeline
+  moves people within a step.
 - **Overlays.** The events keep them possible. See the data design.
 - **Requests from managers.** A later module, on the edit rights unit owners already
   have.

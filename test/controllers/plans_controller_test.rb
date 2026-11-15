@@ -58,6 +58,24 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_response :not_found
     end
 
+    should "open the changes on today, and on a scenario, each section empty until something changes" do
+      get changes_plan_path(@plan_id)
+      assert_response :success
+      assert_select "[aria-current='page']", text: "Changes"
+      assert_includes response.body, "Nothing has changed in the Org Graph since the base."
+      assert_select "#changes-planned-heading", text: "Planned in Today"
+      assert_includes response.body, "Everything in this scenario still fits."
+
+      get changes_plan_path(@plan_id, scenario: @q1)
+      assert_response :success
+      assert_select "#changes-planned-heading", text: "Planned in Q1 hires"
+    end
+
+    should "get a 404 for changes in a scenario that isn't in the plan" do
+      get changes_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
+      assert_response :not_found
+    end
+
     should "open the timeline on the path to the first leaf, its steps shown though nobody is placed yet" do
       get timeline_plan_path(@plan_id)
       assert_response :success
@@ -68,7 +86,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "someone outside the plan" do
-    should "not see it in the index, and get a 404 for its page, map and timeline, even as a tenant admin" do
+    should "not see it in the index, and get a 404 for its page, map, timeline and changes, even as a tenant admin" do
       [ @outsider, @admin ].each do |account|
         sign_in account.user
         get plans_path
@@ -80,6 +98,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
         get map_plan_path(@plan_id)
         assert_response :not_found
         get timeline_plan_path(@plan_id)
+        assert_response :not_found
+        get changes_plan_path(@plan_id)
         assert_response :not_found
         sign_out account.user
       end
@@ -123,7 +143,81 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "updating a plan to today" do
+    setup { travel_to Time.utc(2026, 11, 20, 9) }
+
+    should "show an editor the preview, then move the base to the day it read" do
+      sign_in @editor.user
+      get changes_plan_path(@plan_id)
+      assert_select "a[href='#{rebase_plan_path(@plan_id)}']", text: "Update to today"
+
+      get rebase_plan_path(@plan_id)
+      assert_response :success
+      assert_select "[data-update-to-today] input[name='base_on'][value='2026-11-14']"
+      assert_select "[data-update-to-today] input[name='to'][value='2026-11-20']"
+      assert_includes response.body, "The plan stands on 14 Nov 2026"
+
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
+      assert_redirected_to changes_plan_path(@plan_id)
+      assert_equal "Updated to today, 20 Nov 2026.", flash[:notice]
+      assert_equal "2026-11-20", plan_base_on
+
+      get changes_plan_path(@plan_id)
+      assert_select "a[href='#{rebase_plan_path(@plan_id)}']", count: 0
+    end
+
+    should "take a second click on the confirm as the update it already made" do
+      sign_in @editor.user
+      2.times { post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" } }
+
+      assert_redirected_to changes_plan_path(@plan_id)
+      assert_equal "Updated to today, 20 Nov 2026.", flash[:notice]
+      assert_nil flash[:alert]
+    end
+
+    should "send an editor back to the preview when the day has turned since it was read" do
+      sign_in @editor.user
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-19" }
+
+      assert_redirected_to rebase_plan_path(@plan_id)
+      assert_equal "The day has turned since you looked, so check the update again.", flash[:alert]
+      assert_equal "2026-11-14", plan_base_on
+    end
+
+    should "refuse an update since the preview was read, and send back a plan already on today" do
+      sign_in @editor.user
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-01", to: "2026-11-20" }
+      assert_redirected_to changes_plan_path(@plan_id)
+      assert_match(/\ACouldn't update to today: This plan has moved since you looked/, flash[:alert])
+      assert_equal "2026-11-14", plan_base_on
+
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
+      get rebase_plan_path(@plan_id)
+      assert_redirected_to changes_plan_path(@plan_id)
+      assert_equal "Can't update to today: This plan already stands on today, 2026-11-20", flash[:alert]
+    end
+
+    should "offer a viewer no update and refuse one, and give someone outside the plan a 404" do
+      sign_in @viewer.user
+      get changes_plan_path(@plan_id)
+      assert_select "a[href='#{rebase_plan_path(@plan_id)}']", count: 0
+      get rebase_plan_path(@plan_id)
+      assert_redirected_to root_path
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
+      assert_redirected_to root_path
+      assert_equal "2026-11-14", plan_base_on
+
+      sign_out @viewer.user
+      sign_in @admin.user
+      get plans_path
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
+      assert_response :not_found
+    end
+  end
+
   private
+
+  def plan_base_on = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find(@plan_id).base_on.iso8601 }
 
   def account(role: :member, name: "Someone", **grants)
     user = create(:user)

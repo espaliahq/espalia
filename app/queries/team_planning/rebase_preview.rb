@@ -16,7 +16,8 @@ class TeamPlanning::RebasePreview
   # @!attribute scenarios [Array<Counts>] the baseline first, then each live scenario
   # @!attribute conflicts [Array<Hash>] `{ scenario_id, subject_id, facet, change_id }`: the scenario it reads conflicting in, and the change that scenario resolves to
   # @!attribute drift [TeamPlanning::Drift::Report] what the Org Graph learned in the window
-  Report = Data.define(:base_on, :to, :scenarios, :conflicts, :drift)
+  # @!attribute names [Hash{String => String}] subject id => name for each conflict's subject, as status names it
+  Report = Data.define(:base_on, :to, :scenarios, :conflicts, :drift, :names)
 
   # @!attribute scenario_id [String] the plan's id for the baseline
   Counts = Data.define(:scenario_id, :done, :pending, :conflicting)
@@ -35,7 +36,7 @@ class TeamPlanning::RebasePreview
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] when the plan already stands on today, or on a day still to come, or is
-  #   updated while the preview reads it
+  #   updated while the preview reads it, or when its first step would end before today
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     @plan.reload
@@ -45,12 +46,14 @@ class TeamPlanning::RebasePreview
     end
 
     base_on = @plan.base_on
+    @repository.load_plan(@plan.id).ensure_first_steps_reach!(@today)
     drift = TeamPlanning::Drift.new(context: @context, plan: @plan, today: @today, repository: @repository).call
     reports = scenario_ids.map { [ it, status_of(it) ] }
     raise TeamPlanning::Error, "This plan was updated while you looked: preview it again" unless @plan.base_on == base_on
 
-    Report.new(base_on:, to: @today, scenarios: reports.map { |id, report| counts(id, report) },
-               conflicts: reports.flat_map { |id, report| conflicts(id, report) }, drift:)
+    conflicts = reports.flat_map { |id, report| conflicts(id, report) }
+    names = reports.map { it.last.names }.reduce({}, :merge).slice(*conflicts.map { it[:subject_id] })
+    Report.new(base_on:, to: @today, scenarios: reports.map { |id, report| counts(id, report) }, conflicts:, drift:, names:)
   end
 
   private

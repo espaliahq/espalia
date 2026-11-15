@@ -7,9 +7,15 @@
 # A wide screen shows the path as a grid, a column per step. A phone shows one
 # step at a time, so each lane there says where its person came from and goes
 # to, since the neighbouring steps are out of sight.
+#
+# An editor moves people in a step ([#309](https://github.com/espaliahq/espalia/issues/309)): drag a person's bar onto
+# another unit in a column the bar covers, or use its "Move…". Either opens
+# that step's {Views::Plans::MoveDialog}, so it is the map's move, written in
+# the column's scenario. Today, the first column, takes no moves.
 class Views::Plans::Timeline < Views::Base
   UNASSIGNED = "Unassigned"
   UNNAMED = "Unnamed step"
+  UNASSIGNED_ID = Views::Plans::MoveDialog::UNASSIGNED
 
   # The leaf a path from `from_id` reaches by taking the first "then" at each step.
   #
@@ -27,8 +33,10 @@ class Views::Plans::Timeline < Views::Base
   # @param timeline [Hash] from `team_planning_timeline`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
   # @param step [Integer] the step a phone shows, from the left
-  def initialize(timeline:, scenarios:, step: 0)
+  # @param can_edit [Boolean] whether the viewer edits the plan
+  def initialize(timeline:, scenarios:, step: 0, can_edit: false)
     @timeline = timeline
+    @moving = can_edit && timeline[:columns].size > 1
     @scenarios = scenarios.index_by { it[:scenario_id] }
     @all_scenarios = scenarios
     @thens = self.class.then_index(scenarios)
@@ -41,6 +49,7 @@ class Views::Plans::Timeline < Views::Base
       render Components::Kit::EmptyState.new(title: "No one is placed on this path yet.", size: :panel) if lanes_by_id.empty?
       wide_grid
       phone_step
+      move_dialogs if @moving
     end
   end
 
@@ -89,13 +98,15 @@ class Views::Plans::Timeline < Views::Base
   # -- Wide: a grid, a column per step -------------------------------------
 
   def wide_grid
-    div(class: "hidden overflow-x-auto rounded-lg border border-default bg-default md:block") do
-      div(class: "grid min-w-max text-sm", style: "grid-template-columns: minmax(6rem, 9rem) repeat(#{columns.size}, minmax(11rem, 1fr))",
+    div(class: "group/move hidden overflow-x-auto rounded-lg border border-default bg-default md:block",
+        data: ({ controller: "map-move" } if @moving)) do
+      div(class: "grid text-sm", style: "grid-template-columns: minmax(6rem, 9rem) repeat(#{columns.size}, minmax(11rem, 1fr)); " \
+                                        "min-width: #{9 + (11 * columns.size)}rem",
           data: { timeline_grid: "" }) do
         @row = 1
         header_row
         @timeline[:blocks].each { wide_block(it) }
-        wide_unassigned if unassigned_lanes.any?
+        wide_unassigned if @moving || unassigned_lanes.any?
       end
     end
   end
@@ -114,12 +125,39 @@ class Views::Plans::Timeline < Views::Base
 
   def wide_block(block)
     block_heading(block_title(block), subtitle: continues_from(block))
-    block[:lane_ids].each { |lane_id| wide_lane(lane_id) { |bar| in_block?(bar, block) } }
+    drop_cells(->(index) { block[:units][index]&.dig(:unit_id) }) do
+      block[:lane_ids].each { |lane_id| wide_lane(lane_id) { |bar| in_block?(bar, block) } }
+    end
   end
 
   def wide_unassigned
     block_heading(UNASSIGNED, subtitle: nil)
-    unassigned_lanes.each { |lane_id| wide_lane(lane_id) { |bar| bar[:unit_id].nil? } }
+    drop_cells(->(_) { UNASSIGNED_ID }) do
+      unassigned_lanes.each { |lane_id| wide_lane(lane_id) { |bar| bar[:unit_id].nil? } }
+    end
+  end
+
+  # Behind a block's lanes, a cell per step takes a dropped bar into that unit.
+  def drop_cells(unit_in)
+    first = @row
+    yield
+    return unless @moving
+
+    empty_row if @row == first
+
+    (1...columns.size).each do |index|
+      unit_id = unit_in.(index)
+      next unless unit_id
+
+      div(class: "z-0 border-l border-subtle data-[drop-over]:bg-brand-subtle", style: "grid-row: #{first} / #{@row}; grid-column: #{index + 2}",
+          data: { map_unit: unit_id, map_step: index, action: "dragover->map-move#over dragleave->map-move#leave drop->map-move#drop" })
+    end
+  end
+
+  # A block with nobody in it still needs a row to drop on.
+  def empty_row
+    div(class: "min-h-10", style: cell(@row, 1))
+    @row += 1
   end
 
   def block_heading(title, subtitle:)
@@ -149,8 +187,8 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def wide_bar(lane, bar)
-    div(class: "px-1 py-1", style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
-      bar_box(lane, bar) do
+    div(class: "z-10 px-1 py-1 group-data-[dragging]/move:pointer-events-none has-[[aria-expanded=true]]:z-20", style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
+      bar_box(lane, bar, steps: movable_steps(bar)) do
         span(class: "sr-only") { "#{span_of(bar)}: " }
         bar_text(lane, bar, starts: bar[:from], ends: bar[:to])
       end
@@ -220,7 +258,7 @@ class Views::Plans::Timeline < Views::Base
     lane[:bars].select(&in_step).each do |bar|
       li(class: "px-3 py-2") do
         p(class: "text-xs font-medium uppercase text-muted") { lane_label(bar) }
-        div(class: "mt-1") { bar_box(lane, bar) { bar_text(lane, bar, starts: @step, ends: @step) } }
+        div(class: "mt-1") { bar_box(lane, bar, steps: movable_steps(bar) & [ @step ], drag: false) { bar_text(lane, bar, starts: @step, ends: @step) } }
       end
     end
   end
@@ -229,11 +267,73 @@ class Views::Plans::Timeline < Views::Base
 
   # -- A bar ------------------------------------------------------------------
 
-  def bar_box(lane, bar, &)
+  def bar_box(lane, bar, steps: [], drag: true, &content)
     position = bar[:kind] == "position"
-    div(class: "flex flex-wrap items-baseline gap-x-2 rounded border px-2 py-1 text-default " \
-               "#{position ? 'border-dashed border-emphasized bg-default' : 'border-default bg-subtle'}",
-        data: { timeline_lane: lane[:lane_id] }, &)
+    div(class: "flex flex-wrap items-center gap-x-2 rounded border px-2 py-1 text-default " \
+               "#{position ? 'border-dashed border-emphasized bg-default' : 'border-default bg-subtle'}#{' cursor-grab' if drag && steps.any?}",
+        draggable: ("true" if drag && steps.any?), data: { timeline_lane: lane[:lane_id], **(drag ? drag_data(bar, steps) : {}) }) do
+      content.call
+      move_control(bar, steps) if steps.any?
+    end
+  end
+
+  # -- Moving a person in a step ----------------------------------------------
+
+  def movable_steps(bar)
+    return [] unless @moving && bar[:kind] == "person"
+
+    ([ bar[:from], 1 ].max..bar[:to]).to_a
+  end
+
+  def drag_data(bar, steps)
+    return {} if steps.empty?
+
+    { map_person: bar[:subject_id], map_drag: "person", map_move_from: bar[:unit_id] || UNASSIGNED_ID,
+      map_move_from_position: bar[:position_id], map_from_step: steps.first, map_to_step: steps.last,
+      action: "dragstart->map-move#start dragend->map-move#end" }
+  end
+
+  # One step moves from a button; a bar across several asks which step.
+  def move_control(bar, steps)
+    label = "Move #{name(bar[:subject_id])}"
+    span(class: "ml-auto") do
+      if steps.one?
+        render Components::Kit::Button.new(variant: :ghost, size: :sm, compact: true, aria_label: "#{label} in #{step_name(steps.first)}",
+                                           data: move_trigger(bar, steps.first)) { "Move…" }
+      else
+        render Components::Kit::Dropdown.new(strategy: :fixed) do |menu|
+          menu.trigger(label:, button: { variant: :ghost, size: :sm, compact: true }) { "Move…" }
+          menu.menu(label:) do
+            steps.each { |step| menu.item(data: move_trigger(bar, step)) { "In #{step_name(step)}" } }
+          end
+        end
+      end
+    end
+  end
+
+  def move_trigger(bar, step)
+    Views::Plans::MoveDialog.trigger(
+      url: plan_assignment_path(@timeline[:plan_id], bar[:subject_id]), name: name(bar[:subject_id]),
+      from: bar[:unit_id] || UNASSIGNED_ID, place: { position_id: bar[:position_id], role: bar[:role] },
+      share: share_in(bar, step), dialog: move_dialog_id(step)
+    ).merge(move_at: bar[:unit_id] || UNASSIGNED_ID) # the dialog here lists units, not positions
+  end
+
+  def share_in(bar, step) = bar[:shares]&.dig(step - bar[:from])
+
+  def move_dialog_id(step) = "#{Views::Plans::MoveDialog::ID}-#{step}"
+
+  def move_dialogs
+    back = timeline_plan_path(@timeline[:plan_id], scenario: @timeline[:scenario_id], step: @step)
+    (1...columns.size).each do |index|
+      render Views::Plans::MoveDialog.new(scenario_id: columns[index][:scenario_id], scenario_name: step_name(index),
+                                          units: units_in(index), id: move_dialog_id(index), return_to: back)
+    end
+  end
+
+  # The units of a step, in the order the blocks draw them, as the dialog lists them.
+  def units_in(index)
+    @timeline[:blocks].filter_map { it[:units][index] }.uniq { it[:unit_id] }.map { [ { id: it[:unit_id], name: it[:name] }, [] ] }
   end
 
   # What a bar says between columns `starts` and `ends`: where it came from if

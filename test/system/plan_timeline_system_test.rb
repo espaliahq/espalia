@@ -127,7 +127,97 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "as a planner" do
+    setup { sign_in_as(@planner.user) }
+
+    should "move a person in a later step by dragging their bar onto another unit, and stay on the timeline" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit timeline_plan_path(@plan_id)
+      assert_text "Showing the path to Q2 settle."
+      wait_for_stimulus "map-move"
+      wait_for_stimulus "move-form"
+      within("[data-timeline-grid]") { assert_no_selector "[draggable][data-map-from-step='0']" }
+
+      drag("[draggable][data-map-person='#{@bo.id}']", "[data-map-unit='#{@payments}'][data-map-step='2']")
+      within("#move-person-modal-2") do
+        assert_text "Moving Bo Reyes in Q2 settle"
+        assert_select "To", selected: "Payments"
+      end
+      click_button_with_js_fallback("Save move", expect_text: "Move saved.")
+
+      assert_text "Showing the path to Q2 settle."
+      assert_selector "[data-timeline-lane]", text: /Bo\s+Reyes\s+to\s+Payments/
+      assert_no_sideways_overflow
+    end
+
+    should "refuse a drop in a step the bar doesn't cover" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit timeline_plan_path(@plan_id)
+      wait_for_stimulus "map-move"
+      assert_no_selector "[data-map-unit='#{@payments}'][data-map-step='0']"
+
+      assert drag("[draggable][data-map-person='#{@ada.id}']", "[data-map-unit='#{@growth}'][data-map-step='1']"), "a step the bar covers takes the drop"
+      assert_selector "#move-person-modal-1", text: "Moving Ada Quill in Q1 hires", visible: true
+      press_escape
+      assert_not drag("[draggable][data-map-person='#{@ada.id}']", "[data-map-unit='#{@growth}'][data-map-step='2']"), "Ada leaves in Q1 hires, so Q2 settle has no bar of hers to move"
+    end
+
+    should "take a drop on Unassigned while nobody is unassigned" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit timeline_plan_path(@plan_id)
+      wait_for_stimulus "map-move"
+      wait_for_stimulus "move-form"
+
+      drag("[draggable][data-map-person='#{@bo.id}']", "[data-map-unit='#{Views::Plans::MoveDialog::UNASSIGNED}'][data-map-step='2']")
+      within("#move-person-modal-2") do
+        assert_text "Moving Bo Reyes in Q2 settle"
+        assert_select "To", selected: "Unassigned"
+      end
+    end
+
+    should "move a person on a phone from the bar's Move…, in the step shown" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit timeline_plan_path(@plan_id, step: 1)
+      assert_text "Step 2 of 3"
+      wait_for_stimulus "move-form"
+      click_selector_with_js_fallback("[data-timeline-phone] button[aria-label='Move Bo Reyes in Q1 hires']", expect_text: "Moving Bo Reyes in Q1 hires")
+      within("#move-person-modal-1") { select "Unassigned", from: "To" }
+      click_button_with_js_fallback("Save move", expect_text: "Move saved.")
+
+      assert_text "Step 2 of 3"
+      within("[data-timeline-phone]") { assert_selector "[data-timeline-lane]", text: "Bo Reyes" }
+      assert_no_sideways_overflow
+    end
+  end
+
+  [ [ "desktop", DESKTOP_SIZE ], [ "phone", MOBILE_SIZE ] ].each do |label, size|
+    should "give a viewer no handles on a #{label}" do
+      page.driver.browser.manage.window.resize_to(*size)
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id)
+      assert_text "Showing the path to Q2 settle."
+      assert_no_selector "[draggable]"
+      assert_no_button "Move…"
+      assert_no_selector "[id^='move-person-modal']", visible: :all
+    end
+  end
+
   private
+
+  # Selenium can't drive HTML5 drag and drop, so the events are dispatched.
+  def drag(from, to)
+    page.execute_script(<<~JS, from, to)
+      const row = document.querySelector(arguments[0])
+      const target = document.querySelector(arguments[1])
+      const dataTransfer = new DataTransfer()
+      const fire = (element, type) => element.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer }))
+      fire(row, "dragstart")
+      const taken = !fire(target, "dragover")
+      fire(target, "drop")
+      fire(row, "dragend")
+      return taken
+    JS
+  end
 
   def fork(**params) = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, **params)[:scenario_id]
 

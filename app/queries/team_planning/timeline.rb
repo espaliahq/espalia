@@ -34,7 +34,9 @@ class TeamPlanning::Timeline
 
   # A run of columns, from `from` to `to`, where a head holds one place.
   # `kind` is "person" or "position"; `unit_id` is nil for Unassigned.
-  Bar = Data.define(:kind, :subject_id, :from, :to, :unit_id, :position_id, :allocation, :role, :replaces_id)
+  # `shares` gives a person's share of their time in this place for each
+  # column, counting places in retired units too, as the map does.
+  Bar = Data.define(:kind, :subject_id, :from, :to, :unit_id, :position_id, :allocation, :role, :replaces_id, :shares)
 
   # Between column `after` and the next, the units a person left and joined.
   Move = Data.define(:person_id, :after, :left_unit_ids, :joined_unit_ids)
@@ -219,13 +221,25 @@ class TeamPlanning::Timeline
         live = map.units.to_set(&:id)
         map.people.to_h do |person|
           held = person.memberships.select { live.include?(it.unit_id) }
-          [ person.id, held.empty? ? [ [ nil, nil, nil, nil ] ] : held.map { [ it.unit_id, it.position_id, it.allocation, it.role ] } ]
+          [ person.id, held.empty? ? [ [ nil, nil, nil, nil ] ] : held.map { place_key(it) } ]
         end
       end
-      runs(places) do |person_id, (unit_id, position_id, allocation, role), from, to|
-        Bar.new(kind: "person", subject_id: person_id, from:, to:, unit_id:, position_id:, allocation:, role:, replaces_id: nil)
+      runs(places) do |person_id, key, from, to|
+        unit_id, position_id, allocation, role = key
+        shares = unit_id && (from..to).map { person_shares[it].dig(person_id, key)&.to_f }
+        Bar.new(kind: "person", subject_id: person_id, from:, to:, unit_id:, position_id:, allocation:, role:, replaces_id: nil, shares:)
       end
     end
+
+    def person_shares
+      @person_shares ||= @maps.map do |map|
+        map.people.to_h do |person|
+          [ person.id, TeamPlanning::Baseline::Membership.shares(person.memberships).to_h { |membership, share, _| [ place_key(membership), share ] } ]
+        end
+      end
+    end
+
+    def place_key(membership) = [ membership.unit_id, membership.position_id, membership.allocation, membership.role ]
 
     def position_bars
       places = @maps.map do |map|
@@ -235,7 +249,7 @@ class TeamPlanning::Timeline
       end
       runs(places) do |position_id, (unit_id, _, _, _), from, to|
         Bar.new(kind: "position", subject_id: position_id, from:, to:, unit_id:, position_id:, allocation: nil, role: nil,
-                replaces_id: replaces[position_id])
+                replaces_id: replaces[position_id], shares: nil)
       end
     end
 
