@@ -77,7 +77,40 @@ class PlansController < ApplicationController
     render plan_page(plan, scenarios:, open_tab: :changes, body: tab)
   end
 
+  # GET /planning/:id/update-to-today
+  #
+  # What updating the plan to today would take in, for an editor to confirm
+  # ([#337](https://github.com/espaliahq/espalia/issues/337)).
+  def rebase
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    preview = Operations::TeamPlanning::RebasePreview.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    render plan_page(plan, scenarios:, open_tab: :changes, body: Views::Plans::UpdateToToday.new(plan:, scenarios:, preview:))
+  rescue Operations::Base::ParameterError => e
+    redirect_to changes_plan_path(plan[:plan_id]), alert: "Can't update to today: #{e.message}"
+  end
+
+  # POST /planning/:id/update-to-today
+  #
+  # Takes the base the preview read, so an update made since is refused
+  # rather than taken in unseen.
+  def rebase_plan
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    result = Operations::TeamPlanning::RebasePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id], base_on: params[:base_on] })
+    redirect_to changes_plan_path(plan[:plan_id]), notice: rebased(result)
+  rescue Operations::Base::ParameterError => e
+    redirect_to changes_plan_path(plan[:plan_id]), alert: "Couldn't update to today: #{e.message}"
+  end
+
   private
+
+  def rebased(result)
+    count = result[:conflicts].size
+    carried = count.zero? ? "" : " #{count} planned #{count == 1 ? 'change stays' : 'changes stay'} conflicting."
+    "Updated to today, #{I18n.l(Date.iso8601(result[:base_on]), format: '%-d %b %Y')}.#{carried}"
+  end
 
   # Cost comes before capacity, in the strips above the map and beside each
   # unit's name.

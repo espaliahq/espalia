@@ -789,6 +789,12 @@ for the baseline and each scenario, the changes that read done, pending and conf
 It lists the conflicts too. It reads all of this over one base, and is refused if the
 plan moves while it reads.
 
+On the web, an editor finds "Update to today" on the Changes tab while the base is in
+the past ([#337](https://github.com/espaliahq/espalia/issues/337)). It opens the preview
+under the plan, at `/planning/:id/update-to-today`, and its confirm posts back the base
+the preview read. A viewer sees no button and is refused the update, and a frozen plan
+has no editor left to offer it to.
+
 Once the base is today, a change that disagreed with the Org Graph would read pending:
 today and the base say the same thing. So `PlanRebased` records each conflict found at
 that moment, as the scenario it read conflicting in, its subject, its facet and the
