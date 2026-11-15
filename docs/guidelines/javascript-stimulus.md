@@ -88,6 +88,8 @@ Common behaviors:
 - `useIntersection` — lazy loading / infinite scroll
 - `useHover` — hover interactions
 
+A menu that toggles this way starts closed, so render it with the `hidden` attribute: `<div data-dropdown-target="menu" hidden>`.
+
 ```javascript
 import BaseController from "controllers/base_controller"
 import { useClickOutside } from "stimulus-use"
