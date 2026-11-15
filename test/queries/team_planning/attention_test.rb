@@ -49,6 +49,44 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ "capacity:unassigned" ], TeamPlanning::Attention.new(map, {}, unclassified:).call.map(&:facet)
   end
 
+  should "name each subject the way the map does, leaving out what it no longer holds" do
+    named = map(units: [ unit(ROOT, nil), B::Unit.new(id: LIVE, name: "Payments", parent_id: ROOT, level_id: LEVEL, owner_ids: []) ],
+                retired_units: [ B::Unit.new(id: RETIRED, name: "Risk", parent_id: ROOT, level_id: LEVEL, owner_ids: []) ],
+                positions: [ B::Position.new(id: "p1", role_id: nil, level_id: nil, unit_id: LIVE, fte: 1, basis: "backfill", role_name: "Engineer", level_name: nil) ],
+                successions: [ B::Succession.new(id: "s1", predecessor_ids: [ RETIRED, GONE ], successor_ids: [ LIVE ]) ],
+                names: { PERSON => "Ada Quill" })
+    forgotten = SecureRandom.uuid_v7
+    forgotten_seat = SecureRandom.uuid_v7
+    items = [ [ PERSON, "assignment" ], [ forgotten, "reporting_line" ], [ RETIRED, "unit" ], [ GONE, "unit" ], [ "p1", "position" ],
+              [ "p2", "position" ], [ "s1", "succession" ], [ "p1", "capacity:#{LIVE}" ],
+              [ forgotten_seat, "capacity:unassigned" ] ]
+            .map { |subject_id, facet| TeamPlanning::Attention::Item.new(subject_id:, facet:, reason: "", change: nil) }
+
+    assert_equal({ PERSON => "Ada Quill", forgotten => Person::FORMER_MEMBER, RETIRED => "Risk", "p1" => "Backfill: Engineer",
+                   "s1" => "Risk, A removed unit → Payments", forgotten_seat => Person::FORMER_MEMBER }, TeamPlanning::Attention.names_of(named, items))
+  end
+
+  should "number positions alike in one unit the way the map does" do
+    alike = %w[p1 p2].map { B::Position.new(id: it, role_id: nil, level_id: nil, unit_id: LIVE, fte: 1, basis: "backfill", role_name: "Engineer", level_name: nil) }
+    elsewhere = B::Position.new(id: "p3", role_id: nil, level_id: nil, unit_id: ROOT, fte: 1, basis: "backfill", role_name: "Engineer", level_name: nil)
+    named = map(positions: alike + [ elsewhere ])
+    items = [ [ "p1", "position" ], [ "p2", "capacity:#{LIVE}" ], [ "p3", "position" ] ]
+            .map { |subject_id, facet| TeamPlanning::Attention::Item.new(subject_id:, facet:, reason: "", change: nil) }
+
+    assert_equal({ "p1" => "Backfill: Engineer (1)", "p2" => "Backfill: Engineer (2)", "p3" => "Backfill: Engineer" },
+                 TeamPlanning::Attention.names_of(named, items))
+  end
+
+  should "name the check that found each item" do
+    place = TeamPlanning::CapacityModel::Place.new(unit_id: nil, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id: nil)
+    seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])
+    unclassified = [ [ TeamPlanning::Capacity::Seat.new(seat:, places: []),
+                       TeamPlanning::Capacity::Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "no_model") ] ]
+
+    assert_equal %i[leavers unclassified],
+                 TeamPlanning::Attention.new(map(people: [ member ]), {}, left_ids: [ PERSON ], unclassified:).call.map(&:check)
+  end
+
   should "credit the level change that left a place with no level, when it lands after the placement" do
     place = TeamPlanning::CapacityModel::Place.new(unit_id: LIVE, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id: nil)
     seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])
