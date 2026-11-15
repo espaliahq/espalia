@@ -368,7 +368,7 @@ edits the change, then approves again.
 |---|---|---|
 | 9.1 | Timeline projection: one path from the baseline to a leaf, with lanes and moves | 3.6 |
 | 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.1 |
-| 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later | 9.2, 3.12 |
+| 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.2, 3.12 |
 | 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit | 9.1 |
 | 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |
 
@@ -468,7 +468,8 @@ forecasts that need no assessments (10.1 to 10.4). Left out on purpose:
   built from them needs the cohort rule tested on plan-sized groups first.
 - **Capabilities in the plan (P11).** The reason to build planning inside Espalia, but
   a plan is useful without it, and it rests on the same cohort question.
-- **Editing in time (9.3).** The map edits every step already.
+- **Moving a change in time (9.3).** The map edits every step already, and the timeline
+  moves people within a step.
 - **Overlays.** The events keep them possible. See the data design.
 - **Requests from managers.** A later module, on the edit rights unit owners already
   have.

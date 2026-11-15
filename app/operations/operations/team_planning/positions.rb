@@ -14,8 +14,8 @@ class Operations::TeamPlanning::Positions < Operations::Base
 
   description "List the open positions in a scenario of a Team Planning plan the caller is in: those its own " \
               "changes set, and those it inherits from the scenarios it follows. Each has its role and level " \
-              "(with names from the framework; a name is null once the framework drops it), unit, FTE, basis and " \
-              "budget: 'committed' for a backfill, 'planned' for a new position. occupants lists each person placed " \
+              "(with names from the framework; a name is null once the framework drops it), unit, FTE, basis, " \
+              "cost_centre (the position's own label, null when it has none), and budget: 'committed' for a backfill, 'planned' for a new position. occupants lists each person placed " \
               "in it, with allocation and role; open_fte is its FTE less each occupant's allocation times their " \
               "FTE, below 0 when overfilled. backfill_for_ids lists the people whose departure it backfills: " \
               "empty for a backfill nobody is named for. `names` maps every person id to a name; a forgotten person reads as " \

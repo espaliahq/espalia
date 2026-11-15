@@ -410,6 +410,9 @@ Rails.application.routes.draw do
     get :timeline, on: :member
     # The Org Graph's changes since the base, and where the plan's stand ([#287](https://github.com/espaliahq/espalia/issues/287)).
     get :changes, on: :member
+    # Update the plan to today, from a preview an editor confirms ([#337](https://github.com/espaliahq/espalia/issues/337)).
+    get :rebase, on: :member, path: "update-to-today"
+    post :rebase, on: :member, path: "update-to-today", action: :rebase_plan
     # Fork and rename a scenario (#271).
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
@@ -418,6 +421,8 @@ Rails.application.routes.draw do
     resources :positions, only: [ :update ], controller: "plans/positions"
     # Grant and withdraw the see-pay right ([#300](https://github.com/espaliahq/espalia/issues/300)); the id is the member's.
     resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
+    # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.
+    resources :notes, only: [ :update ], controller: "plans/notes"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.

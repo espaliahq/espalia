@@ -4,6 +4,8 @@
 # the Team Planning Operations, as the MCP tools do, so a plan someone isn't
 # in is a 404 here and "No such plan" there.
 class PlansController < ApplicationController
+  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map]
+
   # GET /planning
   def index
     authorize TeamPlanningPlan, :index?, policy_class: PlanPolicy
@@ -58,7 +60,7 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || Views::Plans::Timeline.first_leaf(scenarios, plan[:plan_id])
     timeline = read(Operations::TeamPlanning::Timeline, scenario_id:)
     render plan_page(plan, scenarios:, open_tab: :timeline,
-                           body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i))
+                           body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i, can_edit: can_edit?))
   end
 
   # GET /planning/:id/changes?scenario=:scenario_id
@@ -73,11 +75,51 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     tab = Views::Plans::ChangesTab.new(plan:, scenarios:, drift: read(Operations::TeamPlanning::Drift),
                                        status: read(Operations::TeamPlanning::Status, scenario_id:),
-                                       attention: read(Operations::TeamPlanning::Attention, scenario_id:))
+                                       attention: read(Operations::TeamPlanning::Attention, scenario_id:), can_edit: can_edit?)
     render plan_page(plan, scenarios:, open_tab: :changes, body: tab)
   end
 
+  # GET /planning/:id/update-to-today
+  #
+  # What updating the plan to today would take in, for an editor to confirm
+  # ([#337](https://github.com/espaliahq/espalia/issues/337)).
+  def rebase
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    preview = Operations::TeamPlanning::RebasePreview.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    render plan_page(plan, scenarios:, open_tab: :changes, body: Views::Plans::UpdateToToday.new(plan:, scenarios:, preview:))
+  rescue Operations::Base::ParameterError => e
+    redirect_to changes_plan_path(plan[:plan_id]), alert: "Can't update to today: #{e.message}"
+  end
+
+  # POST /planning/:id/update-to-today
+  #
+  # Takes the base the preview read, so an update made since is refused
+  # rather than taken in unseen.
+  def rebase_plan
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    today = Time.now.utc.to_date.iso8601
+    # A second click lands after the first has moved the base to the day it confirmed.
+    return redirect_to(changes_plan_path(plan[:plan_id]), notice: "Updated to today, #{day(today)}.") if plan[:base_on] == today && params[:to] == today
+    return redirect_to(rebase_plan_path(plan[:plan_id]), alert: "The day has turned since you looked, so check the update again.") if params[:to] != today
+
+    result = Operations::TeamPlanning::RebasePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id], base_on: params[:base_on] })
+    redirect_to changes_plan_path(plan[:plan_id]), notice: rebased(result)
+  rescue Operations::Base::ParameterError => e
+    redirect_to changes_plan_path(plan[:plan_id]), alert: "Couldn't update to today: #{e.message}"
+  end
+
   private
+
+  def rebased(result)
+    count = result[:conflicts].size
+    carried = count.zero? ? "" : " #{count} planned #{count == 1 ? 'change stays' : 'changes stay'} conflicting."
+    "Updated to today, #{day(result[:base_on])}.#{carried}"
+  end
+
+  def day(iso) = I18n.l(Date.iso8601(iso), format: "%-d %b %Y")
 
   # Cost comes before capacity, in the strips above the map and beside each
   # unit's name.

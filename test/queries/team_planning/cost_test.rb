@@ -140,6 +140,52 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
                  "Payments sits under Engineering, and only Ada is in no unit"
   end
 
+  def cost_centre_rules(*rules, unit_id: nil)
+    operation(Operations::TeamPlanning::SetRule, unit_id:, rule: "cost_centre", value: { rules: })
+  end
+
+  def open_cost_centre(priced, position_id) = lines(priced, position_id).sole.then { [ it.cost_centre, it.cost_centre_source, it.cost_centre_rule ] }
+
+  should "put an open seat under its position's own cost centre first, then an occupant's" do
+    labelled = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                                fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
+    shared = open_position(unit_id: @payments)
+    operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: labelled, allocation: 0.5 },
+                                                                                        { position_id: shared, allocation: 0.5 } ])
+    cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" })
+
+    assert_equal [ "Platform", "position", nil ], open_cost_centre(cost.scenario, labelled), "its own label beats Ada's CC-1"
+    assert_equal [ "CC-1", "person", nil ], open_cost_centre(cost.scenario, shared), "Ada fills half of it and brings CC-1"
+  end
+
+  should "put an unfilled position under the first cost centre rule that matches at its unit, and none without one" do
+    seat = open_position(unit_id: @payments)
+    assert_equal [ nil, "none", nil ], open_cost_centre(cost.scenario, seat)
+
+    cost_centre_rules({ role_id: @manager.role_id, cost_centre: "Managers" },
+                      { unit_id: @engineering, role_family_id: @engineer.role_family_id, cost_centre: "Engineering" },
+                      { unit_id: @payments, cost_centre: "Payments" })
+
+    assert_equal [ "Engineering", "rule", 1 ], open_cost_centre(cost.scenario, seat), "Payments sits under Engineering"
+    assert_includes cost.scenario.cost_centres.keys, "Engineering"
+  end
+
+  should "never move a person's own cost centre by the rules" do
+    cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" })
+
+    assert_equal [ [ nil, "none" ] ], lines(cost.scenario, @cy.id).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+    assert_equal [ [ "CC-1", "person" ] ], lines(cost.scenario, @ada.id).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+  end
+
+  should "give a placeholder hire their position's cost centre, as they have none of their own" do
+    seat = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                            fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
+    hire = operation(Operations::TeamPlanning::SetPlaceholderHire, label: "Payments engineer", fte: 1)[:placeholder_id]
+    operation(Operations::TeamPlanning::SetAssignment, person_id: hire, placements: [ { position_id: seat, allocation: 1 } ])
+
+    assert_equal [ [ "Platform", "position" ] ], lines(cost.scenario, hire).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+  end
+
   should "price a filled position at its occupant's level, falling back to the position's and saying so" do
     seat = open_position(level: @e6, unit_id: @payments)
     operation(Operations::TeamPlanning::SetAssignment, person_id: @cy.id, placements: [ { position_id: seat, allocation: 1 } ])
