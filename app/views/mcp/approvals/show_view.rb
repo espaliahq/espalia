@@ -57,7 +57,7 @@ class Views::Mcp::Approvals::ShowView < Views::Base
   def detail_row(label_text, &block)
     div(class: "flex items-baseline gap-4") do
       span(class: "text-xs uppercase tracking-wider text-muted w-32 shrink-0") { label_text }
-      span(class: "text-sm text-default", &block)
+      span(class: "min-w-0 text-sm text-default wrap-anywhere", &block)
     end
   end
 
