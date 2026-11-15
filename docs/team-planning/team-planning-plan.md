@@ -322,7 +322,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | # | Story | Needs |
 |---|---|---|
 | 8.1 | The may-approve right, and tenant guardrails as rules that are binding at approval | 6.5, 4.6 |
-| 8.2 | `ScenarioSplit`: move the agreed changes into a new scenario beneath, with what they overwrite, and name any change that blocks the split | 3.2 |
+| 8.2 | `ScenarioSplit`: move the agreed changes into a new scenario beneath, with what they overwrite, and name any change that blocks the split. [Design: Splitting a scenario](team-planning-design.md#splitting-a-scenario) | 3.2 |
 | 8.3 | Org Graph Operations accept a plan reference and a cause, and pass them to the handlers. A change made this way shows "From plan" in the activity feed | none |
 | 8.4 | `PlanApproved` pins a point and applies every change Espalia holds, with `ChangeApplied` for each (see below) | 8.1, 8.3 |
 | 8.5 | The change list Operation for an approved point, with a stable id per entry, and `ChangeRaised` with the upstream reference | 8.4 |
