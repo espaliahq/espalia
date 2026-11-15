@@ -961,8 +961,12 @@ values, under the plan's key and deleted with it
   accounting identifier are out of scope.
 - **A plan changes the budget with plan data.** `BudgetLineSet` and `BudgetLineCut` add,
   change or cut a line in a scenario, and a descendant changes them like anything else. The
-  amount is shreddable under the plan's key. Removing a tenant line a plan has changed or cut
-  leaves the plan's change orphaned, and Attention flags it rather than dropping it.
+  amount is shreddable under the plan's key. A tenant line keeps its id in every scenario; a
+  line the plan adds gets one the plan mints. The baseline holds the approved budget as it
+  is, so only a scenario changes it. Removing a tenant line a plan has changed or cut
+  leaves the plan's change orphaned: `team_planning_budget_lines` lists it under `orphaned`,
+  and Attention flags it rather than dropping it. Until the budget tab (6.7), a plan's lines
+  are reached over MCP.
 - **Money keeps its currency.** An amount keeps its own currency and period, a year or a
   month, as a pay band's does, and is never converted. A line with a head count and no amount
   has no amount, never zero.
