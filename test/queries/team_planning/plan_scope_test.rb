@@ -212,6 +212,22 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       end
     end
 
+    should "let a plan re-cover the same units though a change already moves someone outside them" do
+      call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @ada.id,
+                                                    placements: [ { unit_id: @sales, allocation: 1 } ])
+      set_scope(@plan_id, [ @payments ])
+      assert_equal [ @payments ], scope_of(@plan_id)
+    end
+
+    should "name a person once and count no other change when two changes are about them" do
+      call(Operations::TeamPlanning::SetAssignment, plan_id: @whole_id, scenario_id: @whole_h1, person_id: @cy.id,
+                                                    placements: [ { unit_id: @sales, allocation: 0.5 } ])
+      call(Operations::TeamPlanning::SetDeparture, plan_id: @whole_id, scenario_id: @whole_h1, person_id: @cy.id)
+
+      error = assert_raises(Operations::Base::ParameterError) { set_scope(@whole_id, [ @engineering ]) }
+      assert_match "about: Cy Quill in H1. Undo", error.message
+    end
+
     should "judge each change by its own scenario, so a person brought in elsewhere doesn't excuse it" do
       call(Operations::TeamPlanning::SetAssignment, plan_id: @whole_id, scenario_id: @whole_h1, person_id: @dee.id,
                                                     placements: [ { unit_id: @payments, allocation: 1 } ])

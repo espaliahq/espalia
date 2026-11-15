@@ -38,42 +38,53 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
 
   private
 
+  # A change is dropped when the plan holds what it is about today and the
+  # narrower plan would not. One about someone the plan already leaves out
+  # stays as it is, so re-saving or widening never trips on it.
   def keep_every_change!(aggregate, unit_ids)
     return if unit_ids.empty?
+
+    current = TeamPlanningPlan.find(aggregate.plan_id)
+    return if current.scope_unit_ids.present? && (current.scope_unit_ids - unit_ids).empty?
 
     scenario_ids = [ aggregate.plan_id, *aggregate.scenarios.keys ]
     changes = scenario_ids.flat_map { |scenario_id| aggregate.changes_in(scenario_id).map { [ scenario_id, it ] } }
     return if changes.empty?
 
     narrower = TeamPlanningPlan.find(aggregate.plan_id).tap { it.scope_unit_ids = unit_ids }
-    held = maps(narrower, aggregate, scenario_ids).transform_values { held_ids(it).to_set << aggregate.plan_id }
-    dropped = changes.reject { |scenario_id, change| held[scenario_id].include?(change.data[:subject_id]) }
+    now = maps(current, aggregate, scenario_ids)
+    held_now = now.transform_values { held_ids(it) }
+    held = maps(narrower, aggregate, scenario_ids).transform_values { held_ids(it) }
+    dropped = changes.select do |scenario_id, change|
+      subject_id = change.data[:subject_id]
+      held_now[scenario_id].include?(subject_id) && !held[scenario_id].include?(subject_id)
+    end
     return if dropped.empty?
 
-    current = TeamPlanningPlan.find(aggregate.plan_id)
     baseline = ::TeamPlanning::Baseline.new(context:, plan: current)
-    named = maps(current, aggregate, scenario_ids).values.map { baseline.named(it) }
-    raise ::TeamPlanning::Error, refusal(dropped, named, aggregate.plan_id)
+    raise ::TeamPlanning::Error, refusal(dropped, now.values.map { baseline.named(it) }, aggregate.plan_id)
   end
 
-  # A change is kept only when its own scenario's narrower map holds what it is about.
+  # Each change is judged against its own scenario's map.
   def maps(plan, aggregate, scenario_ids)
     base = ::TeamPlanning::Baseline.new(context:, plan:).structure
     scenario_ids.index_with { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id: it, base:).structure(aggregate) }
   end
 
   def held_ids(map)
-    (map.people + map.units + map.retired_units + map.positions + map.budget_lines).map(&:id) + map.departed.map(&:person_id)
+    ((map.people + map.units + map.retired_units + map.positions + map.budget_lines + map.successions).map(&:id) +
+      map.departed.map(&:person_id)).to_set
   end
 
+  # Names each subject once and counts every change it couldn't show.
   def refusal(dropped, current, plan_id)
     names = TeamPlanningScenario.where(plan_id:).to_h { [ it.id, it.name&.reveal ] }
-    described = dropped.filter_map do |scenario_id, change|
+    described = dropped.map do |scenario_id, change|
       subject = name_in(current, change.data[:subject_id])
       "#{subject} in #{scenario_id == plan_id ? 'the baseline' : names[scenario_id] || 'a scenario'}" if subject
-    end.uniq
-    shown = described.first(self.class.named)
-    rest = dropped.size - shown.size
+    end
+    shown = described.compact.uniq.first(self.class.named)
+    rest = described.count { !shown.include?(it) }
     listed = shown + (rest.positive? ? [ "#{rest} other #{'change'.pluralize(rest)}" ] : [])
     "The narrower plan would leave out what these changes are about: #{listed.to_sentence}. " \
       "Undo them, or keep the units they are about"
