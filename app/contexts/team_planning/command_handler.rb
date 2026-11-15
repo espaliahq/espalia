@@ -298,8 +298,7 @@ class TeamPlanning::CommandHandler
     end
   end
 
-  # Hands one facet of one subject back to the scenario's parent. Reconcile
-  # (4.5) calls this to follow reality.
+  # Hands one facet of one subject back to the scenario's parent.
   #
   # @param plan_id [String]
   # @param scenario_id [String]
@@ -316,7 +315,7 @@ class TeamPlanning::CommandHandler
   end
 
   # Keeps what a scenario inherits for one facet of one subject, as it
-  # resolves now. Reconcile (4.5) calls this to keep the plan.
+  # resolves now.
   #
   # A change in the parent's chain is kept as it was made. With none, the
   # value comes from the baseline, read off the parent's resolved map by the

@@ -821,7 +821,13 @@ reads. `team_planning_settle_conflict` takes one of two choices, in one scenario
   the editor gives another.
 - **Follow reality** sets what the Org Graph holds today, in this scenario alone. A clear
   would hand the facet back to the parent's change, which still conflicts, so the
-  scenario that made the change and its other children keep it as it was.
+  scenario that made the change and its other children keep it as it was. Settled in the
+  scenario that made the change, it reaches the children that inherit it, as any change
+  there does. A unit succession can't follow reality yet: the retirements written with it
+  wouldn't follow, so the editor changes it on the map.
+
+Settling is refused once status no longer reads the row as conflicting: the Org Graph
+has caught up with the plan, or the person was forgotten.
 
 No new event records the choice. The write carries a `settles` marker, the day the
 conflict was found and the choice, and the conflict ends by the rule above: a newer
