@@ -22,10 +22,11 @@ class Operations::TeamPlanning::Plan < Operations::Base
   end
 
   # @param plan [TeamPlanningPlan]
-  # @return [Hash] `{ whole_organisation, units: [{ unit_id, name }] }`
+  # @return [Hash] `{ whole_organisation, units: [{ unit_id, name }] }`, units by name with any former unit last
   def self.scope_of(plan)
     ids = plan.scope_unit_ids.to_a
     names = OrgUnit.where(id: ids).pluck(:id, :name).to_h
-    { whole_organisation: ids.empty?, units: ids.map { { unit_id: it, name: names[it] } } }
+    units = ids.map { { unit_id: it, name: names[it] } }.sort_by { [ it[:name] ? 0 : 1, it[:name].to_s, it[:unit_id] ] }
+    { whole_organisation: ids.empty?, units: }
   end
 end
