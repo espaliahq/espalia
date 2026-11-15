@@ -167,6 +167,16 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal [ "60000", "6000", "66000" ], ada(cost(unit_id: @payments)).then { [ it[:base], it[:on_cost][:amount], it[:amount] ] }
     end
 
+    should "not count a seat as priced from actual pay when its on-cost rule refuses it" do
+      fixed = { "model" => "itemised", "params" => { "items" => [ { "name" => "Laptop", "amount" => "2000", "currency" => "AUD" } ] } }
+      call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @year, unit_id: @payments, rule: "on_cost", value: fixed)
+      pay(amount: "60000", period: "year", basis: "actual")
+      holder = cost(unit_id: @payments)
+
+      assert_equal [ "actual", "on_cost_refused" ], ada(holder).values_at(:pay_source, :reason)
+      assert_equal({ scenario: 0, baseline: 0 }, holder[:actual_pay_seats])
+    end
+
     should "leave a seat unpriced once its held pay is lost with the person's key, with no midpoint standing in" do
       pay(amount: "60000", period: "year", basis: "actual")
       ActsAsTenant.with_tenant(@tenant) { PlanKeyStore.new.destroy_person(@ada.id) }

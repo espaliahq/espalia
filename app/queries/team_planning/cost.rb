@@ -118,7 +118,7 @@ class TeamPlanning::Cost
     def unpriced = lines.select(&:unpriced?)
 
     # @return [Integer] the seats priced from actual pay
-    def actual_pay_seats = lines.select { it.pay_source == "actual" }.uniq(&:seat_id).size
+    def actual_pay_seats = lines.reject(&:unpriced?).select { it.pay_source == "actual" }.uniq(&:seat_id).size
   end
 
   # @!attribute period [Range<Date>]
