@@ -277,6 +277,22 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_equal "done", statuses.find { it[:subject_id] == @ada.id && it[:facet] == "assignment" }[:status].to_s
   end
 
+  should "mask a manager seat or a backfill outside the scope, as it masks a manager outside" do
+    sales_seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                             level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    [ @plan_id, @whole_id ].zip([ @h1, @whole_h1 ]).each do |plan_id, scenario_id|
+      seat = plan_id == @plan_id ? sales_seat : call(Operations::TeamPlanning::SetPosition, plan_id:, scenario_id:, role_id: @engineer.role_id,
+                                                                                         level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+      call(Operations::TeamPlanning::SetReportingLine, plan_id:, scenario_id:, person_id: @ada.id, manager_position_id: seat)
+    end
+
+    ada = person(scenario_map(@plan_id, @h1), @ada)
+    assert_nil ada[:manager_position_id]
+    assert ada[:manager_outside]
+    assert_not_includes scenario_map(@plan_id, @h1).to_json, sales_seat
+    assert person(scenario_map(@whole_id, @whole_h1), @ada)[:manager_position_id], "the control proves the payload would carry it"
+  end
+
   should "keep a place in a position outside the scope outside, however often the map settles, and read it as done once it shows" do
     sales_seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @plan_id, role_id: @engineer.role_id,
                                                              level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]

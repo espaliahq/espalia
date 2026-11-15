@@ -13,9 +13,10 @@
 # A plan with a scope never shows anyone or anything outside it
 # [#338](https://github.com/espaliahq/espalia/issues/338). A person keeps only
 # their places in it, with `outside: { share: }` for the rest of their time; a
-# manager outside reads as `manager_outside: true`, and a covered unit's parent
-# or owner outside is left out, as is a capacity override on a place outside. A plan covering the whole organisation reads as
-# it always has.
+# manager or a manager's seat outside reads as `manager_outside: true`, and a
+# covered unit's parent or owner outside is left out, as is a capacity override
+# on a place outside or a backfill for a seat outside. A plan covering the
+# whole organisation reads as it always has.
 #
 # Actual pay under `plan_data` reaches only a member with the see-pay right
 # ([#317](https://github.com/espaliahq/espalia/issues/317)).
@@ -71,11 +72,14 @@ module Operations::TeamPlanning::MapPayload
   def within_scope(payload, person, map, outside)
     away = map.outside_places(person)
     share = ::TeamPlanning::Baseline::Membership.shares(person.memberships).sum(0r) { |place, part, _| away.include?(place) ? part : 0r }
-    manager_outside = outside.include?(person.manager_id)
     on_map = map.known_unit_ids + map.positions.map(&:id)
+    seat_outside = person.manager_position_id && !on_map.include?(person.manager_position_id)
+    manager_outside = outside.include?(person.manager_id) || seat_outside
     payload.merge(memberships: (person.memberships - away).map(&:to_h), outside: (away.any? ? { share: share.to_f } : nil),
                   capacity_overrides: payload[:capacity_overrides].select { |place_id, _| on_map.include?(place_id) },
-                  manager_id: (person.manager_id unless manager_outside), manager_outside:)
+                  manager_id: (person.manager_id unless outside.include?(person.manager_id)),
+                  manager_position_id: (person.manager_position_id unless seat_outside), manager_outside:,
+                  backfill_position_id: (payload[:backfill_position_id] if on_map.include?(payload[:backfill_position_id])))
   end
 
   def positions_payload(map)
