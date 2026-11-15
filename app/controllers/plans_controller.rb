@@ -93,8 +93,6 @@ class PlansController < ApplicationController
   # Today has no period, so only a scenario is priced. Cost shows once a pay
   # band prices something; a scenario that can't be priced keeps its map.
   def cost_hooks(plan, map)
-    return {} if map[:scenario_id] == plan[:plan_id]
-
     marks = Views::Plans::CostMarks.new(cost: read(Operations::TeamPlanning::Cost, scenario_id: map[:scenario_id]), map:)
     marks.priced? ? { unit_marks: marks.unit_marks, summary: Views::Plans::CostStrip.new(marks:) } : {}
   rescue ActiveRecord::RecordNotFound
@@ -106,7 +104,7 @@ class PlansController < ApplicationController
 
     costs = read(Operations::TeamPlanning::ScenarioCosts)
     rows = costs[:scenarios].index_by { it[:scenario_id] }
-    priced = rows.values.any? { |row| row[:total]&.values_at(:scenario, :baseline)&.any? { it[:native].any? } }
+    priced = rows.values.any? { |row| row[:total]&.values_at(:scenario, :baseline)&.compact&.any? { it[:native].any? } }
     return [] unless priced
 
     [ Views::Plans::ScenarioTable::Column.new(heading: "Cost", cell: ->(scenario) {

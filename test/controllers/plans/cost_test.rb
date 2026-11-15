@@ -59,7 +59,7 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     table = Nokogiri::HTML(response.body)
     assert_includes table.at_css("[data-cost-cell='#{@year}']").text, "EUR 250k"
     assert_includes table.at_css("[data-cost-cell='#{@year}']").text, "1 left out"
-    assert_includes response.body, "No period of its own"
+    assert_equal "EUR 200k a year(run rate)1 left out", table.at_css("[data-cost-cell='#{@plan_id}']").text
   end
 
   should "add the units and what is in no unit up to the total exactly, in the map's read and the table's" do
@@ -86,14 +86,32 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     end
   end
 
-  should "leave Today's map without cost, and a page without any band without the Cost column" do
+  should "show Today's map at its yearly run rate, set against nothing" do
     get map_plan_path(@plan_id)
-    assert_nil Nokogiri::HTML(response.body).at_css("[data-cost-strip]")
+    page = Nokogiri::HTML(response.body)
 
+    assert_equal "EUR 200k a year", page.at_css("[data-cost-total]").text
+    assert_equal [ "yearly run rate", nil ], [ page.at_css("[data-cost-run-rate]").text, page.at_css("[data-cost-change]") ]
+    assert_includes page.at_css("[data-cost-strip]").text, "priced for 1 Jan 2026 to 31 Dec 2026"
+    assert_equal [ "EUR 100k a year" ], page.css("[data-cost-unit] .font-medium").map(&:text)
+    assert_not_includes page.at_css("main").text, "vs Today"
+  end
+
+  should "set a shorter scenario against Today over its own days, never against Today's run rate" do
+    half = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @year, relation: "then", name: "H1 2027",
+                                                        ends_on: "2027-06-30")[:scenario_id]
+
+    get plan_path(@plan_id)
+    assert_includes Nokogiri::HTML(response.body).at_css("[data-cost-cell='#{half}']").text, "EUR 124k(+EUR 24.8k vs Today)"
+    get map_plan_path(@plan_id, scenario: half)
+    assert_equal "+EUR 24.8k vs Today", Nokogiri::HTML(response.body).at_css("[data-cost-change]").text
+  end
+
+  should "leave a page without any band without the Cost column or strip" do
     ActsAsTenant.with_tenant(@tenant) { PayBand.delete_all }
     get plan_path(@plan_id)
     assert_response :success
-    assert_not_includes response.body, "No period of its own"
+    assert_nil Nokogiri::HTML(response.body).at_css("[data-cost-cell]")
     get map_plan_path(@plan_id, scenario: @year)
     assert_nil Nokogiri::HTML(response.body).at_css("[data-cost-strip]")
   end
