@@ -24,4 +24,11 @@ class Views::Plans::CapacityFigureTest < ActiveSupport::TestCase
                  overloaded.at_css("[data-capacity-overloaded]").text
     assert_nil figure.at_css("[data-capacity-overloaded]")
   end
+
+  should "badge an override even when the place it replaced counts nowhere" do
+    unreadable = figure(capacity: nil, overridden: true, reason_text: "A planner overrode this figure")
+
+    assert_includes unreadable.at_css("summary").text, "override"
+    assert_not_includes figure.at_css("summary").text, "override"
+  end
 end

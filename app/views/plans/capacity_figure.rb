@@ -21,7 +21,7 @@ class Views::Plans::CapacityFigure < Views::Base
       summary(class: "inline-flex items-center gap-1 rounded px-1 tabular-nums text-default hover:bg-subtle") do
         span(class: "sr-only") { "#{@label}:" }
         span(class: "underline decoration-dotted underline-offset-2") { headline }
-        render Components::Kit::Badge.new("override", size: :sm) if @place[:overridden] && capacity
+        render Components::Kit::Badge.new("override", size: :sm) if @place[:overridden]
       end
       div(class: "mt-1 rounded border border-subtle bg-subtle px-3 py-2 text-muted") { working }
     end
