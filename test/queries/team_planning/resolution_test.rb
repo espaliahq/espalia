@@ -148,4 +148,19 @@ class TeamPlanning::ResolutionTest < ActiveSupport::TestCase
 
     assert_raises(Pundit::NotAuthorizedError) { resolve(@q1, as: stranger) }
   end
+
+  should "reuse a scenario's resolution inside a reusing block, and read afresh once the plan is written" do
+    reads = 0
+    as_of = OrgGraph::AsOf.method(:new)
+    titles = OrgGraph::AsOf.stub(:new, ->(**args) { reads += 1; as_of.call(**args) }) do
+      TeamPlanning::Resolution.reusing do
+        before = [ @q1, @q1, @plan_id ].map { resolve(it, names: true).people.sole.title }
+        set(TitleSet, @q1, title: "Senior Engineer")
+        before + [ resolve(@q1, names: true).people.sole.title ]
+      end
+    end
+
+    assert_equal [ "Engineer", "Engineer", "Engineer", "Senior Engineer" ], titles
+    assert_equal 2, reads
+  end
 end
