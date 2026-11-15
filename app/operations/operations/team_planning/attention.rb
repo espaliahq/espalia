@@ -16,7 +16,7 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "It also checks each person: placed nowhere, over or under 100% allocated (an unknown total is " \
               "neither), still in the plan after the Org Graph has them leave, no manager (except the head of the " \
               "tree), or a manager who is gone, has left, or is in or owns none of their units nor the unit directly above one. " \
-              "Once any place has a capacity model chosen, each place no model covers is listed too, except a leaver's, " \
+              "Once a capacity model is chosen for any role or family, even one no place takes, each place no model covers is listed too, except a leaver's, " \
               "a forgotten person's override and a closed position's. Items come grouped by check, in a fixed order, then " \
               "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
