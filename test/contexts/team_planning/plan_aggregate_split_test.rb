@@ -168,6 +168,17 @@ class TeamPlanning::PlanAggregateSplitTest < ActiveSupport::TestCase
     assert_empty @plan.unpublished_events.select { it.is_a?(TeamPlanning::Events::ScenarioSplit) }
   end
 
+  should "block a split when an earlier change that moves with it, and an undo could bring back, needs what the rest creates" do
+    parent_id = SecureRandom.uuid_v7
+    child_id = SecureRandom.uuid_v7
+    creates = set_unit(@q1, parent_id)
+    under = set_unit(@q1, child_id, parent_id:)
+    alone = set_unit(@q1, child_id)
+
+    error = assert_raises(TeamPlanning::SplitBlocked) { split(@q1, alone) }
+    assert_equal [ [ creates, under ] ], error.blocks.map { [ it.event_id, it.blocks_event_id ] }
+  end
+
   should "let a change move when what it needs stands in the parent or moves with it" do
     standing_id = SecureRandom.uuid_v7
     set_unit(@q1, standing_id)
