@@ -100,13 +100,17 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_raises(KeyError) { render_tab(statuses: [ statuses.first.merge(status: "stalled") ]) }
     end
 
-    should "name a rule by its kind, and a hire only the plan holds" do
+    should "name a rule by its kind, a plan-wide rule by the plan, a plan value apart from a level change, and a hire only the plan holds" do
       html = render_tab(statuses: [
         { scenario_id: Q1, change_id: "r1", subject_id: BO, facet: "rule:on_cost", status: "plan_only", since: nil, sources: [] },
-        { scenario_id: Q1, change_id: "h1", subject_id: "hire", facet: "placeholder", status: "plan_only", since: nil, sources: [] }
+        { scenario_id: Q1, change_id: "h1", subject_id: "hire", facet: "placeholder", status: "plan_only", since: nil, sources: [] },
+        { scenario_id: Q1, change_id: "r2", subject_id: PLAN, facet: "rule:on_cost", status: "plan_only", since: nil, sources: [] },
+        { scenario_id: Q1, change_id: "l1", subject_id: BO, facet: "data:level", status: "plan_only", since: nil, sources: [] }
       ])
 
-      assert_equal [ "Bo Reyes · RulePlan only", "#{Views::Plans::ChangesTab::PLAN_ONLY} · HirePlan only" ], texts(html, "[data-planned-change='plan_only']")
+      assert_equal [ "Bo Reyes · RulePlan only", "#{Views::Plans::ChangesTab::PLAN_ONLY} · HirePlan only",
+                     "#{Views::Plans::ChangesTab::WHOLE_PLAN} · RulePlan only", "Bo Reyes · Level (plan value)Plan only" ],
+                   texts(html, "[data-planned-change='plan_only']")
     end
 
     should "name the scenario shown, and mark it in the picker" do

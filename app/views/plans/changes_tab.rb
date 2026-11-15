@@ -10,7 +10,7 @@ class Views::Plans::ChangesTab < Views::Base
   FACETS = {
     "assignment" => "Placement", "level" => "Level", "reporting_line" => "Manager", "departure" => "Leaving",
     "unit" => "Unit", "succession" => "Succession", "position" => "Position", "placeholder" => "Hire",
-    "data:level" => "Level", "data:fte" => "FTE", "data:pay" => "Pay", "rule" => "Rule", "capacity" => "Capacity",
+    "data:level" => "Level (plan value)", "data:fte" => "FTE (plan value)", "data:pay" => "Pay", "rule" => "Rule", "capacity" => "Capacity",
     "budget_line" => "Budget line"
   }.freeze
   FACTS = {
@@ -22,6 +22,7 @@ class Views::Plans::ChangesTab < Views::Base
     "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ], "plan_only" => [ "Plan only", :info ]
   }.freeze
   PLAN_ONLY = "Only in this plan"
+  WHOLE_PLAN = "The whole plan"
   REMOVED_UNIT = "A removed unit"
 
   # @param plan [Hash] from `team_planning_plan`
@@ -48,6 +49,8 @@ class Views::Plans::ChangesTab < Views::Base
   private
 
   def plan_id = @plan[:plan_id]
+
+  def planned_subject(id) = @status[:names][id] || (id == plan_id ? WHOLE_PLAN : PLAN_ONLY)
 
   def scenario_id = @status[:scenario_id]
 
@@ -119,7 +122,7 @@ class Views::Plans::ChangesTab < Views::Base
     li(class: "flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between", data: { planned_change: entry[:status] }) do
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
-          strong(class: "font-medium") { @status[:names][entry[:subject_id]] || PLAN_ONLY }
+          strong(class: "font-medium") { planned_subject(entry[:subject_id]) }
           plain " · #{facet_name(entry[:facet])}"
         end
         p(class: "text-xs text-muted") { "Planned in #{scenario_name(entry[:scenario_id])}" } if entry[:scenario_id] != scenario_id
