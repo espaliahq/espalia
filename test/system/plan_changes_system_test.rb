@@ -60,14 +60,13 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       within("[data-changes-section='planned']") { assert_text "This scenario plans nothing the Org Graph holds yet." }
       assert_no_sideways_overflow
 
-      find("[data-drift-change='moved'] a", text: "Q1 hires").click
-      assert_text "Planned in Q1 hires"
+      click_selector_with_js_fallback("[data-drift-change='moved'] a[href='#{changes_plan_path(@plan_id, scenario: @q1)}']",
+                                      expect_text: "Planned in Q1 hires")
       within("[data-changes-section='planned']") do
         assert_selector "nav[aria-label='Scenario'] a[aria-current='page']", text: "Q1 hires"
         assert_selector "[data-planned-change='done']", text: /Bo Reyes · Placement.*Done/m
       end
-      within("nav[aria-label='Scenario']") { click_link("Today") }
-      assert_text "Planned in Today"
+      click_selector_with_js_fallback("nav[aria-label='Scenario'] a[href='#{changes_plan_path(@plan_id)}']", expect_text: "Planned in Today")
     end
   end
 
