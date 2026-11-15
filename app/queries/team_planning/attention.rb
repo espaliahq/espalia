@@ -131,6 +131,7 @@ class TeamPlanning::Attention
     @live = map.units.to_set(&:id)
     @retired = map.retired_units.to_set(&:id)
     @outside = map.outside_ids
+    @cut = map.cut_positions.to_set(&:id)
   end
 
   # @return [Array<Item>] in {CHECKS} order, then by subject id and reason
@@ -294,6 +295,8 @@ class TeamPlanning::Attention
 
       UNSHARED.first unless nearby.intersect?(units_of(manager))
     else
+      return if @cut.include?(line.position_id)
+
       position = positions[line.position_id]
       return "Their manager's position is no longer in this scenario" unless position
       return if nearby.empty? || !@live.include?(position.unit_id)
@@ -426,9 +429,8 @@ class TeamPlanning::Attention
   def fundings
     open = @map.positions.to_set(&:id)
     held = @map.budget_lines.to_set(&:id)
-    cut = @map.cut_positions.to_set(&:id)
     @map.fundings.flat_map do |position_id, draws|
-      next [] if cut.include?(position_id)
+      next [] if @cut.include?(position_id)
       next [ item(position_id, FUNDING, "Funds a closed position", broken_by: [ [ position_id, POSITION ] ]) ] unless open.include?(position_id)
 
       gone = draws.map { it[:budget_line_id] }.reject { held.include?(it) }

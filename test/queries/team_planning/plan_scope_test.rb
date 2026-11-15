@@ -303,6 +303,10 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert ada[:manager_outside]
     assert_not_includes scenario_map(@plan_id, @h1).to_json, sales_seat
     assert person(scenario_map(@whole_id, @whole_h1), @ada)[:manager_position_id], "the control proves the payload would carry it"
+
+    attention = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @h1)
+    assert_empty attention[:items].select { it[:subject_id] == @ada.id && it[:facet] == "reporting_line" }
+    assert_not_includes attention.to_json, sales_seat
   end
 
   should "keep a place in a position outside the scope outside, however often the map settles, and read it as done once it shows" do
