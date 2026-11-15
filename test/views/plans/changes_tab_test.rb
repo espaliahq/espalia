@@ -60,7 +60,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_includes rows[2], "Takes effect 1 Nov · learned 20 Nov"
       assert_includes rows[3], "Withdrawn"
       assert html.at_css("[data-drift-change='left'] .line-through")
-      assert_includes rows[4], "Ada Quill joined #{Views::Plans::ChangesTab::REMOVED_UNIT}"
+      assert_includes rows[4], "Ada Quill joined #{TeamPlanning::Attention::REMOVED_UNIT}"
     end
 
     should "mark a change from this plan, and link each scenario whose plan it meets" do

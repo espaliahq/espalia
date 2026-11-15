@@ -6,6 +6,8 @@
 # the change behind it and where to fix it. It reads Attention and decides
 # none of its rules.
 class Views::Plans::ChecksTab < Views::Base
+  include Views::Plans::ScenarioTab
+
   # A check this tab has no heading for still shows, under its key.
   HEADINGS = {
     placements: [ "Placements", "People placed in a unit or position the scenario no longer has." ],
@@ -21,12 +23,6 @@ class Views::Plans::ChecksTab < Views::Base
     unclassified: [ "Capacity", "Places no capacity model covers." ],
     budget_lines: [ "Budget lines", "Changes to budget lines the organisation has since removed." ]
   }.freeze
-  FACETS = {
-    "assignment" => "Placement", "level" => "Level", "reporting_line" => "Manager", "departure" => "Leaving",
-    "unit" => "Unit", "succession" => "Succession", "position" => "Position", "capacity" => "Capacity",
-    "budget_line" => "Budget line"
-  }.freeze
-
   # @param check [String, Symbol]
   # @return [String] the group's heading, or the key itself for a check with none
   def self.heading(check) = HEADINGS.dig(check.to_sym, 0) || check.to_s
@@ -47,7 +43,7 @@ class Views::Plans::ChecksTab < Views::Base
       div do
         h3(id: "checks-heading", class: "text-base font-semibold text-default") { "Checks on #{scenario_name(scenario_id)}" }
         p(class: "mt-1 text-sm text-muted") { "What no longer fits in this scenario, often because a scenario it follows changed later." }
-        scenario_picker
+        scenario_picker(path: :checks_plan_path, select_id: "checks-scenario")
       end
       if @attention[:items].empty?
         render Components::Kit::EmptyState.new(title: "Everything in this scenario still fits.", size: :panel)
@@ -103,7 +99,7 @@ class Views::Plans::ChecksTab < Views::Base
     li(class: "flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between", data: { check_item: item[:facet] }) do
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
-          facet = FACETS.fetch(item[:facet].split(":").first) { item[:facet].humanize }
+          facet = facet_name(item[:facet])
           if (name = @attention[:names][item[:subject_id]])
             strong(class: "font-medium") { name }
             plain " · #{facet}"
@@ -133,45 +129,4 @@ class Views::Plans::ChecksTab < Views::Base
   end
 
   def group_id(check) = "checks-#{check.to_s.dasherize}"
-
-  # A pill per scenario on a wide screen; a phone picks from a list.
-  def scenario_picker
-    div(class: "mt-3 flex flex-wrap items-center gap-2") do
-      nav(aria: { label: "Scenario" }, class: "hidden sm:flex flex-wrap items-center gap-2 text-sm") do
-        span(class: "text-muted") { "Showing" }
-        @scenarios.each { scenario_pill(it) }
-      end
-      form(action: checks_plan_path(plan_id), method: "get", class: "flex min-w-0 flex-1 items-center gap-2 text-sm sm:hidden",
-           data: { controller: "auto-submit" }) do
-        label(for: "checks-scenario", class: "text-muted") { "Showing" }
-        select(id: "checks-scenario", name: "scenario", class: "min-w-0 flex-1 #{Components::Kit::Field::SELECT}",
-               data: { action: "change->auto-submit#submit" }) do
-          Views::Plans::ScenarioTable.tree(@scenarios).each do |scenario, depth|
-            option(value: scenario_param(scenario[:scenario_id]).to_s, selected: scenario[:scenario_id] == scenario_id) { "#{'· ' * depth}#{scenario_name(scenario[:scenario_id])}" }
-          end
-        end
-        noscript { render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit) { "Show" } }
-      end
-    end
-  end
-
-  def scenario_pill(scenario)
-    current = scenario[:scenario_id] == scenario_id
-    a(href: checks_plan_path(plan_id, scenario: scenario_param(scenario[:scenario_id])), aria: { current: ("page" if current) },
-      class: "rounded-full border px-3 py-1 #{current ? 'border-brand bg-brand-subtle font-medium text-default' : 'border-default text-muted hover:text-default'}") do
-      scenario_name(scenario[:scenario_id])
-    end
-  end
-
-  def sources(providers)
-    providers.each { render Components::Kit::Badge.new("Source: #{HrisConfig.provider_label(it)}", variant: :outline) }
-  end
-
-  def scenario_name(id)
-    return "Today" if id == plan_id
-
-    @scenarios.find { it[:scenario_id] == id }&.dig(:name) || "A removed scenario"
-  end
-
-  def scenario_param(id) = (id unless id == plan_id)
 end

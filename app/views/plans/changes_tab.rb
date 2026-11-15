@@ -7,12 +7,8 @@
 # and decides none of their rules. Every change names its source of truth, the
 # place someone goes to make it happen.
 class Views::Plans::ChangesTab < Views::Base
-  FACETS = {
-    "assignment" => "Placement", "level" => "Level", "reporting_line" => "Manager", "departure" => "Leaving",
-    "unit" => "Unit", "succession" => "Succession", "position" => "Position", "placeholder" => "Hire",
-    "data:level" => "Level (plan value)", "data:fte" => "FTE (plan value)", "data:pay" => "Pay", "rule" => "Rule", "capacity" => "Capacity",
-    "budget_line" => "Budget line"
-  }.freeze
+  include Views::Plans::ScenarioTab
+
   FACTS = {
     "title" => "title", "level" => "level", "manager" => "manager", "cost_centre" => "cost centre",
     "site" => "site", "employment" => "employment"
@@ -24,7 +20,6 @@ class Views::Plans::ChangesTab < Views::Base
   STAYING = "Staying"
   PLAN_ONLY = "Only in this plan"
   WHOLE_PLAN = "The whole plan"
-  REMOVED_UNIT = "A removed unit"
 
   # @param plan [Hash] from `team_planning_plan`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
@@ -117,7 +112,7 @@ class Views::Plans::ChangesTab < Views::Base
       p(class: "mt-1 text-sm text-muted") do
         "Where each planned change stands against the Org Graph today. A change the Org Graph never holds, such as a rule, reads Plan only."
       end
-      scenario_picker
+      scenario_picker(path: :changes_plan_path, select_id: "changes-scenario")
       if @status[:statuses].empty?
         render Components::Kit::EmptyState.new(title: "This scenario plans nothing yet.", size: :panel)
       else
@@ -154,8 +149,6 @@ class Views::Plans::ChangesTab < Views::Base
   end
 
   # A rule or a capacity names its own kind after the colon, as in "rule:on_cost".
-  def facet_name(facet) = FACETS.fetch(facet) { FACETS.fetch(facet.split(":").first, facet.humanize) }
-
   # An erased note keeps its place, so the change doesn't read as never explained.
   # Its person was forgotten, so it takes no new one.
   def change_note(note)
@@ -216,39 +209,6 @@ class Views::Plans::ChangesTab < Views::Base
     end
   end
 
-  # A pill per scenario on a wide screen; a phone picks from a list.
-  def scenario_picker
-    div(class: "mt-3 flex flex-wrap items-center gap-2") do
-      nav(aria: { label: "Scenario" }, class: "hidden sm:flex flex-wrap items-center gap-2 text-sm") do
-        span(class: "text-muted") { "Showing" }
-        @scenarios.each { scenario_pill(it) }
-      end
-      form(action: changes_plan_path(plan_id), method: "get", class: "flex min-w-0 flex-1 items-center gap-2 text-sm sm:hidden",
-           data: { controller: "auto-submit" }) do
-        label(for: "changes-scenario", class: "text-muted") { "Showing" }
-        select(id: "changes-scenario", name: "scenario", class: "min-w-0 flex-1 #{Components::Kit::Field::SELECT}",
-               data: { action: "change->auto-submit#submit" }) do
-          Views::Plans::ScenarioTable.tree(@scenarios).each do |scenario, depth|
-            option(value: scenario_param(scenario[:scenario_id]).to_s, selected: scenario[:scenario_id] == scenario_id) { "#{'· ' * depth}#{scenario_name(scenario[:scenario_id])}" }
-          end
-        end
-        noscript { render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit) { "Show" } }
-      end
-    end
-  end
-
-  def scenario_pill(scenario)
-    current = scenario[:scenario_id] == scenario_id
-    a(href: changes_plan_path(plan_id, scenario: scenario_param(scenario[:scenario_id])), aria: { current: ("page" if current) },
-      class: "rounded-full border px-3 py-1 #{current ? 'border-brand bg-brand-subtle font-medium text-default' : 'border-default text-muted hover:text-default'}") do
-      scenario_name(scenario[:scenario_id])
-    end
-  end
-
-  def sources(providers)
-    providers.each { render Components::Kit::Badge.new("Source: #{HrisConfig.provider_label(it)}", variant: :outline) }
-  end
-
   def describe(change)
     person = name_of(change[:person_id])
     unit = unit_name(change[:unit_id])
@@ -289,15 +249,7 @@ class Views::Plans::ChangesTab < Views::Base
 
   def name_of(id) = id && @drift[:names].fetch(id, Person::FORMER_MEMBER)
 
-  def unit_name(id) = id && @drift[:names].fetch(id, REMOVED_UNIT)
-
-  def scenario_name(id)
-    return "Today" if id == plan_id
-
-    @scenarios.find { it[:scenario_id] == id }&.dig(:name) || "A removed scenario"
-  end
-
-  def scenario_param(id) = (id unless id == plan_id)
+  def unit_name(id) = id && @drift[:names].fetch(id, TeamPlanning::Attention::REMOVED_UNIT)
 
   def day(value)
     date = value.is_a?(Date) ? value : Date.iso8601(value)

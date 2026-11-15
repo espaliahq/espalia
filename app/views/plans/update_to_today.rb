@@ -88,7 +88,7 @@ class Views::Plans::UpdateToToday < Views::Base
   def conflict_row(conflict)
     li(class: "p-3 text-sm text-default break-words", data: { update_conflict: conflict[:facet] }) do
       strong(class: "font-medium") { @preview[:names].fetch(conflict[:subject_id], Views::Plans::ChangesTab::PLAN_ONLY) }
-      plain " · #{Views::Plans::ChangesTab::FACETS.fetch(conflict[:facet], conflict[:facet].humanize)} in "
+      plain " · #{Views::Plans::ScenarioTab::FACETS.fetch(conflict[:facet], conflict[:facet].humanize)} in "
       a(href: changes_plan_path(plan_id, scenario: scenario_param(conflict[:scenario_id])), class: "text-link underline") do
         scenario_name(conflict[:scenario_id])
       end
