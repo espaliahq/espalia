@@ -193,4 +193,15 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
     assert_match(/A succession can't follow reality yet/,
                  refusal { call(:SettleConflict, plan_id: @plan_id, scenario_id: @q1, subject_id: succession, facet: "succession", choice: "reality") })
   end
+
+  should "refuse to follow a level the Org Graph cleared, saying why and that keeping the plan still works" do
+    rebase
+    travel_to(Time.utc(2026, 3, 26, 9)) { as_tenant { @org.change_level(@brook.id, nil, **ESPALIA, effective_on: "2026-03-26") } }
+    travel_to Time.utc(2026, 3, 28, 9)
+
+    assert_equal "The Org Graph holds a value this plan can't hold yet, so this can't follow reality. You can still keep the plan",
+                 refusal { settle(@q1, "reality") }
+    settle(@q1, "plan")
+    assert_equal "plan", last_entry(@q1)[:settles]["choice"]
+  end
 end

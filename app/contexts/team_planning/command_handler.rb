@@ -390,7 +390,7 @@ class TeamPlanning::CommandHandler
         raise TeamPlanning::Error, "A succession can't follow reality yet, as the units it retires wouldn't follow: change it on the map"
       end
 
-      kind, end_state = choice.to_s == "reality" ? todays(plan, change, today) : [ change.class, kept(change) ]
+      kind, end_state = choice.to_s == "reality" ? followable(*todays(plan, change, today)) : [ change.class, kept(change) ]
       from_id, = plan.inherited_change(scenario_id, key) unless scenario_id == plan.plan_id
       note = note.presence || note_of(change) if choice.to_s == "plan"
       plan.settle_conflict(kind, scenario_id:, subject_id:, facet: key.last, choice: choice.to_s, end_state:, settled_by_id: actor_id!,
@@ -502,6 +502,14 @@ class TeamPlanning::CommandHandler
   # What the Org Graph holds today for a change's key, read by the first kind
   # sharing its facet that finds it, as a person staying reads as a departure
   # withdrawn.
+  # The Org Graph can hold what a plan can't yet, such as a cleared level or an unknown allocation.
+  def followable(kind, end_state)
+    kind.end_state(end_state.to_h.symbolize_keys)
+    [ kind, end_state ]
+  rescue TeamPlanning::Error
+    raise TeamPlanning::Error, "The Org Graph holds a value this plan can't hold yet, so this can't follow reality. You can still keep the plan"
+  end
+
   def todays(plan, change, today)
     now = TeamPlanning::Baseline.new(context: @actor, plan: TeamPlanningPlan.find(plan.plan_id)).map_on(today, history: true)
     kinds = [ change.class ] | TeamPlanning::ChangeKinds.holding(change.key.last).select(&:readable?)
