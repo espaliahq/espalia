@@ -1,6 +1,6 @@
 {
   "name": "team_planning_move_position",
-  "description": "Move a position to another unit in a scenario of a Team Planning plan, keeping its role, level, FTE and basis. The people in the position move with it. Written as one PositionSet. Refused on the baseline, and unless the caller is one of the plan's editors.",
+  "description": "Move a position to another unit in a scenario of a Team Planning plan, keeping its role, level, FTE, basis and cost centre. The people in the position move with it. Written as one PositionSet. Refused on the baseline, and unless the caller is one of the plan's editors.",
   "inputSchema": {
     "type": "object",
     "properties": {

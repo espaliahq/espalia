@@ -47,15 +47,22 @@ class Operations::TeamPlanning::PositionsTest < ActiveSupport::TestCase
   should "open a position with its budget, and list it with the framework's names" do
     opened = open_position(@q1, basis: "backfill", fte: 0.5)
     assert_equal({ plan_id: @plan_id, scenario_id: @q1, position_id: opened[:position_id], role_id: @engineer.role_id,
-                   level_id: @e2.level_id, unit_id: @unit_id, fte: 0.5, basis: "backfill", budget: "committed" }, opened)
+                   level_id: @e2.level_id, unit_id: @unit_id, fte: 0.5, basis: "backfill", cost_centre: nil, budget: "committed" }, opened)
 
     assert_equal [ { position_id: opened[:position_id], role_id: @engineer.role_id, level_id: @e2.level_id, unit_id: @unit_id,
-                     fte: 0.5, basis: "backfill", role_name: "Software Engineer", level_name: "Engineer II", budget: "committed",
+                     fte: 0.5, basis: "backfill", cost_centre: nil, role_name: "Software Engineer", level_name: "Engineer II", budget: "committed",
                      occupants: [], open_fte: 0.5, backfill_for_ids: [] } ],
                  positions(@q1)
 
     planned = open_position(@q1)[:position_id]
     assert_equal "planned", positions(@q1).find { it[:position_id] == planned }[:budget]
+  end
+
+  should "store and list the position's own cost centre" do
+    opened = open_position(@q1, cost_centre: " Platform ")
+
+    assert_equal "Platform", opened[:cost_centre]
+    assert_equal [ "Platform" ], positions(@q1).pluck(:cost_centre)
   end
 
   should "reach the steps after it and the alternatives to it, and never the scenario before" do
