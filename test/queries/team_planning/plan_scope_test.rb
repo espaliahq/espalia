@@ -221,6 +221,17 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_includes resolve(@plan_id, @h2).people.map(&:id), @cy.id
   end
 
+  should "refuse to undo a clear that would bring back a change about someone a narrower plan no longer covers" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "level")
+    set_scope(@plan_id, [ @engineering ])
+
+    error = assert_raises(Operations::Base::ParameterError) { call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1) }
+    assert_equal "This person is outside the units this plan covers. Place them in one of its units first.", error.message
+    assert_empty uncovered(@h1)
+  end
+
   should "flag a change about someone the plan no longer covers, whether a bring-in was undone or the Org Graph moved them out" do
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])

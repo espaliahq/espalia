@@ -543,6 +543,20 @@ class TeamPlanning::PlanAggregate
     apply(TeamPlanning::Events::ChangeUndone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, undone_event_id: event_id, undone_by_id:, in_effect_event_id: }))
   end
 
+  # Narrowing a plan's scope checks only the changes in effect, so a change a
+  # clear took back is one it never saw.
+  #
+  # @param scenario_id [String]
+  # @param event_id [String] an entry of the scenario's log
+  # @return [TeamPlanning::Events::Change, nil] the change undoing that entry brings back when it is a clear
+  def restored_by_undo(scenario_id, event_id)
+    entry = log_entry!(live_scenario!(scenario_id), event_id)
+    return unless entry.is_a?(TeamPlanning::Events::ChangeCleared)
+
+    key = key_of(entry)
+    in_effect(scenario_id, @undone | [ event_id ]).reverse_each.find { it.key == key }
+  end
+
   # Restores an undone entry of a scenario's log, in its place.
   #
   # @param scenario_id [String] the root or a live scenario

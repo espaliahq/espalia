@@ -442,11 +442,14 @@ class TeamPlanning::CommandHandler
   # @param plan_id [String]
   # @param scenario_id [String]
   # @param event_id [String, nil] the change's event id, from the scenario's history
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the lock, once the actor may edit it
+  # @yieldparam restored [TeamPlanning::Events::Change, nil] the change undoing a clear brings back, nil for any other entry
   # @return [String] the event id undone
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to undo
   # @see TeamPlanning::PlanAggregate#undo_change
-  def undo_change(plan_id, scenario_id:, event_id: nil)
+  def undo_change(plan_id, scenario_id:, event_id: nil, &check)
     reverse(plan_id, scenario_id, event_id, :last_undoable_by, "You have nothing here to undo") do |plan, id|
+      check&.call(plan, plan.restored_by_undo(scenario_id, id))
       plan.undo_change(scenario_id:, event_id: id, undone_by_id: actor_id!)
     end
   end
