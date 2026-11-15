@@ -206,7 +206,8 @@ class TeamPlanning::Attention
   # A scoped plan never names a place outside it, as the map leaves those out.
   def capacity_overrides
     known = @map.known_unit_ids
-    outside = ->(place_id) { @map.scope_ids && !known.include?(place_id) && !@position_units.key?(place_id) }
+    in_position = ->(place_id) { @position_units.key?(place_id) && (@position_units[place_id].nil? || known.include?(@position_units[place_id])) }
+    outside = ->(place_id) { @map.scope_ids && !known.include?(place_id) && !in_position.(place_id) }
     @map.people.flat_map do |person|
       held = person.memberships.to_set { it.position_id || it.unit_id }
       person.capacity_overrides.keys.reject { held.include?(it) || outside.(it) }.sort.map do |place_id|

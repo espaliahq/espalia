@@ -118,6 +118,15 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_not_includes call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @h1).to_json, @sales
   end
 
+  should "keep an override on a closed position outside the scope out of what needs attention" do
+    position = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                           level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @h2, position_id: position)
+    call(Operations::TeamPlanning::SetCapacityOverride, plan_id: @plan_id, scenario_id: @h2, person_id: @ada.id, position_id: position, amount: "0.4")
+
+    assert_not_includes call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @h2).to_json, position
+  end
+
   should "count a person half in the plan when half their time is in units it covers, in every total" do
     map = resolve(@plan_id, @h1)
     assert_equal [ @ada.id, @brook.id ], map.people.map(&:id).sort_by { [ @ada.id, @brook.id ].index(it) }
