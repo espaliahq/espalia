@@ -43,7 +43,7 @@ module Operations::TeamPlanning::MapPayload
   def units_payload(map)
     return map.units.map(&:to_h) unless map.scope_ids
 
-    on_map = map.units.to_set(&:id)
+    on_map = map.known_unit_ids
     outside = map.outside_ids
     map.units.map do |unit|
       unit.to_h.merge(parent_id: (unit.parent_id if on_map.include?(unit.parent_id)), owner_ids: unit.owner_ids.reject { outside.include?(it) })
