@@ -8,7 +8,8 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
   def map(**overrides)
     B::Map.new(base_on: Date.new(2027, 1, 1), known_on: Date.new(2027, 1, 1), units: [ unit(ROOT, nil), unit(LIVE, ROOT) ],
-               retired_units: [ unit(RETIRED, ROOT) ], people: [], unassigned_ids: [], positions: [], names: {}, rules: nil,
+               retired_units: [ unit(RETIRED, ROOT) ], people: [], unassigned_ids: [], positions: [], names: {},
+               rules: B::Rules.new(plan_id: ROOT, defaults: {}, by_subject: {}),
                **overrides)
   end
 
@@ -64,6 +65,31 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ position_id, TeamPlanning::Attention::POSITION ] => recast }
 
     assert_same recast, TeamPlanning::Attention.new(map, changes, unclassified:).call.sole.change
+  end
+
+  def uncovered(reason, position_id: nil)
+    place = TeamPlanning::CapacityModel::Place.new(unit_id: LIVE, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id:)
+    seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])
+    [ [ TeamPlanning::Capacity::Seat.new(seat:, places: []), TeamPlanning::Capacity::Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason:) ] ]
+  end
+
+  should "credit a later capacity rule, at the place's unit or above it, for a place it left with no model" do
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    plan_wide = change(TeamPlanning::Events::RuleSet, ROOT, rule: "capacity_model", value: {})
+    elsewhere = change(TeamPlanning::Events::RuleSet, RETIRED, rule: "capacity_model", value: {})
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, plan_wide.key => plan_wide, elsewhere.key => elsewhere }
+
+    assert_same plan_wide, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_model")).call.sole.change
+    assert_same placed, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_title")).call.sole.change
+  end
+
+  should "not credit a person's own level change for a position's place, whose level is the position's" do
+    position_id = SecureRandom.uuid_v7
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    levelled = change(TeamPlanning::Events::LevelSet, PERSON)
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ PERSON, TeamPlanning::Attention::LEVEL ] => levelled }
+
+    assert_same placed, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_level", position_id:)).call.sole.change
   end
 
   should "say which unit a succession lost, and nothing for one whose predecessor retired as it should" do

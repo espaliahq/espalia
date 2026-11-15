@@ -124,12 +124,29 @@ class TeamPlanning::Attention
   end
 
   # A place in a position takes the position's role and level, so a later
-  # edit to the position can be what left its occupant uncovered.
+  # edit to the position can be what left its occupant uncovered. A missing
+  # model can also be a capacity rule's doing, set at the place's unit, above
+  # it or plan-wide.
   def unclassified_causes(seat, place)
-    return [ [ seat.id, POSITION ] ] unless seat.kind == "person"
+    rules = RULE_REASONS.include?(place.reason) ? rule_keys(place.unit_id) : []
+    return [ [ seat.id, POSITION ], *rules ] unless seat.kind == "person"
 
     position_id = place.place.position_id
-    [ [ seat.id, ASSIGNMENT ], ([ seat.id, LEVEL ] if place.reason == "no_level"), ([ position_id, POSITION ] if position_id) ].compact
+    level = [ seat.id, LEVEL ] if place.reason == "no_level" && !position_id
+    [ [ seat.id, ASSIGNMENT ], level, ([ position_id, POSITION ] if position_id), *rules ].compact
+  end
+
+  RULE_REASONS = %w[no_model unknown_model].freeze
+  CAPACITY_RULE = "#{TeamPlanning::Events::RuleSet.facet}:#{TeamPlanning::RuleKinds::Capacity.rule_name}".freeze
+
+  def rule_keys(unit_id)
+    parent_of = @map.units.to_h { [ it.id, it.parent_id ] }
+    along = []
+    while parent_of.key?(unit_id) && along.exclude?(unit_id)
+      along << unit_id
+      unit_id = parent_of[unit_id]
+    end
+    (along + [ @map.rules.plan_id ]).map { [ it, CAPACITY_RULE ] }
   end
 
   def item(subject_id, facet, reason, broken_by: [])
