@@ -63,6 +63,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         end
         assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 150k"
         [ "[data-cost-strip]", "[data-cost-unit]" ].each { |figures| all(figures).each { assert_not_includes it.text, "177" } }
+        %w[177k 177,419 177419].each { assert_no_text it }
         assert_no_sideways_overflow
       end
 
