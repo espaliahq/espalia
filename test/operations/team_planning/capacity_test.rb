@@ -121,4 +121,23 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     end
     assert_equal "No such plan", assert_raises(Operations::Base::ParameterError) { capacity(as: @outsider) }.message
   end
+  should "name a placeholder hire by its label, so the working says who a figure is for" do
+    ActsAsTenant.with_tenant(@tenant) do
+      context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+      TeamPlanning::CommandHandler.new(actor: context).set_change(
+        @plan_id, TeamPlanning::Events::RuleSet, scenario_id: @plan_id, subject_id: @plan_id,
+                                                 end_state: { rule: "capacity_model", value: { families: { @family.role_family_id => { model: "per_fte" } } } }
+      )
+    end
+    position_id = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @plan_id, role_id: @engineer.role_id,
+                                                              level_id: @e5.level_id, unit_id: @unit_id, fte: 1, basis: "new")[:position_id]
+    hire_id = call(Operations::TeamPlanning::SetPlaceholderHire, plan_id: @plan_id, scenario_id: @plan_id,
+                                                                 label: "Payments engineer", level: "5", fte: 1)[:placeholder_id]
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @plan_id, person_id: hire_id,
+                                                  placements: [ { position_id:, allocation: 1 } ])
+    result = capacity
+
+    assert_equal "person", result[:seats].find { it[:seat_id] == hire_id }[:kind]
+    assert_equal "Payments engineer", result[:names][hire_id]
+  end
 end
