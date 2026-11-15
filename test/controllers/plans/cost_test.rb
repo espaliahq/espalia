@@ -81,7 +81,8 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
         get path
         assert_response :success
         assert_includes response.body, "EUR 250k"
-        text = Nokogiri::HTML(response.body).at_css("body").text
+        body = Nokogiri::HTML(response.body).at_css("body")
+        text = [ body.text, *body.css("input:not([type='hidden'])").map { it["value"] } ].join(" ")
         %w[61k 61.3k 61,337 61337 177k 177,419 177419].each { assert_not_includes text, it, "#{path} shows #{it}" }
       end
     end
