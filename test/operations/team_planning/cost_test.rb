@@ -154,6 +154,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_not viewer.key?(:actual_pay_seats)
       assert_equal [ "band_midpoint", nil, "80000" ], ada(viewer).values_at(:pay_source, :basis, :amount)
       assert_equal "80000", viewer[:total][:scenario][:converted]
+      assert_includes holder.to_json, "60000"
       assert_not_includes viewer.to_json, "60000"
       assert_not_includes viewer.to_json, "50000"
     end
