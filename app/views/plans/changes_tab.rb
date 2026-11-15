@@ -9,7 +9,9 @@
 class Views::Plans::ChangesTab < Views::Base
   FACETS = {
     "assignment" => "Placement", "level" => "Level", "reporting_line" => "Manager", "departure" => "Leaving",
-    "unit" => "Unit", "succession" => "Succession", "position" => "Position"
+    "unit" => "Unit", "succession" => "Succession", "position" => "Position", "placeholder" => "Hire",
+    "data:level" => "Level", "data:fte" => "FTE", "data:pay" => "Pay", "rule" => "Rule", "capacity" => "Capacity",
+    "budget_line" => "Budget line"
   }.freeze
   FACTS = {
     "title" => "title", "level" => "level", "manager" => "manager", "cost_centre" => "cost centre",
@@ -17,7 +19,7 @@ class Views::Plans::ChangesTab < Views::Base
   }.freeze
   STATUSES = {
     "done" => [ "Done", :success ], "pending" => [ "Pending", :neutral ],
-    "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ]
+    "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ], "plan_only" => [ "Plan only", :info ]
   }.freeze
   PLAN_ONLY = "Only in this plan"
   REMOVED_UNIT = "A removed unit"
@@ -99,10 +101,12 @@ class Views::Plans::ChangesTab < Views::Base
   def planned_section
     section(aria: { labelledby: "changes-planned-heading" }, data: { changes_section: "planned" }) do
       h3(id: "changes-planned-heading", class: "text-base font-semibold text-default") { "Planned in #{scenario_name(scenario_id)}" }
-      p(class: "mt-1 text-sm text-muted") { "Where each planned change stands against the Org Graph today." }
+      p(class: "mt-1 text-sm text-muted") do
+        "Where each planned change stands against the Org Graph today. A change the Org Graph never holds, such as a rule, reads Plan only."
+      end
       scenario_picker
       if @status[:statuses].empty?
-        render Components::Kit::EmptyState.new(title: "This scenario plans nothing the Org Graph holds yet.", size: :panel)
+        render Components::Kit::EmptyState.new(title: "This scenario plans nothing yet.", size: :panel)
       else
         ul(class: "mt-3 divide-y divide-default rounded-lg border border-default bg-default") do
           @status[:statuses].each { planned_row(it) }
@@ -116,7 +120,7 @@ class Views::Plans::ChangesTab < Views::Base
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
           strong(class: "font-medium") { @status[:names][entry[:subject_id]] || PLAN_ONLY }
-          plain " · #{FACETS.fetch(entry[:facet], entry[:facet].humanize)}"
+          plain " · #{facet_name(entry[:facet])}"
         end
         p(class: "text-xs text-muted") { "Planned in #{scenario_name(entry[:scenario_id])}" } if entry[:scenario_id] != scenario_id
       end
@@ -126,6 +130,9 @@ class Views::Plans::ChangesTab < Views::Base
       end
     end
   end
+
+  # A rule or a capacity names its own kind after the colon, as in "rule:on_cost".
+  def facet_name(facet) = FACETS.fetch(facet) { FACETS.fetch(facet.split(":").first, facet.humanize) }
 
   def status_badge(entry)
     label, tone = STATUSES.fetch(entry[:status])
@@ -153,7 +160,7 @@ class Views::Plans::ChangesTab < Views::Base
     li(class: "flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between", data: { attention_item: item[:facet] }) do
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
-          facet = FACETS.fetch(item[:facet], item[:facet].humanize)
+          facet = facet_name(item[:facet])
           if (name = attention_name(item[:subject_id]))
             strong(class: "font-medium") { name }
             plain " · #{facet}"

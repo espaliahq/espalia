@@ -325,9 +325,11 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
    on another kind having landed. The kind's fields may not reuse `Change::FIELDS`.
    If the Org Graph holds its facet, also give it `subject_moved_by(change)`, naming the
    subject an Org Graph change moves, and `read_from(map, subject_id:, facet:)`, reading
-   its end state back off a map. Without the first it meets no drift; without both it has
-   no status, unless the Org Graph holds the subject under an id of its own and the kind
-   overrides `read_org_graph` to find it, as a succession does (`Change.tracked?`). Test both in the drift and status tests, as their test-only kinds do.
+   its end state back off a map. Without the first it meets no drift; without both its
+   status reads `plan_only`, never compared, unless the Org Graph holds the subject under an
+   id of its own and the kind overrides `read_org_graph` to find it, as a succession does
+   (`Change.tracked?`). A kind that holds some fields the Org Graph never does overrides
+   `Change.tracks?(change)`, as `PlanDataSet` does for pay. Test both in the drift and status tests, as their test-only kinds do.
 2. **No registration.** `ChangeAwareApplyStrategy` routes every subclass to the aggregate,
    and `Resolution` applies whatever wins. Don't edit the aggregate, the strategy or the
    resolver.
@@ -901,6 +903,9 @@ reads its end state off both with `read_from`.
   own step plans: once Q1's move lands, Q2's next move for the same person waits its turn.
   So is a subject only the plan holds, such as a new unit: neither map has it.
 - **Conflicting**: today reads none of these, as when someone the plan moves has left.
+- **Plan only**: the Org Graph never holds what the change plans, so it is never compared
+  and counts as no Org Graph work: a rule, a position, a capacity, a budget line, a hire
+  the plan adds, or a person's pay. It still shows, so an editor sees the change exists.
 
 A plan whose base is still to come holds every change against today, so nothing reads
 conflicting before the plan starts.
@@ -914,9 +919,9 @@ record that it was ever done.
 A person's placements are one facet, so a planned list is done only when the whole list
 matches, and a list matched in part conflicts. Only a kind that is `readable?` and that the
 Org Graph can move (it implements `subject_moved_by`) or find (it overrides
-`read_org_graph`) has a status: a unit set, a retirement, a succession, an assignment, a
-reporting line and a departure. A rule and a position are plan-only, so each would read
-pending forever.
+`read_org_graph`) is compared: a unit set, a retirement, a succession, an assignment, a
+reporting line, a departure, and a planned level or FTE. Anything else reads plan only,
+since held against the Org Graph it would read pending forever.
 
 Today's map is `Baseline#map_on(today, history: true)`, which adds the units the Org Graph
 has retired, the successions it holds and the people who have left, from `OrgGraph::AsOf`'s

@@ -90,13 +90,32 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_includes rows[2], "#{Views::Plans::ChangesTab::PLAN_ONLY} · Unit"
     end
 
+    should "badge every status the query gives, a plan-only change included, with no fallback" do
+      statuses = TeamPlanning::Status::STATUSES.map do |status|
+        { scenario_id: Q1, change_id: status.to_s, subject_id: BO, facet: "data:pay", status: status.to_s, since: nil, sources: [] }
+      end
+      rows = texts(render_tab(statuses:), "[data-planned-change]")
+
+      assert_equal [ "Done", "Pending", "Conflicting", "Unknown", "Plan only" ], rows.map { it.delete_prefix("Bo Reyes · Pay").strip }
+      assert_raises(KeyError) { render_tab(statuses: [ statuses.first.merge(status: "stalled") ]) }
+    end
+
+    should "name a rule by its kind, and a hire only the plan holds" do
+      html = render_tab(statuses: [
+        { scenario_id: Q1, change_id: "r1", subject_id: BO, facet: "rule:on_cost", status: "plan_only", since: nil, sources: [] },
+        { scenario_id: Q1, change_id: "h1", subject_id: "hire", facet: "placeholder", status: "plan_only", since: nil, sources: [] }
+      ])
+
+      assert_equal [ "Bo Reyes · RulePlan only", "#{Views::Plans::ChangesTab::PLAN_ONLY} · HirePlan only" ], texts(html, "[data-planned-change='plan_only']")
+    end
+
     should "name the scenario shown, and mark it in the picker" do
       html = render_tab
       assert_equal "Planned in Q1 hires", html.at_css("#changes-planned-heading").text
       assert_equal "Q1 hires", html.at_css("nav[aria-label='Scenario'] a[aria-current='page']").text
       assert_equal Q1, html.at_css("#changes-scenario option[selected]")["value"]
       assert_equal "", html.css("#changes-scenario option").find { it.text == "Today" }["value"], "Today is the bare URL, as its pill is"
-      assert_includes html.text, "This scenario plans nothing the Org Graph holds yet."
+      assert_includes html.text, "This scenario plans nothing yet."
     end
   end
 

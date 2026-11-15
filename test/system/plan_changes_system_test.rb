@@ -35,6 +35,8 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
                                                                    ends_on: (Date.current + 120).iso8601)[:scenario_id]
       call(Operations::TeamPlanning::SetAssignment, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @bo.id,
                                                               placements: [ { unit_id: @growth, allocation: 1, role: "ENG" } ])
+      call(Operations::TeamPlanning::SetRule, @planner, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments, rule: "on_cost",
+                                                        value: { "model" => "flat", "params" => { "percent" => "10" } })
     end
 
     today = Date.current.iso8601
@@ -57,7 +59,7 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
         assert_selector "[data-drift-change='moved']", text: "Source: Espalia"
         assert_selector "[data-drift-change='fact_changed']", text: "Ada Quill's title is now Staff Engineer"
       end
-      within("[data-changes-section='planned']") { assert_text "This scenario plans nothing the Org Graph holds yet." }
+      within("[data-changes-section='planned']") { assert_text "This scenario plans nothing yet." }
       assert_no_sideways_overflow
 
       click_selector_with_js_fallback("[data-drift-change='moved'] a[href='#{changes_plan_path(@plan_id, scenario: @q1)}']",
@@ -65,6 +67,7 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       within("[data-changes-section='planned']") do
         assert_selector "nav[aria-label='Scenario'] a[aria-current='page']", text: "Q1 hires"
         assert_selector "[data-planned-change='done']", text: /Bo Reyes · Placement.*Done/m
+        assert_selector "[data-planned-change='plan_only']", text: /Payments · Rule.*Plan only/m
       end
       click_selector_with_js_fallback("nav[aria-label='Scenario'] a[href='#{changes_plan_path(@plan_id)}']", expect_text: "Planned in Today")
     end
@@ -83,6 +86,7 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       find("#changes-scenario").find("option", text: "Q1 hires").select_option
       assert_text "Planned in Q1 hires"
       assert_selector "[data-planned-change='done']", text: "Bo Reyes"
+      assert_selector "[data-planned-change='plan_only']", text: "Plan only"
       assert_no_sideways_overflow
     end
   end

@@ -113,6 +113,15 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     assert_includes statuses, "data:pay"
   end
 
+  should "read pay plan only to every member, never as Org Graph work still to do" do
+    { "holder" => @holder, "viewer" => @viewer, "editor" => @editor }.each do |who, account|
+      pay = call(Operations::TeamPlanning::Status, account, plan_id: @plan_id, scenario_id: @q1)[:statuses].find { it[:facet] == "data:pay" }
+
+      assert_equal [ "plan_only", nil, [] ], pay.values_at(:status, :since, :sources), who
+      assert_empty call(Operations::TeamPlanning::Attention, account, plan_id: @plan_id, scenario_id: @q1)[:items].select { it[:facet] == "data:pay" }, who
+    end
+  end
+
   private
 
   def set_pay(scenario_id)

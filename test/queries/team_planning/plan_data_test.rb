@@ -175,11 +175,11 @@ class TeamPlanning::PlanDataTest < ActiveSupport::TestCase
     assert_equal [ "Payments lead", [ payments ] ], [ hire.placeholder.reveal, hire.memberships.map(&:unit_id) ]
   end
 
-  should "give a placeholder hire and its placement no status, since the Org Graph never holds one" do
+  should "read a placeholder hire and its placement plan only, since the Org Graph never holds one" do
     place_hire
     statuses = as_tenant { TeamPlanning::Status.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @q1).call }.statuses
 
-    assert_empty statuses.select { it.subject_id == @hire }
+    assert_equal({ "placeholder" => :plan_only, "assignment" => :plan_only }, statuses.select { it.subject_id == @hire }.to_h { [ it.facet, it.status ] })
   end
 
   should "meet a drift in the fact a plan value holds, and only that fact, under the value's own facet" do

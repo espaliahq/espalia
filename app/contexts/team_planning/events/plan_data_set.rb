@@ -114,6 +114,12 @@ class TeamPlanning::Events::PlanDataSet < TeamPlanning::Events::Change
   # @return [Boolean] whether the change moves the field this one holds
   def self.moved_by?(planned, change) = super && FACTS[planned.data[:field]] == change.fact
 
+  # Pay is a field the Org Graph never holds.
+  #
+  # @param change [PlanDataSet]
+  # @return [Boolean]
+  def self.tracks?(change) = super && FACTS.key?(change.data[:field].to_s)
+
   # @param facet [String]
   # @return [Boolean]
   def self.holds?(facet) = facet.start_with?("#{self.facet}:") && FIELDS.key?(facet.delete_prefix("#{self.facet}:"))
