@@ -551,7 +551,11 @@ flatters a scenario.
 
 `TeamPlanning::Cost` prices a scenario over its period and prices the baseline over the
 same days, so the two compare ([#288](https://github.com/espaliahq/espalia/issues/288)).
-The baseline has no period of its own, so it is never the scenario costed.
+Today has no period of its own, so its cost is a yearly run rate: every seat it holds priced
+from the plan's `base_on` to the day before the same date a year on, so a leap year counts
+366 days ([#318](https://github.com/espaliahq/espalia/issues/318)). The read says `basis:
+"run_rate"`, returns the two dates it used, and sets the run rate against nothing: a
+scenario's difference stays against Today over the scenario's own days.
 `team_planning_cost` sends the totals, each unit and each cost centre, and the working of
 every seat only for a unit the caller names.
 `team_planning_scenario_costs` sends only the totals, for every scenario at once, reading
@@ -596,8 +600,8 @@ A scenario's map opens with a Cost strip: its total, the difference from Today o
 same days, the period and what it is priced at, what sits in no unit on the map, and a
 list of the seats left out. Each unit card shows its own places' cost beside its name.
 The units and the no-unit figure add up to the strip's total, and the Scenarios table's
-Cost column shows that same total. Today's row reads "No period of its own", and Today's
-map shows no cost. The strip and column appear only once a band prices something, and a
+Cost column shows that same total. Today's row and map read its yearly run rate, "EUR 200k
+a year", with no change beside it, since a run rate and a period total are different bases. The strip and column appear only once a band prices something, and a
 scenario that can't be priced keeps its map and reads "Can't be priced" in the table.
 Figures round to three significant figures (`Views::Plans::CostMarks::Format`); no band
 minimum or maximum shows on either page.
@@ -1196,11 +1200,18 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
   3 and later to 4, moving only the 4 would leave the 3 behind to win. The earlier
   changes for the same subject and facet go across with it.
 - The two parts cover the same period. This is a third relation beside `then` and
-  `instead`: the rest sits on top of the agreed part. The timeline shows them as one
+  `instead`, named `on`: the rest sits on the agreed part. The timeline shows them as one
   column with the agreed part marked.
 - The agreed part must stand without the rest. A change cannot move across if it depends
   on one that stays, such as a person placed in a unit the rest creates. The split says
   which changes block it.
+- Only a split makes `on`. A fork is `then` or `instead`, and the next step forks from the
+  rest, which keeps the original's id, its alternatives and its next step.
+- A split step is one step. Cost, capacity and the headcount walk count the pair once over
+  the one period, and the timeline gives it one column. A split part can be split again.
+- `team_planning_split_scenario` splits from an MCP client. It takes the moving changes'
+  event ids as `team_planning_history` lists them, and its refusal names the event ids
+  that block the split.
 - The agreed part can then be approved and carried out. As its changes are done they leave
   the difference, and the rest is what remains to be argued.
 

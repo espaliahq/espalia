@@ -26,6 +26,10 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   # @return [String]
   def self.facet = "assignment"
 
+  # @param data [Hash]
+  # @return [Array<String>] the positions and units it places the person in
+  def self.refers_to(data) = Array(data[:placements]).flat_map { it.to_h.with_indifferent_access.values_at(*PLACES) }.compact
+
   # @param end_state [Hash] `{ placements: [{ position_id or unit_id, allocation, role }] }`
   # @return [Hash] the ids downcased, each allocation a Float
   # @raise [TeamPlanning::Error] for a placement in both a position and a unit, or neither, an
