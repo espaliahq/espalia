@@ -84,6 +84,8 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
     model = TeamPlanning::CapacityModels.fetch("per_fte")
     floored = Class.new do
       define_method(:notes) { model.notes }
+      define_method(:symbol) { model.symbol }
+      define_method(:description) { model.description }
       define_method(:capacity_of) do |*, **|
         TeamPlanning::CapacityModel::Figure.new(amount: 0r, working: [], overloaded: true, excess: 1r, notes: [ "unattributed_no_manager" ])
       end

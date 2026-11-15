@@ -18,6 +18,7 @@ class TeamPlanning::Resolution
   #   read by a caller resolving several scenarios over the same one
   def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil)
     @baseline = TeamPlanning::Baseline.new(context:, plan:)
+    @context = context
     @base = base
     @plan = plan
     @scenario_id = scenario_id
@@ -42,7 +43,10 @@ class TeamPlanning::Resolution
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def attention
     map, changes = resolved
-    TeamPlanning::Attention.new(map, changes, left_ids: left_since(map)).call
+    capacity = TeamPlanning::Capacity.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository)
+                                     .report_for(map)
+    TeamPlanning::Attention.new(map, changes, left_ids: left_since(map),
+                                              unclassified: capacity.configured? ? capacity.unclassified : []).call
   end
 
   private

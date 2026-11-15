@@ -59,6 +59,7 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_match(/\A0\.3333/, place[:capacity])
     assert_equal "0.5", result[:seats].find { it[:kind] == "position" }[:places].first[:capacity]
     assert_equal [ "per_fte" ], result[:totals].keys
+    assert_equal({ "per_fte" => { symbol: "FTE", description: TeamPlanning::CapacityModels::PerFte.description } }, result[:models])
     assert_equal [ { unit_id: @unit_id, name: "Payments", totals: result[:totals] } ], result[:units]
     assert_equal({ @ada.id => "Ada Quill" }, result[:names])
     assert_empty result[:unclassified]
@@ -83,10 +84,32 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_match "counts against nobody", open_seat[:notes].first[:text]
   end
 
+  should "leave a model no longer registered out of models, its place unclassified" do
+    model = Class.new(TeamPlanning::CapacityModel) do
+      def self.model_name = "test_gone"
+      def self.description = "Gone soon"
+    end
+    TeamPlanning::CapacityModels.register(model)
+    ActsAsTenant.with_tenant(@tenant) do
+      TeamPlanning::CommandHandler.new(actor: AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)).set_change(
+        @plan_id, TeamPlanning::Events::RuleSet, scenario_id: @plan_id, subject_id: @plan_id,
+                                                 end_state: { rule: "capacity_model", value: { families: { @family.role_family_id => { model: "test_gone" } } } }
+      )
+    end
+    TeamPlanning::CapacityModels.unregister(model)
+    result = capacity
+
+    assert_empty result[:models]
+    assert_equal [ "unknown_model" ], result[:unclassified].pluck(:reason)
+  ensure
+    TeamPlanning::CapacityModels.unregister(model) if TeamPlanning::CapacityModels.registered?("test_gone")
+  end
+
   should "list every seat as unclassified, with why, until a model is chosen" do
     result = capacity
 
     assert_empty result[:totals]
+    assert_empty result[:models]
     assert_equal [ [ @ada.id, "person", @unit_id, "no_model" ] ],
                  result[:unclassified].map { it.values_at(:seat_id, :kind, :unit_id, :reason) }
     assert_equal TeamPlanning::Capacity::REASONS["no_model"], result[:unclassified].first[:reason_text]
