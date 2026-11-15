@@ -49,6 +49,21 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ "capacity:unassigned" ], TeamPlanning::Attention.new(map, {}, unclassified:).call.map(&:facet)
   end
 
+  should "name each subject the way the map does, leaving out what it no longer holds" do
+    named = map(units: [ unit(ROOT, nil), B::Unit.new(id: LIVE, name: "Payments", parent_id: ROOT, level_id: LEVEL, owner_ids: []) ],
+                retired_units: [ B::Unit.new(id: RETIRED, name: "Risk", parent_id: ROOT, level_id: LEVEL, owner_ids: []) ],
+                positions: [ B::Position.new(id: "p1", role_id: nil, level_id: nil, unit_id: LIVE, fte: 1, basis: "backfill", role_name: "Engineer", level_name: nil) ],
+                successions: [ B::Succession.new(id: "s1", predecessor_ids: [ RETIRED, GONE ], successor_ids: [ LIVE ]) ],
+                names: { PERSON => "Ada Quill" })
+    forgotten = SecureRandom.uuid_v7
+    items = [ [ PERSON, "assignment" ], [ forgotten, "reporting_line" ], [ RETIRED, "unit" ], [ GONE, "unit" ], [ "p1", "position" ],
+              [ "p2", "position" ], [ "s1", "succession" ], [ "p1", "capacity:#{LIVE}" ] ]
+            .map { |subject_id, facet| TeamPlanning::Attention::Item.new(subject_id:, facet:, reason: "", change: nil) }
+
+    assert_equal({ PERSON => "Ada Quill", forgotten => Person::FORMER_MEMBER, RETIRED => "Risk", "p1" => "Backfill: Engineer",
+                   "s1" => "Risk, A removed unit → Payments" }, TeamPlanning::Attention.names_of(named, items))
+  end
+
   should "name the check that found each item" do
     place = TeamPlanning::CapacityModel::Place.new(unit_id: nil, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id: nil)
     seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])

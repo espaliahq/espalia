@@ -18,10 +18,7 @@ class Views::Plans::ScenarioMap < Views::Base
 
   # @param position [Hash] a position from the map
   # @return [String] what the map calls it, such as "Backfill: Software Engineer"
-  def self.position_label(position)
-    kind = position[:basis] == "backfill" ? "Backfill" : "New position"
-    position[:role_name] ? "#{kind}: #{position[:role_name]}" : kind
-  end
+  def self.position_label(position) = TeamPlanning::Baseline::Position.label(basis: position[:basis], role_name: position[:role_name])
 
   # Positions in a unit that share a label and level are numbered oldest first,
   # so the map row and the move dialog's choice name each one the same way.

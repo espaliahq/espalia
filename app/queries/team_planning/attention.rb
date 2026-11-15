@@ -32,6 +32,13 @@ class TeamPlanning::Attention
     def initialize(unit_ids: [], fact: nil, check: nil, **) = super
   end
 
+  # What a scenario's checks found, with a name for each subject the map can
+  # name, read the way the map reads it.
+  #
+  # @!attribute items [Array<Item>] in {CHECKS} order
+  # @!attribute names [Hash{String => String}] subject id => name
+  Report = Data.define(:items, :names)
+
   CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
               budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
@@ -54,7 +61,7 @@ class TeamPlanning::Attention
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] the plan's id for the root
   # @param repository [TeamPlanning::Repository]
-  # @return [Array<Item>]
+  # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def self.for(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
@@ -62,9 +69,42 @@ class TeamPlanning::Attention
     aggregate = repository.load_plan(plan.id)
     map, changes = resolution.resolved(aggregate)
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
-    new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
-                      unclassified: capacity.configured? ? capacity.unclassified : []).call
+    items = new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
+                              unclassified: capacity.configured? ? capacity.unclassified : []).call
+    Report.new(items:, names: names_of(resolution.named(map), items))
   end
+
+  PERSON_FACETS = [ ASSIGNMENT, LINE, LEVEL, DEPARTURE ].freeze
+  REMOVED_UNIT = "A removed unit"
+
+  # A person the map no longer names was forgotten. A unit, position or
+  # succession it no longer holds has no name, as the map shows none.
+  #
+  # @param map [TeamPlanning::Baseline::Map] with names joined
+  # @param items [Array<Item>]
+  # @return [Hash{String => String}]
+  def self.names_of(map, items)
+    units = (map.units + map.retired_units).to_h { [ it.id, it.name ] }
+    positions = map.positions.to_h { [ it.id, it.label ] }
+    successions = map.successions.to_h { [ it.id, it ] }
+    items.filter_map do |item|
+      id = item.subject_id
+      name = case item.facet.split(":").first
+      when *PERSON_FACETS then map.name_of(id)
+      when UNIT then units[id]
+      when POSITION then positions[id]
+      when SUCCESSION then successions[id]&.then { succession_name(it, units) }
+      when CAPACITY then positions[id] || map.names[id]
+      end
+      [ id, name ] if name
+    end.to_h
+  end
+
+  def self.succession_name(succession, units)
+    sides = [ succession.predecessor_ids, succession.successor_ids ].map { |ids| ids.map { units.fetch(it, REMOVED_UNIT) }.join(", ") }
+    sides.join(" → ")
+  end
+  private_class_method :succession_name
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key

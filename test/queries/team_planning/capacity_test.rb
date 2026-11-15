@@ -207,7 +207,7 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
 
   should "list each place that counts nowhere as needing attention, naming why, once the plan measures capacity" do
     attention = lambda do
-      as_tenant { TeamPlanning::Attention.for(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id) }
+      as_tenant { TeamPlanning::Attention.for(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id).items }
         .select { it.facet.start_with?("#{TeamPlanning::Attention::CAPACITY}:") }
     end
     assert_empty attention.call

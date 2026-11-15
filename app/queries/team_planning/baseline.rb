@@ -319,6 +319,17 @@ class TeamPlanning::Baseline
 
     # @return [String] see {.budget_of}
     def budget = self.class.budget_of(basis)
+
+    # @param basis [String]
+    # @param role_name [String, nil]
+    # @return [String] what the map calls it, such as "Backfill: Software Engineer"
+    def self.label(basis:, role_name:)
+      kind = basis == "backfill" ? "Backfill" : "New position"
+      role_name ? "#{kind}: #{role_name}" : kind
+    end
+
+    # @return [String] see {.label}
+    def label = self.class.label(basis:, role_name:)
   end
 
   BUDGET_FIGURES = %i[starts_on ends_on origin approved_on amount currency period head_count role_id level_id role_name level_name

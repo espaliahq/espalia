@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # What no longer fits in a scenario, from {TeamPlanning::Attention.for}
-# [#257](https://github.com/espaliahq/espalia/issues/257). An item on a person
-# names them, so the forgotten-person audit walks it.
+# [#257](https://github.com/espaliahq/espalia/issues/257). An item names its
+# subject, a person among them, so the forgotten-person audit walks it.
 class Operations::TeamPlanning::Attention < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
@@ -23,8 +23,11 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "of the units the item touches (\"espalia\" for a unit only the plan holds). " \
               "Items come grouped by check, named in each item's `check`, in this order: " \
               "#{::TeamPlanning::Attention::CHECKS.join(', ')}; then " \
-              "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
-              "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
+              "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each subject the " \
+              "scenario's map holds to the name the map shows: a person's (a placeholder hire's label), a unit's, a position's " \
+              "such as \"Backfill: Software Engineer\", or a succession's as its units before and after. A forgotten person reads as " \
+              "\"#{Person::FORMER_MEMBER}\", a removed placeholder label as \"#{::TeamPlanning::Baseline::PLACEHOLDER_NAME}\", and a " \
+              "unit, position or succession the map no longer holds has no name. Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
   approval :none
@@ -36,27 +39,12 @@ class Operations::TeamPlanning::Attention < Operations::Base
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id) || plan.id
-    items = refusing_bad_plans { ::TeamPlanning::Attention.for(context:, plan:, scenario_id:) }
-    sources = ::TeamPlanning::SourceOfTruth.new(tenant_id: plan.tenant_id).preload(unit_ids: items.flat_map(&:unit_ids))
-    { plan_id: plan.id, scenario_id:, items: items.map { item_row(it, sources) }, names: names_of(plan, items) }
+    report = refusing_bad_plans { ::TeamPlanning::Attention.for(context:, plan:, scenario_id:) }
+    sources = ::TeamPlanning::SourceOfTruth.new(tenant_id: plan.tenant_id).preload(unit_ids: report.items.flat_map(&:unit_ids))
+    { plan_id: plan.id, scenario_id:, items: report.items.map { item_row(it, sources) }, names: report.names }
   end
-
-  PERSON_FACETS = [ ::TeamPlanning::Attention::ASSIGNMENT, ::TeamPlanning::Attention::LINE ].freeze
 
   private
-
-  # A capacity item's subject is a person or an open position, so only an
-  # assignment's or a line's subject unknown here is a forgotten person.
-  def names_of(plan, items)
-    named = items.select { person_facet?(it.facet) }
-    known = ::Person.where(tenant_id: plan.tenant_id, id: named.map(&:subject_id).uniq).pluck(:id, :name).to_h
-    named.filter_map do |item|
-      name = known.fetch(item.subject_id) { Person::FORMER_MEMBER if PERSON_FACETS.include?(item.facet) }
-      [ item.subject_id, name ] if name
-    end.to_h
-  end
-
-  def person_facet?(facet) = PERSON_FACETS.include?(facet) || facet.split(":").first == ::TeamPlanning::Attention::CAPACITY
 
   def item_row(item, sources)
     change = item.change && { kind: item.change.class.name.demodulize, scenario_id: item.change.data[:scenario_id],
