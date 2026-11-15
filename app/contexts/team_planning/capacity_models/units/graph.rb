@@ -12,7 +12,9 @@
 # - A vacant manager position also takes, as direct reports, the people that
 #   walk leads to who have no manager on the map, so a seat whose lines
 #   haven't been redrawn yet still carries its span. Someone who already
-#   manages the seat, as the head of the tree does, is never its report.
+#   manages the seat, as the head of the tree does, is never its report, nor
+#   is anyone who owns the seat's unit or a unit above it
+#   ([#341](https://github.com/espaliahq/espalia/issues/341)).
 #
 # A leaver is never a report, and their reports, by name or by position,
 # pass to the position backfilling them, or to nobody.
@@ -152,8 +154,21 @@ class TeamPlanning::CapacityModels::Units::Graph
     @unmanaged.each do |person|
       unit_id = TeamPlanning::Baseline::Membership.shares(person.memberships).min_by { |membership, share, _| [ -share, membership.unit_id.to_s ] }&.first&.unit_id
       manager, = nearest_manager(unit_id, except: person.id)
-      @attached[manager] << person.id if manager && !@people.key?(manager) && !manages?(person.id, manager)
+      next unless manager && !@people.key?(manager)
+      next if manages?(person.id, manager) || owns_above?(person.id, @positions[manager]&.unit_id)
+
+      @attached[manager] << person.id
     end
+  end
+
+  def owns_above?(person_id, unit_id)
+    seen = Set.new
+    while unit_id && seen.add?(unit_id)
+      return true if @units[unit_id]&.owner_ids.to_a.include?(person_id)
+
+      unit_id = @units[unit_id]&.parent_id
+    end
+    false
   end
 
   def manages?(id, other_id) = span(id).any? { it.id == other_id }

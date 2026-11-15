@@ -112,9 +112,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     seat = open_position(@q1, unit_id: @engineering)
     [ @ada, @bo ].each { write(Operations::TeamPlanning::SetReportingLine, @q1, person_id: it.id, manager_position_id: seat) }
 
-    # Hal Head has no manager, so the units model counts them under the open seat in their unit as well.
-
-    assert_equal [ [ seat, "Managing 3 reports costs 2.4 more than the seat delivers" ] ], overloaded.map { it.values_at(:subject_id, :reason) }
+    assert_equal [ [ seat, "Managing 2 reports costs 1.4 more than the seat delivers" ] ], overloaded.map { it.values_at(:subject_id, :reason) }
   end
 
   should "mark no manager overloaded under a model that doesn't price reports" do
