@@ -69,6 +69,12 @@ class Operations::BaseTest < ActiveSupport::TestCase
     should "keep an operation declared web-only off the MCP server" do
       assert_not Class.new(Operations::Base) { mcp false }.mcp
     end
+
+    should "keep a web-only operation's subclasses off too, unless one opts back in" do
+      web_only = Class.new(Operations::Base) { mcp false }
+      assert_not Class.new(web_only).mcp
+      assert Class.new(web_only) { mcp true }.mcp
+    end
   end
 
   ParamFixture = Class.new(Operations::Base) do

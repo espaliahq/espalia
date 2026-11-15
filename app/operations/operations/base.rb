@@ -245,7 +245,9 @@ class Operations::Base
     # @return [Boolean] whether MCP lists and calls it
     def mcp(exposed = nil)
       @mcp = exposed unless exposed.nil?
-      @mcp != false
+      return @mcp unless @mcp.nil?
+
+      superclass.respond_to?(:mcp) ? superclass.mcp : true
     end
 
     # Declares one input parameter.
