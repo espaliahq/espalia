@@ -73,6 +73,12 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal({ @ada.id => "Ada Quill", @bo.id => "Bo Reyes" }, result[:names])
   end
 
+  should "list unclassified places once a model is chosen, even when no place takes it" do
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+
+    assert_equal [ @ada.id, @bo.id ].sort, attention(@q1)[:items].map { it[:subject_id] }.sort
+  end
+
   should "read a scenario that fits as needing nothing" do
     assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
 

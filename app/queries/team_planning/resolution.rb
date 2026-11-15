@@ -44,7 +44,7 @@ class TeamPlanning::Resolution
     map, winning = resolved
     capacity = TeamPlanning::Capacity.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository)
                                      .report_for(map)
-    TeamPlanning::Attention.new(map, winning, unclassified: capacity.measured? ? capacity.unclassified : []).call
+    TeamPlanning::Attention.new(map, winning, unclassified: capacity.configured? ? capacity.unclassified : []).call
   end
 
   private

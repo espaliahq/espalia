@@ -61,6 +61,12 @@ class TeamPlanning::Capacity
 
     # @return [Boolean] whether any place has a model chosen, so the plan measures capacity at all
     def measured? = seats.any? { |seat| seat.places.any?(&:model) }
+
+    # @return [Boolean] whether the tenant or plan chooses a model for any role or family, at any unit
+    def configured?
+      values = [ map.rules.defaults[RULE.rule_name] ] + map.rules.by_subject.values.filter_map { it[RULE.rule_name] }
+      values.any? { |value| value.values.any?(&:present?) }
+    end
   end
 
   # @!attribute seat [TeamPlanning::CapacityModel::Seat]
