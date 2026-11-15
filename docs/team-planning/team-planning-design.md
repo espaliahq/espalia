@@ -447,7 +447,9 @@ share of the seat) is priced on its own:
 A place no model covers counts nowhere and is listed as unclassified with its reason: no
 title, a title mapped to no role, a role not in the framework, a position since closed, no
 model chosen, or a model no longer registered. A place in a unit gone from the map counts
-for the scenario but under no unit.
+for the scenario but under no unit. For no model, or one no longer registered, the checks
+credit the plan's capacity rule that decided it, the nearest unit's or else the plan's,
+however late the person's own change landed.
 
 **A planner's override** (7.3, `CapacitySet`) replaces one place's figure: a person's
 capacity in a position, or straight in a unit, as a number in that place's model's units.

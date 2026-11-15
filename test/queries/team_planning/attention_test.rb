@@ -90,6 +90,27 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_same placed, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_title")).call.sole.change
   end
 
+  should "credit the capacity rule that decided a place has no model, or the wrong one, though the placement landed later" do
+    plan_wide = change(TeamPlanning::Events::RuleSet, ROOT, rule: "capacity_model", value: {})
+    at_unit = change(TeamPlanning::Events::RuleSet, LIVE, rule: "capacity_model", value: { "roles" => {} })
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    rules = B::Rules.new(plan_id: ROOT, defaults: {}, by_subject: { ROOT => { "capacity_model" => {} }, LIVE => { "capacity_model" => {} } })
+    changes = { plan_wide.key => plan_wide, at_unit.key => at_unit, [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed }
+
+    %w[no_model unknown_model].each do |reason|
+      assert_same at_unit, TeamPlanning::Attention.new(map(rules:), changes, unclassified: uncovered(reason)).call.sole.change
+    end
+    assert_same plan_wide, TeamPlanning::Attention.new(map(rules: rules.with(by_subject: { ROOT => { "capacity_model" => {} } })),
+                                                       changes.except(at_unit.key), unclassified: uncovered("no_model")).call.sole.change
+  end
+
+  should "credit the placement for a place with no model when no rule the plan set decides it" do
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed }
+
+    assert_same placed, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_model")).call.sole.change
+  end
+
   should "credit a later capacity rule for a place it left with no level, as a switch to a model that needs one does" do
     placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
     switched = change(TeamPlanning::Events::RuleSet, LIVE, rule: "capacity_model", value: {})
