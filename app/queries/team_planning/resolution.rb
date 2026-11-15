@@ -41,10 +41,11 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def attention
-    map, winning = resolved
+    map, changes = resolved
     capacity = TeamPlanning::Capacity.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository)
                                      .report_for(map)
-    TeamPlanning::Attention.new(map, winning, unclassified: capacity.configured? ? capacity.unclassified : []).call
+    TeamPlanning::Attention.new(map, changes, left_ids: left_since(map),
+                                              unclassified: capacity.configured? ? capacity.unclassified : []).call
   end
 
   private
@@ -64,6 +65,11 @@ class TeamPlanning::Resolution
     chain = aggregate.resolution_chain(@scenario_id)
     before = aggregate.timeline_path(@scenario_id)[-2]
     before ? chain.drop(chain.index(before) + 1) : chain
+  end
+
+  # The people on the map the Org Graph has had leave by today, a UTC day.
+  def left_since(map)
+    OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..Time.now.utc.to_date).pluck(:person_id)
   end
 
   # A person off the map either left by the base date, or was forgotten, or
