@@ -125,4 +125,26 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
 
     assert_equal "Status doesn't read this as conflicting, so there is nothing to settle", refusal { settle(@q1, "plan") }
   end
+
+  should "refuse to follow reality for a succession, whose retired units wouldn't follow it" do
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    squads, payments, platform, money, core = Array.new(5) { SecureRandom.uuid_v7 }
+    travel_to(Time.utc(2026, 2, 1, 9)) do
+      as_tenant do
+        structure.define_taxonomy([ { level_id: squads, name: "Squad" } ], effective_on: "2026-01-01")
+        { payments => "Payments", platform => "Platform", money => "Money", core => "Core" }.each do |id, name|
+          structure.create_unit(id, name, level_id: squads, effective_on: "2026-01-01")
+        end
+      end
+    end
+    succession = call(:SetUnitSuccession, plan_id: @plan_id, scenario_id: @q1, predecessor_ids: [ payments, platform ],
+                                          successor_ids: [ money ])[:succession_id]
+    travel_to(Time.utc(2026, 3, 20, 9)) do
+      as_tenant { structure.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ payments ], successor_ids: [ core ], effective_on: "2026-03-20") }
+    end
+    rebase
+
+    assert_match(/A succession can't follow reality yet/,
+                 refusal { call(:SettleConflict, plan_id: @plan_id, scenario_id: @q1, subject_id: succession, facet: "succession", choice: "reality") })
+  end
 end

@@ -362,6 +362,10 @@ class TeamPlanning::CommandHandler
       authorize_plan!(:update?, plan)
       plan.ensure_settleable!(scenario_id, key)
       change = plan.winning_changes(scenario_id).fetch(key)
+      if choice.to_s == "reality" && change.is_a?(TeamPlanning::Events::UnitSuccessionSet)
+        raise TeamPlanning::Error, "A succession can't follow reality yet, as the units it retires wouldn't follow: change it on the map"
+      end
+
       kind, end_state = choice.to_s == "reality" ? todays(plan, change, today) : [ change.class, kept(change) ]
       from_id, = plan.inherited_change(scenario_id, key) unless scenario_id == plan.plan_id
       note = note.presence || note_of(change) if choice.to_s == "plan"
