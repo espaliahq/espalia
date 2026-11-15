@@ -465,7 +465,16 @@ step is an Attention item.
 A model gets the whole map with each seat, and `Facts`: each seat's level ordinal, its
 roles and an open seat's FTE. Totals are kept per model, per unit and for the scenario, and never
 summed across models. Figures stay exact; `team_planning_capacity` sends them as decimal
-strings, and only the display rounds.
+strings, with each model's symbol (`u`, `FTE`) and description, and only the display rounds.
+
+**On screen** (7.4, [#296](https://github.com/espaliahq/espalia/issues/296)), the map shows
+a strip of the scenario's totals per model, each beside Today's, as cost is. A unit's card
+carries its own total, and each person's place and each open position carries a figure that
+opens to its working; an open position's figure looks like a filled one so the two compare.
+The strip equals the unit totals plus whatever counts in no unit on the map, which it names.
+The scenario table shows the same total per scenario. Once a capacity model is chosen for any
+role or family, at any unit or plan-wide, Attention lists each place no model covers, as `capacity:<unit or position id>`, except a leaver's, a
+forgotten person's override and a closed position's, which are explained elsewhere.
 
 #### The units model
 
@@ -902,8 +911,9 @@ people, so a move reads "from Payments to Growth".
 Attention gives each item its `sources` too. Someone the plan can't place, as they joined
 after the base or have left, is fixed where employment status comes from. A manager item is
 fixed where the manager fact comes from. Every other item is fixed in the units it touches:
-its own, its position's, a succession's, the places of someone over or under allocated, or
-the retired unit that broke it.
+its own, its position's, a succession's, the places of someone over or under allocated, the
+place a capacity item names, or the retired unit that broke it. A capacity item for someone in
+no unit falls back to Espalia.
 
 ## Plan-held data
 

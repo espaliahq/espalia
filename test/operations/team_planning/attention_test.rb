@@ -66,6 +66,26 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
   def change_of(subject_id, scenario_id = @q2) = attention(scenario_id)[:items].find { it[:subject_id] == subject_id }[:change]
 
+  should "list each place no capacity model covers once one is chosen, naming the people" do
+    assert_empty attention(@q1)[:items]
+
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    open_position(@q1)
+    result = attention(@q1)
+
+    reason = "Counts for no capacity: the person has no title"
+    assert_equal [ [ @ada.id, "capacity:#{@payments}", reason ], [ @bo.id, "capacity:#{@payments}", reason ],
+                   [ @head.id, "capacity:#{@engineering}", reason ] ].sort,
+                 result[:items].map { it.values_at(:subject_id, :facet, :reason) }.sort
+    assert_equal({ @ada.id => "Ada Quill", @bo.id => "Bo Reyes", @head.id => "Hal Head" }, result[:names])
+  end
+
+  should "list unclassified places once a model is chosen, even when no place takes it" do
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+
+    assert_equal [ @ada.id, @bo.id, @head.id ].sort, attention(@q1)[:items].map { it[:subject_id] }.sort
+  end
+
   should "read a scenario that fits as needing nothing" do
     assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
 
@@ -165,6 +185,14 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
 
     assert_equal %w[hibob], sources_of(@ada.id, "capacity:#{sales}")
+  end
+
+  should "name the unit of a place no capacity model covers" do
+    sales = hibob_unit
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    assign(@q2, @bo, { unit_id: sales, allocation: 1 })
+
+    assert_equal %w[hibob], sources_of(@bo.id, "capacity:#{sales}")
   end
 
   should "mark someone the plan still places once the Org Graph has them leave, by name" do
