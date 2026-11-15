@@ -1,0 +1,29 @@
+# frozen_string_literal: true
+
+# Writes, rewrites or clears the note on a planned change from the Changes tab
+# ([#292](https://github.com/espaliahq/espalia/issues/292)), through the same
+# Operation the MCP tool uses. A plan someone isn't in is a 404 here, as it is
+# on the plan's page; a viewer is refused.
+class Plans::NotesController < ApplicationController
+  include Plans::MapEditing
+
+  # PATCH /planning/:plan_id/notes/:id, the id being the change's event_id
+  def update
+    authorize_editor
+    fields = params.expect(note: [ :scenario_id, :text ])
+    noted = Operations::TeamPlanning::NoteChange.call(context: pundit_user, params: { plan_id:, scenario_id: fields[:scenario_id],
+                                                                                    event_id: params.expect(:id), note: typed(fields[:text]) })
+    redirect_to back_to_tab, notice: noted[:noted] ? "Note saved." : "Note cleared."
+  rescue Operations::Base::ParameterError => e
+    redirect_to back_to_tab, alert: "Couldn't save the note: #{e.message}"
+  end
+
+  private
+
+  # A browser sends each line break as two characters, while the textarea's
+  # maxlength counted it as one.
+  def typed(text) = text&.gsub("\r\n", "\n")
+
+  # The scenario shown, which an inherited change's note is not written on.
+  def back_to_tab = changes_plan_path(plan_id, scenario: params[:shown].presence)
+end
