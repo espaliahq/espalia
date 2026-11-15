@@ -155,6 +155,13 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
       assert_equal({ removed: true }, status.call[:note])
     end
 
+    should "refuse a new note once the person is forgotten" do
+      as_tenant { PlanKeyStore.new.destroy_person(@ada.id) }
+
+      error = assert_raises(Operations::Base::ParameterError) { note("Ready after all") }
+      assert_includes error.message, "has been forgotten"
+    end
+
     should "leave a cleared note off the change's status" do
       note(nil)
 

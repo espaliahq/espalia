@@ -110,7 +110,7 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
-    should "note a change in a form that fits, and mark a note erased with its person as removed" do
+    should "note a change in a form that fits, and mark a note erased with its person as removed, with no way to write another" do
       sign_in_as(@planner.user)
       visit changes_plan_path(@plan_id, scenario: @q1)
       assert_selector "[data-planned-change='done']", text: "Bo Reyes"
@@ -123,6 +123,7 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       visit changes_plan_path(@plan_id, scenario: @q1)
       assert_selector "[data-planned-change] [data-change-note='removed']", text: "Note removed"
       assert_no_text "Agreed in the October 1:1"
+      assert_no_selector "[data-change-note-editor]"
       assert_no_sideways_overflow
     end
   end

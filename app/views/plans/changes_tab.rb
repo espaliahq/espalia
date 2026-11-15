@@ -122,7 +122,7 @@ class Views::Plans::ChangesTab < Views::Base
         end
         p(class: "text-xs text-muted") { "Planned in #{scenario_name(entry[:scenario_id])}" } if entry[:scenario_id] != scenario_id
         change_note(entry[:note])
-        note_form(entry) if @can_edit
+        note_form(entry) if @can_edit && !entry.dig(:note, :removed)
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         status_badge(entry)
@@ -132,6 +132,7 @@ class Views::Plans::ChangesTab < Views::Base
   end
 
   # An erased note keeps its place, so the change doesn't read as never explained.
+  # Its person was forgotten, so it takes no new one.
   def change_note(note)
     if note&.dig(:removed)
       p(class: "text-sm italic text-muted", data: { change_note: "removed" }) { "Note removed" }

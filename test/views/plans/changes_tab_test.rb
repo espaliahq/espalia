@@ -121,6 +121,10 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_nil render_tab(statuses: [ noted({ value: "x" }) ]).at_css("[data-change-note-editor]")
     end
 
+    should "offer no note form on a change whose note was erased with its person" do
+      assert_nil render_tab(statuses: [ noted({ removed: true }) ], can_edit: true).at_css("[data-change-note-editor]")
+    end
+
     should "let an editor rewrite a note on the scenario that made the change" do
       html = render_tab(statuses: [ noted({ value: "Promo in March" }, scenario_id: PLAN, change_id: "c1"), noted(nil, change_id: "c2") ],
                         can_edit: true)
