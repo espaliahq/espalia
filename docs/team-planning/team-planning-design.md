@@ -300,8 +300,25 @@ It marks a placement in a closed position, or in a retired unit or one gone from
 a position in such a unit, or overfilled; a unit under a retired parent; anyone in
 `unresolved`; and a succession that lost a predecessor or whose successor is no longer live. A
 position in a retired unit is the position's item, not each occupant's. `team_planning_attention`
-reads it, and the checks projection (4.6) and the changes tab (4.4) will too. Marking a reporting
-line or a departure that no longer fits (3.8, 4.6) adds its checks here.
+reads it, and the changes tab (4.4) and the checks tab (4.7) will too.
+
+It also checks each person (4.6):
+
+- **Allocation.** Someone with no place at all is placed nowhere. A total above 100% is
+  over-allocated, and one below is under-allocated. An unknown total is neither. Someone placed
+  only in a gone unit or a closed position already has that item, so they are not also placed
+  nowhere.
+- **Since left.** Someone the scenario still has, with no planned departure, whom the Org Graph
+  has had leave by today, a UTC day. They are placed but left, or, with no place, left. Either
+  way that is their only allocation item. `Resolution#attention` reads them from
+  `org_leavers`, since the base map can't know.
+- **Manager.** A contributor with no manager, though not the head of the tree, who owns a unit
+  with no parent. A manager, or a manager's position, no longer in the scenario. A manager who
+  has since left. A manager who shares no unit with them: a manager shares one by being in or
+  owning one of the person's units or the unit above it, so a lead reporting to the owner of the
+  group around their team is not marked. A position in a gone unit is the position's item, not
+  its reports'. These items have the facet `reporting_line`, and name the person's own change or
+  their manager's, whichever landed last.
 
 ### Adding a change kind
 
@@ -929,8 +946,12 @@ values, under the plan's key and deleted with it
   accounting identifier are out of scope.
 - **A plan changes the budget with plan data.** `BudgetLineSet` and `BudgetLineCut` add,
   change or cut a line in a scenario, and a descendant changes them like anything else. The
-  amount is shreddable under the plan's key. Removing a tenant line a plan has changed or cut
-  leaves the plan's change orphaned, and Attention flags it rather than dropping it.
+  amount is shreddable under the plan's key. A tenant line keeps its id in every scenario; a
+  line the plan adds gets one the plan mints. The baseline holds the approved budget as it
+  is, so only a scenario changes it. Removing a tenant line a plan has changed or cut
+  leaves the plan's change orphaned: `team_planning_budget_lines` lists it under `orphaned`,
+  and Attention flags it rather than dropping it. Until the budget tab (6.7), a plan's lines
+  are reached over MCP.
 - **Money keeps its currency.** An amount keeps its own currency and period, a year or a
   month, as a pay band's does, and is never converted. A line with a head count and no amount
   has no amount, never zero.

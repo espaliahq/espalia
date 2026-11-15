@@ -9,9 +9,12 @@ class Operations::TeamPlanning::Attention < Operations::Base
   description "List what needs attention in a scenario of a Team Planning plan the caller is in: changes that " \
               "still resolve but no longer fit, often because a scenario it follows changed later. Each item has " \
               "the subject_id and facet that no longer fit (a person's assignment, a position, a unit, a " \
-              "succession), a reason, and the change it belongs to: its kind, the scenario that made it and its " \
+              "succession, a reporting line, a budget line), a reason, and the change it belongs to: its kind, the scenario that made it and its " \
               "event_id. That is the later to land of the subject's own change and the change that broke it, such " \
               "as a parent unit's retirement; change is null when nothing in the plan explains it. " \
+              "It also checks each person: placed nowhere, over or under 100% allocated (an unknown total is " \
+              "neither), still in the plan after the Org Graph has them leave, no manager (except the head of the " \
+              "tree), or a manager who is gone, has left, or is in or owns none of their units nor the unit directly above one. " \
               "Items come grouped by check, in a fixed order, then " \
               "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
@@ -30,10 +33,12 @@ class Operations::TeamPlanning::Attention < Operations::Base
     { plan_id: plan.id, scenario_id:, items: items.map { item_row(it) }, names: names_of(plan, items) }
   end
 
+  PERSON_FACETS = [ ::TeamPlanning::Attention::ASSIGNMENT, ::TeamPlanning::Attention::LINE ].freeze
+
   private
 
   def names_of(plan, items)
-    ids = items.select { it.facet == ::TeamPlanning::Attention::ASSIGNMENT }.map(&:subject_id).uniq
+    ids = items.select { PERSON_FACETS.include?(it.facet) }.map(&:subject_id).uniq
     known = ::Person.where(tenant_id: plan.tenant_id, id: ids).pluck(:id, :name).to_h
     ids.to_h { [ it, known.fetch(it, Person::FORMER_MEMBER) ] }
   end

@@ -13,11 +13,12 @@ module Operations::TeamPlanning::PlanRead
 
   private
 
+  # @param may [Symbol] the {PlanPolicy} question, `:update?` for a write that checks before its handler does
   # @return [TeamPlanningPlan]
-  # @raise [Operations::Base::ParameterError] "No such plan" unless the caller is a member
-  def plan!
+  # @raise [Operations::Base::ParameterError] "No such plan" unless the caller is a member, or may do what `may` asks
+  def plan!(may = :show?)
     plan = TeamPlanningPlan.includes(:members).find_by(id: plan_id!)
-    return plan if plan && PlanPolicy.new(context, plan).show?
+    return plan if plan && PlanPolicy.new(context, plan).public_send(may)
 
     raise Operations::Base::ParameterError, "No such plan"
   end

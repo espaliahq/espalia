@@ -19,6 +19,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
       @ada = create(:person, tenant: @tenant, name: "Ada Quill")
       @bo = create(:person, tenant: @tenant, name: "Bo Reyes")
       @newcomer = create(:person, tenant: @tenant, name: "Nia Newcomer")
+      @head = create(:person, tenant: @tenant, name: "Hal Head")
       @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer")
       @e2 = create(:framework_level, tenant: @tenant, role_id: @engineer.role_id, ordinal: 2, title: "Engineer II")
       structure.define_taxonomy([ { level_id: @department, name: "Department" }, { level_id: @squad, name: "Squad" },
@@ -27,10 +28,15 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
       structure.create_unit(@engineering, "Engineering", level_id: @department, effective_on: "2026-01-01")
       structure.create_unit(@payments, "Payments", level_id: @squad, parent_id: @engineering, effective_on: "2026-01-01")
       structure.create_unit(@growth, "Growth", level_id: @squad, parent_id: @engineering, effective_on: "2026-01-01")
+      handler.record_person(@head.id, **ESPALIA, effective_on: "2026-02-01", employment_status: "employed")
+      handler.set_membership(@head.id, @engineering, **ESPALIA, effective_on: "2026-02-01", allocation: 1.0)
+      structure.add_unit_owner(@engineering, @head.id, effective_on: "2026-02-01")
       handler.record_person(@ada.id, **ESPALIA, effective_on: "2026-02-01", employment_status: "employed", fte: 0.8)
+      handler.change_manager(@ada.id, @head.id, **ESPALIA, effective_on: "2026-02-01")
       handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-01", allocation: 1.0)
       handler.record_person(@bo.id, **ESPALIA, effective_on: "2026-02-01", employment_status: "employed")
       handler.set_membership(@bo.id, @payments, **ESPALIA, effective_on: "2026-02-01", allocation: 1.0)
+      handler.change_manager(@bo.id, @head.id, **ESPALIA, effective_on: "2026-02-01")
     end
     @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-03-02")[:plan_id]
     @q1 = fork(relation: "then", name: "Q1", ends_on: "2026-06-30")
@@ -117,6 +123,16 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
     assert_equal [ [ @newcomer.id, "assignment", "Placed, but joined after the base date" ] ], items
     assert_equal({ @newcomer.id => "Nia Newcomer" }, attention[:names])
+  end
+
+  should "mark someone the plan still places once the Org Graph has them leave, by name" do
+    travel_to Time.utc(2026, 3, 10, 9)
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).leave(@bo.id, **ESPALIA, effective_on: "2026-03-10")
+    end
+
+    assert_equal [ [ @bo.id, "assignment", "Placed, but has since left" ] ], items
+    assert_equal({ @bo.id => "Bo Reyes" }, attention[:names])
   end
 
   should "read the baseline when no scenario is given" do
