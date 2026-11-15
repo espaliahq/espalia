@@ -14,13 +14,13 @@ class Views::Plans::CostMarks
     # @return [String] to three significant figures, such as "EUR 3.21m", "EUR 148k" or "EUR 950"
     def amount(figure, currency)
       value = BigDecimal(figure.to_s)
-      "#{'-' if value.negative?}#{currency} #{short(value.abs)}"
+      "#{'-' if value.round.negative?}#{currency} #{short(value.abs)}"
     end
 
-    # @return [String, nil] such as "+EUR 148k", nil when there is no difference
+    # @return [String, nil] such as "+EUR 148k", nil when the difference rounds to nothing
     def change(figure, currency)
       value = BigDecimal(figure.to_s)
-      return nil if value.zero?
+      return nil if value.abs < BigDecimal("0.5")
 
       "#{value.positive? ? '+' : '-'}#{currency} #{short(value.abs)}"
     end
@@ -45,7 +45,6 @@ class Views::Plans::CostMarks
 
     def short(value)
       return "#{significant(value / 1_000_000)}m" if value >= 999_500
-      return "#{(value / 1000).round}k" if value >= 9_995
       return "#{significant(value / 1000)}k" if value >= 999.5
 
       value.round.to_i.to_s

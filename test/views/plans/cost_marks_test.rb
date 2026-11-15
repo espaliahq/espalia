@@ -9,8 +9,8 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
 
   should "round a figure to three significant figures, dropping zeros that carry nothing" do
     expected = { "950" => "EUR 950", "999.4" => "EUR 999", "999.5" => "EUR 1k", "1049.9" => "EUR 1.05k", "5000" => "EUR 5k",
-                 "9994" => "EUR 9.99k", "9995" => "EUR 10k", "148300" => "EUR 148k", "999499" => "EUR 999k",
-                 "999500" => "EUR 1m", "3214000" => "EUR 3.21m", "-4200" => "-EUR 4.2k" }
+                 "9994" => "EUR 9.99k", "9995" => "EUR 10k", "12345" => "EUR 12.3k", "148300" => "EUR 148k", "999499" => "EUR 999k",
+                 "999500" => "EUR 1m", "3214000" => "EUR 3.21m", "-4200" => "-EUR 4.2k", "-0.37" => "EUR 0" }
     assert_equal expected, expected.keys.index_with { Format.amount(it, "EUR") }
   end
 
@@ -18,6 +18,7 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
     assert_equal "+EUR 148k", Format.change("148000", "EUR")
     assert_equal "-EUR 2.5k", Format.change("-2500", "EUR")
     assert_nil Format.change("0", "EUR")
+    assert_nil Format.change("-0.37", "EUR")
   end
 
   should "give the converted total when there is one, and each currency's otherwise" do
