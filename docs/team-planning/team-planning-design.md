@@ -583,6 +583,10 @@ flatters a scenario.
 - **A vacant manager seat never takes its own manager as a report.** The head of the tree
   has no manager, so without this an open seat beneath them would take them, and with them
   everyone.
+- **Nor does it take someone who owns its unit or a unit above it.** An owner with no line
+  sits above the seat even when the seat has no line to them, so they count against nobody,
+  as the head of the tree does. A line-less member who owns nothing up the tree is still
+  taken ([#341](https://github.com/espaliahq/espalia/issues/341)).
 - **A leaver is never a report.** Their reports pass to their backfill, or to nobody,
   whether the line names the leaver or a position only the leaver fills.
 - **A leaver keeps the positions they fill filled for the step**, so their capacity goes to
