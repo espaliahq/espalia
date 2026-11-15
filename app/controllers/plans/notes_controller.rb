@@ -10,13 +10,17 @@ class Plans::NotesController < ApplicationController
     authorize_editor
     fields = params.expect(note: [ :scenario_id, :text ])
     noted = Operations::TeamPlanning::NoteChange.call(context: pundit_user, params: { plan_id:, scenario_id: fields[:scenario_id],
-                                                                                    event_id: params.expect(:id), note: fields[:text] })
+                                                                                    event_id: params.expect(:id), note: typed(fields[:text]) })
     redirect_back_or_to changes_plan_path(plan_id), notice: noted[:noted] ? "Note saved." : "Note cleared."
   rescue Operations::Base::ParameterError => e
     redirect_back_or_to changes_plan_path(plan_id), alert: "Couldn't save the note: #{e.message}"
   end
 
   private
+
+  # A browser sends each line break as two characters, while the textarea's
+  # maxlength counted it as one.
+  def typed(text) = text&.gsub("\r\n", "\n")
 
   def plan_id = params.expect(:plan_id)
 

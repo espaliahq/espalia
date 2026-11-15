@@ -44,6 +44,15 @@ class Plans::NotesControllerTest < ActionDispatch::IntegrationTest
       assert_not status.key?(:note)
     end
 
+    should "count a line break as one character, as the form's limit does" do
+      line = "x" * ((TeamPlanning::PlanAggregate::NOTE_LIMIT - 1) / 2)
+      lines = "#{line}\r\n#{line}"
+      patch plan_note_path(@plan_id, @change_id), params: { note: { scenario_id: @q1, text: lines } }
+
+      assert_equal "Note saved.", flash[:notice]
+      assert_equal lines.gsub("\r\n", "\n"), status[:note][:value]
+    end
+
     should "say why a note was refused" do
       patch plan_note_path(@plan_id, @change_id), params: { note: { scenario_id: @q1, text: "x" * (TeamPlanning::PlanAggregate::NOTE_LIMIT + 1) } }
 
