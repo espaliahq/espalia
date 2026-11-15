@@ -452,8 +452,6 @@ class TeamPlanning::CommandHandler
     raise TeamPlanning::Error, "A plan needs someone who can see pay: give the right to someone else first"
   end
 
-  # A plan is private to its members, so to anyone else it reads as missing:
-  # the refusal can't tell a caller which plan ids exist.
   # Pay is changed, cleared, noted, undone and redone only by a member who
   # may see it, as each of those reads or moves what a seat costs.
   def ensure_pay_right!(plan, facet)
@@ -467,6 +465,8 @@ class TeamPlanning::CommandHandler
     "#{kind.facet}:#{end_state[:field]}" if kind == TeamPlanning::Events::PlanDataSet
   end
 
+  # A plan is private to its members, so to anyone else it reads as missing:
+  # the refusal can't tell a caller which plan ids exist.
   def authorize_plan!(predicate, plan)
     return if plan.exists? && PlanPolicy.new(@actor, plan).public_send(predicate)
 
