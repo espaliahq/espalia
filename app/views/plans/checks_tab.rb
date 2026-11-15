@@ -17,6 +17,7 @@ class Views::Plans::ChecksTab < Views::Base
     allocations: [ "Allocations", "People placed nowhere, or over or under 100% allocated." ],
     leavers: [ "Leavers", "People still in the plan after the Org Graph has them leave." ],
     managers: [ "Managers", "People with no manager, or one who is gone, has left or shares none of their units." ],
+    overloaded: [ "Overloaded managers", "Seats whose reports cost more to manage than the seat delivers." ],
     unclassified: [ "Capacity", "Places no capacity model covers." ],
     budget_lines: [ "Budget lines", "Changes to budget lines the organisation has since removed." ]
   }.freeze

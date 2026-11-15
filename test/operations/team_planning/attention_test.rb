@@ -87,6 +87,45 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ @ada.id, @bo.id, @head.id ].sort, attention(@q1)[:items].map { it[:subject_id] }.sort
   end
 
+  def overloading_rule
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model",
+                                                       value: { roles: { @engineer.role_id => { model: "units", params: { per_report: { direct: "1" } } } } })
+  end
+
+  def overloaded(scenario_id = @q1) = attention(scenario_id)[:items].select { it[:facet] == "capacity" }
+
+  should "mark a manager whose reports cost more than their seat delivers, crediting the line that tipped it, by name" do
+    overloading_rule
+    seat = open_position(@q1, unit_id: @engineering)
+    assign(@q1, @head, { position_id: seat, allocation: 1 })
+    write(Operations::TeamPlanning::SetReportingLine, @q1, person_id: @bo.id, manager_id: @head.id)
+    result = attention(@q1)
+
+    item = overloaded.sole
+    assert_equal [ @head.id, "Managing 2 reports costs 1.4 more than the seat delivers" ], item.values_at(:subject_id, :reason)
+    assert_equal "ReportingLineSet", item[:change][:kind]
+    assert_equal "Hal Head", result[:names][@head.id]
+  end
+
+  should "mark an open manager position as a filled one, so leaving the seat empty never hides the load" do
+    overloading_rule
+    seat = open_position(@q1, unit_id: @engineering)
+    [ @ada, @bo ].each { write(Operations::TeamPlanning::SetReportingLine, @q1, person_id: it.id, manager_position_id: seat) }
+
+    # Hal Head has no manager, so the units model counts them under the open seat in their unit as well.
+
+    assert_equal [ [ seat, "Managing 3 reports costs 2.4 more than the seat delivers" ] ], overloaded.map { it.values_at(:subject_id, :reason) }
+  end
+
+  should "mark no manager overloaded under a model that doesn't price reports" do
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    seat = open_position(@q1, unit_id: @engineering)
+    assign(@q1, @head, { position_id: seat, allocation: 1 })
+    write(Operations::TeamPlanning::SetReportingLine, @q1, person_id: @bo.id, manager_id: @head.id)
+
+    assert_empty overloaded
+  end
+
   should "read a scenario that fits as needing nothing" do
     assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
 
