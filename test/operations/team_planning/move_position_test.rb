@@ -52,6 +52,14 @@ class Operations::TeamPlanning::MovePositionTest < ActiveSupport::TestCase
 
   def refusal(**params) = assert_raises(Operations::Base::ParameterError) { move(**params) }.message
 
+  should "keep the position's own cost centre" do
+    call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @q1, position_id: @position, role_id: @engineer.role_id,
+                                                level_id: @e2.level_id, unit_id: @payments, fte: 0.5, basis: "backfill", cost_centre: "Platform")
+    move(to_unit_id: @growth)
+
+    assert_equal "Platform", map[:positions].find { it[:position_id] == @position }[:cost_centre]
+  end
+
   should "move the position and keep its role, level, FTE and basis" do
     move(to_unit_id: @growth)
 

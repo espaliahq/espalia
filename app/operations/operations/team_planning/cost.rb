@@ -23,6 +23,10 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "Totals are per currency in `native`, and `converted` is the same in the reference currency at the " \
               "period's start, null with `missing` saying why when a rate is missing. Units count their own places, " \
               "with null for no unit; `with_below` adds the units below. Cost centres use null for no cost centre. " \
+              "A person's seat takes the person's cost centre. A placeholder hire's seat and an open seat take their position's own " \
+              "cost centre, else its occupant's, else the first cost_centre rule at its unit that matches; a seat's " \
+              "cost_centre_source says which (position, person, rule or none), and cost_centre_rule is the " \
+              "winning rule's index in the cost_centre list that unit reads. " \
               "Unit, cost-centre and plan totals always agree. A seat that can't be priced is in `unpriced` with its reason, " \
               "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
               "bands_changed_at says when a band last changed. pay_view is band_ranges for a member with the see-pay " \
@@ -87,7 +91,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
   def line(line)
     band = line.band
     { seat_id: line.seat_id, kind: line.kind, position_id: line.position_id, cost_centre: line.cost_centre,
-      level_id: line.level_id, level_source: line.level_source,
+      cost_centre_source: line.cost_centre_source, cost_centre_rule: line.cost_centre_rule, level_id: line.level_id, level_source: line.level_source,
       band: band && band(band),
       hours_per_year: line.hours_per_year && decimal(line.hours_per_year), yearly: line.yearly && decimal(line.yearly),
       fte: decimal(line.fte), fraction: decimal(line.fraction),
