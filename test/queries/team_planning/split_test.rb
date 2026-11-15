@@ -123,6 +123,30 @@ class TeamPlanning::SplitTest < ActiveSupport::TestCase
     assert(items.filter_map { it[:change] }.all? { it[:scenario_id] != @h1 }, "no item points at the rest for a change it no longer holds")
   end
 
+  should "let the rest withdraw a departure that moved into the agreed part" do
+    agreed = split(change_on(@brook.id))
+
+    assert operation(Operations::TeamPlanning::WithdrawDeparture, scenario_id: @h1, person_id: @brook.id)[:withdrawn]
+    assert_nil resolved(@h1).people.find { it.id == @brook.id }&.departure
+    assert resolved(agreed).people.find { it.id == @brook.id }&.departure
+  end
+
+  should "keep a moved override under the agreed part's own id, with its departure leaving there in it and its history, through an undo and redo" do
+    departure = change_on(@brook.id)
+    agreed = split(departure)
+    row = -> { TeamPlanningOverride.find_by(scenario_id: agreed, subject_id: @brook.id) }
+    fresh = TeamPlanningOverride.new(tenant: @tenant, scenario_id: agreed, subject_id: @brook.id, facet: row.call.facet).tap(&:validate)
+    assert_equal fresh.id, row.call.id
+    assert_equal agreed, row.call.end_state["leaves_in_id"]
+    assert_equal agreed, TeamPlanningHistoryEntry.find(departure).end_state["leaves_in_id"]
+
+    as_tenant { handler.undo_change(@plan_id, scenario_id: agreed, event_id: departure) }
+    assert_nil row.call
+    as_tenant { handler.redo_change(@plan_id, scenario_id: agreed, event_id: departure) }
+    assert_equal [ fresh.id, agreed ], [ row.call.id, row.call.end_state["leaves_in_id"] ]
+    assert_not TeamPlanningOverride.exists?(scenario_id: @h1, subject_id: @brook.id)
+  end
+
   should "keep a moved departure leaving in the agreed part once the rest is gone" do
     agreed = split(change_on(@brook.id))
     operation(Operations::TeamPlanning::RemoveScenario, scenario_id: @h2)

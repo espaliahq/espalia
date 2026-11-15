@@ -57,7 +57,10 @@ class TeamPlanning::Projections::History
   def split(data)
     keys = data[:keys].map(&:to_a).to_set
     moving = TeamPlanningHistoryEntry.where(scenario_id: data[:scenario_id]).order(:position).select { keys.include?([ it.subject_id, it.facet ]) }
-    moving.each.with_index(next_position(data[:agreed_id])) { |entry, position| entry.update!(scenario_id: data[:agreed_id], position:) }
+    moving.each.with_index(next_position(data[:agreed_id])) do |entry, position|
+      end_state = TeamPlanning::ChangeEntry.moved_end_state(entry.kind, entry.end_state, from: entry.scenario_id, to: data[:agreed_id])
+      entry.update!(scenario_id: data[:agreed_id], position:, end_state:)
+    end
   end
 
   def record(entry)
