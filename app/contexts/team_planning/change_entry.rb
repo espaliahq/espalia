@@ -55,6 +55,25 @@ TeamPlanning::ChangeEntry = Data.define(
   end
   private_class_method :fields_of, :split
 
+  # What an end state says once a split moves its change from one scenario to
+  # another, by the rule of the change's kind.
+  #
+  # @param kind [String, nil] the change's class name
+  # @param end_state [Hash, nil]
+  # @param from [String]
+  # @param to [String]
+  # @return [Hash, nil]
+  def self.moved_end_state(kind, end_state, from:, to:)
+    klass = kind&.safe_constantize
+    return end_state unless end_state && klass.respond_to?(:moved_end_state)
+
+    klass.moved_end_state(end_state.to_h.symbolize_keys, from:, to:)
+  end
+
+  # @param to [String] the agreed part a split moves this entry's change to
+  # @return [TeamPlanning::ChangeEntry]
+  def moved_to(to) = with(scenario_id: to, end_state: self.class.moved_end_state(kind, end_state, from: scenario_id, to:))
+
   # @return [Boolean] whether it sets an end state: a set or a pin
   def sets? = %w[set pin].include?(action)
 
