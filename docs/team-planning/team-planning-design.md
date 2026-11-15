@@ -546,9 +546,10 @@ every seat only for a unit the caller names.
   nothing in the period, and their backfill holds the whole of it. A backfill for several
   leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
   period any FTE no leaver opens.
-- **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
-  until positions carry a cost-centre label in 6.2. No cost centre is a bucket of its own,
-  counted like any other.
+- **A cost centre** is the person's, from the Org Graph, or none. An open seat takes its
+  position's cost centre, resolved as [Position to cost centre](#which-budget-line-a-position-draws-on)
+  describes, and the working says how (`cost_centre_source`). No cost centre is a bucket of
+  its own, counted like any other.
 - **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
   that refuses it, or a level or FTE lost with a forgotten person's key), never counted
   as zero.
@@ -972,6 +973,14 @@ the first match wins. A matcher names a unit (and so its subtree), a role or rol
 from the framework, or a unit and a role together. The list is ordered because
 organisations differ on whether the unit or the role decides. Rules start from the
 tenant default, and a plan or scenario can change them.
+
+As built in 6.2 ([#325](https://github.com/espaliahq/espalia/issues/325)): the rules are the
+`cost_centre` rule kind, set through the generic rule write. A matcher names a unit, a role
+or a role family, or a unit with one of the other two. Each position's result records its
+source (`position`, `person`, `rule` with the rule's index, or `none`). Step 2 reads only the
+occupant's own cost centre, the one with the largest allocation first: no event carries a
+plan's change to a person's cost centre yet, and the mismatch check in 6.6 is where one is
+needed.
 
 **Cost centre to budget line.** The most specific budget line that matches the position's cost centre and
 period, and whichever of role, level and location the budget line states. `PositionFundingSet` is
