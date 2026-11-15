@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
-# The scenario map's "Move" dialog ([#285](https://github.com/espaliahq/espalia/issues/285)), one per map, for an editor on a
-# scenario other than Today. Each person row's "Move…" button opens it, and a
-# drop on a unit clicks that same button with the unit in `data-move-to`, so
-# drag and keyboard share one path. The `move-form` controller fills it from
-# the trigger, and it posts to {Plans::AssignmentsController}.
+# The "Move" dialog for an editor on a scenario other than Today: one per map
+# ([#285](https://github.com/espaliahq/espalia/issues/285)), and one per step on the timeline
+# ([#309](https://github.com/espaliahq/espalia/issues/309)), which also gives it `return_to`.
+# Each person's "Move…" button opens it, and a drop on a unit clicks that same
+# button with the unit in `data-move-to`, so drag and keyboard share one path.
+# The `move-form` controller fills it from the trigger, and it posts to
+# {Plans::AssignmentsController}.
 class Views::Plans::MoveDialog < Views::Base
   ID = "move-person-modal"
   UNASSIGNED = Operations::TeamPlanning::MovePlace::UNASSIGNED
@@ -21,9 +23,10 @@ class Views::Plans::MoveDialog < Views::Base
   # @param from [String] the unit their place is in, or "unassigned"
   # @param place [Hash, nil] the place moved: its position and role
   # @param share [Rational, nil] what the place counts for; the new place starts at it
+  # @param dialog [String] the dialog it opens, when a page has one per step
   # @return [Hash]
-  def self.trigger(url:, name:, from:, place:, share: nil)
-    { action: "click->modal#open", modal_target_id: ID, move_action: url, move_name: name, move_from: from,
+  def self.trigger(url:, name:, from:, place:, share: nil, dialog: ID)
+    { action: "click->modal#open", modal_target_id: dialog, move_action: url, move_name: name, move_from: from,
       move_from_position: place&.dig(:position_id).to_s, move_at: place&.dig(:position_id) ? position_choice(place[:position_id]) : from, move_role: place&.dig(:role).to_s, move_allocation: percent(share) }
   end
 
@@ -40,7 +43,11 @@ class Views::Plans::MoveDialog < Views::Base
   # @param scenario_name [String]
   # @param units [Array<Array(Hash, Array<String>)>] each unit with the names above it, in map order
   # @param positions [Hash{String => Array<Hash>}] each unit's positions, by unit id
-  def initialize(scenario_id:, scenario_name:, units:, positions: {})
+  # @param id [String] the dialog's id, when a page has one per step
+  # @param return_to [String, nil] where a saved move goes back to; the map when nil
+  def initialize(scenario_id:, scenario_name:, units:, positions: {}, id: ID, return_to: nil)
+    @id = id
+    @return_to = return_to
     @scenario_id = scenario_id
     @scenario_name = scenario_name
     @units = units
@@ -48,7 +55,7 @@ class Views::Plans::MoveDialog < Views::Base
   end
 
   def view_template
-    render Components::Kit::Modal.new(id: ID, title: "Move", size: :sm, standalone: false) do |m|
+    render Components::Kit::Modal.new(id: @id, title: "Move", size: :sm, standalone: false) do |m|
       m.body { move_form }
     end
   end
@@ -61,6 +68,7 @@ class Views::Plans::MoveDialog < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch")
       input(type: "hidden", name: "move[scenario_id]", value: @scenario_id)
+      input(type: "hidden", name: "return_to", value: @return_to) if @return_to
       input(type: "hidden", name: "move[from_unit_id]", data: { move_form_target: "from" })
       input(type: "hidden", name: "move[from_position_id]", data: { move_form_target: "fromPosition" })
       p(class: "text-sm text-muted") do
@@ -71,14 +79,14 @@ class Views::Plans::MoveDialog < Views::Base
         plain ". Their other places stay as they are, except one they already hold in the unit or position they move to, " \
               "which this replaces."
       end
-      field("move-to", "To") { to_select }
+      field(field_id("to"), "To") { to_select }
       div(class: "grid grid-cols-2 gap-3", data: { move_form_target: "placeFields" }) do
-        field("move-allocation", "Allocation (%)") do
-          input(id: "move-allocation", type: "number", name: "move[allocation]", min: "0.1", max: 100, step: "any", required: true,
+        field(field_id("allocation"), "Allocation (%)") do
+          input(id: field_id("allocation"), type: "number", name: "move[allocation]", min: "0.1", max: 100, step: "any", required: true,
                 class: Components::Kit::Field::INPUT, data: { move_form_target: "allocation" })
         end
-        field("move-role", "Role") do
-          input(id: "move-role", type: "text", name: "move[role]", autocomplete: "off", placeholder: "Optional",
+        field(field_id("role"), "Role") do
+          input(id: field_id("role"), type: "text", name: "move[role]", autocomplete: "off", placeholder: "Optional",
                 class: Components::Kit::Field::INPUT, data: { move_form_target: "role" })
         end
       end
@@ -89,8 +97,11 @@ class Views::Plans::MoveDialog < Views::Base
     end
   end
 
+  # Several dialogs share the timeline, one a step, so each names its own fields.
+  def field_id(name) = "move-#{name}#{@id.delete_prefix(ID)}"
+
   def to_select
-    select(id: "move-to", name: "move[to]", class: Components::Kit::Field::SELECT,
+    select(id: field_id("to"), name: "move[to]", class: Components::Kit::Field::SELECT,
            data: { move_form_target: "to", action: "change->move-form#sync" }) do
       @units.each do |unit, path|
         trail = path + [ unit[:name] ]

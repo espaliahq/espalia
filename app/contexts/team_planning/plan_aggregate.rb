@@ -831,6 +831,17 @@ class TeamPlanning::PlanAggregate
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
+  # A first step that ends before a new base would leave a gap, so a rebase,
+  # and its preview, refuse one.
+  #
+  # @param base_on [Date]
+  # @raise [TeamPlanning::FirstStepEndsTooSoon]
+  def ensure_first_steps_reach!(base_on)
+    step = children_of(@plan_id).find { it.relation == "then" && it.ends_on < base_on } or return
+
+    raise TeamPlanning::FirstStepEndsTooSoon.new(scenario_id: step.id, ends_on: step.ends_on, base_on:)
+  end
+
   private
 
   def in_effect(scenario_id, undone)
@@ -1019,11 +1030,6 @@ class TeamPlanning::PlanAggregate
     period
   end
 
-  def ensure_first_steps_reach!(base_on)
-    step = children_of(@plan_id).find { it.relation == "then" && it.ends_on < base_on } or return
-
-    raise TeamPlanning::FirstStepEndsTooSoon.new(scenario_id: step.id, ends_on: step.ends_on, base_on:)
-  end
 
   def conflict_keys!(conflicts)
     conflicts.map { it.to_h.symbolize_keys.slice(*CONFLICT_FIELDS) }.uniq.each do |conflict|

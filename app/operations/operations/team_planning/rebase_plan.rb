@@ -35,11 +35,6 @@ class Operations::TeamPlanning::RebasePlan < Operations::Base
         conflicts = ::TeamPlanning::RebasePreview.new(context:, plan: plan.reload, today:).call.conflicts
       end
       { plan_id: plan.id, base_on: today.iso8601, previous_base_on: expected_base_on.iso8601, conflicts: }
-    rescue ::TeamPlanning::FirstStepEndsTooSoon => e
-      name = TeamPlanningScenario.find_by(id: e.scenario_id)&.name&.reveal
-      raise e if name.blank?
-
-      raise ::TeamPlanning::Error, e.message_for(name)
     end
   end
 end

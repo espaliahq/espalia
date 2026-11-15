@@ -11,7 +11,7 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
     @tenant = create(:tenant)
     @payments = SecureRandom.uuid_v7
     @growth = SecureRandom.uuid_v7
-    level = SecureRandom.uuid_v7
+    @level = level = SecureRandom.uuid_v7
     travel_to Time.utc(2026, 11, 1, 9)
     ActsAsTenant.with_tenant(@tenant) do
       @editor = account(team_planner: true, name: "Erin Editor")
@@ -32,9 +32,9 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  def move(scenario_id: @q1, **fields)
+  def move(scenario_id: @q1, return_to: nil, **fields)
     patch plan_assignment_path(@plan_id, @ada.id),
-          params: { move: { scenario_id:, from_unit_id: @payments, to: @growth, allocation: "60", role: "Lead", **fields } }
+          params: { move: { scenario_id:, from_unit_id: @payments, to: @growth, allocation: "60", role: "Lead", **fields }, return_to: }.compact
   end
 
   context "an editor" do
@@ -90,6 +90,89 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
         assert_select "[data-map-position='#{position}'] span.font-medium", text: "New position: Software Engineer (#{index + 1})"
         assert_select "[data-map-position='#{position}'] button[aria-label='Move New position: Software Engineer (#{index + 1}) in Growth']"
       end
+    end
+
+    should "land back on the timeline step it came from" do
+      back = timeline_plan_path(@plan_id, scenario: @q1, step: 1)
+      move(return_to: back)
+
+      assert_redirected_to back
+      assert_equal "Move saved.", flash[:notice]
+    end
+
+    should "say on the timeline why a move was refused" do
+      back = timeline_plan_path(@plan_id, step: 1)
+      move(scenario_id: @plan_id, return_to: back)
+
+      assert_redirected_to back
+      assert_match "Today can't be edited", flash[:alert]
+    end
+
+    should "ignore a return_to that leaves this plan's timeline" do
+      [ "https://example.com/planning", plan_path(@plan_id), "//example.com#{timeline_plan_path(@plan_id)}", "http://[bad" ].each do |back|
+        move(return_to: back)
+
+        assert response.location.start_with?(map_plan_url(@plan_id)), "#{back} sent the move to #{response.location}"
+      end
+    end
+
+    should "start someone in a position on its unit in the timeline's dialog, which lists units only" do
+      position = ActsAsTenant.with_tenant(@tenant) do
+        role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+        level = create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 2, title: "Engineer II")
+        call(Operations::TeamPlanning::SetPosition, @editor, plan_id: @plan_id, scenario_id: @q1, role_id: role.role_id,
+                                                            level_id: level.level_id, unit_id: @growth, fte: 1, basis: "new")[:position_id]
+      end
+      move(to: Views::Plans::MoveDialog.position_choice(position))
+
+      get timeline_plan_path(@plan_id)
+
+      assert_select "button[data-modal-target-id='move-person-modal-1'][data-move-from-position='#{position}'][data-move-at='#{@growth}']"
+    end
+
+    should "keep the share a place with no allocation takes beside another in the timeline's dialog" do
+      ActsAsTenant.with_tenant(@tenant) do
+        graph = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        graph.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-01-03", allocation: nil)
+        graph.set_membership(@ada.id, @growth, **ESPALIA, effective_on: "2026-01-03", allocation: nil)
+      end
+      @plan_id = ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::CreatePlan, @editor, name: "Split", base_on: "2026-11-14")[:plan_id] }
+      ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+      end
+
+      get timeline_plan_path(@plan_id)
+
+      [ @payments, @growth ].each do |unit|
+        assert_select "button[data-modal-target-id='move-person-modal-1'][data-move-from='#{unit}'][data-move-allocation='50']"
+      end
+    end
+
+    should "count a place in a retired unit in the share the timeline's dialog keeps, as the map does" do
+      retired = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.create_unit(retired, "Legacy", level_id: @level, effective_on: "2026-01-01")
+        graph = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        graph.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-01-03", allocation: nil)
+        graph.set_membership(@ada.id, retired, **ESPALIA, effective_on: "2026-01-03", allocation: 0.5)
+        @plan_id = call(Operations::TeamPlanning::CreatePlan, @editor, name: "Retiring", base_on: "2026-11-14")[:plan_id]
+        q1 = call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")[:scenario_id]
+        call(Operations::TeamPlanning::RetireUnit, @editor, plan_id: @plan_id, scenario_id: q1, unit_id: retired)
+      end
+
+      get timeline_plan_path(@plan_id)
+
+      assert_select "button[data-modal-target-id='move-person-modal-1'][data-move-from='#{@payments}'][data-move-allocation='50']"
+    end
+
+    should "give each step on the timeline its own move dialog and field ids" do
+      get timeline_plan_path(@plan_id)
+
+      assert_select "#move-person-modal-1 select#move-to-1"
+      assert_select "#move-person-modal-1 input[name='return_to'][value='#{timeline_plan_path(@plan_id, scenario: @q1, step: 0)}']"
+      assert_select "#move-person-modal-0", count: 0
+      assert_select "#move-person-modal", count: 0
     end
 
     should "refuse Today and say why" do
