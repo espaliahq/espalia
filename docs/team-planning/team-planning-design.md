@@ -539,6 +539,10 @@ same days, so the two compare ([#288](https://github.com/espaliahq/espalia/issue
 The baseline has no period of its own, so it is never the scenario costed.
 `team_planning_cost` sends the totals, each unit and each cost centre, and the working of
 every seat only for a unit the caller names.
+`team_planning_scenario_costs` sends only the totals, for every scenario at once, reading
+the Org Graph once for the plan: the Scenarios table's Cost column reads it
+([#316](https://github.com/espaliahq/espalia/issues/316)). A single cost read also reads
+it once, for the scenario and the baseline together.
 
 - **A seat** is a person, or the FTE a position's occupants leave open, as capacity counts it.
 - **Its level** is the person's own, a planned one winning. When theirs resolves to none,
@@ -569,6 +573,18 @@ rounds. Plans reprice live: a changed band changes every plan's cost, and the re
 when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
 time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
 to a rate, reprices plans too but does not move the stamp.
+
+#### Cost on screen
+
+A scenario's map opens with a Cost strip: its total, the difference from Today over the
+same days, the period and what it is priced at, what sits in no unit on the map, and a
+list of the seats left out. Each unit card shows its own places' cost beside its name.
+The units and the no-unit figure add up to the strip's total, and the Scenarios table's
+Cost column shows that same total. Today's row reads "No period of its own", and Today's
+map shows no cost. The strip and column appear only once a band prices something, and a
+scenario that can't be priced keeps its map and reads "Can't be priced" in the table.
+Figures round to three significant figures (`Views::Plans::CostMarks::Format`); no band
+minimum or maximum shows on either page.
 
 ### The see-pay right as built
 

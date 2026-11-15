@@ -25,10 +25,11 @@ class TeamPlanning::Resolution
     @repository = repository
   end
 
+  # @param aggregate [TeamPlanning::PlanAggregate] the plan as loaded
   # @return [TeamPlanning::Baseline::Map] with names joined
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call = @baseline.named(structure)
+  def call(aggregate = @repository.load_plan(@plan.id)) = @baseline.named(structure(aggregate))
 
   # @param aggregate [TeamPlanning::PlanAggregate] the plan as loaded; a write
   #   passes the one it holds under the lock
