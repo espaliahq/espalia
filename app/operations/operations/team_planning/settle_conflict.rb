@@ -32,9 +32,27 @@ class Operations::TeamPlanning::SettleConflict < Operations::Base
     plan_id = plan_id!
     scenario_id = scenario_id!(:scenario_id)
     key = { subject_id: params[:subject_id], facet: params[:facet] }
-    refusing_bad_plans { handler.settle_conflict(plan_id, scenario_id:, **key, choice: params[:choice], note: params[:note]) }
+    refusing_bad_plans do
+      ensure_conflicting!(plan_id, scenario_id, key)
+      handler.settle_conflict(plan_id, scenario_id:, **key, choice: params[:choice], note: params[:note])
+    end
     { plan_id:, scenario_id:, **key, choice: params[:choice] }
   rescue PlanKeyStore::Destroyed
-    raise ParameterError, "This change's person has been forgotten, so its note can't be kept"
+    raise ParameterError, "This change's person has been forgotten, so it can't be settled"
+  end
+
+  private
+
+  # The plan remembers which conflicts an update carried forward, but only
+  # status knows whether the Org Graph has since caught up, or the person was forgotten.
+  def ensure_conflicting!(plan_id, scenario_id, key)
+    plan = TeamPlanningPlan.includes(:members).find_by(id: plan_id)
+    raise ::TeamPlanning::Error, "No such plan" unless plan && PlanPolicy.new(context, plan).update?
+
+    report = ::TeamPlanning::Status.new(context:, plan:, scenario_id:).call
+    entry = report.statuses.find { it.subject_id == key[:subject_id] && it.facet.to_s == key[:facet] }
+    return if entry&.status.to_s == "conflicting"
+
+    raise ::TeamPlanning::Error, "Status doesn't read this as conflicting, so there is nothing to settle"
   end
 end

@@ -116,4 +116,13 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
     rebase
     assert_match(/choice must be one of \["plan", "reality"\], got "keep"/, refusal { settle(@q1, "keep") })
   end
+
+  should "refuse a carried conflict the Org Graph has since caught up with" do
+    rebase
+    travel_to(Time.utc(2026, 3, 26, 9)) { as_tenant { @org.change_level(@brook.id, "4", **ESPALIA, effective_on: "2026-03-26") } }
+    travel_to Time.utc(2026, 3, 28, 9)
+    assert_equal "done", brook(@q1)[:status].to_s
+
+    assert_equal "Status doesn't read this as conflicting, so there is nothing to settle", refusal { settle(@q1, "plan") }
+  end
 end
