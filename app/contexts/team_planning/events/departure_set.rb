@@ -25,6 +25,10 @@ class TeamPlanning::Events::DepartureSet < TeamPlanning::Events::Change
   # @return [String]
   def self.facet = "departure"
 
+  # @param data [Hash]
+  # @return [Array<String>] the backfill, if any
+  def self.refers_to(data) = [ data[:position_id] ].compact
+
   # @param end_state [Hash] `{ leaves_in_id:, position_id:, leaves_on: }`, the position nil or absent
   #   for no backfill, the date absent when the step is the date
   # @return [Hash] the ids downcased, and `leaves_on` only when given

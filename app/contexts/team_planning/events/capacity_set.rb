@@ -29,6 +29,10 @@ class TeamPlanning::Events::CapacitySet < TeamPlanning::Events::Change
   # @return [String]
   def self.facet = "capacity"
 
+  # @param data [Hash]
+  # @return [Array<String>] the place the amount is for
+  def self.refers_to(data) = data.values_at(:position_id, :unit_id).compact
+
   # @param end_state [Hash] `{ position_id or unit_id, amount }`
   # @return [Hash] the place downcased, the amount a decimal string
   # @raise [TeamPlanning::Error] for a place in both a position and a unit, or neither, or an amount

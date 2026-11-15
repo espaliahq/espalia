@@ -21,6 +21,10 @@ class TeamPlanning::Events::ReportingLineSet < TeamPlanning::Events::Change
   # @return [String]
   def self.facet = "reporting_line"
 
+  # @param data [Hash]
+  # @return [Array<String>] the manager or the position they report to
+  def self.refers_to(data) = data.values_at(:manager_id, :manager_position_id).compact
+
   # @param end_state [Hash] `{ manager_id: }`, `{ manager_position_id: }`, or neither for no manager
   # @return [Hash] both keys, the ids downcased, one or both nil
   # @raise [TeamPlanning::Error] when both are given

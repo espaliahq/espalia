@@ -97,6 +97,16 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [Boolean]
   def self.shows?(read, planned, map:) = same_end_state?(read, planned)
 
+  # The ids besides its subject that this change needs on the map, so a split
+  # can tell when the agreed part can't stand without the rest.
+  #
+  # @param data [Hash] the stored event data
+  # @return [Array<String>]
+  def self.refers_to(data) = []
+
+  # @return [Boolean] whether this kind can bring its subject into the plan, as a new unit, position or hire
+  def self.creates_subject? = false
+
   # @return [Boolean] whether this kind seals a field of its end state, beyond the note any change may carry
   def self.seals_end_state? = (shreddable_fields.keys - FIELDS).any?
 
