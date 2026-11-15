@@ -7,6 +7,28 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
   SYSTEM = OrgGraph::Authorization::SYSTEM
   BASE_ON = Date.new(2026, 1, 1)
 
+  # Test-only forecast kinds, standing in for those 10.2 to 10.4 add.
+  class Hiring < TeamPlanning::ForecastKind
+    def self.rule_name = "test_hiring"
+    def self.description = "What each unit's forecast hires cost"
+    def self.default = { "per_unit" => "0" }
+
+    def self.forecast(frame)
+      frame.map.units.filter_map do |unit|
+        per_unit = Rational(frame.rule_at(unit.id)["per_unit"])
+        frame.row(unit_id: unit.id, cost_centre: "CC-F", headcount: 1r, cost: { "NZD" => per_unit }, capacity: { "per_fte" => 1r }) if per_unit.positive?
+      end
+    end
+  end
+
+  class Leaving < TeamPlanning::ForecastKind
+    def self.rule_name = "test_leaving"
+    def self.description = "A tenth of everyone no planned change covers leaves"
+    def self.default = {}
+
+    def self.forecast(frame) = frame.map.people.reject { frame.covered?(it.id) }.map { frame.row(unit_id: nil, headcount: Rational(-1, 10)) }
+  end
+
   setup do
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
@@ -77,6 +99,24 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
   end
 
   def lines(priced, seat_id) = priced.lines.select { it.seat_id == seat_id }
+
+  def with_kinds(*kinds)
+    kinds.each { TeamPlanning::RuleKinds.register(it) }
+    yield
+  ensure
+    kinds.each { TeamPlanning::RuleKinds.unregister(it) }
+  end
+
+  def add_up(parts) = [ parts.actual, parts.planned, parts.forecast ].reduce { TeamPlanning::Cost.plus(_1, _2) }
+
+  # A part may name a currency at zero that the total doesn't.
+  def assert_adds_up(parts, message = nil)
+    sum = add_up(parts)
+    (sum.native.keys | parts.total.native.keys).each do |currency|
+      assert_equal parts.total.native.fetch(currency, 0r), sum.native.fetch(currency, 0r), "#{message} #{currency}"
+    end
+    assert_equal parts.total.converted, sum.converted, message
+  end
 
   def amounts(priced, seat_id) = lines(priced, seat_id).map(&:amount)
 
@@ -333,5 +373,105 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal [ @plan_id, @year, half ], reports.keys
     ada = reports[half].baseline.lines.find { it.seat_id == @ada.id }
     assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 6, 30), Rational(181, 365) ], [ ada.held, ada.share ]
+  end
+
+  context "actual, planned and forecast" do
+    setup do
+      @moved = operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { unit_id: @payments, allocation: 1 } ])
+      open_position(unit_id: @payments, fte: 0.5)
+    end
+
+    should "add up to every total exactly, per unit, unit with those below, cost centre and plan" do
+      with_kinds(Hiring) do
+        operation(Operations::TeamPlanning::SetRule, rule: "test_hiring", value: { per_unit: "1000" })
+        report = cost
+
+        assert_equal 2, report.forecast.rows.size
+        assert_equal({ "NZD" => 2000r }, report.parts.forecast.native)
+        assert_equal 1000r, report.parts.forecast.converted
+        assert_equal report.scenario.total.converted + 1000r, report.parts.total.converted
+        assert_adds_up report.parts, "plan"
+        [ :units, :units_with_below, :cost_centres ].each do |scope|
+          keys = [ report.scenario, report.baseline, report.forecast ].flat_map { it.public_send(scope).keys }.uniq
+          keys.each { assert_adds_up report.parts(scope, it), "#{scope} #{it}" }
+        end
+        assert_equal report.parts.total.converted, [ nil, @engineering ].sum { report.parts(:units_with_below, it).total.converted || report.parts(:units, it).total.converted },
+                     "no unit and Engineering with those below hold the whole plan"
+      end
+    end
+
+    should "have no forecast with no forecast kind, and planned the difference from Today in every total" do
+      report = cost
+
+      assert_empty report.forecast.rows
+      [ [ :total, nil ], [ :units, @engineering ], [ :units, @payments ], [ :units_with_below, @engineering ], [ :cost_centres, "CC-1" ], [ :cost_centres, nil ] ].each do |scope, key|
+        parts = scope == :total ? report.parts : report.parts(scope, key)
+        scenario, baseline = [ report.scenario, report.baseline ].map { scope == :total ? it.total : it.public_send(scope)[key] }
+        assert_equal TeamPlanning::Cost.difference(scenario, baseline), parts.planned, "#{scope} #{key}"
+        assert_equal [ {}, 0r ], [ parts.forecast.native, parts.forecast.converted ]
+        assert_equal scenario, parts.total
+      end
+      assert_equal report.difference, TeamPlanning::Cost.plus(report.parts.planned, report.parts.forecast)
+    end
+
+    should "keep someone moved as actual in the old unit with a negative planned there, and positive planned in the new" do
+      report = cost
+      engineering, payments = [ @engineering, @payments ].map { report.parts(:units, it) }
+
+      assert_equal 100_000r + 41_600r, engineering.actual.native["EUR"], "Ada and half of Brook, at the base date"
+      assert_equal(-100_000r, engineering.planned.native["EUR"])
+      assert_equal 150_000r, payments.planned.native["EUR"], "Ada, and the half-time position"
+      assert_equal 50_000r, report.parts.planned.native["EUR"], "the move nets to nothing; only the position is new"
+      assert_equal report.parts(:units_with_below, @engineering).planned.native["EUR"], report.parts.planned.native["EUR"]
+    end
+
+    should "be all actual for Today's run rate" do
+      with_kinds(Hiring) do
+        operation(Operations::TeamPlanning::SetRule, scenario_id: @plan_id, rule: "test_hiring", value: { per_unit: "1000" })
+        parts = cost(@plan_id).parts
+
+        assert_equal [ cost(@plan_id).scenario.total ] * 2, [ parts.actual, parts.total ]
+        assert_equal [ {}, {} ], [ parts.planned.native, parts.forecast.native ]
+        assert_empty cost(@plan_id).forecast.rows, "Today has no period, so no step to forecast"
+      end
+    end
+  end
+
+  context "the forecast frame" do
+    should "forecast a row per unit and step with no id, person or position, writing nothing" do
+      with_kinds(Hiring) do
+        operation(Operations::TeamPlanning::SetRule, unit_id: @payments, rule: "test_hiring", value: { per_unit: "500" })
+        log = -> { as_tenant { TeamPlanning::Repository.new.load_plan(@plan_id).log_of(@year).map(&:event_id) } }
+        before = log.()
+        rows = nil
+        assert_no_difference(-> { Rails.configuration.event_store.read.count }) { rows = cost.forecast.rows }
+
+        assert_equal [ [ "test_hiring", @payments, BASE_ON, Date.new(2026, 12, 31), { "NZD" => 500r } ] ],
+                     rows.map { it.to_h.values_at(:kind, :unit_id, :starts_on, :ends_on, :cost) }, "the scenario's period is the one step"
+        assert_empty TeamPlanning::Forecast::Row.members & %i[id event_id subject_id person_id position_id]
+        assert_equal before, log.(), "nothing joins the change list"
+      end
+    end
+
+    should "leave out of a forecast anyone a planned change in the scenario's chain covers" do
+      with_kinds(Leaving) do
+        assert_equal 4, cost.forecast.rows.size
+        operation(Operations::TeamPlanning::SetDeparture, scenario_id: @plan_id, person_id: @cy.id)
+        child = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, parent_id: @year, relation: "then", name: "2027",
+                                                                  ends_on: "2027-12-31")[:scenario_id]
+        operation(Operations::TeamPlanning::SetDeparture, person_id: @dee.id)
+
+        assert_equal 2, cost(child).forecast.rows.size, "Cy leaves in the baseline and Dee in its parent"
+        assert_equal Rational(-2, 10), cost(child).forecast.rows.sum(&:headcount)
+      end
+    end
+
+    should "only hold forecast kinds among the rule kinds that forecast" do
+      with_kinds(Hiring) do
+        assert_includes TeamPlanning::RuleKinds.forecasts, Hiring
+        assert_equal [ Hiring ], TeamPlanning::RuleKinds.forecasts, "no built-in kind forecasts yet"
+        assert_includes TeamPlanning::RuleKinds.all, Hiring
+      end
+    end
   end
 end

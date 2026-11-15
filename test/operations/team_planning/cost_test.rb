@@ -54,7 +54,10 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal [ "EUR", "2025-12-15T09:00:00Z" ], result.values_at(:reference_currency, :bands_changed_at)
     assert_equal({ scenario: { native: { "EUR" => "150000" }, converted: "150000", missing: [] },
                    baseline: { native: { "EUR" => "100000" }, converted: "100000", missing: [] },
-                   difference: { native: { "EUR" => "50000" }, converted: "50000", missing: [] } }, result[:total])
+                   difference: { native: { "EUR" => "50000" }, converted: "50000", missing: [] },
+                   parts: { actual: { native: { "EUR" => "100000" }, converted: "100000", missing: [] },
+                            planned: { native: { "EUR" => "50000" }, converted: "50000", missing: [] },
+                            forecast: { native: {}, converted: "0", missing: [] } } }, result[:total])
 
     payments = result[:units].find { it[:unit_id] == @payments }
     assert_equal [ "Payments", "150000", "150000" ], [ payments[:name], payments[:scenario][:converted], payments[:with_below][:scenario][:converted] ]
