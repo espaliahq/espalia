@@ -62,6 +62,7 @@ class TeamPlanning::Projections::Scenarios
   def split(event)
     data = event.data
     original = TeamPlanningScenario.find_by(id: data[:scenario_id]) or return
+    return if TeamPlanningScenario.exists?(id: data[:agreed_id])
 
     write(data[:agreed_id], event, **original.slice(:plan_id, :parent_id, :relation, :starts_on, :ends_on).symbolize_keys,
                                    name: data[:name], forked_by_id: data[:split_by_id])

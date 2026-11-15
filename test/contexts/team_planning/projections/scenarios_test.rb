@@ -120,6 +120,19 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
     assert_empty periods
   end
 
+  should "read a split delivered twice as it read once" do
+    q1 = fork(ends_on: "2027-03-31")
+    agreed = split(q1)
+    tree = -> { TeamPlanningScenario.where(plan_id: @plan_id).order(:id).map { [ it.id, it.parent_id, it.relation, it.ends_on ] } }
+    once = tree.call
+
+    event = Rails.configuration.event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).of_type(TeamPlanning::Events::ScenarioSplit).last
+    TeamPlanning::Projections::Scenarios.new.call(event)
+
+    assert_equal once, tree.call
+    assert_equal [ @plan_id, "then" ], TeamPlanningScenario.find(agreed).slice(:parent_id, :relation).values
+  end
+
   should "put a split's agreed part in the original's place, with the original on it over the same period" do
     q1 = fork(ends_on: "2027-03-31")
     q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")
