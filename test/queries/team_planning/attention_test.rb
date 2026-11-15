@@ -173,6 +173,20 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ [ report.id, left ] ], items.map { [ it.subject_id, it.change ] }
   end
 
+  should "name the move of the position a manager sits in when it parts them from a report" do
+    far = SecureRandom.uuid_v7
+    seat = B::Position.new(id: SecureRandom.uuid_v7, role_id: nil, level_id: LEVEL, unit_id: far, fte: 1.0, basis: "new",
+                           role_name: nil, level_name: nil)
+    lead = member(SecureRandom.uuid_v7, places: [], manager_id: PERSON)
+      .then { it.with(memberships: [ B::Membership.new(unit_id: far, allocation: 1, role: nil, position_id: seat.id) ]) }
+    report = member(SecureRandom.uuid_v7, manager_id: lead.id)
+    moved = change(TeamPlanning::Events::PositionSet, seat.id, role_id: nil, level_id: LEVEL, unit_id: far, fte: 1.0, basis: "new")
+
+    items = TeamPlanning::Attention.new(map(units: [ unit(ROOT, nil), unit(LIVE, ROOT), unit(far, ROOT) ], positions: [ seat ],
+                                            people: [ member, lead, report ]), { moved.key => moved }).call
+    assert_equal [ [ report.id, moved ] ], items.select { it.facet == "reporting_line" }.map { [ it.subject_id, it.change ] }
+  end
+
   should "mark a manager or a manager's position that is no longer in the scenario" do
     position = B::Position.new(id: SecureRandom.uuid_v7, role_id: nil, level_id: LEVEL, unit_id: ROOT, fte: 1.0, basis: "new",
                                role_name: nil, level_name: nil)

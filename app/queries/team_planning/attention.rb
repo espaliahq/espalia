@@ -153,9 +153,16 @@ class TeamPlanning::Attention
     @map.people.filter_map do |person|
       next unless (reason = manager_reason(person, by_id, positions, heads))
 
-      units = UNSHARED.include?(reason) ? near_units(person).map { [ it, UNIT ] } : []
-      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *units, *manager_keys(person.line) ])
+      placing = UNSHARED.include?(reason) ? placing_keys(person, by_id[person.line.person_id]) : []
+      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *placing, *manager_keys(person.line) ])
     end
+  end
+
+  # A seat in a position sits in the position's unit, so moving the position
+  # can part a report from their manager as surely as moving either of them.
+  def placing_keys(person, manager)
+    seats = [ person, manager ].compact.flat_map(&:memberships).filter_map { [ it.position_id, POSITION ] if it.position_id }
+    [ *near_units(person).map { [ it, UNIT ] }, *seats ]
   end
 
   def manager_keys(line)
