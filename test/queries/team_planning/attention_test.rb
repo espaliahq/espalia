@@ -66,11 +66,11 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                    "s1" => "Risk, A removed unit → Payments", forgotten_seat => Person::FORMER_MEMBER }, TeamPlanning::Attention.names_of(named, items))
   end
 
-  should "number positions alike in one unit the way the map does" do
+  should "number positions alike in one unit the way the map does, for a funding item too" do
     alike = %w[p1 p2].map { B::Position.new(id: it, role_id: nil, level_id: nil, unit_id: LIVE, fte: 1, basis: "backfill", role_name: "Engineer", level_name: nil) }
     elsewhere = B::Position.new(id: "p3", role_id: nil, level_id: nil, unit_id: ROOT, fte: 1, basis: "backfill", role_name: "Engineer", level_name: nil)
     named = map(positions: alike + [ elsewhere ])
-    items = [ [ "p1", "position" ], [ "p2", "capacity:#{LIVE}" ], [ "p3", "position" ] ]
+    items = [ [ "p1", "position" ], [ "p2", "capacity:#{LIVE}" ], [ "p3", "funding" ] ]
             .map { |subject_id, facet| TeamPlanning::Attention::Item.new(subject_id:, facet:, reason: "", change: nil) }
 
     assert_equal({ "p1" => "Backfill: Engineer (1)", "p2" => "Backfill: Engineer (2)", "p3" => "Backfill: Engineer" },

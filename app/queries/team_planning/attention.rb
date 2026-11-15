@@ -96,7 +96,7 @@ class TeamPlanning::Attention
       name = case item.facet.split(":").first
       when *PERSON_FACETS then map.name_of(id)
       when UNIT then units[id]
-      when POSITION then positions[id]
+      when POSITION, FUNDING then positions[id]
       when SUCCESSION then successions[id]&.then { succession_name(it, units) }
       when CAPACITY then positions[id] || map.name_of(id)
       end
