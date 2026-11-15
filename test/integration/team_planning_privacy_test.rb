@@ -67,6 +67,12 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
   should "open every plan read to its members, so the walk above refuses for the right reason" do
     [ @editor, @viewer ].each do |member|
       OPERATIONS.call.select { it.parameters.key?(:plan_id) && it.category == :read }.each do |operation|
+        # The units a plan may widen to are for its editors, who alone may widen it.
+        if operation == Operations::TeamPlanning::CoverableUnits && member == @viewer
+          assert_raises(Operations::Base::ParameterError) { operation.call(context: context_for(member), params: params_for(operation)) }
+          next
+        end
+
         assert_includes operation.call(context: context_for(member), params: params_for(operation)).to_json, @plan_id
       end
     end

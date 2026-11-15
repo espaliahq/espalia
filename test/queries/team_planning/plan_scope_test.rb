@@ -81,9 +81,11 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
 
   def person(payload, person) = payload[:people].find { it[:id] == person.id }
 
+  # The picker that widens a plan names every unit by design, and no person.
   def plan_reads
     Operations::Registry.all.select do |operation|
       operation.name.start_with?("Operations::TeamPlanning::") && operation.category == :read &&
+        operation != Operations::TeamPlanning::CoverableUnits &&
         operation.parameters.values.select(&:required).map(&:name).difference(%i[plan_id scenario_id]).empty?
     end
   end
