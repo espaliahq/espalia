@@ -29,6 +29,8 @@ class TeamPlanning::Repository
       end
     end
     plan
+  ensure
+    CurrentPlanReads.memo&.clear
   end
 
   # Holds the plan's lock while the block runs, so a write that first reads the

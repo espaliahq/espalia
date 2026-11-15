@@ -18,6 +18,7 @@ class TeamPlanning::Resolution
   #   read by a caller resolving several scenarios over the same one
   def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil)
     @baseline = TeamPlanning::Baseline.new(context:, plan:)
+    @context = context
     @base = base
     @plan = plan
     @scenario_id = scenario_id
@@ -27,7 +28,24 @@ class TeamPlanning::Resolution
   # @return [TeamPlanning::Baseline::Map] with names joined
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call = @baseline.named(structure)
+  def call = CurrentPlanReads.fetch([ :scenario, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @scenario_id ]) { @baseline.named(structure) }
+
+  # Reuses every scenario and baseline read inside the block, so a page that
+  # shows a scenario's map and prices it, beside the baseline's, reads the
+  # Org Graph once. A plan write empties it ({TeamPlanning::Repository#with_plan}).
+  #
+  # @yield the unit of work
+  # @return [Object] what the block returns
+  def self.reusing
+    return yield if CurrentPlanReads.memo
+
+    begin
+      CurrentPlanReads.memo = {}
+      yield
+    ensure
+      CurrentPlanReads.memo = nil
+    end
+  end
 
   # @param aggregate [TeamPlanning::PlanAggregate] the plan as loaded; a write
   #   passes the one it holds under the lock
