@@ -280,10 +280,9 @@ class TeamPlanning::Cost
   end
 
   def paid(pay, seat)
-    amount = exact(pay["amount"])
     hours = hours_at(seat[:unit_id]) if pay["period"] == "hour"
     Line.new(**seat, **UNPRICED, currency: pay["currency"], pay_source: "actual", basis: pay["basis"], hours_per_year: hours,
-                     yearly: hours ? amount * hours : amount * PayBand::PER_YEAR.fetch(pay["period"]), reason: nil)
+                     yearly: PayBand.yearly(exact(pay["amount"]), period: pay["period"], hours_per_year: hours), reason: nil)
   end
 
   def hours_at(unit_id) = TeamPlanning::RuleKinds::WorkingHours.hours_per_year(rule_at("working_hours", unit_id))
