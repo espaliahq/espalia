@@ -119,6 +119,11 @@ class Mcp::ApprovalsController < ApplicationController
     ActsAsTenant.with_tenant(@approval.tenant) do
       @approval.operation.approval_notice(context: approval_context(@approval), params: @approval.arguments)
     end
+  rescue StandardError => e
+    # The notice is a courtesy; a failure in it must not keep the user from
+    # approving or rejecting.
+    Rails.logger.error("[mcp_approval] notice failed: #{e.class}")
+    nil
   end
 
   def stale_alert

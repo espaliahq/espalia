@@ -4,7 +4,8 @@ require "test_helper"
 
 # Removing a scenario over MCP waits for approval in the app. An editor who
 # cannot see pay learns, by count alone, that the scenario holds pay changes
-# their removal takes with it (#322).
+# their removal takes with it
+# ([#322](https://github.com/espaliahq/espalia/pull/322)).
 class ScenarioRemovalApprovalTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
@@ -55,6 +56,15 @@ class ScenarioRemovalApprovalTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_not_includes response.body, "you can&#39;t see"
+  end
+
+  should "still show the page when the notice fails" do
+    approval = ask_over_mcp(@editor)
+    sign_in @editor.user
+    Operations::TeamPlanning::RemoveScenario.stub(:approval_notice, ->(**) { raise "boom" }) { get mcp_approval_path(approval) }
+
+    assert_response :success
+    assert_includes response.body, "Approve"
   end
 
   private
