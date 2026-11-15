@@ -5,7 +5,7 @@
 //      data-action="keydown.esc@window->dropdown#close">
 //   <button data-action="dropdown#toggle"
 //           data-dropdown-target="trigger">Menu</button>
-//   <div data-dropdown-target="menu" class="hidden">
+//   <div data-dropdown-target="menu" hidden>
 //     <!-- menu items -->
 //   </div>
 // </div>
@@ -17,7 +17,7 @@
 // its trigger while open in this mode (it would otherwise detach from it).
 
 import BaseController from "controllers/base_controller"
-import { useClickOutside, useTransition } from "stimulus-use"
+import { useClickOutside } from "stimulus-use"
 
 export default class extends BaseController {
   static targets = ["menu", "trigger"]
@@ -29,7 +29,6 @@ export default class extends BaseController {
   connect() {
     super.connect()
     useClickOutside(this)
-    useTransition(this, { element: this.menuTarget })
     this._onAnyScroll = this.#onAnyScroll.bind(this)
     // A menu item that opens a modal leaves this menu open behind it — and the
     // menu (z-50) outranks the overlay (z-40), so it renders over the dialog it
@@ -46,9 +45,10 @@ export default class extends BaseController {
 
   toggle() {
     this._toggling = true
-    const opening = this.menuTarget.classList.contains("hidden")
+    const opening = this.menuTarget.hidden
     if (this.fixedValue && opening) this.#positionFixed()
-    this.toggleTransition()
+    // Synchronous: a hide deferred over frames lets a toggle read the menu as still open.
+    this.menuTarget.hidden = !opening
     if (this.fixedValue) {
       if (opening) {
         window.addEventListener("scroll", this._onAnyScroll, true)
@@ -64,22 +64,20 @@ export default class extends BaseController {
   }
 
   close() {
-    this.leave()
+    this.menuTarget.hidden = true
     window.removeEventListener("scroll", this._onAnyScroll, true)
     this.#setExpanded(false)
   }
 
   clickOutside() {
     if (this._toggling) return
-    this.leave()
-    window.removeEventListener("scroll", this._onAnyScroll, true)
-    this.#setExpanded(false)
+    this.close()
   }
 
   // private
 
   #onModalOpen() {
-    if (this.menuTarget.classList.contains("hidden")) return
+    if (this.menuTarget.hidden) return
 
     this.close()
   }
@@ -91,7 +89,7 @@ export default class extends BaseController {
   // A scroll's event fires a frame late, so a scroll that brought the trigger
   // into view can arrive after the menu opened: close only once it has moved.
   #onAnyScroll(event) {
-    if (this.menuTarget.classList.contains("hidden")) return
+    if (this.menuTarget.hidden) return
     if (event && this.menuTarget.contains(event.target)) return
     if (!this.#triggerMoved()) return
     this.close()
@@ -123,7 +121,7 @@ export default class extends BaseController {
 
   #clampFixed() {
     const menu = this.menuTarget
-    if (menu.classList.contains("hidden")) return
+    if (menu.hidden) return
 
     // Horizontal re-clamp with the menu's REAL width — #positionFixed ran
     // before the menu was visible and guessed w-56.
@@ -148,9 +146,6 @@ export default class extends BaseController {
     }
   }
 
-  // Set from intent, not from the menu's `hidden` class: useTransition only
-  // adds `hidden` once the leave transition ends, so reading it here left
-  // aria-expanded "true" after every close.
   #setExpanded(expanded) {
     if (this.hasTriggerTarget) this.triggerTarget.setAttribute("aria-expanded", expanded)
   }
