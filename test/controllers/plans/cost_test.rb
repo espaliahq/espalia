@@ -94,6 +94,7 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     assert_equal [ "yearly run rate", nil ], [ page.at_css("[data-cost-run-rate]").text, page.at_css("[data-cost-change]") ]
     assert_includes page.at_css("[data-cost-strip]").text, "priced for 1 Jan 2026 to 31 Dec 2026"
     assert_equal [ "EUR 100k a year" ], page.css("[data-cost-unit] .font-medium").map(&:text)
+    assert_includes page.at_css("[data-cost-outside]").text, "Of this, EUR 100k a year is in no unit"
     assert_not_includes page.at_css("main").text, "vs Today"
   end
 

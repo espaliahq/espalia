@@ -32,8 +32,10 @@ class Views::Plans::CostStrip < Views::Base
 
   def total = @marks.total
 
-  def figure
-    text = Format.sum(total[:scenario], reference)
+  def figure = figure_of(total[:scenario])
+
+  def figure_of(sum)
+    text = Format.sum(sum, reference)
     @marks.run_rate? ? Format.yearly(text) : text
   end
 
@@ -76,7 +78,7 @@ class Views::Plans::CostStrip < Views::Base
     return unless row
 
     p(data: { cost_outside: "" }, class: "text-sm text-muted") do
-      "Of this, #{Format.sum(row[:scenario], reference)} is in no unit on the map: someone in no unit, or a place in a unit gone by this date."
+      "Of this, #{figure_of(row[:scenario])} is in no unit on the map: someone in no unit, or a place in a unit gone by this date."
     end
   end
 
