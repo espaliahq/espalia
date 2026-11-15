@@ -37,8 +37,10 @@ class TeamPlanning::Attention
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
-  def initialize(map, changes)
+  # @param closed_units [Hash{String => String}] the unit of each position the scenario closed
+  def initialize(map, changes, closed_units: {})
     @map = map
+    @position_units = closed_units.merge(map.positions.to_h { [ it.id, it.unit_id ] })
     @changes = changes
     @order = changes.keys.each_with_index.to_h
     @live = map.units.to_set(&:id)
@@ -118,11 +120,12 @@ class TeamPlanning::Attention
   def units_touched(subject_id, facet, broken_by)
     own = case facet
     when UNIT then [ subject_id ]
-    when POSITION then [ @map.positions.find { it.id == subject_id }&.unit_id ]
+    when POSITION then [ @position_units[subject_id] ]
     when SUCCESSION then @map.successions.find { it.id == subject_id }&.then { it.predecessor_ids + it.successor_ids }
     else []
     end
-    (own.to_a + broken_by.filter_map { |id, broken| id if broken == UNIT }).compact.uniq
+    broken = broken_by.filter_map { |id, kind| { UNIT => id, POSITION => @position_units[id] }[kind] }
+    (own.to_a + broken).compact.uniq
   end
 
   def gone(unit_id) = @retired.include?(unit_id) ? "a retired unit" : "a unit no longer in this scenario"

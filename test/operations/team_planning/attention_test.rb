@@ -131,6 +131,27 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal({ @newcomer.id => %w[hibob], @ada.id => %w[espalia], @bo.id => %w[espalia] }, sources)
   end
 
+  def hibob_unit
+    division, unit = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      structure.define_taxonomy([ { level_id: division, name: "Division", provider: "hibob" }, { level_id: @department, name: "Department" },
+                                  { level_id: @squad, name: "Squad" }, { level_id: @team, name: "Team" } ], effective_on: "2026-01-01")
+      structure.create_unit(unit, "Sales", level_id: division, provider: "hibob", external_ref: "div-1", effective_on: "2026-01-01")
+    end
+    unit
+  end
+
+  def sources_of(subject_id, facet) = attention[:items].find { it.values_at(:subject_id, :facet) == [ subject_id, facet ] }[:sources]
+
+  should "name the unit of a position an earlier step closed" do
+    position = open_position(@q1, unit_id: hibob_unit)
+    assign(@q2, @bo, { position_id: position, allocation: 1 })
+    write(Operations::TeamPlanning::ClosePosition, @q1, position_id: position)
+
+    assert_equal %w[hibob], sources_of(@bo.id, "assignment")
+  end
+
   should "read the baseline when no scenario is given" do
     write(Operations::TeamPlanning::RetireUnit, @plan_id, unit_id: @payments)
 
