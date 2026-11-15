@@ -25,10 +25,12 @@ class TeamPlanning::RuleKinds::CostCentre < TeamPlanning::RuleKind
   # @return [Hash]
   def self.json_schema
     rule = { type: "object", required: [ "cost_centre" ], additionalProperties: false,
+             description: "Names at least one of unit_id, role_id and role_family_id, and never both role_id and role_family_id",
              properties: { unit_id: { type: "string", description: "A unit, matching it and every unit below it" },
                            role_id: { type: "string" }, role_family_id: { type: "string", description: "Not with role_id" },
-                           cost_centre: { type: "string", maxLength: TeamPlanning::Events::PositionSet::COST_CENTRE_LENGTH } } }
-    { type: "object", properties: { rules: { type: "array", items: rule, maxItems: MAX_RULES } } }
+                           cost_centre: { type: "string", maxLength: TeamPlanning::Events::PositionSet::COST_CENTRE_LENGTH } },
+             anyOf: MATCHERS.map { { required: [ it ] } }, not: { required: %w[role_id role_family_id] } }
+    { type: "object", additionalProperties: false, properties: { rules: { type: "array", items: rule, maxItems: MAX_RULES } } }
   end
 
   # @param value [Hash] with string keys
