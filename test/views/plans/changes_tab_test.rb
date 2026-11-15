@@ -89,6 +89,16 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_not_includes row.text, "Meets the plan in"
     end
 
+    should "link the scenario a child inherits its conflict from, which settling in the child leaves alone" do
+      meets = [ { scenario_id: PLAN, change_id: "c9", facet: "level", subject_id: BO } ]
+      inherited = { scenario_id: PLAN, change_id: "c9", subject_id: BO, facet: "level", status: "conflicting", since: "2026-11-21", sources: %w[espalia] }
+      html = render_tab(changes: [ drift_change("fact_changed", person_id: BO, fact: "level", meets:) ], statuses: [ inherited ], can_edit: true)
+
+      settle = html.at_css("[data-drift-settle='#{Q1}']")
+      assert_equal %w[plan reality], settle.css("button").map { it["value"] }
+      assert_equal [ "/planning/#{PLAN}/changes" ], settle.css("[data-drift-settle-elsewhere='1'] a").map { it["href"] }
+    end
+
     should "offer no drift-row buttons for a live conflict or to a viewer" do
       meets = [ { scenario_id: Q1, change_id: "c2", facet: "level", subject_id: BO } ]
       drift = [ drift_change("fact_changed", person_id: BO, fact: "level", meets:) ]

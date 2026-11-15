@@ -122,7 +122,7 @@ class Views::Plans::ChangesTab < Views::Base
     div(class: "space-y-1", data: { drift_settle: scenario_id }) do
       p(class: "text-xs text-muted") { "Conflicts with the plan in #{scenario_name(scenario_id)}." }
       carried.each { settle(it) }
-      others = meets.map { it[:scenario_id] }.uniq - carried.map { it[:scenario_id] } - [ scenario_id ]
+      others = meets.map { it[:scenario_id] }.uniq - [ scenario_id ]
       other_scenarios(others) if others.any?
     end
   end
