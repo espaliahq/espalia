@@ -1056,6 +1056,28 @@ period, and whichever of role, level and location the budget line states. `Posit
 the exception only: a position funded from another centre, or split across budget lines. A position no
 budget line matches is unfunded.
 
+As built in 6.3 ([#345](https://github.com/espaliahq/espalia/issues/345)): `team_planning_funding`
+reads it for a scenario, never the baseline, which has no period. A line matches when its cost
+centre is blank or the position's, its period overlaps the days the position is held, and each of
+role, level and location it states is the position's. A line with no cost centre matches any
+position and is the least specific; past that, the more of role, level and location a line
+states, the more specific. Two choices fill gaps the plan doesn't record:
+
+- **When a position is first held.** A filled one is held all period. An open one replacing
+  someone is held from the day after the earliest of them leaves; any other from the period's
+  start.
+- **Where a position is.** An occupant's country, the largest allocation first, else the
+  country of a person it replaces.
+
+Each line lists its positions in draw order: filled first, then open positions replacing a
+leaver, as that budget is already committed, then other open positions, each group by the day
+it is first held, then by id. Each position names its `draw_reason`. `PositionFundingSet` is
+the `funding` facet, written by `team_planning_set_position_funding` with shares summing to 1.
+A draw on a line the scenario no longer holds funds nothing, and the checks flag it, as they
+do a funding on a closed position. Funded counts the positions funded whole and the FTE each
+draw funds, so funded and unfunded always add up to the positions and FTE the cost read
+prices. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
+
 The projection records how each position's cost centre was reached (set here, from the Org
 Graph, by which rule) and reports three conditions as checks:
 
