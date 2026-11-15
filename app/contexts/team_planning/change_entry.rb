@@ -11,11 +11,12 @@
 #
 # An update to today changes no facet, but the history keeps it as a
 # baseline entry, `rebase`, with the old and new base and the keys of the
-# conflicts it carried forward.
+# conflicts it carried forward. A set or pin that settled one of those
+# conflicts holds {#settles}: the conflict's since and the choice made.
 TeamPlanning::ChangeEntry = Data.define(
   :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
   :actor_id, :at, :pinned_from_scenario_id, :pinned_from_event_id, :reverses_event_id, :note,
-  :noted_event_id
+  :noted_event_id, :settles
 ) do
   # @param event [RubyEventStore::Event]
   # @return [TeamPlanning::ChangeEntry, nil] nil for an event that changes no facet
@@ -24,7 +25,8 @@ TeamPlanning::ChangeEntry = Data.define(
 
     new(event_id: event.event_id, plan_id: event.data[:plan_id], scenario_id: event.data[:scenario_id] || event.data[:plan_id],
         at: event.timestamp, subject_id: nil, facet: nil, kind: nil, end_state: nil, sealed_fields: [],
-        pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, note: nil, noted_event_id: nil, **fields)
+        pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, note: nil, noted_event_id: nil,
+        settles: event.data[:settles]&.to_h&.stringify_keys, **fields)
   end
 
   def self.fields_of(event)

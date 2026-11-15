@@ -54,4 +54,14 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
       assert lanes.any? { it.include?("from PaymentsAda Quill") }, lanes.inspect
     end
   end
+
+  context "a person who crosses the edge of a scoped plan" do
+    should "say they move out of it, and that they join it" do
+      out = render_timeline(bars: [ bar(0, 0) ], moves: [ { person_id: ADA, after: 0, left_unit_ids: [ PAYMENTS ], joined_unit_ids: [], crossing: "out" } ])
+      joins = render_timeline(bars: [ bar(1, 1) ], moves: [ { person_id: ADA, after: 0, left_unit_ids: [], joined_unit_ids: [ PAYMENTS ], crossing: "in" } ])
+
+      assert_includes out.css("[data-timeline-grid] [data-timeline-lane]").map(&:text).join, "Ada Quillmoves out of this plan"
+      assert_includes joins.css("[data-timeline-grid] [data-timeline-lane]").map(&:text).join, "joins this planAda Quill"
+    end
+  end
 end

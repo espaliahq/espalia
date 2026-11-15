@@ -1,0 +1,20 @@
+{
+  "name": "team_planning_coverable_units",
+  "description": "List the live units a Team Planning plan may cover, in tree order (depth first, siblings by name), each with its id, name, parent and depth: the ids team_planning_create_plan and team_planning_set_plan_scope take as unit_ids. Without plan_id, refused unless the caller may create a plan; with it, unless they are an editor of that plan.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

@@ -19,6 +19,13 @@ class PlansSystemTest < ApplicationSystemTestCase
       call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, parent_id: q1, relation: "instead", name: "Slower hiring")
       call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, parent_id: q1, relation: "then", name: "Q2 hires",
                                                              ends_on: "2027-06-30")
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      department, squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      structure.define_taxonomy([ { level_id: department, name: "Department" }, { level_id: squad, name: "Squad" } ], effective_on: "2026-01-01")
+      engineering = SecureRandom.uuid_v7
+      structure.create_unit(engineering, "Engineering", level_id: department, effective_on: "2026-01-01")
+      structure.create_unit(SecureRandom.uuid_v7, "Payments", level_id: squad, parent_id: engineering, effective_on: "2026-01-01")
+      structure.create_unit(SecureRandom.uuid_v7, "Sales", level_id: department, effective_on: "2026-01-01")
     end
   end
 
@@ -34,6 +41,8 @@ class PlansSystemTest < ApplicationSystemTestCase
         click_link_with_js_fallback("Pay review 2027", expect_text: "Private to 2 members")
 
         assert_text "You're a viewer."
+        assert_text "Covers the whole organisation."
+        assert_no_button "Change"
         assert_text "Based on the Org Graph on 14 November 2026"
         within("table") do
           assert_text "Today"
@@ -56,6 +65,34 @@ class PlansSystemTest < ApplicationSystemTestCase
         click_button_with_js_fallback("Create plan", expect_text: "Reorg 2027")
         assert_text "Private to 1 member. You're an editor."
         assert_no_sideways_overflow
+      end
+
+      should "let a planner start a plan on the units they choose" do
+        sign_in_as(@planner.user)
+        visit plans_path
+        assert_text "You can widen what a plan covers later."
+        assert_no_selector "ul[aria-label='Units']"
+        js_set_checkbox("Chosen units", checked: true)
+        assert_selector "ul[aria-label='Units']", visible: true
+        js_fill_in "Name", with: "Sales growth"
+        js_set_checkbox("Sales", checked: true)
+        click_button_with_js_fallback("Create plan", expect_text: "Covers Sales.")
+        assert_text "Sales growth"
+        assert_no_sideways_overflow
+      end
+
+      should "let an editor widen a plan from its page" do
+        sign_in_as(@planner.user)
+        visit plan_path(@plan_id)
+        assert_text "Covers the whole organisation."
+        wait_for_stimulus "modal"
+        click_button_with_js_fallback("Change", expect_text: "What this plan covers")
+        js_set_checkbox("Chosen units", checked: true)
+        js_set_checkbox("Payments", checked: true)
+        js_set_checkbox("Sales", checked: true)
+        assert_no_sideways_overflow
+        click_button_with_js_fallback("Save", expect_text: "This plan now covers Payments and Sales.")
+        assert_text "Covers Payments and Sales."
       end
 
       should "tell a viewer their plan is frozen once its only editor is forgotten" do

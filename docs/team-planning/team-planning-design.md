@@ -83,7 +83,7 @@ Every change event has the same shape:
 
 | Group | Events |
 |---|---|
-| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
+| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
 | People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
@@ -101,6 +101,46 @@ Subjects the plan creates (a position, a unit, a placeholder hire, a budget line
 minted by the plan. Subjects from the Org Graph are referred to by the Org Graph's id. A change
 never refers to the content of its parent scenario. That is what lets the same change be
 resolved over a different base.
+
+### What a plan covers
+
+A plan covers the whole organisation, or chosen units and everything under them
+([#338](https://github.com/espaliahq/espalia/issues/338)). `PlanScopeSet` records the
+units, sorted, with an empty list for the whole organisation. A plan with no such event
+covers the whole organisation, so plans made before scope read as they always did. The
+plans projection keeps the list in `scope_unit_ids`.
+
+- **Units only.** A plan is scoped by units, never by people, roles or reporting lines.
+- **Widening is always allowed.** Narrowing is refused while a change is about a person,
+  unit or position the narrower plan would leave out. The refusal names up to five such
+  changes, and only subjects the plan already shows, and counts the rest.
+- **Everything a reader counts stops at the edge.** Baseline, map, capacity, cost,
+  attention and the timeline see only what is inside. Someone with part of their time
+  outside counts for the part inside, and the rest reads as one `outside: { share: }`,
+  never as the units it is spent in. A manager outside reads as `manager_outside: true`.
+  A change that places someone inside brings them in; undoing it lets them go.
+- **A plan changes only the people it covers.** A change about someone outside is refused
+  unless it is the assignment that places them in a covered unit, and the refusal says
+  nothing about them. A reporting line from someone inside to a manager outside is allowed.
+  A redo is held to the same rule, so narrowing a plan past an undone change can't bring
+  that change back about someone the plan no longer covers.
+- **A change left about someone outside is flagged, never hidden from its own record.**
+  An undone bring-in, or an Org Graph move out of the plan's units, leaves the person's
+  other changes in the plan. Attention lists each one under "A change about someone this
+  plan no longer covers", with the change, so a planner can clear it or bring the person
+  back. History, status and overrides keep naming the subject by id, unnamed.
+- **The scope cut runs before the pay filter.** The cut runs first, in `Map#settled`, so
+  people outside never reach `map.people`. The see-pay filter runs after it, per person, in
+  `map_payload`. Cost drops places outside before pricing, and reads actual pay only for
+  holders. So the pay filter never sees a person outside, and no change to pay rules can
+  bring one back.
+- **The picker reaches the whole organisation.** `team_planning_coverable_units` lists
+  every live unit, in tree order with its depth, to anyone who may start a plan, or to an
+  editor of the plan with `plan_id`. It names units and no person, so a planner who can't
+  read the Org Graph can still choose.
+- **On screen** the new-plan form asks "Covers" with the whole organisation or chosen
+  units, and says the plan can be widened later. The plan page reads "Covers …" under its
+  title, with a Change dialog for editors.
 
 ### Propagation is a projection, never an event
 
@@ -298,7 +338,9 @@ winning change and the change that broke it, such as its unit's `UnitRetired`.
 
 It marks a placement in a closed position, or in a retired unit or one gone from the scenario;
 a position in such a unit, or overfilled; a unit under a retired parent; anyone in
-`unresolved`; and a succession that lost a predecessor or whose successor is no longer live. A
+`unresolved`; a change about someone a scoped plan no longer covers, other than the
+assignment that moved them out, unnamed and under the change's own facet; and a succession
+that lost a predecessor or whose successor is no longer live. A
 position in a retired unit is the position's item, not each occupant's. `team_planning_attention`
 reads it, and the changes tab (4.4) and the checks tab (4.7) will too.
 
@@ -717,8 +759,8 @@ kind last set it; pinning a baseline value asks each readable kind of the facet 
 projection subscribes through it and writes
 `team_planning_overrides`: one row per scenario, subject and facet the scenario sets or
 pinned. `team_planning_overrides` lists them, each beside what the scenario would inherit
-without it, and says when a pin's parent has moved on. Reconcile (4.5) reuses both: keep
-the plan is a pin, and follow reality is a clear.
+without it, and says when a pin's parent has moved on. Settling a conflict (4.5) reuses
+the pin to keep an inherited change; see [Settling a conflict](#settling-a-conflict).
 
 ### Undo
 
@@ -873,6 +915,48 @@ conflict stays open while the scenario still resolves to the same change. A set,
 clear or undo along its chain ends it, a redo of the same change brings it back, and a
 later update replaces the set, keeping the date a conflict was first found. Nothing stores the result: it is derived from the stream on
 each load.
+
+### Settling a conflict
+
+Only a conflict an update carried forward can be settled
+([#336](https://github.com/espaliahq/espalia/issues/336)). Before an update, the plan
+still reads the Org Graph as of its old base, so keeping the plan would change nothing it
+reads. `team_planning_settle_conflict` takes one of two choices, in one scenario:
+
+- **Keep the plan** writes the planned change again in the scenario. A scenario that made
+  the change sets it again. One that inherits it pins it, naming where it came from, unless
+  its kind seals its value (a level, plan data): a pin holds its end state in clear, so a
+  sealed change is set again in the child instead. The change keeps its own note unless
+  the editor gives another.
+- **Follow reality** sets what the Org Graph holds today, in this scenario alone. A clear
+  would hand the facet back to the parent's change, which still conflicts, so the
+  scenario that made the change and its other children keep it as it was. Settled in the
+  scenario that made the change, it reaches the children that inherit it, as any change
+  there does. A unit succession can't follow reality yet: the retirements written with it
+  wouldn't follow, so the editor changes it on the map.
+
+Settling is refused once status no longer reads the row as conflicting: the Org Graph
+has caught up with the plan, or the person was forgotten.
+
+No new event records the choice. The write carries a `settles` marker, the day the
+conflict was found and the choice, and the conflict ends by the rule above: a newer
+change along the chain ends it, even one with the same value. Status stops reporting it,
+and history shows the marker. Undoing the write brings the conflict back.
+
+On the web, an editor sees "Keep the plan" and "Follow reality" on each carried conflict on
+the Changes tab, and both settle in the scenario shown. A conflict no update has carried
+links to "Update to today" instead. The baseline reads the Org Graph as known at the end
+of the day before the base, so a change learned today waits for tomorrow's update; until
+then the row says so rather than offering an update that would take nothing in. An
+inherited change names the scenario that made it, linked to that scenario's tab.
+
+The drift row that meets a carried conflict offers the same two buttons, posting to the
+same settle, so settling from either row clears both in one response. An update takes
+the change that caused the conflict into the baseline, so this happens only once the Org
+Graph moves that facet again: a level that went to 5, was carried, then went to 6. The
+buttons act only in the scenario shown. When the change meets plans in other scenarios,
+the row counts them and links to each one's tab instead of offering buttons that act out
+of sight.
 
 ### The baseline reader
 
@@ -1134,6 +1218,30 @@ period, and whichever of role, level and location the budget line states. `Posit
 the exception only: a position funded from another centre, or split across budget lines. A position no
 budget line matches is unfunded.
 
+As built in 6.3 ([#345](https://github.com/espaliahq/espalia/issues/345)): `team_planning_funding`
+reads it for a scenario, never the baseline, which has no period. A line matches when its cost
+centre is blank or the position's, its period overlaps the days the position is held, and each of
+role, level and location it states is the position's. A line with no cost centre matches any
+position and is the least specific; past that, the more of role, level and location a line
+states, the more specific. Two choices fill gaps the plan doesn't record:
+
+- **When a position is first held.** A filled one is held all period. An open one replacing
+  someone is held from the day the cost read first holds it: the day after a leaver goes, or
+  the period's start when a leaver has no date or leaves part of it open. Any other open one is
+  held from the period's start.
+- **Where a position is.** An occupant's country, the largest allocation first, else the
+  country of a person it replaces.
+
+Each line lists its positions in draw order: filled first, then open positions replacing a
+leaver, as that budget is already committed, then other open positions, each group by the day
+it is first held, then by id. Each position names its `draw_reason`. `PositionFundingSet` is
+the `funding` facet, written by `team_planning_set_position_funding` with shares summing to 1.
+A draw on a line the scenario no longer holds funds nothing, and the checks flag it, as they
+do a funding on a closed position. Funded counts the positions funded whole and the FTE each
+draw funds, so funded and unfunded always add up to the scenario's positions and FTE. That
+holds whether or not a pay band prices a position: one with no band is still funded or
+unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
+
 The projection records how each position's cost centre was reached (set here, from the Org
 Graph, by which rule) and reports three conditions as checks:
 
@@ -1141,8 +1249,10 @@ Graph, by which rule) and reports three conditions as checks:
   give the position. The known value is used and the mismatch is always flagged. It is
   resolved by planning the cost centre change, which joins the change list to be raised
   upstream. The rules never move a person's cost on their own.
-- **Unplaced.** An open position no rule matches. It draws on no budget line. This is a warning
-  while drafting, and a guardrail a tenant can make binding at approval.
+- **Unplaced.** An open position with no cost centre: it has no label of its own and no rule
+  matches it. It can draw only on a budget line that states
+  no cost centre, which matches any position, and is unfunded when none matches. This is a
+  warning while drafting, and a guardrail a tenant can make binding at approval.
 - **Ambiguous.** Two budget lines match a position equally well. Nothing is picked silently.
 
 A tenant's approved budget reaches a new plan as a default, the way configuration does.

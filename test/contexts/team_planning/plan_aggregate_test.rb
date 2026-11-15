@@ -43,6 +43,40 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#set_scope" do
+    setup { create_plan }
+
+    should "cover the whole organisation until a scope is set" do
+      assert_nil @plan.scope_unit_ids
+    end
+
+    should "record the units, sorted and downcased, once" do
+      units = Array.new(2) { SecureRandom.uuid_v7 }
+      @plan.set_scope(unit_ids: [ units.last.upcase, units.first, units.first ], set_by_id: @creator_id)
+      @plan.set_scope(unit_ids: units.reverse, set_by_id: @creator_id)
+
+      event = @plan.unpublished_events.to_a.last
+      assert_kind_of TeamPlanning::Events::PlanScopeSet, event
+      assert_equal({ plan_id: @plan_id, unit_ids: units.sort, set_by_id: @creator_id }, event.data)
+      assert_equal 2, @plan.unpublished_events.count
+      assert_equal units.sort, @plan.scope_unit_ids
+    end
+
+    should "widen to the whole organisation with no units, and write nothing for the whole organisation again" do
+      @plan.set_scope(unit_ids: [ SecureRandom.uuid_v7 ], set_by_id: @creator_id)
+      @plan.set_scope(unit_ids: [], set_by_id: @creator_id)
+      @plan.set_scope(unit_ids: [], set_by_id: @creator_id)
+
+      assert_nil @plan.scope_unit_ids
+      assert_equal 3, @plan.unpublished_events.count
+    end
+
+    should "refuse a deleted plan" do
+      @plan.delete(deleted_by_id: @creator_id)
+      assert_raises(TeamPlanning::Error) { @plan.set_scope(unit_ids: [], set_by_id: @creator_id) }
+    end
+  end
+
   context "#rename" do
     setup { create_plan }
 

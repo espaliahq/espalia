@@ -415,6 +415,8 @@ Rails.application.routes.draw do
     # Update the plan to today, from a preview an editor confirms ([#337](https://github.com/espaliahq/espalia/issues/337)).
     get :rebase, on: :member, path: "update-to-today"
     post :rebase, on: :member, path: "update-to-today", action: :rebase_plan
+    # Change which units the plan covers ([#338](https://github.com/espaliahq/espalia/issues/338)).
+    patch :scope, on: :member
     # Fork and rename a scenario (#271).
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
@@ -425,6 +427,7 @@ Rails.application.routes.draw do
     resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
     # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.
     resources :notes, only: [ :update ], controller: "plans/notes"
+    resources :settlements, only: [ :create ], controller: "plans/settlements"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.

@@ -8,6 +8,7 @@
 module Operations::TeamPlanning::ChangeWrite
   extend ActiveSupport::Concern
   include Operations::TeamPlanning::PlanWrite
+  include Operations::TeamPlanning::WithinScope
 
   included do
     parameter :note, String, schema: {
@@ -27,7 +28,10 @@ module Operations::TeamPlanning::ChangeWrite
   # @raise [Operations::Base::ParameterError] "No such plan" before any check, unless the caller edits it
   def set_change!(kind, subject_id:, end_state: {}, &check)
     refusing_bad_plans do
-      handler.set_change(plan_id!, kind, scenario_id: scenario_id!(:scenario_id), subject_id:, end_state:, note: params[:note], &check)
+      handler.set_change(plan_id!, kind, scenario_id: scenario_id!(:scenario_id), subject_id:, end_state:, note: params[:note]) do |plan|
+        check&.call(plan)
+        within_scope!(plan, kind, subject_id, end_state)
+      end
     end
   end
 

@@ -73,6 +73,42 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_equal "/planning/#{PLAN}/changes", row.css("a").first["href"]
     end
 
+    should "settle from the drift row only what conflicts in the scenario on screen, and count the others" do
+      meets = [ { scenario_id: Q1, change_id: "c2", facet: "level", subject_id: BO }, { scenario_id: PLAN, change_id: "c9", facet: "level", subject_id: BO } ]
+      carried = { scenario_id: Q1, change_id: "c2", subject_id: BO, facet: "level", status: "conflicting", since: "2026-11-21", sources: %w[espalia] }
+      html = render_tab(changes: [ drift_change("fact_changed", person_id: BO, fact: "level", meets:) ], statuses: [ carried ], can_edit: true)
+
+      row = html.at_css("[data-drift-change='fact_changed']")
+      settle = row.at_css("[data-drift-settle='#{Q1}']")
+      assert_includes settle.text, "Conflicts with the plan in Q1 hires."
+      assert_equal %w[plan reality], settle.css("[data-settle-conflict='level'] button").map { it["value"] }
+      assert_equal Q1, settle.at_css("input[name='settlement[scenario_id]']")["value"]
+      elsewhere = settle.at_css("[data-drift-settle-elsewhere='1']")
+      assert_includes elsewhere.text, "Also planned in 1 other scenario"
+      assert_equal [ "/planning/#{PLAN}/changes" ], elsewhere.css("a").map { it["href"] }
+      assert_not_includes row.text, "Meets the plan in"
+    end
+
+    should "link the scenario a child inherits its conflict from, which settling in the child leaves alone" do
+      meets = [ { scenario_id: PLAN, change_id: "c9", facet: "level", subject_id: BO } ]
+      inherited = { scenario_id: PLAN, change_id: "c9", subject_id: BO, facet: "level", status: "conflicting", since: "2026-11-21", sources: %w[espalia] }
+      html = render_tab(changes: [ drift_change("fact_changed", person_id: BO, fact: "level", meets:) ], statuses: [ inherited ], can_edit: true)
+
+      settle = html.at_css("[data-drift-settle='#{Q1}']")
+      assert_equal %w[plan reality], settle.css("button").map { it["value"] }
+      assert_equal [ "/planning/#{PLAN}/changes" ], settle.css("[data-drift-settle-elsewhere='1'] a").map { it["href"] }
+    end
+
+    should "offer no drift-row buttons for a live conflict or to a viewer" do
+      meets = [ { scenario_id: Q1, change_id: "c2", facet: "level", subject_id: BO } ]
+      drift = [ drift_change("fact_changed", person_id: BO, fact: "level", meets:) ]
+      live = { scenario_id: Q1, change_id: "c2", subject_id: BO, facet: "level", status: "conflicting", since: nil, sources: %w[espalia] }
+
+      assert_nil render_tab(changes: drift, statuses: [ live ], can_edit: true).at_css("[data-drift-settle]")
+      assert_nil render_tab(changes: drift, statuses: [ live.merge(since: "2026-11-21") ]).at_css("[data-drift-settle]")
+      assert_includes render_tab(changes: drift, statuses: [ live ], can_edit: true).at_css("[data-drift-change]").text, "Meets the plan in Q1 hires"
+    end
+
     should "say when nothing has changed" do
       assert_includes render_tab.text, "Nothing has changed in the Org Graph since the base."
     end
@@ -165,6 +201,16 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_includes form.at_css("#change-note-c1-hint").text, "It is saved on Today, so every scenario that follows it shows it."
       assert_not_includes editors[1].at_css("#change-note-c2-hint").text, "It is saved on"
       assert_equal "Note", form.at_css("label[for='change-note-c1']").text
+    end
+
+    should "offer only keeping the plan on a carried succession conflict, which can't follow reality" do
+      carried = ->(facet, id) { { scenario_id: Q1, change_id: id, subject_id: BO, facet:, status: "conflicting", since: "2026-11-21", sources: %w[espalia] } }
+      html = render_tab(statuses: [ carried.("level", "c1"), carried.("succession", "c2") ], can_edit: true)
+
+      assert_equal %w[plan reality], html.css("[data-settle-conflict='level'] button").map { it["value"] }
+      succession = html.at_css("[data-settle-conflict='succession']")
+      assert_equal %w[plan], succession.css("button").map { it["value"] }
+      assert_includes succession.text, "change the succession on the map"
     end
   end
 
