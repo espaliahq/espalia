@@ -29,11 +29,12 @@ class Operations::TeamPlanning::Forecast < Operations::Base
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
-    aggregate = ::TeamPlanning::Repository.new.load_plan(plan.id)
     rows = refusing_bad_plans do
-      map = ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).call(aggregate)
-      names = map.units.to_h { [ it.id, it.name ] }
-      ::TeamPlanning::Forecast.new(aggregate:, scenario_id:, map:).rows.map { row(it, names) }
+      cost = ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call
+      capacity = ::TeamPlanning::Capacity.split(context:, plan:, scenario_id:)
+      names = cost.scenario.map.units.to_h { [ it.id, it.name ] }
+      ::TeamPlanning::Forecast.new(aggregate: ::TeamPlanning::Repository.new.load_plan(plan.id), scenario_id:, map: cost.scenario.map,
+                                   pricing: cost.scenario.pricing.with_capacity_of(capacity.report.pricing)).rows.map { row(it, names) }
     end
     { plan_id: plan.id, scenario_id:, rows: }
   end
