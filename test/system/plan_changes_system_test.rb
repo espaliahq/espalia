@@ -92,6 +92,32 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_selector "[data-planned-change] [data-change-note]", text: "Agreed in the October 1:1"
       assert_no_selector "[data-change-note-editor]"
     end
+
+    should "let an editor preview an update to today, confirm it, and see the conflict it carried" do
+      plan_a_conflict
+      sign_in_as(@planner.user)
+      visit changes_plan_path(@plan_id)
+      assert_text "Ada Quill's title is now Staff Engineer"
+      click_link_with_js_fallback("Update to today", expect_text: "Conflicts it carries forward")
+
+      within("[data-update-to-today]") do
+        assert_selector "[data-update-scenario='#{@q1}']", text: /Q1 hires.*1 done.*1 conflicting/m
+        assert_selector "[data-update-conflict='level']", text: "Ada Quill · Level in Q1 hires"
+      end
+      click_button_with_js_fallback("Update to #{today_label}", expect_text: "1 planned change stays conflicting.")
+      assert_text "Updated to today, #{today_label}."
+      assert_no_link "Update to today"
+
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-planned-change='conflicting']", text: /Ada Quill · Level.*Conflicting since/m
+    end
+
+    should "offer a viewer no update to today" do
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id)
+      assert_text "Bo Reyes moved from Payments to Growth"
+      assert_no_link "Update to today"
+    end
   end
 
   context "on a phone" do
@@ -126,9 +152,31 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-change-note-editor]"
       assert_no_sideways_overflow
     end
+
+    should "preview and confirm an update to today in a page that fits" do
+      plan_a_conflict
+      sign_in_as(@planner.user)
+      visit rebase_plan_path(@plan_id)
+      assert_selector "[data-update-conflict='level']", text: "Ada Quill · Level in Q1 hires"
+      assert_no_sideways_overflow
+
+      click_button_with_js_fallback("Update to #{today_label}", expect_text: "1 planned change stays conflicting.")
+      assert_no_link "Update to today"
+      assert_no_sideways_overflow
+    end
   end
 
   private
+
+  def plan_a_conflict
+    call(Operations::TeamPlanning::SetPlannedLevel, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "4")
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                              .change_level(@ada.id, "5", **ESPALIA, effective_on: Date.current.iso8601)
+    end
+  end
+
+  def today_label = I18n.l(Time.now.utc.to_date, format: "%-d %b %Y")
 
   def bo_change_id
     call(Operations::TeamPlanning::Status, @planner, plan_id: @plan_id, scenario_id: @q1)[:statuses].sole[:change_id]

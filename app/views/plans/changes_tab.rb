@@ -55,6 +55,7 @@ class Views::Plans::ChangesTab < Views::Base
     section(aria: { labelledby: "changes-drift-heading" }, data: { changes_section: "drift" }) do
       h3(id: "changes-drift-heading", class: "text-base font-semibold text-default") { "In the Org Graph since #{day(@plan[:base_on])}" }
       p(class: "mt-1 text-sm text-muted") { "What the Org Graph has learned since the plan's base, and the planned changes each one meets." }
+      update_to_today if @can_edit && Date.iso8601(@plan[:base_on]) < Time.now.utc.to_date
       if @drift[:changes].empty?
         render Components::Kit::EmptyState.new(title: "Nothing has changed in the Org Graph since the base.", size: :panel)
       else
@@ -62,6 +63,12 @@ class Views::Plans::ChangesTab < Views::Base
           @drift[:changes].each { drift_row(it) }
         end
       end
+    end
+  end
+
+  def update_to_today
+    div(class: "mt-3") do
+      render Components::Kit::Button.new(variant: :outline, size: :sm, href: rebase_plan_path(plan_id)) { "Update to today" }
     end
   end
 

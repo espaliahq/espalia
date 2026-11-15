@@ -36,6 +36,9 @@ module Operations::TeamPlanning::PlanWrite
   # Runs the block, turning the plan's own refusals into a bad-parameter error.
   def refusing_bad_plans
     yield
+  rescue ::TeamPlanning::FirstStepEndsTooSoon => e
+    name = TeamPlanningScenario.find_by(id: e.scenario_id)&.name&.reveal
+    raise Operations::Base::ParameterError, name.present? ? e.message_for(name) : e.message
   rescue ::TeamPlanning::Error => e
     raise Operations::Base::ParameterError, e.message
   end
