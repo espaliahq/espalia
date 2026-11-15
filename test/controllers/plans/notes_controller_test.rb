@@ -28,18 +28,18 @@ class Plans::NotesControllerTest < ActionDispatch::IntegrationTest
   context "an editor" do
     setup { sign_in @editor.user }
 
-    should "rewrite a note and go back to the Changes tab" do
-      patch plan_note_path(@plan_id, @change_id), params: { note: { scenario_id: @q1, text: "Ready, and asked for it" } },
-                                                  headers: { "HTTP_REFERER" => changes_plan_url(@plan_id, scenario: @q1) }
+    should "rewrite a note and go back to the scenario shown" do
+      patch plan_note_path(@plan_id, @change_id), params: { note: { scenario_id: @q1, text: "Ready, and asked for it" }, shown: @q1 }
 
-      assert_redirected_to changes_plan_url(@plan_id, scenario: @q1)
+      assert_redirected_to changes_plan_path(@plan_id, scenario: @q1)
       assert_equal "Note saved.", flash[:notice]
       assert_equal({ value: "Ready, and asked for it" }, status[:note])
     end
 
-    should "clear a note with a blank" do
+    should "clear a note with a blank, and go back to the baseline when none was shown" do
       patch plan_note_path(@plan_id, @change_id), params: { note: { scenario_id: @q1, text: "" } }
 
+      assert_redirected_to changes_plan_path(@plan_id)
       assert_equal "Note cleared.", flash[:notice]
       assert_not status.key?(:note)
     end

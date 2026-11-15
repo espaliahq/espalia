@@ -151,6 +151,7 @@ class Views::Plans::ChangesTab < Views::Base
         input(type: "hidden", name: "_method", value: "patch")
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "note[scenario_id]", value: entry[:scenario_id])
+        input(type: "hidden", name: "shown", value: scenario_param(scenario_id))
         label(for: id, class: "block text-sm font-medium text-default") { "Note" }
         textarea(id:, name: "note[text]", rows: "3", maxlength: TeamPlanning::PlanAggregate::NOTE_LIMIT,
                  aria: { describedby: "#{id}-hint" }, class: Components::Kit::Field::TEXTAREA) { entry.dig(:note, :value) }

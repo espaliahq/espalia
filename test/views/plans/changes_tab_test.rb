@@ -135,6 +135,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_equal "/planning/#{PLAN}/notes/c1", form["action"]
       assert_equal "patch", form.at_css("input[name='_method']")["value"]
       assert_equal PLAN, form.at_css("input[name='note[scenario_id]']")["value"], "an inherited change is noted where it was made"
+      assert_equal Q1, form.at_css("input[name='shown']")["value"]
       assert_equal "Promo in March", form.at_css("textarea[name='note[text]']").text
       assert_equal "change-note-c1-hint", form.at_css("textarea")["aria-describedby"]
       assert_equal "Note", form.at_css("label[for='change-note-c1']").text
