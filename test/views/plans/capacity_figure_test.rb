@@ -25,6 +25,15 @@ class Views::Plans::CapacityFigureTest < ActiveSupport::TestCase
     assert_nil figure.at_css("[data-capacity-overloaded]")
   end
 
+  should "show the model's own overload and notes beside a planner's override" do
+    model = { overloaded: true, excess: "0.35", notes: [ { note: "capped", text: "Capped at the level's ceiling" } ] }
+    overridden = figure(overridden: true, capacity: "2", calculated: "1.2", calculated_diagnostics: model)
+
+    assert_includes overridden.text, "The model gives 1.2u."
+    assert_equal "Overloaded: managing others costs 0.4u more than this seat's base.", overridden.at_css("[data-capacity-overloaded]").text
+    assert_includes overridden.text, "Capped at the level's ceiling"
+  end
+
   should "badge an override even when the place it replaced counts nowhere" do
     unreadable = figure(capacity: nil, overridden: true, reason_text: "A planner overrode this figure")
 

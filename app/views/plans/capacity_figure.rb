@@ -45,8 +45,8 @@ class Views::Plans::CapacityFigure < Views::Base
     p(class: "text-xs") { @marks.description_of(@place[:model]) }
     ol(class: "mt-1 space-y-0.5") { @place[:working].each { step(it) } }
     calculated if @place[:overridden]
-    overload
-    notes
+    overload(@place)
+    notes(@place)
   end
 
   def step(step)
@@ -67,18 +67,22 @@ class Views::Plans::CapacityFigure < Views::Base
     return unless @place[:calculated]
 
     p(class: "mt-1") { "The model gives #{Format.amount(BigDecimal(@place[:calculated]), symbol)}." }
+    return unless (model = @place[:calculated_diagnostics])
+
+    overload(model)
+    notes(model)
   end
 
-  def overload
-    return unless @place[:overloaded]
+  def overload(figure)
+    return unless figure[:overloaded]
 
     p(class: "mt-1 text-default", data: { capacity_overloaded: "" }) do
-      "Overloaded: managing others costs #{Format.amount(BigDecimal(@place[:excess]), symbol)} more than this seat's base."
+      "Overloaded: managing others costs #{Format.amount(BigDecimal(figure[:excess]), symbol)} more than this seat's base."
     end
   end
 
-  def notes
-    texts = @place[:notes].map { it[:text] }.compact
+  def notes(figure)
+    texts = figure[:notes].map { it[:text] }.compact
     ul(class: "mt-1 list-disc pl-5") { texts.each { |text| li { text } } } if texts.any?
   end
 end
