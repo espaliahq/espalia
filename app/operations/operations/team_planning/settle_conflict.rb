@@ -23,7 +23,7 @@ class Operations::TeamPlanning::SettleConflict < Operations::Base
   parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
   parameter :subject_id, String, required: true, allow_blank: false
   parameter :facet, String, required: true, allow_blank: false
-  parameter :choice, String, required: true, schema: { enum: ::TeamPlanning::PlanAggregate::SETTLE_CHOICES }
+  parameter :choice, String, required: true, allowed: ::TeamPlanning::PlanAggregate::SETTLE_CHOICES
   parameter :note, String
   prose_fields :note
 

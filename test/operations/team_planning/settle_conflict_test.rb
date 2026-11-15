@@ -111,4 +111,9 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
     assert_equal "No such plan", refusal { settle(@q1, "plan", as: @viewer) }
     assert_equal "conflicting", brook(@q1)[:status].to_s
   end
+
+  should "refuse a choice that is neither keeping the plan nor following reality, before reading the plan" do
+    rebase
+    assert_match(/choice must be one of \["plan", "reality"\], got "keep"/, refusal { settle(@q1, "keep") })
+  end
 end
