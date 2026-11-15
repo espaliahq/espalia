@@ -469,7 +469,7 @@ class TeamPlanning::CommandHandler
   # withdrawn.
   def todays(plan, change, today)
     now = TeamPlanning::Baseline.new(context: @actor, plan: TeamPlanningPlan.find(plan.plan_id)).map_on(today, history: true)
-    kinds = [ change.class ] | TeamPlanning::ChangeKinds.all.select { it.holds?(change.key.last) && it.readable? }
+    kinds = [ change.class ] | TeamPlanning::ChangeKinds.holding(change.key.last).select(&:readable?)
     kinds.each do |kind|
       end_state = kind == change.class ? kind.read_org_graph(now, change) : kind.read_from(now, subject_id: change.data[:subject_id], facet: change.key.last)
       return [ kind, end_state ] if end_state

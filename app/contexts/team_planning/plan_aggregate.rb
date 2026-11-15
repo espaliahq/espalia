@@ -896,10 +896,13 @@ class TeamPlanning::PlanAggregate
   # A change without a note holds no note field, so it is stored as it was before notes.
   def with_note(data, note) = note ? data.merge(note:) : data
 
+  # Only a settle carries the marker, so every other write is stored as before.
+  def with_settles(data, settles) = settles ? data.merge(settles:) : data
+
   def write_change(kind, scenario_id:, subject_id:, set_by_id:, end_state:, note:, settles: nil)
     fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
     data = with_note({ plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }, note)
-    apply(kind.new(data: settles ? data.merge(settles:) : data))
+    apply(kind.new(data: with_settles(data, settles)))
   end
 
   def write_pin(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from:, note:, settles: nil)
@@ -913,7 +916,7 @@ class TeamPlanning::PlanAggregate
       plan_id: @plan_id, scenario_id:, subject_id:, facet:, kind: kind.name, end_state: end_state.to_h,
       pinned_from_scenario_id: from_scenario_id, pinned_from_event_id: from_event_id, pinned_by_id:
     }, note)
-    apply(TeamPlanning::Events::ChangePinned.new(data: settles ? data.merge(settles:) : data))
+    apply(TeamPlanning::Events::ChangePinned.new(data: with_settles(data, settles)))
   end
 
   def require_note(note)
