@@ -98,6 +98,20 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     assert_not_includes page.at_css("main").text, "vs Today"
   end
 
+  should "read the Org Graph once for Today's map and once for the plan page, though both price Today's run rate" do
+    reads = 0
+    as_of = OrgGraph::AsOf.method(:new)
+    OrgGraph::AsOf.stub(:new, ->(**args) { reads += 1; as_of.call(**args) }) do
+      [ map_plan_path(@plan_id), plan_path(@plan_id) ].map do |path|
+        reads = 0
+        get path
+        assert_includes response.body, "EUR 200k a year"
+        reads
+      end => counts
+      assert_equal [ 1, 1 ], counts
+    end
+  end
+
   should "set a shorter scenario against Today over its own days, never against Today's run rate" do
     half = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @year, relation: "then", name: "H1 2027",
                                                         ends_on: "2027-06-30")[:scenario_id]
