@@ -19,12 +19,13 @@ class Views::Plans::ChecksTab < Views::Base
     managers: [ "Managers", "People with no manager, or one who is gone, has left or shares none of their units." ],
     overloaded: [ "Overloaded managers", "Seats whose reports cost more to manage than the seat delivers." ],
     unclassified: [ "Capacity", "Places no capacity model covers." ],
-    budget_lines: [ "Budget lines", "Changes to budget lines the organisation has since removed." ]
+    budget_lines: [ "Budget lines", "Changes to budget lines the organisation has since removed." ],
+    fundings: [ "Funding", "Funding set on a position that has closed, or on a budget line this scenario no longer holds." ]
   }.freeze
   FACETS = {
     "assignment" => "Placement", "level" => "Level", "reporting_line" => "Manager", "departure" => "Leaving",
     "unit" => "Unit", "succession" => "Succession", "position" => "Position", "capacity" => "Capacity",
-    "budget_line" => "Budget line"
+    "budget_line" => "Budget line", "funding" => "Funding"
   }.freeze
 
   # @param check [String, Symbol]
