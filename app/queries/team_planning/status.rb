@@ -120,16 +120,23 @@ class TeamPlanning::Status
               status: since ? :conflicting : status, since:, sources: @sources.of_plan(facet, unit_ids:))
   end
 
-  # A move touches the units someone is in today and the ones the scenario places them in.
+  # A move touches the units someone is in today, the ones the scenario places
+  # them in, and the ones it names, as someone the Org Graph lacks is in neither map.
   def units_of(change, key, now)
     subject_id, facet = key
     case facet
     when TeamPlanning::Events::AssignmentSet.facet
-      [ now, resolved(@scenario_id) ].flat_map { |map| people_of(map)[subject_id]&.memberships.to_a.map(&:unit_id) }
+      maps = [ now, resolved(@scenario_id) ]
+      maps.flat_map { |map| people_of(map)[subject_id]&.memberships.to_a.map(&:unit_id) } + placed_units(change)
     when TeamPlanning::Events::UnitSuccessionSet.facet then change.data.values_at(:predecessor_ids, :successor_ids).flatten.compact
     when TeamPlanning::Events::UnitSet.facet then [ subject_id ]
     else []
     end
+  end
+
+  def placed_units(change)
+    positions = resolved(@scenario_id).positions.to_h { [ it.id, it.unit_id ] }
+    change.data[:placements].to_a.map { it.to_h.symbolize_keys }.map { it[:unit_id] || positions[it[:position_id]] }
   end
 
   def people_of(map) = (@people ||= {}.compare_by_identity)[map] ||= map.people.index_by(&:id)

@@ -381,4 +381,20 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
 
     assert_raises(Pundit::NotAuthorizedError) { status(as: stranger) }
   end
+
+  should "take an assignment's source from the unit it names, for someone the Org Graph lacks" do
+    newcomer = sales = nil
+    as_tenant do
+      newcomer = create(:person, tenant: @tenant, name: "Cam Newell")
+      sales = SecureRandom.uuid_v7
+      department = SecureRandom.uuid_v7
+      structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+      structure.define_taxonomy([ { level_id: department, name: "Department", provider: "hibob" }, { level_id: @squads, name: "Squad" } ],
+                                effective_on: "2026-01-01")
+      structure.create_unit(sales, "Sales", level_id: department, provider: "hibob", external_ref: "dept-1", effective_on: "2026-01-01")
+    end
+    plan(TeamPlanning::Events::AssignmentSet, newcomer.id, placements: [ { unit_id: sales, allocation: 1, role: "ENG" } ])
+
+    on(TODAY) { assert_equal %w[hibob], status.statuses.find { it.subject_id == newcomer.id }.sources }
+  end
 end
