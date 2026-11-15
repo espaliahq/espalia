@@ -228,6 +228,41 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse pay for someone outside the plan's units, in words that don't name them" do
+      error = assert_raises(Operations::Base::ParameterError) { hold_pay(@q1, @out, SCOPED_OUT, "full_time") }
+      [ @out.id, @out.name ].each { assert_not_includes error.message, it }
+      assert_not_includes event_store_text, SCOPED_OUT
+    end
+
+    should "keep pay held for someone the Org Graph moves out of the plan's units out of every read, and their id out of the plan's figures" do
+      moved = create(:person, tenant: @tenant, name: "Moved Quill")
+      people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      people.record_person(moved.id, provider: "espalia", effective_on: "2026-01-01", employment_status: "employed",
+                                     title: "Software Engineer", level: "5", fte: 1.0)
+      people.set_membership(moved.id, @payments, provider: "espalia", effective_on: "2026-01-01", allocation: 1.0)
+      hold_pay(@q1, moved, SCOPED_OUT, "full_time")
+      assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: @q1).to_json, SCOPED_OUT
+
+      people.move_membership(moved.id, @payments, @sales, effective_on: "2026-02-01")
+      @subject = moved
+      { "holder" => @holder, "editor" => @editor, "viewer" => @viewer }.each do |who, account|
+        READS.call.each do |operation|
+          output = begin
+            call(operation, account, **params_for(operation, scenario_id: @q1)).to_json
+          rescue Operations::Base::ParameterError => e
+            e.message
+          end
+          assert_not_includes output, SCOPED_OUT, "#{Operations::Registry.tool_name_for(operation)} as #{who}"
+        end
+        figures = [ call(Operations::TeamPlanning::ScenarioMap, account, plan_id: @plan_id, scenario_id: @q1),
+                    call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments),
+                    call(Operations::TeamPlanning::Baseline, account, plan_id: @plan_id),
+                    call(Operations::TeamPlanning::Timeline, account, plan_id: @plan_id, scenario_id: @q1),
+                    call(Operations::TeamPlanning::ScenarioCosts, account, plan_id: @plan_id) ]
+        figures.each_with_index { |figure, index| assert_not_includes figure.to_json, moved.id, "figure #{index} as #{who}" }
+      end
+    end
+
     should "leave pay held for someone brought in unreadable again, to a holder too, once that change is undone" do
       call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @out.id,
                                                              placements: [ { unit_id: @payments, allocation: 1 } ])
