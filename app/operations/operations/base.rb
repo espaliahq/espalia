@@ -283,8 +283,9 @@ class Operations::Base
     # first, so a validating client and this check agree.
     #
     # @param names [Array<Symbol>] at least two declared parameter names
+    # @param message [String, nil] the refusal in the tool's own words, in place of the generic one
     # @raise [ArgumentError] at load time for an unknown or too-short set
-    def requires_any_of(*names)
+    def requires_any_of(*names, message: nil)
       # uniq before counting: `requires_any_of :name, :name` would otherwise
       # clear the size check while describing a group of one, quietly making
       # `name` mandatory instead of one of several alternatives.
@@ -295,11 +296,17 @@ class Operations::Base
       raise ArgumentError, "requires_any_of names undeclared parameter(s): #{unknown.join(', ')}" if unknown.any?
 
       parameter_constraints << names
+      parameter_constraint_messages[names] = message if message
     end
 
     # @return [Array<Array<Symbol>>] one entry per `requires_any_of` group
     def parameter_constraints
       @parameter_constraints ||= []
+    end
+
+    # @return [Hash{Array<Symbol>=>String}] the groups that refuse in their own words
+    def parameter_constraint_messages
+      @parameter_constraint_messages ||= {}
     end
 
     # Declares that `name` is required only when another parameter carries a
@@ -739,7 +746,7 @@ class Operations::Base
     self.class.parameter_constraints.each do |names|
       next if names.any? { |name| supplied_at_all?(validated[name]) }
 
-      raise ParameterError, "provide at least one of: #{names.join(', ')}"
+      raise ParameterError, self.class.parameter_constraint_messages.fetch(names) { "provide at least one of: #{names.join(', ')}" }
     end
   end
 

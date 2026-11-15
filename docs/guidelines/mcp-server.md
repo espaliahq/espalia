@@ -638,7 +638,9 @@ that lives in only one of those two places is the bug:
   only ask that any single group hold). **"Supplied" means the key arrived,
   not that its value is meaty**, because that is exactly what `required` asks
   inside an `anyOf` branch. It is also what partial updates need: `""` is a
-  meaningful clear, and `false` / `0` are real values.
+  meaningful clear, and `false` / `0` are real values. `message:` words the
+  refusal for a person, as the budget-line tools do, because a web form that
+  drops blank fields reaches this check before the model's own validation.
 - **`allow_blank: false`** — a supplied `""` is a mistake, not a clear →
   `minLength: 1`. Distinct from `required:`: omitting the key is still fine.
   Reach for it on names and ids; never on a description, which callers
