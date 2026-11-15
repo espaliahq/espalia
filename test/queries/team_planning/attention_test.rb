@@ -196,7 +196,7 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_same moved, overloads([ seat ], changes: { [ position_id, TeamPlanning::Attention::POSITION ] => moved }, map: map(positions: [ position ])).sole.change
   end
 
-  should "credit a report's later level, its placement, or the position that gives the report its level, as a junior report costs more" do
+  should "credit a report's later level, its placement, or the position that gives the report its level when they have none of their own, as a junior report costs more" do
     placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
     line = change(TeamPlanning::Events::ReportingLineSet, REPORT)
     demoted = change(TeamPlanning::Events::LevelSet, REPORT)
@@ -210,6 +210,10 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     regraded = change(TeamPlanning::Events::PositionSet, position_id)
     assert_same regraded, overloads([ priced_seat ], changes: changes.merge([ position_id, TeamPlanning::Attention::POSITION ] => regraded),
                                                      map: map(people: [ report ])).find { it.facet == "capacity" }.change
+
+    leveled = priced_seat(id: REPORT, overloaded: false).with(own_level: true)
+    assert_same demoted, overloads([ priced_seat, leveled ], changes: changes.merge([ position_id, TeamPlanning::Attention::POSITION ] => regraded),
+                                                             map: map(people: [ report ])).find { it.facet == "capacity" }.change
 
     moved = change(TeamPlanning::Events::AssignmentSet, REPORT)
     assert_same moved, overloads([ priced_seat ], changes: changes.merge([ REPORT, TeamPlanning::Attention::ASSIGNMENT ] => moved)).sole.change

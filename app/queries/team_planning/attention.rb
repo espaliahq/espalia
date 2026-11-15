@@ -269,12 +269,19 @@ class TeamPlanning::Attention
   # The seat's own level and place, a position it fills (whose role picks the
   # model), each report's line to it and level (a report costs more the more
   # junior), and the capacity rule that chose the model can each tip a seat
-  # over. A person's level is their own before a position's, so both count.
+  # over. A person's level is their own before a position's, so both count,
+  # though a report with a level of their own costs the same whatever the
+  # position they fill.
   def overload_causes(seat, report_ids, places)
     filled = places.filter_map { it.place.position_id }
     own = seat.kind == "person" ? [ [ seat.id, ASSIGNMENT ], *level_keys(seat.id, filled) ] : [ [ seat.id, POSITION ] ]
     positions = @map.positions.to_set(&:id)
-    reports = report_ids.flat_map { positions.include?(it) ? [ [ it, POSITION ] ] : [ [ it, LINE ], [ it, ASSIGNMENT ], *level_keys(it) ] }
+    own_level = @own_level_ids ||= @priced.select(&:own_level).to_set { it.seat.id }
+    reports = report_ids.flat_map do
+      next [ [ it, POSITION ] ] if positions.include?(it)
+
+      [ [ it, LINE ], [ it, ASSIGNMENT ], *level_keys(it, ([] if own_level.include?(it))) ]
+    end
     rules = places.filter_map { effective_rule(it.unit_id) }
     [ *own, *reports, *rules ].uniq
   end

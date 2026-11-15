@@ -71,7 +71,10 @@ class TeamPlanning::Capacity
 
   # @!attribute seat [TeamPlanning::CapacityModel::Seat]
   # @!attribute places [Array<Place>] in the seat's order
-  Seat = Data.define(:seat, :places)
+  # @!attribute own_level [Boolean] the person's own level prices them, not a position's
+  Seat = Data.define(:seat, :places, :own_level) do
+    def initialize(own_level: false, **) = super
+  end
 
   # @!attribute place [TeamPlanning::CapacityModel::Place] its role_id is nil when none resolves
   # @!attribute model [String, nil] the model chosen
@@ -118,7 +121,8 @@ class TeamPlanning::Capacity
     seats = people + open_positions(people)
     families = family_ids(seats)
     @facts = facts(seats)
-    priced = seats.map { |seat, reasons| Seat.new(seat:, places: seat.places.zip(reasons).map { |place, reason| price(seat, place, reason, families) }) }
+    priced = seats.map { |seat, reasons| Seat.new(seat:, places: seat.places.zip(reasons).map { |place, reason| price(seat, place, reason, families) },
+                                                     own_level: !@own_levels[seat.id].nil?) }
     Report.new(map: @map, seats: priced, **sums(priced))
   end
 
