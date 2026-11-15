@@ -119,6 +119,19 @@ plans projection keeps the list in `scope_unit_ids`.
   outside counts for the part inside, and the rest reads as one `outside: { share: }`,
   never as the units it is spent in. A manager outside reads as `manager_outside: true`.
   A change that places someone inside brings them in; undoing it lets them go.
+- **A plan changes only the people it covers.** A change about someone outside is refused
+  unless it is the assignment that places them in a covered unit, and the refusal says
+  nothing about them. A reporting line from someone inside to a manager outside is allowed.
+- **A change left about someone outside is flagged, never hidden from its own record.**
+  An undone bring-in, or an Org Graph move out of the plan's units, leaves the person's
+  other changes in the plan. Attention lists each one under "A change about someone this
+  plan no longer covers", with the change, so a planner can clear it or bring the person
+  back. History, status and overrides keep naming the subject by id, unnamed.
+- **The scope cut runs before the pay filter.** The cut runs first, in `Map#settled`, so
+  people outside never reach `map.people`. The see-pay filter runs after it, per person, in
+  `map_payload`. Cost drops places outside before pricing, and reads actual pay only for
+  holders. So the pay filter never sees a person outside, and no change to pay rules can
+  bring one back.
 - **The picker reaches the whole organisation.** `team_planning_coverable_units` lists
   every live unit, in tree order with its depth, to anyone who may start a plan, or to an
   editor of the plan with `plan_id`. It names units and no person, so a planner who can't
@@ -323,7 +336,9 @@ winning change and the change that broke it, such as its unit's `UnitRetired`.
 
 It marks a placement in a closed position, or in a retired unit or one gone from the scenario;
 a position in such a unit, or overfilled; a unit under a retired parent; anyone in
-`unresolved`; and a succession that lost a predecessor or whose successor is no longer live. A
+`unresolved`; a change about someone a scoped plan no longer covers, other than the
+assignment that moved them out, unnamed and under the change's own facet; and a succession
+that lost a predecessor or whose successor is no longer live. A
 position in a retired unit is the position's item, not each occupant's. `team_planning_attention`
 reads it, and the changes tab (4.4) and the checks tab (4.7) will too.
 
