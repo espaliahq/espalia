@@ -254,6 +254,18 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_equal({ "per_fte" => 1.5 }, capacity(@plan_id, @h1)[:totals].transform_values(&:to_f))
   end
 
+  should "keep a funding on a position outside the scope out of what needs attention" do
+    line = as_tenant { BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", head_count: 1) }
+    position = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                           level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    as_tenant do
+      handler.set_change(@plan_id, TeamPlanning::Events::PositionFundingSet, scenario_id: @h1, subject_id: position,
+                                                                             end_state: { draws: [ { budget_line_id: line.id } ] })
+    end
+
+    assert_not_includes call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @h2).to_json, position
+  end
+
   should "count someone who left in an earlier step as gone when a later step brings them in" do
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @cy.id,
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])
