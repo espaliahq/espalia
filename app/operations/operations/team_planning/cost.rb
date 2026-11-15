@@ -19,7 +19,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "priced over the same days, with the difference. Each seat (a person, or the FTE a position's occupants " \
               "leave open) is priced at the midpoint of the pay band for its level and country (else the band for any " \
               "location), made yearly (a month is 1/12, an hour takes the working_hours rule), scaled by FTE and by " \
-              "the days it is held out of 365, plus the on_cost rule of its unit. A person is priced at their own " \
+              "the days it is held out of the year (365, or the run rate's own year: 366 across a 29 February), plus the on_cost rule of its unit. A person is priced at their own " \
               "level, a planned one winning, and at their position's level only when theirs resolves to none; " \
               "level_source says which. A leaver costs up to their leaving date and their backfill from the day after. " \
               "Totals are per currency in `native`, and `converted` is the same in the reference currency at the " \

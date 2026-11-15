@@ -7,7 +7,6 @@ module Operations::TeamPlanning::CostFigures
 
   private
 
-  # A run rate stands alone: it has no baseline, so no difference.
   def compared(report, scenario, baseline)
     scenario ||= ::TeamPlanning::Cost.nothing(report.reference_currency)
     return { scenario: sum(scenario) } if report.run_rate?
