@@ -98,7 +98,9 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     changes = { plan_wide.key => plan_wide, at_unit.key => at_unit, [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed }
 
     %w[no_model unknown_model].each do |reason|
-      assert_same at_unit, TeamPlanning::Attention.new(map(rules:), changes, unclassified: uncovered(reason)).call.sole.change
+      item = TeamPlanning::Attention.new(map(rules:), changes, unclassified: uncovered(reason)).call.sole
+      assert_same at_unit, item.change
+      assert_equal [ LIVE ], item.unit_ids
     end
     assert_same plan_wide, TeamPlanning::Attention.new(map(rules: rules.with(by_subject: { ROOT => { "capacity_model" => {} } })),
                                                        changes.except(at_unit.key), unclassified: uncovered("no_model")).call.sole.change

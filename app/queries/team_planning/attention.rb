@@ -256,7 +256,7 @@ class TeamPlanning::Attention
       facet = "#{CAPACITY}:#{place.place.position_id || place.unit_id || UNASSIGNED}"
       reason = "Counts for no capacity: #{TeamPlanning::Capacity::REASONS.fetch(place.reason).downcase_first}"
       deciding = deciding_rule(place.unit_id) if MODEL_REASONS.include?(place.reason)
-      next Item.new(subject_id: seat.id, facet:, reason:, change: @changes[deciding]) if deciding
+      next Item.new(subject_id: seat.id, facet:, reason:, change: @changes[deciding], unit_ids: units_touched(seat.id, facet, [])) if deciding
 
       item(seat.id, facet, reason, broken_by: unclassified_causes(seat, place))
     end
