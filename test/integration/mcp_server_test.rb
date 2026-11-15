@@ -199,16 +199,12 @@ class McpServerTest < ActionDispatch::IntegrationTest
     end
 
     should "neither list nor call a web-only operation" do
-      whoami = Operations::System::Whoami
-      whoami.mcp(false)
-      begin
+      Operations::System::Whoami.stub(:mcp, false) do
         post_mcp({ jsonrpc: "2.0", id: 3, method: "tools/list" })
         assert_not_includes json_body.dig("result", "tools").pluck("name"), "system_whoami"
 
         post_mcp({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "system_whoami", arguments: {} } })
         assert_equal(-32601, json_body.dig("error", "code"))
-      ensure
-        whoami.remove_instance_variable(:@mcp)
       end
     end
 
