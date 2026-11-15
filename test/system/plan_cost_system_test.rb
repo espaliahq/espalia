@@ -28,7 +28,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
       [ ada, cy ].each { people.set_membership(it.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0) }
       @ada_id = ada.id
 
-      PayBand.create!(level: e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_000)
+      PayBand.create!(level: e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_419)
       ReferenceCurrency.create!(currency: "EUR")
       @level_id = e5.level_id
       @role_id = engineer.role_id
@@ -62,7 +62,8 @@ class PlanCostSystemTest < ApplicationSystemTestCase
           assert_text "Cy Quill: no level resolves for the seat", wait: 10
         end
         assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 150k"
-        assert_no_text "177"
+        [ "[data-cost-strip]", "[data-cost-unit]" ].each { |figures| all(figures).each { assert_not_includes it.text, "177" } }
+        %w[177k 177,419 177419].each { assert_no_text it }
         assert_no_sideways_overflow
       end
 
