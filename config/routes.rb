@@ -423,6 +423,7 @@ Rails.application.routes.draw do
     resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
     # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.
     resources :notes, only: [ :update ], controller: "plans/notes"
+    resources :settlements, only: [ :create ], controller: "plans/settlements"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.
