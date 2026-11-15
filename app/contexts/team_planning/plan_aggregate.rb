@@ -18,9 +18,11 @@
 # Its scenarios form a tree under the root, the baseline, which shares the
 # plan's id, stands on the base date and has no period. A `then` scenario is
 # the next step after its parent; an `instead` scenario is an alternative over
-# its parent's period. Only a `then` scenario's end is held: every start, and
-# an alternative's whole period, follows from the tree, so the periods along
-# any path from the root stay contiguous.
+# its parent's period. A split ({#split_scenario}) adds the third relation:
+# the rest of a scenario sits `on` its agreed part, over the same period. Only
+# a `then` scenario's end is held: every start, and the whole period of an
+# alternative or of the rest, follows from the tree, so the periods along any
+# path from the root stay contiguous.
 #
 # Each scenario holds its changes ({TeamPlanning::Events::Change}) in the order
 # made. A scenario resolves along its {#resolution_chain}, so an alternative is
@@ -45,7 +47,9 @@ class TeamPlanning::PlanAggregate
   def self.normalise_description(text) = text.to_s.gsub("\r\n", "\n").strip.presence
 
   ROLES = %w[editor viewer].freeze
-  RELATIONS = %w[then instead].freeze
+  RELATIONS = %w[then instead on].freeze
+  # A scenario sits `on` another only by a split.
+  FORK_RELATIONS = %w[then instead].freeze
   # A conflict an update carries: where it was read, its key, and the change it read.
   CONFLICT_FIELDS = %i[scenario_id subject_id facet change_id].freeze
 
@@ -275,7 +279,7 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "This plan already has that scenario" if scenario_id_taken?(scenario_id)
 
     relation = relation.to_s
-    raise TeamPlanning::Error, "A scenario forks as then or instead" unless RELATIONS.include?(relation)
+    raise TeamPlanning::Error, "A scenario forks as then or instead" unless FORK_RELATIONS.include?(relation)
 
     period = forked_period(live_scenario!(parent_id), relation, starts_on:, ends_on:)
     apply(TeamPlanning::Events::ScenarioForked.new(data: {
@@ -346,8 +350,11 @@ class TeamPlanning::PlanAggregate
     ensure_open!
     scenario = @scenarios[live_scenario!(scenario_id)]
     raise TeamPlanning::Error, "The baseline stands on the base date and has no period" unless scenario
-    if scenario.relation == "instead"
-      raise TeamPlanning::Error, "This scenario is an alternative: it takes its period from #{parent_of(scenario.parent_id)}"
+
+    case scenario.relation
+    in "instead" then raise TeamPlanning::Error, "This scenario is an alternative: it takes its period from #{parent_of(scenario.parent_id)}"
+    in "on" then return set_scenario_period(scenario.parent_id, ends_on:, set_by_id:)
+    in "then"
     end
 
     ends_on = require_date(ends_on)
@@ -381,6 +388,55 @@ class TeamPlanning::PlanAggregate
       plan_id: @plan_id, scenario_id: scenario_id, removed_by_id: removed_by_id
     }))
   end
+
+  # Splits a scenario so part of it can be approved. The named changes move
+  # into a new scenario, the agreed part, in its place; the original keeps the
+  # rest and sits `on` it. A change takes every entry of its subject and facet
+  # with it, so nothing it overwrote is left behind to win. Every scenario
+  # resolves as it did.
+  #
+  # @param scenario_id [String] a live scenario
+  # @param agreed_id [String] UUID minted by the caller
+  # @param name [String] the agreed part's
+  # @param event_ids [Array<String>] changes or pins in effect in the scenario
+  # @param standing_ids [Set<String>] the ids the scenario's parent resolves to: units, positions and people.
+  #   A moving change may need only these, or what another moving change creates.
+  # @param split_by_id [String] person_id of the actor
+  # @raise [TeamPlanning::SplitBlocked] if a moving change needs what a staying one creates
+  # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown or the root, the id taken, a
+  #   change not in effect there, or nothing or everything would move
+  def split_scenario(scenario_id, agreed_id:, name:, event_ids:, split_by_id:, standing_ids: Set.new)
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline can't be split" unless @scenarios[live_scenario!(scenario_id)]
+    raise TeamPlanning::Error, "This plan already has that scenario" if scenario_id_taken?(agreed_id)
+
+    in_effect = changes_in(scenario_id)
+    named = Array(event_ids).uniq.map do |event_id|
+      in_effect.find { it.event_id == event_id } or raise TeamPlanning::Error, "This scenario has no change #{event_id} in effect to move"
+    end
+    raise TeamPlanning::Error, "Name the changes that move into the agreed part" if named.empty?
+
+    keys = named.map(&:key).uniq
+    staying = latest_by_key(in_effect).reject { keys.include?(it.key) }
+    raise TeamPlanning::Error, "Every change would move: approve the scenario whole instead" if staying.empty?
+
+    moved, kept = @logs.fetch(scenario_id, []).partition { keys.include?(key_of(it)) }
+    ensure_stands_alone!(moved.grep(TeamPlanning::Events::Change), kept.grep(TeamPlanning::Events::Change), standing_ids.to_set)
+    apply(TeamPlanning::Events::ScenarioSplit.new(data: {
+      plan_id: @plan_id, scenario_id:, agreed_id:, name: require_name(name, "scenario"), keys:,
+      moved_event_ids: moved.map(&:event_id), split_by_id:
+    }))
+  end
+
+  # @param scenario_id [String]
+  # @return [Boolean] whether it is half of a split step: it sits `on` another, or another sits on it
+  def split?(scenario_id) = @scenarios[scenario_id]&.relation == "on" || children_of(scenario_id).any? { it.relation == "on" }
+
+  # The scenarios that share a step with this one by sitting on it, and on those.
+  #
+  # @param scenario_id [String]
+  # @return [Array<String>]
+  def resting_on(scenario_id) = children_of(scenario_id).select { it.relation == "on" }.flat_map { [ it.id, *resting_on(it.id) ] }
 
   # Records the end state of one facet of one subject in a scenario.
   #
@@ -625,7 +681,10 @@ class TeamPlanning::PlanAggregate
 
     scenario = @scenarios.fetch(scenario_id)
     path = timeline_path(scenario.parent_id)
-    (scenario.relation == "instead" ? path[0...-1] : path) + [ scenario_id ]
+    case scenario.relation
+    in "instead" | "on" then path[0...-1] + [ scenario_id ]
+    in "then" then path + [ scenario_id ]
+    end
   end
 
   # @return [Hash{String => Scenario}] the live scenarios, by id, without the root
@@ -642,10 +701,12 @@ class TeamPlanning::PlanAggregate
   # @return [Range<Date>, nil] nil for the root
   def period_of(scenario_id, ends = {})
     scenario = @scenarios.fetch(scenario_id) { return nil }
-    return period_of(scenario.parent_id, ends) if scenario.relation == "instead"
-
-    starts_on = scenario.parent_id == @plan_id ? @base_on : period_of(scenario.parent_id, ends).end + 1
-    starts_on..ends.fetch(scenario_id, scenario.ends_on)
+    case scenario.relation
+    in "instead" | "on" then period_of(scenario.parent_id, ends)
+    in "then"
+      starts_on = scenario.parent_id == @plan_id ? @base_on : period_of(scenario.parent_id, ends).end + 1
+      starts_on..ends.fetch(scenario_id, scenario.ends_on)
+    end
   end
 
   # @return [Hash{String => String}] person_id to role
@@ -744,6 +805,23 @@ class TeamPlanning::PlanAggregate
     @scenarios[id] = @scenarios.fetch(id).with(ends_on: Date.iso8601(event.data[:ends_on]))
   end
 
+  on TeamPlanning::Events::ScenarioSplit do |event|
+    data = event.data
+    original = @scenarios.fetch(data[:scenario_id])
+    agreed_id = data[:agreed_id]
+    moved = data[:moved_event_ids].to_set
+    @scenarios[agreed_id] = original.with(id: agreed_id)
+    @scenarios[original.id] = original.with(parent_id: agreed_id, relation: "on", ends_on: nil)
+    moving, @logs[original.id] = @logs.fetch(original.id, []).partition { moved.include?(it.event_id) }
+    @logs[agreed_id] = moving.map { moved_to(it, agreed_id) }
+    @redo_stacks.fetch(original.id, {}).each do |person_id, stack|
+      redo_stack(agreed_id, person_id).concat(stack.select { moved.include?(it) })
+      stack.reject! { moved.include?(it) }
+    end
+    carried = @carried.fetch(original.id, {}).slice(*data[:keys].map(&:to_a))
+    @carried[agreed_id] = carried if carried.any?
+  end
+
   on TeamPlanning::Events::ChangeCleared do |event|
     record_change(event)
   end
@@ -824,6 +902,28 @@ class TeamPlanning::PlanAggregate
     kind.new(event_id:, data: { **fields, **end_state.to_h.symbolize_keys })
   end
 
+  def latest_by_key(changes) = changes.each_with_object({}) { |change, latest| latest.delete(change.key); latest[change.key] = change }.values
+
+  # A moving change may need its own subject, unless it creates it, and the
+  # ids it refers to. Each must stand in the parent or be created by a moving
+  # change; one that only a staying change creates blocks the split. Every
+  # change that moves counts, since an undo in the agreed part can bring an
+  # earlier one back. Every staying change counts too, cleared or undone,
+  # since an undo in the rest can bring its creation back.
+  def ensure_stands_alone!(moving, staying, standing_ids)
+    created = moving.select { it.class.creates_subject? }.to_set { it.data[:subject_id] }
+    creators = staying.select { it.class.creates_subject? }.group_by { it.data[:subject_id] }
+    blocks = moving.flat_map do |change|
+      needs = change.class.refers_to(change.data) + (change.class.creates_subject? ? [] : [ change.data[:subject_id] ])
+      needs.uniq.reject { standing_ids.include?(it) || created.include?(it) }.flat_map do |id|
+        creators.fetch(id, []).map do |creator|
+          TeamPlanning::SplitBlocked::Block.new(event_id: creator.event_id, subject_id: id, facet: creator.key.last, blocks_event_id: change.event_id)
+        end
+      end
+    end
+    raise TeamPlanning::SplitBlocked, blocks if blocks.any?
+  end
+
   def log_entry!(scenario_id, event_id)
     @logs.fetch(scenario_id, []).find { it.event_id == event_id } or
       raise TeamPlanning::Error, "#{this(scenario_id)} has no such change"
@@ -845,6 +945,14 @@ class TeamPlanning::PlanAggregate
     later = later_in_effect(@logs.fetch(scenario_id), entry) or return
 
     raise TeamPlanning::Error, "A later change to this replaced it (#{later.event_id}): undo that first, then #{action} this"
+  end
+
+  # A moved change names the agreed part as where it is set, so every reader
+  # finds it where the log holds it.
+  def moved_to(entry, agreed_id)
+    data = entry.data.merge(scenario_id: agreed_id)
+    data = entry.class.moved_end_state(data, from: entry.data[:scenario_id], to: agreed_id) if entry.is_a?(TeamPlanning::Events::Change)
+    entry.class.new(event_id: entry.event_id, data:, metadata: entry.metadata.to_h)
   end
 
   def record_change(event)
@@ -921,6 +1029,9 @@ class TeamPlanning::PlanAggregate
   def next_step(parent_id, starts_on, ends_on)
     if children_of(parent_id).any? { it.relation == "then" }
       raise TeamPlanning::Error, "#{parent_of(parent_id).upcase_first} already has a next step: fork an alternative to that step instead"
+    end
+    if children_of(parent_id).any? { it.relation == "on" }
+      raise TeamPlanning::Error, "This is the agreed part of a split step: fork the next step from the rest, which sits on it"
     end
 
     start = parent_id == @plan_id ? @base_on : period_of(parent_id).end + 1

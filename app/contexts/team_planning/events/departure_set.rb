@@ -25,6 +25,10 @@ class TeamPlanning::Events::DepartureSet < TeamPlanning::Events::Change
   # @return [String]
   def self.facet = "departure"
 
+  # @param data [Hash]
+  # @return [Array<String>] the backfill, if any
+  def self.refers_to(data) = [ data[:position_id] ].compact
+
   # @param end_state [Hash] `{ leaves_in_id:, position_id:, leaves_on: }`, the position nil or absent
   #   for no backfill, the date absent when the step is the date
   # @return [Hash] the ids downcased, and `leaves_on` only when given
@@ -36,6 +40,17 @@ class TeamPlanning::Events::DepartureSet < TeamPlanning::Events::Change
     state = { leaves_in_id:, position_id: end_state[:position_id].to_s.strip.downcase.presence }
     leaves_on = leaving_date(end_state[:leaves_on])
     leaves_on ? state.merge(leaves_on: leaves_on.iso8601) : state
+  end
+
+  # A departure set where it leaves moves with its step, so the agreed part
+  # still has them leave in it once the rest is gone.
+  #
+  # @param end_state [Hash]
+  # @param from [String]
+  # @param to [String]
+  # @return [Hash]
+  def self.moved_end_state(end_state, from:, to:)
+    end_state[:leaves_in_id] == from ? end_state.merge(leaves_in_id: to) : end_state
   end
 
   # @param value [Date, String, nil]

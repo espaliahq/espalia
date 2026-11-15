@@ -208,6 +208,26 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Moves the named changes into an agreed part beneath the scenario. What a
+  # moving change may need is read from the parent's resolved map.
+  #
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param agreed_id [String] UUID minted by the caller
+  # @param name [String] the agreed part's
+  # @param event_ids [Array<String>] changes or pins in effect in the scenario
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::SplitBlocked] if a moving change needs what a staying one creates
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#split_scenario
+  def split_scenario(plan_id, scenario_id, agreed_id:, name:, event_ids:)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.split_scenario(scenario_id, agreed_id:, name:, event_ids:, standing_ids: standing_ids(plan, scenario_id),
+                                       split_by_id: actor_id!)
+    end
+  end
+
   # @param plan_id [String]
   # @param scenario_id [String]
   # @param name [String]
@@ -417,6 +437,13 @@ class TeamPlanning::CommandHandler
       yield plan, chosen
     end
     chosen
+  end
+
+  def standing_ids(plan, scenario_id)
+    parent_id = plan.scenarios[scenario_id]&.parent_id or return Set.new
+
+    map = TeamPlanning::Resolution.new(context: @actor, plan: TeamPlanningPlan.find(plan.plan_id), scenario_id: parent_id).structure(plan)
+    [ map.units, map.positions, map.people ].flatten.to_set(&:id)
   end
 
   def inherited(plan, scenario_id, subject_id, facet)

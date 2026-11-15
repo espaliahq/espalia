@@ -203,6 +203,20 @@ class TeamPlanning::Baseline
     # @raise [TeamPlanning::Error] for an unknown rule, or a unit not on the map
     def rule(rule, unit_id: nil) = rules.value_of(rule.to_s, along: unit_id ? units_up_from(unit_id) : [])
 
+    # @param unit_id [String]
+    # @return [Array<String>] the unit and each unit above it on the map, nearest first
+    # @raise [TeamPlanning::Error] for a unit not on the map
+    def units_up_from(unit_id)
+      by_id = units.index_by(&:id)
+      raise TeamPlanning::Error, "No such unit" unless by_id.key?(unit_id)
+
+      chain = [ unit_id ]
+      while (parent_id = by_id[chain.last].parent_id) && by_id.key?(parent_id) && chain.exclude?(parent_id)
+        chain << parent_id
+      end
+      chain
+    end
+
     private
 
     def covered_ids
@@ -214,17 +228,6 @@ class TeamPlanning::Baseline
         children.fetch(id, []).each { queue << it.id if covered.add?(it.id) }
       end
       covered
-    end
-
-    def units_up_from(unit_id)
-      by_id = units.index_by(&:id)
-      raise TeamPlanning::Error, "No such unit" unless by_id.key?(unit_id)
-
-      chain = [ unit_id ]
-      while (parent_id = by_id[chain.last].parent_id) && by_id.key?(parent_id) && chain.exclude?(parent_id)
-        chain << parent_id
-      end
-      chain
     end
   end
 
@@ -377,8 +380,11 @@ class TeamPlanning::Baseline
   Unresolved::LEFT = "has left"
 
   # An open position. Its role and level names are nil until joined, and stay
-  # nil for a role or level the framework no longer has.
-  Position = Data.define(:id, :role_id, :level_id, :unit_id, :fte, :basis, :role_name, :level_name) do
+  # nil for a role or level the framework no longer has. Its cost centre is
+  # its own label, nil when it has none.
+  Position = Data.define(:id, :role_id, :level_id, :unit_id, :fte, :basis, :cost_centre, :role_name, :level_name) do
+    def initialize(cost_centre: nil, **) = super
+
     # @param basis [String]
     # @return [String] "committed" for a backfill, "planned" for a new position
     def self.budget_of(basis) = basis == "backfill" ? "committed" : "planned"
@@ -433,7 +439,7 @@ class TeamPlanning::Baseline
 
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def structure = map_on(@plan.base_on, known_on: @plan.base_on - 1)
+  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on ]) { map_on(@plan.base_on, known_on: @plan.base_on - 1) }
 
   # The organisation on another day, in the shape {#structure} gives, so a
   # reader can hold the plan up against it.

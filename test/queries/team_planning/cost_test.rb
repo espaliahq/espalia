@@ -140,6 +140,52 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
                  "Payments sits under Engineering, and only Ada is in no unit"
   end
 
+  def cost_centre_rules(*rules, unit_id: nil)
+    operation(Operations::TeamPlanning::SetRule, unit_id:, rule: "cost_centre", value: { rules: })
+  end
+
+  def open_cost_centre(priced, position_id) = lines(priced, position_id).sole.then { [ it.cost_centre, it.cost_centre_source, it.cost_centre_rule ] }
+
+  should "put an open seat under its position's own cost centre first, then an occupant's" do
+    labelled = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                                fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
+    shared = open_position(unit_id: @payments)
+    operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: labelled, allocation: 0.5 },
+                                                                                        { position_id: shared, allocation: 0.5 } ])
+    cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" })
+
+    assert_equal [ "Platform", "position", nil ], open_cost_centre(cost.scenario, labelled), "its own label beats Ada's CC-1"
+    assert_equal [ "CC-1", "person", nil ], open_cost_centre(cost.scenario, shared), "Ada fills half of it and brings CC-1"
+  end
+
+  should "put an unfilled position under the first cost centre rule that matches at its unit, and none without one" do
+    seat = open_position(unit_id: @payments)
+    assert_equal [ nil, "none", nil ], open_cost_centre(cost.scenario, seat)
+
+    cost_centre_rules({ role_id: @manager.role_id, cost_centre: "Managers" },
+                      { unit_id: @engineering, role_family_id: @engineer.role_family_id, cost_centre: "Engineering" },
+                      { unit_id: @payments, cost_centre: "Payments" })
+
+    assert_equal [ "Engineering", "rule", 1 ], open_cost_centre(cost.scenario, seat), "Payments sits under Engineering"
+    assert_includes cost.scenario.cost_centres.keys, "Engineering"
+  end
+
+  should "never move a person's own cost centre by the rules" do
+    cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" })
+
+    assert_equal [ [ nil, "none" ] ], lines(cost.scenario, @cy.id).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+    assert_equal [ [ "CC-1", "person" ] ], lines(cost.scenario, @ada.id).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+  end
+
+  should "give a placeholder hire their position's cost centre, as they have none of their own" do
+    seat = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                            fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
+    hire = operation(Operations::TeamPlanning::SetPlaceholderHire, label: "Payments engineer", fte: 1)[:placeholder_id]
+    operation(Operations::TeamPlanning::SetAssignment, person_id: hire, placements: [ { position_id: seat, allocation: 1 } ])
+
+    assert_equal [ [ "Platform", "position" ] ], lines(cost.scenario, hire).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+  end
+
   should "price a filled position at its occupant's level, falling back to the position's and saying so" do
     seat = open_position(level: @e6, unit_id: @payments)
     operation(Operations::TeamPlanning::SetAssignment, person_id: @cy.id, placements: [ { position_id: seat, allocation: 1 } ])
@@ -261,8 +307,31 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal Time.utc(2026, 1, 6, 9), cost.bands_changed_at, "a removed band reprices plans too"
   end
 
-  should "refuse to cost the baseline, which has no period" do
-    refused = assert_raises(TeamPlanning::Error) { cost(@plan_id) }
-    assert_equal "The baseline has no period to cost, so cost one of the plan's scenarios", refused.message
+  should "price Today for the year from its base date, with nothing to stand against" do
+    report = cost(@plan_id)
+
+    assert_equal [ "run_rate", BASE_ON..Date.new(2026, 12, 31) ], [ report.basis, report.period ]
+    assert_equal 243_200r, report.scenario.total.converted
+    assert_nil report.baseline
+    assert_nil report.difference
+  end
+
+  should "count a year with 29 February in it as one full year, and end a year from 29 February on 28 February" do
+    plan_id = SecureRandom.uuid_v7
+    as_tenant { handler.create_plan(plan_id, name: "Leap", base_on: Date.new(2027, 6, 1)) }
+    report = as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(plan_id), scenario_id: plan_id).call }
+
+    assert_equal Date.new(2027, 6, 1)..Date.new(2028, 5, 31), report.period
+    assert_equal [ 366, 1r, 100_000r ], lines(report.scenario, @ada.id).sole.then { [ it.days, it.share, it.amount ] }
+    assert_equal Date.new(2028, 2, 29)..Date.new(2029, 2, 28), TeamPlanning::Cost.year_from(Date.new(2028, 2, 29))
+  end
+
+  should "price Today's run rate first among every scenario, each scenario still against Today over its own days" do
+    half = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, parent_id: @year, relation: "then", name: "Half", ends_on: "2027-06-30")[:scenario_id]
+    reports = as_tenant { TeamPlanning::Cost.every_scenario(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)) }
+
+    assert_equal [ @plan_id, @year, half ], reports.keys
+    ada = reports[half].baseline.lines.find { it.seat_id == @ada.id }
+    assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 6, 30), Rational(181, 365) ], [ ada.held, ada.share ]
   end
 end

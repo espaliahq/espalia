@@ -4,6 +4,8 @@
 # the Team Planning Operations, as the MCP tools do, so a plan someone isn't
 # in is a 404 here and "No such plan" there.
 class PlansController < ApplicationController
+  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map]
+
   # GET /planning
   def index
     authorize TeamPlanningPlan, :index?, policy_class: PlanPolicy
@@ -57,7 +59,7 @@ class PlansController < ApplicationController
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
     render plan_page(plan, scenarios:, open_tab: :map,
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
-                                                               **map_hooks(cost_hooks(plan, map), capacity_hooks(marks))))
+                                                               **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
 
   # GET /planning/:id/timeline?scenario=:scenario_id&step=:index
@@ -152,11 +154,9 @@ class PlansController < ApplicationController
     { **marks, summary: summaries.any? ? Views::Plans::MapSummaries.new(summaries) : nil }
   end
 
-  # Today has no period, so only a scenario is priced. Cost shows once a pay
-  # band prices something; a scenario that can't be priced keeps its map.
-  def cost_hooks(plan, map)
-    return {} if map[:scenario_id] == plan[:plan_id]
-
+  # Cost shows once a pay band prices something; a scenario that can't be
+  # priced keeps its map.
+  def cost_hooks(map)
     marks = Views::Plans::CostMarks.new(cost: read(Operations::TeamPlanning::Cost, scenario_id: map[:scenario_id]), map:)
     marks.priced? ? { unit_marks: marks.unit_marks, summary: Views::Plans::CostStrip.new(marks:) } : {}
   rescue ActiveRecord::RecordNotFound
@@ -168,7 +168,7 @@ class PlansController < ApplicationController
 
     costs = read(Operations::TeamPlanning::ScenarioCosts)
     rows = costs[:scenarios].index_by { it[:scenario_id] }
-    priced = rows.values.any? { |row| row[:total]&.values_at(:scenario, :baseline)&.any? { it[:native].any? } }
+    priced = rows.values.any? { |row| row[:total]&.values_at(:scenario, :baseline)&.compact&.any? { it[:native].any? } }
     return [] unless priced
 
     [ Views::Plans::ScenarioTable::Column.new(heading: "Cost", cell: ->(scenario) {

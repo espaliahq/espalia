@@ -96,13 +96,22 @@ class TeamPlanning::Timeline
     end
   end
 
+  # Either half of a split step is part of the step, not another way through it.
   def alternatives(aggregate, before, scenario_id)
     @paths ||= aggregate.scenarios.keys.index_with { aggregate.timeline_path(it) }
-    ordered(@paths.keys).select { it != scenario_id && @paths[it] == before + [ it ] }
+    same_step = [ scenario_id, *aggregate.resting_on(scenario_id) ]
+    ordered(@paths.keys).select { same_step.exclude?(it) && @paths[it] == before + [ it ] && aggregate.resting_on(it).empty? }
   end
 
   def next_ids(aggregate, scenario_id)
-    ordered(aggregate.scenarios.select { |_, scenario| scenario.parent_id == scenario_id && scenario.relation == "then" }.keys)
+    ordered(aggregate.scenarios.select { |_, scenario| scenario.parent_id == scenario_id && follows?(scenario.relation) }.keys)
+  end
+
+  def follows?(relation)
+    case relation
+    in "then" then true
+    in "instead" | "on" then false
+    end
   end
 
   def ordered(ids) = ids.sort_by { [ created_order.fetch(it, created_order.size), it ] }

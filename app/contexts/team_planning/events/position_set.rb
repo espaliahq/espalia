@@ -12,31 +12,42 @@
 #   @option data [String] :unit_id an Org Graph unit, or one a plan creates
 #   @option data [Float] :fte above 0 and at most 1
 #   @option data [String] :basis "backfill" (committed budget) or "new" (planned)
+#   @option data [String, nil] :cost_centre the position's own label, which
+#     wins over its occupant's and the cost centre rules; absent from older events
 #   Plus {TeamPlanning::Events::Change::FIELDS}.
 #
 class TeamPlanning::Events::PositionSet < TeamPlanning::Events::Change
   BASES = %w[backfill new].freeze
   IDS = %i[role_id level_id unit_id].freeze
+  COST_CENTRE_LENGTH = 120
 
   # @return [String]
   def self.facet = "position"
 
+  # @param data [Hash]
+  # @return [Array<String>] the unit the position sits in
+  def self.refers_to(data) = [ data[:unit_id] ].compact
+
+  # @return [Boolean]
+  def self.creates_subject? = true
+
   # @param end_state [Hash]
-  # @return [Hash] the ids downcased, the FTE a Float
-  # @raise [TeamPlanning::Error] for a missing id, an FTE outside (0, 1] or an unknown basis
+  # @return [Hash] the ids downcased, the FTE a Float, the cost centre squished or nil
+  # @raise [TeamPlanning::Error] for a missing id, an FTE outside (0, 1], an unknown basis or a long cost centre
   def self.end_state(end_state)
     ids = IDS.to_h { [ it, end_state[it].to_s.strip.downcase ] }
     missing = ids.select { |_, id| id.empty? }.keys
     raise TeamPlanning::Error, "A position needs #{missing.join(", ")}" if missing.any?
 
-    { **ids, fte: fte!(end_state[:fte]), basis: basis!(end_state[:basis]) }
+    { **ids, fte: fte!(end_state[:fte]), basis: basis!(end_state[:basis]), cost_centre: cost_centre!(end_state[:cost_centre]) }
   end
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
   # @return [TeamPlanning::Baseline::Map]
   def self.apply_to(map, data)
-    position = TeamPlanning::Baseline::Position.new(id: data[:subject_id], **data.slice(*IDS, :fte, :basis), role_name: nil, level_name: nil)
+    fields = data.slice(*IDS, :fte, :basis, :cost_centre)
+    position = TeamPlanning::Baseline::Position.new(id: data[:subject_id], **fields, role_name: nil, level_name: nil)
     map.with(positions: map.positions.reject { it.id == position.id } + [ position ])
   end
 
@@ -54,5 +65,12 @@ class TeamPlanning::Events::PositionSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "A position is a #{BASES.join(" or a ")} one"
   end
 
-  private_class_method :fte!, :basis!
+  def self.cost_centre!(value)
+    label = value.to_s.squish.presence
+    return label if label.nil? || label.length <= COST_CENTRE_LENGTH
+
+    raise TeamPlanning::Error, "A position's cost centre is at most #{COST_CENTRE_LENGTH} characters"
+  end
+
+  private_class_method :fte!, :basis!, :cost_centre!
 end
