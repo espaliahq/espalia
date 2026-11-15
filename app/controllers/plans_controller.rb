@@ -24,7 +24,10 @@ class PlansController < ApplicationController
   def show
     plan = read(Operations::TeamPlanning::Plan)
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
-    render plan_page(plan, open_tab: :scenarios)
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?,
+                                            extra_columns: capacity_columns(plan, scenarios))
+    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table)
   end
 
   # GET /planning/:id/map?scenario=:scenario_id
@@ -37,8 +40,9 @@ class PlansController < ApplicationController
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
+    marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
     render plan_page(plan, scenarios:, open_tab: :map,
-                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?))
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?, **capacity_hooks(marks)))
   end
 
   # GET /planning/:id/timeline?scenario=:scenario_id&step=:index
@@ -57,6 +61,42 @@ class PlansController < ApplicationController
   end
 
   private
+
+  # Every scenario is measured against the baseline, as cost is, so its
+  # capacity and Today's are read side by side.
+  def capacity_marks(plan, scenario_id, names: {}, live_unit_ids: nil)
+    @capacity ||= {}
+    scenario, baseline = [ scenario_id, plan[:plan_id] ].map { @capacity[it] ||= read(Operations::TeamPlanning::Capacity, scenario_id: it) }
+    Views::Plans::CapacityMarks.new(scenario:, baseline:, names: scenario[:names].merge(names), live_unit_ids:)
+  end
+
+  def capacity_hooks(marks)
+    return {} unless marks.measured?
+
+    { unit_marks: marks.unit_marks, person_marks: marks.person_marks, position_marks: marks.position_marks,
+      summary: Views::Plans::CapacityStrip.new(marks:) }
+  end
+
+  # A scenario that no longer resolves says so in its cell rather than
+  # taking the whole table with it.
+  def capacity_columns(plan, scenarios)
+    marks = scenarios.to_h { [ it[:scenario_id], capacity_marks_or_nil(plan, it[:scenario_id]) ] }
+    return [] if marks.values.all? { it && !it.measured? }
+
+    [ Views::Plans::ScenarioTable::Column.new(heading: "Capacity", cell: ->(scenario) { capacity_cell(marks[scenario[:scenario_id]]) }) ]
+  end
+
+  def capacity_marks_or_nil(plan, scenario_id)
+    capacity_marks(plan, scenario_id)
+  rescue ActiveRecord::RecordNotFound
+    nil
+  end
+
+  def capacity_cell(marks)
+    return Views::Plans::CapacityUnitTotal.new(totals: [], baseline: false, empty: "Can't be counted") unless marks
+
+    Views::Plans::CapacityUnitTotal.new(totals: marks.totals, baseline: marks.baseline?, empty: "None counted")
+  end
 
   def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil)
     members = read(Operations::TeamPlanning::PlanMembers)[:members]

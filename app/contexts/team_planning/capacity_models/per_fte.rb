@@ -9,6 +9,9 @@ class TeamPlanning::CapacityModels::PerFte < TeamPlanning::CapacityModel
   # @return [String]
   def self.description = "One unit per full-time equivalent, whatever the role or level"
 
+  # @return [String]
+  def self.symbol = "FTE"
+
   # @param params [Hash] none
   # @return [Hash]
   # @raise [TeamPlanning::Error] for any parameter

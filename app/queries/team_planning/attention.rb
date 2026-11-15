@@ -27,22 +27,28 @@ class TeamPlanning::Attention
   #   nil only when no change explains it
   Item = Data.define(:subject_id, :facet, :reason, :change)
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers budget_lines].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
+              budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
   SUCCESSION = TeamPlanning::Events::UnitSuccessionSet.facet
   LINE = TeamPlanning::Events::ReportingLineSet.facet
   CAPACITY = TeamPlanning::Events::CapacitySet.facet
+  LEVEL = TeamPlanning::Events::LevelSet.facet
   BUDGET_LINE = TeamPlanning::Events::BudgetLineSet.facet
   DEPARTURE = TeamPlanning::Events::DepartureSet.facet
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
+  # A place in no unit has no id an override could name, as the map's own drop target hasn't.
+  UNASSIGNED = "unassigned"
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
   # @param left_ids [Array<String>] the people the Org Graph has had leave by today
-  def initialize(map, changes, left_ids: [])
+  # @param unclassified [Array<Array(TeamPlanning::Capacity::Seat, TeamPlanning::Capacity::Place)>] from {TeamPlanning::Capacity::Report#unclassified}
+  def initialize(map, changes, left_ids: [], unclassified: [])
     @map = map
+    @unclassified = unclassified
     @changes = changes
     @left = left_ids.to_set
     @order = changes.keys.each_with_index.to_h
@@ -212,6 +218,46 @@ class TeamPlanning::Attention
 
   def percent(total) = "#{fte(total * 100)}%"
 
+  # A leaver's backfill carries their seat, a forgotten person's override is
+  # gone with them, and a closed position is the placements check's item.
+  UNCLASSIFIED_ELSEWHERE = %w[leaving override_unknown closed_position].freeze
+
+  def unclassified
+    @unclassified.reject { |_, place| UNCLASSIFIED_ELSEWHERE.include?(place.reason) }.map do |priced, place|
+      seat = priced.seat
+      facet = "#{CAPACITY}:#{place.place.position_id || place.unit_id || UNASSIGNED}"
+      item(seat.id, facet, "Counts for no capacity: #{TeamPlanning::Capacity::REASONS.fetch(place.reason).downcase_first}",
+           broken_by: unclassified_causes(seat, place))
+    end
+  end
+
+  # A place in a position takes the position's role and level, so a later
+  # edit to the position can be what left its occupant uncovered. A missing
+  # model or level can also be a capacity rule's doing, set at the place's
+  # unit, above it or plan-wide, or the unit's retirement, which drops the
+  # rule set there.
+  def unclassified_causes(seat, place)
+    rules = RULE_REASONS.include?(place.reason) ? rule_keys(place.unit_id) : []
+    return [ [ seat.id, POSITION ], *rules ] unless seat.kind == "person"
+
+    position_id = place.place.position_id
+    level = [ seat.id, LEVEL ] if place.reason == "no_level" && !position_id
+    [ [ seat.id, ASSIGNMENT ], level, ([ position_id, POSITION ] if position_id), *rules ].compact
+  end
+
+  RULE_REASONS = %w[no_model unknown_model no_level].freeze
+  CAPACITY_RULE = "#{TeamPlanning::Events::RuleSet.facet}:#{TeamPlanning::RuleKinds::Capacity.rule_name}".freeze
+
+  def rule_keys(unit_id)
+    parent_of = @map.units.to_h { [ it.id, it.parent_id ] }
+    along = []
+    while parent_of.key?(unit_id) && along.exclude?(unit_id)
+      along << unit_id
+      unit_id = parent_of[unit_id]
+    end
+    retired = [ [ unit_id, UNIT ] ] if unit_id && along.empty?
+    [ *(along + [ @map.rules.plan_id ]).map { [ it, CAPACITY_RULE ] }, *retired ]
+  end
 
   # The tenant removed a line the plan changed or cut, so the change stands on nothing.
   def budget_lines

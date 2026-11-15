@@ -58,6 +58,15 @@ class TeamPlanning::Capacity
   Report = Data.define(:map, :seats, :units, :totals) do
     # @return [Array<Array(Seat, Place)>] each place that counts nowhere, with its seat
     def unclassified = seats.flat_map { |seat| seat.places.select(&:unclassified?).map { [ seat, it ] } }
+
+    # @return [Boolean] whether any place has a model chosen, so the plan measures capacity at all
+    def measured? = seats.any? { |seat| seat.places.any?(&:model) }
+
+    # @return [Boolean] whether the tenant or plan chooses a model for any role or family, at any unit
+    def configured?
+      values = [ map.rules.defaults[RULE.rule_name] ] + map.rules.by_subject.values.filter_map { it[RULE.rule_name] }
+      values.any? { |value| value.values.any?(&:present?) }
+    end
   end
 
   # @!attribute seat [TeamPlanning::CapacityModel::Seat]
@@ -93,8 +102,14 @@ class TeamPlanning::Capacity
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call
-    @map = @resolution.call
+  def call = report_for(@resolution.call)
+
+  # Prices a map the caller has already resolved for this scenario.
+  #
+  # @param map [TeamPlanning::Baseline::Map]
+  # @return [Report]
+  def report_for(map)
+    @map = map
     @positions = @rules = @own_levels = nil
     @overrides = @map.people.to_h { [ it.id, it.capacity_overrides ] }
     @live = @map.units.to_set(&:id)
