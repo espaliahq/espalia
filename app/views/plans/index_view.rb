@@ -7,9 +7,11 @@ class Views::Plans::IndexView < Views::Base
   # @param plans [Array<Hash>] from `team_planning_plans`
   # @param can_create [Boolean] whether the caller may start a plan
   # @param error [String, nil] why the last plan could not be created
-  # @param draft [Hash] the name and base date the caller last typed, kept when the create was refused
-  def initialize(plans:, can_create:, user:, current_tenant:, tenants: [], error: nil, draft: {})
+  # @param draft [Hash] the name, base date and scope the caller last chose, kept when the create was refused
+  # @param units [Array<Hash>] from `team_planning_coverable_units`, the units a new plan may cover
+  def initialize(plans:, can_create:, user:, current_tenant:, tenants: [], error: nil, draft: {}, units: [])
     @plans = plans
+    @units = units
     @can_create = can_create
     @error = error
     @draft = draft
@@ -69,21 +71,33 @@ class Views::Plans::IndexView < Views::Base
       render Components::Kit::Card.new(title: "New plan", heading_level: :h2) do |card|
         card.body do
           render Components::Kit::Alert.new(tone: :danger, class: "mb-4") { @error } if @error
-          form(action: plans_path, method: "post", class: "grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end") do
+          form(action: plans_path, method: "post", class: "space-y-4") do
             input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-            div do
-              label(for: "plan_name", class: "block text-sm font-medium text-default") { "Name" }
-              input(id: "plan_name", name: "plan[name]", type: "text", required: true, value: @draft[:name], class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
-            end
-            div do
-              label(for: "plan_base_on", class: "block text-sm font-medium text-default") { "Start from the organisation on" }
-              input(id: "plan_base_on", name: "plan[base_on]", type: "date", required: true,
-                    value: @draft[:base_on].presence || Date.current.iso8601, class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
-            end
+            div(class: "grid gap-4 sm:grid-cols-[1fr_auto]") { name_and_date }
+            render Views::Plans::ScopeFields.new(id: "plan-scope", units: @units, chosen: drafted_units, choosing: @draft[:scope] == "chosen",
+                                                 hint: "You can widen what a plan covers later.")
             render Components::Kit::Button.new(variant: :solid, tone: :brand, type: :submit) { "Create plan" }
           end
         end
       end
     end
+  end
+
+  def name_and_date
+    div do
+      label(for: "plan_name", class: "block text-sm font-medium text-default") { "Name" }
+      input(id: "plan_name", name: "plan[name]", type: "text", required: true, value: @draft[:name], class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
+    end
+    div do
+      label(for: "plan_base_on", class: "block text-sm font-medium text-default") { "Start from the organisation on" }
+      input(id: "plan_base_on", name: "plan[base_on]", type: "date", required: true,
+            value: @draft[:base_on].presence || Date.current.iso8601, class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
+    end
+  end
+
+  def drafted_units
+    return [] unless @draft[:scope] == "chosen"
+
+    Array(@draft[:unit_ids]).map { { unit_id: it } }
   end
 end

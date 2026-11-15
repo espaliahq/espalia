@@ -14,6 +14,7 @@ class Views::Plans::ChecksTab < Views::Base
     positions: [ "Positions", "Positions in a unit the scenario retired, or filled past their FTE." ],
     units: [ "Units", "Units whose parent the scenario retired." ],
     unresolved: [ "People the plan can't place", "People placed who joined after the base or have left, so the Org Graph can't place them." ],
+    uncovered: [ "People the plan no longer covers", "Changes about someone outside the plan's units, since a bring-in was undone or the Org Graph moved them out." ],
     successions: [ "Successions", "Successions whose units no longer read the way the succession says." ],
     capacity_overrides: [ "Capacity overrides", "Overrides on a place the person no longer holds." ],
     allocations: [ "Allocations", "People placed nowhere, or over or under 100% allocated." ],
@@ -21,7 +22,8 @@ class Views::Plans::ChecksTab < Views::Base
     managers: [ "Managers", "People with no manager, or one who is gone, has left or shares none of their units." ],
     overloaded: [ "Overloaded managers", "Seats whose reports cost more to manage than the seat delivers." ],
     unclassified: [ "Capacity", "Places no capacity model covers." ],
-    budget_lines: [ "Budget lines", "Changes to budget lines the organisation has since removed." ]
+    budget_lines: [ "Budget lines", "Changes to budget lines the organisation has since removed." ],
+    fundings: [ "Funding", "Funding set on a position that has closed, or on a budget line this scenario no longer holds." ]
   }.freeze
   # @param check [String, Symbol]
   # @return [String] the group's heading, or the key itself for a check with none

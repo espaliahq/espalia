@@ -1,0 +1,30 @@
+{
+  "name": "team_planning_set_plan_scope",
+  "description": "Set which units a Team Planning plan covers: unit_ids, each with everything under it, or none for the whole organisation. Widening is always allowed. Narrowing is refused while the plan holds a change about a person, unit or position the narrower plan would leave out; the refusal names those changes and counts any it can't name. Refused unless the caller is one of the plan's editors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "unit_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "the units it covers; none for the whole organisation"
+      }
+    },
+    "required": [
+      "plan_id",
+      "unit_ids"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

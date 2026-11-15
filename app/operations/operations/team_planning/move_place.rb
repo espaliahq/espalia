@@ -14,6 +14,7 @@
 # edits a scenario, never the Org Graph's own picture.
 class Operations::TeamPlanning::MovePlace < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
+  include Operations::TeamPlanning::PlanRead
 
   UNASSIGNED = "unassigned"
 
@@ -45,8 +46,8 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
   def perform
     editor_scenario!
     ::TeamPlanning::Repository.new.holding_plan(plan_id!) do
-      map = Operations::TeamPlanning::ScenarioMap.call(context:, params: { plan_id: plan_id!, scenario_id: })
-      person = map[:people].find { it[:id] == person_id } or raise Operations::Base::ParameterError, "This scenario has no such person"
+      map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id:).call }
+      person = map.people.find { it.id == person_id } or raise Operations::Base::ParameterError, "This scenario has no such person"
 
       Operations::TeamPlanning::SetAssignment.call(
         context:, params: { plan_id: plan_id!, scenario_id:, person_id:, placements: placements(person, map), note: params[:note] }
@@ -66,16 +67,18 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
 
   def person_id = uuid!(:person_id)
 
+  # A place outside the plan's scope is kept as it is: the plan can't see it to move it.
   def placements(person, map)
-    live = map[:units].to_set { it[:id] }
-    held = ::TeamPlanning::Baseline::Membership.shares(person[:memberships].map { ::TeamPlanning::Baseline::Membership.new(**it) })
-    moved, kept = held.partition { |place, _, _| from?(place, live) }
-    raise Operations::Base::ParameterError, "#{map[:names][person_id]} holds no such place" if no_such_place?(moved, kept, live)
+    live = map.units.to_set(&:id)
+    away = map.outside_places(person)
+    held = ::TeamPlanning::Baseline::Membership.shares(person.memberships)
+    moved, kept = held.partition { |place, _, _| !away.include?(place) && from?(place, live) }
+    raise Operations::Base::ParameterError, "#{map.name_of(person_id)} holds no such place" if no_such_place?(moved, kept, live)
     raise Operations::Base::ParameterError, "This scenario has no such unit" unless to_position || to_unit == UNASSIGNED || live.include?(to_unit)
-    raise Operations::Base::ParameterError, "This scenario has no such position" if to_position && map[:positions].none? { it[:position_id] == to_position && live.include?(it[:unit_id]) }
+    raise Operations::Base::ParameterError, "This scenario has no such position" if to_position && map.positions.none? { it.id == to_position && live.include?(it.unit_id) }
 
     kept.reject! { |place, _, _| replaced?(place) }
-    kept.map { |place, share, _| written(place, share) } + arriving
+    kept.map { |place, share, _| written(place, share, away: away.include?(place)) } + arriving
   end
 
   def replaced?(place)
@@ -99,7 +102,12 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
 
   def from_position = params[:from_position_id].presence && uuid!(:from_position_id)
 
-  def written(place, share)
+  # The plan can't show a place outside its scope, so its refusal names none.
+  def written(place, share, away:)
+    if away && !share.positive?
+      raise Operations::Base::ParameterError, "Part of this person's time is in units this plan doesn't cover, with no allocation " \
+                                               "left to keep. Set that allocation in the Org Graph first."
+    end
     raise Operations::Base::ParameterError, "A place with no allocation has nothing left to share. Set its allocation first." unless share.positive?
 
     spot = place.position_id ? { position_id: place.position_id } : { unit_id: place.unit_id }

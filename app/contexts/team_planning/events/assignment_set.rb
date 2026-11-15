@@ -76,7 +76,7 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   def self.shows?(read, planned, map:)
     return same_end_state?(read, planned) unless read && planned
 
-    units = map.positions.to_h { [ it.id, it.unit_id ] }
+    units = map.position_units
     places = read.as_json.fetch("placements").dup
     wanted = planned.as_json.fetch("placements")
     return false unless wanted.size == places.size
@@ -103,14 +103,14 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map] for a person the map doesn't have, the placement
   #   waits in `unresolved`, its reason given when the resolution settles
   def self.apply_to(map, data)
-    unless map.people.any? { it.id == data[:subject_id] }
+    unless map.holds?(data[:subject_id])
       return map if data[:placements].empty?
 
       return map.with(unresolved: map.unresolved + [ TeamPlanning::Baseline::Unresolved.new(person_id: data[:subject_id], why: nil) ])
     end
 
     memberships = data[:placements].map { TeamPlanning::Baseline::Membership.new(**it.to_h.symbolize_keys.slice(*TeamPlanning::Baseline::Membership.members)) }
-    map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(memberships:) : it })
+    map.updating(data[:subject_id]) { it.with(memberships:) }
   end
 
   def self.shows_place?(place, wanted, units)

@@ -50,6 +50,8 @@ class TeamPlanning::PlanAggregate
   RELATIONS = %w[then instead on].freeze
   # A scenario sits `on` another only by a split.
   FORK_RELATIONS = %w[then instead].freeze
+  # How a carried conflict is settled: keep the plan, or follow reality.
+  SETTLE_CHOICES = %w[plan reality].freeze
   # A conflict an update carries: where it was read, its key, and the change it read.
   CONFLICT_FIELDS = %i[scenario_id subject_id facet change_id].freeze
 
@@ -90,6 +92,24 @@ class TeamPlanning::PlanAggregate
       created_by_id: created_by_id
     }))
   end
+
+  # Sets the units the plan covers, each with everything under it. An empty
+  # list covers the whole organisation; the same scope writes nothing. The
+  # caller checks the units exist and that no change falls outside them.
+  #
+  # @param unit_ids [Array<String>]
+  # @param set_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone
+  def set_scope(unit_ids:, set_by_id:)
+    ensure_open!
+    unit_ids = unit_ids.to_a.map { it.to_s.strip.downcase }.compact_blank.uniq.sort
+    return if unit_ids == scope_unit_ids.to_a
+
+    apply(TeamPlanning::Events::PlanScopeSet.new(data: { plan_id: @plan_id, unit_ids:, set_by_id: }))
+  end
+
+  # @return [Array<String>, nil] the covered units, nil for the whole organisation
+  def scope_unit_ids = @scope_unit_ids
 
   # Renames the plan. The plan holds no name, so the caller says what it is
   # called now; the same name writes nothing.
@@ -440,8 +460,52 @@ class TeamPlanning::PlanAggregate
     live_scenario!(scenario_id)
     note = require_note(note)
     yield self if block_given?
-    fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
-    apply(kind.new(data: with_note({ plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }, note)))
+    write_change(kind, scenario_id:, subject_id:, set_by_id:, end_state:, note:)
+  end
+
+  # Settles a conflict an update to today carried forward in a scenario, so it
+  # stops reading conflicting: the write is newer than the change the update
+  # saw, which ends the conflict ({#carried_conflicts}). Keeping the plan sets
+  # the same end state again, or pins it where the scenario inherits the
+  # change; a pin holds its end state in clear, so a sealed one is set. Following reality sets what the Org Graph holds today, in this
+  # scenario only, so the scenario that made the change and its other
+  # children keep it. Either write carries `settles`, the conflict's since and
+  # the choice, so its history tells it from an ordinary edit.
+  #
+  # @param kind [Class<TeamPlanning::Events::Change>]
+  # @param scenario_id [String] the root or a live scenario
+  # @param subject_id [String]
+  # @param facet [String] the second half of the change's key
+  # @param choice [String] "plan" or "reality"
+  # @param end_state [Hash] what to keep, or what the Org Graph holds today, as the kind stores it
+  # @param settled_by_id [String] person_id of the actor
+  # @param pinned_from [Array(String, String), nil] for keeping an inherited change, the scenario and event id it keeps
+  # @param note [String, nil] why; blank for none
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the choice unknown, the note too long,
+  #   or no update to today carried a conflict there forward
+  def settle_conflict(kind, scenario_id:, subject_id:, facet:, choice:, end_state:, settled_by_id:, pinned_from: nil, note: nil)
+    since = ensure_settleable!(scenario_id, [ subject_id, facet ])
+    raise TeamPlanning::Error, "A conflict is settled by keeping the plan or following reality" unless SETTLE_CHOICES.include?(choice)
+
+    settles = { since: since.iso8601, choice: }
+    if choice == "reality" || own_change?(scenario_id, [ subject_id, facet ]) || kind.seals_end_state?
+      write_change(kind, scenario_id:, subject_id:, set_by_id: settled_by_id, end_state:, note: require_note(note), settles:)
+    else
+      write_pin(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id: settled_by_id, pinned_from:, note:, settles:)
+    end
+  end
+
+  # Refuses a settle before anyone works out what it would write.
+  #
+  # @param scenario_id [String]
+  # @param key [Array(String, String)] a subject and a facet
+  # @return [Date] the day of the update that first found the conflict
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, or nothing carried there stands
+  def ensure_settleable!(scenario_id, key)
+    ensure_open!
+    carried_conflicts(live_scenario!(scenario_id)).fetch(key) do
+      raise TeamPlanning::Error, "No update to today carried a conflict here forward, so there is nothing to settle: update the plan to today first"
+    end
   end
 
   # Every change, pin and clear a scenario made, in order. A pin is the change
@@ -477,6 +541,20 @@ class TeamPlanning::PlanAggregate
     subject_id, facet = key_of(entry)
     in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone | [ event_id ])
     apply(TeamPlanning::Events::ChangeUndone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, undone_event_id: event_id, undone_by_id:, in_effect_event_id: }))
+  end
+
+  # Narrowing a plan's scope checks only the changes in effect, so a change a
+  # clear took back is one it never saw.
+  #
+  # @param scenario_id [String]
+  # @param event_id [String] an entry of the scenario's log
+  # @return [TeamPlanning::Events::Change, nil] the change undoing that entry brings back when it is a clear
+  def restored_by_undo(scenario_id, event_id)
+    entry = log_entry!(live_scenario!(scenario_id), event_id)
+    return unless entry.is_a?(TeamPlanning::Events::ChangeCleared)
+
+    key = key_of(entry)
+    in_effect(scenario_id, @undone | [ event_id ]).reverse_each.find { it.key == key }
   end
 
   # Restores an undone entry of a scenario's log, in its place.
@@ -611,16 +689,7 @@ class TeamPlanning::PlanAggregate
     raise ArgumentError, "#{kind} is not a kind of change" unless kind.is_a?(Class) && kind < TeamPlanning::Events::Change && kind.complete?
 
     ensure_pinnable!(scenario_id, [ subject_id, facet ])
-    note = require_note(note)
-    end_state = own_fields!(end_state.to_h.symbolize_keys)
-    pinned = pinned_change(kind, { plan_id: @plan_id, scenario_id:, subject_id:, set_by_id: pinned_by_id }, end_state)
-    raise ArgumentError, "That end state doesn't make a #{facet} change" unless pinned.key == [ subject_id, facet ]
-
-    from_scenario_id, from_event_id = pinned_from
-    apply(TeamPlanning::Events::ChangePinned.new(data: with_note({
-      plan_id: @plan_id, scenario_id:, subject_id:, facet:, kind: kind.name, end_state: end_state.to_h,
-      pinned_from_scenario_id: from_scenario_id, pinned_from_event_id: from_event_id, pinned_by_id:
-    }, note)))
+    write_pin(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from:, note:)
   end
 
   # Refuses a pin before anyone works out what it would keep.
@@ -767,6 +836,10 @@ class TeamPlanning::PlanAggregate
 
   # The plan holds no name.
   on TeamPlanning::Events::PlanRenamed do |_event|
+  end
+
+  on TeamPlanning::Events::PlanScopeSet do |event|
+    @scope_unit_ids = event.data[:unit_ids].presence
   end
 
   on TeamPlanning::Events::PlanDeleted do |_event|
@@ -974,6 +1047,29 @@ class TeamPlanning::PlanAggregate
 
   # A change without a note holds no note field, so it is stored as it was before notes.
   def with_note(data, note) = note ? data.merge(note:) : data
+
+  # Only a settle carries the marker, so every other write is stored as before.
+  def with_settles(data, settles) = settles ? data.merge(settles:) : data
+
+  def write_change(kind, scenario_id:, subject_id:, set_by_id:, end_state:, note:, settles: nil)
+    fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
+    data = with_note({ plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }, note)
+    apply(kind.new(data: with_settles(data, settles)))
+  end
+
+  def write_pin(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id:, pinned_from:, note:, settles: nil)
+    note = require_note(note)
+    end_state = own_fields!(end_state.to_h.symbolize_keys)
+    pinned = pinned_change(kind, { plan_id: @plan_id, scenario_id:, subject_id:, set_by_id: pinned_by_id }, end_state)
+    raise ArgumentError, "That end state doesn't make a #{facet} change" unless pinned.key == [ subject_id, facet ]
+
+    from_scenario_id, from_event_id = pinned_from
+    data = with_note({
+      plan_id: @plan_id, scenario_id:, subject_id:, facet:, kind: kind.name, end_state: end_state.to_h,
+      pinned_from_scenario_id: from_scenario_id, pinned_from_event_id: from_event_id, pinned_by_id:
+    }, note)
+    apply(TeamPlanning::Events::ChangePinned.new(data: with_settles(data, settles)))
+  end
 
   def require_note(note)
     note = note.to_s.strip.presence or return nil

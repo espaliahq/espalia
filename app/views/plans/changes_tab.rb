@@ -26,7 +26,7 @@ class Views::Plans::ChangesTab < Views::Base
   # @param drift [Hash] from `team_planning_drift`
   # @param status [Hash] from `team_planning_status`, for the scenario shown
   # @param attention [Hash] from `team_planning_attention`, for the same scenario
-  # @param can_edit [Boolean] whether the viewer may note a change
+  # @param can_edit [Boolean] whether the viewer may note a change or settle a conflict
   def initialize(plan:, scenarios:, drift:, status:, attention:, can_edit: false)
     @plan = plan
     @can_edit = can_edit
@@ -80,7 +80,12 @@ class Views::Plans::ChangesTab < Views::Base
           span(class: ("line-through" if change[:withdrawn])) { describe(change) }
         end
         p(class: "text-xs text-muted") { drift_meta(change) }
-        meets_line(change[:meets]) if change[:meets].any?
+        carried = carried_here(change[:meets])
+        if carried.any?
+          drift_settle(carried, change[:meets])
+        elsif change[:meets].any?
+          meets_line(change[:meets])
+        end
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         render Components::Kit::Badge.new("From this plan", tone: :brand) if change[:from_plan]
@@ -94,6 +99,38 @@ class Views::Plans::ChangesTab < Views::Base
     learned = change[:learned_at] && Time.iso8601(change[:learned_at]).to_date
     takes = "Takes effect #{day(change[:effective_on])}"
     learned && learned.iso8601 != change[:effective_on] ? "#{takes} · learned #{day(learned)}" : takes
+  end
+
+  # The carried conflicts this change causes in the scenario on screen. A
+  # conflict elsewhere is settled from its own scenario, so the buttons here
+  # never act on a scenario the reader isn't looking at.
+  def carried_here(meets)
+    return [] unless @can_edit
+
+    @status[:statuses].select do |entry|
+      entry[:status].to_s == "conflicting" && entry[:since] && meets.any? do |met|
+        met[:scenario_id] == entry[:scenario_id] && met[:subject_id] == entry[:subject_id] && met[:facet].to_s == entry[:facet].to_s
+      end
+    end
+  end
+
+  def drift_settle(carried, meets)
+    div(class: "space-y-1", data: { drift_settle: scenario_id }) do
+      p(class: "text-xs text-muted") { "Conflicts with the plan in #{scenario_name(scenario_id)}." }
+      carried.each { settle(it) }
+      others = meets.map { it[:scenario_id] }.uniq - [ scenario_id ]
+      other_scenarios(others) if others.any?
+    end
+  end
+
+  def other_scenarios(ids)
+    p(class: "text-xs text-muted", data: { drift_settle_elsewhere: ids.size }) do
+      plain "Also planned in #{ids.size} other #{"scenario".pluralize(ids.size)}, settled from #{ids.one? ? "its" : "each"} own tab: "
+      ids.each_with_index do |id, index|
+        plain ", " if index.positive?
+        a(href: changes_plan_path(plan_id, scenario: scenario_param(id)), class: "text-link underline") { scenario_name(id) }
+      end
+    end
   end
 
   def meets_line(meets)
@@ -137,13 +174,51 @@ class Views::Plans::ChangesTab < Views::Base
           strong(class: "font-medium") { planned_subject(entry[:subject_id]) }
           plain " · #{entry[:staying] ? STAYING : facet_name(entry[:facet])}"
         end
-        p(class: "text-xs text-muted") { "Planned in #{scenario_name(entry[:scenario_id])}" } if entry[:scenario_id] != scenario_id
+        planned_in(entry[:scenario_id]) if entry[:scenario_id] != scenario_id
         change_note(entry[:note])
         note_form(entry) if @can_edit && !entry.dig(:note, :removed)
+        settle(entry) if @can_edit && entry[:status].to_s == "conflicting"
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         status_badge(entry)
         sources(entry[:sources])
+      end
+    end
+  end
+
+  def planned_in(id)
+    p(class: "text-xs text-muted", data: { planned_in: id }) do
+      plain "Planned in "
+      a(href: changes_plan_path(plan_id, scenario: scenario_param(id)), class: "text-link underline") { scenario_name(id) }
+    end
+  end
+
+  # Only a conflict an update carried forward can be settled: before one, the
+  # plan still reads the Org Graph as of its base, so keeping it changes nothing.
+  def settle(entry)
+    return update_first unless entry[:since]
+
+    form(action: plan_settlements_path(plan_id), method: "post", class: "flex flex-wrap items-center gap-2 pt-1", data: { settle_conflict: entry[:facet] }) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      { scenario_id:, subject_id: entry[:subject_id], facet: entry[:facet] }.each do |field, value|
+        input(type: "hidden", name: "settlement[#{field}]", value:)
+      end
+      render Components::Kit::Button.new(type: :submit, size: :sm, compact: true, name: "settlement[choice]", value: "plan") { "Keep the plan" }
+      if entry[:facet] == "succession"
+        span(class: "text-xs text-muted") { "To follow reality, change the succession on the map." }
+      else
+        render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "settlement[choice]", value: "reality") { "Follow reality" }
+      end
+    end
+  end
+
+  def update_first
+    p(class: "text-xs text-muted", data: { settle_conflict: "live" }) do
+      if Date.iso8601(@plan[:base_on]) < Time.now.utc.to_date
+        a(href: rebase_plan_path(plan_id), class: "text-link underline") { "Update the plan to today" }
+        plain " to keep the plan or follow reality here."
+      else
+        plain "The Org Graph changed today, so this can be settled after the next update to today."
       end
     end
   end

@@ -10,7 +10,7 @@ module Views::Plans::ScenarioTab
     "assignment" => "Placement", "level" => "Level", "reporting_line" => "Manager", "departure" => "Leaving",
     "unit" => "Unit", "succession" => "Succession", "position" => "Position", "placeholder" => "Hire",
     "data:level" => "Level (plan value)", "data:fte" => "FTE (plan value)", "data:pay" => "Pay", "rule" => "Rule", "capacity" => "Capacity",
-    "budget_line" => "Budget line"
+    "budget_line" => "Budget line", "funding" => "Funding"
   }.freeze
 
   private

@@ -90,4 +90,16 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
     assert_equal({ older => "New position: Software Engineer (1)", newer => "New position: Software Engineer (2)",
                    POSITION => "New position: Software Engineer" }, names)
   end
+
+  should "offer to move a place the HRIS gave no allocation with the share its time outside a scoped plan leaves" do
+    step = "01a1da48-c64a-7529-af90-0f97e41cdaa3"
+    ada = { id: ADA, memberships: [ place(PAYMENTS, nil) ], outside: { share: 0.25 }, manager_id: nil, manager_outside: false,
+            leaving: false, planned_level: nil, plan_data: {}, capacity_overrides: {}, placeholder: nil, allocation_total: 0.75 }
+    map = { plan_id: PLAN, scenario_id: step, base_on: "2026-11-15", known_on: "2026-11-14", units: [ unit(PAYMENTS, "Payments") ],
+            people: [ ada ], unassigned_ids: [], positions: [], unresolved: [], names: { ADA => "Ada Quill" } }
+    scenarios = [ { scenario_id: PLAN, parent_id: nil, name: "Pay review" }, { scenario_id: step, parent_id: PLAN, name: "Q1" } ]
+    html = Nokogiri::HTML5.fragment(render_view(Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: true)))
+
+    assert_equal [ "75" ], html.css("[data-move-allocation]").map { it["data-move-allocation"] }
+  end
 end
