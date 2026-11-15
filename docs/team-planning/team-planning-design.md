@@ -1129,8 +1129,9 @@ it is first held, then by id. Each position names its `draw_reason`. `PositionFu
 the `funding` facet, written by `team_planning_set_position_funding` with shares summing to 1.
 A draw on a line the scenario no longer holds funds nothing, and the checks flag it, as they
 do a funding on a closed position. Funded counts the positions funded whole and the FTE each
-draw funds, so funded and unfunded always add up to the positions and FTE the cost read
-prices. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
+draw funds, so funded and unfunded always add up to the scenario's positions and FTE. That
+holds whether or not a pay band prices a position: one with no band is still funded or
+unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
 
 The projection records how each position's cost centre was reached (set here, from the Org
 Graph, by which rule) and reports three conditions as checks:
