@@ -83,7 +83,7 @@ Every change event has the same shape:
 
 | Group | Events |
 |---|---|
-| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
+| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
 | People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
@@ -101,6 +101,46 @@ Subjects the plan creates (a position, a unit, a placeholder hire, a budget line
 minted by the plan. Subjects from the Org Graph are referred to by the Org Graph's id. A change
 never refers to the content of its parent scenario. That is what lets the same change be
 resolved over a different base.
+
+### What a plan covers
+
+A plan covers the whole organisation, or chosen units and everything under them
+([#338](https://github.com/espaliahq/espalia/issues/338)). `PlanScopeSet` records the
+units, sorted, with an empty list for the whole organisation. A plan with no such event
+covers the whole organisation, so plans made before scope read as they always did. The
+plans projection keeps the list in `scope_unit_ids`.
+
+- **Units only.** A plan is scoped by units, never by people, roles or reporting lines.
+- **Widening is always allowed.** Narrowing is refused while a change is about a person,
+  unit or position the narrower plan would leave out. The refusal names up to five such
+  changes, and only subjects the plan already shows, and counts the rest.
+- **Everything a reader counts stops at the edge.** Baseline, map, capacity, cost,
+  attention and the timeline see only what is inside. Someone with part of their time
+  outside counts for the part inside, and the rest reads as one `outside: { share: }`,
+  never as the units it is spent in. A manager outside reads as `manager_outside: true`.
+  A change that places someone inside brings them in; undoing it lets them go.
+- **A plan changes only the people it covers.** A change about someone outside is refused
+  unless it is the assignment that places them in a covered unit, and the refusal says
+  nothing about them. A reporting line from someone inside to a manager outside is allowed.
+  A redo is held to the same rule, so narrowing a plan past an undone change can't bring
+  that change back about someone the plan no longer covers.
+- **A change left about someone outside is flagged, never hidden from its own record.**
+  An undone bring-in, or an Org Graph move out of the plan's units, leaves the person's
+  other changes in the plan. Attention lists each one under "A change about someone this
+  plan no longer covers", with the change, so a planner can clear it or bring the person
+  back. History, status and overrides keep naming the subject by id, unnamed.
+- **The scope cut runs before the pay filter.** The cut runs first, in `Map#settled`, so
+  people outside never reach `map.people`. The see-pay filter runs after it, per person, in
+  `map_payload`. Cost drops places outside before pricing, and reads actual pay only for
+  holders. So the pay filter never sees a person outside, and no change to pay rules can
+  bring one back.
+- **The picker reaches the whole organisation.** `team_planning_coverable_units` lists
+  every live unit, in tree order with its depth, to anyone who may start a plan, or to an
+  editor of the plan with `plan_id`. It names units and no person, so a planner who can't
+  read the Org Graph can still choose.
+- **On screen** the new-plan form asks "Covers" with the whole organisation or chosen
+  units, and says the plan can be widened later. The plan page reads "Covers …" under its
+  title, with a Change dialog for editors.
 
 ### Propagation is a projection, never an event
 
@@ -298,7 +338,9 @@ winning change and the change that broke it, such as its unit's `UnitRetired`.
 
 It marks a placement in a closed position, or in a retired unit or one gone from the scenario;
 a position in such a unit, or overfilled; a unit under a retired parent; anyone in
-`unresolved`; and a succession that lost a predecessor or whose successor is no longer live. A
+`unresolved`; a change about someone a scoped plan no longer covers, other than the
+assignment that moved them out, unnamed and under the change's own facet; and a succession
+that lost a predecessor or whose successor is no longer live. A
 position in a retired unit is the position's item, not each occupant's. `team_planning_attention`
 reads it, and the changes tab (4.4) and the checks tab (4.7) will too.
 

@@ -15,11 +15,25 @@ class PlansController < ApplicationController
   # POST /planning
   def create
     authorize TeamPlanningPlan, :create?, policy_class: PlanPolicy
-    draft = params.expect(plan: [ :name, :base_on ]).to_h.symbolize_keys
-    plan = Operations::TeamPlanning::CreatePlan.call(context: pundit_user, params: draft)
+    draft = params.expect(plan: [ :name, :base_on, :scope, unit_ids: [] ]).to_h.symbolize_keys
+    plan = Operations::TeamPlanning::CreatePlan.call(context: pundit_user, params: { **draft.slice(:name, :base_on), unit_ids: chosen_units(draft) })
     redirect_to plan_path(plan[:plan_id]), notice: "Plan created."
   rescue Operations::Base::ParameterError => e
     render index_view(error: e.message, draft:), status: :unprocessable_content
+  end
+
+  # PATCH /planning/:id/scope
+  #
+  # Widens what the plan covers, or narrows it when nothing planned falls
+  # outside ([#338](https://github.com/espaliahq/espalia/issues/338)).
+  def scope
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    draft = params.expect(plan: [ :scope, unit_ids: [] ]).to_h.symbolize_keys
+    result = Operations::TeamPlanning::SetPlanScope.call(context: pundit_user, params: { plan_id: plan[:plan_id], unit_ids: chosen_units(draft) })
+    redirect_to plan_path(plan[:plan_id]), notice: "This plan now covers #{Views::Plans::ScopeDialog.covers(result[:scope])}."
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), alert: "Couldn't change what this plan covers: #{e.message}"
   end
 
   # GET /planning/:id
@@ -127,6 +141,14 @@ class PlansController < ApplicationController
 
   private
 
+  # "Chosen units" with none ticked is a slip, not the whole organisation.
+  def chosen_units(draft)
+    return [] unless draft[:scope] == "chosen"
+    raise Operations::Base::ParameterError, "Choose at least one unit, or cover the whole organisation" if Array(draft[:unit_ids]).compact_blank.empty?
+
+    Array(draft[:unit_ids]).compact_blank
+  end
+
   def rebased(result)
     count = result[:conflicts].size
     carried = count.zero? ? "" : " #{count} planned #{count == 1 ? 'change stays' : 'changes stay'} conflicting."
@@ -219,14 +241,17 @@ class PlansController < ApplicationController
       open_tab:,
       body:,
       can_edit: can_edit?,
+      coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
       **layout
     )
   end
 
   def index_view(error: nil, draft: {})
+    can_create = policy_for(TeamPlanningPlan).create?
     Views::Plans::IndexView.new(
       plans: Operations::TeamPlanning::Plans.call(context: pundit_user)[:plans],
-      can_create: policy_for(TeamPlanningPlan).create?,
+      can_create:,
+      units: can_create ? Operations::TeamPlanning::CoverableUnits.call(context: pundit_user)[:units] : [],
       error:,
       draft:,
       **layout

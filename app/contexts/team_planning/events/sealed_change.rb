@@ -18,11 +18,11 @@ module TeamPlanning::Events::SealedChange
   # Lands a change on the person it names, or lists them unresolved when the
   # scenario's map doesn't hold them.
   def on_person(map, data)
-    unless map.people.any? { it.id == data[:subject_id] }
+    unless map.holds?(data[:subject_id])
       return map.with(unresolved: map.unresolved + [ TeamPlanning::Baseline::Unresolved.new(person_id: data[:subject_id], why: nil) ])
     end
 
-    map.with(people: map.people.map { it.id == data[:subject_id] ? yield(it) : it })
+    map.updating(data[:subject_id]) { yield(it) }
   end
 
   def revealed(end_state) = end_state.to_h.transform_keys(&:to_s).transform_values { it.is_a?(Shreddable::Value) ? it.reveal : it }

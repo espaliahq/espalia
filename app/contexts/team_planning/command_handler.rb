@@ -23,14 +23,35 @@ class TeamPlanning::CommandHandler
   # @param plan_id [String] UUID minted by the caller
   # @param name [String]
   # @param base_on [Date, String]
+  # @param unit_ids [Array<String>] the units it covers, none for the whole organisation
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [Pundit::NotAuthorizedError] unless the actor may create a plan
+  # @raise [TeamPlanning::Error] for a unit the Org Graph hasn't
   # @see TeamPlanning::PlanAggregate#create
-  def create_plan(plan_id, name:, base_on:)
+  def create_plan(plan_id, name:, base_on:, unit_ids: [])
     created_by_id = actor_id!
     authorize!(:create?, nil) { "Only a tenant admin or a planner can create a plan" }
+    unit_ids = known_units!(unit_ids)
     @repository.with_plan(plan_id) do |plan|
       plan.create(plan_id, name: name, base_on: base_on, created_by_id: created_by_id)
+      plan.set_scope(unit_ids:, set_by_id: created_by_id)
+    end
+  end
+
+  # Sets the units a plan covers. Narrowing is checked by the caller, which
+  # reads the plan's changes; this checks the units exist.
+  #
+  # @param plan_id [String]
+  # @param unit_ids [Array<String>] empty for the whole organisation
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor, or for a unit the Org Graph hasn't
+  # @see TeamPlanning::PlanAggregate#set_scope
+  def set_plan_scope(plan_id, unit_ids:)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      unit_ids = known_units!(unit_ids, kept: plan.scope_unit_ids.to_a)
+      yield plan, unit_ids if block_given?
+      plan.set_scope(unit_ids:, set_by_id: actor_id!)
     end
   end
 
@@ -421,11 +442,14 @@ class TeamPlanning::CommandHandler
   # @param plan_id [String]
   # @param scenario_id [String]
   # @param event_id [String, nil] the change's event id, from the scenario's history
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the lock, once the actor may edit it
+  # @yieldparam restored [TeamPlanning::Events::Change, nil] the change undoing a clear brings back, nil for any other entry
   # @return [String] the event id undone
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to undo
   # @see TeamPlanning::PlanAggregate#undo_change
-  def undo_change(plan_id, scenario_id:, event_id: nil)
+  def undo_change(plan_id, scenario_id:, event_id: nil, &check)
     reverse(plan_id, scenario_id, event_id, :last_undoable_by, "You have nothing here to undo") do |plan, id|
+      check&.call(plan, plan.restored_by_undo(scenario_id, id))
       plan.undo_change(scenario_id:, event_id: id, undone_by_id: actor_id!)
     end
   end
@@ -436,11 +460,14 @@ class TeamPlanning::CommandHandler
   # @param plan_id [String]
   # @param scenario_id [String]
   # @param event_id [String, nil] the undone change's event id
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the lock, once the actor may edit it
+  # @yieldparam entry [RubyEventStore::Event, nil] the change, pin or clear about to be redone, nil for one not in the log
   # @return [String] the event id redone
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to redo
   # @see TeamPlanning::PlanAggregate#redo_change
-  def redo_change(plan_id, scenario_id:, event_id: nil)
+  def redo_change(plan_id, scenario_id:, event_id: nil, &check)
     reverse(plan_id, scenario_id, event_id, :last_redoable_by, "You have nothing here to redo") do |plan, id|
+      check&.call(plan, plan.log_of(scenario_id).find { it.event_id == id })
       plan.redo_change(scenario_id:, event_id: id, redone_by_id: actor_id!)
     end
   end
@@ -575,6 +602,16 @@ class TeamPlanning::CommandHandler
     return if PlanPolicy.new(@actor, record).public_send(predicate)
 
     raise Pundit::NotAuthorizedError, yield
+  end
+
+  # A unit retired since the plan chose it may stay, so widening never asks to drop it.
+  # Postgres reads a UUID without its hyphens too, so only the hyphenated form
+  # is taken: the plan compares the ids it keeps as written.
+  def known_units!(unit_ids, kept: [])
+    unit_ids = Array(unit_ids).map { it.to_s.strip.downcase }.compact_blank.uniq
+    return unit_ids if unit_ids.all?(OrgGraph::StructureAggregate::UUID) && OrgUnit.live.where(id: unit_ids - kept).count == (unit_ids - kept).size
+
+    raise TeamPlanning::Error, "A plan covers units the organisation has"
   end
 
   def actor_id!

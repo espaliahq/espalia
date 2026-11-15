@@ -67,6 +67,12 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
   should "open every plan read to its members, so the walk above refuses for the right reason" do
     [ @editor, @viewer ].each do |member|
       OPERATIONS.call.select { it.parameters.key?(:plan_id) && it.category == :read }.each do |operation|
+        # The units a plan may widen to are for its editors, who alone may widen it.
+        if operation == Operations::TeamPlanning::CoverableUnits && member == @viewer
+          assert_raises(Operations::Base::ParameterError) { operation.call(context: context_for(member), params: params_for(operation)) }
+          next
+        end
+
         assert_includes operation.call(context: context_for(member), params: params_for(operation)).to_json, @plan_id
       end
     end
@@ -108,7 +114,7 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
                base_on: "2026-11-14", scenario_id: @scenario_id, parent_id: @scenario_id, relation: "instead",
                ends_on: "2027-04-30", position_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
                level_id: SecureRandom.uuid_v7, unit_id: SecureRandom.uuid_v7, fte: 1, basis: "new", predecessor_ids: [ UNIT_ID ],
-               successor_ids: [ UNIT_ID ],
+               successor_ids: [ UNIT_ID ], unit_ids: [],
                placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1 } ], subject_id: @plan_id, facet: "rule:headcount_cap",
                rule: "capacity_model", level: "4", label: "Payments lead", field: "fte", value: "1", amount: "1",
                from_unit_id: "unassigned", to_unit_id: "unassigned", event_id: SecureRandom.uuid, event_ids: [ SecureRandom.uuid ],

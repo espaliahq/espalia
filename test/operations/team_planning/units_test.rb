@@ -43,6 +43,23 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
 
   def names(scenario_id = @q1, list = :units) = units(scenario_id)[list].pluck(:name)
 
+  context "CoverableUnits" do
+    should "list the whole organisation's live units in tree order, to anyone who may start a plan" do
+      assert_equal [ [ "Engineering", nil, 0 ], [ "Payments", @engineering, 1 ], [ "Platform", @engineering, 1 ] ],
+                   call(Operations::TeamPlanning::CoverableUnits)[:units].map { it.values_at(:name, :parent_id, :depth) }
+    end
+
+    should "refuse a member who may not start a plan, and a plan the caller doesn't edit" do
+      member = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
+      assert_raises(Pundit::NotAuthorizedError) { call(Operations::TeamPlanning::CoverableUnits, as: member) }
+      call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: member.person.id, role: "viewer")
+      assert_equal "No such plan", assert_raises(Operations::Base::ParameterError) {
+        call(Operations::TeamPlanning::CoverableUnits, as: member, plan_id: @plan_id)
+      }.message
+      assert_equal 3, call(Operations::TeamPlanning::CoverableUnits, plan_id: @plan_id)[:units].size
+    end
+  end
+
   context "SetUnit" do
     should "create a unit with an id the plan mints, seen in its scenario and those after it only" do
       created = write(Operations::TeamPlanning::SetUnit, name: "  Risk  ", parent_id: @engineering, level_id: @squad)

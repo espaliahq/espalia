@@ -70,12 +70,12 @@ class TeamPlanning::Events::DepartureSet < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map] the person marked; {TeamPlanning::Baseline::Map#settled}
   #   takes them off when the departure was set in an earlier step
   def self.apply_to(map, data)
-    unless map.people.any? { it.id == data[:subject_id] }
+    unless map.holds?(data[:subject_id])
       return map.with(unresolved: map.unresolved + [ TeamPlanning::Baseline::Unresolved.new(person_id: data[:subject_id], why: nil) ])
     end
 
     departure = data.slice(:leaves_in_id, :position_id, :leaves_on)
-    map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(departure:) : it })
+    map.updating(data[:subject_id]) { it.with(departure:) }
   end
 
   # @param map [TeamPlanning::Baseline::Map]

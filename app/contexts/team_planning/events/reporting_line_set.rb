@@ -39,11 +39,11 @@ class TeamPlanning::Events::ReportingLineSet < TeamPlanning::Events::Change
   # @param data [Hash]
   # @return [TeamPlanning::Baseline::Map] for a person the map doesn't have, the line waits in `unresolved`
   def self.apply_to(map, data)
-    unless map.people.any? { it.id == data[:subject_id] }
+    unless map.holds?(data[:subject_id])
       return map.with(unresolved: map.unresolved + [ TeamPlanning::Baseline::Unresolved.new(person_id: data[:subject_id], why: nil) ])
     end
 
-    map.with(people: map.people.map { it.id == data[:subject_id] ? it.with(**data.slice(*TARGETS)) : it })
+    map.updating(data[:subject_id]) { it.with(**data.slice(*TARGETS)) }
   end
 
   # @param map [TeamPlanning::Baseline::Map]

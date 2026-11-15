@@ -12,6 +12,7 @@ class Views::Plans::ChecksTab < Views::Base
     positions: [ "Positions", "Positions in a unit the scenario retired, or filled past their FTE." ],
     units: [ "Units", "Units whose parent the scenario retired." ],
     unresolved: [ "People the plan can't place", "People placed who joined after the base or have left, so the Org Graph can't place them." ],
+    uncovered: [ "People the plan no longer covers", "Changes about someone outside the plan's units, since a bring-in was undone or the Org Graph moved them out." ],
     successions: [ "Successions", "Successions whose units no longer read the way the succession says." ],
     capacity_overrides: [ "Capacity overrides", "Overrides on a place the person no longer holds." ],
     allocations: [ "Allocations", "People placed nowhere, or over or under 100% allocated." ],
