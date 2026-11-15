@@ -87,7 +87,8 @@ class TeamPlanning::SourceOfTruth
     ids = ids.compact.uniq - @units.keys
     return if ids.empty?
 
-    @units.merge!(OrgUnit.where(tenant_id: @tenant_id, id: ids).pluck(:id, :name, :provider).to_h { |id, *rest| [ id, rest ] })
+    found = OrgUnit.where(tenant_id: @tenant_id, id: ids).pluck(:id, :name, :provider).to_h { |id, *rest| [ id, rest ] }
+    ids.each { @units[it] = found[it] }
   end
 
   def succession_units(succession_id)

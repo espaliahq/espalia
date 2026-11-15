@@ -65,4 +65,10 @@ class TeamPlanning::SourceOfTruthTest < ActiveSupport::TestCase
     end
     assert_equal "Sales", @sources.unit_name(@sales)
   end
+
+  should "remember a unit only the plan holds, so it reads that unit once" do
+    plan_only = SecureRandom.uuid_v7
+    assert_queries_count(1) { @sources.preload(unit_ids: [ plan_only ]) }
+    assert_no_queries { assert_equal %w[espalia], @sources.of_plan("unit", unit_ids: [ plan_only ]) }
+  end
 end
