@@ -58,6 +58,24 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_response :not_found
     end
 
+    should "open the changes on today, and on a scenario, each section empty until something changes" do
+      get changes_plan_path(@plan_id)
+      assert_response :success
+      assert_select "[aria-current='page']", text: "Changes"
+      assert_includes response.body, "Nothing has changed in the Org Graph since the base."
+      assert_select "#changes-planned-heading", text: "Planned in Today"
+      assert_includes response.body, "Everything in this scenario still fits."
+
+      get changes_plan_path(@plan_id, scenario: @q1)
+      assert_response :success
+      assert_select "#changes-planned-heading", text: "Planned in Q1 hires"
+    end
+
+    should "get a 404 for changes in a scenario that isn't in the plan" do
+      get changes_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
+      assert_response :not_found
+    end
+
     should "open the timeline on the path to the first leaf, its steps shown though nobody is placed yet" do
       get timeline_plan_path(@plan_id)
       assert_response :success
@@ -68,7 +86,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "someone outside the plan" do
-    should "not see it in the index, and get a 404 for its page, map and timeline, even as a tenant admin" do
+    should "not see it in the index, and get a 404 for its page, map, timeline and changes, even as a tenant admin" do
       [ @outsider, @admin ].each do |account|
         sign_in account.user
         get plans_path
@@ -80,6 +98,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
         get map_plan_path(@plan_id)
         assert_response :not_found
         get timeline_plan_path(@plan_id)
+        assert_response :not_found
+        get changes_plan_path(@plan_id)
         assert_response :not_found
         sign_out account.user
       end

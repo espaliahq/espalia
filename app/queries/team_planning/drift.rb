@@ -16,7 +16,7 @@ class TeamPlanning::Drift
   # @!attribute from [Date] the day before the base date
   # @!attribute to [Date] today
   # @!attribute changes [Array<Drifted>] in effective date order
-  # @!attribute names [Hash{String => String}] person id => name for everyone the changes name
+  # @!attribute names [Hash{String => String}] person or unit id => name for everyone and every unit the changes name
   Report = Data.define(:from, :to, :changes, :names) do
     # @param person_id [String]
     # @return [String]
@@ -26,7 +26,8 @@ class TeamPlanning::Drift
   # @!attribute change [OrgGraph::ChangesBetween::Change]
   # @!attribute from_plan [Boolean] whether it was applied from this plan
   # @!attribute meets [Array<Met>] the plan's changes to the facet it moves
-  Drifted = Data.define(:change, :from_plan, :meets)
+  # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
+  Drifted = Data.define(:change, :from_plan, :meets, :sources)
 
   # @!attribute scenario_id [String] the plan's id for the root
   # @!attribute change_id [String] the planned change's event id
@@ -60,8 +61,13 @@ class TeamPlanning::Drift
 
     planned = planned_changes
     from_plan = plan_ids(changes.map(&:event_id))
-    drifted = changes.map { Drifted.new(change: it, from_plan: from_plan[it.event_id] == @plan.id, meets: meeting(planned, it)) }
-    Report.new(from:, to: @today, changes: drifted, names: names_for(changes))
+    sources = TeamPlanning::SourceOfTruth.new(tenant_id: @plan.tenant_id)
+                                         .preload(unit_ids: changes.flat_map { [ it.unit_id, it.from_unit_id ] },
+                                                  succession_ids: changes.map(&:succession_id))
+    drifted = changes.map do
+      Drifted.new(change: it, from_plan: from_plan[it.event_id] == @plan.id, meets: meeting(planned, it), sources: sources.of_drift(it))
+    end
+    Report.new(from:, to: @today, changes: drifted, names: names_for(changes, sources))
   end
 
   private
@@ -88,8 +94,9 @@ class TeamPlanning::Drift
     Rails.configuration.event_store.read.events(event_ids.uniq).to_h { [ it.event_id, it.data[:plan_id] ] }
   end
 
-  def names_for(changes)
+  def names_for(changes, sources)
     ids = changes.flat_map { [ it.person_id, it.before&.dig("manager_id"), it.after&.dig("manager_id") ] }.compact.uniq
-    ::Person.where(tenant_id: @plan.tenant_id, id: ids).pluck(:id, :name).to_h
+    units = changes.flat_map { [ it.unit_id, it.from_unit_id ] }.compact.uniq.filter_map { |id| (name = sources.unit_name(id)) && [ id, name ] }
+    units.to_h.merge(::Person.where(tenant_id: @plan.tenant_id, id: ids).pluck(:id, :name).to_h)
   end
 end

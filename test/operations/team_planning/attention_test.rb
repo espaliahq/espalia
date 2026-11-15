@@ -66,6 +66,26 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
   def change_of(subject_id, scenario_id = @q2) = attention(scenario_id)[:items].find { it[:subject_id] == subject_id }[:change]
 
+  should "list each place no capacity model covers once one is chosen, naming the people" do
+    assert_empty attention(@q1)[:items]
+
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    open_position(@q1)
+    result = attention(@q1)
+
+    reason = "Counts for no capacity: the person has no title"
+    assert_equal [ [ @ada.id, "capacity:#{@payments}", reason ], [ @bo.id, "capacity:#{@payments}", reason ],
+                   [ @head.id, "capacity:#{@engineering}", reason ] ].sort,
+                 result[:items].map { it.values_at(:subject_id, :facet, :reason) }.sort
+    assert_equal({ @ada.id => "Ada Quill", @bo.id => "Bo Reyes", @head.id => "Hal Head" }, result[:names])
+  end
+
+  should "list unclassified places once a model is chosen, even when no place takes it" do
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+
+    assert_equal [ @ada.id, @bo.id, @head.id ].sort, attention(@q1)[:items].map { it[:subject_id] }.sort
+  end
+
   should "read a scenario that fits as needing nothing" do
     assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
 
@@ -125,6 +145,56 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal({ @newcomer.id => "Nia Newcomer" }, attention[:names])
   end
 
+  should "name where to fix each item: the employment status provider for a newcomer, else the units it touches" do
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                       .set_fact_provider("employment_status", "hibob", effective_on: "2026-01-01")
+    end
+    assign(@q2, @newcomer, { unit_id: @growth, allocation: 1 })
+    write(Operations::TeamPlanning::RetireUnit, @q1, unit_id: @payments)
+
+    sources = attention[:items].to_h { [ it[:subject_id], it[:sources] ] }
+    assert_equal({ @newcomer.id => %w[hibob], @ada.id => %w[espalia], @bo.id => %w[espalia] }, sources)
+  end
+
+  def hibob_unit
+    division, unit = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      structure.define_taxonomy([ { level_id: division, name: "Division", provider: "hibob" }, { level_id: @department, name: "Department" },
+                                  { level_id: @squad, name: "Squad" }, { level_id: @team, name: "Team" } ], effective_on: "2026-01-01")
+      structure.create_unit(unit, "Sales", level_id: division, provider: "hibob", external_ref: "div-1", effective_on: "2026-01-01")
+    end
+    unit
+  end
+
+  def sources_of(subject_id, facet) = attention[:items].find { it.values_at(:subject_id, :facet) == [ subject_id, facet ] }[:sources]
+
+  should "name the unit of a position an earlier step closed" do
+    position = open_position(@q1, unit_id: hibob_unit)
+    assign(@q2, @bo, { position_id: position, allocation: 1 })
+    write(Operations::TeamPlanning::ClosePosition, @q1, position_id: position)
+
+    assert_equal %w[hibob], sources_of(@bo.id, "assignment")
+  end
+
+  should "name the unit a stray capacity override is for" do
+    sales = hibob_unit
+    assign(@q1, @ada, { unit_id: sales, allocation: 1 })
+    write(Operations::TeamPlanning::SetCapacityOverride, @q1, person_id: @ada.id, unit_id: sales, amount: "0.5")
+    assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
+
+    assert_equal %w[hibob], sources_of(@ada.id, "capacity:#{sales}")
+  end
+
+  should "name the unit of a place no capacity model covers" do
+    sales = hibob_unit
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    assign(@q2, @bo, { unit_id: sales, allocation: 1 })
+
+    assert_equal %w[hibob], sources_of(@bo.id, "capacity:#{sales}")
+  end
+
   should "mark someone the plan still places once the Org Graph has them leave, by name" do
     travel_to Time.utc(2026, 3, 10, 9)
     ActsAsTenant.with_tenant(@tenant) do
@@ -133,6 +203,18 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
     assert_equal [ [ @bo.id, "assignment", "Placed, but has since left" ] ], items
     assert_equal({ @bo.id => "Bo Reyes" }, attention[:names])
+    assert_equal %w[espalia], sources_of(@bo.id, "assignment")
+  end
+
+  should "name the manager fact's provider for a manager item" do
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                       .set_fact_provider("manager", "hibob", effective_on: "2026-01-01")
+    end
+    assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
+    write(Operations::TeamPlanning::SetReportingLine, @q2, person_id: @ada.id, manager_id: @bo.id)
+
+    assert_equal %w[hibob], sources_of(@ada.id, "reporting_line")
   end
 
   should "read the baseline when no scenario is given" do

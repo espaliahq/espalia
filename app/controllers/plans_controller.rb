@@ -24,7 +24,10 @@ class PlansController < ApplicationController
   def show
     plan = read(Operations::TeamPlanning::Plan)
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
-    render plan_page(plan, open_tab: :scenarios)
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?,
+                                            extra_columns: cost_columns + capacity_columns(plan, scenarios))
+    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table)
   end
 
   # GET /planning/:id/map?scenario=:scenario_id
@@ -37,8 +40,10 @@ class PlansController < ApplicationController
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
+    marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
     render plan_page(plan, scenarios:, open_tab: :map,
-                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?))
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
+                                                               **map_hooks(cost_hooks(plan, map), capacity_hooks(marks))))
   end
 
   # GET /planning/:id/timeline?scenario=:scenario_id&step=:index
@@ -56,7 +61,94 @@ class PlansController < ApplicationController
                            body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i))
   end
 
+  # GET /planning/:id/changes?scenario=:scenario_id
+  #
+  # What the Org Graph has learned since the base, and where one scenario's
+  # planned changes stand against it ([#287](https://github.com/espaliahq/espalia/issues/287)).
+  # The baseline is the default.
+  def changes
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = params[:scenario].presence || plan[:plan_id]
+    tab = Views::Plans::ChangesTab.new(plan:, scenarios:, drift: read(Operations::TeamPlanning::Drift),
+                                       status: read(Operations::TeamPlanning::Status, scenario_id:),
+                                       attention: read(Operations::TeamPlanning::Attention, scenario_id:))
+    render plan_page(plan, scenarios:, open_tab: :changes, body: tab)
+  end
+
   private
+
+  # Cost comes before capacity, in the strips above the map and beside each
+  # unit's name.
+  def map_hooks(*hooks)
+    summaries = hooks.filter_map { it[:summary] }
+    marks = %i[unit_marks person_marks position_marks].to_h do |key|
+      calls = hooks.filter_map { it[key] }
+      [ key, ->(*args) { calls.flat_map { it.call(*args) } } ]
+    end
+    { **marks, summary: summaries.any? ? Views::Plans::MapSummaries.new(summaries) : nil }
+  end
+
+  # Today has no period, so only a scenario is priced. Cost shows once a pay
+  # band prices something; a scenario that can't be priced keeps its map.
+  def cost_hooks(plan, map)
+    return {} if map[:scenario_id] == plan[:plan_id]
+
+    marks = Views::Plans::CostMarks.new(cost: read(Operations::TeamPlanning::Cost, scenario_id: map[:scenario_id]), map:)
+    marks.priced? ? { unit_marks: marks.unit_marks, summary: Views::Plans::CostStrip.new(marks:) } : {}
+  rescue ActiveRecord::RecordNotFound
+    {}
+  end
+
+  def cost_columns
+    return [] unless PayBand.exists?
+
+    costs = read(Operations::TeamPlanning::ScenarioCosts)
+    rows = costs[:scenarios].index_by { it[:scenario_id] }
+    priced = rows.values.any? { |row| row[:total]&.values_at(:scenario, :baseline)&.any? { it[:native].any? } }
+    return [] unless priced
+
+    [ Views::Plans::ScenarioTable::Column.new(heading: "Cost", cell: ->(scenario) {
+      Views::Plans::CostCell.new(row: rows[scenario[:scenario_id]], reference: costs[:reference_currency])
+    }) ]
+  end
+
+  # Every scenario is measured against the baseline, as cost is, so its
+  # capacity and Today's are read side by side.
+  def capacity_marks(plan, scenario_id, names: {}, live_unit_ids: nil)
+    @capacity ||= {}
+    scenario, baseline = [ scenario_id, plan[:plan_id] ].map { @capacity[it] ||= read(Operations::TeamPlanning::Capacity, scenario_id: it) }
+    Views::Plans::CapacityMarks.new(scenario:, baseline:, names: scenario[:names].merge(names), live_unit_ids:)
+  end
+
+  def capacity_hooks(marks)
+    return {} unless marks.measured?
+
+    { unit_marks: marks.unit_marks, person_marks: marks.person_marks, position_marks: marks.position_marks,
+      summary: Views::Plans::CapacityStrip.new(marks:) }
+  end
+
+  # A scenario that no longer resolves says so in its cell rather than
+  # taking the whole table with it.
+  def capacity_columns(plan, scenarios)
+    marks = scenarios.to_h { [ it[:scenario_id], capacity_marks_or_nil(plan, it[:scenario_id]) ] }
+    return [] if marks.values.all? { it && !it.measured? }
+
+    [ Views::Plans::ScenarioTable::Column.new(heading: "Capacity", cell: ->(scenario) { capacity_cell(marks[scenario[:scenario_id]]) }) ]
+  end
+
+  def capacity_marks_or_nil(plan, scenario_id)
+    capacity_marks(plan, scenario_id)
+  rescue ActiveRecord::RecordNotFound
+    nil
+  end
+
+  def capacity_cell(marks)
+    return Views::Plans::CapacityUnitTotal.new(totals: [], baseline: false, empty: "Can't be counted") unless marks
+
+    Views::Plans::CapacityUnitTotal.new(totals: marks.totals, baseline: marks.baseline?, empty: "None counted")
+  end
 
   def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil)
     members = read(Operations::TeamPlanning::PlanMembers)[:members]
@@ -67,7 +159,8 @@ class PlansController < ApplicationController
       see_pay: see_pay(members),
       tabs: [ Views::Plans::ShowView::Tab.new(key: :scenarios, label: "Scenarios", href: plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])),
-              Views::Plans::ShowView::Tab.new(key: :timeline, label: "Timeline", href: timeline_plan_path(plan[:plan_id])) ],
+              Views::Plans::ShowView::Tab.new(key: :timeline, label: "Timeline", href: timeline_plan_path(plan[:plan_id])),
+              Views::Plans::ShowView::Tab.new(key: :changes, label: "Changes", href: changes_plan_path(plan[:plan_id])) ],
       open_tab:,
       body:,
       can_edit: can_edit?,
