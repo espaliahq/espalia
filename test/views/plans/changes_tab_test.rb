@@ -73,6 +73,32 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_equal "/planning/#{PLAN}/changes", row.css("a").first["href"]
     end
 
+    should "settle from the drift row only what conflicts in the scenario on screen, and count the others" do
+      meets = [ { scenario_id: Q1, change_id: "c2", facet: "level", subject_id: BO }, { scenario_id: PLAN, change_id: "c9", facet: "level", subject_id: BO } ]
+      carried = { scenario_id: Q1, change_id: "c2", subject_id: BO, facet: "level", status: "conflicting", since: "2026-11-21", sources: %w[espalia] }
+      html = render_tab(changes: [ drift_change("fact_changed", person_id: BO, fact: "level", meets:) ], statuses: [ carried ], can_edit: true)
+
+      row = html.at_css("[data-drift-change='fact_changed']")
+      settle = row.at_css("[data-drift-settle='#{Q1}']")
+      assert_includes settle.text, "Conflicts with the plan in Q1 hires."
+      assert_equal %w[plan reality], settle.css("[data-settle-conflict='level'] button").map { it["value"] }
+      assert_equal Q1, settle.at_css("input[name='settlement[scenario_id]']")["value"]
+      elsewhere = settle.at_css("[data-drift-settle-elsewhere='1']")
+      assert_includes elsewhere.text, "Also planned in 1 other scenario"
+      assert_equal [ "/planning/#{PLAN}/changes" ], elsewhere.css("a").map { it["href"] }
+      assert_not_includes row.text, "Meets the plan in"
+    end
+
+    should "offer no drift-row buttons for a live conflict or to a viewer" do
+      meets = [ { scenario_id: Q1, change_id: "c2", facet: "level", subject_id: BO } ]
+      drift = [ drift_change("fact_changed", person_id: BO, fact: "level", meets:) ]
+      live = { scenario_id: Q1, change_id: "c2", subject_id: BO, facet: "level", status: "conflicting", since: nil, sources: %w[espalia] }
+
+      assert_nil render_tab(changes: drift, statuses: [ live ], can_edit: true).at_css("[data-drift-settle]")
+      assert_nil render_tab(changes: drift, statuses: [ live.merge(since: "2026-11-21") ]).at_css("[data-drift-settle]")
+      assert_includes render_tab(changes: drift, statuses: [ live ], can_edit: true).at_css("[data-drift-change]").text, "Meets the plan in Q1 hires"
+    end
+
     should "say when nothing has changed" do
       assert_includes render_tab.text, "Nothing has changed in the Org Graph since the base."
     end

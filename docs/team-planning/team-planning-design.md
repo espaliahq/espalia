@@ -855,6 +855,14 @@ of the day before the base, so a change learned today waits for tomorrow's updat
 then the row says so rather than offering an update that would take nothing in. An
 inherited change names the scenario that made it, linked to that scenario's tab.
 
+The drift row that meets a carried conflict offers the same two buttons, posting to the
+same settle, so settling from either row clears both in one response. An update takes
+the change that caused the conflict into the baseline, so this happens only once the Org
+Graph moves that facet again: a level that went to 5, was carried, then went to 6. The
+buttons act only in the scenario shown. When the change meets plans in other scenarios,
+the row counts them and links to each one's tab instead of offering buttons that act out
+of sight.
+
 ### The baseline reader
 
 `TeamPlanning::Baseline` reads the root scenario, which changes nothing yet, over

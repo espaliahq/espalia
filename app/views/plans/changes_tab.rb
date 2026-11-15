@@ -79,7 +79,12 @@ class Views::Plans::ChangesTab < Views::Base
           span(class: ("line-through" if change[:withdrawn])) { describe(change) }
         end
         p(class: "text-xs text-muted") { drift_meta(change) }
-        meets_line(change[:meets]) if change[:meets].any?
+        carried = carried_here(change[:meets])
+        if carried.any?
+          drift_settle(carried, change[:meets])
+        elsif change[:meets].any?
+          meets_line(change[:meets])
+        end
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         render Components::Kit::Badge.new("From this plan", tone: :brand) if change[:from_plan]
@@ -93,6 +98,38 @@ class Views::Plans::ChangesTab < Views::Base
     learned = change[:learned_at] && Time.iso8601(change[:learned_at]).to_date
     takes = "Takes effect #{day(change[:effective_on])}"
     learned && learned.iso8601 != change[:effective_on] ? "#{takes} · learned #{day(learned)}" : takes
+  end
+
+  # The carried conflicts this change causes in the scenario on screen. A
+  # conflict elsewhere is settled from its own scenario, so the buttons here
+  # never act on a scenario the reader isn't looking at.
+  def carried_here(meets)
+    return [] unless @can_edit
+
+    @status[:statuses].select do |entry|
+      entry[:status].to_s == "conflicting" && entry[:since] && meets.any? do |met|
+        met[:scenario_id] == entry[:scenario_id] && met[:subject_id] == entry[:subject_id] && met[:facet].to_s == entry[:facet].to_s
+      end
+    end
+  end
+
+  def drift_settle(carried, meets)
+    div(class: "space-y-1", data: { drift_settle: scenario_id }) do
+      p(class: "text-xs text-muted") { "Conflicts with the plan in #{scenario_name(scenario_id)}." }
+      carried.each { settle(it) }
+      others = meets.map { it[:scenario_id] }.uniq - carried.map { it[:scenario_id] } - [ scenario_id ]
+      other_scenarios(others) if others.any?
+    end
+  end
+
+  def other_scenarios(ids)
+    p(class: "text-xs text-muted", data: { drift_settle_elsewhere: ids.size }) do
+      plain "Also planned in #{ids.size} other #{"scenario".pluralize(ids.size)}, settled from #{ids.one? ? "its" : "each"} own tab: "
+      ids.each_with_index do |id, index|
+        plain ", " if index.positive?
+        a(href: changes_plan_path(plan_id, scenario: scenario_param(id)), class: "text-link underline") { scenario_name(id) }
+      end
+    end
   end
 
   def meets_line(meets)
