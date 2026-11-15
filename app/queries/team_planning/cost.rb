@@ -20,6 +20,15 @@
 # after, so the seat is never counted twice. Without a date the step is the
 # date: the leaver costs nothing in it.
 #
+# A member with the see-pay right sees a person priced from the actual pay
+# the plan holds for them instead
+# ([#317](https://github.com/espaliahq/espalia/issues/317)): made yearly,
+# scaled by FTE only when its basis is full_time, by the days held, and with
+# on-cost on top. Pay the plan lost with the person's key leaves the seat
+# unpriced, as no midpoint stands in for it. Everyone else sees midpoints
+# throughout, so the two views total differently. `pay_view` keeps its
+# name from before actual pay; each line's `pay_source` says how it was priced.
+#
 # Figures stay exact Rationals in their band's currency, totalled per
 # currency. Each total converts once, to the reference currency at the
 # period's start; a missing rate leaves it unconverted and says so. Plans
@@ -38,9 +47,12 @@ class TeamPlanning::Cost
   YEAR_DAYS = 365
   NO_UNIT = nil
   NO_REFERENCE = "There is no reference currency to total in"
+  PAY_VIEWS = %w[band_ranges band_midpoints].freeze
+  UNPRICED = { band: nil, currency: nil, pay_source: nil, basis: nil, hours_per_year: nil, yearly: nil, base: nil, on_cost: nil }.freeze
 
   # Why a seat is unpriced.
   REASONS = {
+    "pay_unknown" => "The plan's pay for the person was lost with their key",
     "level_unknown" => "The plan's level for the person was lost with their key",
     "fte_unknown" => "The plan's FTE for the person was lost with their key",
     "no_level" => "No level resolves for the seat",
@@ -66,29 +78,33 @@ class TeamPlanning::Cost
   # @!attribute cost_centre_rule [Integer, nil] the winning cost centre rule's index, for "rule"
   # @!attribute level_id [String, nil]
   # @!attribute level_source [String, nil] a {LEVEL_SOURCES} key
-  # @!attribute band [PayBand, nil]
+  # @!attribute band [PayBand, nil] nil when priced from actual pay
+  # @!attribute currency [String, nil]
+  # @!attribute pay_source [String, nil] "actual" or "band_midpoint" when priced
+  # @!attribute basis [String, nil] for actual pay, "actual" or "full_time"
   # @!attribute fte [Rational]
   # @!attribute fraction [Rational] the part of the seat this place carries
   # @!attribute held [Range<Date>, nil] the days the seat is held; nil for none
   # @!attribute year_days [Integer] the days that make a full year: 365 over a period, the year's own for a run rate
   # @!attribute hours_per_year [Rational, nil] for an hourly band
-  # @!attribute yearly [Rational, nil] the band midpoint for a full-time year
+  # @!attribute yearly [Rational, nil] the band midpoint or actual pay for a year
   # @!attribute base [Rational, nil]
   # @!attribute on_cost [TeamPlanning::OnCostModel::Figure, nil]
   # @!attribute reason [String, nil] a {REASONS} key when unpriced
-  Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :cost_centre_source, :cost_centre_rule, :level_id, :level_source, :band, :fte, :fraction,
-                     :held, :year_days, :hours_per_year, :yearly, :base, :on_cost, :reason) do
+  Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :cost_centre_source, :cost_centre_rule, :level_id, :level_source, :band,
+                     :currency, :pay_source, :basis, :fte, :fraction, :held, :year_days, :hours_per_year, :yearly, :base, :on_cost, :reason) do
     # @return [Boolean]
     def unpriced? = reason.present?
-
-    # @return [String, nil]
-    def currency = band&.currency
 
     # @return [Integer]
     def days = held && held.end >= held.begin ? (held.end - held.begin).to_i + 1 : 0
 
     # @return [Rational] the part of a full-time year the place covers
     def share = fte * fraction * Rational(days, year_days)
+
+    # @return [Rational] the part of {#yearly} the place costs: actual pay
+    #   is already what the person earns, so FTE leaves it alone
+    def priced_share = basis == "actual" ? fraction * Rational(days, year_days) : share
 
     # @return [Rational, nil] base plus on-cost, nil when unpriced
     def amount = unpriced? ? nil : base + on_cost.amount
@@ -112,6 +128,9 @@ class TeamPlanning::Cost
   Priced = Data.define(:map, :lines, :total, :units, :units_with_below, :cost_centres) do
     # @return [Array<Line>]
     def unpriced = lines.select(&:unpriced?)
+
+    # @return [Integer] the seats priced from actual pay
+    def actual_pay_seats = lines.reject(&:unpriced?).select { it.pay_source == "actual" }.uniq(&:seat_id).size
   end
 
   # What the forecast assumptions add to the scenario
@@ -138,12 +157,13 @@ class TeamPlanning::Cost
 
   # @!attribute basis [String] "period" for a scenario, "run_rate" for Today's year
   # @!attribute period [Range<Date>] the scenario's period, or Today's year
+  # @!attribute pay_view [String] a {PAY_VIEWS} entry
   # @!attribute reference_currency [String, nil]
   # @!attribute bands_changed_at [Time, nil] when a pay band last changed; plans reprice live
   # @!attribute scenario [Priced]
   # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
   # @!attribute forecast [Forecasted]
-  Report = Data.define(:basis, :period, :reference_currency, :bands_changed_at, :scenario, :baseline, :forecast) do
+  Report = Data.define(:basis, :period, :pay_view, :reference_currency, :bands_changed_at, :scenario, :baseline, :forecast) do
     # @return [Boolean]
     def run_rate? = basis == "run_rate"
 
@@ -210,11 +230,13 @@ class TeamPlanning::Cost
     @year_days = run_rate ? @period.count : YEAR_DAYS
     @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
     @factors = {}
+    @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     scenario = priced(resolved(@scenario_id))
     forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map).rows)
     baseline = priced(resolved(@plan.id)) unless run_rate
-    Report.new(basis: run_rate ? "run_rate" : "period", period: @period, reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
+    Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
+               reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
                scenario:, baseline:, forecast:)
   end
 
@@ -272,13 +294,16 @@ class TeamPlanning::Cost
     places = TeamPlanning::Baseline::Membership.shares(member.memberships)
     held = held_by(member)
     seat = { seat_id: member.id, kind: "person", fte: fte_of(member) || 1r }
-    unpriced = ("fte_unknown" unless fte_of(member)) || ("level_unknown" if member.planned_or_own(:level) == TeamPlanning::Baseline::UNKNOWN)
+    pay = member.plan_data[:pay] if @actual_pay
+    unpriced = ("pay_unknown" if pay&.removed?) || ("fte_unknown" unless fte_of(member)) ||
+               ("level_unknown" if !pay && member.planned_or_own(:level) == TeamPlanning::Baseline::UNKNOWN)
     own_level_id, own_source = person_level(member)
     fractions(places).map do |placement, fraction|
       position = @positions[placement.position_id]
       level_id, source = own_level_id || !position ? [ own_level_id, own_source ] : [ position.level_id, "position" ]
-      line(**seat, **person_cost_centre(member, position), unit_id: live_unit(placement.unit_id), position_id: placement.position_id, level_id:, level_source: level_id && source,
-                   country: member.country, fraction:, held:, reason: unpriced)
+      line(**seat, **person_cost_centre(member, position), unit_id: live_unit(placement.unit_id), position_id: placement.position_id, level_id:,
+                   level_source: level_id && source, country: member.country, fraction:, held:, reason: unpriced,
+                   pay: pay && !pay.removed? ? pay.reveal : nil)
     end
   end
 
@@ -324,22 +349,34 @@ class TeamPlanning::Cost
     end.flatten
   end
 
-  def line(country:, reason:, **seat)
-    band = PayBand.covering(bands.fetch(seat[:level_id], []), country) if seat[:level_id]
-    reason ||= seat[:level_id] ? ("no_band" unless band) : "no_level"
-    empty = { band: nil, hours_per_year: nil, yearly: nil, base: nil, on_cost: nil }
-    return Line.new(**seat, year_days: @year_days, **empty, reason:) if reason
+  def line(country:, reason:, pay: nil, **seat)
+    seat[:year_days] = @year_days
+    band = PayBand.covering(bands.fetch(seat[:level_id], []), country) if seat[:level_id] && !pay
+    reason ||= seat[:level_id] ? ("no_band" unless band) : "no_level" unless pay
+    return Line.new(**seat, **UNPRICED, reason:) if reason
 
-    hours = TeamPlanning::RuleKinds::WorkingHours.hours_per_year(rule_at("working_hours", seat[:unit_id])) if band.period == "hour"
-    yearly = band.yearly(:midpoint, hours_per_year: hours)
-    line = Line.new(**seat, year_days: @year_days, band:, hours_per_year: hours, yearly:, base: nil, on_cost: nil, reason: nil)
-    base = yearly * line.share
-    on_cost = TeamPlanning::RuleKinds::OnCost.on_cost_of(rule_at("on_cost", seat[:unit_id]), base:, currency: band.currency,
+    line = pay ? paid(pay, seat) : banded(band, seat)
+    base = line.yearly * line.priced_share
+    on_cost = TeamPlanning::RuleKinds::OnCost.on_cost_of(rule_at("on_cost", seat[:unit_id]), base:, currency: line.currency,
                                                           country:, share: line.share)
     line.with(base:, on_cost:)
   rescue TeamPlanning::Error
     line.with(base:, reason: "on_cost_refused")
   end
+
+  def banded(band, seat)
+    hours = hours_at(seat[:unit_id]) if band.period == "hour"
+    Line.new(**seat, **UNPRICED, band:, currency: band.currency, pay_source: "band_midpoint", hours_per_year: hours,
+                     yearly: band.yearly(:midpoint, hours_per_year: hours), reason: nil)
+  end
+
+  def paid(pay, seat)
+    hours = hours_at(seat[:unit_id]) if pay["period"] == "hour"
+    Line.new(**seat, **UNPRICED, currency: pay["currency"], pay_source: "actual", basis: pay["basis"], hours_per_year: hours,
+                     yearly: PayBand.yearly(exact(pay["amount"]), period: pay["period"], hours_per_year: hours), reason: nil)
+  end
+
+  def hours_at(unit_id) = TeamPlanning::RuleKinds::WorkingHours.hours_per_year(rule_at("working_hours", unit_id))
 
   def person_level(member)
     level = member.planned_or_own(:level)

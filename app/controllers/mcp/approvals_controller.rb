@@ -15,7 +15,7 @@ class Mcp::ApprovalsController < ApplicationController
   # GET /mcp/approvals/:id
   def show
     authorize @approval
-    render Views::Mcp::Approvals::ShowView.new(approval: @approval)
+    render Views::Mcp::Approvals::ShowView.new(approval: @approval, notice: approval_notice)
   end
 
   # POST /mcp/approvals/:id/approve
@@ -111,6 +111,19 @@ class Mcp::ApprovalsController < ApplicationController
       tenant_user: tenant_user,
       person: tenant_user&.person
     )
+  end
+
+  def approval_notice
+    return unless @approval.resolvable?
+
+    ActsAsTenant.with_tenant(@approval.tenant) do
+      @approval.operation.approval_notice(context: approval_context(@approval), params: @approval.arguments)
+    end
+  rescue StandardError => e
+    # The notice is a courtesy; a failure in it must not keep the user from
+    # approving or rejecting.
+    Rails.logger.error("[mcp_approval] notice failed: #{e.class}")
+    nil
   end
 
   def stale_alert

@@ -450,6 +450,14 @@ class Operations::Base
       new(context: context, params: params).call
     end
 
+    # A warning the in-app approval page shows above the arguments, for an
+    # operation whose effect reaches further than its arguments say.
+    #
+    # @param context [AuthorizationContext] the person who will approve
+    # @param params [Hash] the arguments awaiting approval
+    # @return [String, nil] nil when there is nothing to warn about
+    def approval_notice(context:, params:) = nil
+
     private
 
     # Destructive ops route to in-app approval unless explicitly opted out.
