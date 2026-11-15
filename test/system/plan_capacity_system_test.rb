@@ -94,6 +94,22 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
+      should "badge an override on someone who leaves, whose place counts nowhere" do
+        call(Operations::TeamPlanning::SetCapacityOverride, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
+                                                                      unit_id: @payments, amount: "0.5")
+        call(Operations::TeamPlanning::SetDeparture, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id)
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id, scenario: @q1)
+
+        click_selector_with_js_fallback("[data-map-person='#{@ada.id}'] [data-capacity-figure] summary",
+                                        expect_text: "The person leaves in this step")
+        within("[data-map-person='#{@ada.id}'] [data-capacity-figure] summary") do
+          assert_text "No capacity"
+          assert_text "override"
+        end
+        assert_no_sideways_overflow
+      end
+
       should "list a place no model covers, with why, and mark its figure" do
         sign_in_as(@planner.user)
         visit map_plan_path(@plan_id)
