@@ -103,8 +103,8 @@ class Views::Plans::ShowView < Views::Base
 
   def tab_strip
     if tabs.size > 1
-      nav(aria: { label: "Plan views" }, class: "mb-4 flex gap-1 overflow-x-auto border-b border-default") do
-        tabs.each { tab(it) }
+      nav(aria: { label: "Plan views" }, class: "mb-4 border-b border-default") do
+        div(class: "-mb-px flex gap-1 overflow-x-auto") { tabs.each { tab(it) } }
       end
     end
     h2(id: "plan-main-heading", class: ("sr-only" if tabs.size > 1) || "mb-3 text-base font-semibold text-default") do
