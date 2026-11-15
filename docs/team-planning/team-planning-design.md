@@ -122,6 +122,8 @@ plans projection keeps the list in `scope_unit_ids`.
 - **A plan changes only the people it covers.** A change about someone outside is refused
   unless it is the assignment that places them in a covered unit, and the refusal says
   nothing about them. A reporting line from someone inside to a manager outside is allowed.
+  A redo is held to the same rule, so narrowing a plan past an undone change can't bring
+  that change back about someone the plan no longer covers.
 - **A change left about someone outside is flagged, never hidden from its own record.**
   An undone bring-in, or an Org Graph move out of the plan's units, leaves the person's
   other changes in the plan. Attention lists each one under "A change about someone this

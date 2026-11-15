@@ -423,11 +423,14 @@ class TeamPlanning::CommandHandler
   # @param plan_id [String]
   # @param scenario_id [String]
   # @param event_id [String, nil] the undone change's event id
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the lock, once the actor may edit it
+  # @yieldparam entry [RubyEventStore::Event, nil] the change, pin or clear about to be redone, nil for one not in the log
   # @return [String] the event id redone
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to redo
   # @see TeamPlanning::PlanAggregate#redo_change
-  def redo_change(plan_id, scenario_id:, event_id: nil)
+  def redo_change(plan_id, scenario_id:, event_id: nil, &check)
     reverse(plan_id, scenario_id, event_id, :last_redoable_by, "You have nothing here to redo") do |plan, id|
+      check&.call(plan, plan.log_of(scenario_id).find { it.event_id == id })
       plan.redo_change(scenario_id:, event_id: id, redone_by_id: actor_id!)
     end
   end

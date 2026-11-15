@@ -192,6 +192,23 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_includes resolve(@plan_id, @h1).people.map(&:id), @dee.id
   end
 
+  should "refuse to redo a change about someone a narrower plan no longer covers, unless it places them in" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
+    call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1)
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h2, person_id: @cy.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h2)
+    set_scope(@plan_id, [ @engineering ])
+
+    error = assert_raises(Operations::Base::ParameterError) { call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @h1) }
+    assert_equal "This person is outside the units this plan covers. Place them in one of its units first.", error.message
+    assert_not_includes resolve(@plan_id, @h1).people.map(&:id), @dee.id
+
+    call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @h2)
+    assert_includes resolve(@plan_id, @h2).people.map(&:id), @cy.id
+  end
+
   should "flag a change about someone the plan no longer covers, whether a bring-in was undone or the Org Graph moved them out" do
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])
