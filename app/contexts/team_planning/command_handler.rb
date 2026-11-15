@@ -47,9 +47,9 @@ class TeamPlanning::CommandHandler
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor, or for a unit the Org Graph hasn't
   # @see TeamPlanning::PlanAggregate#set_scope
   def set_plan_scope(plan_id, unit_ids:)
-    unit_ids = known_units!(unit_ids)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      unit_ids = known_units!(unit_ids)
       yield plan, unit_ids if block_given?
       plan.set_scope(unit_ids:, set_by_id: actor_id!)
     end

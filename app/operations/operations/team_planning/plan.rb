@@ -18,12 +18,12 @@ class Operations::TeamPlanning::Plan < Operations::Base
   def perform
     plan = plan!
     { plan_id: plan.id, name: plan.name&.reveal, base_on: plan.base_on.iso8601, role: plan.role_of(context.person.id),
-      scope: scope_of(plan), frozen: PlanPolicy.frozen?(plan) }
+      scope: self.class.scope_of(plan), frozen: PlanPolicy.frozen?(plan) }
   end
 
-  private
-
-  def scope_of(plan)
+  # @param plan [TeamPlanningPlan]
+  # @return [Hash] `{ whole_organisation, units: [{ unit_id, name }] }`
+  def self.scope_of(plan)
     ids = plan.scope_unit_ids.to_a
     names = OrgUnit.where(id: ids).pluck(:id, :name).to_h
     { whole_organisation: ids.empty?, units: ids.map { { unit_id: it, name: names[it] } } }

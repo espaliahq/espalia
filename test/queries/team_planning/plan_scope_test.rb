@@ -75,12 +75,28 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
 
   def scenario_map(plan_id, scenario_id) = call(Operations::TeamPlanning::ScenarioMap, plan_id:, scenario_id:)
 
+  def set_scope(plan_id, unit_ids) = call(Operations::TeamPlanning::SetPlanScope, plan_id:, unit_ids:)
+
+  def scope_of(plan_id) = as_tenant { TeamPlanningPlan.find(plan_id).scope_unit_ids.to_a }
+
   def person(payload, person) = payload[:people].find { it[:id] == person.id }
 
+  def plan_reads
+    Operations::Registry.all.select do |operation|
+      operation.name.start_with?("Operations::TeamPlanning::") && operation.category == :read &&
+        operation.parameters.values.select(&:required).map(&:name).difference(%i[plan_id scenario_id]).empty?
+    end
+  end
+
   def every_read(plan_id, scenario_id)
-    [ scenario_map(plan_id, scenario_id), cost(plan_id, scenario_id), capacity(plan_id, scenario_id),
-      call(Operations::TeamPlanning::Timeline, plan_id:, scenario_id:), call(Operations::TeamPlanning::Attention, plan_id:, scenario_id:),
-      call(Operations::TeamPlanning::Plan, plan_id:) ].to_json
+    plan_reads.to_h do |operation|
+      given = { plan_id:, scenario_id: }.slice(*operation.parameters.keys)
+      [ operation.name, begin
+        call(operation, **given)
+      rescue Operations::Base::ParameterError => refusal
+        refusal.message
+      end ]
+    end.to_json
   end
 
   should "count a person half in the plan when half their time is in units it covers, in every total" do
@@ -147,5 +163,34 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_equal [ "out", [ @payments ], [] ], ada.values_at(:crossing, :left_unit_ids, :joined_unit_ids)
     dee = moves.find { it[:person_id] == @dee.id }
     assert_equal [ "in", [], [ @payments ] ], dee.values_at(:crossing, :left_unit_ids, :joined_unit_ids)
+  end
+
+  context "changing the scope" do
+    should "always let a plan widen, and narrow while nothing it plans falls outside" do
+      assert_equal [ "Engineering", "Sales" ], set_scope(@plan_id, [ @engineering, @sales ])[:scope][:units].map { it[:name] }.sort
+      assert_equal({ whole_organisation: true, units: [] }, set_scope(@plan_id, [])[:scope])
+
+      call(Operations::TeamPlanning::SetAssignment, plan_id: @whole_id, scenario_id: @whole_h1, person_id: @ada.id,
+                                                    placements: [ { unit_id: @payments, allocation: 0.5 } ])
+      set_scope(@whole_id, [ @engineering ])
+      assert_equal [ @engineering ], scope_of(@whole_id)
+    end
+
+    should "refuse to narrow while a change is about something left out, naming what it can and counting the rest" do
+      [ @cy, @dee ].each do |person|
+        call(Operations::TeamPlanning::SetAssignment, plan_id: @whole_id, scenario_id: @whole_h1, person_id: person.id,
+                                                      placements: [ { unit_id: @sales, allocation: 0.5 } ])
+      end
+
+      error = assert_raises(Operations::Base::ParameterError) { set_scope(@whole_id, [ @engineering ]) }
+      assert_equal "The narrower plan would leave out what these changes are about: Cy Quill in H1 and Dee Quill in H1. " \
+                   "Undo them, or keep the units they are about", error.message
+      assert_empty scope_of(@whole_id), "the scope stands as it was"
+
+      Operations::TeamPlanning::SetPlanScope.stub(:named, 1) do
+        error = assert_raises(Operations::Base::ParameterError) { set_scope(@whole_id, [ @engineering ]) }
+        assert_match "Cy Quill in H1 and 1 other change.", error.message
+      end
+    end
   end
 end
