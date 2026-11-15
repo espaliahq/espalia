@@ -122,10 +122,19 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
 
   def band_of(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }[:band]
 
-  should "refuse a unit on neither map, the baseline as the scenario, and a caller outside the plan" do
+  should "refuse a unit on neither map and a caller outside the plan" do
     assert_equal "No such unit", assert_raises(Operations::Base::ParameterError) { cost(unit_id: SecureRandom.uuid_v7) }.message
-    assert_match(/baseline has no period/, assert_raises(Operations::Base::ParameterError) { cost(scenario_id: @plan_id) }.message)
     assert_raises(Operations::Base::ParameterError) { cost(as: @outsider) }
+  end
+
+  should "give Today's run rate for the plan's id, with no baseline or difference anywhere in it" do
+    result = cost(scenario_id: @plan_id, unit_id: @payments)
+
+    assert_equal [ "run_rate", { starts_on: "2026-01-01", ends_on: "2026-12-31" } ], result.values_at(:basis, :period)
+    totals = [ result[:total], *result[:units], *result[:units].filter_map { it[:with_below] }, *result[:cost_centres] ]
+    assert totals.all? { it.keys.intersect?(%i[baseline difference]).! }, "a run rate is never compared"
+    assert_equal [ :scenario ], result[:seats].keys
+    assert_equal "period", cost[:basis]
   end
 
   should "read the Org Graph once for the scenario and the baseline together" do

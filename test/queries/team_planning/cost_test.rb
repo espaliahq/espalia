@@ -261,8 +261,31 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal Time.utc(2026, 1, 6, 9), cost.bands_changed_at, "a removed band reprices plans too"
   end
 
-  should "refuse to cost the baseline, which has no period" do
-    refused = assert_raises(TeamPlanning::Error) { cost(@plan_id) }
-    assert_equal "The baseline has no period to cost, so cost one of the plan's scenarios", refused.message
+  should "price Today for the year from its base date, with nothing to stand against" do
+    report = cost(@plan_id)
+
+    assert_equal [ "run_rate", BASE_ON..Date.new(2026, 12, 31) ], [ report.basis, report.period ]
+    assert_equal 243_200r, report.scenario.total.converted
+    assert_nil report.baseline
+    assert_nil report.difference
+  end
+
+  should "count a year with 29 February in it as one full year, and end a year from 29 February on 28 February" do
+    plan_id = SecureRandom.uuid_v7
+    as_tenant { handler.create_plan(plan_id, name: "Leap", base_on: Date.new(2027, 6, 1)) }
+    report = as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(plan_id), scenario_id: plan_id).call }
+
+    assert_equal Date.new(2027, 6, 1)..Date.new(2028, 5, 31), report.period
+    assert_equal [ 366, 1r, 100_000r ], lines(report.scenario, @ada.id).sole.then { [ it.days, it.share, it.amount ] }
+    assert_equal Date.new(2028, 2, 29)..Date.new(2029, 2, 28), TeamPlanning::Cost.year_from(Date.new(2028, 2, 29))
+  end
+
+  should "price Today's run rate first among every scenario, each scenario still against Today over its own days" do
+    half = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, parent_id: @year, relation: "then", name: "Half", ends_on: "2027-06-30")[:scenario_id]
+    reports = as_tenant { TeamPlanning::Cost.every_scenario(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)) }
+
+    assert_equal [ @plan_id, @year, half ], reports.keys
+    ada = reports[half].baseline.lines.find { it.seat_id == @ada.id }
+    assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 6, 30), Rational(181, 365) ], [ ada.held, ada.share ]
   end
 end
