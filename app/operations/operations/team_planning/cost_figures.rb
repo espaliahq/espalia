@@ -7,12 +7,13 @@ module Operations::TeamPlanning::CostFigures
 
   private
 
-  def compared(report, scenario, baseline)
-    scenario ||= ::TeamPlanning::Cost.nothing(report.reference_currency)
-    return { scenario: sum(scenario) } if report.run_rate?
+  # The total, beside the baseline with the difference unless it is a run
+  # rate, and its parts: actual, planned and forecast, which add up to it.
+  def compared(parts, report)
+    split = { actual: sum(parts.actual), planned: sum(parts.planned), forecast: sum(parts.forecast) }
+    return { scenario: sum(parts.total), parts: split } if report.run_rate?
 
-    baseline ||= ::TeamPlanning::Cost.nothing(report.reference_currency)
-    { scenario: sum(scenario), baseline: sum(baseline), difference: sum(::TeamPlanning::Cost.difference(scenario, baseline)) }
+    { scenario: sum(parts.total), baseline: sum(parts.actual), difference: sum(::TeamPlanning::Cost.difference(parts.total, parts.actual)), parts: split }
   end
 
   def unpriced_lines(report) = [ report.scenario, report.baseline ].compact.flat_map(&:unpriced).uniq { [ it.seat_id, it.unit_id, it.reason ] }

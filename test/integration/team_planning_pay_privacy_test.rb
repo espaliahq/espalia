@@ -9,6 +9,14 @@ require "test_helper"
 class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
   AMOUNT = "92417"
 
+  class Hiring < TeamPlanning::ForecastKind
+    def self.rule_name = "test_privacy_hiring"
+    def self.description = "A fixed forecast cost"
+    def self.default = {}
+
+    def self.forecast(frame) = [ frame.row(unit_id: nil, headcount: 1r, cost: { "AUD" => 1000r }) ]
+  end
+
   setup do
     travel_to Time.utc(2026, 2, 1, 9)
     @tenant = create(:tenant)
@@ -66,6 +74,48 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       assert_equal [ "run_rate", "band_midpoints" ], other.values_at(:basis, :pay_view)
       assert_not_includes other.keys, :actual_pay_seats
       assert_not_includes other.to_json, AMOUNT
+    end
+  end
+
+  context "the actual, planned and forecast split" do
+    setup do
+      @tenant.update!(hris_config: build(:tenant, :with_hibob_config).hris_config)
+      engineer = create(:framework_role, code: "E", name: "Software Engineer")
+      level = create(:framework_level, role_id: engineer.role_id, ordinal: 3, title: "Engineer")
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                              .apply_facts(@ada.id, provider: "espalia", effective_on: "2026-02-01", title: "Software Engineer")
+      PayBand.create!(level:, currency: "AUD", period: "year", minimum: 50_000, midpoint: 100_000, maximum: 150_000)
+      ReferenceCurrency.create!(currency: "AUD")
+      TeamPlanning::RuleKinds.register(Hiring)
+    end
+
+    teardown { TeamPlanning::RuleKinds.unregister(Hiring) }
+
+    # Q1 holds 121 of the run rate's 365 days.
+    should "add up a member's parts to their own total: midpoints without the right, actual pay with it, and no figure from the pay for the first" do
+      { @plan_id => Rational(1), @q1 => Rational(121, 365) }.each do |scenario_id, share|
+        midpoint = 100_000 * share
+        forecast = scenario_id == @q1 ? 1000 : 0
+        derived = BigDecimal(Integer(AMOUNT) * share, 20).to_s("F")[0, 5]
+
+        { @editor => midpoint, @viewer => midpoint, @holder => Integer(AMOUNT) * share }.each do |account, priced|
+          who = "#{account == @holder ? 'holder' : 'non-holder'} in #{scenario_id == @plan_id ? 'Today' : 'Q1'}"
+          cost = call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id:)
+          table = call(Operations::TeamPlanning::ScenarioCosts, account, plan_id: @plan_id)[:scenarios].find { it[:scenario_id] == scenario_id }
+
+          assert_split(cost[:total], priced + forecast, who)
+          assert_equal cost[:total], table[:total], who
+          assert_equal(forecast, call(Operations::TeamPlanning::Forecast, account, plan_id: @plan_id, scenario_id:)[:rows].sum { BigDecimal(it[:cost]["AUD"]) }, who)
+          if account == @holder
+            assert_includes cost.to_json, derived, who
+            next
+          end
+
+          [ cost, table, call(Operations::TeamPlanning::Forecast, account, plan_id: @plan_id, scenario_id:) ].each do |payload|
+            assert_not_includes payload.to_json, derived, who
+          end
+        end
+      end
     end
   end
 
@@ -174,6 +224,12 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         assert_not_includes output, AMOUNT, "#{tool} as #{who} in #{scenario_id == @plan_id ? 'Today' : scenario_id}"
       end
     end
+  end
+
+  def assert_split(total, expected, who)
+    parts = total[:parts].values_at(:actual, :planned, :forecast).sum { BigDecimal(it[:converted]) }
+    assert_in_delta expected, BigDecimal(total[:scenario][:converted]), 1e-9, who
+    assert_in_delta expected, parts, 1e-9, who
   end
 
   def context_for(account) = AuthorizationContext.new(user: account.user, tenant_user: account, person: account.person)
