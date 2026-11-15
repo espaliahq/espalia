@@ -71,6 +71,23 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_select "#changes-planned-heading", text: "Planned in Q1 hires"
     end
 
+    should "open the checks on today, and on a scenario, as a tab after the changes" do
+      get checks_plan_path(@plan_id)
+      assert_response :success
+      assert_select "[aria-current='page']", text: "Checks"
+      assert_select "#checks-heading", text: "Checks on Today"
+      assert_includes response.body, "Everything in this scenario still fits."
+
+      get checks_plan_path(@plan_id, scenario: @q1)
+      assert_response :success
+      assert_select "#checks-heading", text: "Checks on Q1 hires"
+    end
+
+    should "get a 404 for checks in a scenario that isn't in the plan" do
+      get checks_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
+      assert_response :not_found
+    end
+
     should "get a 404 for changes in a scenario that isn't in the plan" do
       get changes_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
       assert_response :not_found
@@ -86,7 +103,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "someone outside the plan" do
-    should "not see it in the index, and get a 404 for its page, map, timeline and changes, even as a tenant admin" do
+    should "not see it in the index, and get a 404 for its page, map, timeline, changes and checks, even as a tenant admin" do
       [ @outsider, @admin ].each do |account|
         sign_in account.user
         get plans_path
@@ -100,6 +117,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
         get timeline_plan_path(@plan_id)
         assert_response :not_found
         get changes_plan_path(@plan_id)
+        assert_response :not_found
+        get checks_plan_path(@plan_id)
         assert_response :not_found
         sign_out account.user
       end
