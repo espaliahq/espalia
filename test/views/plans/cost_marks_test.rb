@@ -53,7 +53,7 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
                     "Priced from the actual pay the plan holds for 1 seat here and 2 seats in Today, and at pay band midpoints for the rest, plus"
     assert_includes basis.({ actual_pay_seats: { scenario: 0, baseline: 3 } }),
                     "Priced from the actual pay the plan holds for 3 seats in Today, and at pay band midpoints for the rest"
-    [ {}, { actual_pay_seats: { scenario: 0, baseline: 0 } } ].each do |cost|
+    [ {}, { actual_pay_seats: { scenario: 0, baseline: 0 } }, { actual_pay_seats: { scenario: nil, baseline: nil } } ].each do |cost|
       assert_includes basis.(cost), "the scenario this one follows. Priced at pay band midpoints, plus", cost.inspect
     end
   end

@@ -59,7 +59,7 @@ class Views::Plans::CostStrip < Views::Base
   # Only a member with the see-pay right gets a count of seats priced from actual pay.
   def priced_from
     held = @marks.cost[:actual_pay_seats]
-    return "Priced at pay band midpoints" unless held && held.values.any?(&:positive?)
+    return "Priced at pay band midpoints" unless held && held.values.any? { it.to_i.positive? }
 
     where = { scenario: "here", baseline: "in Today" }.filter_map { |side, place| "#{seats(held[side])} #{place}" if held[side].to_i.positive? }
     "Priced from the actual pay the plan holds for #{where.join(' and ')}, and at pay band midpoints for the rest"
