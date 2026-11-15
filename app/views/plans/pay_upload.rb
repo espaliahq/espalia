@@ -2,7 +2,7 @@
 
 # A file of actual pay for one scenario, previewed before anything is held
 # ([#323](https://github.com/espaliahq/espalia/issues/323)). The preview lands
-# in a frame below the form, so the chosen file stays in its input and the
+# in a frame inside the form, so the chosen file stays in its input and the
 # confirm sends it again with the preview's signature.
 class Views::Plans::PayUpload < Views::Base
   FORM_ID = "pay-upload-form"
@@ -58,7 +58,6 @@ class Views::Plans::PayUpload < Views::Base
       end
       render(Components::Kit::Alert.new(tone: :danger, role: "alert")) { @error } if @error
       upload_form
-      turbo_frame_tag(FRAME_ID) { preview if @preview }
     end
   end
 
@@ -74,6 +73,7 @@ class Views::Plans::PayUpload < Views::Base
       file_field
       basis_field
       render Components::Kit::Button.new(type: :submit, variant: :outline, name: "intent", value: "preview") { "Check the file" }
+      turbo_frame_tag(FRAME_ID) { preview if @preview }
     end
   end
 
@@ -110,7 +110,7 @@ class Views::Plans::PayUpload < Views::Base
       div(class: "mt-2 space-y-2") do
         BASES.each do |value, (title, detail)|
           label(class: "flex items-start gap-2 text-sm text-default") do
-            input(type: "radio", name: "basis", value:, checked: @basis == value, required: true,
+            input(id: "pay-upload-basis-#{value}", type: "radio", name: "basis", value:, checked: @basis == value, required: true,
                   class: "mt-0.5 #{Components::Kit::Field::RADIO}")
             span do
               span(class: "font-medium") { title }
@@ -183,8 +183,8 @@ class Views::Plans::PayUpload < Views::Base
   def confirm
     count = @preview[:matched_ids].size
     div(class: "flex flex-wrap items-center gap-2") do
-      input(type: "hidden", name: "signature", value: @preview[:signature], form: FORM_ID)
-      render Components::Kit::Button.new(type: :submit, tone: :brand, name: "intent", value: "confirm", form: FORM_ID,
+      input(type: "hidden", name: "signature", value: @preview[:signature])
+      render Components::Kit::Button.new(type: :submit, tone: :brand, name: "intent", value: "confirm",
                                          data: { turbo_frame: "_top" }) do
         "Hold pay for #{count} #{count == 1 ? 'person' : 'people'}"
       end
