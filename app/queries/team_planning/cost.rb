@@ -25,6 +25,12 @@
 # period's start; a missing rate leaves it unconverted and says so. Plans
 # reprice live: the report states when the bands last changed.
 #
+# Today has no period of its own, so it gets a run rate instead: every seat
+# it holds priced for the year from the base date to the day before the
+# same date a year later, a leap year counting as one full year
+# ([#318](https://github.com/espaliahq/espalia/issues/318)). A run rate has
+# no baseline to stand against, and is never compared with a period total.
+#
 # @example
 #   report = TeamPlanning::Cost.new(context:, plan:, scenario_id:).call
 #   report.scenario.totals # => { "EUR" => (60000/1) }
@@ -64,13 +70,14 @@ class TeamPlanning::Cost
   # @!attribute fte [Rational]
   # @!attribute fraction [Rational] the part of the seat this place carries
   # @!attribute held [Range<Date>, nil] the days the seat is held; nil for none
+  # @!attribute year_days [Integer] the days that make a full year: 365 over a period, the year's own for a run rate
   # @!attribute hours_per_year [Rational, nil] for an hourly band
   # @!attribute yearly [Rational, nil] the band midpoint for a full-time year
   # @!attribute base [Rational, nil]
   # @!attribute on_cost [TeamPlanning::OnCostModel::Figure, nil]
   # @!attribute reason [String, nil] a {REASONS} key when unpriced
   Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :cost_centre_source, :cost_centre_rule, :level_id, :level_source, :band, :fte, :fraction,
-                     :held, :hours_per_year, :yearly, :base, :on_cost, :reason) do
+                     :held, :year_days, :hours_per_year, :yearly, :base, :on_cost, :reason) do
     # @return [Boolean]
     def unpriced? = reason.present?
 
@@ -81,7 +88,7 @@ class TeamPlanning::Cost
     def days = held && held.end >= held.begin ? (held.end - held.begin).to_i + 1 : 0
 
     # @return [Rational] the part of a full-time year the place covers
-    def share = fte * fraction * Rational(days, YEAR_DAYS)
+    def share = fte * fraction * Rational(days, year_days)
 
     # @return [Rational, nil] base plus on-cost, nil when unpriced
     def amount = unpriced? ? nil : base + on_cost.amount
@@ -107,19 +114,23 @@ class TeamPlanning::Cost
     def unpriced = lines.select(&:unpriced?)
   end
 
-  # @!attribute period [Range<Date>]
+  # @!attribute basis [String] "period" for a scenario, "run_rate" for Today's year
+  # @!attribute period [Range<Date>] the scenario's period, or Today's year
   # @!attribute reference_currency [String, nil]
   # @!attribute bands_changed_at [Time, nil] when a pay band last changed; plans reprice live
   # @!attribute scenario [Priced]
-  # @!attribute baseline [Priced]
-  Report = Data.define(:period, :reference_currency, :bands_changed_at, :scenario, :baseline) do
-    # @return [Sum] the scenario's total less the baseline's
-    def difference = TeamPlanning::Cost.difference(scenario.total, baseline.total)
+  # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
+  Report = Data.define(:basis, :period, :reference_currency, :bands_changed_at, :scenario, :baseline) do
+    # @return [Boolean]
+    def run_rate? = basis == "run_rate"
+
+    # @return [Sum, nil] the scenario's total less the baseline's; nil for a run rate
+    def difference = baseline && TeamPlanning::Cost.difference(scenario.total, baseline.total)
   end
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
-  # @param scenario_id [String] a scenario, never the root, which has no period
+  # @param scenario_id [String] a scenario, or the plan's id for Today's run rate
   # @param repository [TeamPlanning::Repository]
   # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already
   #   read by a caller pricing several scenarios over the same one
@@ -135,13 +146,13 @@ class TeamPlanning::Cost
 
   # Every scenario of the plan priced, reading the Org Graph and the plan once.
   #
-  # @return [Hash{String => Report, TeamPlanning::Error}] by scenario id, the
-  #   root left out; a scenario that can't be priced maps to its error
+  # @return [Hash{String => Report, TeamPlanning::Error}] by scenario id, Today's
+  #   run rate first; a scenario that can't be priced maps to its error
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   def self.every_scenario(context:, plan:, repository: TeamPlanning::Repository.new)
     aggregate = repository.load_plan(plan.id)
     base = TeamPlanning::Baseline.new(context:, plan:).structure
-    (aggregate.scenarios.keys - [ plan.id ]).index_with do |scenario_id|
+    [ plan.id, *(aggregate.scenarios.keys - [ plan.id ]) ].index_with do |scenario_id|
       new(context:, plan:, scenario_id:, repository:, base:, aggregate:).call
     rescue TeamPlanning::Error => e
       e
@@ -150,20 +161,29 @@ class TeamPlanning::Cost
 
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  # @raise [TeamPlanning::Error] for the root, or a scenario the plan doesn't have
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
     aggregate = @aggregate ||= @repository.load_plan(@plan.id)
+    run_rate = @scenario_id == @plan.id
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
-    raise TeamPlanning::Error, "The baseline has no period to cost, so cost one of the plan's scenarios" if @scenario_id == @plan.id
 
-    @period = aggregate.period_of(@scenario_id)
+    @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
+    @year_days = run_rate ? @period.count : YEAR_DAYS
     @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
     @factors = {}
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     scenario = priced(resolved(@scenario_id))
-    baseline = priced(resolved(@plan.id))
-    Report.new(period: @period, reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
+    baseline = priced(resolved(@plan.id)) unless run_rate
+    Report.new(basis: run_rate ? "run_rate" : "period", period: @period, reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
                scenario:, baseline:)
+  end
+
+  # @param starts_on [Date]
+  # @return [Range<Date>] to the day before the same date a year later; from
+  #   29 February, to 28 February, as the next year has no 29th
+  def self.year_from(starts_on)
+    following = starts_on.next_year
+    starts_on..(following.day == starts_on.day ? following - 1 : following)
   end
 
   # @param reference_currency [String, nil]
@@ -260,11 +280,11 @@ class TeamPlanning::Cost
     band = PayBand.covering(bands.fetch(seat[:level_id], []), country) if seat[:level_id]
     reason ||= seat[:level_id] ? ("no_band" unless band) : "no_level"
     empty = { band: nil, hours_per_year: nil, yearly: nil, base: nil, on_cost: nil }
-    return Line.new(**seat, **empty, reason:) if reason
+    return Line.new(**seat, year_days: @year_days, **empty, reason:) if reason
 
     hours = TeamPlanning::RuleKinds::WorkingHours.hours_per_year(rule_at("working_hours", seat[:unit_id])) if band.period == "hour"
     yearly = band.yearly(:midpoint, hours_per_year: hours)
-    line = Line.new(**seat, band:, hours_per_year: hours, yearly:, base: nil, on_cost: nil, reason: nil)
+    line = Line.new(**seat, year_days: @year_days, band:, hours_per_year: hours, yearly:, base: nil, on_cost: nil, reason: nil)
     base = yearly * line.share
     on_cost = TeamPlanning::RuleKinds::OnCost.on_cost_of(rule_at("on_cost", seat[:unit_id]), base:, currency: band.currency,
                                                           country:, share: line.share)
