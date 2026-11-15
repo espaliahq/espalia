@@ -122,7 +122,28 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  should "warn an editor without the right, by count alone, that removing a scenario removes pay they can't see" do
+    notice = Operations::TeamPlanning::RemoveScenario.approval_notice(context: context_for(@editor), params: { plan_id: @plan_id, scenario_id: @q1 })
+
+    assert_equal "This scenario holds 1 change to pay you can't see. Removing it removes that too.", notice
+    assert_nil Operations::TeamPlanning::RemoveScenario.approval_notice(context: context_for(@holder), params: { plan_id: @plan_id, scenario_id: @q1 })
+  end
+
+  should "let an editor without the right remove a scenario, leaving the holder's other pay intact and unread by them" do
+    result = call(Operations::TeamPlanning::RemoveScenario, @editor, plan_id: @plan_id, scenario_id: @q1)
+
+    assert_not_includes result.to_json, AMOUNT
+    assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: @plan_id).to_json, AMOUNT
+    assert_not_includes call(Operations::TeamPlanning::ScenarioMap, @editor, plan_id: @plan_id, scenario_id: @plan_id).to_json, AMOUNT
+    assert_not_includes @log.string, AMOUNT
+    removed = Rails.configuration.event_store.read.of_type(TeamPlanning::Events::ScenarioRemoved).last
+    assert_equal [ @q1, @editor.person_id ], removed.data.values_at(:scenario_id, :removed_by_id)
+    assert_equal Time.current, removed.timestamp
+  end
+
   private
+
+  def context_for(account) = AuthorizationContext.new(user: account.user, tenant_user: account, person: account.person)
 
   def set_pay(scenario_id)
     call(Operations::TeamPlanning::SetActualPay, @holder, plan_id: @plan_id, scenario_id:, person_id: @ada.id,
