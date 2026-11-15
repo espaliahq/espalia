@@ -134,6 +134,7 @@ flowchart LR
     s72[7.2 Units model]
     s73[7.3 Override]
     s74[7.4 Capacity totals]
+    s75[7.5 Overloaded manager check]
   end
   subgraph P8[P8 Approval and carrying out]
     s81[8.1 Approver, guardrails]
@@ -203,6 +204,7 @@ flowchart LR
   s71 & s37 --> s72
   s72 & s39 --> s73
   s72 --> s74
+  s72 & s46 --> s75
   s65 & s46 --> s81
   s81 & s83 --> s84
   s84 --> s85
@@ -316,6 +318,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph. [Design: The units model](team-planning-design.md#the-units-model) | 7.1, 3.7 |
 | 7.3 | Override a person's capacity in an assignment, with the calculated figure behind it | 7.2, 3.9 |
 | 7.4 | Capacity per model, per unit and per scenario, each figure with its working, and the unclassified role check | 7.2 |
+| 7.5 | Attention check for a seat whose reports cost more to manage than it delivers, overridden or open | 7.2, 4.6 |
 
 ### P8 Approval and carrying out
 
