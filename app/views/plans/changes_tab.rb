@@ -199,37 +199,20 @@ class Views::Plans::ChangesTab < Views::Base
     render Components::Kit::Badge.new(label, tone:)
   end
 
+  # The items themselves live on the Checks tab, grouped by check.
   def attention_section
+    count = @attention[:items].size
     section(aria: { labelledby: "changes-attention-heading" }, data: { changes_section: "attention" }) do
       h3(id: "changes-attention-heading", class: "text-base font-semibold text-default") { "Needs attention" }
-      p(class: "mt-1 text-sm text-muted") do
-        "What no longer fits in #{scenario_name(scenario_id)}, such as someone placed who joined after the base or has left."
-      end
-      if @attention[:items].empty?
+      if count.zero?
         render Components::Kit::EmptyState.new(title: "Everything in this scenario still fits.", size: :panel)
       else
-        ul(class: "mt-3 divide-y divide-default rounded-lg border border-default bg-default") do
-          @attention[:items].each { attention_row(it) }
+        p(class: "mt-1 text-sm text-muted", data: { attention_count: count }) do
+          plain "#{count} #{count == 1 ? 'item' : 'items'} in #{scenario_name(scenario_id)} no longer #{count == 1 ? 'fits' : 'fit'}. "
+          render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true,
+                                             href: checks_plan_path(plan_id, scenario: scenario_param(scenario_id))) { "Review them in Checks" }
         end
       end
-    end
-  end
-
-  def attention_row(item)
-    li(class: "flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between", data: { attention_item: item[:facet] }) do
-      div(class: "min-w-0 space-y-1") do
-        p(class: "text-sm text-default break-words") do
-          facet = facet_name(item[:facet])
-          if (name = attention_name(item[:subject_id]))
-            strong(class: "font-medium") { name }
-            plain " · #{facet}"
-          else
-            strong(class: "font-medium") { facet }
-          end
-        end
-        p(class: "text-xs text-muted") { item[:reason] }
-      end
-      div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") { sources(item[:sources]) }
     end
   end
 
@@ -307,9 +290,6 @@ class Views::Plans::ChangesTab < Views::Base
   def name_of(id) = id && @drift[:names].fetch(id, Person::FORMER_MEMBER)
 
   def unit_name(id) = id && @drift[:names].fetch(id, REMOVED_UNIT)
-
-  # Attention leaves a unit the map no longer holds unnamed. It may still be the Org Graph's, so it isn't called plan-only.
-  def attention_name(id) = @attention[:names][id] || @status[:names][id] || @drift[:names][id]
 
   def scenario_name(id)
     return "Today" if id == plan_id

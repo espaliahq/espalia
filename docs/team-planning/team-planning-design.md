@@ -985,8 +985,10 @@ name, and a subject only the plan holds has none. `Raised` will join these once
 
 The Changes tab ([#287](https://github.com/espaliahq/espalia/issues/287)) draws three reads
 and decides none of their rules: the drift, the status of one scenario's changes, and what
-in that scenario needs attention. A picker chooses the scenario, as pills on a wide screen
-and a list on a phone. Each drift change links the scenarios whose plan it meets.
+in that scenario needs attention. What needs attention reads as a count that links to the
+Checks tab for the same scenario, which lists the items grouped by check
+([#355](https://github.com/espaliahq/espalia/issues/355)). A picker chooses the scenario, as
+pills on a wide screen and a list on a phone. Each drift change links the scenarios whose plan it meets.
 
 Drift and status each give a change's `sources`, from `TeamPlanning::SourceOfTruth`: who
 supplies what the change moves, so the place someone goes to make it happen. A person fact

@@ -179,17 +179,25 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
   end
 
   context "what needs attention" do
-    should "list each item with its reason" do
-      html = render_tab(items: [ { subject_id: ADA, facet: "assignment", reason: "Placed, but has left", change: nil, sources: %w[hibob] } ])
-      row = html.at_css("[data-attention-item='assignment']")
-      assert_equal [ "Ada Quill · Placement", "Placed, but has left" ], row.css("p").map { it.text.squish }
-      assert_includes row.text, "Source: HiBob"
+    should "count the items and link to the Checks tab for the same scenario, leaving the items there" do
+      items = [ { subject_id: ADA, facet: "assignment", reason: "Placed, but has left", change: nil, sources: %w[hibob] },
+                { subject_id: PAYMENTS, facet: "unit", reason: "Its parent was retired", change: nil, sources: %w[espalia] } ]
+      section = render_tab(items:).at_css("[data-changes-section='attention']")
+
+      assert_equal "2 items in Q1 hires no longer fit. Review them in Checks", section.at_css("[data-attention-count='2']").text.squish
+      assert_equal Rails.application.routes.url_helpers.checks_plan_path(PLAN, scenario: Q1), section.at_css("a")["href"]
+      assert_not_includes section.text, "Placed, but has left"
     end
 
-    should "name a unit it can, and never call one it can't only the plan's" do
-      html = render_tab(items: [ { subject_id: PAYMENTS, facet: "unit", reason: "Its parent was retired", change: nil, sources: %w[espalia] },
-                                 { subject_id: "elsewhere", facet: "unit", reason: "Its parent was retired", change: nil, sources: %w[espalia] } ])
-      assert_equal [ "Payments · Unit", "Unit" ], html.css("[data-attention-item] p:first-child").map { it.text.squish }
+    should "link the baseline's count to Checks with no scenario, and say when nothing needs attention" do
+      one = [ { subject_id: ADA, facet: "assignment", reason: "Placed, but has left", change: nil, sources: [] } ]
+      section = render_tab(items: one, scenario_id: PLAN).at_css("[data-changes-section='attention']")
+      assert_includes section.text.squish, "1 item in Today no longer fits."
+      assert_equal Rails.application.routes.url_helpers.checks_plan_path(PLAN), section.at_css("a")["href"]
+
+      empty = render_tab.at_css("[data-changes-section='attention']")
+      assert_includes empty.text, "Everything in this scenario still fits."
+      assert_nil empty.at_css("a")
     end
   end
 end
