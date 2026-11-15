@@ -418,6 +418,8 @@ Rails.application.routes.draw do
     resources :positions, only: [ :update ], controller: "plans/positions"
     # Grant and withdraw the see-pay right ([#300](https://github.com/espaliahq/espalia/issues/300)); the id is the member's.
     resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
+    # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.
+    resources :notes, only: [ :update ], controller: "plans/notes"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.
