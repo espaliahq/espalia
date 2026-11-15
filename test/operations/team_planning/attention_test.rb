@@ -152,6 +152,15 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal %w[hibob], sources_of(@bo.id, "assignment")
   end
 
+  should "name the unit a stray capacity override is for" do
+    sales = hibob_unit
+    assign(@q1, @ada, { unit_id: sales, allocation: 1 })
+    write(Operations::TeamPlanning::SetCapacityOverride, @q1, person_id: @ada.id, unit_id: sales, amount: "0.5")
+    assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
+
+    assert_equal %w[hibob], sources_of(@ada.id, "capacity:#{sales}")
+  end
+
   should "read the baseline when no scenario is given" do
     write(Operations::TeamPlanning::RetireUnit, @plan_id, unit_id: @payments)
 

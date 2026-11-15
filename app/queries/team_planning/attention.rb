@@ -122,11 +122,15 @@ class TeamPlanning::Attention
     when UNIT then [ subject_id ]
     when POSITION then [ @position_units[subject_id] ]
     when SUCCESSION then @map.successions.find { it.id == subject_id }&.then { it.predecessor_ids + it.successor_ids }
+    when /\A#{CAPACITY}:/ then [ place_unit(facet.delete_prefix("#{CAPACITY}:")) ]
     else []
     end
     broken = broken_by.filter_map { |id, kind| { UNIT => id, POSITION => @position_units[id] }[kind] }
     (own.to_a + broken).compact.uniq
   end
+
+  # A capacity override names a unit or a position.
+  def place_unit(place_id) = @position_units.fetch(place_id, place_id)
 
   def gone(unit_id) = @retired.include?(unit_id) ? "a retired unit" : "a unit no longer in this scenario"
 
