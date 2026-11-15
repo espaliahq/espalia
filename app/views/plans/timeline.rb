@@ -11,7 +11,8 @@ class Views::Plans::Timeline < Views::Base
   UNASSIGNED = "Unassigned"
   UNNAMED = "Unnamed step"
 
-  # The leaf a path from `from_id` reaches by taking the first "then" at each step.
+  # The leaf a path from `from_id` reaches by taking the first "then" at each
+  # step, and passing up through the rest of a split step.
   #
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
   # @param from_id [String]
@@ -22,7 +23,7 @@ class Views::Plans::Timeline < Views::Base
     id
   end
 
-  def self.then_index(scenarios) = scenarios.select { it[:relation] == "then" }.group_by { it[:parent_id] }
+  def self.then_index(scenarios) = scenarios.select { Views::Plans::ScenarioDialogs.onward?(it) }.group_by { it[:parent_id] }
 
   # @param timeline [Hash] from `team_planning_timeline`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
