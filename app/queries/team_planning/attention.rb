@@ -27,7 +27,8 @@ class TeamPlanning::Attention
   #   nil only when no change explains it
   Item = Data.define(:subject_id, :facet, :reason, :change)
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
+              budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
@@ -35,6 +36,7 @@ class TeamPlanning::Attention
   LINE = TeamPlanning::Events::ReportingLineSet.facet
   CAPACITY = TeamPlanning::Events::CapacitySet.facet
   LEVEL = TeamPlanning::Events::LevelSet.facet
+  BUDGET_LINE = TeamPlanning::Events::BudgetLineSet.facet
   DEPARTURE = TeamPlanning::Events::DepartureSet.facet
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
   # A place in no unit has no id an override could name, as the map's own drop target hasn't.
@@ -255,6 +257,13 @@ class TeamPlanning::Attention
     end
     retired = [ [ unit_id, UNIT ] ] if unit_id && along.empty?
     [ *(along + [ @map.rules.plan_id ]).map { [ it, CAPACITY_RULE ] }, *retired ]
+  end
+
+  # The tenant removed a line the plan changed or cut, so the change stands on nothing.
+  def budget_lines
+    @map.orphaned_lines.map do |line_id, kind|
+      item(line_id, BUDGET_LINE, "#{kind == 'cut' ? 'Cuts' : 'Changes'} a budget line the organisation has since removed")
+    end
   end
 
   def item(subject_id, facet, reason, broken_by: [])
