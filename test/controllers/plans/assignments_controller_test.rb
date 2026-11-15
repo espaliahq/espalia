@@ -130,6 +130,24 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "button[data-modal-target-id='move-person-modal-1'][data-move-from-position='#{position}'][data-move-at='#{@growth}']"
     end
 
+    should "keep the share a place with no allocation takes beside another in the timeline's dialog" do
+      ActsAsTenant.with_tenant(@tenant) do
+        graph = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        graph.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-01-03", allocation: nil)
+        graph.set_membership(@ada.id, @growth, **ESPALIA, effective_on: "2026-01-03", allocation: nil)
+      end
+      @plan_id = ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::CreatePlan, @editor, name: "Split", base_on: "2026-11-14")[:plan_id] }
+      ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")
+      end
+
+      get timeline_plan_path(@plan_id)
+
+      [ @payments, @growth ].each do |unit|
+        assert_select "button[data-modal-target-id='move-person-modal-1'][data-move-from='#{unit}'][data-move-allocation='50']"
+      end
+    end
+
     should "give each step on the timeline its own move dialog and field ids" do
       get timeline_plan_path(@plan_id)
 

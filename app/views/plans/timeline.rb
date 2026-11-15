@@ -315,9 +315,19 @@ class Views::Plans::Timeline < Views::Base
     Views::Plans::MoveDialog.trigger(
       url: plan_assignment_path(@timeline[:plan_id], bar[:subject_id]), name: name(bar[:subject_id]),
       from: bar[:unit_id] || UNASSIGNED_ID, place: { position_id: bar[:position_id], role: bar[:role] },
-      share: bar[:allocation]&.to_r, dialog: move_dialog_id(step)
+      share: share_in(bar, step), dialog: move_dialog_id(step)
     ).merge(move_at: bar[:unit_id] || UNASSIGNED_ID) # the dialog here lists units, not positions
   end
+
+  # A bar with no allocation shares what the person's other places in the step leave, as on the map.
+  def share_in(bar, step)
+    held = person_bars.fetch(bar[:subject_id], []).select { it[:unit_id] && (it[:from]..it[:to]).cover?(step) }
+    places = held.map { TeamPlanning::Baseline::Membership.new(**it.slice(:unit_id, :allocation, :role, :position_id)) }
+    index = held.index { it.equal?(bar) }
+    TeamPlanning::Baseline::Membership.shares(places)[index].second if index
+  end
+
+  def person_bars = @person_bars ||= @timeline[:lanes].flat_map { it[:bars] }.select { it[:kind] == "person" }.group_by { it[:subject_id] }
 
   def move_dialog_id(step) = "#{Views::Plans::MoveDialog::ID}-#{step}"
 
