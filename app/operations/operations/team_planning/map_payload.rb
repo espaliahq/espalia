@@ -14,7 +14,7 @@
 # [#338](https://github.com/espaliahq/espalia/issues/338). A person keeps only
 # their places in it, with `outside: { share: }` for the rest of their time; a
 # manager outside reads as `manager_outside: true`, and a covered unit's parent
-# or owner outside is left out. A plan covering the whole organisation reads as
+# or owner outside is left out, as is a capacity override on a place outside. A plan covering the whole organisation reads as
 # it always has.
 #
 # Actual pay under `plan_data` reaches only a member with the see-pay right
@@ -72,7 +72,9 @@ module Operations::TeamPlanning::MapPayload
     away = map.outside_places(person)
     share = ::TeamPlanning::Baseline::Membership.shares(person.memberships).sum(0r) { |place, part, _| away.include?(place) ? part : 0r }
     manager_outside = outside.include?(person.manager_id)
+    on_map = map.known_unit_ids + map.positions.map(&:id)
     payload.merge(memberships: (person.memberships - away).map(&:to_h), outside: (away.any? ? { share: share.to_f } : nil),
+                  capacity_overrides: payload[:capacity_overrides].select { |place_id, _| on_map.include?(place_id) },
                   manager_id: (person.manager_id unless manager_outside), manager_outside:)
   end
 

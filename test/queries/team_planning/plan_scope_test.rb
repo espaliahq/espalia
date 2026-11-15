@@ -105,6 +105,16 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     end.to_json
   end
 
+  should "keep a capacity override on a place outside the plan out of the scenario map" do
+    [ @payments, @sales ].each do |unit_id|
+      call(Operations::TeamPlanning::SetCapacityOverride, plan_id: @plan_id, scenario_id: @h1, person_id: @brook.id, unit_id:, amount: "0.4")
+    end
+
+    overrides = person(scenario_map(@plan_id, @h1), @brook)[:capacity_overrides]
+    assert_equal [ @payments ], overrides.keys.map(&:to_s)
+    assert_not_includes scenario_map(@plan_id, @h1).to_json, @sales
+  end
+
   should "count a person half in the plan when half their time is in units it covers, in every total" do
     map = resolve(@plan_id, @h1)
     assert_equal [ @ada.id, @brook.id ], map.people.map(&:id).sort_by { [ @ada.id, @brook.id ].index(it) }
