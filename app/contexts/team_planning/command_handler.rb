@@ -23,14 +23,35 @@ class TeamPlanning::CommandHandler
   # @param plan_id [String] UUID minted by the caller
   # @param name [String]
   # @param base_on [Date, String]
+  # @param unit_ids [Array<String>] the units it covers, none for the whole organisation
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [Pundit::NotAuthorizedError] unless the actor may create a plan
+  # @raise [TeamPlanning::Error] for a unit the Org Graph hasn't
   # @see TeamPlanning::PlanAggregate#create
-  def create_plan(plan_id, name:, base_on:)
+  def create_plan(plan_id, name:, base_on:, unit_ids: [])
     created_by_id = actor_id!
     authorize!(:create?, nil) { "Only a tenant admin or a planner can create a plan" }
+    unit_ids = known_units!(unit_ids)
     @repository.with_plan(plan_id) do |plan|
       plan.create(plan_id, name: name, base_on: base_on, created_by_id: created_by_id)
+      plan.set_scope(unit_ids:, set_by_id: created_by_id)
+    end
+  end
+
+  # Sets the units a plan covers. Narrowing is checked by the caller, which
+  # reads the plan's changes; this checks the units exist.
+  #
+  # @param plan_id [String]
+  # @param unit_ids [Array<String>] empty for the whole organisation
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor, or for a unit the Org Graph hasn't
+  # @see TeamPlanning::PlanAggregate#set_scope
+  def set_plan_scope(plan_id, unit_ids:)
+    unit_ids = known_units!(unit_ids)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      yield plan, unit_ids if block_given?
+      plan.set_scope(unit_ids:, set_by_id: actor_id!)
     end
   end
 
@@ -458,6 +479,13 @@ class TeamPlanning::CommandHandler
     return if PlanPolicy.new(@actor, record).public_send(predicate)
 
     raise Pundit::NotAuthorizedError, yield
+  end
+
+  def known_units!(unit_ids)
+    unit_ids = Array(unit_ids).map { it.to_s.strip.downcase }.compact_blank.uniq
+    return unit_ids if OrgUnit.where(id: unit_ids).count == unit_ids.size
+
+    raise TeamPlanning::Error, "A plan covers units the organisation has"
   end
 
   def actor_id!

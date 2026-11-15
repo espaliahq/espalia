@@ -87,6 +87,24 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
+  # Sets the units the plan covers, each with everything under it. An empty
+  # list covers the whole organisation; the same scope writes nothing. The
+  # caller checks the units exist and that no change falls outside them.
+  #
+  # @param unit_ids [Array<String>]
+  # @param set_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone
+  def set_scope(unit_ids:, set_by_id:)
+    ensure_open!
+    unit_ids = unit_ids.to_a.map { it.to_s.strip.downcase }.compact_blank.uniq.sort
+    return if unit_ids == scope_unit_ids.to_a
+
+    apply(TeamPlanning::Events::PlanScopeSet.new(data: { plan_id: @plan_id, unit_ids:, set_by_id: }))
+  end
+
+  # @return [Array<String>, nil] the covered units, nil for the whole organisation
+  def scope_unit_ids = @scope_unit_ids
+
   # Renames the plan. The plan holds no name, so the caller says what it is
   # called now; the same name writes nothing.
   #
@@ -698,6 +716,10 @@ class TeamPlanning::PlanAggregate
 
   # The plan holds no name.
   on TeamPlanning::Events::PlanRenamed do |_event|
+  end
+
+  on TeamPlanning::Events::PlanScopeSet do |event|
+    @scope_unit_ids = event.data[:unit_ids].presence
   end
 
   on TeamPlanning::Events::PlanDeleted do |_event|
