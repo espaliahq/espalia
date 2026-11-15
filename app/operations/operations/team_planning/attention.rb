@@ -16,6 +16,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "It also checks each person: placed nowhere, over or under 100% allocated (an unknown total is " \
               "neither), still in the plan after the Org Graph has them leave, no manager (except the head of the " \
               "tree), or a manager who is gone, has left, or is in or owns none of their units nor the unit directly above one. " \
+              "In a plan scoped to chosen units, each change about someone the plan no longer covers is listed under that " \
+              "change's facet, unnamed, because a bring-in was undone or the Org Graph moved them out; clear the change or place them back in. " \
               "Once a capacity model is chosen for any role or family, even one no place takes, each place no model covers is listed too, except a leaver's, " \
               "a forgotten person's override and a closed position's. " \
               "`sources` names where to fix each item: the provider of employment status for someone who joined " \
@@ -46,8 +48,9 @@ class Operations::TeamPlanning::Attention < Operations::Base
 
   # A capacity item's subject is a person or an open position, so only an
   # assignment's or a line's subject unknown here is a forgotten person.
+  # Someone the plan no longer covers stays unnamed, as in History.
   def names_of(plan, items)
-    named = items.select { person_facet?(it.facet) }
+    named = items.select { person_facet?(it.facet) && it.reason != ::TeamPlanning::Attention::UNCOVERED }
     known = ::Person.where(tenant_id: plan.tenant_id, id: named.map(&:subject_id).uniq).pluck(:id, :name).to_h
     named.filter_map do |item|
       name = known.fetch(item.subject_id) { Person::FORMER_MEMBER if PERSON_FACETS.include?(item.facet) }

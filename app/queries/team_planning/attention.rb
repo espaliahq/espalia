@@ -31,7 +31,7 @@ class TeamPlanning::Attention
     def initialize(unit_ids: [], fact: nil, **) = super
   end
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
+  CHECKS = %i[placements positions units unresolved uncovered successions capacity_overrides allocations leavers managers unclassified
               budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
@@ -45,6 +45,7 @@ class TeamPlanning::Attention
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
   # A place in no unit has no id an override could name, as the map's own drop target hasn't.
   UNASSIGNED = "unassigned"
+  UNCOVERED = "A change about someone this plan no longer covers"
 
   # Resolves the scenario, then prices it, so the unclassified check reads
   # the same map as every other.
@@ -126,6 +127,15 @@ class TeamPlanning::Attention
 
   def unresolved
     @map.unresolved.map { item(it.person_id, ASSIGNMENT, "Placed, but #{it.why}", fact: "employment_status") }
+  end
+
+  # A bring-in undone, or the Org Graph moving someone out, leaves their
+  # changes standing on nobody the plan shows (#338). An assignment that
+  # places them outside is the plan moving them out, so it stands.
+  def uncovered
+    @changes.filter_map do |(subject_id, facet), change|
+      Item.new(subject_id:, facet:, reason: UNCOVERED, change:) if facet != ASSIGNMENT && @outside.include?(subject_id)
+    end
   end
 
   def successions

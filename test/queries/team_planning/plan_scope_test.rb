@@ -77,6 +77,10 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
 
   def set_scope(plan_id, unit_ids) = call(Operations::TeamPlanning::SetPlanScope, plan_id:, unit_ids:)
 
+  def uncovered(scenario_id)
+    call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id:)[:items].select { it[:reason] == TeamPlanning::Attention::UNCOVERED }
+  end
+
   def scope_of(plan_id) = as_tenant { TeamPlanningPlan.find(plan_id).scope_unit_ids.to_a }
 
   def person(payload, person) = payload[:people].find { it[:id] == person.id }
@@ -176,6 +180,31 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])
     call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
     assert_includes resolve(@plan_id, @h1).people.map(&:id), @dee.id
+  end
+
+  should "flag a change about someone the plan no longer covers, whether a bring-in was undone or the Org Graph moved them out" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @ada.id, level: "6")
+    assert_empty uncovered(@h1)
+
+    bring_in = call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id: @h1)[:entries]
+               .find { it[:subject_id] == @dee.id && it[:facet] == "assignment" }[:event_id]
+    call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1, event_id: bring_in)
+    assert_equal [ [ @dee.id, "level", "LevelSet" ] ], uncovered(@h1).map { [ it[:subject_id], it[:facet], it[:change][:kind] ] }
+
+    as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).move_membership(@ada.id, @payments, @sales, effective_on: "2025-12-20") }
+    attention = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @h1)
+    assert_equal [ @ada.id, @dee.id ].sort, attention[:items].select { it[:reason] == TeamPlanning::Attention::UNCOVERED }.map { it[:subject_id] }.sort
+    assert_not_includes attention[:names].keys, @dee.id
+    assert_not_includes attention[:names].keys, @ada.id
+  end
+
+  should "leave a planned move out of the scope unflagged" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @ada.id,
+                                                  placements: [ { unit_id: @sales, allocation: 1 } ])
+    assert_empty uncovered(@h1)
   end
 
   should "show leaving the plan and joining it as moves on the timeline" do
