@@ -28,6 +28,8 @@ class TeamPlanning::PlanDataTest < ActiveSupport::TestCase
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
 
+  def context = context_for(@planner)
+
   def context_for(tenant_user) = AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: tenant_user.person)
 
   def handler = TeamPlanning::CommandHandler.new(actor: context_for(@planner))
@@ -133,15 +135,15 @@ class TeamPlanning::PlanDataTest < ActiveSupport::TestCase
     promote_and_correct
     add_hire
 
-    person = as_tenant { map_payload(map) }[:people].find { it[:id] == @ada.id }
+    person = as_tenant { map_payload(map, plan: TeamPlanningPlan.find(@plan_id)) }[:people].find { it[:id] == @ada.id }
     assert_equal({ value: "4" }, person[:planned_level])
     assert_equal({ fte: { value: 0.8 } }, person[:plan_data])
-    assert_equal "Payments engineer", as_tenant { map_payload(map) }[:names].fetch(@hire)
+    assert_equal "Payments engineer", as_tenant { map_payload(map, plan: TeamPlanningPlan.find(@plan_id)) }[:names].fetch(@hire)
 
     forget_ada
-    person = as_tenant { map_payload(map) }[:people].find { it[:id] == @ada.id }
+    person = as_tenant { map_payload(map, plan: TeamPlanningPlan.find(@plan_id)) }[:people].find { it[:id] == @ada.id }
     assert_equal({ removed: true }, person[:planned_level])
-    assert_nothing_raised { as_tenant { map_payload(map) }.to_json }
+    assert_nothing_raised { as_tenant { map_payload(map, plan: TeamPlanningPlan.find(@plan_id)) }.to_json }
   end
 
   should "count a planned FTE in capacity, and a removed one as not known" do
