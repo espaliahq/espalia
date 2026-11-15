@@ -30,7 +30,8 @@ class Operations::TeamPlanning::Status < Operations::Base
               "join to the planned sides, conflicting when they don't. A departure is done once the Org Graph has " \
               "the person leave, and pending while they stay. Subjects are named by id, and `names` maps each the Org Graph " \
               "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \
-              "plan holds has none. Refused, as an unknown plan, unless " \
+              "plan holds has none. A status whose change carries a note has it as note: { value }, or { removed: true } " \
+              "once erased. Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
   approval :none
@@ -43,8 +44,22 @@ class Operations::TeamPlanning::Status < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Status.new(context:, plan:, scenario_id:).call }
+    notes = notes_of(plan, report.statuses.map(&:change_id))
     { plan_id: plan.id, scenario_id:, on: report.on.iso8601,
-      statuses: report.statuses.map { it.to_h.merge(status: it.status.to_s, since: it.since&.iso8601) },
+      statuses: report.statuses.map { status_row(it, notes[it.change_id]) },
       names: report.names }
+  end
+
+  private
+
+  # A change's note is rewritten apart from it, so it is read off the override
+  # the change projects, which holds the latest.
+  def notes_of(plan, change_ids)
+    TeamPlanningOverride.where(plan_id: plan.id, event_id: change_ids).filter_map { [ it.event_id, it.note ] if it.note }.to_h
+  end
+
+  def status_row(entry, note)
+    entry.to_h.merge(status: entry.status.to_s, since: entry.since&.iso8601,
+                     **({ note: Operations::TeamPlanning::MapPayload.sealed(note) } if note))
   end
 end

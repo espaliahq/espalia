@@ -81,8 +81,10 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
     end
 
     statuses = [ @noted, @plain ].map { call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: it)[:statuses] }
-    assert_equal without_scenario(statuses.last), without_scenario(statuses.first)
+    assert_equal without_scenario(statuses.last), without_scenario(statuses.first).map { it.except(:note) }
     assert_equal %w[conflicting pending], statuses.first.map { it[:status] }.sort
+    assert_equal [ { value: "Ready since the platform launch" } ] * 2, statuses.first.map { it[:note] }
+    assert statuses.last.none? { it.key?(:note) }
 
     drifted = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)[:changes].find { it[:person_id] == @ada.id }
     assert_equal [ @noted, @plain ].sort, drifted[:meets].map { it[:scenario_id] }.sort
@@ -142,6 +144,21 @@ class Operations::TeamPlanning::ChangeNotesTest < ActiveSupport::TestCase
       assert_equal [ { person_id: @editor.person_id, name: @editor.person.name } ] * 2, [ rewritten, cleared ].map { it[:by] }
       assert_equal [ "2026-02-01T10:00:00Z", "2026-02-01T11:00:00Z" ], [ rewritten, cleared ].map { it[:at] }
       assert_not override.key?(:note)
+    end
+
+    should "give the change's status its latest note, then none once cleared, and read it as removed once the person is forgotten" do
+      status = -> { call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @noted)[:statuses].sole }
+      note("Ready, and asked for it")
+      assert_equal({ value: "Ready, and asked for it" }, status.call[:note])
+
+      as_tenant { PlanKeyStore.new.destroy_person(@ada.id) }
+      assert_equal({ removed: true }, status.call[:note])
+    end
+
+    should "leave a cleared note off the change's status" do
+      note(nil)
+
+      assert_not call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @noted)[:statuses].sole.key?(:note)
     end
 
     should "keep every entry in the history once the person is forgotten, with who wrote each and when, the note removed" do
