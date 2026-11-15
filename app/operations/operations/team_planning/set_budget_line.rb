@@ -32,9 +32,9 @@ class Operations::TeamPlanning::SetBudgetLine < Operations::Base
   def perform
     scenario_id = scenario!
     line_id = params[:budget_line_id].nil? ? SecureRandom.uuid_v7 : uuid!(:budget_line_id)
-    prior = params[:budget_line_id].nil? ? nil : prior_change(line_id)
-    tenant_line = !params[:budget_line_id].nil? && tenant_line?(line_id, prior)
-    line = assign_line(held_line(line_id, prior))
+    changes = params[:budget_line_id].nil? ? [] : line_changes(line_id)
+    tenant_line = !params[:budget_line_id].nil? && tenant_line?(line_id, changes.last)
+    line = assign_line(held_line(line_id, changes))
     set_change!(KIND, subject_id: line_id, end_state: figures(line).merge(tenant_line:)) do |plan|
       held!(plan, line_id) unless params[:budget_line_id].nil?
     end
@@ -44,10 +44,10 @@ class Operations::TeamPlanning::SetBudgetLine < Operations::Base
 
   private
 
-  # The line's role and level as the scenario last set them, or as the organisation holds them, so a role or
-  # level gone from the framework may be given again.
-  def held_line(line_id, prior)
-    kept = prior.is_a?(::TeamPlanning::Events::BudgetLineSet) ? prior.data : ::BudgetLine.find_by(id: line_id)&.attributes.to_h.symbolize_keys
+  # The line's role and level as the scenario last set them, even before a cut, or as the organisation holds
+  # them, so a role or level gone from the framework may be given again.
+  def held_line(line_id, changes)
+    kept = changes.reverse.find { it.is_a?(KIND) }&.data || ::BudgetLine.find_by(id: line_id)&.attributes.to_h.symbolize_keys
     ::BudgetLine.new(kept.to_h.slice(:role_id, :level_id, :role_name, :level_name))
   end
 

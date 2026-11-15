@@ -24,10 +24,12 @@ module Operations::TeamPlanning::BudgetLineWrite
 
   # Read before the lock, to shape the end state; {#held!} checks again under it.
   #
-  # @return [TeamPlanning::Events::Change, nil] the set or cut the scenario resolves to for the line
-  def prior_change(line_id)
+  # @return [Array<TeamPlanning::Events::Change>] the sets and cuts in effect for the line along the scenario's
+  #   chain, oldest first, so the last is the one the scenario resolves to
+  def line_changes(line_id)
     plan = refusing_bad_plans { ::TeamPlanning::Repository.new.load_plan(plan_id!) }
-    refusing_bad_plans { winning_change(plan, line_id, FACET) }
+    chain = refusing_bad_plans { plan.resolution_chain(scenario_id!(:scenario_id)) }
+    chain.flat_map { plan.changes_in(it) }.select { it.key == [ line_id, FACET ] }
   end
 
   # A tenant line the organisation has since removed stays one, so it keeps reading as orphaned.
