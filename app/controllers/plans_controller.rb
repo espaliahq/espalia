@@ -58,7 +58,7 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || Views::Plans::Timeline.first_leaf(scenarios, plan[:plan_id])
     timeline = read(Operations::TeamPlanning::Timeline, scenario_id:)
     render plan_page(plan, scenarios:, open_tab: :timeline,
-                           body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i))
+                           body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i, can_edit: can_edit?))
   end
 
   # GET /planning/:id/changes?scenario=:scenario_id

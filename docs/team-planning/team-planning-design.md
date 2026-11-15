@@ -176,8 +176,15 @@ column per step, a heading per block, and a row per lane, with each bar spanning
 it holds. A phone shows one step at a time, picked from a row of steps that marks the
 current one. Since the neighbouring steps are out of sight there, each bar says where its
 person came from when they arrive and where they go when they leave. A path with nobody on
-it still shows its steps, so its alternatives stay in reach. Read-only for now: editing in
-time is 9.3.
+it still shows its steps, so its alternatives stay in reach.
+
+An editor moves people from the tab too ([#309](https://github.com/espaliahq/espalia/issues/309)).
+Dragging a person's bar onto another block in a column moves them in that column's step, and
+a drop outside the bar's own steps is refused. Each bar also has a "Move…" button, a menu of
+its steps when it spans several, so the keyboard and a phone reach the same form. On a phone
+it moves the person in the step shown. The form is the map's, one per step, and saves
+through `MovePlace`, then returns to the same step of the timeline. Today has no handles,
+and a viewer sees none. Moving a change a step earlier or later is the next part of 9.3.
 
 ### Unit changes as built
 
