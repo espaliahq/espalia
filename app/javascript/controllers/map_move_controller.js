@@ -5,6 +5,12 @@
 // with the destination in `data-move-to`, so the dialog that confirms the move
 // is the one the keyboard path opens.
 //
+// On the timeline a drop cell is one unit in one step (`data-map-step`), and a
+// bar covers a span of steps (`data-map-from-step`, `data-map-to-step`). A cell
+// takes a bar only in a step the bar covers, and the drop opens that step's
+// dialog, `move-person-modal-<step>`. While a drag is on, the controller's
+// element carries `data-dragging`, so bars can step aside for the cells under them.
+//
 // Usage:
 //   <div data-controller="map-move">
 //     <section data-map-unit="<unit id>" data-action="dragover->map-move#over dragleave->map-move#leave drop->map-move#drop">
@@ -31,10 +37,13 @@ export default class extends BaseController {
     this.dragged = event.currentTarget
     event.dataTransfer.effectAllowed = "move"
     event.dataTransfer.setData("text/plain", this.dragged.dataset.mapPerson || this.dragged.dataset.mapPosition)
+    // Changing the page inside dragstart cancels the drag in Chrome.
+    setTimeout(() => { if (this.dragged) this.element.dataset.dragging = "" })
   }
 
   end() {
     this.dragged = null
+    delete this.element.dataset.dragging
     this.#clear()
   }
 
@@ -63,7 +72,9 @@ export default class extends BaseController {
 
     event.preventDefault()
     event.stopPropagation()
-    const trigger = this.dragged.querySelector(`[data-modal-target-id='${DIALOGS[this.dragged.dataset.mapDrag]}']`)
+    const { mapStep } = target.dataset
+    const dialog = DIALOGS[this.dragged.dataset.mapDrag] + (mapStep === undefined ? "" : `-${mapStep}`)
+    const trigger = this.dragged.querySelector(`[data-modal-target-id='${dialog}']`)
     this.end()
     trigger.dataset.moveTo = this.#destination(target)
     trigger.click()
@@ -81,7 +92,9 @@ export default class extends BaseController {
 
   #accepts(target) {
     if (!this.dragged) return false
-    const { mapDrag, mapMoveFrom, mapMoveFromPosition } = this.dragged.dataset
+    const { mapDrag, mapMoveFrom, mapMoveFromPosition, mapFromStep, mapToStep } = this.dragged.dataset
+    const step = target.dataset.mapStep
+    if (step !== undefined && !(Number(mapFromStep) <= Number(step) && Number(step) <= Number(mapToStep))) return false
     if (target.dataset.mapPosition) return mapDrag === "person" && target.dataset.mapPosition !== mapMoveFromPosition
 
     const unit = target.dataset.mapUnit
