@@ -11,7 +11,7 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
     @tenant = create(:tenant)
     @payments = SecureRandom.uuid_v7
     @growth = SecureRandom.uuid_v7
-    level = SecureRandom.uuid_v7
+    @level = level = SecureRandom.uuid_v7
     travel_to Time.utc(2026, 11, 1, 9)
     ActsAsTenant.with_tenant(@tenant) do
       @editor = account(team_planner: true, name: "Erin Editor")
@@ -146,6 +146,24 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
       [ @payments, @growth ].each do |unit|
         assert_select "button[data-modal-target-id='move-person-modal-1'][data-move-from='#{unit}'][data-move-allocation='50']"
       end
+    end
+
+    should "count a place in a retired unit in the share the timeline's dialog keeps, as the map does" do
+      retired = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.create_unit(retired, "Legacy", level_id: @level, effective_on: "2026-01-01")
+        graph = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        graph.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-01-03", allocation: nil)
+        graph.set_membership(@ada.id, retired, **ESPALIA, effective_on: "2026-01-03", allocation: 0.5)
+        @plan_id = call(Operations::TeamPlanning::CreatePlan, @editor, name: "Retiring", base_on: "2026-11-14")[:plan_id]
+        q1 = call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")[:scenario_id]
+        call(Operations::TeamPlanning::RetireUnit, @editor, plan_id: @plan_id, scenario_id: q1, unit_id: retired)
+      end
+
+      get timeline_plan_path(@plan_id)
+
+      assert_select "button[data-modal-target-id='move-person-modal-1'][data-move-from='#{@payments}'][data-move-allocation='50']"
     end
 
     should "give each step on the timeline its own move dialog and field ids" do

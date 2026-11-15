@@ -319,15 +319,7 @@ class Views::Plans::Timeline < Views::Base
     ).merge(move_at: bar[:unit_id] || UNASSIGNED_ID) # the dialog here lists units, not positions
   end
 
-  # A bar with no allocation shares what the person's other places in the step leave, as on the map.
-  def share_in(bar, step)
-    held = person_bars.fetch(bar[:subject_id], []).select { it[:unit_id] && (it[:from]..it[:to]).cover?(step) }
-    places = held.map { TeamPlanning::Baseline::Membership.new(**it.slice(:unit_id, :allocation, :role, :position_id)) }
-    index = held.index { it.equal?(bar) }
-    TeamPlanning::Baseline::Membership.shares(places)[index].second if index
-  end
-
-  def person_bars = @person_bars ||= @timeline[:lanes].flat_map { it[:bars] }.select { it[:kind] == "person" }.group_by { it[:subject_id] }
+  def share_in(bar, step) = bar[:shares]&.dig(step - bar[:from])
 
   def move_dialog_id(step) = "#{Views::Plans::MoveDialog::ID}-#{step}"
 
