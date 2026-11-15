@@ -143,7 +143,8 @@ flowchart LR
     s83[8.3 Plan reference in Operations]
     s84[8.4 Approve and apply]
     s85[8.5 Change list, raised]
-    s86[8.6 Approve screen]
+    s86a[8.6a Split on the plan page]
+    s86b[8.6b Approve screen]
     s87[8.7 Close a step]
   end
   subgraph P9[P9 Timeline]
@@ -210,7 +211,8 @@ flowchart LR
   s65 & s46 --> s81
   s81 & s83 --> s84
   s84 --> s85
-  s82 & s85 --> s86
+  s82 --> s86a
+  s86a & s85 --> s86b
   s43 --> s87
   s91 --> s92 & s94
   s92 & s312 --> s93
@@ -225,8 +227,8 @@ flowchart LR
   s111 --> s114
 ```
 
-The longest chain is twelve stories and ends at the approve screen (8.6): 1.1, 3.1, 3.2,
-3.3, 5.2, 5.4, 6.3, 6.5, 8.1, 8.4, 8.5, 8.6. Cost and budget set the length of the plan,
+The longest chain is twelve stories and ends at the approve screen (8.6b): 1.1, 3.1, 3.2,
+3.3, 5.2, 5.4, 6.3, 6.5, 8.1, 8.4, 8.5, 8.6b. Cost and budget set the length of the plan,
 because a binding budget guardrail needs them.
 
 ## Stories
@@ -332,7 +334,8 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 8.3 | Org Graph Operations accept a plan reference and a cause, and pass them to the handlers. A change made this way shows "From plan" in the activity feed | none |
 | 8.4 | `PlanApproved` pins a point and applies every change Espalia holds, with `ChangeApplied` for each (see below) | 8.1, 8.3 |
 | 8.5 | The change list Operation for an approved point, with a stable id per entry, and `ChangeRaised` with the upstream reference | 8.4 |
-| 8.6 | Split, approve and carry out screen | 8.2, 8.5 |
+| 8.6a | Split a scenario from the plan page: choose the agreed changes, see before submit which can't go across alone, name the part and split ([#360](https://github.com/espaliahq/espalia/issues/360)) | 8.2 |
+| 8.6b | Approve the agreed part and carry it out, on the 8.6a page ([#359](https://github.com/espaliahq/espalia/issues/359)) | 8.6a, 8.5 |
 | 8.7 | `StepClosed`: the next step stands on the Org Graph, pending changes show as carried over, and the closed step reads planned against actual through `AsOf` on its end date | 4.3 |
 
 **One transaction.** 8.4 builds the person and structure handlers with the approval's
