@@ -759,8 +759,8 @@ kind last set it; pinning a baseline value asks each readable kind of the facet 
 projection subscribes through it and writes
 `team_planning_overrides`: one row per scenario, subject and facet the scenario sets or
 pinned. `team_planning_overrides` lists them, each beside what the scenario would inherit
-without it, and says when a pin's parent has moved on. Reconcile (4.5) reuses both: keep
-the plan is a pin, and follow reality is a clear.
+without it, and says when a pin's parent has moved on. Settling a conflict (4.5) reuses
+the pin to keep an inherited change; see [Settling a conflict](#settling-a-conflict).
 
 ### Undo
 
@@ -915,6 +915,48 @@ conflict stays open while the scenario still resolves to the same change. A set,
 clear or undo along its chain ends it, a redo of the same change brings it back, and a
 later update replaces the set, keeping the date a conflict was first found. Nothing stores the result: it is derived from the stream on
 each load.
+
+### Settling a conflict
+
+Only a conflict an update carried forward can be settled
+([#336](https://github.com/espaliahq/espalia/issues/336)). Before an update, the plan
+still reads the Org Graph as of its old base, so keeping the plan would change nothing it
+reads. `team_planning_settle_conflict` takes one of two choices, in one scenario:
+
+- **Keep the plan** writes the planned change again in the scenario. A scenario that made
+  the change sets it again. One that inherits it pins it, naming where it came from, unless
+  its kind seals its value (a level, plan data): a pin holds its end state in clear, so a
+  sealed change is set again in the child instead. The change keeps its own note unless
+  the editor gives another.
+- **Follow reality** sets what the Org Graph holds today, in this scenario alone. A clear
+  would hand the facet back to the parent's change, which still conflicts, so the
+  scenario that made the change and its other children keep it as it was. Settled in the
+  scenario that made the change, it reaches the children that inherit it, as any change
+  there does. A unit succession can't follow reality yet: the retirements written with it
+  wouldn't follow, so the editor changes it on the map.
+
+Settling is refused once status no longer reads the row as conflicting: the Org Graph
+has caught up with the plan, or the person was forgotten.
+
+No new event records the choice. The write carries a `settles` marker, the day the
+conflict was found and the choice, and the conflict ends by the rule above: a newer
+change along the chain ends it, even one with the same value. Status stops reporting it,
+and history shows the marker. Undoing the write brings the conflict back.
+
+On the web, an editor sees "Keep the plan" and "Follow reality" on each carried conflict on
+the Changes tab, and both settle in the scenario shown. A conflict no update has carried
+links to "Update to today" instead. The baseline reads the Org Graph as known at the end
+of the day before the base, so a change learned today waits for tomorrow's update; until
+then the row says so rather than offering an update that would take nothing in. An
+inherited change names the scenario that made it, linked to that scenario's tab.
+
+The drift row that meets a carried conflict offers the same two buttons, posting to the
+same settle, so settling from either row clears both in one response. An update takes
+the change that caused the conflict into the baseline, so this happens only once the Org
+Graph moves that facet again: a level that went to 5, was carried, then went to 6. The
+buttons act only in the scenario shown. When the change meets plans in other scenarios,
+the row counts them and links to each one's tab instead of offering buttons that act out
+of sight.
 
 ### The baseline reader
 

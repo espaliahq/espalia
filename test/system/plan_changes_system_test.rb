@@ -4,6 +4,7 @@ require "application_system_test_case"
 
 class PlanChangesSystemTest < ApplicationSystemTestCase
   ESPALIA = { provider: "espalia" }.freeze
+  PLANNED_SETTLE = "[data-planned-change='conflicting'] [data-settle-conflict='level']"
 
   setup do
     @tenant = create(:tenant)
@@ -115,6 +116,52 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_selector "[data-planned-change='conflicting']", text: /Ada Quill · Level.*Conflicting since/m
     end
 
+    should "point a live conflict at the update, then settle a carried one in a child alone, and keep the plan in its parent" do
+      plan_a_conflict
+      lean = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, parent_id: @q1, relation: "instead",
+                                                                    name: "Lean Q1")[:scenario_id]
+      sign_in_as(@planner.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-planned-change='conflicting'] [data-settle-conflict='live']", text: "Update the plan to today"
+      assert_no_button "Keep the plan"
+
+      carry_conflicts
+      visit changes_plan_path(@plan_id, scenario: lean)
+      assert_selector "[data-planned-change='conflicting'] [data-planned-in='#{@q1}'] a", text: "Q1 hires"
+      click_selector_with_js_fallback("#{PLANNED_SETTLE} button[value='reality']", expect_text: "Following reality.")
+      assert_no_selector "[data-planned-change='conflicting']"
+
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-planned-change='conflicting']", text: "Ada Quill"
+      click_selector_with_js_fallback("#{PLANNED_SETTLE} button[value='plan']", expect_text: "Kept the plan.")
+      assert_selector "[data-planned-change='pending']", text: /Ada Quill · Level/
+      assert_no_selector "[data-planned-change='conflicting']"
+    end
+
+    should "settle a carried conflict from the drift row, which clears both rows' buttons at once" do
+      plan_a_conflict
+      carry_conflicts
+      level_moves_again
+      sign_in_as(@planner.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-drift-settle='#{@q1}']", text: "Conflicts with the plan in Q1 hires."
+      assert_selector PLANNED_SETTLE
+
+      click_selector_with_js_fallback("[data-drift-settle='#{@q1}'] button[value='reality']", expect_text: "Following reality.")
+      assert_no_selector "[data-drift-settle]"
+      assert_no_selector "[data-settle-conflict]"
+      assert_no_selector "[data-planned-change='conflicting']"
+    end
+
+    should "show a viewer a carried conflict with no way to settle it" do
+      plan_a_conflict
+      carry_conflicts
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-planned-change='conflicting']", text: /Ada Quill · Level.*Conflicting since/m
+      assert_no_selector "[data-settle-conflict]"
+    end
+
     should "offer a viewer no update to today" do
       sign_in_as(@viewer.user)
       visit changes_plan_path(@plan_id)
@@ -157,6 +204,24 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    should "settle a carried conflict from the drift row's buttons, which fit, and clear both rows" do
+      plan_a_conflict
+      carry_conflicts
+      level_moves_again
+      sign_in_as(@planner.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector PLANNED_SETTLE
+      assert_selector "[data-drift-settle='#{@q1}']"
+      assert_no_sideways_overflow
+
+      click_selector_with_js_fallback("[data-drift-settle='#{@q1}'] button[value='plan']", expect_text: "Kept the plan.")
+      # The kept plan meets the Org Graph's later move to 6, learned today, so it waits for the next update.
+      assert_selector "[data-planned-change='conflicting'] [data-settle-conflict]", text: "settled after the next update"
+      assert_no_selector "[data-drift-settle]"
+      assert_no_selector "[data-settle-conflict] button"
+      assert_no_sideways_overflow
+    end
+
     should "preview and confirm an update to today in a page that fits" do
       plan_a_conflict
       sign_in_as(@planner.user)
@@ -172,11 +237,27 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
 
   private
 
+  def carry_conflicts
+    base_on = call(Operations::TeamPlanning::Plan, @planner, plan_id: @plan_id)[:base_on]
+    call(Operations::TeamPlanning::RebasePlan, @planner, plan_id: @plan_id, base_on:)
+  end
+
   def plan_a_conflict
     call(Operations::TeamPlanning::SetPlannedLevel, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "4")
+    # Learned before today, so an update to today takes it in: one learned today waits for the next.
+    travel_to(2.days.ago) do
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                .change_level(@ada.id, "5", **ESPALIA, effective_on: Date.current.iso8601)
+      end
+    end
+  end
+
+  # The update to today takes the first move into the baseline, so only a later one is drift.
+  def level_moves_again
     ActsAsTenant.with_tenant(@tenant) do
       OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
-                              .change_level(@ada.id, "5", **ESPALIA, effective_on: Date.current.iso8601)
+                              .change_level(@ada.id, "6", **ESPALIA, effective_on: Date.current.iso8601)
     end
   end
 
