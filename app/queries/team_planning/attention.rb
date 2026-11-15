@@ -86,7 +86,9 @@ class TeamPlanning::Attention
   # @return [Hash{String => String}]
   def self.names_of(map, items)
     units = (map.units + map.retired_units).to_h { [ it.id, it.name ] }
-    positions = map.positions.to_h { [ it.id, it.label ] }
+    positions = map.positions.group_by(&:unit_id).each_value.reduce({}) do |names, group|
+      names.merge(TeamPlanning::Baseline::Position.names(group.map { [ it.id, it.label, it.level_id ] }))
+    end
     successions = map.successions.to_h { [ it.id, it ] }
     items.filter_map do |item|
       id = item.subject_id
