@@ -408,7 +408,7 @@ Rails.application.routes.draw do
     get :map, on: :member
     # One path along the calendar ([#298](https://github.com/espaliahq/espalia/issues/298)).
     get :timeline, on: :member
-    # The Org Graph's changes since the base, and where the plan's stand (#287).
+    # The Org Graph's changes since the base, and where the plan's stand ([#287](https://github.com/espaliahq/espalia/issues/287)).
     get :changes, on: :member
     # Fork and rename a scenario (#271).
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
