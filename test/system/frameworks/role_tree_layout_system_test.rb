@@ -142,7 +142,7 @@ class Frameworks::RoleTreeLayoutSystemTest < ApplicationSystemTestCase
       # which is exactly the state the pointer ends up in over a menu item.
       inert = page.evaluate_script(<<~JS)
         (() => {
-          const menu = document.querySelector(".tree-actions [role='menu']:not(.hidden)");
+          const menu = document.querySelector(".tree-actions [role='menu']:not([hidden])");
           if (!menu) return ["no open menu inside the cluster"];
           return [...menu.querySelectorAll("[role='menuitem']")]
             .filter((item) => getComputedStyle(item).pointerEvents === "none")
