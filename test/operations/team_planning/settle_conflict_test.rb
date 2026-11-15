@@ -90,7 +90,7 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
     parent, sibling = map(@q1), map(@bold)
     settle(@lean, "reality")
 
-    assert_not_equal "conflicting", brook(@lean)[:status].to_s
+    assert_equal "done", brook(@lean)[:status].to_s, "the plan's 4 would read pending; only the Org Graph's 5 reads done"
     assert_equal [ "set", { "since" => "2026-03-25", "choice" => "reality" } ], last_entry(@lean).values_at(:action, :settles)
     assert_equal parent, map(@q1)
     assert_equal sibling, map(@bold)
