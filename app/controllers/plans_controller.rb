@@ -111,7 +111,52 @@ class PlansController < ApplicationController
     redirect_to changes_plan_path(plan[:plan_id]), alert: "Couldn't update to today: #{e.message}"
   end
 
+  # GET /planning/:id/scenarios/:scenario_id/split
+  #
+  # The changes a scenario makes, to choose the agreed part from, with what
+  # each can't go across without ([#360](https://github.com/espaliahq/espalia/issues/360)).
+  def split
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    render split_page(plan)
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), alert: "Can't split this scenario: #{e.message}"
+  end
+
+  # POST /planning/:id/scenarios/:scenario_id/split
+  #
+  # A refusal shows the page again with the choice kept and the operation's
+  # reason, so the editor can add what a change needs.
+  def split_scenario
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    draft = { event_ids: Array(params[:event_ids]).compact_blank, name: params[:name].to_s }
+    result = Operations::TeamPlanning::SplitScenario.call(context: pundit_user,
+                                                          params: { plan_id: plan[:plan_id], scenario_id: params.expect(:scenario_id), **draft })
+    count = result[:moved_event_ids].size
+    redirect_to timeline_plan_path(plan[:plan_id], scenario: result[:scenario_id]),
+                notice: "Split #{count} #{count == 1 ? 'change' : 'changes'} off into #{result[:name]}."
+  rescue Operations::Base::ParameterError => e
+    refused = -> { redirect_to plan_path(plan[:plan_id]), alert: "Couldn't split the scenario: #{e.message}" }
+    return refused.call unless can_edit?
+
+    begin
+      render split_page(plan, draft:, error: e.message), status: :unprocessable_content
+    rescue Operations::Base::ParameterError
+      refused.call
+    end
+  end
+
   private
+
+  def split_page(plan, draft: {}, error: nil)
+    scenario_id = params.expect(:scenario_id)
+    needs = Operations::TeamPlanning::SplitNeeds.call(context: pundit_user, params: { plan_id: plan[:plan_id], scenario_id: })
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario = scenarios.find { it[:scenario_id] == scenario_id }
+    plan_page(plan, scenarios:, open_tab: :scenarios,
+                    body: Views::Plans::SplitScenario.new(plan:, scenario:, needs:, draft:, error:))
+  end
 
   def rebased(result)
     count = result[:conflicts].size
