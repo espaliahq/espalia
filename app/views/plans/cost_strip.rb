@@ -52,9 +52,20 @@ class Views::Plans::CostStrip < Views::Base
     period = @marks.cost[:period]
     changed = @marks.cost[:bands_changed_at]
     "For #{day(period[:starts_on])} to #{day(period[:ends_on])}, measured against Today over the same days, not against " \
-      "the scenario this one follows. Priced at pay band midpoints, plus the on-cost rule at each unit" \
+      "the scenario this one follows. #{priced_from}, plus the on-cost rule at each unit" \
       "#{"; bands last changed #{Time.zone.parse(changed).strftime('%-d %b %Y')}" if changed}."
   end
+
+  # Only a member with the see-pay right gets a count of seats priced from actual pay.
+  def priced_from
+    held = @marks.cost[:actual_pay_seats]
+    return "Priced at pay band midpoints" unless held && held.values.any?(&:positive?)
+
+    "Priced from the actual pay the plan holds for #{seats(held[:scenario])} here and #{seats(held[:baseline])} in Today, " \
+      "and at pay band midpoints for the rest"
+  end
+
+  def seats(count) = "#{count} #{count == 1 ? 'seat' : 'seats'}"
 
   def outside_units
     row = @marks.outside_units

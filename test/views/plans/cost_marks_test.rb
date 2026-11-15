@@ -40,6 +40,22 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
     assert_equal "Not totalled in one currency: no GBP rate.", strip.at_css("[data-cost-missing]").text
   end
 
+  should "name actual pay in the basis for a holder whose plan holds some, and midpoints otherwise" do
+    basis = lambda do |cost|
+      marks = Struct.new(:total, :reference, :cost, :outside_units, :unpriced).new(
+        { scenario: sum({ "EUR" => "100" }, "100"), baseline: sum({ "EUR" => "100" }, "100"), difference: sum({}, "0") },
+        "EUR", { period: { starts_on: "2026-01-01", ends_on: "2026-12-31" }, **cost }, nil, []
+      )
+      Nokogiri::HTML5.fragment(Views::Plans::CostStrip.new(marks:).call).at_css("p.text-muted").text
+    end
+
+    assert_includes basis.({ actual_pay_seats: { scenario: 1, baseline: 2 } }),
+                    "Priced from the actual pay the plan holds for 1 seat here and 2 seats in Today, and at pay band midpoints for the rest, plus"
+    [ {}, { actual_pay_seats: { scenario: 0, baseline: 0 } } ].each do |cost|
+      assert_includes basis.(cost), "the scenario this one follows. Priced at pay band midpoints, plus", cost.inspect
+    end
+  end
+
   should "say in the table that Today has no period, and that a scenario can't be priced" do
     today = Views::Plans::CostCell.new(row: nil, reference: "EUR").call
     broken = Nokogiri::HTML5.fragment(Views::Plans::CostCell.new(row: { scenario_id: "s", error: "No period" }, reference: "EUR").call)

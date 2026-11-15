@@ -26,6 +26,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
       end
       people.record_person(cy.id, **ESPALIA, effective_on: since, employment_status: "employed", title: "Juggler", level: "5", fte: 1.0)
       [ ada, cy ].each { people.set_membership(it.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0) }
+      @ada_id = ada.id
 
       PayBand.create!(level: e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_000)
       ReferenceCurrency.create!(currency: "EUR")
@@ -62,6 +63,16 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         end
         assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 150k"
         assert_no_text "177"
+        assert_no_sideways_overflow
+      end
+
+      should "say in the strip that the plan's actual pay priced a seat, for a holder" do
+        call(Operations::TeamPlanning::SetActualPay, plan_id: @plan_id, scenario_id: @year, person_id: @ada_id,
+                                                     amount: "90000", currency: "EUR", period: "year", basis: "full_time")
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id, scenario: @year)
+
+        within("[data-cost-strip]") { assert_text "Priced from the actual pay the plan holds for 1 seat here and 0 seats in Today" }
         assert_no_sideways_overflow
       end
     end
