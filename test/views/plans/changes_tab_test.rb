@@ -21,7 +21,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       withdrawn: false, from_plan: false, meets: [], sources: %w[espalia], **fields }
   end
 
-  def render_tab(changes: [], statuses: [], items: [], scenario_id: Q1)
+  def render_tab(changes: [], statuses: [], items: [], scenario_id: Q1, can_edit: false)
     drift = { plan_id: PLAN, from: "2026-11-14", to: "2026-11-30", changes:,
               names: { ADA => "Ada Quill", BO => "Bo Reyes", PAYMENTS => "Payments", GROWTH => "Growth" } }
     status = { plan_id: PLAN, scenario_id:, on: "2026-11-30", statuses:, names: { BO => "Bo Reyes" } }
@@ -29,7 +29,13 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
     plan = { plan_id: PLAN, name: "Pay review", base_on: "2026-11-15" }
     controller = ApplicationController.new
     controller.request = ActionDispatch::TestRequest.create
-    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ChangesTab.new(plan:, scenarios: SCENARIOS, drift:, status:, attention:)))
+    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ChangesTab.new(plan:, scenarios: SCENARIOS, drift:, status:, attention:,
+                                                                                                                can_edit:)))
+  end
+
+  def noted(note, scenario_id: Q1, change_id: "c1")
+    { scenario_id:, change_id:, subject_id: BO, facet: "level", status: "pending", since: nil, sources: %w[espalia],
+      **({ note: } if note) }
   end
 
   def texts(html, selector) = html.css(selector).map { it.text.squish }
@@ -120,6 +126,44 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_equal Q1, html.at_css("#changes-scenario option[selected]")["value"]
       assert_equal "", html.css("#changes-scenario option").find { it.text == "Today" }["value"], "Today is the bare URL, as its pill is"
       assert_includes html.text, "This scenario plans nothing yet."
+    end
+  end
+
+  context "a planned change's note" do
+    should "render a note as prose, mark an erased one as removed, and show nothing without one" do
+      html = render_tab(statuses: [ noted({ value: "Promo **agreed** in March" }, change_id: "c1"),
+                                    noted({ removed: true }, change_id: "c2"), noted(nil, change_id: "c3") ])
+
+      rows = html.css("[data-planned-change]")
+      assert_equal "agreed", rows[0].at_css("[data-change-note].md-prose strong").text
+      assert_equal "Note removed", rows[1].at_css("[data-change-note='removed']").text
+      assert_nil rows[2].at_css("[data-change-note]")
+    end
+
+    should "offer no note form to a viewer who can't edit" do
+      assert_nil render_tab(statuses: [ noted({ value: "x" }) ]).at_css("[data-change-note-editor]")
+    end
+
+    should "offer no note form on a change whose note was erased with its person" do
+      assert_nil render_tab(statuses: [ noted({ removed: true }) ], can_edit: true).at_css("[data-change-note-editor]")
+    end
+
+    should "let an editor rewrite a note on the scenario that made the change" do
+      html = render_tab(statuses: [ noted({ value: "Promo in March" }, scenario_id: PLAN, change_id: "c1"), noted(nil, change_id: "c2") ],
+                        can_edit: true)
+
+      editors = html.css("[data-change-note-editor]")
+      assert_equal [ "Edit note", "Add a note" ], editors.map { it.at_css("summary").text }
+      form = editors[0].at_css("form")
+      assert_equal "/planning/#{PLAN}/notes/c1", form["action"]
+      assert_equal "patch", form.at_css("input[name='_method']")["value"]
+      assert_equal PLAN, form.at_css("input[name='note[scenario_id]']")["value"], "an inherited change is noted where it was made"
+      assert_equal Q1, form.at_css("input[name='shown']")["value"]
+      assert_equal "Promo in March", form.at_css("textarea[name='note[text]']").text
+      assert_equal "change-note-c1-hint", form.at_css("textarea")["aria-describedby"]
+      assert_includes form.at_css("#change-note-c1-hint").text, "It is saved on Today, so every scenario that follows it shows it."
+      assert_not_includes editors[1].at_css("#change-note-c2-hint").text, "It is saved on"
+      assert_equal "Note", form.at_css("label[for='change-note-c1']").text
     end
   end
 

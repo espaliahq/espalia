@@ -11,7 +11,7 @@ class Operations::TeamPlanning::NoteChange < Operations::Base
               "clear it. A note never changes what the scenario resolves to, can't be undone, and follows its " \
               "change through undo and redo. Refused for a change since undone, cleared or replaced in its " \
               "scenario, for a note over #{::TeamPlanning::PlanAggregate::NOTE_LIMIT} characters, or unless the " \
-              "caller is an editor. A note on a change to a person goes when they are forgotten. Any other note, such as " \
+              "caller is an editor, and for a change to a person since forgotten. A note on a change to a person goes when they are forgotten. Any other note, such as " \
               "one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
   category :write
   approval :mcp_client
@@ -29,5 +29,7 @@ class Operations::TeamPlanning::NoteChange < Operations::Base
     event_id = uuid!(:event_id)
     refusing_bad_plans { handler.note_change(plan_id, scenario_id:, event_id:, note: params[:note]) }
     { plan_id:, scenario_id:, event_id:, noted: params[:note].to_s.strip.present? }
+  rescue PlanKeyStore::Destroyed
+    raise ParameterError, "This change's person has been forgotten, so its note can't be written"
   end
 end

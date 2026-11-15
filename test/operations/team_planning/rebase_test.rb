@@ -97,7 +97,7 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
                    scenarios: [ { scenario_id: @plan_id, done: 0, pending: 0, conflicting: 0 },
                                 { scenario_id: @q1, done: 1, pending: 0, conflicting: 1 },
                                 { scenario_id: @lean, done: 1, pending: 0, conflicting: 1 } ],
-                   conflicts: brook_conflicts }, result.except(:drift))
+                   conflicts: brook_conflicts, names: { @brook.id => "Brook Tamsin" } }, result.except(:drift))
     assert_equal call(:Drift, plan_id: @plan_id).except(:plan_id), result[:drift]
     assert_equal [ [ @brook.id, "Staff Engineer" ], [ @ada.id, "Senior Engineer" ] ],
                  result[:drift][:changes].map { [ it[:person_id], it[:after]["title"] ] }
@@ -174,9 +174,21 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
     end
   end
 
-  should "refuse an update that would leave the first step ending before today, naming it" do
+  should "refuse a preview and an update that would leave the first step ending before today, naming it" do
     travel_to Time.utc(2026, 7, 2, 9)
+    assert_equal "Q1 ends on 2026-06-30, before 2026-07-02: end it later or remove it first", refusal { preview }
     assert_equal "Q1 ends on 2026-06-30, before 2026-07-02: end it later or remove it first", refusal { rebase }
+  end
+
+  should "name a conflict an earlier update carried, though the drift since no longer holds its subject" do
+    drift_brook
+    rebase
+    travel_to Time.utc(2026, 3, 30, 9)
+    result = preview
+
+    assert_empty result[:drift][:changes]
+    assert_equal [ @brook.id ], result[:conflicts].map { it[:subject_id] }.uniq
+    assert_equal({ @brook.id => "Brook Tamsin" }, result[:names])
   end
 
   should "bring in someone who joined in the window, and keep someone who left unresolved" do

@@ -10,7 +10,10 @@
 # a planned one winning, and at their position's level only when theirs
 # resolves to none; the working names which. An open seat is the FTE a
 # position's occupants leave, priced at the position's level and the
-# any-location band. A seat no band prices is unpriced, with its reason,
+# any-location band, under its position's cost centre
+# ({TeamPlanning::PositionCostCentres}). A person's seat keeps the person's
+# own cost centre, as the cost centre rules never move it; a placeholder
+# hire takes their position's. A seat no band prices is unpriced, with its reason,
 # and never counts as zero.
 #
 # A leaver costs up to their leaving date and their backfill from the day
@@ -37,7 +40,6 @@
 class TeamPlanning::Cost
   YEAR_DAYS = 365
   NO_UNIT = nil
-  NO_COST_CENTRE = nil
   NO_REFERENCE = "There is no reference currency to total in"
   PAY_VIEWS = %w[band_ranges band_midpoints].freeze
   UNPRICED = { band: nil, currency: nil, pay_source: nil, basis: nil, hours_per_year: nil, yearly: nil, base: nil, on_cost: nil }.freeze
@@ -66,6 +68,8 @@ class TeamPlanning::Cost
   # @!attribute unit_id [String, nil] nil when the place is in no live unit
   # @!attribute position_id [String, nil]
   # @!attribute cost_centre [String, nil] nil for no cost centre
+  # @!attribute cost_centre_source [String] a {TeamPlanning::PositionCostCentres::SOURCES} entry
+  # @!attribute cost_centre_rule [Integer, nil] the winning cost centre rule's index, for "rule"
   # @!attribute level_id [String, nil]
   # @!attribute level_source [String, nil] a {LEVEL_SOURCES} key
   # @!attribute band [PayBand, nil] nil when priced from actual pay
@@ -80,8 +84,8 @@ class TeamPlanning::Cost
   # @!attribute base [Rational, nil]
   # @!attribute on_cost [TeamPlanning::OnCostModel::Figure, nil]
   # @!attribute reason [String, nil] a {REASONS} key when unpriced
-  Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :level_id, :level_source, :band, :currency, :pay_source, :basis,
-                     :fte, :fraction, :held, :hours_per_year, :yearly, :base, :on_cost, :reason) do
+  Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :cost_centre_source, :cost_centre_rule, :level_id, :level_source, :band,
+                     :currency, :pay_source, :basis, :fte, :fraction, :held, :hours_per_year, :yearly, :base, :on_cost, :reason) do
     # @return [Boolean]
     def unpriced? = reason.present?
 
@@ -210,6 +214,7 @@ class TeamPlanning::Cost
     @live = map.units.to_set(&:id)
     @rules = {}
     @positions = map.positions.index_by(&:id)
+    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id)
     people = map.people.flat_map { person_lines(it) }
     lines = people + open_lines(map)
     units = by(lines, &:unit_id)
@@ -219,7 +224,7 @@ class TeamPlanning::Cost
   def person_lines(member)
     places = TeamPlanning::Baseline::Membership.shares(member.memberships)
     held = held_by(member)
-    seat = { seat_id: member.id, kind: "person", cost_centre: member.cost_centre.presence, fte: fte_of(member) || 1r }
+    seat = { seat_id: member.id, kind: "person", fte: fte_of(member) || 1r }
     pay = member.plan_data[:pay] if @actual_pay
     unpriced = ("pay_unknown" if pay&.removed?) || ("fte_unknown" unless fte_of(member)) ||
                ("level_unknown" if !pay && member.planned_or_own(:level) == TeamPlanning::Baseline::UNKNOWN)
@@ -227,9 +232,22 @@ class TeamPlanning::Cost
     fractions(places).map do |placement, fraction|
       position = @positions[placement.position_id]
       level_id, source = own_level_id || !position ? [ own_level_id, own_source ] : [ position.level_id, "position" ]
-      line(**seat, unit_id: live_unit(placement.unit_id), position_id: placement.position_id, level_id:, level_source: level_id && source,
-                   country: member.country, fraction:, held:, reason: unpriced, pay: pay && !pay.removed? ? pay.reveal : nil)
+      line(**seat, **person_cost_centre(member, position), unit_id: live_unit(placement.unit_id), position_id: placement.position_id, level_id:,
+                   level_source: level_id && source, country: member.country, fraction:, held:, reason: unpriced,
+                   pay: pay && !pay.removed? ? pay.reveal : nil)
     end
+  end
+
+  # A person keeps their own cost centre, as the cost centre rules never move
+  # it. A placeholder hire has none of their own, so takes their position's.
+  def person_cost_centre(member, position)
+    resolved = if member.placeholder?
+      position ? @cost_centres.of(position) : TeamPlanning::PositionCostCentres::NONE
+    else
+      cost_centre = member.cost_centre.presence
+      TeamPlanning::PositionCostCentres::Resolved.new(cost_centre:, source: cost_centre ? "person" : "none")
+    end
+    { cost_centre: resolved.cost_centre, cost_centre_source: resolved.source, cost_centre_rule: resolved.rule_index }
   end
 
   # Each place's part of the seat, so the places of a person always add up
@@ -253,8 +271,10 @@ class TeamPlanning::Cost
       open = exact(position.fte) - filled[position.id]
       next unless open.positive?
 
+      cost_centre = @cost_centres.of(position)
       openings(open, leavers.fetch(position.id, [])).map do |fte, held|
-        line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id, cost_centre: NO_COST_CENTRE,
+        line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id,
+             cost_centre: cost_centre.cost_centre, cost_centre_source: cost_centre.source, cost_centre_rule: cost_centre.rule_index,
              level_id: position.level_id, level_source: nil, country: nil, fte:, fraction: 1r, held:, reason: nil)
       end
     end.flatten

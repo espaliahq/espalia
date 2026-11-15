@@ -176,8 +176,15 @@ column per step, a heading per block, and a row per lane, with each bar spanning
 it holds. A phone shows one step at a time, picked from a row of steps that marks the
 current one. Since the neighbouring steps are out of sight there, each bar says where its
 person came from when they arrive and where they go when they leave. A path with nobody on
-it still shows its steps, so its alternatives stay in reach. Read-only for now: editing in
-time is 9.3.
+it still shows its steps, so its alternatives stay in reach.
+
+An editor moves people from the tab too ([#309](https://github.com/espaliahq/espalia/issues/309)).
+Dragging a person's bar onto another block in a column moves them in that column's step, and
+a drop outside the bar's own steps is refused. Each bar also has a "Move…" button, a menu of
+its steps when it spans several, so the keyboard and a phone reach the same form. On a phone
+it moves the person in the step shown. The form is the map's, one per step, and saves
+through `MovePlace`, then returns to the same step of the timeline. Today has no handles,
+and a viewer sees none. Moving a change a step earlier or later is the next part of 9.3.
 
 ### Unit changes as built
 
@@ -561,9 +568,10 @@ it once, for the scenario and the baseline together.
   nothing in the period, and their backfill holds the whole of it. A backfill for several
   leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
   period any FTE no leaver opens.
-- **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
-  until positions carry a cost-centre label in 6.2. No cost centre is a bucket of its own,
-  counted like any other.
+- **A cost centre** is the person's, from the Org Graph, or none. An open seat takes its
+  position's cost centre, resolved as [Position to cost centre](#which-budget-line-a-position-draws-on)
+  describes, and the working says how (`cost_centre_source`). No cost centre is a bucket of
+  its own, counted like any other.
 - **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
   that refuses it, or a level or FTE lost with a forgotten person's key), never counted
   as zero.
@@ -827,6 +835,12 @@ for the baseline and each scenario, the changes that read done, pending and conf
 It lists the conflicts too. It reads all of this over one base, and is refused if the
 plan moves while it reads.
 
+On the web, an editor finds "Update to today" on the Changes tab while the base is in
+the past ([#337](https://github.com/espaliahq/espalia/issues/337)). It opens the preview
+under the plan, at `/planning/:id/update-to-today`, and its confirm posts back the base
+the preview read. A viewer sees no button and is refused the update, and a frozen plan
+has no editor left to offer it to.
+
 Once the base is today, a change that disagreed with the Org Graph would read pending:
 today and the base say the same thing. So `PlanRebased` records each conflict found at
 that moment, as the scenario it read conflicting in, its subject, its facet and the
@@ -972,6 +986,14 @@ its own, its position's, a succession's, the places of someone over or under all
 place a capacity item names, or the retired unit that broke it. A capacity item for someone in
 no unit falls back to Espalia.
 
+Each planned change shows its note beside it ([#292](https://github.com/espaliahq/espalia/issues/292)),
+rendered as prose. `team_planning_status` gives an entry its `note`, read off the override
+the change projects, so it holds the latest one written. A removed note reads "Note removed"
+rather than vanishing, so the change doesn't look as if nobody explained it. An editor writes,
+rewrites or clears a note in place, through `team_planning_note_change`, on the scenario that
+made the change. For an inherited change that is not the scenario shown. Rules and positions
+have no status, so their notes don't appear here.
+
 ## Plan-held data
 
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not
@@ -1061,6 +1083,14 @@ the first match wins. A matcher names a unit (and so its subtree), a role or rol
 from the framework, or a unit and a role together. The list is ordered because
 organisations differ on whether the unit or the role decides. Rules start from the
 tenant default, and a plan or scenario can change them.
+
+As built in 6.2 ([#325](https://github.com/espaliahq/espalia/issues/325)): the rules are the
+`cost_centre` rule kind, set through the generic rule write. A matcher names a unit, a role
+or a role family, or a unit with one of the other two. Each position's result records its
+source (`position`, `person`, `rule` with the rule's index, or `none`). Step 2 reads only the
+occupant's own cost centre, the one with the largest allocation first: no event carries a
+plan's change to a person's cost centre yet, and the mismatch check in 6.6 is where one is
+needed.
 
 **Cost centre to budget line.** The most specific budget line that matches the position's cost centre and
 period, and whichever of role, level and location the budget line states. `PositionFundingSet` is
