@@ -72,7 +72,11 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     tables.each do |table|
       assert_not_includes ActiveRecord::Base.connection.select_values("SELECT row_to_json(t)::text FROM #{table} t").join, AMOUNT, table
     end
-    assert_not_includes ActiveRecord::Base.connection.select_values("SELECT data::text FROM event_store_events").join, AMOUNT
+    assert_not_includes event_store_text, AMOUNT
+  end
+
+  should "read the event store in a form that would show a clear amount" do
+    assert_includes event_store_text(AMOUNT), AMOUNT
   end
 
   should "answer an editor without the right in no more than status already shows them" do
@@ -89,6 +93,14 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
   def set_pay(scenario_id)
     call(Operations::TeamPlanning::SetActualPay, @holder, plan_id: @plan_id, scenario_id:, person_id: @ada.id,
                                                           amount: AMOUNT, currency: "AUD", period: "year", basis: "full_time")
+  end
+
+  # `data` is bytea, which casts to hex; escape keeps printable bytes as they
+  # are and never fails on a sealed row.
+  def event_store_text(planted = nil)
+    sql = "SELECT encode(data, 'escape') FROM event_store_events"
+    sql = "SELECT encode(convert_to('{\"amount\":\"#{planted}\"}', 'UTF8'), 'escape') UNION ALL #{sql}" if planted
+    ActiveRecord::Base.connection.select_values(sql).join
   end
 
   def params_for(operation)
