@@ -122,7 +122,7 @@ class TeamPlanning::Capacity
     families = family_ids(seats)
     @facts = facts(seats)
     priced = seats.map { |seat, reasons| Seat.new(seat:, places: seat.places.zip(reasons).map { |place, reason| price(seat, place, reason, families) },
-                                                     own_level: !@own_levels[seat.id].nil?) }
+                                                     own_level: !(@own_levels || {})[seat.id].nil?) }
     Report.new(map: @map, seats: priced, **sums(priced))
   end
 
