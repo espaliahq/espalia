@@ -165,6 +165,16 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     assert_equal 1, upload(csv, signature:)[:written]
   end
 
+  should "refuse a confirm once a line no longer names one person, and write nothing" do
+    csv = "#{HEADER}cy.quill@example.com,90413,EUR,year\n"
+    signature = upload(csv).fetch(:signature)
+    ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, person: @off_map, user: create(:user, email: "cy.quill@example.com")) }
+
+    before = event_count
+    assert_equal "The scenario changed since the preview, so check the file again", refusal { upload(csv, signature:) }
+    assert_equal before, event_count
+  end
+
   should "write once when the same signature is confirmed twice" do
     csv = "#{HEADER}E-100,90413,EUR,year\ncy.quill@example.com,80000,EUR,year\n"
     signature = upload(csv).fetch(:signature)

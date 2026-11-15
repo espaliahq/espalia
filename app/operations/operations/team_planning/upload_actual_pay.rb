@@ -73,6 +73,8 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
         changes
       end
     end
+    raise Operations::Base::ParameterError, "The scenario changed since the preview, so check the file again" unless report.ok?
+
     payload(plan, scenario_id, report, map, names: {}).merge(written:)
   end
 
