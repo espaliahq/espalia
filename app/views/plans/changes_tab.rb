@@ -157,7 +157,11 @@ class Views::Plans::ChangesTab < Views::Base
         input(type: "hidden", name: "settlement[#{field}]", value:)
       end
       render Components::Kit::Button.new(type: :submit, size: :sm, compact: true, name: "settlement[choice]", value: "plan") { "Keep the plan" }
-      render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "settlement[choice]", value: "reality") { "Follow reality" }
+      if entry[:facet] == "succession"
+        span(class: "text-xs text-muted") { "To follow reality, change the succession on the map." }
+      else
+        render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "settlement[choice]", value: "reality") { "Follow reality" }
+      end
     end
   end
 

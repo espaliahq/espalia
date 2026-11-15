@@ -142,6 +142,16 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_not_includes editors[1].at_css("#change-note-c2-hint").text, "It is saved on"
       assert_equal "Note", form.at_css("label[for='change-note-c1']").text
     end
+
+    should "offer only keeping the plan on a carried succession conflict, which can't follow reality" do
+      carried = ->(facet, id) { { scenario_id: Q1, change_id: id, subject_id: BO, facet:, status: "conflicting", since: "2026-11-21", sources: %w[espalia] } }
+      html = render_tab(statuses: [ carried.("level", "c1"), carried.("succession", "c2") ], can_edit: true)
+
+      assert_equal %w[plan reality], html.css("[data-settle-conflict='level'] button").map { it["value"] }
+      succession = html.at_css("[data-settle-conflict='succession']")
+      assert_equal %w[plan], succession.css("button").map { it["value"] }
+      assert_includes succession.text, "change the succession on the map"
+    end
   end
 
   context "what needs attention" do
