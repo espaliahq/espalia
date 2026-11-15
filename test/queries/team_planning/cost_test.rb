@@ -176,6 +176,15 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal [ [ "CC-1", "person" ] ], lines(cost.scenario, @ada.id).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
   end
 
+  should "give a placeholder hire their position's cost centre, as they have none of their own" do
+    seat = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                            fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
+    hire = operation(Operations::TeamPlanning::SetPlaceholderHire, label: "Payments engineer", fte: 1)[:placeholder_id]
+    operation(Operations::TeamPlanning::SetAssignment, person_id: hire, placements: [ { position_id: seat, allocation: 1 } ])
+
+    assert_equal [ [ "Platform", "position" ] ], lines(cost.scenario, hire).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+  end
+
   should "price a filled position at its occupant's level, falling back to the position's and saying so" do
     seat = open_position(level: @e6, unit_id: @payments)
     operation(Operations::TeamPlanning::SetAssignment, person_id: @cy.id, placements: [ { position_id: seat, allocation: 1 } ])
