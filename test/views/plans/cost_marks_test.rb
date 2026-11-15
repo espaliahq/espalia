@@ -30,7 +30,7 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
   end
 
   should "say why a total isn't in one currency when only Today's fails to convert" do
-    marks = Struct.new(:total, :reference, :cost, :outside_units, :unpriced).new(
+    marks = Struct.new(:total, :reference, :cost, :outside_units, :unpriced) { def run_rate? = false }.new(
       { scenario: sum({ "EUR" => "100" }, "100"), baseline: sum({ "GBP" => "80" }, nil, [ "No GBP rate." ]),
         difference: sum({ "EUR" => "100", "GBP" => "-80" }) },
       "EUR", { period: { starts_on: "2026-01-01", ends_on: "2026-12-31" } }, nil, []
@@ -42,7 +42,7 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
 
   should "name actual pay in the basis for a holder whose plan holds some, and midpoints otherwise" do
     basis = lambda do |cost|
-      marks = Struct.new(:total, :reference, :cost, :outside_units, :unpriced).new(
+      marks = Struct.new(:total, :reference, :cost, :outside_units, :unpriced) { def run_rate? = false }.new(
         { scenario: sum({ "EUR" => "100" }, "100"), baseline: sum({ "EUR" => "100" }, "100"), difference: sum({}, "0") },
         "EUR", { period: { starts_on: "2026-01-01", ends_on: "2026-12-31" }, **cost }, nil, []
       )
@@ -58,11 +58,12 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
     end
   end
 
-  should "say in the table that Today has no period, and that a scenario can't be priced" do
-    today = Views::Plans::CostCell.new(row: nil, reference: "EUR").call
+  should "give Today in the table as a run rate set against nothing, and say a scenario can't be priced" do
+    row = { scenario_id: "p", basis: "run_rate", total: { scenario: sum({ "EUR" => "1200000" }, "1200000") }, unpriced: 0 }
+    today = Nokogiri::HTML5.fragment(Views::Plans::CostCell.new(row:, reference: "EUR").call)
     broken = Nokogiri::HTML5.fragment(Views::Plans::CostCell.new(row: { scenario_id: "s", error: "No period" }, reference: "EUR").call)
 
-    assert_includes today, "No period of its own"
+    assert_equal "EUR 1.2m a year(run rate)", today.text
     assert_equal [ "Can't be priced", "No period" ], [ broken.text, broken.at_css("span")["title"] ]
   end
 end

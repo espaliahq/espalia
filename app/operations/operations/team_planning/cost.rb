@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # What a scenario costs against the baseline, through {TeamPlanning::Cost}
-# ([#288](https://github.com/espaliahq/espalia/issues/288)). Totals come by
+# ([#288](https://github.com/espaliahq/espalia/issues/288)), or Today's
+# yearly run rate when the scenario is the plan's own id
+# ([#318](https://github.com/espaliahq/espalia/issues/318)). Totals come by
 # default; a seat's working only for the one unit a caller names, so a large
 # plan answers in a page. Figures leave as decimal strings. Band midpoints
 # are tenant configuration, not anyone's pay, so every plan member sees them;
@@ -19,7 +21,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "priced over the same days, with the difference. Each seat (a person, or the FTE a position's occupants " \
               "leave open) is priced at the midpoint of the pay band for its level and country (else the band for any " \
               "location), made yearly (a month is 1/12, an hour takes the working_hours rule), scaled by FTE and by " \
-              "the days it is held out of 365, plus the on_cost rule of its unit. A person is priced at their own " \
+              "the days it is held out of the year (365, or the run rate's own year: 366 across a 29 February), plus the on_cost rule of its unit. A person is priced at their own " \
               "level, a planned one winning, and at their position's level only when theirs resolves to none; " \
               "level_source says which. A leaver costs up to their leaving date and their backfill from the day after. " \
               "Totals are per currency in `native`, and `converted` is the same in the reference currency at the " \
@@ -31,23 +33,25 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "winning rule's index in the cost_centre list that unit reads. " \
               "Unit, cost-centre and plan totals always agree. A seat that can't be priced is in `unpriced` with its reason, " \
               "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
-              "bands_changed_at says when a band last changed. pay_view is band_ranges for a member with the see-pay " \
+              "bands_changed_at says when a band last changed. Pass the plan's id as scenario_id for Today's run rate: " \
+              "basis is run_rate, period is the year from the base date to the day before the same date a year later, " \
+              "each seat is priced for that whole year, and totals carry only `scenario`, with no baseline or difference, " \
+              "as a run rate is never compared with a period total. A scenario has basis period. pay_view is band_ranges for a member with the see-pay " \
               "right, whose working shows each band's minimum and maximum, and band_midpoints for everyone else. " \
               "For a holder, a person whose actual pay the plan holds is priced from it instead (made yearly, scaled " \
-              "by FTE only when its basis is full_time, by the days held, plus on-cost): each seat's pay_source " \
+              "by FTE only when its basis is full_time, by the days held, plus on-cost), in a run rate as in a scenario: each seat's pay_source " \
               "says actual or band_midpoint, and actual_pay_seats counts the seats priced from actual pay. Held pay " \
               "the plan lost with the person's key leaves the seat unpriced as pay_unknown. Everyone else is priced " \
-              "at midpoints throughout, so the two views total differently. The baseline has no period, so it can't be the " \
-              "scenario. Figures are decimal strings; people are named by id in `names`. Refused, as an unknown " \
+              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. Refused, as an unknown " \
               "plan, unless the caller is a member."
   category :read
   approval :none
 
   parameter :plan_id, String, required: true
-  parameter :scenario_id, String, required: true, schema: { description: "A scenario of the plan; not the plan's id, as the baseline has no period." }
+  parameter :scenario_id, String, required: true, schema: { description: "A scenario of the plan, or the plan's id for Today's yearly run rate." }
   parameter :unit_id, String, allow_blank: false, schema: { description: "A unit on the scenario's or the baseline's map, for the working of each seat in it." }
 
-  # @return [Hash] `{ plan_id, scenario_id, period, reference_currency, bands_changed_at, pay_view, total,
+  # @return [Hash] `{ plan_id, scenario_id, basis, period, reference_currency, bands_changed_at, pay_view, total,
   #   actual_pay_seats (for a see-pay holder),
   #   units, cost_centres, unpriced, names }`, and `seats` for a unit
   def perform
@@ -56,12 +60,12 @@ class Operations::TeamPlanning::Cost < Operations::Base
     report = refusing_bad_plans { ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call }
     @ranges = report.pay_view == "band_ranges"
     unit_id = unit!(report)
-    unpriced = (report.scenario.unpriced + report.baseline.unpriced).uniq { [ it.seat_id, it.unit_id, it.reason ] }
-    seats = { scenario: lines_in(report.scenario, unit_id), baseline: lines_in(report.baseline, unit_id) } if unit_id
-    { plan_id: plan.id, scenario_id:, period: { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601 },
+    unpriced = unpriced_lines(report)
+    seats = { scenario: lines_in(report.scenario, unit_id), **({ baseline: lines_in(report.baseline, unit_id) } if report.baseline) } if unit_id
+    { plan_id: plan.id, scenario_id:, basis: report.basis, period: period(report),
       reference_currency: report.reference_currency, bands_changed_at: report.bands_changed_at&.iso8601,
       pay_view: report.pay_view, **actual_pay_seats(report),
-      total: compared(report, report.scenario.total, report.baseline.total), units: units(report), cost_centres: cost_centres(report),
+      total: compared(report, report.scenario.total, report.baseline&.total), units: units(report), cost_centres: cost_centres(report),
       unpriced: unpriced.map { unpriced(it) }, **({ unit_id:, seats: } if unit_id), names: names(report, unpriced, seats) }
   end
 
@@ -71,7 +75,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
     return nil if params[:unit_id].blank?
 
     unit_id = params[:unit_id].to_s.strip.downcase
-    return unit_id if [ report.scenario, report.baseline ].any? { |priced| priced.map.units.any? { it.id == unit_id } }
+    return unit_id if priced(report).any? { |priced| priced.map.units.any? { it.id == unit_id } }
 
     raise Operations::Base::ParameterError, "No such unit"
   end
@@ -79,23 +83,25 @@ class Operations::TeamPlanning::Cost < Operations::Base
   def actual_pay_seats(report)
     return {} unless @ranges
 
-    { actual_pay_seats: { scenario: report.scenario.actual_pay_seats, baseline: report.baseline.actual_pay_seats } }
+    { actual_pay_seats: { scenario: report.scenario.actual_pay_seats, **({ baseline: report.baseline.actual_pay_seats } if report.baseline) } }
   end
 
+  def priced(report) = [ report.scenario, report.baseline ].compact
+
   def units(report)
-    names = (report.baseline.map.units + report.scenario.map.units).to_h { [ it.id, it.name ] }
-    ids = (report.scenario.units.keys | report.baseline.units.keys | names.keys)
+    names = priced(report).reverse.flat_map { it.map.units }.to_h { [ it.id, it.name ] }
+    ids = (priced(report).flat_map { it.units.keys }.uniq | names.keys)
     ids.sort_by { [ it.nil? ? 1 : 0, names[it].to_s, it.to_s ] }.map do |unit_id|
-      row = { unit_id:, name: names[unit_id], **compared(report, report.scenario.units[unit_id], report.baseline.units[unit_id]) }
+      row = { unit_id:, name: names[unit_id], **compared(report, report.scenario.units[unit_id], report.baseline&.units&.[](unit_id)) }
       next row unless unit_id
 
-      row.merge(with_below: compared(report, report.scenario.units_with_below[unit_id], report.baseline.units_with_below[unit_id]))
+      row.merge(with_below: compared(report, report.scenario.units_with_below[unit_id], report.baseline&.units_with_below&.[](unit_id)))
     end
   end
 
   def cost_centres(report)
-    (report.scenario.cost_centres.keys | report.baseline.cost_centres.keys).sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.map do |cost_centre|
-      { cost_centre:, **compared(report, report.scenario.cost_centres[cost_centre], report.baseline.cost_centres[cost_centre]) }
+    priced(report).flat_map { it.cost_centres.keys }.uniq.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.map do |cost_centre|
+      { cost_centre:, **compared(report, report.scenario.cost_centres[cost_centre], report.baseline&.cost_centres&.[](cost_centre)) }
     end
   end
 
@@ -129,6 +135,6 @@ class Operations::TeamPlanning::Cost < Operations::Base
     ids = (unpriced.map { [ it.kind, it.seat_id ] } + seats.to_h.values.flatten.map { [ it[:kind], it[:seat_id] ] })
           .filter_map { |kind, id| id if kind == "person" }.uniq
     in_scenario = report.scenario.map.people.to_set(&:id)
-    ids.to_h { [ it, (in_scenario.include?(it) ? report.scenario.map : report.baseline.map).name_of(it) ] }
+    ids.to_h { [ it, (in_scenario.include?(it) || !report.baseline ? report.scenario.map : report.baseline.map).name_of(it) ] }
   end
 end

@@ -101,7 +101,8 @@ class TeamPlanning::Resolution
   def step_of(aggregate)
     chain = aggregate.resolution_chain(@scenario_id)
     before = aggregate.timeline_path(@scenario_id)[-2]
-    before ? chain.drop(chain.index(before) + 1) : chain
+    step = before ? chain.drop(chain.index(before) + 1) : chain
+    (step + aggregate.resting_on(@scenario_id)).uniq
   end
 
   # A person off the map either left by the base date, or was forgotten, or

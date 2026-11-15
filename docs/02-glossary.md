@@ -156,6 +156,16 @@ Rails 8 default for background jobs. Powers RES async event handlers (notificati
 
 ---
 
+## Team Planning Concepts
+
+### Scenario relation
+How a scenario stands to its parent. `then` is the next step, starting the day after its parent ends. `instead` is an alternative over its parent's period. `on` is the rest of a split scenario, sitting on the agreed part over the same period; only `ScenarioSplit` makes it, and the pair reads as one step.
+
+### Split
+`ScenarioSplit` moves the agreed changes of a scenario, with every earlier change they overwrite, into a new scenario that takes its place. The original keeps its id and the rest, and sits `on` the agreed part, so every scenario resolves as before.
+
+---
+
 ## Integration Concepts
 
 ### HRIS Adapter
