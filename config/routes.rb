@@ -410,6 +410,8 @@ Rails.application.routes.draw do
     get :timeline, on: :member
     # The Org Graph's changes since the base, and where the plan's stand ([#287](https://github.com/espaliahq/espalia/issues/287)).
     get :changes, on: :member
+    # What no longer fits in one scenario, by check ([#350](https://github.com/espaliahq/espalia/issues/350)).
+    get :checks, on: :member
     # Update the plan to today, from a preview an editor confirms ([#337](https://github.com/espaliahq/espalia/issues/337)).
     get :rebase, on: :member, path: "update-to-today"
     post :rebase, on: :member, path: "update-to-today", action: :rebase_plan

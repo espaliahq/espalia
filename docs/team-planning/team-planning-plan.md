@@ -287,7 +287,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 4.4 | Changes tab: drift and planned changes, each with its source of truth from `OrgFactProvider`. An Org Graph change that came from this plan is matched through its event's `plan_id`. [Design: The changes tab as built](team-planning-design.md#the-changes-tab-as-built) | 4.1, 4.3 |
 | 4.5 | Reconcile a conflict: keep the plan (pin) or follow reality (clear) | 4.4, 3.9 |
 | 4.6 | Checks projection: over- or under-allocated, placed nowhere, placed but left, no manager, a manager sharing no unit | 3.7, 4.3 |
-| 4.7 | Checks tab, with guardrail checks marked | 4.6 |
+| 4.7 | Checks tab: what no longer fits in one scenario, grouped by check, each item linked to the change behind it. [Design: The checks tab as built](team-planning-design.md#the-checks-tab-as-built) | 4.6 |
 
 ### P5 Cost
 
@@ -382,7 +382,7 @@ edits the change, then approves again.
 
 | # | Story | Needs |
 |---|---|---|
-| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts | 3.3, 5.4 |
+| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), API only; the screen is [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out | 10.1 |
 | 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |
