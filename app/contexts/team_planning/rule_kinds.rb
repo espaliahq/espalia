@@ -12,6 +12,9 @@ class TeamPlanning::RuleKinds
     # @return [Array<Class<TeamPlanning::RuleKind>>]
     def all = kinds.values
 
+    # @return [Array<Class<TeamPlanning::ForecastKind>>] the kinds that are forecast assumptions
+    def forecasts = all.select { it < TeamPlanning::ForecastKind }
+
     # @return [Hash{String => Hash}] each rule's built-in default, by rule
     def defaults = kinds.transform_values { it.default.deep_stringify_keys }
 

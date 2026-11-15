@@ -29,7 +29,11 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "cost centre, else its occupant's, else the first cost_centre rule at its unit that matches; a seat's " \
               "cost_centre_source says which (position, person, rule or none), and cost_centre_rule is the " \
               "winning rule's index in the cost_centre list that unit reads. " \
-              "Unit, cost-centre and plan totals always agree. A seat that can't be priced is in `unpriced` with its reason, " \
+              "Unit, cost-centre and plan totals always agree. Every total carries `parts`, which add up to its " \
+              "`scenario` figure exactly: actual is the baseline's figure for the same unit or cost centre over the same days, " \
+              "planned is what the plan's changes add or take away (negative where they take away, so someone moved between " \
+              "units is negative in the old unit and positive in the new), and forecast is what the plan's forecast " \
+              "assumptions add, zero until a forecast rule is set; team_planning_forecast lists its rows. A run rate is all actual. A seat that can't be priced is in `unpriced` with its reason, " \
               "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
               "bands_changed_at says when a band last changed. Pass the plan's id as scenario_id for Today's run rate: " \
               "basis is run_rate, period is the year from the base date to the day before the same date a year later, " \
@@ -58,7 +62,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
     { plan_id: plan.id, scenario_id:, basis: report.basis, period: period(report),
       reference_currency: report.reference_currency, bands_changed_at: report.bands_changed_at&.iso8601,
       pay_view: @ranges ? "band_ranges" : "band_midpoints",
-      total: compared(report, report.scenario.total, report.baseline&.total), units: units(report), cost_centres: cost_centres(report),
+      total: compared(report.parts, report), units: units(report), cost_centres: cost_centres(report),
       unpriced: unpriced.map { unpriced(it) }, **({ unit_id:, seats: } if unit_id), names: names(report, unpriced, seats) }
   end
 
@@ -77,18 +81,18 @@ class Operations::TeamPlanning::Cost < Operations::Base
 
   def units(report)
     names = priced(report).reverse.flat_map { it.map.units }.to_h { [ it.id, it.name ] }
-    ids = (priced(report).flat_map { it.units.keys }.uniq | names.keys)
+    ids = ([ *priced(report), report.forecast ].flat_map { it.units.keys }.uniq | names.keys)
     ids.sort_by { [ it.nil? ? 1 : 0, names[it].to_s, it.to_s ] }.map do |unit_id|
-      row = { unit_id:, name: names[unit_id], **compared(report, report.scenario.units[unit_id], report.baseline&.units&.[](unit_id)) }
+      row = { unit_id:, name: names[unit_id], **compared(report.parts(:units, unit_id), report) }
       next row unless unit_id
 
-      row.merge(with_below: compared(report, report.scenario.units_with_below[unit_id], report.baseline&.units_with_below&.[](unit_id)))
+      row.merge(with_below: compared(report.parts(:units_with_below, unit_id), report))
     end
   end
 
   def cost_centres(report)
-    priced(report).flat_map { it.cost_centres.keys }.uniq.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.map do |cost_centre|
-      { cost_centre:, **compared(report, report.scenario.cost_centres[cost_centre], report.baseline&.cost_centres&.[](cost_centre)) }
+    [ *priced(report), report.forecast ].flat_map { it.cost_centres.keys }.uniq.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.map do |cost_centre|
+      { cost_centre:, **compared(report.parts(:cost_centres, cost_centre), report) }
     end
   end
 
