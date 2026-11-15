@@ -8,7 +8,8 @@
 # removes the row, as does a removed scenario or a deleted plan; the stream
 # keeps them all. An undo or redo puts back the change or pin its event names
 # as then in effect for its subject and facet, with the note it last had, or
-# removes the row. A note rewrites the note of the row its change made. It reads
+# removes the row. A note rewrites the note of the row its change made. A split
+# moves the rows of its subjects and facets to the agreed part. It reads
 # each event through {TeamPlanning::ChangeEntry} and hears every kind
 # in {TeamPlanning::ChangeKinds}.
 #
@@ -24,7 +25,7 @@ class TeamPlanning::Projections::Overrides
   def self.handled_events
     TeamPlanning::ChangeKinds.all + [ TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangePinned,
                                       TeamPlanning::Events::ChangeUndone, TeamPlanning::Events::ChangeRedone,
-                                      TeamPlanning::Events::ChangeNoted,
+                                      TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::ScenarioSplit,
                                       TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanDeleted ]
   end
 
@@ -46,12 +47,19 @@ class TeamPlanning::Projections::Overrides
       case event
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningOverride.where(scenario_id: event.data[:scenario_id]).delete_all
       when TeamPlanning::Events::PlanDeleted then TeamPlanningOverride.where(plan_id: event.data[:plan_id]).delete_all
+      when TeamPlanning::Events::ScenarioSplit then split(event.data)
       else apply(TeamPlanning::ChangeEntry.from(event), event)
       end
     end
   end
 
   private
+
+  def split(data)
+    data[:keys].each do |subject_id, facet|
+      TeamPlanningOverride.where(scenario_id: data[:scenario_id], subject_id:, facet:).update_all(scenario_id: data[:agreed_id])
+    end
+  end
 
   def apply(entry, event)
     if entry.reverses? then restore(entry, event)

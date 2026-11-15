@@ -25,6 +25,15 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
     end
   end
 
+  # Sets two levels in the scenario and moves one of them into an agreed part.
+  def split(scenario_id)
+    [ @person, create(:person, tenant: @tenant) ].each do |person|
+      @handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id:, subject_id: person.id, end_state: { level: "4" })
+    end
+    moving = TeamPlanningOverride.find_by!(scenario_id:, subject_id: @person.id).event_id
+    SecureRandom.uuid_v7.tap { @handler.split_scenario(@plan_id, scenario_id, agreed_id: it, name: "Agreed Q1", event_ids: [ moving ]) }
+  end
+
   def periods
     TeamPlanningScenario.where(plan_id: @plan_id).order(:created_at, :id)
       .map { [ it.name.reveal, it.starts_on.iso8601, it.ends_on&.iso8601 ] }
@@ -111,6 +120,19 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
     assert_empty periods
   end
 
+  should "put a split's agreed part in the original's place, with the original on it over the same period" do
+    q1 = fork(ends_on: "2027-03-31")
+    q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")
+    agreed = split(q1)
+
+    assert_equal [ @plan_id, "then", @person.id ], TeamPlanningScenario.find(agreed).slice(:parent_id, :relation, :forked_by_id).values
+    assert_equal [ agreed, "on" ], TeamPlanningScenario.find(q1).slice(:parent_id, :relation).values
+    @handler.set_scenario_period(@plan_id, q1, ends_on: "2027-04-30")
+    assert_equal [ [ "Baseline", "2027-01-01", nil ], [ "Q1", "2027-01-01", "2027-04-30" ], [ "Q2", "2027-05-01", "2027-06-30" ],
+                   [ "Agreed Q1", "2027-01-01", "2027-04-30" ] ], periods
+    assert TeamPlanningScenario.exists?(q2)
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       q1 = fork(ends_on: "2027-03-31")
@@ -119,13 +141,14 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
       @handler.set_scenario_period(@plan_id, q1, ends_on: "2027-04-30")
       @handler.rename_scenario(@plan_id, q1, name: "First quarter")
       @handler.describe_scenario(@plan_id, q1, description: "Hire two seniors")
+      split(q1)
       @handler.remove_scenario(@plan_id, q2)
       gone = SecureRandom.uuid_v7
       @handler.create_plan(gone, name: "Gone", base_on: "2027-01-01")
       @handler.delete_plan(gone)
 
       before = snapshot_read_models(TeamPlanning::Projections::Scenarios, @tenant)
-      assert_equal 3, before[:scenarios].size
+      assert_equal 4, before[:scenarios].size
 
       TeamPlanning::Projections::Scenarios.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningScenario.count

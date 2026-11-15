@@ -7,7 +7,8 @@
 #
 # Writes `team_planning_history_entries`, and nothing else writes it. An undo
 # marks the entry it reverses as undone and a redo lifts the mark; both stay
-# as entries of their own. A removed scenario or a deleted plan takes its
+# as entries of their own. A split moves the entries of its subjects and facets
+# to the agreed part, in their order. A removed scenario or a deleted plan takes its
 # entries with it; the stream keeps them. It hears every kind in
 # {TeamPlanning::ChangeKinds}.
 #
@@ -27,7 +28,7 @@ class TeamPlanning::Projections::History
     TeamPlanning::ChangeKinds.all + [
       TeamPlanning::Events::ChangePinned, TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangeUndone,
       TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::PlanRebased,
-      TeamPlanning::Events::ScenarioRemoved,
+      TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::ScenarioSplit,
       TeamPlanning::Events::PlanDeleted
     ]
   end
@@ -45,12 +46,19 @@ class TeamPlanning::Projections::History
       case event
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningHistoryEntry.where(scenario_id: event.data[:scenario_id]).delete_all
       when TeamPlanning::Events::PlanDeleted then TeamPlanningHistoryEntry.where(plan_id: event.data[:plan_id]).delete_all
+      when TeamPlanning::Events::ScenarioSplit then split(event.data)
       else record(TeamPlanning::ChangeEntry.from(event))
       end
     end
   end
 
   private
+
+  def split(data)
+    keys = data[:keys].map(&:to_a).to_set
+    moving = TeamPlanningHistoryEntry.where(scenario_id: data[:scenario_id]).order(:position).select { keys.include?([ it.subject_id, it.facet ]) }
+    moving.each.with_index(next_position(data[:agreed_id])) { |entry, position| entry.update!(scenario_id: data[:agreed_id], position:) }
+  end
 
   def record(entry)
     return if TeamPlanningHistoryEntry.exists?(id: entry.event_id)
