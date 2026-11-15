@@ -82,6 +82,9 @@ class TeamPlanning::CapacityModel
   # @return [String] what the model counts, for the tools that list models
   def self.description = raise(NotImplementedError, "#{name} must describe its model")
 
+  # @return [String] what follows a figure on screen, such as "u"
+  def self.symbol = model_name
+
   # @param params [Hash] with string keys
   # @return [Hash] the parameters as stored
   # @raise [TeamPlanning::Error] naming what is wrong, never a value

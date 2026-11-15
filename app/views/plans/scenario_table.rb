@@ -4,7 +4,8 @@
 # scenario under the one it follows or replaces.
 #
 # Later stories add columns (cost and capacity) through `extra_columns:`,
-# each a heading and a block that draws its cell for a scenario.
+# each a heading and a callable that returns the component for a scenario's
+# cell. Below `sm` each column stacks under the name, after its heading.
 class Views::Plans::ScenarioTable < Views::Base
   # A column a later story adds: a heading, and how to draw its cell.
   Column = Data.define(:heading, :cell)
@@ -73,10 +74,16 @@ class Views::Plans::ScenarioTable < Views::Base
             span { period(scenario) }
             state(baseline)
           end
+          @extra_columns.each do |column|
+            div(class: "sm:hidden mt-1 flex flex-wrap items-baseline gap-x-2") do
+              span(class: "text-muted") { "#{column.heading}:" }
+              render column.cell.call(scenario)
+            end
+          end
         end
       end
       td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period(scenario) }
-      @extra_columns.each { |column| td(class: "#{WIDE} px-4 py-3 align-top") { column.cell.call(scenario) } }
+      @extra_columns.each { |column| td(class: "#{WIDE} px-4 py-3 align-top") { render column.cell.call(scenario) } }
       td(class: "#{WIDE} px-4 py-3 align-top") { state(baseline) }
       td(class: "px-2 py-2 align-top text-right") { row_menu(scenario, baseline) } if @can_edit
     end
