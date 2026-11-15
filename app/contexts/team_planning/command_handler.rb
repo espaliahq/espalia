@@ -425,12 +425,7 @@ class TeamPlanning::CommandHandler
     chosen
   end
 
-  def standing_ids(plan, scenario_id)
-    parent_id = plan.scenarios[scenario_id]&.parent_id or return Set.new
-
-    map = TeamPlanning::Resolution.new(context: @actor, plan: TeamPlanningPlan.find(plan.plan_id), scenario_id: parent_id).structure(plan)
-    [ map.units, map.positions, map.people ].flatten.to_set(&:id)
-  end
+  def standing_ids(plan, scenario_id) = TeamPlanning::SplitNeeds.standing_ids(context: @actor, aggregate: plan, scenario_id:)
 
   def inherited(plan, scenario_id, subject_id, facet)
     if TeamPlanning::ChangeKinds.holding(facet).any?(&:seals_end_state?)
