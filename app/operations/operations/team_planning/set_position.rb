@@ -13,7 +13,8 @@ class Operations::TeamPlanning::SetPosition < Operations::Base
   description "Open a position in a scenario of a Team Planning plan, or change or reopen one by passing its " \
               "position_id. A position is a framework role and one of that role's levels (the level pay bands " \
               "key on), in a unit, at an FTE above 0 and at most 1. basis 'backfill' is committed budget; 'new' " \
-              "is planned. Give every field each time: the scenario's position becomes exactly this. Steps after " \
+              "is planned. cost_centre is the position's own label, which wins over its occupant's cost centre " \
+              "and the tenant's cost centre rules; omit it to leave the position to those. Give every field each time: the scenario's position becomes exactly this. Steps after " \
               "the scenario, and its alternatives, inherit it unless they change it. Refused unless the caller " \
               "is one of the plan's editors."
   category :write
@@ -27,11 +28,13 @@ class Operations::TeamPlanning::SetPosition < Operations::Base
   parameter :unit_id, String, required: true
   parameter :fte, Numeric, required: true, schema: { exclusiveMinimum: 0, maximum: 1 }
   parameter :basis, String, required: true, schema: { enum: POSITION::BASES }
+  parameter :cost_centre, String, schema: { maxLength: POSITION::COST_CENTRE_LENGTH }
 
-  # @return [Hash] `{ plan_id, scenario_id, position_id, role_id, level_id, unit_id, fte, basis, budget }`
+  # @return [Hash] `{ plan_id, scenario_id, position_id, role_id, level_id, unit_id, fte, basis, cost_centre, budget }`
   def perform
     position_id = params[:position_id].nil? ? SecureRandom.uuid_v7 : uuid!(:position_id)
-    end_state = { role_id: uuid!(:role_id), level_id: uuid!(:level_id), unit_id: uuid!(:unit_id), fte: params[:fte], basis: params[:basis] }
+    end_state = { role_id: uuid!(:role_id), level_id: uuid!(:level_id), unit_id: uuid!(:unit_id), fte: params[:fte], basis: params[:basis],
+                  cost_centre: params[:cost_centre] }
     set_change!(POSITION, subject_id: position_id, end_state:) do |plan|
       known_position!(plan, position_id) unless params[:position_id].nil?
       role_and_level!(end_state)
