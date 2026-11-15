@@ -13,12 +13,14 @@ class Views::Plans::PayUpload < Views::Base
     "actual" => [ "Actual pay", "What the person is paid as it is, already pro-rated, which FTE leaves alone." ]
   }.freeze
 
+  LIMITS = "up to #{TeamPlanning::PayUpload::MAX_ROWS.to_fs(:delimited)} rows and #{TeamPlanning::PayUpload::MAX_BYTES / 1.megabyte} MB"
+
   FILE_PROBLEMS = {
     "empty" => "The file has no rows of pay.",
-    "too_large" => "The file is over 1 MB.",
+    "too_large" => "The file is over #{TeamPlanning::PayUpload::MAX_BYTES / 1.megabyte} MB.",
     "bad_encoding" => "The file isn't UTF-8 text. Save it again as CSV UTF-8.",
     "missing_column" => "The file needs the columns person, amount, currency and period.",
-    "too_many_rows" => "The file has more than 5,000 rows."
+    "too_many_rows" => "The file has more than #{TeamPlanning::PayUpload::MAX_ROWS.to_fs(:delimited)} rows."
   }.freeze
 
   ROW_PROBLEMS = {
@@ -96,7 +98,7 @@ class Views::Plans::PayUpload < Views::Base
       label(for: "pay-upload-file", class: "block text-sm font-medium text-default") { "CSV file" }
       p(id: "pay-upload-file-hint", class: "mt-1 text-sm text-muted") do
         "Columns person, amount, currency and period, in any order. A person is their Espalia id, HRIS employee id or " \
-          "work email. Period is year, month or hour. Up to 5,000 rows and 1 MB."
+          "work email. Period is year, month or hour. #{LIMITS.upcase_first}."
       end
       input(id: "pay-upload-file", type: "file", name: "file", accept: ".csv,text/csv", required: true,
             aria: { describedby: "pay-upload-file-hint" },
