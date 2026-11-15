@@ -919,7 +919,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
   def read_menu_geometry
     page.evaluate_script(<<~JS)
         (() => {
-          const menu = document.querySelector("[role='menu']:not(.hidden)");
+          const menu = document.querySelector("[role='menu']:not([hidden])");
           const items = [...menu.querySelectorAll("[role='menuitem']")];
           const rect = menu.getBoundingClientRect();
           return {
