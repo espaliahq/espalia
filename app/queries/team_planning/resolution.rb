@@ -59,6 +59,10 @@ class TeamPlanning::Resolution
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def structure(aggregate = @repository.load_plan(@plan.id)) = resolved(aggregate).first
 
+  # @param map [TeamPlanning::Baseline::Map] from {#resolved}
+  # @return [TeamPlanning::Baseline::Map] with names joined, as {#call} gives it
+  def named(map) = @baseline.named(map)
+
   # @param aggregate [TeamPlanning::PlanAggregate]
   # @return [Array(TeamPlanning::Baseline::Map, Hash{Array(String, String) => TeamPlanning::Events::Change})]
   #   the settled map by id, and the winning changes by key
