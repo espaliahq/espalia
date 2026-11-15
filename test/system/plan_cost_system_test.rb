@@ -49,7 +49,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         sign_in_as(@planner.user)
         visit plan_path(@plan_id)
         assert_selector "[data-cost-cell='#{@year}']", text: "EUR 250k"
-        assert_text "No period of its own"
+        assert_selector "[data-cost-cell='#{@plan_id}']", text: /EUR 200k a year\s+\(run rate\)/
         assert_no_sideways_overflow
 
         visit map_plan_path(@plan_id, scenario: @year)
@@ -62,6 +62,19 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         end
         assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 150k"
         assert_no_text "177"
+        assert_no_sideways_overflow
+      end
+
+      should "show Today's map at its yearly run rate, with no change beside it" do
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id)
+        within("[data-cost-strip]") do
+          assert_selector "[data-cost-total]", text: "EUR 200k a year"
+          assert_selector "[data-cost-run-rate]", text: "yearly run rate"
+          assert_no_selector "[data-cost-change]"
+        end
+        assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 100k a year"
+        assert_no_text "vs Today"
         assert_no_sideways_overflow
       end
     end

@@ -2,7 +2,9 @@
 
 # The scenario's cost above the map: its total over its period beside
 # Today's over the same days, what is in no unit, and the seats no band
-# prices ([#316](https://github.com/espaliahq/espalia/issues/316)).
+# prices ([#316](https://github.com/espaliahq/espalia/issues/316)). On
+# Today's map it is the yearly run rate instead, with nothing beside it
+# ([#318](https://github.com/espaliahq/espalia/issues/318)).
 class Views::Plans::CostStrip < Views::Base
   Format = Views::Plans::CostMarks::Format
 
@@ -16,8 +18,8 @@ class Views::Plans::CostStrip < Views::Base
             class: "rounded-lg border border-default bg-default px-4 py-3 space-y-2") do
       div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-1") do
         h3(id: "cost-strip", class: "text-sm font-semibold text-default") { "Cost" }
-        span(data: { cost_total: "" }, class: "text-lg font-semibold tabular-nums text-default") { Format.sum(total[:scenario], reference) }
-        change
+        span(data: { cost_total: "" }, class: "text-lg font-semibold tabular-nums text-default") { figure }
+        @marks.run_rate? ? span(data: { cost_run_rate: "" }, class: "text-sm text-muted") { "yearly run rate" } : change
       end
       not_converted
       p(class: "text-sm text-muted") { basis }
@@ -30,6 +32,13 @@ class Views::Plans::CostStrip < Views::Base
 
   def total = @marks.total
 
+  def figure = figure_of(total[:scenario])
+
+  def figure_of(sum)
+    text = Format.sum(sum, reference)
+    @marks.run_rate? ? Format.yearly(text) : text
+  end
+
   def reference = @marks.reference
 
   def change
@@ -40,7 +49,7 @@ class Views::Plans::CostStrip < Views::Base
   end
 
   def not_converted
-    missing = total.values_at(:scenario, :baseline).reject { it[:converted] }.flat_map { it[:missing] }.uniq
+    missing = total.values_at(:scenario, :baseline).compact.reject { it[:converted] }.flat_map { it[:missing] }.uniq
     return if missing.empty?
 
     p(data: { cost_missing: "" }, class: "text-sm text-warning") do
@@ -51,9 +60,17 @@ class Views::Plans::CostStrip < Views::Base
   def basis
     period = @marks.cost[:period]
     changed = @marks.cost[:bands_changed_at]
+    return run_rate_basis(period, changed) if @marks.run_rate?
+
     "For #{day(period[:starts_on])} to #{day(period[:ends_on])}, measured against Today over the same days, not against " \
       "the scenario this one follows. Priced at pay band midpoints, plus the on-cost rule at each unit" \
       "#{"; bands last changed #{Time.zone.parse(changed).strftime('%-d %b %Y')}" if changed}."
+  end
+
+  def run_rate_basis(period, changed)
+    "What Today costs in a year: every seat it holds priced for #{day(period[:starts_on])} to #{day(period[:ends_on])}. " \
+      "A run rate, not a period total, so it is never set against a scenario's cost. Priced at pay band midpoints, plus " \
+      "the on-cost rule at each unit#{"; bands last changed #{Time.zone.parse(changed).strftime('%-d %b %Y')}" if changed}."
   end
 
   def outside_units
@@ -61,7 +78,7 @@ class Views::Plans::CostStrip < Views::Base
     return unless row
 
     p(data: { cost_outside: "" }, class: "text-sm text-muted") do
-      "Of this, #{Format.sum(row[:scenario], reference)} is in no unit on the map: someone in no unit, or a place in a unit gone by this date."
+      "Of this, #{figure_of(row[:scenario])} is in no unit on the map: someone in no unit, or a place in a unit gone by this date."
     end
   end
 
