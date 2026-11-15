@@ -23,9 +23,11 @@ class Views::Plans::ShowView < Views::Base
   # @param drawer [Phlex::SGML, nil] a component that renders a drawer over the page
   # @param can_edit [Boolean] whether the viewer may fork and rename scenarios
   # @param see_pay [Hash] the members panel's see-pay options: `can_manage_see_pay`, `reachable_ids`, `locked_out`
+  # @param coverable_units [Array<Hash>, nil] from `team_planning_coverable_units`, for an editor to change the scope
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
-                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, see_pay: {})
+                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, see_pay: {}, coverable_units: nil)
     @plan = plan
+    @coverable_units = coverable_units
     @see_pay = see_pay
     @can_edit = can_edit
     @scenarios = scenarios
@@ -56,6 +58,7 @@ class Views::Plans::ShowView < Views::Base
           end
         end
         render Views::Plans::ScenarioDialogs.new(plan_id: @plan[:plan_id], scenarios: @scenarios) if @can_edit
+        render Views::Plans::ScopeDialog.new(plan: @plan, units: @coverable_units) if changes_scope?
       end
       render @drawer if @drawer
     end
@@ -74,6 +77,7 @@ class Views::Plans::ShowView < Views::Base
           span { privacy_line }
           render Components::Kit::Badge.new("Based on the Org Graph on #{base_on.strftime("%-d %B %Y")}", tone: :warning)
         end
+        scope_line
       end
       if @actions.any? || @can_edit
         div(class: "flex flex-wrap items-center gap-2") do
@@ -89,6 +93,24 @@ class Views::Plans::ShowView < Views::Base
       "New scenario"
     end
   end
+
+  def scope_line
+    p(class: "mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted") do
+      span { "Covers #{covers}." }
+      if changes_scope?
+        render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true, data: Views::Plans::ScopeDialog.trigger) { "Change" }
+      end
+    end
+  end
+
+  def covers
+    scope = @plan[:scope]
+    return "the whole organisation" if scope.nil? || scope[:whole_organisation]
+
+    scope[:units].map { it[:name] || "a former unit" }.to_sentence
+  end
+
+  def changes_scope? = @can_edit && @coverable_units
 
   def privacy_line
     count = @members.size

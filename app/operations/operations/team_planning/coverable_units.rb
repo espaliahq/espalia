@@ -23,14 +23,19 @@ class Operations::TeamPlanning::CoverableUnits < Operations::Base
   # @return [Hash] `{ plan_id, units: [{ unit_id, name, parent_id, depth }] }`, with plan_id only when given
   def perform
     plan = plan!(:update?) if params[:plan_id]
-    overview = ::OrgGraph::UnitsOverview.new
-    { **({ plan_id: plan.id } if plan), units: overview.roots.flat_map { tree(overview, it, nil, 0) } }
+    units = OrgUnit.live.pluck(:id, :name, :parent_id)
+    live = units.to_set(&:first)
+    @children = units.group_by { |_, _, parent_id| live.include?(parent_id) ? parent_id : nil }
+                     .transform_values { it.sort_by { |id, name, _| [ name, id ] } }
+    { **({ plan_id: plan.id } if plan), units: tree(nil, 0) }
   end
 
   private
 
-  def tree(overview, unit, parent_id, depth)
-    [ { unit_id: unit.id, name: unit.name, parent_id:, depth: },
-      *overview.children_of(unit).flat_map { tree(overview, it, unit.id, depth + 1) } ]
+  # Depth first, siblings by name, as the Org Graph's Units page orders them.
+  def tree(parent_id, depth)
+    @children.fetch(parent_id, []).flat_map do |id, name, _|
+      [ { unit_id: id, name:, parent_id:, depth: }, *tree(id, depth + 1) ]
+    end
   end
 end

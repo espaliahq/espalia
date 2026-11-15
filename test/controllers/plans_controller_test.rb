@@ -143,6 +143,68 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "what a plan covers" do
+    setup do
+      @engineering, @sales = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        level = SecureRandom.uuid_v7
+        structure.define_taxonomy([ { level_id: level, name: "Department" } ], effective_on: "2026-01-01")
+        structure.create_unit(@engineering, "Engineering", level_id: level, effective_on: "2026-01-01")
+        structure.create_unit(@sales, "Sales", level_id: level, effective_on: "2026-01-01")
+      end
+    end
+
+    should "let a planner start a plan on chosen units, and refuse a choice of none" do
+      sign_in @editor.user
+      get plans_path
+      assert_select "input[name='plan[unit_ids][]'][value='#{@sales}']"
+
+      post plans_path, params: { plan: { name: "Sales growth", base_on: "2026-11-01", scope: "chosen", unit_ids: [ @sales ] } }
+      plan = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.order(:created_at).last }
+      assert_equal [ @sales ], plan.scope_unit_ids
+      follow_redirect!
+      assert_includes response.body, "Covers Sales."
+
+      post plans_path, params: { plan: { name: "Nothing", base_on: "2026-11-01", scope: "chosen", unit_ids: [ "" ] } }
+      assert_response :unprocessable_content
+      assert_includes response.body, "Choose at least one unit, or cover the whole organisation"
+      assert_select "input[name='plan[scope]'][value='chosen'][checked]"
+    end
+
+    should "let an editor widen the plan from its page, and refuse a narrowing that leaves planned work outside" do
+      sign_in @editor.user
+      get plan_path(@plan_id)
+      assert_includes response.body, "Covers the whole organisation."
+      assert_select "form[action='#{scope_plan_path(@plan_id)}']"
+
+      patch scope_plan_path(@plan_id), params: { plan: { scope: "chosen", unit_ids: [ @engineering ] } }
+      assert_redirected_to plan_path(@plan_id)
+      assert_equal "This plan now covers Engineering.", flash[:notice]
+
+      patch scope_plan_path(@plan_id), params: { plan: { scope: "whole" } }
+      assert_equal "This plan now covers the whole organisation.", flash[:notice]
+
+      patch scope_plan_path(@plan_id), params: { plan: { scope: "chosen", unit_ids: [] } }
+      assert_equal "Couldn't change what this plan covers: Choose at least one unit, or cover the whole organisation", flash[:alert]
+    end
+
+    should "offer a viewer no change and refuse one, and give someone outside the plan a 404" do
+      sign_in @viewer.user
+      get plan_path(@plan_id)
+      assert_includes response.body, "Covers the whole organisation."
+      assert_select "form[action='#{scope_plan_path(@plan_id)}']", count: 0
+      patch scope_plan_path(@plan_id), params: { plan: { scope: "chosen", unit_ids: [ @sales ] } }
+      assert_redirected_to root_path
+      assert_empty Array(ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find(@plan_id).scope_unit_ids })
+
+      sign_out @viewer.user
+      sign_in @outsider.user
+      patch scope_plan_path(@plan_id), params: { plan: { scope: "chosen", unit_ids: [ @sales ] } }
+      assert_response :not_found
+    end
+  end
+
   context "updating a plan to today" do
     setup { travel_to Time.utc(2026, 11, 20, 9) }
 
