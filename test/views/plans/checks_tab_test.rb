@@ -52,7 +52,7 @@ class Views::Plans::ChecksTabTest < ActiveSupport::TestCase
 
   should "link a change to its row in the Changes tab, and name one the tab doesn't list without a link" do
     html = render_tab(items: [ item(:placements, change: change("e1")), item(:units, subject_id: RISK, facet: "unit", change: change("e2", scenario_id: Q1)),
-                               item(:allocations, reason: "Placed nowhere") ], linked_ids: Set[ "e1" ])
+                               item(:allocations, reason: "Placed nowhere") ], linked_ids: Set["e1"])
 
     rows = html.css("[data-check-item]")
     link = rows[0].at_css("a")
