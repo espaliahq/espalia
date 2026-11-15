@@ -71,7 +71,7 @@ class TeamPlanning::Attention
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
     items = new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
                               unclassified: capacity.configured? ? capacity.unclassified : []).call
-    Report.new(items:, names: names_of(resolution.named(map), items))
+    Report.new(items:, names: items.empty? ? {} : names_of(resolution.named(map), items))
   end
 
   PERSON_FACETS = [ ASSIGNMENT, LINE, LEVEL, DEPARTURE ].freeze
