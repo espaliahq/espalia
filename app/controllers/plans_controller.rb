@@ -81,7 +81,7 @@ class PlansController < ApplicationController
   # taking the whole table with it.
   def capacity_columns(plan, scenarios)
     marks = scenarios.to_h { [ it[:scenario_id], capacity_marks_or_nil(plan, it[:scenario_id]) ] }
-    return [] unless marks.values.any? { it&.measured? }
+    return [] if marks.values.all? { it && !it.measured? }
 
     [ Views::Plans::ScenarioTable::Column.new(heading: "Capacity", cell: ->(scenario) { capacity_cell(marks[scenario[:scenario_id]]) }) ]
   end

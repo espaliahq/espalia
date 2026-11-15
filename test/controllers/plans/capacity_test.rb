@@ -116,6 +116,14 @@ class Plans::CapacityTest < ActionDispatch::IntegrationTest
     assert table.at_css("tr[data-scenario-id='#{@plan_id}'] [data-capacity-total='per_fte']")
   end
 
+  should "keep the column, saying so, when no scenario's capacity can be read" do
+    choose_per_fte
+    refuse = ->(**) { raise Operations::Base::ParameterError, "Doesn't resolve" }
+    table = Operations::TeamPlanning::Capacity.stub(:call, refuse) { page_for(plan_path(@plan_id)) }
+
+    assert_equal "Can't be counted", table.at_css("tr[data-scenario-id='#{@q1}'] td.sm\\:table-cell span.text-muted").text
+  end
+
   should "show an open position's figure as a filled place's is shown, each with its working" do
     choose_per_fte
     hire_into_growth
