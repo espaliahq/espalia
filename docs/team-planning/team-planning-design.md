@@ -1015,9 +1015,10 @@ have no status, so their notes don't appear here.
 The Checks tab ([#350](https://github.com/espaliahq/espalia/issues/350)) shows what no longer
 fits in one scenario, Today included, and reads `team_planning_attention` alone. Items come
 grouped by the check that found them, in Attention's order, each under a heading and a sentence
-saying what the check looks for. A check the tab has no heading for still shows, under its key,
+saying what the check looks for. Every check shows, and one that found nothing says so in an
+empty state of its own. A check the tab has no heading for still shows, under its key,
 and a test fails when Attention gains one the tab doesn't name. A row of counts at the top links
-to each group.
+to each group that found something.
 
 Each item names its subject, the reason, the change behind it and its `sources`. Attention names
 units, positions and successions the way the scenario's map does. One the map no longer holds
