@@ -28,6 +28,7 @@ module Operations::Tenants::BudgetLineFields
     operation.parameter :level_id, String
     operation.parameter :location, String
     operation.parameter :cost_centre, String
+    operation.requires_any_of :amount, :head_count
     operation.dependent_required :amount, requires: :currency, message: "An amount needs a currency"
     operation.dependent_required :amount, requires: :period, message: "An amount needs a period, year or month"
     operation.forbids_when :approved_on, if: :origin, in: %w[existing replacement],

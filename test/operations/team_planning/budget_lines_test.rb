@@ -147,7 +147,7 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_equal "This scenario has no such budget line", refusal { set(budget_line_id: unknown, head_count: "1") }
     assert_equal "This scenario has no such budget line", refusal { cut(unknown) }
 
-    assert_equal "A budget line needs an amount, a head count or both", refusal { set }
+    assert_equal "provide at least one of: amount, head_count", refusal { set }
     assert_equal "amount must be a number with at most two decimal places", refusal { set(amount: "52,50", currency: "AUD", period: "year") }
     assert_equal "Currency #{Currency::INVALID}", refusal { set(amount: "777", currency: "ZZZ", period: "year") }
   end
