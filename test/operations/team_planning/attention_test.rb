@@ -116,6 +116,15 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ [ seat, "Managing 3 reports costs 2.4 more than the seat delivers" ] ], overloaded.map { it.values_at(:subject_id, :reason) }
   end
 
+  should "mark no manager overloaded under a model that doesn't price reports" do
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    seat = open_position(@q1, unit_id: @engineering)
+    assign(@q1, @head, { position_id: seat, allocation: 1 })
+    write(Operations::TeamPlanning::SetReportingLine, @q1, person_id: @bo.id, manager_id: @head.id)
+
+    assert_empty overloaded
+  end
+
   should "read a scenario that fits as needing nothing" do
     assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
 
