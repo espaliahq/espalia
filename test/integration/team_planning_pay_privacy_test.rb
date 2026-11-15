@@ -65,10 +65,10 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
-  should "show a non-holder no pay where an override reads what it inherits off the parent's map" do
+  should "read pay as its field alone where an override inherits it off the parent's map, to a holder too" do
     TeamPlanningOverride.where(scenario_id: @plan_id).delete_all
 
-    { "viewer" => @viewer, "editor" => @editor }.each do |who, account|
+    { "holder" => @holder, "viewer" => @viewer, "editor" => @editor }.each do |who, account|
       overrides = call(Operations::TeamPlanning::Overrides, account, plan_id: @plan_id, scenario_id: @q1)
       pay = overrides[:overrides].find { it[:facet] == "data:pay" }
 

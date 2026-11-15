@@ -69,18 +69,16 @@ class Operations::TeamPlanning::Overrides < Operations::Base
     private
 
     # A rule whose kind has since gone reads as nothing, not a failed listing.
-    # Pay reads as its field alone to anyone without the see-pay right, by
-    # this check rather than by Shreddable::Value refusing to serialise.
+    # Pay reads as its field alone, to holders too: the parent's map holds it
+    # sealed, and a sealed Shreddable::Value refuses to serialise.
     def read_off_parent(kind, row)
       return unless @parent_id && kind&.readable?
-      return { field: "pay" } if row.facet == ::TeamPlanning::Events::PlanDataSet::PAY_FACET && !see_pay?
+      return { field: "pay" } if row.facet == ::TeamPlanning::Events::PlanDataSet::PAY_FACET
 
       kind.read_from(parent_map, subject_id: row.subject_id, facet: row.facet)
     rescue ::TeamPlanning::Error
       nil
     end
-
-    def see_pay? = @see_pay.nil? ? (@see_pay = PlanPolicy.new(@context, @plan).see_pay?) : @see_pay
 
     def parent_map = @parent_map ||= ::TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @parent_id).structure
 
