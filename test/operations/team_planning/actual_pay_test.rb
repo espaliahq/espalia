@@ -65,9 +65,8 @@ class Operations::TeamPlanning::ActualPayTest < ActiveSupport::TestCase
   end
 
   should "refuse pay through the generic plan value tool" do
-    assert_raises(Operations::Base::ParameterError) do
-      call(Operations::TeamPlanning::SetPlanValue, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, field: "pay", value: "1")
-    end
+    assert_equal "Pay has its own tool, team_planning_set_actual_pay",
+                 refusal { call(Operations::TeamPlanning::SetPlanValue, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, field: "pay", value: "1") }
   end
 
   should "refuse an editor without the see-pay right to write, clear, undo, redo or note pay" do

@@ -73,7 +73,7 @@ class Operations::TeamPlanning::PlanDataTest < ActiveSupport::TestCase
     assert_equal "This scenario has no such placeholder hire",
                  refusal(Operations::TeamPlanning::SetPlaceholderHire, placeholder_id: SecureRandom.uuid_v7, label: "Lead")
     assert_equal "An FTE is above 0 and at most 1", refusal(Operations::TeamPlanning::SetPlanValue, person_id: @ada.id, field: "fte", value: "1.5")
-    assert_equal "A plan holds a person's level, fte or pay, not salary", refusal(Operations::TeamPlanning::SetPlanValue, person_id: @ada.id, field: "salary", value: "1")
+    assert_equal "A plan value is a person's level or fte, not salary", refusal(Operations::TeamPlanning::SetPlanValue, person_id: @ada.id, field: "salary", value: "1")
     assert_equal "No such person", refusal(Operations::TeamPlanning::SetAssignment, person_id: SecureRandom.uuid_v7, placements: [])
   end
 
