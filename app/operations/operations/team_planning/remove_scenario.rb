@@ -35,7 +35,7 @@ class Operations::TeamPlanning::RemoveScenario < Operations::Base
   end
 
   def self.hidden_pay(aggregate, scenario_id)
-    aggregate.changes_in(scenario_id).count { it.key.last == ::TeamPlanning::Events::PlanDataSet::PAY_FACET }
+    aggregate.changes_in(scenario_id).map(&:key).uniq.count { it.last == ::TeamPlanning::Events::PlanDataSet::PAY_FACET }
   end
   private_class_method :hidden_pay
 

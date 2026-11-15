@@ -123,6 +123,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
   end
 
   should "warn an editor without the right, by count alone, that removing a scenario removes pay they can't see" do
+    set_pay(@q1)
     notice = Operations::TeamPlanning::RemoveScenario.approval_notice(context: context_for(@editor), params: { plan_id: @plan_id, scenario_id: @q1 })
 
     assert_equal "This scenario holds 1 change to pay you can't see. Removing it removes that too.", notice
