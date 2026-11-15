@@ -267,16 +267,21 @@ class TeamPlanning::Attention
   end
 
   # The seat's own level and place, a position it fills (whose role picks the
-  # model), each report's line to it, and the capacity rule that chose the
-  # model can each tip a seat over. A person's own level outranks a
-  # position's, so it stays a cause in a position too.
+  # model), each report's line to it and level (a report costs more the more
+  # junior), and the capacity rule that chose the model can each tip a seat
+  # over. A person's level is their own before a position's, so both count.
   def overload_causes(seat, report_ids, places)
-    filled = places.filter_map { it.place.position_id }.map { [ it, POSITION ] }
-    own = seat.kind == "person" ? [ [ seat.id, ASSIGNMENT ], [ seat.id, LEVEL ], *filled ] : [ [ seat.id, POSITION ] ]
+    filled = places.filter_map { it.place.position_id }
+    own = seat.kind == "person" ? [ [ seat.id, ASSIGNMENT ], *level_keys(seat.id, filled) ] : [ [ seat.id, POSITION ] ]
     positions = @map.positions.to_set(&:id)
-    lines = report_ids.map { positions.include?(it) ? [ it, POSITION ] : [ it, LINE ] }
+    reports = report_ids.flat_map { positions.include?(it) ? [ [ it, POSITION ] ] : [ [ it, LINE ], *level_keys(it) ] }
     rules = places.filter_map { effective_rule(it.unit_id) }
-    [ *own, *lines, *rules ].uniq
+    [ *own, *reports, *rules ].uniq
+  end
+
+  def level_keys(person_id, position_ids = nil)
+    position_ids ||= (@people_by_id ||= @map.people.index_by(&:id))[person_id]&.memberships.to_a.filter_map(&:position_id)
+    [ [ person_id, LEVEL ], *position_ids.map { [ it, POSITION ] } ]
   end
 
   def decimal(value) = BigDecimal(value, 20).round(4).to_s("F").delete_suffix(".0")

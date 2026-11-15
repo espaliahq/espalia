@@ -196,6 +196,22 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_same moved, overloads([ seat ], changes: { [ position_id, TeamPlanning::Attention::POSITION ] => moved }, map: map(positions: [ position ])).sole.change
   end
 
+  should "credit a report's later level, or the position that gives the report its level, as a junior report costs more" do
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    line = change(TeamPlanning::Events::ReportingLineSet, REPORT)
+    demoted = change(TeamPlanning::Events::LevelSet, REPORT)
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ REPORT, TeamPlanning::Attention::LINE ] => line,
+                [ REPORT, TeamPlanning::Attention::LEVEL ] => demoted }
+
+    assert_same demoted, overloads([ priced_seat ], changes:).sole.change
+
+    position_id = SecureRandom.uuid_v7
+    report = member(REPORT).then { it.with(memberships: [ B::Membership.new(unit_id: LIVE, allocation: 1, role: nil, position_id:) ]) }
+    regraded = change(TeamPlanning::Events::PositionSet, position_id)
+    assert_same regraded, overloads([ priced_seat ], changes: changes.merge([ position_id, TeamPlanning::Attention::POSITION ] => regraded),
+                                                     map: map(people: [ report ])).find { it.facet == "capacity" }.change
+  end
+
   should "mark nothing for a seat no model prices as overloaded" do
     assert_empty overloads([ priced_seat(overloaded: false) ])
   end
