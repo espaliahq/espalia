@@ -65,6 +65,8 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
 
   def attention(scenario_id = @q2) = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id:)[:items]
 
+  def capacity_items = attention.select { it[:facet].start_with?("capacity:") }
+
   should "price a place at the override in the step it is set and those after, with the calculated figure behind it" do
     assert_equal({ plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, position_id: nil, unit_id: @unit_id, amount: "0.8" },
                  override(" 0.8 "))
@@ -139,10 +141,10 @@ class Operations::TeamPlanning::CapacityOverrideTest < ActiveSupport::TestCase
     override("0.8")
     override("0.4", unit_id: @growth)
     assert_equal [ [ @ada.id, "capacity:#{@growth}", "Overrides capacity in a place they don't hold" ] ],
-                 attention.map { it.values_at(:subject_id, :facet, :reason) }
+                 capacity_items.map { it.values_at(:subject_id, :facet, :reason) }
 
     write(Operations::TeamPlanning::SetAssignment, scenario_id: @q2, person_id: @ada.id, placements: [ { unit_id: @growth, allocation: 1 } ])
-    assert_equal [ "capacity:#{@unit_id}" ], attention.map { it[:facet] }
+    assert_equal [ "capacity:#{@unit_id}" ], capacity_items.map { it[:facet] }
     assert_equal "0.4", place_of_ada[:capacity]
   end
 

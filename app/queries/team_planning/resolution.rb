@@ -42,7 +42,7 @@ class TeamPlanning::Resolution
   def attention
     aggregate = @repository.load_plan(@plan.id)
     map, winning = resolved(aggregate)
-    TeamPlanning::Attention.new(map, winning, closed_units: closed_position_units(aggregate, winning)).call
+    TeamPlanning::Attention.new(map, winning, left_ids: left_since(map), closed_units: closed_position_units(aggregate, winning)).call
   end
 
   private
@@ -73,6 +73,11 @@ class TeamPlanning::Resolution
     chain = aggregate.resolution_chain(@scenario_id)
     before = aggregate.timeline_path(@scenario_id)[-2]
     before ? chain.drop(chain.index(before) + 1) : chain
+  end
+
+  # The people on the map the Org Graph has had leave by today, a UTC day.
+  def left_since(map)
+    OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..Time.now.utc.to_date).pluck(:person_id)
   end
 
   # A person off the map either left by the base date, or was forgotten, or
