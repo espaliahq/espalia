@@ -445,16 +445,18 @@ class TeamPlanning::Baseline
   # @param known_on [Date, nil] nil for what the Org Graph knows now
   # @param history [Boolean] whether to carry the units the Org Graph retired, the
   #   successions it recorded and the people it had leave, by that day
+  # @param scoped [Boolean] false for the whole organisation, so a reader can
+  #   find someone the plan moved out of its scope
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def map_on(date, known_on: nil, history: false)
+  def map_on(date, known_on: nil, history: false, scoped: true)
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     snapshot = OrgGraph::AsOf.new(context: @context, date:, known_on:).call
 
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
-    scope_ids = @plan.scope_unit_ids.presence
+    scope_ids = (@plan.scope_unit_ids.presence if scoped)
     map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people: scope_ids ? [] : people, outside: scope_ids ? people : [],
                   scope_ids:, unassigned_ids: [], positions: [], names: {}, step_ids: [ @plan.id ], budget_lines: approved_budget,
                   rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled

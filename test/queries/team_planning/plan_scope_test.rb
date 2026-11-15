@@ -184,6 +184,18 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_includes map.departed.map(&:person_id), @cy.id
   end
 
+  should "read a change as done once the Org Graph moves its person out of the scope as planned" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @plan_id, person_id: @ada.id,
+                                                  placements: [ { unit_id: @sales, allocation: 1 } ])
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      OrgGraph::CommandHandler.new(actor: SYSTEM).move_membership(@ada.id, @payments, @sales, effective_on: "2026-02-01")
+    end
+
+    statuses = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @plan_id)[:statuses]
+    assert_equal "done", statuses.find { it[:subject_id] == @ada.id && it[:facet] == "assignment" }[:status].to_s
+  end
+
   context "changing the scope" do
     should "always let a plan widen, and narrow while nothing it plans falls outside" do
       assert_equal [ "Engineering", "Sales" ], set_scope(@plan_id, [ @engineering, @sales ])[:scope][:units].map { it[:name] }.sort

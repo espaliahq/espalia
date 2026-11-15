@@ -98,12 +98,13 @@ class TeamPlanning::Status
   end
 
   # Today, and the base to hold it against. A succession the Org Graph held on
-  # the base date came before the plan, so today leaves it out.
+  # the base date came before the plan, so today leaves it out. Both read the
+  # whole organisation, as a change can move someone out of the plan's scope.
   def maps
-    now = @baseline.map_on(@today, history: true)
+    now = @baseline.map_on(@today, history: true, scoped: false)
     return [ now, now ] if @today < @plan.base_on
 
-    base = @baseline.map_on(@plan.base_on, known_on: @plan.base_on - 1, history: true)
+    base = @baseline.map_on(@plan.base_on, known_on: @plan.base_on - 1, history: true, scoped: false)
     [ now.with(successions: now.successions - base.successions), base.with(retired_units: [], successions: [], left_ids: []) ]
   end
 
