@@ -99,6 +99,16 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     assert_not of(report, seat).funded?
   end
 
+  should "place a backfill where its leaver was, in the scenarios after the one they leave in" do
+    seat = open_position(basis: "backfill")
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @brook.id, position_id: seat, leaves_on: "2026-06-30")
+    following = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, parent_id: @year, relation: "then", name: "2027",
+                                                                   ends_on: "2027-12-31")[:scenario_id]
+    atlantis = as_tenant { BudgetLine.create!(**YEAR, starts_on: "2027-01-01", ends_on: "2027-12-31", location: "Atlantis").id }
+
+    assert_equal [ [ atlantis ], nil ], drawn_on(funding(following), seat)
+  end
+
   should "leave a position no line matches unfunded: another cost centre, role, level or location" do
     line(cost_centre: "Elsewhere")
     line(role_id: SecureRandom.uuid_v7)

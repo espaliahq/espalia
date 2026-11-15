@@ -156,6 +156,8 @@ class TeamPlanning::Funding
 
   def people = @people ||= @map.people.index_by(&:id)
 
+  def departed_countries = @departed_countries ||= @map.departed.to_h { [ it.person_id, it.country ] }
+
   def draw_reason(position)
     return "filled" if occupants.key?(position.id)
 
@@ -189,7 +191,7 @@ class TeamPlanning::Funding
 
   def location_of(position)
     held = occupants.fetch(position.id, []).sort_by { |person, place| [ -place.allocation.to_f, person.id ] }.map(&:first)
-    replaced = backfills.fetch(position.id, []).filter_map { people[it] }
-    (held + replaced).map(&:country).find(&:present?)
+    replaced = backfills.fetch(position.id, []).map { people[it]&.country || departed_countries[it] }
+    (held.map(&:country) + replaced).find(&:present?)
   end
 end
