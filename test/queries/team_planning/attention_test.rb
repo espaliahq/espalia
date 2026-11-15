@@ -120,12 +120,12 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
   REPORT, OTHER_REPORT = Array.new(2) { SecureRandom.uuid_v7 }
 
-  def priced_seat(kind: "person", id: PERSON, units: [ LIVE ], overloaded: true, overridden: false)
+  def priced_seat(kind: "person", id: PERSON, units: [ LIVE ], overloaded: true, overridden: false, position_id: nil)
     working = [ TeamPlanning::CapacityModel::Step.new(label: "Base at L3", amount: 1r, op: "+"),
                 *[ REPORT, OTHER_REPORT ].map { TeamPlanning::CapacityModel::Step.new(label: "Report, direct", amount: -0.65r, op: "+", subject_id: it) } ]
     calculated = TeamPlanning::CapacityModel::Figure.new(amount: 0r, working:, overloaded:, excess: overloaded ? 0.3r : 0r)
     places = units.map do |unit_id|
-      place = TeamPlanning::CapacityModel::Place.new(unit_id:, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id: nil)
+      place = TeamPlanning::CapacityModel::Place.new(unit_id:, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id:)
       figure = overridden ? TeamPlanning::CapacityModel::Figure.new(amount: 2r, working: []) : calculated
       TeamPlanning::Capacity::Place.new(place:, model: "units", chosen_for: "family", figure:, reason: nil,
                                         calculated: (calculated if overridden), overridden:)
@@ -139,8 +139,8 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
   should "mark a manager whose reports cost more than the seat delivers, once however many places they hold" do
     items = overloads([ priced_seat(units: [ LIVE, ROOT ]), priced_seat(id: REPORT, overloaded: false) ])
 
-    assert_equal [ [ PERSON, "capacity", "Managing 2 reports costs 0.3 more than the seat delivers" ] ],
-                 items.map { [ it.subject_id, it.facet, it.reason ] }
+    assert_equal [ [ PERSON, "capacity", "Managing 2 reports costs 0.3 more than the seat delivers", [ LIVE, ROOT ] ] ],
+                 items.map { [ it.subject_id, it.facet, it.reason, it.unit_ids ] }
   end
 
   should "mark an open manager position that prices as overloaded, as a filled seat is, so leaving it empty never hides the load" do
@@ -161,9 +161,28 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     rule = change(TeamPlanning::Events::RuleSet, ROOT, rule: "capacity_model", value: {})
     changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ OTHER_REPORT, TeamPlanning::Attention::LINE ] => line }
 
-    assert_same line, overloads([ priced_seat ], changes:).sole.change
-    assert_same rule, overloads([ priced_seat ], changes: changes.merge(rule.key => rule)).sole.change
+    ruled = map(rules: B::Rules.new(plan_id: ROOT, defaults: {}, by_subject: { ROOT => { "capacity_model" => {} } }))
+
+    assert_same line, overloads([ priced_seat ], changes:, map: ruled).sole.change
+    assert_same rule, overloads([ priced_seat ], changes: changes.merge(rule.key => rule), map: ruled).sole.change
     assert_same placed, overloads([ priced_seat ], changes: changes.except([ OTHER_REPORT, TeamPlanning::Attention::LINE ])).sole.change
+  end
+
+  should "credit only the capacity rule that chose the seat's model, not a later one further up" do
+    at_unit = change(TeamPlanning::Events::RuleSet, LIVE, rule: "capacity_model", value: {})
+    plan_wide = change(TeamPlanning::Events::RuleSet, ROOT, rule: "capacity_model", value: {})
+    rules = B::Rules.new(plan_id: ROOT, defaults: {}, by_subject: { ROOT => { "capacity_model" => {} }, LIVE => { "capacity_model" => {} } })
+
+    assert_same at_unit, overloads([ priced_seat ], changes: { at_unit.key => at_unit, plan_wide.key => plan_wide }, map: map(rules:)).sole.change
+  end
+
+  should "credit a later edit to the position the manager fills" do
+    position_id = SecureRandom.uuid_v7
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    edited = change(TeamPlanning::Events::PositionSet, position_id)
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ position_id, TeamPlanning::Attention::POSITION ] => edited }
+
+    assert_same edited, overloads([ priced_seat(position_id:) ], changes:).sole.change
   end
 
   should "credit an open seat's own change when the report is a position" do

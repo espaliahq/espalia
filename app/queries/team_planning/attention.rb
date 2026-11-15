@@ -262,17 +262,20 @@ class TeamPlanning::Attention
       reports = figure.working.filter_map(&:subject_id).uniq
       reason = "Managing #{pluralize(reports.size, 'report')} costs #{decimal(figure.excess)} more than the seat delivers"
       reason += "; its figure is overridden" if places.any?(&:overridden)
-      item(priced.seat.id, CAPACITY, reason, broken_by: overload_causes(priced.seat, reports, places))
+      item(priced.seat.id, CAPACITY, reason, broken_by: overload_causes(priced.seat, reports, places), units: places.map(&:unit_id))
     end
   end
 
-  # The seat's own level and place, each report's line to it, and the
-  # capacity rule that chose the model can each tip a seat over.
+  # The seat's own level and place, a position it fills (whose role picks the
+  # model), each report's line to it, and the capacity rule that chose the
+  # model can each tip a seat over. A person's own level outranks a
+  # position's, so it stays a cause in a position too.
   def overload_causes(seat, report_ids, places)
-    own = seat.kind == "person" ? [ [ seat.id, ASSIGNMENT ], [ seat.id, LEVEL ] ] : [ [ seat.id, POSITION ] ]
+    filled = places.filter_map { it.place.position_id }.map { [ it, POSITION ] }
+    own = seat.kind == "person" ? [ [ seat.id, ASSIGNMENT ], [ seat.id, LEVEL ], *filled ] : [ [ seat.id, POSITION ] ]
     positions = @map.positions.to_set(&:id)
     lines = report_ids.map { positions.include?(it) ? [ it, POSITION ] : [ it, LINE ] }
-    rules = places.flat_map { rule_keys(it.unit_id) }.select { it.last == CAPACITY_RULE }
+    rules = places.filter_map { effective_rule(it.unit_id) }
     [ *own, *lines, *rules ].uniq
   end
 
@@ -299,9 +302,11 @@ class TeamPlanning::Attention
   # Whether a place has a model is the rule's choice alone, so the plan's
   # rule that decided it is the cause, however late the seat's own change
   # landed. The nearest unit to set the rule decides, then the plan.
-  def deciding_rule(unit_id)
+  def deciding_rule(unit_id) = effective_rule(unit_id)&.then { it if @changes.key?(it) }
+
+  def effective_rule(unit_id)
     keys = rule_keys(unit_id).select { it.last == CAPACITY_RULE }
-    keys.find { |subject_id, _| @map.rules.by_subject.fetch(subject_id, {}).key?(CAPACITY_RULE_NAME) }&.then { it if @changes.key?(it) }
+    keys.find { |subject_id, _| @map.rules.by_subject.fetch(subject_id, {}).key?(CAPACITY_RULE_NAME) }
   end
 
   # A place in a position takes the position's role and level, so a later
