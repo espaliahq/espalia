@@ -78,12 +78,12 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_selector "[data-planned-change='done']", text: "Bo Reyes"
 
       write_note("Agreed with **Bo** in the October 1:1", expect_text: "Note saved.")
-      assert_selector "[data-planned-change] [data-change-note] strong", text: "Bo"
+      assert_selector "[data-planned-change='done'] [data-change-note] strong", text: "Bo"
       write_note("Moves once the Growth hire lands", expect_text: "Moves once the Growth hire lands")
       assert_no_text "Agreed with"
 
       write_note("", expect_text: "Note cleared.")
-      assert_no_selector "[data-change-note]"
+      assert_no_selector "[data-planned-change='done'] [data-change-note]"
       assert_selector "[data-change-note-editor] summary", text: "Add a note"
     end
 
@@ -92,8 +92,8 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
                                                            note: "Agreed in the October 1:1")
       sign_in_as(@viewer.user)
       visit changes_plan_path(@plan_id, scenario: @q1)
-      assert_selector "[data-planned-change] [data-change-note]", text: "Agreed in the October 1:1"
-      assert_no_selector "[data-change-note-editor]"
+      assert_selector "[data-planned-change='done'] [data-change-note]", text: "Agreed in the October 1:1"
+      assert_no_selector "[data-planned-change='done'] [data-change-note-editor]"
     end
 
     should "let an editor preview an update to today, confirm it, and see the conflict it carried" do
@@ -146,14 +146,14 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_selector "[data-planned-change='done']", text: "Bo Reyes"
 
       write_note("Agreed in the October 1:1", expect_text: "Note saved.")
-      assert_selector "[data-planned-change] [data-change-note]", text: "Agreed in the October 1:1"
+      assert_selector "[data-planned-change='done'] [data-change-note]", text: "Agreed in the October 1:1"
       assert_no_sideways_overflow
 
       ActsAsTenant.with_tenant(@tenant) { PlanKeyStore.new.destroy_person(@bo.id) }
       visit changes_plan_path(@plan_id, scenario: @q1)
-      assert_selector "[data-planned-change] [data-change-note='removed']", text: "Note removed"
+      assert_selector "[data-planned-change='done'] [data-change-note='removed']", text: "Note removed"
       assert_no_text "Agreed in the October 1:1"
-      assert_no_selector "[data-change-note-editor]"
+      assert_no_selector "[data-planned-change='done'] [data-change-note-editor]"
       assert_no_sideways_overflow
     end
 
@@ -183,11 +183,12 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
   def today_label = I18n.l(Time.now.utc.to_date, format: "%-d %b %Y")
 
   def bo_change_id
-    call(Operations::TeamPlanning::Status, @planner, plan_id: @plan_id, scenario_id: @q1)[:statuses].sole[:change_id]
+    call(Operations::TeamPlanning::Status, @planner, plan_id: @plan_id, scenario_id: @q1)[:statuses]
+      .find { it[:subject_id] == @bo.id }[:change_id]
   end
 
   def write_note(text, expect_text:)
-    within("[data-planned-change]") do
+    within("[data-planned-change='done']") do
       click_selector_with_js_fallback("[data-change-note-editor] summary", expect_text: "Leave it blank to clear the note.")
       js_fill_in "Note", with: text
     end
