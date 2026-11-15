@@ -133,6 +133,28 @@ class TeamPlanning::Cost
     def actual_pay_seats = lines.reject(&:unpriced?).select { it.pay_source == "actual" }.uniq(&:seat_id).size
   end
 
+  # What the forecast assumptions add to the scenario
+  # ([#351](https://github.com/espaliahq/espalia/issues/351)), summed as a
+  # {Priced} map's lines are.
+  #
+  # @!attribute rows [Array<TeamPlanning::Forecast::Row>]
+  # @!attribute total [Sum]
+  # @!attribute units [Hash{String, nil => Sum}]
+  # @!attribute units_with_below [Hash{String => Sum}]
+  # @!attribute cost_centres [Hash{String, nil => Sum}]
+  Forecasted = Data.define(:rows, :total, :units, :units_with_below, :cost_centres)
+
+  # One total split by what it measures. Actual is the baseline's figure over
+  # the same days; planned is what the plan's changes add or take away, so it
+  # can be negative; forecast is what the assumptions add. A part may hold a
+  # currency at zero that the total doesn't name.
+  #
+  # @!attribute actual [Sum]
+  # @!attribute planned [Sum]
+  # @!attribute forecast [Sum]
+  # @!attribute total [Sum] the scenario's priced seats plus the forecast: the three parts' sum
+  Parts = Data.define(:actual, :planned, :forecast, :total)
+
   # @!attribute basis [String] "period" for a scenario, "run_rate" for Today's year
   # @!attribute period [Range<Date>] the scenario's period, or Today's year
   # @!attribute pay_view [String] a {PAY_VIEWS} entry
@@ -140,12 +162,29 @@ class TeamPlanning::Cost
   # @!attribute bands_changed_at [Time, nil] when a pay band last changed; plans reprice live
   # @!attribute scenario [Priced]
   # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
-  Report = Data.define(:basis, :period, :pay_view, :reference_currency, :bands_changed_at, :scenario, :baseline) do
+  # @!attribute forecast [Forecasted]
+  Report = Data.define(:basis, :period, :pay_view, :reference_currency, :bands_changed_at, :scenario, :baseline, :forecast) do
     # @return [Boolean]
     def run_rate? = basis == "run_rate"
 
-    # @return [Sum, nil] the scenario's total less the baseline's; nil for a run rate
-    def difference = baseline && TeamPlanning::Cost.difference(scenario.total, baseline.total)
+    # @return [Sum, nil] the total less the baseline's; nil for a run rate
+    def difference = baseline && TeamPlanning::Cost.difference(parts.total, baseline.total)
+
+    # Today's run rate is all actual.
+    #
+    # @param scope [Symbol] :total, :units, :units_with_below or :cost_centres
+    # @param key [String, nil] the unit or cost centre, nil for none
+    # @return [Parts]
+    def parts(scope = :total, key = nil)
+      nothing = TeamPlanning::Cost.nothing(reference_currency)
+      pick = ->(figures) { (scope == :total ? figures&.total : figures&.public_send(scope)&.[](key)) || nothing }
+      priced = pick.(scenario)
+      return Parts.new(actual: priced, planned: nothing, forecast: nothing, total: priced) if run_rate?
+
+      actual = pick.(baseline)
+      forecast = pick.(self.forecast)
+      Parts.new(actual:, planned: TeamPlanning::Cost.difference(priced, actual), forecast:, total: TeamPlanning::Cost.plus(priced, forecast))
+    end
   end
 
   # @param context [AuthorizationContext]
@@ -194,10 +233,11 @@ class TeamPlanning::Cost
     @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     scenario = priced(resolved(@scenario_id))
+    forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map).rows)
     baseline = priced(resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
-               scenario:, baseline:)
+               scenario:, baseline:, forecast:)
   end
 
   # @param starts_on [Date]
@@ -221,6 +261,14 @@ class TeamPlanning::Cost
     native = (one.native.keys | other.native.keys).sort.to_h { [ it, one.native.fetch(it, 0r) - other.native.fetch(it, 0r) ] }
     converted = one.converted - other.converted if one.converted && other.converted
     Sum.new(native:, converted:, missing: (one.missing | other.missing))
+  end
+
+  # @param one [Sum]
+  # @param other [Sum]
+  # @return [Sum] both together, converted only when both are
+  def self.plus(one, other)
+    Sum.new(native: one.native.merge(other.native) { |_, a, b| a + b }.sort.to_h,
+            converted: one.converted && other.converted && (one.converted + other.converted), missing: one.missing | other.missing)
   end
 
   private
@@ -395,13 +443,21 @@ class TeamPlanning::Cost
     totals
   end
 
-  def plus(one, other)
-    Sum.new(native: one.native.merge(other.native) { |_, a, b| a + b }.sort.to_h,
-            converted: one.converted && other.converted && (one.converted + other.converted), missing: one.missing | other.missing)
+  def plus(one, other) = self.class.plus(one, other)
+
+  def sum(lines) = converted(lines.reject(&:unpriced?).group_by(&:currency).transform_values { |group| group.sum(0r, &:amount) })
+
+  # Called straight after the scenario is priced, so its units hold.
+  def forecasted(rows)
+    units = rows.group_by { live_unit(it.unit_id) }.transform_values { forecast_sum(it) }
+    Forecasted.new(rows:, total: forecast_sum(rows), units:, units_with_below: with_below(units),
+                   cost_centres: rows.group_by(&:cost_centre).transform_values { forecast_sum(it) })
   end
 
-  def sum(lines)
-    native = lines.reject(&:unpriced?).group_by(&:currency).transform_values { |group| group.sum(0r, &:amount) }.sort.to_h
+  def forecast_sum(rows) = converted(rows.flat_map { it.cost.to_a }.group_by(&:first).transform_values { |pairs| pairs.sum(0r) { exact(it.last) } })
+
+  def converted(native)
+    native = native.sort.to_h
     converted, missing = convert(native)
     Sum.new(native:, converted:, missing:)
   end
