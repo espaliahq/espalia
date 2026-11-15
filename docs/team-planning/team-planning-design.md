@@ -546,6 +546,10 @@ same days, so the two compare ([#288](https://github.com/espaliahq/espalia/issue
 The baseline has no period of its own, so it is never the scenario costed.
 `team_planning_cost` sends the totals, each unit and each cost centre, and the working of
 every seat only for a unit the caller names.
+`team_planning_scenario_costs` sends only the totals, for every scenario at once, reading
+the Org Graph once for the plan: the Scenarios table's Cost column reads it
+([#316](https://github.com/espaliahq/espalia/issues/316)). A single cost read also reads
+it once, for the scenario and the baseline together.
 
 - **A seat** is a person, or the FTE a position's occupants leave open, as capacity counts it.
 - **Its level** is the person's own, a planned one winning. When theirs resolves to none,
@@ -576,6 +580,18 @@ rounds. Plans reprice live: a changed band changes every plan's cost, and the re
 when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
 time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
 to a rate, reprices plans too but does not move the stamp.
+
+#### Cost on screen
+
+A scenario's map opens with a Cost strip: its total, the difference from Today over the
+same days, the period and what it is priced at, what sits in no unit on the map, and a
+list of the seats left out. Each unit card shows its own places' cost beside its name.
+The units and the no-unit figure add up to the strip's total, and the Scenarios table's
+Cost column shows that same total. Today's row reads "No period of its own", and Today's
+map shows no cost. The strip and column appear only once a band prices something, and a
+scenario that can't be priced keeps its map and reads "Can't be priced" in the table.
+Figures round to three significant figures (`Views::Plans::CostMarks::Format`); no band
+minimum or maximum shows on either page.
 
 ### The see-pay right as built
 
@@ -898,6 +914,37 @@ one. It reads done once the person is in that unit at that allocation. Names com
 last and from today, so a forgotten person reads "Former member", a renamed unit its new
 name, and a subject only the plan holds has none. `Raised` will join these once
 `ChangeRaised` exists. `team_planning_status` gives the same read over MCP.
+
+### The changes tab as built
+
+The Changes tab ([#287](https://github.com/espaliahq/espalia/issues/287)) draws three reads
+and decides none of their rules: the drift, the status of one scenario's changes, and what
+in that scenario needs attention. A picker chooses the scenario, as pills on a wide screen
+and a list on a phone. Each drift change links the scenarios whose plan it meets.
+
+Drift and status each give a change's `sources`, from `TeamPlanning::SourceOfTruth`: who
+supplies what the change moves, so the place someone goes to make it happen. A person fact
+comes from its `OrgFactProvider`, or from Espalia where nobody chose one. A level, a manager
+and a departure move a person fact. A membership the Org Graph holds comes from whoever
+supplied it, as Espalia can hold one in a unit an HRIS mirrors. A unit, a succession and a
+planned placement come from the providers of the units they touch, as a unit mirrored from
+an HRIS takes its members from the sync. A unit only the plan holds is Espalia's. Drift's `names` cover units as well as
+people, so a move reads "from Payments to Growth".
+
+Attention gives each item its `sources` too. Someone the plan can't place, as they joined
+after the base or have left, is fixed where employment status comes from. A manager item is
+fixed where the manager fact comes from. Every other item is fixed in the units it touches:
+its own, its position's, a succession's, the places of someone over or under allocated, the
+place a capacity item names, or the retired unit that broke it. A capacity item for someone in
+no unit falls back to Espalia.
+
+Each planned change shows its note beside it ([#292](https://github.com/espaliahq/espalia/issues/292)),
+rendered as prose. `team_planning_status` gives an entry its `note`, read off the override
+the change projects, so it holds the latest one written. A removed note reads "Note removed"
+rather than vanishing, so the change doesn't look as if nobody explained it. An editor writes,
+rewrites or clears a note in place, through `team_planning_note_change`, on the scenario that
+made the change. For an inherited change that is not the scenario shown. Rules and positions
+have no status, so their notes don't appear here.
 
 ## Plan-held data
 
