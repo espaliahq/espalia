@@ -155,10 +155,17 @@ class Views::Plans::ChangesTab < Views::Base
         label(for: id, class: "block text-sm font-medium text-default") { "Note" }
         textarea(id:, name: "note[text]", rows: "3", maxlength: TeamPlanning::PlanAggregate::NOTE_LIMIT,
                  aria: { describedby: "#{id}-hint" }, class: Components::Kit::Field::TEXTAREA) { entry.dig(:note, :value) }
-        p(id: "#{id}-hint", class: "text-xs text-muted") { "#{Prose::COMPOSER_HINT}. Leave it blank to clear the note." }
+        p(id: "#{id}-hint", class: "text-xs text-muted") { note_hint(entry) }
         render Components::Kit::Button.new(type: :submit, tone: :brand, size: :sm, compact: true) { "Save note" }
       end
     end
+  end
+
+  def note_hint(entry)
+    hint = "#{Prose::COMPOSER_HINT}. Leave it blank to clear the note."
+    return hint if entry[:scenario_id] == scenario_id
+
+    "#{hint} It is saved on #{scenario_name(entry[:scenario_id])}, so every scenario that follows it shows it."
   end
 
   def status_badge(entry)

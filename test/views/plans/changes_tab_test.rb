@@ -138,6 +138,8 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_equal Q1, form.at_css("input[name='shown']")["value"]
       assert_equal "Promo in March", form.at_css("textarea[name='note[text]']").text
       assert_equal "change-note-c1-hint", form.at_css("textarea")["aria-describedby"]
+      assert_includes form.at_css("#change-note-c1-hint").text, "It is saved on Today, so every scenario that follows it shows it."
+      assert_not_includes editors[1].at_css("#change-note-c2-hint").text, "It is saved on"
       assert_equal "Note", form.at_css("label[for='change-note-c1']").text
     end
   end
