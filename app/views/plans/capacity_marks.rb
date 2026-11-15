@@ -154,7 +154,7 @@ class Views::Plans::CapacityMarks
     end
   end
 
-  def off_the_map?(priced) = priced[:unit_id].nil? || (priced[:position_id].nil? && @live_unit_ids&.exclude?(priced[:unit_id]))
+  def off_the_map?(priced) = priced[:unit_id].nil? || @live_unit_ids&.exclude?(priced[:unit_id])
 
   def exact(value) = value.nil? ? BigDecimal(0) : BigDecimal(value)
 end

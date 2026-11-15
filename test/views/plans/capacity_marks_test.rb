@@ -72,6 +72,15 @@ class Views::Plans::CapacityMarksTest < ActiveSupport::TestCase
     assert_empty unassigned.(UNITS).person_marks.call({ id: "person-1" }, nil)
   end
 
+  should "give an unassigned row the figure for a position left in a retired unit" do
+    place = { unit_id: UNITS.last, position_id: "position-1", model: "units", capacity: "1", overridden: false, calculated: nil,
+              overloaded: false, excess: "0", notes: [], working: [] }
+    scenario = payload(SCENARIO, "1", []).merge(seats: [ { seat_id: "person-1", kind: "person", places: [ place ] } ])
+    marks = Views::Plans::CapacityMarks.new(scenario:, baseline: payload(PLAN, "1", []), names: {}, live_unit_ids: UNITS.first(2))
+
+    assert_includes marks.person_marks.call({ id: "person-1" }, nil).sole.call, "1.0u"
+  end
+
   should "know the baseline from its id, which is the plan's" do
     assert marks(payload(PLAN, "1", [])).baseline?
     assert_not marks(payload(SCENARIO, "1", [])).baseline?

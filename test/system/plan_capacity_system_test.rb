@@ -46,8 +46,8 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
     call(Operations::TeamPlanning::SetRule, @planner, plan_id: @plan_id, scenario_id: @plan_id, rule: "capacity_model",
                                                       value: { roles: { @engineer.role_id => { model: "per_fte" },
                                                                         @designer.role_id => { model: "units" } } })
-    call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id,
-                                                          level_id: @e5.level_id, unit_id: @growth, fte: 1, basis: "new")
+    @position = call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id,
+                                                                      level_id: @e5.level_id, unit_id: @growth, fte: 1, basis: "new")[:position_id]
   end
 
   [ [ "desktop", DESKTOP_SIZE ], [ "phone", MOBILE_SIZE ] ].each do |label, size|
@@ -101,6 +101,19 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
         within("[data-capacity-strip]") { assert_text "1 place counts for no capacity" }
         click_selector_with_js_fallback("[data-capacity-unclassified] summary", expect_text: "Dee Quill: the person's title maps to no role")
         within("[data-map-person='#{@dee.id}']") { assert_text "No capacity" }
+        assert_no_sideways_overflow
+      end
+
+      should "give someone left unassigned by a retired unit's position the capacity they still count for" do
+        call(Operations::TeamPlanning::SetAssignment, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
+                                                                placements: [ { position_id: @position, allocation: 1 } ])
+        call(Operations::TeamPlanning::RetireUnit, @planner, plan_id: @plan_id, scenario_id: @q1, unit_id: @growth)
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id, scenario: @q1)
+
+        within("section[aria-labelledby='map-unassigned'] [data-map-person='#{@ada.id}']") do
+          assert_selector "[data-capacity-figure] summary", text: "0.8 FTE"
+        end
         assert_no_sideways_overflow
       end
 
