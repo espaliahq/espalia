@@ -101,7 +101,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       holder = cost(unit_id: @payments)
       viewer = cost(as: @viewer, unit_id: @payments)
 
-      assert_equal %w[actual_pay band_midpoints], [ holder[:pay_view], viewer[:pay_view] ]
+      assert_equal %w[band_ranges band_midpoints], [ holder[:pay_view], viewer[:pay_view] ]
       assert_equal %w[0.00 100000.00 200000.00], band_of(holder).values_at(:minimum, :midpoint, :maximum)
       assert_equal [ :midpoint ], band_of(viewer).keys & PayBand::FIGURES
       assert_equal holder[:total], viewer[:total]
@@ -111,7 +111,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     should "give an agent acting for a person exactly that person's view" do
       assert_equal "band_midpoints", cost(as: @viewer)[:pay_view]
       call(Operations::TeamPlanning::GrantSeePay, plan_id: @plan_id, person_id: @viewer.person.id)
-      assert_equal "actual_pay", cost(as: @viewer)[:pay_view]
+      assert_equal "band_ranges", cost(as: @viewer)[:pay_view]
     end
 
     should "name no figure when it refuses a caller outside the plan" do

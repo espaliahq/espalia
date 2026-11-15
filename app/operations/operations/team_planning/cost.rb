@@ -9,8 +9,8 @@
 # ([#300](https://github.com/espaliahq/espalia/issues/300)), as does any
 # actual pay the plan holds
 # ([#317](https://github.com/espaliahq/espalia/issues/317)). `pay_view` names
-# which a caller got, and only a holder learns how many seats actual pay
-# priced. It names people, so the forgotten-person audit walks it.
+# which a caller got, each seat's `pay_source` how it was priced, and only a
+# holder learns how many seats actual pay priced. It names people, so the forgotten-person audit walks it.
 class Operations::TeamPlanning::Cost < Operations::Base
   include Operations::TeamPlanning::PlanRead
   include Operations::TeamPlanning::CostFigures
@@ -27,12 +27,13 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "with null for no unit; `with_below` adds the units below. Cost centres use null for no cost centre. " \
               "Unit, cost-centre and plan totals always agree. A seat that can't be priced is in `unpriced` with its reason, " \
               "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
-              "bands_changed_at says when a band last changed. pay_view is actual_pay for a member with the see-pay " \
-              "right: a person whose actual pay the plan holds is priced from it instead (made yearly, scaled by " \
-              "FTE only when its basis is full_time, by the days held, plus on-cost), each seat's pay_source says " \
-              "which, actual_pay_seats counts them, and the working shows each band's minimum and maximum. Held pay " \
-              "the plan lost with the person's key leaves the seat unpriced as pay_unknown. Everyone else gets " \
-              "band_midpoints, pricing every seat at its midpoint, so the two views total differently. The baseline has no period, so it can't be the " \
+              "bands_changed_at says when a band last changed. pay_view is band_ranges for a member with the see-pay " \
+              "right, whose working shows each band's minimum and maximum, and band_midpoints for everyone else. " \
+              "For a holder, a person whose actual pay the plan holds is priced from it instead (made yearly, scaled " \
+              "by FTE only when its basis is full_time, by the days held, plus on-cost): each seat's pay_source " \
+              "says actual or band_midpoint, and actual_pay_seats counts the seats priced from actual pay. Held pay " \
+              "the plan lost with the person's key leaves the seat unpriced as pay_unknown. Everyone else is priced " \
+              "at midpoints throughout, so the two views total differently. The baseline has no period, so it can't be the " \
               "scenario. Figures are decimal strings; people are named by id in `names`. Refused, as an unknown " \
               "plan, unless the caller is a member."
   category :read
@@ -49,7 +50,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call }
-    @ranges = report.pay_view == "actual_pay"
+    @ranges = report.pay_view == "band_ranges"
     unit_id = unit!(report)
     unpriced = (report.scenario.unpriced + report.baseline.unpriced).uniq { [ it.seat_id, it.unit_id, it.reason ] }
     seats = { scenario: lines_in(report.scenario, unit_id), baseline: lines_in(report.baseline, unit_id) } if unit_id

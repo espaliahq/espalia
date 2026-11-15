@@ -23,7 +23,8 @@
 # scaled by FTE only when its basis is full_time, by the days held, and with
 # on-cost on top. Pay the plan lost with the person's key leaves the seat
 # unpriced, as no midpoint stands in for it. Everyone else sees midpoints
-# throughout, so the two views total differently; `pay_view` names which.
+# throughout, so the two views total differently. `pay_view` keeps its
+# name from before actual pay; each line's `pay_source` says how it was priced.
 #
 # Figures stay exact Rationals in their band's currency, totalled per
 # currency. Each total converts once, to the reference currency at the
@@ -38,7 +39,7 @@ class TeamPlanning::Cost
   NO_UNIT = nil
   NO_COST_CENTRE = nil
   NO_REFERENCE = "There is no reference currency to total in"
-  PAY_VIEWS = %w[actual_pay band_midpoints].freeze
+  PAY_VIEWS = %w[band_ranges band_midpoints].freeze
   UNPRICED = { band: nil, currency: nil, pay_source: nil, basis: nil, hours_per_year: nil, yearly: nil, base: nil, on_cost: nil }.freeze
 
   # Why a seat is unpriced.
@@ -178,7 +179,7 @@ class TeamPlanning::Cost
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     scenario = priced(resolved(@scenario_id))
     baseline = priced(resolved(@plan.id))
-    Report.new(period: @period, pay_view: @actual_pay ? "actual_pay" : "band_midpoints", reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
+    Report.new(period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints", reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
                scenario:, baseline:)
   end
 

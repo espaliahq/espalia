@@ -594,8 +594,9 @@ A member holds the see-pay right or not
 answers for the caller, and every read of band ranges or actual pay asks it.
 `team_planning_cost` gives a holder each band's minimum and maximum beside its midpoint, and
 prices from [actual pay](#actual-pay-as-built) where the plan holds it. Everyone else gets
-midpoints throughout. `pay_view` names which (`actual_pay` or `band_midpoints`), and the two
-views total differently once a plan holds pay. An agent over MCP gets the view of the person
+midpoints throughout. `pay_view` names which (`band_ranges` or `band_midpoints`), each seat's
+`pay_source` says whether actual pay or a midpoint priced it, and the two views total
+differently once a plan holds pay. An agent over MCP gets the view of the person
 it acts for.
 
 - **Who changes it.** Only a holder grants or withdraws, and only for a member. The creator
