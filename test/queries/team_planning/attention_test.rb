@@ -137,6 +137,15 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                  TeamPlanning::Attention.new(map(people: [ member, member(other) ]), {}).call.map { it.to_h.values_at(:subject_id, :facet, :reason) }
   end
 
+  should "name the move that took someone off the head of the tree" do
+    head, other = Array.new(2) { SecureRandom.uuid_v7 }
+    units = [ unit(ROOT, nil), unit(LIVE, ROOT), B::Unit.new(id: head, name: "Unit", parent_id: ROOT, level_id: LEVEL, owner_ids: [ other ]) ]
+    moved = change(TeamPlanning::Events::UnitSet, head, name: "Unit", parent_id: ROOT, level_id: LEVEL)
+
+    assert_equal [ [ other, "Has no manager", moved ] ],
+                 TeamPlanning::Attention.new(map(units:, people: [ member, member(other) ]), { moved.key => moved }).call.map { [ it.subject_id, it.reason, it.change ] }
+  end
+
   should "count a manager who owns the unit above as sharing one, and mark one who shares none" do
     team, far = Array.new(2) { SecureRandom.uuid_v7 }
     units = [ unit(ROOT, nil), unit(LIVE, ROOT), unit(team, LIVE), unit(far, ROOT) ]

@@ -160,7 +160,7 @@ class TeamPlanning::Attention
       next unless (reason = manager_reason(person, by_id, positions, heads))
 
       placing = UNSHARED.include?(reason) ? placing_keys(person, by_id[person.line.person_id]) : []
-      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *placing, *manager_keys(person.line) ])
+      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *placing, *manager_keys(person.line), *owned_keys(person) ])
     end
   end
 
@@ -170,6 +170,9 @@ class TeamPlanning::Attention
     seats = [ person, manager ].compact.flat_map(&:memberships).filter_map { [ it.position_id, POSITION ] if it.position_id }
     [ *near_units(person).map { [ it, UNIT ] }, *seats ]
   end
+
+  # Giving a unit someone owns a parent takes them off the head of the tree.
+  def owned_keys(person) = person.line ? [] : @owned[person.id].map { [ it, UNIT ] }
 
   def manager_keys(line)
     return [] unless line
