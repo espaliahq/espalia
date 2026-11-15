@@ -27,7 +27,11 @@ class Operations::TeamPlanning::Capacity < Operations::Base
               "plan can't read, since its person was forgotten, leaves the place unclassified with the model's " \
               "figure still in `calculated`. `overridden` marks every place the plan holds an override for, so one " \
               "on a place that counts nowhere for another reason, such as a leaver's, stays visible. Figures are " \
-              "decimal strings. `models` maps each model a place uses to its symbol, what follows its figures on " \
+              "decimal strings. Each total carries `parts`, which add up to it per model: actual is the baseline's capacity, " \
+              "planned is what the plan's changes add or take away (negative where they take away, so someone moved between " \
+              "units is negative in the old unit and positive in the new), and forecast is what the plan's forecast " \
+              "assumptions add, zero until a forecast rule is set. The baseline is all actual. A unit gone from the " \
+              "scenario's map counts in the scenario's parts only. `models` maps each model a place uses to its symbol, what follows its figures on " \
               "screen, and its description. People are named by id, and `names` maps each to a name. Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
@@ -36,12 +40,13 @@ class Operations::TeamPlanning::Capacity < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
 
-  # @return [Hash] `{ plan_id, scenario_id, totals, units, seats, unclassified, models, names }`
+  # @return [Hash] `{ plan_id, scenario_id, totals, parts, units, seats, unclassified, models, names }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
-    report = refusing_bad_plans { ::TeamPlanning::Capacity.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, scenario_id:, totals: figures(report.totals), units: units(report),
+    split = refusing_bad_plans { ::TeamPlanning::Capacity.split(context:, plan:, scenario_id:) }
+    report = split.report
+    { plan_id: plan.id, scenario_id:, **totals(split.parts), units: units(split),
       seats: report.seats.map { seat(it) }, unclassified: report.unclassified.map { |seat, place| unclassified(seat, place) },
       models: models(report), names: names(report) }
   end
@@ -60,9 +65,13 @@ class Operations::TeamPlanning::Capacity < Operations::Base
       .uniq.to_h { [ it, report.map.name_of(it) ] }
   end
 
-  def units(report)
-    names = report.map.units.to_h { [ it.id, it.name ] }
-    report.units.map { |unit_id, totals| { unit_id:, name: names[unit_id], totals: figures(totals) } }
+  def units(split)
+    names = split.report.map.units.to_h { [ it.id, it.name ] }
+    split.report.units.keys.map { |unit_id| { unit_id:, name: names[unit_id], **totals(split.parts(unit_id)) } }
+  end
+
+  def totals(parts)
+    { totals: figures(parts.total), parts: { actual: figures(parts.actual), planned: figures(parts.planned), forecast: figures(parts.forecast) } }
   end
 
   def seat(priced)

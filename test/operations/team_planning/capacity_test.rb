@@ -60,7 +60,8 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_equal "0.5", result[:seats].find { it[:kind] == "position" }[:places].first[:capacity]
     assert_equal [ "per_fte" ], result[:totals].keys
     assert_equal({ "per_fte" => { symbol: "FTE", description: TeamPlanning::CapacityModels::PerFte.description } }, result[:models])
-    assert_equal [ { unit_id: @unit_id, name: "Payments", totals: result[:totals] } ], result[:units]
+    assert_equal [ { unit_id: @unit_id, name: "Payments", totals: result[:totals], parts: result[:parts] } ], result[:units]
+    assert_equal({ actual: result[:totals], planned: {}, forecast: {} }, result[:parts])
     assert_equal({ @ada.id => "Ada Quill" }, result[:names])
     assert_empty result[:unclassified]
   end

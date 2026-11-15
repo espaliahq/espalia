@@ -3,6 +3,18 @@
 require "test_helper"
 
 class TeamPlanning::CapacityTest < ActiveSupport::TestCase
+  class Hiring < TeamPlanning::ForecastKind
+    def self.rule_name = "test_capacity_hiring"
+    def self.description = "One forecast hire in each unit"
+    def self.default = { "hires" => "0" }
+
+    def self.forecast(frame)
+      frame.map.units.filter_map do |unit|
+        hires = Rational(frame.rule_at(unit.id)["hires"])
+        frame.row(unit_id: unit.id, headcount: hires, capacity: { "per_fte" => hires }) if hires.positive?
+      end
+    end
+  end
   ESPALIA = { provider: "espalia", effective_on: "2026-02-01" }.freeze
   SYSTEM = OrgGraph::Authorization::SYSTEM
   BASE_ON = Date.new(2026, 3, 2)
@@ -77,6 +89,52 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
   end
 
   def seat(report, id) = report.seats.find { it.seat.id == id }
+
+  def split(scenario_id)
+    as_tenant { TeamPlanning::Capacity.split(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id:) }
+  end
+
+  context "actual, planned and forecast" do
+    setup do
+      choose(families: { @engineering_family.role_family_id => per_fte })
+      @year = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+      operation(Operations::TeamPlanning::SetAssignment, scenario_id: @year, person_id: @ada.id,
+                                                         placements: [ { unit_id: @payments, allocation: 1 } ])
+    end
+
+    should "count someone moved as actual in the old unit, negative planned there and positive planned in the new" do
+      result = split(@year)
+
+      engineering = result.parts(@engineering)
+      assert_equal [ Rational(7, 5), Rational(-1), Rational(2, 5) ],
+                   [ engineering.actual["per_fte"], engineering.planned["per_fte"], engineering.total["per_fte"] ]
+      assert_equal 1r, result.parts(@payments).planned["per_fte"]
+      assert_equal 0r, result.parts.planned["per_fte"]
+    end
+
+    should "add the parts up to the total exactly, with the forecast's rows in their own unit" do
+      TeamPlanning::RuleKinds.register(Hiring)
+      operation(Operations::TeamPlanning::SetRule, scenario_id: @year, unit_id: @payments, rule: "test_capacity_hiring", value: { hires: "2" })
+      result = split(@year)
+
+      [ nil, @engineering, @payments ].each do |unit_id|
+        parts = result.parts(unit_id)
+        added = TeamPlanning::Capacity.add([ parts.actual, parts.planned, parts.forecast ])
+        assert_equal parts.total.fetch("per_fte"), added.fetch("per_fte"), "unit #{unit_id.inspect}"
+      end
+      assert_equal [ {}, { "per_fte" => 2r } ], [ result.parts(@engineering).forecast, result.parts(@payments).forecast ]
+      assert_equal result.report.totals["per_fte"] + 2, result.parts.total["per_fte"]
+    ensure
+      TeamPlanning::RuleKinds.unregister(Hiring)
+    end
+
+    should "make Today all actual, with no forecast and the plain totals" do
+      result = split(@plan_id)
+
+      assert_nil result.baseline
+      assert_equal [ result.report.totals, {}, {} ], [ result.parts.actual, result.parts.planned, result.parts.forecast ]
+    end
+  end
 
   should "count nothing and leave every seat unclassified until a model is chosen" do
     report = capacity

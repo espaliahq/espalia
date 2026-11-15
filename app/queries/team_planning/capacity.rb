@@ -51,6 +51,58 @@ class TeamPlanning::Capacity
     Integrations::HrisPersonRow::STATUS_MISSING_ROLE => "unknown_role"
   }.freeze
 
+  # One capacity total split by what it measures
+  # ([#351](https://github.com/espaliahq/espalia/issues/351)), each a model =>
+  # amount hash. Actual is the baseline's capacity; planned is what the plan's
+  # changes add or take away, so it can be negative; forecast is what the
+  # assumptions add. A part may hold a model at zero that the total doesn't.
+  #
+  # @!attribute actual [Hash{String => Rational}]
+  # @!attribute planned [Hash{String => Rational}]
+  # @!attribute forecast [Hash{String => Rational}]
+  # @!attribute total [Hash{String => Rational}] the scenario's own plus the forecast
+  Parts = Data.define(:actual, :planned, :forecast, :total)
+
+  # A scenario's capacity beside the baseline's, with what its forecast adds.
+  #
+  # @!attribute report [Report] the scenario's
+  # @!attribute baseline [Report, nil] nil when the scenario is the baseline
+  # @!attribute forecast [Array<TeamPlanning::Forecast::Row>]
+  Split = Data.define(:report, :baseline, :forecast) do
+    # The baseline is all actual.
+    #
+    # @param unit_id [String, nil] a live unit of the scenario, or nil for the plan
+    # @return [Parts]
+    def parts(unit_id = nil)
+      pick = ->(report) { unit_id ? report.units.fetch(unit_id, {}) : report.totals }
+      scenario = pick.(report)
+      return Parts.new(actual: scenario, planned: {}, forecast: {}, total: scenario) unless baseline
+
+      actual = pick.(baseline)
+      added = TeamPlanning::Capacity.add(forecast.select { unit_id.nil? || it.unit_id == unit_id }.map(&:capacity))
+      planned = (scenario.keys | actual.keys).sort.to_h { [ it, scenario.fetch(it, 0r) - actual.fetch(it, 0r) ] }
+      Parts.new(actual:, planned:, forecast: added, total: TeamPlanning::Capacity.add([ scenario, added ]))
+    end
+  end
+
+  # @param amounts [Array<Hash{String => Rational}>] model => amount
+  # @return [Hash{String => Rational}] summed per model, by model
+  def self.add(amounts) = amounts.flat_map(&:to_a).group_by(&:first).transform_values { |pairs| pairs.sum(0r) { Rational(it.last) } }.sort.to_h
+
+  # @param context [AuthorizationContext]
+  # @param plan [TeamPlanningPlan]
+  # @param scenario_id [String] the plan's id for the baseline
+  # @param repository [TeamPlanning::Repository]
+  # @return [Split]
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def self.split(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
+    report = new(context:, plan:, scenario_id:, repository:).call
+    baseline = new(context:, plan:, scenario_id: plan.id, repository:).call unless scenario_id == plan.id
+    forecast = TeamPlanning::Forecast.new(aggregate: repository.load_plan(plan.id), scenario_id:, map: report.map).rows
+    Split.new(report:, baseline:, forecast:)
+  end
+
   # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named
   # @!attribute seats [Array<Seat>] people by id, then positions with FTE left open, by id
   # @!attribute units [Hash{String => Hash{String => Rational}}] live unit id => model => total
