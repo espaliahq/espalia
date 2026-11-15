@@ -98,8 +98,9 @@ class TeamPlanning::Capacity
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def self.split(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
     aggregate = repository.load_plan(plan.id)
+    base = TeamPlanning::Baseline.new(context:, plan:).structure
     price = lambda do |id|
-      resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id: id, repository:)
+      resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id: id, repository:, base:)
       new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(resolution.call(aggregate))
     end
     report = price.(scenario_id)

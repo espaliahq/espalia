@@ -128,6 +128,14 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
       TeamPlanning::RuleKinds.unregister(Hiring)
     end
 
+    should "read the Org Graph baseline once for the scenario and the baseline alike" do
+      reads = 0
+      as_of = OrgGraph::AsOf.method(:new)
+      OrgGraph::AsOf.stub(:new, ->(**args) { reads += 1; as_of.call(**args) }) { split(@year) }
+
+      assert_equal 1, reads
+    end
+
     should "make Today all actual, with no forecast and the plain totals" do
       result = split(@plan_id)
 
