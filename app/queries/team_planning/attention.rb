@@ -25,24 +25,36 @@ class TeamPlanning::Attention
   #   child's placement under an ancestor's retirement names the placement,
   #   and a later retirement under an earlier placement names the retirement;
   #   nil only when no change explains it
-  Item = Data.define(:subject_id, :facet, :reason, :change)
+  # @!attribute unit_ids [Array<String>] the units it touches, whose providers are its source of truth
+  # @!attribute fact [String, nil] the person fact it rests on instead, for someone the plan can't place
+  Item = Data.define(:subject_id, :facet, :reason, :change, :unit_ids, :fact) do
+    def initialize(unit_ids: [], fact: nil, **) = super
+  end
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers budget_lines].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
+              budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
   SUCCESSION = TeamPlanning::Events::UnitSuccessionSet.facet
   LINE = TeamPlanning::Events::ReportingLineSet.facet
   CAPACITY = TeamPlanning::Events::CapacitySet.facet
+  LEVEL = TeamPlanning::Events::LevelSet.facet
   BUDGET_LINE = TeamPlanning::Events::BudgetLineSet.facet
   DEPARTURE = TeamPlanning::Events::DepartureSet.facet
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
+  # A place in no unit has no id an override could name, as the map's own drop target hasn't.
+  UNASSIGNED = "unassigned"
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
   # @param left_ids [Array<String>] the people the Org Graph has had leave by today
-  def initialize(map, changes, left_ids: [])
+  # @param closed_units [Hash{String => String}] the unit of each position the scenario closed
+  # @param unclassified [Array<Array(TeamPlanning::Capacity::Seat, TeamPlanning::Capacity::Place)>] from {TeamPlanning::Capacity::Report#unclassified}
+  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [])
     @map = map
+    @position_units = closed_units.merge(map.positions.to_h { [ it.id, it.unit_id ] })
+    @unclassified = unclassified
     @changes = changes
     @left = left_ids.to_set
     @order = changes.keys.each_with_index.to_h
@@ -89,7 +101,7 @@ class TeamPlanning::Attention
   end
 
   def unresolved
-    @map.unresolved.map { item(it.person_id, ASSIGNMENT, "Placed, but #{it.why}") }
+    @map.unresolved.map { item(it.person_id, ASSIGNMENT, "Placed, but #{it.why}", fact: "employment_status") }
   end
 
   def successions
@@ -126,11 +138,13 @@ class TeamPlanning::Attention
       if gone?(person) then nil
       elsif person.memberships.empty? then item(person.id, ASSIGNMENT, "Placed nowhere")
       elsif total.nil? || total.zero? then nil
-      elsif total > 1 then item(person.id, ASSIGNMENT, "Over-allocated, at #{percent(total)}")
-      elsif total < 1 then item(person.id, ASSIGNMENT, "Under-allocated, at #{percent(total)}", broken_by: dropped_keys(person))
+      elsif total > 1 then item(person.id, ASSIGNMENT, "Over-allocated, at #{percent(total)}", units: places_of(person))
+      elsif total < 1 then item(person.id, ASSIGNMENT, "Under-allocated, at #{percent(total)}", broken_by: dropped_keys(person), units: places_of(person))
       end
     end
   end
+
+  def places_of(person) = person.memberships.map { it.position_id ? @position_units[it.position_id] : it.unit_id }
 
   def dropped_keys(person)
     person.memberships.reject { @live.include?(it.unit_id) }.flat_map do |place|
@@ -142,7 +156,7 @@ class TeamPlanning::Attention
     @map.people.filter_map do |person|
       next unless gone?(person)
 
-      item(person.id, ASSIGNMENT, person.memberships.any? ? "Placed, but has since left" : "Has since left")
+      item(person.id, ASSIGNMENT, person.memberships.any? ? "Placed, but has since left" : "Has since left", fact: "employment_status")
     end
   end
 
@@ -161,7 +175,8 @@ class TeamPlanning::Attention
       next unless (reason = manager_reason(person, by_id, positions, heads))
 
       placing = UNSHARED.include?(reason) ? placing_keys(person, by_id[person.line.person_id]) : []
-      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *placing, *manager_keys(person.line), *owned_keys(person) ])
+      item(person.id, LINE, reason, broken_by: [ [ person.id, ASSIGNMENT ], *placing, *manager_keys(person.line), *owned_keys(person) ],
+                                    fact: "manager")
     end
   end
 
@@ -212,6 +227,46 @@ class TeamPlanning::Attention
 
   def percent(total) = "#{fte(total * 100)}%"
 
+  # A leaver's backfill carries their seat, a forgotten person's override is
+  # gone with them, and a closed position is the placements check's item.
+  UNCLASSIFIED_ELSEWHERE = %w[leaving override_unknown closed_position].freeze
+
+  def unclassified
+    @unclassified.reject { |_, place| UNCLASSIFIED_ELSEWHERE.include?(place.reason) }.map do |priced, place|
+      seat = priced.seat
+      facet = "#{CAPACITY}:#{place.place.position_id || place.unit_id || UNASSIGNED}"
+      item(seat.id, facet, "Counts for no capacity: #{TeamPlanning::Capacity::REASONS.fetch(place.reason).downcase_first}",
+           broken_by: unclassified_causes(seat, place))
+    end
+  end
+
+  # A place in a position takes the position's role and level, so a later
+  # edit to the position can be what left its occupant uncovered. A missing
+  # model or level can also be a capacity rule's doing, set at the place's
+  # unit, above it or plan-wide, or the unit's retirement, which drops the
+  # rule set there.
+  def unclassified_causes(seat, place)
+    rules = RULE_REASONS.include?(place.reason) ? rule_keys(place.unit_id) : []
+    return [ [ seat.id, POSITION ], *rules ] unless seat.kind == "person"
+
+    position_id = place.place.position_id
+    level = [ seat.id, LEVEL ] if place.reason == "no_level" && !position_id
+    [ [ seat.id, ASSIGNMENT ], level, ([ position_id, POSITION ] if position_id), *rules ].compact
+  end
+
+  RULE_REASONS = %w[no_model unknown_model no_level].freeze
+  CAPACITY_RULE = "#{TeamPlanning::Events::RuleSet.facet}:#{TeamPlanning::RuleKinds::Capacity.rule_name}".freeze
+
+  def rule_keys(unit_id)
+    parent_of = @map.units.to_h { [ it.id, it.parent_id ] }
+    along = []
+    while parent_of.key?(unit_id) && along.exclude?(unit_id)
+      along << unit_id
+      unit_id = parent_of[unit_id]
+    end
+    retired = [ [ unit_id, UNIT ] ] if unit_id && along.empty?
+    [ *(along + [ @map.rules.plan_id ]).map { [ it, CAPACITY_RULE ] }, *retired ]
+  end
 
   # The tenant removed a line the plan changed or cut, so the change stands on nothing.
   def budget_lines
@@ -220,10 +275,27 @@ class TeamPlanning::Attention
     end
   end
 
-  def item(subject_id, facet, reason, broken_by: [])
+  # @param units [Array<String>] units the item touches beyond its subject's and broken_by's
+  def item(subject_id, facet, reason, broken_by: [], fact: nil, units: [])
     keys = [ [ subject_id, facet ], *broken_by ].select { @order.key?(it) }
-    Item.new(subject_id:, facet:, reason:, change: keys.max_by { @order[it] }&.then { @changes[it] })
+    Item.new(subject_id:, facet:, reason:, change: keys.max_by { @order[it] }&.then { @changes[it] },
+             unit_ids: (units + units_touched(subject_id, facet, broken_by)).compact.uniq, fact:)
   end
+
+  def units_touched(subject_id, facet, broken_by)
+    own = case facet
+    when UNIT then [ subject_id ]
+    when POSITION then [ @position_units[subject_id] ]
+    when SUCCESSION then @map.successions.find { it.id == subject_id }&.then { it.predecessor_ids + it.successor_ids }
+    when /\A#{CAPACITY}:/ then [ place_unit(facet.delete_prefix("#{CAPACITY}:")) ]
+    else []
+    end
+    broken = broken_by.filter_map { |id, kind| { UNIT => id, POSITION => @position_units[id] }[kind] }
+    (own.to_a + broken).compact.uniq
+  end
+
+  # A capacity facet names a unit, a position, or no unit at all.
+  def place_unit(place_id) = place_id == UNASSIGNED ? nil : @position_units.fetch(place_id, place_id)
 
   def gone(unit_id) = @retired.include?(unit_id) ? "a retired unit" : "a unit no longer in this scenario"
 

@@ -13,9 +13,11 @@ class Operations::TeamPlanning::Drift < Operations::Base
               "date order, as org_graph_changes_between by \"learned\" gives them for from (the day before the base " \
               "date) and to (today). A change it no longer believes comes back withdrawn. Each change carries `meets`, the " \
               "plan's latest change to the facet it moves, one per scenario that holds one (a scenario_id equal " \
-              "to the plan_id is the baseline), and `from_plan`, true when the change was applied from this plan. " \
+              "to the plan_id is the baseline), `from_plan`, true when the change was applied from this plan, and `sources`, who supplies what it " \
+              "moves: the provider of a person fact, whoever supplied a membership, or the providers of the units a unit or succession touches " \
+              "(\"espalia\" for one Espalia supplies, or an HRIS such as \"hibob\"). " \
               "A person's placements are one facet, so a move in one placement meets the plan's whole list. " \
-              "People are named by id, and `names` maps every person id the changes name to a name; a forgotten " \
+              "People are named by id, and `names` maps every person and unit id the changes name to a name; a forgotten " \
               "person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
@@ -31,14 +33,15 @@ class Operations::TeamPlanning::Drift < Operations::Base
   # Every id the changes name, so a client never meets an id it can't name.
   def self.names_for(report)
     ids = report.changes.flat_map { [ it.change.person_id, it.change.before&.dig("manager_id"), it.change.after&.dig("manager_id") ] }
-    ids.compact.uniq.index_with { report.name_of(it) }
+    unit_ids = report.changes.flat_map { [ it.change.unit_id, it.change.from_unit_id ] }.compact.uniq
+    report.names.slice(*unit_ids).merge(ids.compact.uniq.index_with { report.name_of(it) })
   end
 
   def self.serialize(drifted)
     change = drifted.change
     change.to_h.merge(kind: change.kind.to_s, effective_on: change.effective_on.iso8601,
                       learned_at: change.learned_at&.utc&.iso8601,
-                      from_plan: drifted.from_plan, meets: drifted.meets.map(&:to_h))
+                      from_plan: drifted.from_plan, meets: drifted.meets.map(&:to_h), sources: drifted.sources)
   end
   private_class_method :names_for, :serialize
 

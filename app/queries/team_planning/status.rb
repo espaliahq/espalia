@@ -51,7 +51,8 @@ class TeamPlanning::Status
   # @!attribute facet [String]
   # @!attribute status [Symbol] :done, :pending, :conflicting or :unknown
   # @!attribute since [Date, nil] for a conflict an update to today carried forward, the day of that update
-  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since)
+  # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
+  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since, :sources)
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -81,7 +82,9 @@ class TeamPlanning::Status
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
     now, base = maps
-    statuses = changes.map { |key, change| entry(change, key, base:, now:) }
+    units = changes.to_h { |key, change| [ key, units_of(change, key, now) ] }
+    @sources = TeamPlanning::SourceOfTruth.new(tenant_id: @plan.tenant_id).preload(unit_ids: units.values.flatten)
+    statuses = changes.map { |key, change| entry(change, key, base:, now:, unit_ids: units[key]) }
     Report.new(on: @today, statuses:, names: names_for(statuses.map(&:subject_id), base, now))
   end
 
@@ -106,7 +109,7 @@ class TeamPlanning::Status
 
   def winning(scenario_id) = @winning[scenario_id] ||= @repository.sealed(@aggregate.winning_changes(scenario_id))
 
-  def entry(change, key, base:, now:)
+  def entry(change, key, base:, now:, unit_ids:)
     kind = change.class
     subject_id, facet = key
     today = kind.read_org_graph(now, change)
@@ -114,8 +117,31 @@ class TeamPlanning::Status
     status = status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before)
     since = @carried[key] unless %i[done unknown].include?(status)
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
-              status: since ? :conflicting : status, since:)
+              status: since ? :conflicting : status, since:, sources: @sources.of_plan(facet, unit_ids:))
   end
+
+  # A move touches the units someone is in today, the ones the scenario places
+  # them in, and the ones it names, as someone the Org Graph lacks is in neither map.
+  def units_of(change, key, now)
+    subject_id, facet = key
+    case facet
+    when TeamPlanning::Events::AssignmentSet.facet
+      maps = [ now, resolved(@scenario_id) ]
+      maps.flat_map { |map| people_of(map)[subject_id]&.memberships.to_a.map(&:unit_id) } + placed_units(change)
+    when TeamPlanning::Events::UnitSuccessionSet.facet then change.data.values_at(:predecessor_ids, :successor_ids).flatten.compact
+    when TeamPlanning::Events::UnitSet.facet then [ subject_id ]
+    else []
+    end
+  end
+
+  def placed_units(change)
+    positions = units_of_positions(resolved(@scenario_id))
+    change.data[:placements].to_a.map { it.to_h.symbolize_keys }.map { it[:unit_id] || positions[it[:position_id]] }
+  end
+
+  def units_of_positions(map) = (@position_units ||= {}.compare_by_identity)[map] ||= map.positions.to_h { [ it.id, it.unit_id ] }
+
+  def people_of(map) = (@people ||= {}.compare_by_identity)[map] ||= map.people.index_by(&:id)
 
   def removed?(end_state) = end_state.values.any? { it.is_a?(Shreddable::Value) && it.removed? }
 

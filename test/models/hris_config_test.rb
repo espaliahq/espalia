@@ -19,6 +19,7 @@ class HrisConfigTest < ActiveSupport::TestCase
     should "name a provider for people" do
       assert_equal "HiBob", HrisConfig.provider_label("hibob")
       assert_equal "Not configured", HrisConfig.provider_label(nil)
+      assert_equal "Espalia", HrisConfig.provider_label("espalia")
     end
 
     should "reject unknown providers" do

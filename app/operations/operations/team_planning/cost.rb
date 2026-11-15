@@ -11,8 +11,7 @@
 # walks it.
 class Operations::TeamPlanning::Cost < Operations::Base
   include Operations::TeamPlanning::PlanRead
-
-  SIGNIFICANT_DIGITS = 20
+  include Operations::TeamPlanning::CostFigures
 
   description "Get what a scenario of a Team Planning plan the caller is in costs over its period, beside the baseline " \
               "priced over the same days, with the difference. Each seat (a person, or the FTE a position's occupants " \
@@ -87,14 +86,6 @@ class Operations::TeamPlanning::Cost < Operations::Base
     end
   end
 
-  def compared(report, scenario, baseline)
-    scenario ||= ::TeamPlanning::Cost.nothing(report.reference_currency)
-    baseline ||= ::TeamPlanning::Cost.nothing(report.reference_currency)
-    { scenario: sum(scenario), baseline: sum(baseline), difference: sum(::TeamPlanning::Cost.difference(scenario, baseline)) }
-  end
-
-  def sum(sum) = { native: sum.native.transform_values { decimal(it) }, converted: sum.converted && decimal(sum.converted), missing: sum.missing }
-
   def lines_in(priced, unit_id) = priced.lines.select { it.unit_id == unit_id }.map { line(it) }
 
   def line(line)
@@ -127,6 +118,4 @@ class Operations::TeamPlanning::Cost < Operations::Base
     in_scenario = report.scenario.map.people.to_set(&:id)
     ids.to_h { [ it, (in_scenario.include?(it) ? report.scenario.map : report.baseline.map).name_of(it) ] }
   end
-
-  def decimal(value) = BigDecimal(value, SIGNIFICANT_DIGITS).to_s("F").delete_suffix(".0")
 end
