@@ -42,8 +42,8 @@ class TeamPlanning::Attention
     @retired = map.retired_units.to_set(&:id)
   end
 
-  # @return [Array<Item>] in check order, then map order
-  def call = CHECKS.flat_map { send(it) }
+  # @return [Array<Item>] in {CHECKS} order, then by subject id and reason
+  def call = CHECKS.flat_map { |check| send(check).sort_by { [ it.subject_id, it.reason ] } }
 
   private
 

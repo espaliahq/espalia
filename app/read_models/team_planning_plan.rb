@@ -24,4 +24,11 @@ class TeamPlanningPlan < ApplicationRecord
 
   # @return [Array<String>] person ids
   def editor_ids = members.select { it.role == "editor" }.map(&:person_id)
+
+  # @param person_id [String, nil]
+  # @return [Boolean] whether they hold the see-pay right
+  def sees_pay?(person_id) = members.any? { it.person_id == person_id && it.see_pay }
+
+  # @return [Array<String>] person ids
+  def pay_holder_ids = members.select(&:see_pay).map(&:person_id)
 end

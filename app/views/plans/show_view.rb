@@ -22,9 +22,11 @@ class Views::Plans::ShowView < Views::Base
   # @param panels [Array<Phlex::SGML>] sidebar panels; the rules and the members when nil
   # @param drawer [Phlex::SGML, nil] a component that renders a drawer over the page
   # @param can_edit [Boolean] whether the viewer may fork and rename scenarios
+  # @param see_pay [Hash] the members panel's see-pay options: `can_manage_see_pay`, `reachable_ids`, `locked_out`
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
-                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false)
+                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, see_pay: {})
     @plan = plan
+    @see_pay = see_pay
     @can_edit = can_edit
     @scenarios = scenarios
     @members = members
@@ -122,7 +124,7 @@ class Views::Plans::ShowView < Views::Base
   def current_tab = tabs.find { it.key == @open_tab } || tabs.first
 
   def default_panels
-    [ Views::Plans::RulesPanel.new, Views::Plans::MembersPanel.new(members: @members) ]
+    [ Views::Plans::RulesPanel.new, Views::Plans::MembersPanel.new(members: @members, plan_id: @plan[:plan_id], **@see_pay) ]
   end
 
   def base_on = Date.iso8601(@plan[:base_on])
