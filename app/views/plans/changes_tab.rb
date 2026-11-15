@@ -27,8 +27,10 @@ class Views::Plans::ChangesTab < Views::Base
   # @param drift [Hash] from `team_planning_drift`
   # @param status [Hash] from `team_planning_status`, for the scenario shown
   # @param attention [Hash] from `team_planning_attention`, for the same scenario
-  def initialize(plan:, scenarios:, drift:, status:, attention:)
+  # @param can_edit [Boolean] whether the viewer may note a change
+  def initialize(plan:, scenarios:, drift:, status:, attention:, can_edit: false)
     @plan = plan
+    @can_edit = can_edit
     @scenarios = scenarios
     @drift = drift
     @status = status
@@ -53,6 +55,7 @@ class Views::Plans::ChangesTab < Views::Base
     section(aria: { labelledby: "changes-drift-heading" }, data: { changes_section: "drift" }) do
       h3(id: "changes-drift-heading", class: "text-base font-semibold text-default") { "In the Org Graph since #{day(@plan[:base_on])}" }
       p(class: "mt-1 text-sm text-muted") { "What the Org Graph has learned since the plan's base, and the planned changes each one meets." }
+      update_to_today if @can_edit && Date.iso8601(@plan[:base_on]) < Time.now.utc.to_date
       if @drift[:changes].empty?
         render Components::Kit::EmptyState.new(title: "Nothing has changed in the Org Graph since the base.", size: :panel)
       else
@@ -60,6 +63,12 @@ class Views::Plans::ChangesTab < Views::Base
           @drift[:changes].each { drift_row(it) }
         end
       end
+    end
+  end
+
+  def update_to_today
+    div(class: "mt-3") do
+      render Components::Kit::Button.new(variant: :outline, size: :sm, href: rebase_plan_path(plan_id)) { "Update to today" }
     end
   end
 
@@ -119,12 +128,51 @@ class Views::Plans::ChangesTab < Views::Base
           plain " · #{FACETS.fetch(entry[:facet], entry[:facet].humanize)}"
         end
         p(class: "text-xs text-muted") { "Planned in #{scenario_name(entry[:scenario_id])}" } if entry[:scenario_id] != scenario_id
+        change_note(entry[:note])
+        note_form(entry) if @can_edit && !entry.dig(:note, :removed)
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         status_badge(entry)
         sources(entry[:sources])
       end
     end
+  end
+
+  # An erased note keeps its place, so the change doesn't read as never explained.
+  # Its person was forgotten, so it takes no new one.
+  def change_note(note)
+    if note&.dig(:removed)
+      p(class: "text-sm italic text-muted", data: { change_note: "removed" }) { "Note removed" }
+    elsif note
+      render Components::Kit::Prose.new(note[:value], class: "text-sm text-muted break-words", data: { change_note: "" })
+    end
+  end
+
+  # The note is written on the scenario that made the change, which for an
+  # inherited one is not the scenario shown.
+  def note_form(entry)
+    id = "change-note-#{entry[:change_id]}"
+    details(data: { change_note_editor: "" }, class: "text-sm") do
+      summary(class: "inline-flex min-h-6 w-fit items-center rounded text-xs font-medium text-link hover:underline") { entry.dig(:note, :value) ? "Edit note" : "Add a note" }
+      form(action: plan_note_path(plan_id, entry[:change_id]), method: "post", class: "mt-2 space-y-2") do
+        input(type: "hidden", name: "_method", value: "patch")
+        input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+        input(type: "hidden", name: "note[scenario_id]", value: entry[:scenario_id])
+        input(type: "hidden", name: "shown", value: scenario_param(scenario_id))
+        label(for: id, class: "block text-sm font-medium text-default") { "Note" }
+        textarea(id:, name: "note[text]", rows: "3", maxlength: TeamPlanning::PlanAggregate::NOTE_LIMIT,
+                 aria: { describedby: "#{id}-hint" }, class: Components::Kit::Field::TEXTAREA) { entry.dig(:note, :value) }
+        p(id: "#{id}-hint", class: "text-xs text-muted") { note_hint(entry) }
+        render Components::Kit::Button.new(type: :submit, tone: :brand, size: :sm, compact: true) { "Save note" }
+      end
+    end
+  end
+
+  def note_hint(entry)
+    hint = "#{Prose::COMPOSER_HINT}. Leave it blank to clear the note."
+    return hint if entry[:scenario_id] == scenario_id
+
+    "#{hint} It is saved on #{scenario_name(entry[:scenario_id])}, so every scenario that follows it shows it."
   end
 
   def status_badge(entry)
