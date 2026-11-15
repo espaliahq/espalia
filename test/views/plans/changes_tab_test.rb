@@ -112,6 +112,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
                                     noted({ removed: true }, change_id: "c2"), noted(nil, change_id: "c3") ])
 
       rows = html.css("[data-planned-change]")
+      assert_equal %w[change-c1 change-c2 change-c3], rows.map { it["id"] }, "the Checks tab links each change by its row's id"
       assert_equal "agreed", rows[0].at_css("[data-change-note].md-prose strong").text
       assert_equal "Note removed", rows[1].at_css("[data-change-note='removed']").text
       assert_nil rows[2].at_css("[data-change-note]")

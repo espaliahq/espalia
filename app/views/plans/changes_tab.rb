@@ -120,8 +120,15 @@ class Views::Plans::ChangesTab < Views::Base
     end
   end
 
+  # The Checks tab links an item's change here.
+  #
+  # @param change_id [String] the planned change's event id
+  # @return [String] its row's id
+  def self.change_anchor(change_id) = "change-#{change_id}"
+
   def planned_row(entry)
-    li(class: "flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between", data: { planned_change: entry[:status] }) do
+    li(id: self.class.change_anchor(entry[:change_id]), class: "flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between",
+       data: { planned_change: entry[:status] }) do
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
           strong(class: "font-medium") { @status[:names][entry[:subject_id]] || PLAN_ONLY }
