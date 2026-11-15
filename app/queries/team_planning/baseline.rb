@@ -144,8 +144,9 @@ class TeamPlanning::Baseline
     # @raise [TeamPlanning::Error] for an unknown rule, or a unit not on the map
     def rule(rule, unit_id: nil) = rules.value_of(rule.to_s, along: unit_id ? units_up_from(unit_id) : [])
 
-    private
-
+    # @param unit_id [String]
+    # @return [Array<String>] the unit and each unit above it on the map, nearest first
+    # @raise [TeamPlanning::Error] for a unit not on the map
     def units_up_from(unit_id)
       by_id = units.index_by(&:id)
       raise TeamPlanning::Error, "No such unit" unless by_id.key?(unit_id)
