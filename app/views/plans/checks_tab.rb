@@ -49,7 +49,7 @@ class Views::Plans::ChecksTab < Views::Base
         p(class: "mt-1 text-sm text-muted") { "What no longer fits in this scenario, often because a scenario it follows changed later." }
         scenario_picker
       end
-      if groups.empty?
+      if @attention[:items].empty?
         render Components::Kit::EmptyState.new(title: "Everything in this scenario still fits.", size: :panel)
       else
         summary
@@ -64,11 +64,19 @@ class Views::Plans::ChecksTab < Views::Base
 
   def scenario_id = @attention[:scenario_id]
 
-  def groups = @groups ||= @attention[:items].group_by { it[:check] }
+  # Every check Attention runs, found something or not, then any it gained that the tab has no heading for.
+  def groups
+    @groups ||= begin
+      found = @attention[:items].group_by { it[:check].to_s }
+      TeamPlanning::Attention::CHECKS.to_h { [ it.to_s, found.delete(it.to_s) || [] ] }.merge(found)
+    end
+  end
 
   def summary
     nav(aria: { label: "Checks" }, class: "flex flex-wrap gap-2 text-sm") do
       groups.each do |check, items|
+        next if items.empty?
+
         a(href: "##{group_id(check)}", class: "rounded-full border border-default px-3 py-1 text-muted hover:text-default") do
           plain "#{self.class.heading(check)} "
           span(class: "font-medium text-default") { items.size.to_s }
@@ -83,7 +91,11 @@ class Views::Plans::ChecksTab < Views::Base
       if (sentence = HEADINGS.dig(check.to_sym, 1))
         p(class: "mt-1 text-sm text-muted") { sentence }
       end
-      ul(class: "mt-3 divide-y divide-default rounded-lg border border-default bg-default") { items.each { item_row(it) } }
+      if items.empty?
+        div(class: "mt-3") { render Components::Kit::EmptyState.new(title: "Nothing to fix here.", size: :panel) }
+      else
+        ul(class: "mt-3 divide-y divide-default rounded-lg border border-default bg-default") { items.each { item_row(it) } }
+      end
     end
   end
 

@@ -37,10 +37,19 @@ class Views::Plans::ChecksTabTest < ActiveSupport::TestCase
     html = render_tab(items: [ item(:placements), item(:units, subject_id: RISK, facet: "unit", reason: "Its parent is a retired unit"),
                                item(:leavers, reason: "Placed, but has since left") ])
 
-    assert_equal %w[placements units leavers], html.css("[data-check]").map { it["data-check"] }
+    assert_equal TeamPlanning::Attention::CHECKS.map(&:to_s), html.css("[data-check]").map { it["data-check"] }
     assert_equal [ "Placements 1", "Units 1", "Leavers 1" ], html.css("nav[aria-label='Checks'] a").map { it.text.squish }
     assert_equal "#checks-units", html.css("nav[aria-label='Checks'] a")[1]["href"]
     assert_equal "Risk · Unit", html.at_css("#checks-units [data-check-item] strong").parent.text.squish
+  end
+
+  should "give a check that found nothing an empty state of its own, and leave it out of the counts" do
+    html = render_tab(items: [ item(:placements) ])
+
+    assert_includes html.at_css("#checks-managers").text, "Nothing to fix here."
+    assert_nil html.at_css("#checks-managers [data-check-item]")
+    assert_not_includes html.at_css("#checks-placements").text, "Nothing to fix here."
+    assert_equal [ "Placements 1" ], html.css("nav[aria-label='Checks'] a").map { it.text.squish }
   end
 
   should "show a check with no heading under its key, with its items" do
