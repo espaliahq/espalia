@@ -98,6 +98,22 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     assert_nil Nokogiri::HTML(response.body).at_css("[data-cost-strip]")
   end
 
+  should "show cost before capacity in the strips, beside each unit and in the table, when both are measured" do
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "capacity_model",
+                                            value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+
+    get map_plan_path(@plan_id, scenario: @year)
+    page = Nokogiri::HTML(response.body)
+    strips = page.css("[data-cost-strip], [data-capacity-strip]").map { it.key?("data-cost-strip") ? :cost : :capacity }
+    payments = page.css("[data-map-unit]").find { it.at_css("h3").text == "Payments" }
+    marks = payments.css("[data-cost-unit], [data-capacity-unit]").map { it.key?("data-cost-unit") ? :cost : :capacity }
+    assert_equal [ %i[cost capacity] ] * 2, [ strips, marks ]
+
+    get plan_path(@plan_id)
+    headings = Nokogiri::HTML(response.body).css("th").map { it.text.strip }
+    assert_operator headings.index("Cost"), :<, headings.index("Capacity")
+  end
+
   private
 
   def account(role: :member, name: "Someone", **grants)
