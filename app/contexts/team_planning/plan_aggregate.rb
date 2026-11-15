@@ -498,6 +498,12 @@ class TeamPlanning::PlanAggregate
     apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id:, in_effect_event_id: }))
   end
 
+  # @param scenario_id [String] the root or a live scenario
+  # @param event_id [String] an entry of its log
+  # @return [String] the facet the entry changes, pins or clears
+  # @raise [TeamPlanning::Error] if the scenario is unknown or the entry not in its log
+  def facet_of(scenario_id, event_id) = key_of(log_entry!(live_scenario!(scenario_id), event_id)).last
+
   # Writes, rewrites or clears the note on a change or pin, which must still
   # stand in its scenario: not undone, not cleared and not replaced.
   #
@@ -526,12 +532,13 @@ class TeamPlanning::PlanAggregate
   #
   # @param scenario_id [String] the root or a live scenario
   # @param person_id [String]
+  # @param except_facets [Array<String>] facets the person may no longer touch
   # @return [String, nil] its event id
-  def last_undoable_by(scenario_id, person_id)
+  def last_undoable_by(scenario_id, person_id, except_facets: [])
     ensure_open!
     replaced = Set.new
     @logs.fetch(live_scenario!(scenario_id), []).reverse_each do |entry|
-      next if undone?(entry.event_id)
+      next if undone?(entry.event_id) || except_facets.include?(key_of(entry).last)
       return entry.event_id if actor_of(entry) == person_id && !replaced.include?(key_of(entry))
 
       replaced << key_of(entry)
@@ -545,13 +552,14 @@ class TeamPlanning::PlanAggregate
   #
   # @param scenario_id [String] the root or a live scenario
   # @param person_id [String]
+  # @param except_facets [Array<String>] facets the person may no longer touch
   # @return [String, nil] the undone entry's event id
-  def last_redoable_by(scenario_id, person_id)
+  def last_redoable_by(scenario_id, person_id, except_facets: [])
     ensure_open!
     log = @logs.fetch(live_scenario!(scenario_id), [])
     redo_stack(scenario_id, person_id).reverse.find do |event_id|
       entry = log.find { it.event_id == event_id }
-      undone?(event_id) && entry && later_in_effect(log, entry).nil?
+      undone?(event_id) && entry && !except_facets.include?(key_of(entry).last) && later_in_effect(log, entry).nil?
     end
   end
 

@@ -63,15 +63,26 @@ class Views::Plans::CostStrip < Views::Base
     return run_rate_basis(period, changed) if @marks.run_rate?
 
     "For #{day(period[:starts_on])} to #{day(period[:ends_on])}, measured against Today over the same days, not against " \
-      "the scenario this one follows. Priced at pay band midpoints, plus the on-cost rule at each unit" \
+      "the scenario this one follows. #{priced_from}, plus the on-cost rule at each unit" \
       "#{"; bands last changed #{Time.zone.parse(changed).strftime('%-d %b %Y')}" if changed}."
   end
 
   def run_rate_basis(period, changed)
     "What Today costs in a year: every seat it holds priced for #{day(period[:starts_on])} to #{day(period[:ends_on])}. " \
-      "A run rate, not a period total, so it is never set against a scenario's cost. Priced at pay band midpoints, plus " \
+      "A run rate, not a period total, so it is never set against a scenario's cost. #{priced_from(scenario: nil)}, plus " \
       "the on-cost rule at each unit#{"; bands last changed #{Time.zone.parse(changed).strftime('%-d %b %Y')}" if changed}."
   end
+
+  # Only a member with the see-pay right gets a count of seats priced from actual pay.
+  def priced_from(places = { scenario: "here", baseline: "in Today" })
+    held = @marks.cost[:actual_pay_seats]
+    return "Priced at pay band midpoints" unless held && held.values.any? { it.to_i.positive? }
+
+    where = places.filter_map { |side, place| [ seats(held[side]), place ].compact.join(" ") if held[side].to_i.positive? }
+    "Priced from the actual pay the plan holds for #{where.join(' and ')}, and at pay band midpoints for the rest"
+  end
+
+  def seats(count) = "#{count} #{count == 1 ? 'seat' : 'seats'}"
 
   def outside_units
     row = @marks.outside_units
