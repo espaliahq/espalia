@@ -9,14 +9,17 @@ class Views::Mcp::Approvals::ShowView < Views::Base
   STATUS_TONES = { "pending" => :warning, "approved" => :success, "rejected" => :danger, "expired" => :neutral }.freeze
 
   # @param approval [Mcp::PendingApproval]
-  def initialize(approval:)
+  # @param notice [String, nil] the operation's warning for this approval
+  def initialize(approval:, notice: nil)
     @approval = approval
+    @notice = notice
   end
 
   def view_template
     div(class: "min-h-screen bg-page flex items-center justify-center p-4") do
       div(class: "w-full max-w-2xl space-y-6") do
         header
+        render(Components::Kit::Alert.new(tone: :warning)) { @notice } if @notice
         details_card
         arguments_card
         result_card if @approval.executed_at
@@ -54,7 +57,7 @@ class Views::Mcp::Approvals::ShowView < Views::Base
   def detail_row(label_text, &block)
     div(class: "flex items-baseline gap-4") do
       span(class: "text-xs uppercase tracking-wider text-muted w-32 shrink-0") { label_text }
-      span(class: "text-sm text-default", &block)
+      span(class: "min-w-0 text-sm text-default wrap-anywhere", &block)
     end
   end
 

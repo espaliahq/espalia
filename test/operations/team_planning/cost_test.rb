@@ -98,11 +98,11 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @viewer.person.id, role: "viewer")
     end
 
-    should "show a holder each band's range and everyone else its midpoint, with the same totals" do
+    should "show a holder each band's range and everyone else its midpoint, with the same totals while no pay is held" do
       holder = cost(unit_id: @payments)
       viewer = cost(as: @viewer, unit_id: @payments)
 
-      assert_equal [ "band_ranges", "band_midpoints" ], [ holder[:pay_view], viewer[:pay_view] ]
+      assert_equal %w[band_ranges band_midpoints], [ holder[:pay_view], viewer[:pay_view] ]
       assert_equal %w[0.00 100000.00 200000.00], band_of(holder).values_at(:minimum, :midpoint, :maximum)
       assert_equal [ :midpoint ], band_of(viewer).keys & PayBand::FIGURES
       assert_equal holder[:total], viewer[:total]
@@ -120,6 +120,81 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal "No such plan", error.message
     end
   end
+
+  context "actual pay" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @viewer = create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant))
+      end
+      call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @viewer.person.id, role: "viewer")
+      call(Operations::TeamPlanning::SetPlanValue, plan_id: @plan_id, scenario_id: @year, person_id: @ada.id, field: "fte", value: "0.8")
+    end
+
+    should "scale a full-time figure by a 0.8 FTE, and leave actual pay as it is" do
+      { [ "90000", "year", "full_time" ] => "72000", [ "6000", "month", "full_time" ] => "57600",
+        [ "60000", "year", "actual" ] => "60000", [ "5000", "month", "actual" ] => "60000" }.each do |(amount, period, basis), base|
+        pay(amount:, period:, basis:)
+        seat = ada(cost(unit_id: @payments))
+
+        assert_equal [ "actual", basis, "EUR", base, base ], seat.values_at(:pay_source, :basis, :currency, :base, :amount), [ amount, period, basis ].join(" ")
+        assert_nil seat[:band]
+      end
+    end
+
+    should "price the rest of the plan at midpoints, and count the seats priced from actual pay for a holder only" do
+      pay(amount: "60000", period: "year", basis: "actual")
+      pay(@cy, amount: "50000", period: "year", basis: "actual")
+      holder = cost(unit_id: @payments)
+      viewer = cost(as: @viewer, unit_id: @payments)
+
+      assert_equal({ scenario: 2, baseline: 0 }, holder[:actual_pay_seats])
+      assert_equal "110000", holder[:total][:scenario][:converted]
+      assert_equal "100000", holder[:total][:baseline][:converted]
+
+      assert_equal "band_midpoints", viewer[:pay_view]
+      assert_not viewer.key?(:actual_pay_seats)
+      assert_equal [ "band_midpoint", nil, "80000" ], ada(viewer).values_at(:pay_source, :basis, :amount)
+      assert_equal "80000", viewer[:total][:scenario][:converted]
+      assert_includes holder.to_json, "60000"
+      assert_not_includes viewer.to_json, "60000"
+      assert_not_includes viewer.to_json, "50000"
+    end
+
+    should "add the unit's on-cost on top of actual pay" do
+      call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @year, unit_id: @payments, rule: "on_cost",
+                                               value: { "model" => "flat", "params" => { "percent" => "10" } })
+      pay(amount: "60000", period: "year", basis: "actual")
+
+      assert_equal [ "60000", "6000", "66000" ], ada(cost(unit_id: @payments)).then { [ it[:base], it[:on_cost][:amount], it[:amount] ] }
+    end
+
+    should "not count a seat as priced from actual pay when its on-cost rule refuses it" do
+      fixed = { "model" => "itemised", "params" => { "items" => [ { "name" => "Laptop", "amount" => "2000", "currency" => "AUD" } ] } }
+      call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @year, unit_id: @payments, rule: "on_cost", value: fixed)
+      pay(amount: "60000", period: "year", basis: "actual")
+      holder = cost(unit_id: @payments)
+
+      assert_equal [ "actual", "on_cost_refused" ], ada(holder).values_at(:pay_source, :reason)
+      assert_equal({ scenario: 0, baseline: 0 }, holder[:actual_pay_seats])
+    end
+
+    should "leave a seat unpriced once its held pay is lost with the person's key, with no midpoint standing in" do
+      pay(amount: "60000", period: "year", basis: "actual")
+      ActsAsTenant.with_tenant(@tenant) { PlanKeyStore.new.destroy_person(@ada.id) }
+      holder = cost(unit_id: @payments)
+
+      assert_equal "pay_unknown", ada(holder)[:reason]
+      assert_nil ada(holder)[:amount]
+      assert_includes holder[:unpriced].map { it[:reason] }, "pay_unknown"
+      assert_not_includes cost(as: @viewer).to_json, "pay_unknown"
+    end
+  end
+
+  def pay(person = @ada, **pay)
+    call(Operations::TeamPlanning::SetActualPay, plan_id: @plan_id, scenario_id: @year, person_id: person.id, currency: "EUR", **pay)
+  end
+
+  def ada(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }
 
   def band_of(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }[:band]
 
