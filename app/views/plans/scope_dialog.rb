@@ -9,6 +9,14 @@ class Views::Plans::ScopeDialog < Views::Base
   # @return [Hash] the data a button carries to open the dialog
   def self.trigger = { action: "click->modal#open", modal_target_id: ID }
 
+  # @param scope [Hash, nil] `{ whole_organisation, units: [{ name }] }`, as `team_planning_plan` gives it
+  # @return [String] what the plan covers, for the plan page and the notice after a change
+  def self.covers(scope)
+    return "the whole organisation" if scope.nil? || scope[:whole_organisation]
+
+    scope[:units].map { it[:name] || "a former unit" }.to_sentence
+  end
+
   # @param plan [Hash] from `team_planning_plan`
   # @param units [Array<Hash>] from `team_planning_coverable_units`
   def initialize(plan:, units:)

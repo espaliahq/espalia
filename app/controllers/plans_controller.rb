@@ -29,7 +29,7 @@ class PlansController < ApplicationController
     authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
     draft = params.expect(plan: [ :scope, unit_ids: [] ]).to_h.symbolize_keys
     result = Operations::TeamPlanning::SetPlanScope.call(context: pundit_user, params: { plan_id: plan[:plan_id], unit_ids: chosen_units(draft) })
-    redirect_to plan_path(plan[:plan_id]), notice: "This plan now covers #{covers(result[:scope])}."
+    redirect_to plan_path(plan[:plan_id]), notice: "This plan now covers #{Views::Plans::ScopeDialog.covers(result[:scope])}."
   rescue Operations::Base::ParameterError => e
     redirect_to plan_path(plan[:plan_id]), alert: "Couldn't change what this plan covers: #{e.message}"
   end
@@ -132,8 +132,6 @@ class PlansController < ApplicationController
 
     Array(draft[:unit_ids]).compact_blank
   end
-
-  def covers(scope) = scope[:whole_organisation] ? "the whole organisation" : scope[:units].map { it[:name] || "a former unit" }.to_sentence
 
   def rebased(result)
     count = result[:conflicts].size

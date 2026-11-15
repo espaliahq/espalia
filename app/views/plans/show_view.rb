@@ -96,18 +96,11 @@ class Views::Plans::ShowView < Views::Base
 
   def scope_line
     p(class: "mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted") do
-      span { "Covers #{covers}." }
+      span { "Covers #{Views::Plans::ScopeDialog.covers(@plan[:scope])}." }
       if changes_scope?
         render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true, data: Views::Plans::ScopeDialog.trigger) { "Change" }
       end
     end
-  end
-
-  def covers
-    scope = @plan[:scope]
-    return "the whole organisation" if scope.nil? || scope[:whole_organisation]
-
-    scope[:units].map { it[:name] || "a former unit" }.to_sentence
   end
 
   def changes_scope? = @can_edit && @coverable_units
