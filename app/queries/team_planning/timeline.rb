@@ -290,10 +290,11 @@ class TeamPlanning::Timeline
     end
 
     def crossings(before, after, column)
-      out = before.people.select { after.outside?(it.id) }.map do |person|
+      leaving, joining = after.outside_ids, before.outside_ids
+      out = before.people.select { leaving.include?(it.id) }.map do |person|
         Move.new(person_id: person.id, after: column, left_unit_ids: units_of(before, person), joined_unit_ids: [], crossing: "out")
       end
-      out + after.people.select { before.outside?(it.id) }.map do |person|
+      out + after.people.select { joining.include?(it.id) }.map do |person|
         Move.new(person_id: person.id, after: column, left_unit_ids: [], joined_unit_ids: units_of(after, person), crossing: "in")
       end
     end

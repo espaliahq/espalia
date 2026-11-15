@@ -54,12 +54,12 @@ class TeamPlanning::Baseline
     #
     # @return [Map]
     def settled
-      gone, staying = people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
-      departed = self.departed + gone.map { Departed.new(person_id: it.id, **it.departure) }
       unit_of = positions.to_h { [ it.id, it.unit_id ] }
       placed = ->(person) { person.with(memberships: person.memberships.map { it.position_id ? it.with(unit_id: unit_of[it.position_id]) : it }) }
-      map = with(people: staying.map(&placed), outside: outside.map(&placed), departed:)
+      map = with(people: people.map(&placed), outside: outside.map(&placed))
       map = map.cut if scope_ids
+      gone, staying = map.people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
+      map = map.with(people: staying, departed: departed + gone.map { Departed.new(person_id: it.id, **it.departure) })
       live = map.units.to_set(&:id)
       map.with(unassigned_ids: map.people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
     end
@@ -72,7 +72,7 @@ class TeamPlanning::Baseline
       inside = ->(person, was_on) { person.memberships.any? { known.include?(it.unit_id) } || (was_on && person.memberships.none?(&:unit_id)) }
       people, leaving = map.people.partition { inside.(it, true) }
       joining, outside = map.outside.partition { inside.(it, false) }
-      map.with(people: people + joining, outside: leaving + outside)
+      map.with(people: people + joining, outside: leaving + outside, positions: map.positions.select { it.unit_id.nil? || known.include?(it.unit_id) })
     end
 
     # @return [Set<String>] the units on the map, live or retired
@@ -92,9 +92,8 @@ class TeamPlanning::Baseline
       with(outside: outside.map { it.id == person_id ? yield(it) : it })
     end
 
-    # @param person_id [String, nil]
-    # @return [Boolean] whether they are outside the plan's scope
-    def outside?(person_id) = !person_id.nil? && outside.any? { it.id == person_id }
+    # @return [Set<String>] the people outside the plan's scope, for a check run once per person
+    def outside_ids = outside.to_set(&:id)
 
     # @param member [Member]
     # @return [Array<Membership>] the places in units outside the plan's scope

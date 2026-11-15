@@ -11,7 +11,7 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
+    @departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
     @engineering, @payments, @sales = Array.new(3) { SecureRandom.uuid_v7 }
 
     travel_to Time.utc(2025, 12, 15, 9)
@@ -20,10 +20,10 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       @engineer = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: @family.role_family_id)
       @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5, title: "Senior SWE")
 
-      structure.define_taxonomy([ { level_id: departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
-      structure.create_unit(@engineering, "Engineering", level_id: departments, effective_on: "2025-01-01")
+      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
+      structure.create_unit(@engineering, "Engineering", level_id: @departments, effective_on: "2025-01-01")
       structure.create_unit(@payments, "Payments", level_id: teams, parent_id: @engineering, effective_on: "2025-01-01")
-      structure.create_unit(@sales, "Sales", level_id: departments, effective_on: "2025-01-01")
+      structure.create_unit(@sales, "Sales", level_id: @departments, effective_on: "2025-01-01")
 
       @ada, @brook, @cy, @dee = %w[Ada Brook Cy Dee].map { create(:person, tenant: @tenant, name: "#{it} Quill") }
       [ @ada, @brook, @cy, @dee ].each do |person|
@@ -132,6 +132,7 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
   end
 
   should "never let a unit or person outside the scope reach a plan read, though a whole-organisation plan shows them" do
+    as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).set_membership(@brook.id, @payments, **ESPALIA, allocation: 0.7) }
     leaked = [ @sales, @cy.id, @dee.id ]
     scoped = every_read(@plan_id, @h1)
     leaked.each { assert_not_includes scoped, it }
@@ -165,6 +166,22 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_equal [ "in", [], [ @payments ] ], dee.values_at(:crossing, :left_unit_ids, :joined_unit_ids)
   end
 
+  should "leave a position in a unit outside the scope off the map and out of its totals" do
+    position = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                           level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    assert_not_includes resolve(@plan_id, @h1).positions.map(&:id), position
+    assert_equal({ "per_fte" => 1.5 }, capacity(@plan_id, @h1)[:totals].transform_values(&:to_f))
+  end
+
+  should "count someone who left in an earlier step as gone when a later step brings them in" do
+    call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: @h1, person_id: @cy.id)
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h2, person_id: @cy.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    map = resolve(@plan_id, @h2)
+    assert_not_includes map.people.map(&:id), @cy.id
+    assert_includes map.departed.map(&:person_id), @cy.id
+  end
+
   context "changing the scope" do
     should "always let a plan widen, and narrow while nothing it plans falls outside" do
       assert_equal [ "Engineering", "Sales" ], set_scope(@plan_id, [ @engineering, @sales ])[:scope][:units].map { it[:name] }.sort
@@ -191,6 +208,29 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
         error = assert_raises(Operations::Base::ParameterError) { set_scope(@whole_id, [ @engineering ]) }
         assert_match "Cy Quill in H1 and 1 other change.", error.message
       end
+    end
+
+    should "judge each change by its own scenario, so a person brought in elsewhere doesn't excuse it" do
+      call(Operations::TeamPlanning::SetAssignment, plan_id: @whole_id, scenario_id: @whole_h1, person_id: @dee.id,
+                                                    placements: [ { unit_id: @payments, allocation: 1 } ])
+      call(Operations::TeamPlanning::SetDeparture, plan_id: @whole_id, scenario_id: @whole_id, person_id: @dee.id)
+
+      error = assert_raises(Operations::Base::ParameterError) { set_scope(@whole_id, [ @engineering ]) }
+      assert_match "Dee Quill in the baseline", error.message
+    end
+
+    should "cover only units the organisation still has, but keep one retired since the plan chose it" do
+      archive = SecureRandom.uuid_v7
+      as_tenant { OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(archive, "Archive", level_id: @departments, effective_on: "2025-01-01") }
+      set_scope(@plan_id, [ @engineering, archive ])
+      as_tenant { OrgGraph::StructureCommandHandler.new(actor: SYSTEM).retire_unit(archive, effective_on: "2025-06-01") }
+
+      set_scope(@plan_id, [ @engineering, archive, @sales ])
+      assert_equal [ @engineering, archive, @sales ].sort, scope_of(@plan_id).sort
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::TeamPlanning::CreatePlan, name: "Archive next year", base_on: BASE_ON.iso8601, unit_ids: [ archive ])
+      end
+      assert_equal "A plan covers units the organisation has", error.message
     end
   end
 end

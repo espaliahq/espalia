@@ -44,27 +44,29 @@ module Operations::TeamPlanning::MapPayload
     return map.units.map(&:to_h) unless map.scope_ids
 
     on_map = map.units.to_set(&:id)
+    outside = map.outside_ids
     map.units.map do |unit|
-      unit.to_h.merge(parent_id: (unit.parent_id if on_map.include?(unit.parent_id)), owner_ids: unit.owner_ids.reject { map.outside?(it) })
+      unit.to_h.merge(parent_id: (unit.parent_id if on_map.include?(unit.parent_id)), owner_ids: unit.owner_ids.reject { outside.include?(it) })
     end
   end
 
   def people_payload(map)
     totals = map.allocation_totals
+    outside = map.outside_ids
     map.people.map do |person|
       payload = person.to_h.except(:departure, :planned_level, :plan_data, :placeholder, :capacity_overrides)
                       .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
                              capacity_overrides: person.capacity_overrides.transform_values { sealed_payload(it) },
                              placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
                              leaving: person.leaving?, leaves_on: (person.departure[:leaves_on] if person.leaving?), backfill_position_id: person.backfill_id)
-      map.scope_ids ? within_scope(payload, person, map) : payload
+      map.scope_ids ? within_scope(payload, person, map, outside) : payload
     end
   end
 
-  def within_scope(payload, person, map)
+  def within_scope(payload, person, map, outside)
     away = map.outside_places(person)
     share = ::TeamPlanning::Baseline::Membership.shares(person.memberships).sum(0r) { |place, part, _| away.include?(place) ? part : 0r }
-    manager_outside = map.outside?(person.manager_id)
+    manager_outside = outside.include?(person.manager_id)
     payload.merge(memberships: (person.memberships - away).map(&:to_h), outside: (away.any? ? { share: share.to_f } : nil),
                   manager_id: (person.manager_id unless manager_outside), manager_outside:)
   end

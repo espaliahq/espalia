@@ -49,7 +49,7 @@ class TeamPlanning::CommandHandler
   def set_plan_scope(plan_id, unit_ids:)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      unit_ids = known_units!(unit_ids)
+      unit_ids = known_units!(unit_ids, kept: plan.scope_unit_ids.to_a)
       yield plan, unit_ids if block_given?
       plan.set_scope(unit_ids:, set_by_id: actor_id!)
     end
@@ -481,9 +481,10 @@ class TeamPlanning::CommandHandler
     raise Pundit::NotAuthorizedError, yield
   end
 
-  def known_units!(unit_ids)
+  # A unit retired since the plan chose it may stay, so widening never asks to drop it.
+  def known_units!(unit_ids, kept: [])
     unit_ids = Array(unit_ids).map { it.to_s.strip.downcase }.compact_blank.uniq
-    return unit_ids if OrgUnit.where(id: unit_ids).count == unit_ids.size
+    return unit_ids if OrgUnit.live.where(id: unit_ids - kept).count == (unit_ids - kept).size
 
     raise TeamPlanning::Error, "A plan covers units the organisation has"
   end

@@ -46,17 +46,20 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
     return if changes.empty?
 
     narrower = TeamPlanningPlan.find(aggregate.plan_id).tap { it.scope_unit_ids = unit_ids }
-    held = maps(narrower, aggregate, scenario_ids).flat_map { held_ids(it) }.to_set << aggregate.plan_id
-    dropped = changes.reject { |_, change| held.include?(change.data[:subject_id]) }
+    held = maps(narrower, aggregate, scenario_ids).transform_values { held_ids(it).to_set << aggregate.plan_id }
+    dropped = changes.reject { |scenario_id, change| held[scenario_id].include?(change.data[:subject_id]) }
     return if dropped.empty?
 
     current = TeamPlanningPlan.find(aggregate.plan_id)
-    named = maps(current, aggregate, scenario_ids).map { ::TeamPlanning::Baseline.new(context:, plan: current).named(it) }
+    baseline = ::TeamPlanning::Baseline.new(context:, plan: current)
+    named = maps(current, aggregate, scenario_ids).values.map { baseline.named(it) }
     raise ::TeamPlanning::Error, refusal(dropped, named, aggregate.plan_id)
   end
 
+  # A change is kept only when its own scenario's narrower map holds what it is about.
   def maps(plan, aggregate, scenario_ids)
-    scenario_ids.map { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id: it).structure(aggregate) }
+    base = ::TeamPlanning::Baseline.new(context:, plan:).structure
+    scenario_ids.index_with { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id: it, base:).structure(aggregate) }
   end
 
   def held_ids(map)

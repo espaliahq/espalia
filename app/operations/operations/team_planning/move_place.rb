@@ -65,7 +65,6 @@ class Operations::TeamPlanning::MovePlace < Operations::Base
 
   def scenario_id = scenario_id!(:scenario_id)
 
-
   def person_id = uuid!(:person_id)
 
   # A place outside the plan's scope is kept as it is: the plan can't see it to move it.

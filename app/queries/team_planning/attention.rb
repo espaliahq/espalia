@@ -60,6 +60,7 @@ class TeamPlanning::Attention
     @order = changes.keys.each_with_index.to_h
     @live = map.units.to_set(&:id)
     @retired = map.retired_units.to_set(&:id)
+    @outside = map.outside_ids
   end
 
   # @return [Array<Item>] in {CHECKS} order, then by subject id and reason
@@ -148,7 +149,7 @@ class TeamPlanning::Attention
     end
   end
 
-  def places_of(person) = person.memberships.map { it.position_id ? @position_units[it.position_id] : it.unit_id }
+  def places_of(person) = (person.memberships - @map.outside_places(person)).map { it.position_id ? @position_units[it.position_id] : it.unit_id }
 
   def dropped_keys(person)
     (person.memberships - @map.outside_places(person)).reject { @live.include?(it.unit_id) }.flat_map do |place|
@@ -205,7 +206,7 @@ class TeamPlanning::Attention
 
     nearby = near_units(person)
     if line.person_id
-      return if @map.outside?(line.person_id)
+      return if @outside.include?(line.person_id)
 
       manager = by_id[line.person_id]
       return "Their manager is no longer in this scenario" unless manager
