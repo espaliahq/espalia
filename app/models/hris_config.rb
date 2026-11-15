@@ -27,6 +27,7 @@ class HrisConfig
   # @return [String] the provider's display name
   def self.provider_label(provider)
     return "Not configured" if provider.blank?
+    return "Espalia" if provider == OrgGraph::StructureAggregate::ESPALIA
 
     PROVIDER_LABELS[provider] || provider.humanize
   end

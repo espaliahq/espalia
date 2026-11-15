@@ -194,10 +194,8 @@ class Views::Plans::ChangesTab < Views::Base
   end
 
   def sources(providers)
-    providers.each { render Components::Kit::Badge.new("Source: #{provider_label(it)}", variant: :outline) }
+    providers.each { render Components::Kit::Badge.new("Source: #{HrisConfig.provider_label(it)}", variant: :outline) }
   end
-
-  def provider_label(provider) = provider == OrgGraph::StructureAggregate::ESPALIA ? "Espalia" : HrisConfig.provider_label(provider)
 
   def describe(change)
     person = name_of(change[:person_id])
