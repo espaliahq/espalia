@@ -150,10 +150,11 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     labelled = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
                                                                 fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
     shared = open_position(unit_id: @payments)
-    operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: shared, allocation: 0.5 } ])
+    operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: labelled, allocation: 0.5 },
+                                                                                        { position_id: shared, allocation: 0.5 } ])
     cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" })
 
-    assert_equal [ "Platform", "position", nil ], open_cost_centre(cost.scenario, labelled)
+    assert_equal [ "Platform", "position", nil ], open_cost_centre(cost.scenario, labelled), "its own label beats Ada's CC-1"
     assert_equal [ "CC-1", "person", nil ], open_cost_centre(cost.scenario, shared), "Ada fills half of it and brings CC-1"
   end
 
