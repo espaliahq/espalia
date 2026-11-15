@@ -19,7 +19,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "In a plan scoped to chosen units, each change about someone the plan no longer covers is listed under that " \
               "change's facet, unnamed, because a bring-in was undone or the Org Graph moved them out; clear the change or place them back in. " \
               "Once a capacity model is chosen for any role or family, even one no place takes, each place no model covers is listed too, except a leaver's, " \
-              "a forgotten person's override and a closed position's. " \
+              "a forgotten person's override and a closed position's. A seat whose reports cost more to manage than it delivers, " \
+              "a person or an open position, is listed once under the facet capacity, overridden or not. " \
               "`sources` names where to fix each item: the provider of employment status for someone who joined " \
               "after the base or has left, the provider of the manager fact for a manager item, else the providers " \
               "of the units the item touches (\"espalia\" for a unit only the plan holds). " \

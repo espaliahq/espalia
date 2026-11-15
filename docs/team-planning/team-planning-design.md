@@ -554,6 +554,12 @@ resolves to none. The figure is max(base − cost, 0) × allocation × FTE: the 
 taken before the seat splits across places. A cost past the base floors at zero and marks
 the figure overloaded, with the excess. Each step names what it charges for.
 
+An overloaded seat is an Attention item (7.5), once per seat under the facet `capacity`,
+whether a person or an open position holds it. A floor hides a smell, so the check reads
+the model's own figure: an override changes the number, not the reports, and the reason
+says the figure is overridden. It credits the latest of the seat's placement and level,
+each report's line to it, and the capacity rule that chose the model.
+
 `Units::Graph` reads who a seat manages from reporting lines, never from unit owners:
 ownership says who may edit a unit, not who manages it. One principle runs through the
 rules: a vacant seat and a filled one must stay comparable, so leaving a seat empty never
