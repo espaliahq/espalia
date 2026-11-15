@@ -253,6 +253,16 @@ class TeamPlanning::CapacityModels::UnitsTest < ActiveSupport::TestCase
     assert_not_includes graph.span("vp").map(&:id), "ceo"
   end
 
+  should "never make someone with no line who owns a vacant manager seat's unit, or a unit above it, a report of the seat" do
+    @people += [ member("lead", "studio"), member("boss", "studio") ]
+    @units.map! { %w[studio root].include?(it.id) ? it.with(owner_ids: [ { "studio" => "lead", "root" => "boss" }[it.id] ]) : it }
+    span = Units::Graph.new(map:, facts:, manager_role_ids: []).span("v").map(&:id)
+
+    assert_not_includes span, "lead"
+    assert_not_includes span, "boss"
+    assert_includes span, "e"
+  end
+
   should "never count a leaver as a report, and pass their reports to the position backfilling them, or to nobody" do
     @people.map! { it.id == "c" ? it.with(departure: { leaves_in_id: "s1", position_id: "v" }) : it }
     graph = Units::Graph.new(map:, facts:, manager_role_ids: [])
