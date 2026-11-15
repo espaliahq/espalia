@@ -44,9 +44,10 @@ class Views::Notifications::Bell < Views::Base
     div(
       class: "absolute right-0 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-md shadow-overlay " \
              "max-sm:fixed max-sm:inset-x-2 max-sm:top-14 max-sm:mt-0 max-sm:w-auto max-sm:max-w-none " \
-             "border border-default bg-overlay z-50 hidden overflow-hidden " \
+             "border border-default bg-overlay z-50 overflow-hidden " \
              "[--gos-focus-ring:var(--gos-content-default)]",
       data: { dropdown_target: "menu" },
+      hidden: true,
       role: "menu",
       aria: { orientation: "vertical", label: "Notifications" }
     ) do

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Reusable dropdown menu component powered by a Stimulus controller
-# with `useClickOutside` and `useTransition` from stimulus-use.
+# with `useClickOutside` from stimulus-use. The menu shows and hides at once.
 #
 # Uses a slot pattern: call `trigger` for the clickable element and
 # `menu` for the dropdown panel.
@@ -34,8 +34,8 @@
 #   # viewport instead, so it can escape scroll panes.
 class Components::Kit::Dropdown < Components::Base
   ALIGNMENT_CLASSES = {
-    right: "right-0 origin-top-right",
-    left: "left-0 origin-top-left"
+    right: "right-0",
+    left: "left-0"
   }.freeze
 
   # Highlighted and current items take the neutral fills, never brand (#543)
@@ -139,9 +139,10 @@ class Components::Kit::Dropdown < Components::Base
       # scroll, so without this their lower content was unreachable).
       # The focus ring resets to neutral: in the navbar it follows the nav's text.
       class: "absolute #{ALIGNMENT_CLASSES[@align]} mt-2 #{width} max-h-[70vh] overflow-y-auto " \
-             "rounded-md shadow-overlay border border-default bg-overlay z-50 hidden " \
+             "rounded-md shadow-overlay border border-default bg-overlay z-50 " \
              "[--gos-focus-ring:var(--gos-content-default)]",
       data: { dropdown_target: "menu" },
+      hidden: true,
       role: role,
       aria: { orientation: (role == "menu" ? "vertical" : nil), label: label }.compact
     ) do
