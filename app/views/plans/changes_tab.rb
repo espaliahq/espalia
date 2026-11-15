@@ -297,7 +297,7 @@ class Views::Plans::ChangesTab < Views::Base
 
   def unit_name(id) = id && @drift[:names].fetch(id, REMOVED_UNIT)
 
-  # Attention names people only. An unnamed unit may still be the Org Graph's, so it isn't called plan-only.
+  # Attention leaves a unit the map no longer holds unnamed. It may still be the Org Graph's, so it isn't called plan-only.
   def attention_name(id) = @attention[:names][id] || @status[:names][id] || @drift[:names][id]
 
   def scenario_name(id)

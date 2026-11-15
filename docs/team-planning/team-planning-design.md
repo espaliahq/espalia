@@ -969,8 +969,8 @@ and a test fails when Attention gains one the tab doesn't name. A row of counts 
 to each group.
 
 Each item names its subject, the reason, the change behind it and its `sources`. Attention names
-units, positions and successions the way the scenario's map does, so a removed unit reads as
-removed. The change links to its row on the Changes tab, which carries the id
+units, positions and successions the way the scenario's map does. One the map no longer holds
+has no name, and a succession calls a missing side "A removed unit". The change links to its row on the Changes tab, which carries the id
 `change-<change_id>`, whenever that tab lists it for the same scenario; a change it doesn't list
 is named without a link. An item no change explains says so.
 
