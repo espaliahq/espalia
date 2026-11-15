@@ -9,7 +9,8 @@
 class Operations::TeamPlanning::SetPlanValue < Operations::Base
   include Operations::TeamPlanning::ChangeWrite
 
-  FIELDS = ::TeamPlanning::Events::PlanDataSet::FIELDS.keys.freeze
+  # Pay has its own tool, which needs the see-pay right.
+  FIELDS = (::TeamPlanning::Events::PlanDataSet::FIELDS.keys - %w[pay]).freeze
 
   description "Hold a person's level or FTE in a scenario of a Team Planning plan in place of the Org Graph's, " \
               "for a value the HRIS has wrong or that is about to change. An FTE is above 0 and at most 1. The " \
@@ -27,11 +28,22 @@ class Operations::TeamPlanning::SetPlanValue < Operations::Base
   # @return [Hash] `{ plan_id, scenario_id, person_id, field, value }`
   def perform
     person_id = uuid!(:person_id)
+    field!
     end_state = { field: params[:field], value: params[:value] }
     set_change!(::TeamPlanning::Events::PlanDataSet, subject_id: person_id, end_state:) do
       raise Operations::Base::ParameterError, "No such person" unless ::Person.exists?(tenant_id: ActsAsTenant.current_tenant&.id, id: person_id)
     end
 
     { plan_id: plan_id!, scenario_id: scenario_id!(:scenario_id), person_id:, **::TeamPlanning::Events::PlanDataSet.end_state(end_state) }
+  end
+
+  private
+
+  def field!
+    field = params[:field].to_s
+    return if FIELDS.include?(field)
+    raise Operations::Base::ParameterError, "Pay has its own tool, team_planning_set_actual_pay" if field == "pay"
+
+    raise Operations::Base::ParameterError, "A plan value is a person's #{FIELDS.to_sentence(two_words_connector: ' or ')}, not #{field.presence || 'nothing'}"
   end
 end

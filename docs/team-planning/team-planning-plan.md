@@ -296,7 +296,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). | 5.2, 5.3, 3.5, 3.7 |
 | 5.5 | The see-pay right per plan member. Without it, band midpoints only | 5.4, 1.2 |
 | 5.6 | Plan-held pay: `PlanDataSet` for a person's actual cost, shreddable under their key | 5.5, 2.2 |
-| 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Never written to the Org Graph | 5.6 |
+| 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Ask once per file whether amounts are actual pay or full-time figures. Never written to the Org Graph | 5.6 |
 | 5.8 | Cost on the plan page and the map, with the difference from the baseline | 5.4 |
 | 5.9 | Today's yearly run rate: every seat Today holds priced for a year from the plan's start, shown on Today's map and row and never set against a scenario's period total | 5.4, 5.8 |
 

@@ -16,6 +16,9 @@
 # manager outside reads as `manager_outside: true`, and a covered unit's parent
 # or owner outside is left out. A plan covering the whole organisation reads as
 # it always has.
+#
+# Actual pay under `plan_data` reaches only a member with the see-pay right
+# ([#317](https://github.com/espaliahq/espalia/issues/317)).
 module Operations::TeamPlanning::MapPayload
   # @param value [Shreddable::Value, nil]
   # @return [Hash, nil] `{ value: }`, or `{ removed: true }` once its key is gone
@@ -28,11 +31,12 @@ module Operations::TeamPlanning::MapPayload
   private
 
   # @param map [TeamPlanning::Baseline::Map] with names joined
+  # @param plan [TeamPlanningPlan] whose see-pay right decides whether pay shows
   # @return [Hash] `{ base_on, known_on, units, people, unassigned_ids, positions, unresolved, departed, names }`
-  def map_payload(map)
+  def map_payload(map, plan:)
     { base_on: map.base_on.iso8601, known_on: map.known_on.iso8601,
       units: units_payload(map),
-      people: people_payload(map),
+      people: people_payload(map, pay: PlanPolicy.new(context, plan).see_pay?),
       unassigned_ids: map.unassigned_ids,
       positions: positions_payload(map),
       unresolved: map.unresolved.map(&:to_h),
@@ -50,12 +54,13 @@ module Operations::TeamPlanning::MapPayload
     end
   end
 
-  def people_payload(map)
+  def people_payload(map, pay:)
     totals = map.allocation_totals
     outside = map.outside_ids
     map.people.map do |person|
+      plan_data = pay ? person.plan_data : person.plan_data.except(:pay)
       payload = person.to_h.except(:departure, :planned_level, :plan_data, :placeholder, :capacity_overrides)
-                      .merge(planned_level: sealed_payload(person.planned_level), plan_data: person.plan_data.transform_values { sealed_payload(it) },
+                      .merge(planned_level: sealed_payload(person.planned_level), plan_data: plan_data.transform_values { sealed_payload(it) },
                              capacity_overrides: person.capacity_overrides.transform_values { sealed_payload(it) },
                              placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
                              leaving: person.leaving?, leaves_on: (person.departure[:leaves_on] if person.leaving?), backfill_position_id: person.backfill_id)

@@ -120,6 +120,7 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
                from_unit_id: "unassigned", to_unit_id: "unassigned", event_id: SecureRandom.uuid, event_ids: [ SecureRandom.uuid ],
                budget_line_id: SecureRandom.uuid_v7, starts_on: "2026-12-01", origin: "new", head_count: "1",
                currency: "AUD", period: "year" }
+    values[:basis] = "full_time" if operation == Operations::TeamPlanning::SetActualPay
     values[:value] = {} if operation == Operations::TeamPlanning::SetRule
     values.delete(:unit_id) if operation.category == :read
     values.slice(*operation.parameters.keys)

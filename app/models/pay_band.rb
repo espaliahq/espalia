@@ -115,10 +115,13 @@ class PayBand < ApplicationRecord
   # @param name [Symbol] :minimum, :midpoint or :maximum
   # @param hours_per_year [Rational] for an hourly band
   # @return [Rational]
-  def yearly(name, hours_per_year:)
-    figure = public_send(name).to_r
-    period == "hour" ? figure * hours_per_year : figure * PER_YEAR.fetch(period)
-  end
+  def yearly(name, hours_per_year:) = self.class.yearly(public_send(name).to_r, period:, hours_per_year:)
+
+  # @param figure [Rational] an amount per period
+  # @param period [String] "year", "month" or "hour"
+  # @param hours_per_year [Rational, nil] for an hourly figure
+  # @return [Rational]
+  def self.yearly(figure, period:, hours_per_year:) = period == "hour" ? figure * hours_per_year : figure * PER_YEAR.fetch(period)
 
   # @return [String] the location as the screen reads it
   def location_name = any_location? ? "Any location" : location
