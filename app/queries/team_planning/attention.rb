@@ -274,7 +274,7 @@ class TeamPlanning::Attention
     filled = places.filter_map { it.place.position_id }
     own = seat.kind == "person" ? [ [ seat.id, ASSIGNMENT ], *level_keys(seat.id, filled) ] : [ [ seat.id, POSITION ] ]
     positions = @map.positions.to_set(&:id)
-    reports = report_ids.flat_map { positions.include?(it) ? [ [ it, POSITION ] ] : [ [ it, LINE ], *level_keys(it) ] }
+    reports = report_ids.flat_map { positions.include?(it) ? [ [ it, POSITION ] ] : [ [ it, LINE ], [ it, ASSIGNMENT ], *level_keys(it) ] }
     rules = places.filter_map { effective_rule(it.unit_id) }
     [ *own, *reports, *rules ].uniq
   end
