@@ -48,7 +48,7 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
   def preview(plan, scenario_id, upload, inputs)
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).call }
     report = upload.against(map)
-    payload(plan, scenario_id, report, map, names: map.names)
+    payload(plan, scenario_id, report, held(map), names: map.names)
       .merge(signature: (::TeamPlanning::PayUpload.signature(**inputs) if report.ok?))
   end
 
@@ -56,15 +56,15 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
     raise Operations::Base::ParameterError, "The file, basis or scenario changed since the preview" unless
       ::TeamPlanning::PayUpload.signed?(params[:signature], **inputs)
 
-    report = map = nil
+    report = held_now = nil
     written = 0
     refusing_bad_plans do
       handler.set_changes(plan.id) do |aggregate|
         map = ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure(aggregate)
         report = upload.against(map)
+        held_now = held(map)
         next [] unless report.ok?
 
-        held_now = held(map)
         changes = report.matches.reject { held_now[it.person_id] == it.pay }.map do |match|
           { kind: ::TeamPlanning::Events::PlanDataSet, scenario_id:, subject_id: match.person_id,
             end_state: { field: "pay", value: match.pay }, note: NOTE }
@@ -75,12 +75,11 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
     end
     raise Operations::Base::ParameterError, "The scenario changed since the preview, so check the file again" unless report.ok?
 
-    payload(plan, scenario_id, report, map, names: {}).merge(written:)
+    payload(plan, scenario_id, report, held_now, names: {}).merge(written:)
   end
 
-  def payload(plan, scenario_id, report, map, names:)
+  def payload(plan, scenario_id, report, held_now, names:)
     matched = report.matches.map(&:person_id)
-    held_now = map ? held(map) : {}
     pay = report.matches.to_h { [ it.person_id, it.pay ] }
     { plan_id: plan.id, scenario_id:, basis: params[:basis], problem: report.problem, line: report.line,
       rows_read: report.rows_read, failures: report.failures.map(&:to_h), matched_ids: matched,
