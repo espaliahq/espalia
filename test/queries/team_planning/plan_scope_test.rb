@@ -155,6 +155,29 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_includes map.outside.map(&:id), @dee.id
   end
 
+  should "refuse a change about someone outside the scope unless it places them in a covered unit" do
+    refusals = [
+      -> { call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6") },
+      -> { call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, leaves_on: "2026-05-01") },
+      -> { call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, manager_id: @ada.id) },
+      lambda {
+        call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                      placements: [ { unit_id: @sales, allocation: 1 } ])
+      }
+    ]
+    refusals.each do |write|
+      error = assert_raises(Operations::Base::ParameterError) { write.call }
+      assert_equal "This person is outside the units this plan covers. Place them in one of its units first.", error.message
+    end
+
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @ada.id, manager_id: @dee.id)
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @whole_id, scenario_id: @whole_h1, person_id: @dee.id, level: "6")
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
+    assert_includes resolve(@plan_id, @h1).people.map(&:id), @dee.id
+  end
+
   should "show leaving the plan and joining it as moves on the timeline" do
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h2, person_id: @ada.id,
                                                   placements: [ { unit_id: @sales, allocation: 1 } ])
@@ -176,6 +199,8 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
   end
 
   should "count someone who left in an earlier step as gone when a later step brings them in" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @cy.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
     call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: @h1, person_id: @cy.id)
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h2, person_id: @cy.id,
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])
