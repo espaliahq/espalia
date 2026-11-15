@@ -61,6 +61,22 @@ class PlansController < ApplicationController
                            body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i))
   end
 
+  # GET /planning/:id/changes?scenario=:scenario_id
+  #
+  # What the Org Graph has learned since the base, and where one scenario's
+  # planned changes stand against it ([#287](https://github.com/espaliahq/espalia/issues/287)).
+  # The baseline is the default.
+  def changes
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = params[:scenario].presence || plan[:plan_id]
+    tab = Views::Plans::ChangesTab.new(plan:, scenarios:, drift: read(Operations::TeamPlanning::Drift),
+                                       status: read(Operations::TeamPlanning::Status, scenario_id:),
+                                       attention: read(Operations::TeamPlanning::Attention, scenario_id:))
+    render plan_page(plan, scenarios:, open_tab: :changes, body: tab)
+  end
+
   private
 
   # Cost comes before capacity, in the strips above the map and beside each
@@ -143,7 +159,8 @@ class PlansController < ApplicationController
       see_pay: see_pay(members),
       tabs: [ Views::Plans::ShowView::Tab.new(key: :scenarios, label: "Scenarios", href: plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])),
-              Views::Plans::ShowView::Tab.new(key: :timeline, label: "Timeline", href: timeline_plan_path(plan[:plan_id])) ],
+              Views::Plans::ShowView::Tab.new(key: :timeline, label: "Timeline", href: timeline_plan_path(plan[:plan_id])),
+              Views::Plans::ShowView::Tab.new(key: :changes, label: "Changes", href: changes_plan_path(plan[:plan_id])) ],
       open_tab:,
       body:,
       can_edit: can_edit?,

@@ -17,7 +17,11 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "neither), still in the plan after the Org Graph has them leave, no manager (except the head of the " \
               "tree), or a manager who is gone, has left, or is in or owns none of their units nor the unit directly above one. " \
               "Once a capacity model is chosen for any role or family, even one no place takes, each place no model covers is listed too, except a leaver's, " \
-              "a forgotten person's override and a closed position's. Items come grouped by check, in a fixed order, then " \
+              "a forgotten person's override and a closed position's. " \
+              "`sources` names where to fix each item: the provider of employment status for someone who joined " \
+              "after the base or has left, the provider of the manager fact for a manager item, else the providers " \
+              "of the units the item touches (\"espalia\" for a unit only the plan holds). " \
+              "Items come grouped by check, in a fixed order, then " \
               "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
               "the caller is a member."
@@ -32,7 +36,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id) || plan.id
     items = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).attention }
-    { plan_id: plan.id, scenario_id:, items: items.map { item_row(it) }, names: names_of(plan, items) }
+    sources = ::TeamPlanning::SourceOfTruth.new(tenant_id: plan.tenant_id).preload(unit_ids: items.flat_map(&:unit_ids))
+    { plan_id: plan.id, scenario_id:, items: items.map { item_row(it, sources) }, names: names_of(plan, items) }
   end
 
   PERSON_FACETS = [ ::TeamPlanning::Attention::ASSIGNMENT, ::TeamPlanning::Attention::LINE ].freeze
@@ -52,9 +57,10 @@ class Operations::TeamPlanning::Attention < Operations::Base
 
   def person_facet?(facet) = PERSON_FACETS.include?(facet) || facet.split(":").first == ::TeamPlanning::Attention::CAPACITY
 
-  def item_row(item)
+  def item_row(item, sources)
     change = item.change && { kind: item.change.class.name.demodulize, scenario_id: item.change.data[:scenario_id],
                               event_id: item.change.event_id }
-    { subject_id: item.subject_id, facet: item.facet, reason: item.reason, change: }
+    { subject_id: item.subject_id, facet: item.facet, reason: item.reason, change:,
+      sources: item.fact ? sources.of_fact(item.fact) : sources.of_units(item.unit_ids) }
   end
 end

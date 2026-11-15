@@ -908,6 +908,29 @@ last and from today, so a forgotten person reads "Former member", a renamed unit
 name, and a subject only the plan holds has none. `Raised` will join these once
 `ChangeRaised` exists. `team_planning_status` gives the same read over MCP.
 
+### The changes tab as built
+
+The Changes tab ([#287](https://github.com/espaliahq/espalia/issues/287)) draws three reads
+and decides none of their rules: the drift, the status of one scenario's changes, and what
+in that scenario needs attention. A picker chooses the scenario, as pills on a wide screen
+and a list on a phone. Each drift change links the scenarios whose plan it meets.
+
+Drift and status each give a change's `sources`, from `TeamPlanning::SourceOfTruth`: who
+supplies what the change moves, so the place someone goes to make it happen. A person fact
+comes from its `OrgFactProvider`, or from Espalia where nobody chose one. A level, a manager
+and a departure move a person fact. A membership the Org Graph holds comes from whoever
+supplied it, as Espalia can hold one in a unit an HRIS mirrors. A unit, a succession and a
+planned placement come from the providers of the units they touch, as a unit mirrored from
+an HRIS takes its members from the sync. A unit only the plan holds is Espalia's. Drift's `names` cover units as well as
+people, so a move reads "from Payments to Growth".
+
+Attention gives each item its `sources` too. Someone the plan can't place, as they joined
+after the base or have left, is fixed where employment status comes from. A manager item is
+fixed where the manager fact comes from. Every other item is fixed in the units it touches:
+its own, its position's, a succession's, the places of someone over or under allocated, the
+place a capacity item names, or the retired unit that broke it. A capacity item for someone in
+no unit falls back to Espalia.
+
 ## Plan-held data
 
 Values a plan holds on top of the Org Graph (a pasted salary, a corrected level, a hire not

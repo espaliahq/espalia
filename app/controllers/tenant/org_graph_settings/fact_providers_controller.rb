@@ -12,7 +12,7 @@ class Tenant::OrgGraphSettings::FactProvidersController < ApplicationController
     authorize :org_graph, :edit_structure?
 
     result = Operations::OrgGraph::SetFactProvider.call(context: pundit_user, params: fact_params)
-    source = provider_label(result[:provider])
+    source = HrisConfig.provider_label(result[:provider])
     source = "the #{source} field you chose" if fact_params[:fields]
     back_with_notice "#{fact_label(result[:fact])} now comes from #{source}."
   rescue Operations::Base::ParameterError => e
@@ -28,9 +28,5 @@ class Tenant::OrgGraphSettings::FactProvidersController < ApplicationController
   def fact_params!
     fields = params.fetch(:fields, {}).permit(*PARTS).to_h.presence
     { fact: params.expect(:fact), provider: params.expect(:provider), fields: }.compact
-  end
-
-  def provider_label(provider)
-    provider == OrgGraph::StructureAggregate::ESPALIA ? "Espalia" : HrisConfig.provider_label(provider)
   end
 end
