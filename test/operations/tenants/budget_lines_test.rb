@@ -92,7 +92,7 @@ class Operations::Tenants::BudgetLinesTest < ActiveSupport::TestCase
 
     errors.each { |message| assert_no_match(/999|888|777|666|120/, message) }
     assert_equal "A budget line can't end before it starts", errors[3]
-    assert_equal "provide at least one of: amount, head_count", errors[4]
+    assert_equal "A budget line needs an amount, a head count or both", errors[4]
   end
 
   should "refuse a comma, which the page strips only from a grouped figure" do
