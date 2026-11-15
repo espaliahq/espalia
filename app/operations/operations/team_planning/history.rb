@@ -20,6 +20,8 @@ class Operations::TeamPlanning::History < Operations::Base
               "it reverses in reverses_event_id, and a note names the change it notes in noted_event_id, with " \
               "no note when it cleared it. The baseline's history also lists each update to today as action rebase, " \
               "whose end_state holds base_on, previous_base_on and the conflicts it carried forward. " \
+              "A set or pin that settled a conflict an update carried forward has settles: { since, choice }, choice " \
+              "plan or reality, so keeping the plan reads apart from an ordinary edit. " \
               "An entry that stands undone says who undid it. A change, pin or note entry shows its note " \
               "as note: { value }, or { removed: true } once the plan is deleted. Any other value " \
               "that can be erased is never shown here: sealed_fields names any such field. A forgotten person reads as " \
@@ -57,7 +59,7 @@ class Operations::TeamPlanning::History < Operations::Base
       kind: row.kind&.demodulize&.underscore, end_state: row.end_state, sealed_fields: row.sealed_fields,
       pinned_from: (row.action == "pin" ? { scenario_id: row.pinned_from_scenario_id, event_id: row.pinned_from_event_id } : nil),
       reverses_event_id: row.reverses_event_id, noted_event_id: row.noted_event_id, note: Operations::TeamPlanning::MapPayload.sealed(row.note),
-      by: person(row.actor_id, names), at: row.at.utc.iso8601,
+      settles: row.settles, by: person(row.actor_id, names), at: row.at.utc.iso8601,
       undone: (row.undone? ? { by: person(row.undone_by_id, names), at: row.undone_at.utc.iso8601 } : nil)
     }.compact
   end

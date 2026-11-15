@@ -1,0 +1,62 @@
+{
+  "name": "team_planning_set_position_funding",
+  "description": "Set which budget lines an open position in a scenario of a Team Planning plan draws on, in place of the line team_planning_funding derives: for a position paid from another cost centre, or split across lines. Each draw names a budget_line_id the scenario holds and its share. The scenarios that follow inherit it. team_planning_clear_change with the position_id and the facet 'funding' goes back to the derived line. Refused on the baseline, which has no period to fund, for a position that isn't open in the scenario, and unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
+      },
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario. The baseline is refused."
+      },
+      "position_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "draws": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 10,
+        "description": "The lines it draws on, each named once. A lone draw may leave out its share; otherwise the shares add up to 1.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "budget_line_id"
+          ],
+          "properties": {
+            "budget_line_id": {
+              "type": "string",
+              "description": "A line from team_planning_budget_lines."
+            },
+            "share": {
+              "type": "string",
+              "pattern": "^(0\\.\\d+|1(\\.0+)?)$",
+              "description": "The part of the position it funds, a decimal above 0 and at most 1, such as \"0.5\"."
+            }
+          }
+        }
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "position_id",
+      "draws"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

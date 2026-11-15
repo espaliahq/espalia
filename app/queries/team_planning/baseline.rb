@@ -35,26 +35,93 @@ class TeamPlanning::Baseline
   # @!attribute departed [Array<Departed>] the people a departure in an earlier step took off the map
   # @!attribute budget_lines [Array<BudgetLine>] the tenant's approved lines, read live, with the plan's changes on top
   # @!attribute orphaned_lines [Hash{String => String}] each tenant line the tenant has since removed, by id, to "set" or "cut", whichever change came last
+  # @!attribute scope_ids [Array<String>, nil] the units the plan covers, each with everything under it; nil for the whole organisation
+  # @!attribute outside [Array<Member>] the people outside the plan's scope, kept so a change can bring one in. Never shown
+  # @!attribute cut_positions [Array<Position>] the positions in units outside the plan's scope. Never shown
+  # @!attribute fundings [Hash{String => Array<Hash>}] position id => the draws a {TeamPlanning::Events::PositionFundingSet} sets
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
-                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines) do
+                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings, :scope_ids, :outside,
+                    :cut_positions) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
-                   orphaned_lines: {}, **) = super
+                   orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
     # Unassigned. A placement in a closed position keeps its position but
     # has no unit.
     #
+    # A plan with a scope keeps only the units it covers. A person with a
+    # place in one is on the map; anyone else is outside. Someone on the map
+    # whose places a change took out of every covered unit moves outside,
+    # but one it left with no place stays, in Unassigned.
+    #
     # @return [Map]
     def settled
-      gone, staying = people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
-      departed = self.departed + gone.map { Departed.new(person_id: it.id, **it.departure) }
-      unit_of = positions.to_h { [ it.id, it.unit_id ] }
-      people = staying.map do |person|
-        person.with(memberships: person.memberships.map { it.position_id ? it.with(unit_id: unit_of[it.position_id]) : it })
-      end
-      live = units.to_set(&:id)
-      with(people:, departed:, unassigned_ids: people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
+      unit_of = position_units
+      placed = ->(person) { person.with(memberships: person.memberships.map { it.position_id ? it.with(unit_id: unit_of[it.position_id]) : it }) }
+      map = with(people: people.map(&placed), outside: outside.map(&placed))
+      map = map.cut if scope_ids
+      gone, staying = map.people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
+      map = map.with(people: staying, departed: departed + gone.map { Departed.new(person_id: it.id, country: it.country, **it.departure) })
+      live = map.units.to_set(&:id)
+      map.with(unassigned_ids: map.people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
+    end
+
+    # @return [Map] only the covered units, and the people placed in them
+    def cut
+      covered = covered_ids
+      map = with(units: units.select { covered.include?(it.id) }, retired_units: retired_units.select { covered.include?(it.id) })
+      known = map.known_unit_ids
+      inside = ->(person, was_on) { person.memberships.any? { known.include?(it.unit_id) } || (was_on && person.memberships.none?(&:unit_id)) }
+      people, leaving = map.people.partition { inside.(it, true) }
+      joining, outside = map.outside.partition { inside.(it, false) }
+      kept, gone = map.positions.partition { it.unit_id.nil? || known.include?(it.unit_id) }
+      map.with(people: people + joining, outside: leaving + outside, positions: kept, cut_positions: (gone + cut_positions).uniq(&:id))
+    end
+
+    # A position the cut took off the map still places its people outside,
+    # so a later settle doesn't read them as placed in no unit.
+    #
+    # @return [Hash{String => String, nil}] each position's unit, by position id
+    def position_units = (cut_positions + positions).to_h { [ it.id, it.unit_id ] }
+
+    # @return [Set<String>] the units on the map, live or retired
+    def known_unit_ids = (units + retired_units).to_set(&:id)
+
+    # @param person_id [String]
+    # @return [Boolean] whether the map holds them, on it or outside the plan's scope
+    def holds?(person_id) = people.any? { it.id == person_id } || outside.any? { it.id == person_id }
+
+    # @param person_id [String] someone the map {#holds?}
+    # @yieldparam person [Member]
+    # @yieldreturn [Member]
+    # @return [Map] the person changed wherever the map holds them; the next settle decides which side they are on
+    def updating(person_id)
+      return with(people: people.map { it.id == person_id ? yield(it) : it }) if people.any? { it.id == person_id }
+
+      with(outside: outside.map { it.id == person_id ? yield(it) : it })
+    end
+
+    # @return [Set<String>] the people outside the plan's scope, for a check run once per person
+    def outside_ids = outside.to_set(&:id)
+
+    # @param member [Member]
+    # @return [Array<Membership>] the places in units outside the plan's scope
+    def outside_places(member)
+      return [] unless scope_ids
+
+      known = known_unit_ids
+      member.memberships.select { it.unit_id && !known.include?(it.unit_id) }
+    end
+
+    # The shares a plan counts: those of places on the map, so a person half
+    # inside the plan's scope counts as half.
+    #
+    # @param member [Member]
+    # @return [Array<(Membership, Rational, Boolean)>] as {Membership.shares}
+    def counted_shares(member)
+      away = outside_places(member)
+      Membership.shares(member.memberships).reject { |place, _, _| away.include?(place) }
     end
 
     # A leaver never fills the position that backfills them.
@@ -119,7 +186,8 @@ class TeamPlanning::Baseline
     def allocation_totals
       live = units.to_set(&:id)
       people.to_h do |person|
-        allocations = person.memberships.select { live.include?(it.unit_id) }.map(&:allocation)
+        away = outside_places(person)
+        allocations = person.memberships.select { live.include?(it.unit_id) || away.include?(it) }.map(&:allocation)
         [ person.id, allocations.any?(&:nil?) ? nil : allocations.sum(&:to_f).round(4) ]
       end
     end
@@ -127,8 +195,9 @@ class TeamPlanning::Baseline
     # @return [Array<String>] every person id the map uses: its people, their
     #   managers, the units' owners and the people it can't place
     def person_ids
-      (people.flat_map { [ it.id, it.manager_id ] } + units.flat_map(&:owner_ids) + unresolved.map(&:person_id) +
+      ids = (people.flat_map { [ it.id, it.manager_id ] } + units.flat_map(&:owner_ids) + unresolved.map(&:person_id) +
         departed.map(&:person_id)).compact.uniq
+      outside.empty? ? ids : ids - outside.map(&:id)
     end
 
     # @param person_id [String]
@@ -156,6 +225,19 @@ class TeamPlanning::Baseline
         chain << parent_id
       end
       chain
+    end
+
+    private
+
+    def covered_ids
+      every = units + retired_units
+      children = every.group_by(&:parent_id)
+      covered = scope_ids.to_set & every.to_set(&:id)
+      queue = covered.to_a
+      while (id = queue.shift)
+        children.fetch(id, []).each { queue << it.id if covered.add?(it.id) }
+      end
+      covered
     end
   end
 
@@ -274,8 +356,8 @@ class TeamPlanning::Baseline
   # Someone a departure in an earlier step took off the map, the step they
   # left in, the position backfilling them, if any, and the date within the
   # step, if the plan gave one.
-  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on) do
-    def initialize(leaves_on: nil, **) = super
+  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on, :country) do
+    def initialize(leaves_on: nil, country: nil, **) = super
 
     # @return [Hash] as {TeamPlanning::Events::DepartureSet} set it, `leaves_on` only when given
     def departure = { leaves_in_id:, position_id: }.merge(leaves_on ? { leaves_on: } : {})
@@ -403,17 +485,20 @@ class TeamPlanning::Baseline
   # @param known_on [Date, nil] nil for what the Org Graph knows now
   # @param history [Boolean] whether to carry the units the Org Graph retired, the
   #   successions it recorded and the people it had leave, by that day
+  # @param scoped [Boolean] false for the whole organisation, so a reader can
+  #   find someone the plan moved out of its scope
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def map_on(date, known_on: nil, history: false)
+  def map_on(date, known_on: nil, history: false, scoped: true)
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     snapshot = OrgGraph::AsOf.new(context: @context, date:, known_on:).call
 
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }
     units = snapshot.units.map { Unit.new(**it.to_h.slice(*Unit.members)) }
-    map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people:, unassigned_ids: [], positions: [], names: {},
-                  step_ids: [ @plan.id ], budget_lines: approved_budget,
+    scope_ids = (@plan.scope_unit_ids.presence if scoped)
+    map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people: scope_ids ? [] : people, outside: scope_ids ? people : [],
+                  scope_ids:, unassigned_ids: [], positions: [], names: {}, step_ids: [ @plan.id ], budget_lines: approved_budget,
                   rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
     return map unless history
 

@@ -418,6 +418,8 @@ Rails.application.routes.draw do
     # Hold actual pay from a file, previewed then confirmed ([#323](https://github.com/espaliahq/espalia/issues/323)).
     get :pay_upload, on: :member, path: "pay-upload"
     post :pay_upload, on: :member, path: "pay-upload", action: :upload_pay
+    # Change which units the plan covers ([#338](https://github.com/espaliahq/espalia/issues/338)).
+    patch :scope, on: :member
     # Fork and rename a scenario (#271).
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
@@ -428,6 +430,7 @@ Rails.application.routes.draw do
     resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
     # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.
     resources :notes, only: [ :update ], controller: "plans/notes"
+    resources :settlements, only: [ :create ], controller: "plans/settlements"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.

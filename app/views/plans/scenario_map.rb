@@ -255,12 +255,15 @@ class Views::Plans::ScenarioMap < Views::Base
   end
 
   # What the place counts for: its allocation, or for a place the HRIS gave
-  # none, the share MovePlace would write for it.
+  # none, the share MovePlace would write for it. Time spent outside a scoped
+  # plan stands in as one place, so the share leaves it out.
   def share(person, place)
     index = place && person[:memberships].index { it.equal?(place) }
     return unless index
 
-    TeamPlanning::Baseline::Membership.shares(person[:memberships].map { TeamPlanning::Baseline::Membership.new(**it) })[index].second
+    places = person[:memberships].map { TeamPlanning::Baseline::Membership.new(**it) }
+    away = person[:outside] && TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: person[:outside][:share], role: nil, position_id: nil)
+    TeamPlanning::Baseline::Membership.shares(places + [ away ].compact)[index].second
   end
 
   def from(place) = place ? place[:unit_id] : Views::Plans::MoveDialog::UNASSIGNED

@@ -31,7 +31,7 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
       people.set_membership(@ada.id, @payments, **ESPALIA, allocation: 1.0)
       people.set_membership(@cy.id, @payments, **ESPALIA, allocation: 1.0)
 
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_000)
+      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 61_337, midpoint: 100_000, maximum: 177_419)
       ReferenceCurrency.create!(currency: "EUR")
 
       @editor = account(team_planner: true, name: "Erin Editor")
@@ -81,7 +81,9 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
         get path
         assert_response :success
         assert_includes response.body, "EUR 250k"
-        %w[61k 61,000 177k 177,000].each { assert_not_includes response.body, it, "#{path} shows #{it}" }
+        body = Nokogiri::HTML(response.body).at_css("body")
+        text = [ body.text, *body.css("input:not([type='hidden'])").map { it["value"] } ].join(" ")
+        %w[61k 61.3k 61,337 61337 177k 177,419 177419].each { assert_not_includes text, it, "#{path} shows #{it}" }
       end
     end
   end

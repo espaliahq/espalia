@@ -27,7 +27,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       people.set_membership(@ada.id, @payments, **ESPALIA, allocation: 1.0)
       people.set_membership(@cy.id, @payments, **ESPALIA, allocation: 1.0)
 
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_419)
       ReferenceCurrency.create!(currency: "EUR")
 
       @admin = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
@@ -54,7 +54,10 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal [ "EUR", "2025-12-15T09:00:00Z" ], result.values_at(:reference_currency, :bands_changed_at)
     assert_equal({ scenario: { native: { "EUR" => "150000" }, converted: "150000", missing: [] },
                    baseline: { native: { "EUR" => "100000" }, converted: "100000", missing: [] },
-                   difference: { native: { "EUR" => "50000" }, converted: "50000", missing: [] } }, result[:total])
+                   difference: { native: { "EUR" => "50000" }, converted: "50000", missing: [] },
+                   parts: { actual: { native: { "EUR" => "100000" }, converted: "100000", missing: [] },
+                            planned: { native: { "EUR" => "50000" }, converted: "50000", missing: [] },
+                            forecast: { native: {}, converted: "0", missing: [] } } }, result[:total])
 
     payments = result[:units].find { it[:unit_id] == @payments }
     assert_equal [ "Payments", "150000", "150000" ], [ payments[:name], payments[:scenario][:converted], payments[:with_below][:scenario][:converted] ]
@@ -103,10 +106,10 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       viewer = cost(as: @viewer, unit_id: @payments)
 
       assert_equal %w[band_ranges band_midpoints], [ holder[:pay_view], viewer[:pay_view] ]
-      assert_equal %w[0.00 100000.00 200000.00], band_of(holder).values_at(:minimum, :midpoint, :maximum)
+      assert_equal %w[0.00 100000.00 200419.00], band_of(holder).values_at(:minimum, :midpoint, :maximum)
       assert_equal [ :midpoint ], band_of(viewer).keys & PayBand::FIGURES
       assert_equal holder[:total], viewer[:total]
-      assert_not_includes viewer.to_json, "200000"
+      assert_not_includes without_ids(viewer), "200419"
     end
 
     should "give an agent acting for a person exactly that person's view" do
@@ -142,22 +145,22 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     end
 
     should "price the rest of the plan at midpoints, and count the seats priced from actual pay for a holder only" do
-      pay(amount: "60000", period: "year", basis: "actual")
-      pay(@cy, amount: "50000", period: "year", basis: "actual")
+      pay(amount: "60417", period: "year", basis: "actual")
+      pay(@cy, amount: "50419", period: "year", basis: "actual")
       holder = cost(unit_id: @payments)
       viewer = cost(as: @viewer, unit_id: @payments)
 
       assert_equal({ scenario: 2, baseline: 0 }, holder[:actual_pay_seats])
-      assert_equal "110000", holder[:total][:scenario][:converted]
+      assert_equal "110836", holder[:total][:scenario][:converted]
       assert_equal "100000", holder[:total][:baseline][:converted]
 
       assert_equal "band_midpoints", viewer[:pay_view]
       assert_not viewer.key?(:actual_pay_seats)
       assert_equal [ "band_midpoint", nil, "80000" ], ada(viewer).values_at(:pay_source, :basis, :amount)
       assert_equal "80000", viewer[:total][:scenario][:converted]
-      assert_includes holder.to_json, "60000"
-      assert_not_includes viewer.to_json, "60000"
-      assert_not_includes viewer.to_json, "50000"
+      assert_includes without_ids(holder), "60417"
+      assert_not_includes without_ids(viewer), "60417"
+      assert_not_includes without_ids(viewer), "50419"
     end
 
     should "add the unit's on-cost on top of actual pay" do
@@ -197,6 +200,9 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
   def ada(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }
 
   def band_of(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }[:band]
+
+  # Ids are hex, so a short run of digits can turn up inside one.
+  def without_ids(result) = result.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
 
   should "refuse a unit on neither map and a caller outside the plan" do
     assert_equal "No such unit", assert_raises(Operations::Base::ParameterError) { cost(unit_id: SecureRandom.uuid_v7) }.message

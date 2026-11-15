@@ -40,8 +40,8 @@ class TeamPlanning::Attention
   # @!attribute names [Hash{String => String}] subject id => name
   Report = Data.define(:items, :names)
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers overloaded
-              unclassified budget_lines].freeze
+  CHECKS = %i[placements positions units unresolved uncovered successions capacity_overrides allocations leavers managers overloaded
+              unclassified budget_lines fundings].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
@@ -51,9 +51,11 @@ class TeamPlanning::Attention
   LEVEL = TeamPlanning::Events::LevelSet.facet
   BUDGET_LINE = TeamPlanning::Events::BudgetLineSet.facet
   DEPARTURE = TeamPlanning::Events::DepartureSet.facet
+  FUNDING = TeamPlanning::Events::PositionFundingSet.facet
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
   # A place in no unit has no id an override could name, as the map's own drop target hasn't.
   UNASSIGNED = "unassigned"
+  UNCOVERED = "A change about someone this plan no longer covers"
 
   # Resolves the scenario, then prices it, so the unclassified check reads
   # the same map as every other.
@@ -80,6 +82,7 @@ class TeamPlanning::Attention
 
   # A person the map no longer names was forgotten. A unit, position or
   # succession it no longer holds has no name, as the map shows none.
+  # Someone a scoped plan no longer covers stays unnamed.
   #
   # @param map [TeamPlanning::Baseline::Map] with names joined
   # @param items [Array<Item>]
@@ -91,11 +94,13 @@ class TeamPlanning::Attention
     end
     successions = map.successions.to_h { [ it.id, it ] }
     items.filter_map do |item|
+      next if item.reason == UNCOVERED
+
       id = item.subject_id
       name = case item.facet.split(":").first
       when *PERSON_FACETS then map.name_of(id)
       when UNIT then units[id]
-      when POSITION then positions[id]
+      when POSITION, FUNDING then positions[id]
       when SUCCESSION then successions[id]&.then { succession_name(it, units) }
       when CAPACITY then positions[id] || map.name_of(id)
       end
@@ -125,6 +130,8 @@ class TeamPlanning::Attention
     @order = changes.keys.each_with_index.to_h
     @live = map.units.to_set(&:id)
     @retired = map.retired_units.to_set(&:id)
+    @outside = map.outside_ids
+    @cut = map.cut_positions.to_set(&:id)
   end
 
   # @return [Array<Item>] in {CHECKS} order, then by subject id and reason
@@ -136,7 +143,8 @@ class TeamPlanning::Attention
   def placements
     open = @map.positions.to_set(&:id)
     @map.people.flat_map do |person|
-      breaks = person.memberships.filter_map do |place|
+      away = @map.outside_places(person)
+      breaks = (person.memberships - away).filter_map do |place|
         if place.position_id
           [ "Placed in a closed position", [ place.position_id, POSITION ] ] unless open.include?(place.position_id)
         elsif !@live.include?(place.unit_id)
@@ -157,16 +165,28 @@ class TeamPlanning::Attention
     end
   end
 
+  # A unit the plan covers sits under one it doesn't, so its parent is never gone.
   def units
-    @map.units.filter_map do |unit|
-      next if unit.parent_id.nil? || @live.include?(unit.parent_id)
+    roots = @map.scope_ids.to_a.to_set
+    parted = @map.units.filter_map do |unit|
+      next if unit.parent_id.nil? || @live.include?(unit.parent_id) || roots.include?(unit.id)
 
       item(unit.id, UNIT, "Its parent is #{gone(unit.parent_id)}", broken_by: [ [ unit.parent_id, UNIT ] ])
     end
+    parted + (roots - @live - @retired).map { item(it, UNIT, "The plan covers it, but the organisation no longer has it") }
   end
 
   def unresolved
     @map.unresolved.map { item(it.person_id, ASSIGNMENT, "Placed, but #{it.why}", fact: "employment_status") }
+  end
+
+  # A bring-in undone, or the Org Graph moving someone out, leaves their
+  # changes standing on nobody the plan shows (#338). An assignment that
+  # places them outside is the plan moving them out, so it stands.
+  def uncovered
+    @changes.filter_map do |(subject_id, facet), change|
+      Item.new(subject_id:, facet:, reason: UNCOVERED, change:) if facet != ASSIGNMENT && @outside.include?(subject_id)
+    end
   end
 
   def successions
@@ -182,10 +202,15 @@ class TeamPlanning::Attention
 
   # Capacity prices a place in a position by the position, so an override on
   # the unit around it is one no place reads.
+  #
+  # A scoped plan never names a place outside it, as the map leaves those out.
   def capacity_overrides
+    known = @map.known_unit_ids
+    in_position = ->(place_id) { @position_units.key?(place_id) && (@position_units[place_id].nil? || known.include?(@position_units[place_id])) }
+    outside = ->(place_id) { @map.scope_ids && !known.include?(place_id) && !in_position.(place_id) }
     @map.people.flat_map do |person|
       held = person.memberships.to_set { it.position_id || it.unit_id }
-      person.capacity_overrides.keys.reject { held.include?(it) }.sort.map do |place_id|
+      person.capacity_overrides.keys.reject { held.include?(it) || outside.(it) }.sort.map do |place_id|
         item(person.id, "#{CAPACITY}:#{place_id}", "Overrides capacity in a place they don't hold", broken_by: [ [ person.id, ASSIGNMENT ] ])
       end
     end
@@ -209,10 +234,10 @@ class TeamPlanning::Attention
     end
   end
 
-  def places_of(person) = person.memberships.map { it.position_id ? @position_units[it.position_id] : it.unit_id }
+  def places_of(person) = (person.memberships - @map.outside_places(person)).map { it.position_id ? @position_units[it.position_id] : it.unit_id }
 
   def dropped_keys(person)
-    person.memberships.reject { @live.include?(it.unit_id) }.flat_map do |place|
+    (person.memberships - @map.outside_places(person)).reject { @live.include?(it.unit_id) }.flat_map do |place|
       [ ([ place.position_id, POSITION ] if place.position_id), ([ place.unit_id, UNIT ] if place.unit_id) ].compact
     end
   end
@@ -266,6 +291,8 @@ class TeamPlanning::Attention
 
     nearby = near_units(person)
     if line.person_id
+      return if @outside.include?(line.person_id)
+
       manager = by_id[line.person_id]
       return "Their manager is no longer in this scenario" unless manager
       return "Their manager has since left" if @left.include?(manager.id)
@@ -273,6 +300,8 @@ class TeamPlanning::Attention
 
       UNSHARED.first unless nearby.intersect?(units_of(manager))
     else
+      return if @cut.include?(line.position_id)
+
       position = positions[line.position_id]
       return "Their manager's position is no longer in this scenario" unless position
       return if nearby.empty? || !@live.include?(position.unit_id)
@@ -401,6 +430,19 @@ class TeamPlanning::Attention
     end
   end
 
+  # A funding stands when its position closes or a line it draws on goes, so name it.
+  def fundings
+    open = @map.positions.to_set(&:id)
+    held = @map.budget_lines.to_set(&:id)
+    @map.fundings.flat_map do |position_id, draws|
+      next [] if @cut.include?(position_id)
+      next [ item(position_id, FUNDING, "Funds a closed position", broken_by: [ [ position_id, POSITION ] ]) ] unless open.include?(position_id)
+
+      gone = draws.map { it[:budget_line_id] }.reject { held.include?(it) }
+      gone.empty? ? [] : [ item(position_id, FUNDING, "Draws on a budget line this scenario no longer holds", broken_by: gone.map { [ it, BUDGET_LINE ] }) ]
+    end
+  end
+
   # @param units [Array<String>] units the item touches beyond its subject's and broken_by's
   def item(subject_id, facet, reason, broken_by: [], fact: nil, units: [])
     keys = [ [ subject_id, facet ], *broken_by ].select { @order.key?(it) }
@@ -411,7 +453,7 @@ class TeamPlanning::Attention
   def units_touched(subject_id, facet, broken_by)
     own = case facet
     when UNIT then [ subject_id ]
-    when POSITION then [ @position_units[subject_id] ]
+    when POSITION, FUNDING then [ @position_units[subject_id] ]
     when SUCCESSION then @map.successions.find { it.id == subject_id }&.then { it.predecessor_ids + it.successor_ids }
     when /\A#{CAPACITY}:/ then [ place_unit(facet.delete_prefix("#{CAPACITY}:")) ]
     else []

@@ -16,7 +16,7 @@ class TeamPlanning::Projections::Plans
   # @return [Array<Class>]
   def self.handled_events
     [ TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanRenamed, TeamPlanning::Events::PlanRebased,
-      TeamPlanning::Events::PlanDeleted ]
+      TeamPlanning::Events::PlanScopeSet, TeamPlanning::Events::PlanDeleted ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -39,6 +39,8 @@ class TeamPlanning::Projections::Plans
         TeamPlanningPlan.find_by(id: data[:plan_id])&.update!(name: data[:name], updated_at: event.timestamp)
       when TeamPlanning::Events::PlanRebased
         TeamPlanningPlan.where(id: data[:plan_id]).update_all(base_on: data[:base_on], updated_at: event.timestamp)
+      when TeamPlanning::Events::PlanScopeSet
+        TeamPlanningPlan.where(id: data[:plan_id]).update_all(scope_unit_ids: data[:unit_ids].presence, updated_at: event.timestamp)
       when TeamPlanning::Events::PlanDeleted
         TeamPlanningPlan.where(id: data[:plan_id]).delete_all
       end

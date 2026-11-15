@@ -1,6 +1,6 @@
 {
   "name": "team_planning_create_plan",
-  "description": "Create a Team Planning plan, a private draft of the organisation built on the Org Graph as it stood on base_on (today by default). Only its members see it, and its creator is its first editor. Refused unless the caller is a tenant admin or a planner, linked to a person.",
+  "description": "Create a Team Planning plan, a private draft of the organisation built on the Org Graph as it stood on base_on (today by default). It covers the whole organisation, or with unit_ids only those units and everything under them; the scope can be widened later. Only its members see it, and its creator is its first editor. Refused unless the caller is a tenant admin or a planner, linked to a person.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -13,6 +13,13 @@
         "type": "string",
         "minLength": 1,
         "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "unit_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "the units it covers, each with everything under it; none for the whole organisation"
       }
     },
     "required": [

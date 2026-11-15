@@ -4,7 +4,7 @@
 # its own, so a later change in its parent no longer reaches it. From then on
 # the pin is the scenario's change for that facet, of the kind it names.
 #
-# Reconcile (4.5) records "keep the plan" as a pin.
+# Reconcile (4.5) keeps an inherited change over a conflict as a pin.
 #
 # @!attribute [r] data
 #   @return [Hash] event data
@@ -19,6 +19,8 @@
 #   @option data [String] :pinned_by_id person_id of the actor
 #   @option data [Shreddable::Value, nil] :note why the scenario keeps it, sealed under the subject's key,
 #     as a change of its kind seals one; absent when there is none, and never part of the end state
+#   @option data [Hash, nil] :settles for a pin that kept the plan over a conflict an update to today carried
+#     forward, `since` and `choice`, as {TeamPlanning::Events::Change} holds them; absent for an ordinary pin
 #
 class TeamPlanning::Events::ChangePinned < RubyEventStore::Event
   extend Shreddable

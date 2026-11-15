@@ -18,5 +18,7 @@ class TeamPlanning::Events::PositionClosed < TeamPlanning::Events::Change
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
   # @return [TeamPlanning::Baseline::Map]
-  def self.apply_to(map, data) = map.with(positions: map.positions.reject { it.id == data[:subject_id] })
+  def self.apply_to(map, data)
+    map.with(positions: map.positions.reject { it.id == data[:subject_id] }, cut_positions: map.cut_positions.reject { it.id == data[:subject_id] })
+  end
 end

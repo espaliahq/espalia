@@ -241,6 +241,7 @@ because a binding budget guardrail needs them.
 | 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes | 1.2, 1.3 |
 | 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
 | 1.6 | Read-only map of any scenario, the baseline by default: units, people with their allocation and role, open positions, and the Unassigned bucket, read through `team_planning_scenario_map` | 1.4 |
+| 1.7 | What a plan covers: the whole organisation or chosen units, set when it starts and widened later, through `PlanScopeSet`, `team_planning_set_plan_scope` and `team_planning_coverable_units`. Units only; narrowing is refused while a change falls outside; the picker reaches the whole organisation ([#338](https://github.com/espaliahq/espalia/issues/338)) | 1.5, 1.6 |
 
 ### P2 Shreddable plan fields
 
@@ -379,7 +380,7 @@ edits the change, then approves again.
 
 | # | Story | Needs |
 |---|---|---|
-| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts | 3.3, 5.4 |
+| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), API only; the screen is [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out | 10.1 |
 | 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |
