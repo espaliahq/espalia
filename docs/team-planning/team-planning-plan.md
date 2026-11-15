@@ -376,7 +376,7 @@ edits the change, then approves again.
 
 | # | Story | Needs |
 |---|---|---|
-| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts | 3.3, 5.4 |
+| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), API only; the screen is [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out | 10.1 |
 | 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |
