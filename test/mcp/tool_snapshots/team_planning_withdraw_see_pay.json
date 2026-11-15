@@ -1,0 +1,28 @@
+{
+  "name": "team_planning_withdraw_see_pay",
+  "description": "Take the see-pay right from a member of a Team Planning plan, or give up your own. A plan keeps one holder who can still open it. Refused, as an unknown plan, unless the caller holds the right.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "person_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "plan_id",
+      "person_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

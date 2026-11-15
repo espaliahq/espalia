@@ -166,7 +166,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
   end
 
   # Quinn joins while still in the organisation, as an editor of the lead's
-  # plan, and sets a rule in one of its scenarios.
+  # plan, sets a rule in one of its scenarios, and is the last to grant the
+  # lead the see-pay right.
   def plan_with_quinn
     @plan_id = SecureRandom.uuid_v7
     @scenario_id = SecureRandom.uuid_v7
@@ -175,7 +176,12 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
       handler.add_member(@plan_id, @quinn.id, role: "editor")
       handler.fork_scenario(@plan_id, @scenario_id, parent_id: @plan_id, relation: "then", name: "Q1", ends_on: Date.current + 90)
     end
+    TeamPlanning::CommandHandler.new(actor: lead_context).grant_see_pay(@plan_id, @quinn.id)
     quinn = AuthorizationContext.new(user: User.find_by(email: ERASED_EMAIL), tenant_user: TenantUser.find_by(person_id: @quinn.id), person: @quinn)
+    TeamPlanning::CommandHandler.new(actor: quinn).tap do |handler|
+      handler.withdraw_see_pay(@plan_id, @lead.id)
+      handler.grant_see_pay(@plan_id, @lead.id)
+    end
     TeamPlanning::CommandHandler.new(actor: quinn).set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id: @scenario_id, subject_id: @plan_id,
                                                                                                        end_state: { rule: "test_headcount_cap", value: { cap: 4 } })
   end
