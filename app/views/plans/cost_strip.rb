@@ -40,10 +40,11 @@ class Views::Plans::CostStrip < Views::Base
   end
 
   def not_converted
-    return if total[:scenario][:converted]
+    missing = total.values_at(:scenario, :baseline).reject { it[:converted] }.flat_map { it[:missing] }.uniq
+    return if missing.empty?
 
     p(data: { cost_missing: "" }, class: "text-sm text-warning") do
-      "Not totalled in one currency: #{total[:scenario][:missing].map { it.downcase_first.delete_suffix('.') }.to_sentence}."
+      "Not totalled in one currency: #{missing.map { it.downcase_first.delete_suffix('.') }.to_sentence}."
     end
   end
 

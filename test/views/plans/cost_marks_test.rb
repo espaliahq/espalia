@@ -29,6 +29,17 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
     assert_nil Format.sum_change(sum({ "EUR" => "0" }, "0"), "EUR")
   end
 
+  should "say why a total isn't in one currency when only Today's fails to convert" do
+    marks = Struct.new(:total, :reference, :cost, :outside_units, :unpriced).new(
+      { scenario: sum({ "EUR" => "100" }, "100"), baseline: sum({ "GBP" => "80" }, nil, [ "No GBP rate." ]),
+        difference: sum({ "EUR" => "100", "GBP" => "-80" }) },
+      "EUR", { period: { starts_on: "2026-01-01", ends_on: "2026-12-31" } }, nil, []
+    )
+    strip = Nokogiri::HTML5.fragment(Views::Plans::CostStrip.new(marks:).call)
+
+    assert_equal "Not totalled in one currency: no GBP rate.", strip.at_css("[data-cost-missing]").text
+  end
+
   should "say in the table that Today has no period, and that a scenario can't be priced" do
     today = Views::Plans::CostCell.new(row: nil, reference: "EUR").call
     broken = Nokogiri::HTML5.fragment(Views::Plans::CostCell.new(row: { scenario_id: "s", error: "No period" }, reference: "EUR").call)
