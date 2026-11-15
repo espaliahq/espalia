@@ -284,7 +284,7 @@ facet, so a later step or an alternative can have the person stay.
 
 A write refuses only a malformed change. Fit is read, never refused
 ([#257](https://github.com/espaliahq/espalia/issues/257)). `TeamPlanning::Attention` walks a
-resolved scenario and lists what no longer fits. `Resolution#attention` runs it on the settled
+resolved scenario and lists what no longer fits. `Attention.for` runs it on the settled
 map and the changes that won, and nothing is stored. Each item has the subject and facet, a
 reason a planner can read, and the change it belongs to: the later to land of the subject's own
 winning change and the change that broke it, such as its unit's `UnitRetired`.
@@ -303,7 +303,7 @@ It also checks each person (4.6):
   nowhere.
 - **Since left.** Someone the scenario still has, with no planned departure, whom the Org Graph
   has had leave by today, a UTC day. They are placed but left, or, with no place, left. Either
-  way that is their only allocation item. `Resolution#attention` reads them from
+  way that is their only allocation item. `Attention.for` reads them from
   `org_leavers`, since the base map can't know.
 - **Manager.** A contributor with no manager, though not the head of the tree, who owns a unit
   with no parent. A manager, or a manager's position, no longer in the scenario. A manager who

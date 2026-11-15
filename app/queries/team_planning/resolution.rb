@@ -18,7 +18,6 @@ class TeamPlanning::Resolution
   #   read by a caller resolving several scenarios over the same one
   def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil)
     @baseline = TeamPlanning::Baseline.new(context:, plan:)
-    @context = context
     @base = base
     @plan = plan
     @scenario_id = scenario_id
@@ -37,19 +36,11 @@ class TeamPlanning::Resolution
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def structure(aggregate = @repository.load_plan(@plan.id)) = resolved(aggregate).first
 
-  # @return [Array<TeamPlanning::Attention::Item>] what no longer fits, each with the change it belongs to
+  # @param aggregate [TeamPlanning::PlanAggregate]
+  # @return [Array(TeamPlanning::Baseline::Map, Hash{Array(String, String) => TeamPlanning::Events::Change})]
+  #   the settled map by id, and the winning changes by key
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def attention
-    map, changes = resolved
-    capacity = TeamPlanning::Capacity.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository)
-                                     .report_for(map)
-    TeamPlanning::Attention.new(map, changes, left_ids: left_since(map),
-                                              unclassified: capacity.configured? ? capacity.unclassified : []).call
-  end
-
-  private
-
   def resolved(aggregate = @repository.load_plan(@plan.id))
     winning = @repository.sealed(aggregate.winning_changes(@scenario_id))
     base = (@base || @baseline.structure).with(step_ids: step_of(aggregate))
@@ -58,6 +49,14 @@ class TeamPlanning::Resolution
     [ explained(map.settled), winning ]
   end
 
+  # @param map [TeamPlanning::Baseline::Map]
+  # @return [Array<String>] the people on the map the Org Graph has had leave by today, a UTC day
+  def left_since(map)
+    OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..Time.now.utc.to_date).pluck(:person_id)
+  end
+
+  private
+
   # The scenario and those it is an alternative of: the chain after the step
   # before it on the timeline. The scenarios that step replaced come earlier
   # in the chain, so they drop off too.
@@ -65,11 +64,6 @@ class TeamPlanning::Resolution
     chain = aggregate.resolution_chain(@scenario_id)
     before = aggregate.timeline_path(@scenario_id)[-2]
     before ? chain.drop(chain.index(before) + 1) : chain
-  end
-
-  # The people on the map the Org Graph has had leave by today, a UTC day.
-  def left_since(map)
-    OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..Time.now.utc.to_date).pluck(:person_id)
   end
 
   # A person off the map either left by the base date, or was forgotten, or

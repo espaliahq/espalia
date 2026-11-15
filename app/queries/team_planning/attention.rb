@@ -13,7 +13,7 @@
 # tab (4.4) and the checks tab (4.7) both read it.
 #
 # @example
-#   TeamPlanning::Resolution.new(context:, plan:, scenario_id:).attention
+#   TeamPlanning::Attention.for(context:, plan:, scenario_id:)
 class TeamPlanning::Attention
   # One thing that no longer fits.
   #
@@ -41,6 +41,23 @@ class TeamPlanning::Attention
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
   # A place in no unit has no id an override could name, as the map's own drop target hasn't.
   UNASSIGNED = "unassigned"
+
+  # Resolves the scenario, then prices it, so the unclassified check reads
+  # the same map as every other.
+  #
+  # @param context [AuthorizationContext]
+  # @param plan [TeamPlanningPlan]
+  # @param scenario_id [String] the plan's id for the root
+  # @param repository [TeamPlanning::Repository]
+  # @return [Array<Item>]
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def self.for(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
+    resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:)
+    map, changes = resolution.resolved
+    capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
+    new(map, changes, left_ids: resolution.left_since(map), unclassified: capacity.configured? ? capacity.unclassified : []).call
+  end
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
