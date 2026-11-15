@@ -95,6 +95,23 @@ class TeamPlanning::SplitTest < ActiveSupport::TestCase
     assert_equal before, [ counts, timeline ]
   end
 
+  should "resolve every step byte for byte as before, bar the ids of the step it names, after a split and an undo in the agreed part" do
+    hire = change_on(@hire)
+    maps = -> { [ @h1, @h2 ].map { resolved(it).with(step_ids: []).to_json } }
+    before = maps.call
+    as_tenant { handler.undo_change(@plan_id, scenario_id: @h1, event_id: hire) }
+    undone = maps.call
+    as_tenant { handler.redo_change(@plan_id, scenario_id: @h1, event_id: hire) }
+    assert_equal before, maps.call
+
+    agreed = split(hire)
+    assert_equal before, maps.call
+
+    as_tenant { handler.undo_change(@plan_id, scenario_id: agreed, event_id: hire) }
+    assert_equal undone, maps.call
+    assert_not_equal before, undone
+  end
+
   should "count a departure that moves into the agreed part as leaving in its step, there and in the rest" do
     agreed = split(change_on(@brook.id))
 
