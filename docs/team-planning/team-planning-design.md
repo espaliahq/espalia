@@ -1160,7 +1160,8 @@ Graph, by which rule) and reports three conditions as checks:
   give the position. The known value is used and the mismatch is always flagged. It is
   resolved by planning the cost centre change, which joins the change list to be raised
   upstream. The rules never move a person's cost on their own.
-- **Unplaced.** An open position no rule matches. It can draw only on a budget line that states
+- **Unplaced.** An open position with no cost centre: it has no label of its own and no rule
+  matches it. It can draw only on a budget line that states
   no cost centre, which matches any position, and is unfunded when none matches. This is a
   warning while drafting, and a guardrail a tenant can make binding at approval.
 - **Ambiguous.** Two budget lines match a position equally well. Nothing is picked silently.
