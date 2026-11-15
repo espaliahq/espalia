@@ -52,14 +52,15 @@ class Operations::TeamPlanning::ScenarioCostsTest < ActiveSupport::TestCase
     result = costs
 
     assert_equal [ "EUR", "2025-12-15T09:00:00Z" ], result.values_at(:reference_currency, :bands_changed_at)
-    assert_equal [ @year, later ], result[:scenarios].pluck(:scenario_id)
-    [ @year, later ].each do |scenario_id|
+    assert_equal [ @plan_id, @year, later ], result[:scenarios].pluck(:scenario_id)
+    assert_equal %w[run_rate period period], result[:scenarios].pluck(:basis)
+    [ @plan_id, @year, later ].each do |scenario_id|
       one = call(Operations::TeamPlanning::Cost, plan_id: @plan_id, scenario_id:)
       row = result[:scenarios].find { it[:scenario_id] == scenario_id }
       assert_equal one[:total], row[:total]
       assert_equal [ one[:period], one[:unpriced].size ], row.values_at(:period, :unpriced)
     end
-    assert_equal "50000", result[:scenarios].first[:total][:difference][:converted]
+    assert_equal "50000", result[:scenarios].second[:total][:difference][:converted]
   end
 
   should "read the Org Graph once, however many scenarios the plan has" do

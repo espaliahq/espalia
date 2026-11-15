@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Every scenario's total against the baseline, for the plan page's Cost
-# column ([#316](https://github.com/espaliahq/espalia/issues/316)). It reads
+# column ([#316](https://github.com/espaliahq/espalia/issues/316)), after
+# Today's yearly run rate ([#318](https://github.com/espaliahq/espalia/issues/318)). It reads
 # the Org Graph once for the whole plan, where calling `team_planning_cost`
 # per scenario would read it once each. Totals only: no seat, band or
 # person, so the see-pay right changes nothing in it.
@@ -11,7 +12,9 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
 
   description "Get what each scenario of a Team Planning plan the caller is in costs over its own period, beside " \
               "the baseline priced over the same days, with the difference: the same totals as team_planning_cost, " \
-              "for every scenario at once. The baseline has no period, so it is not listed. Totals are per currency " \
+              "for every scenario at once. Today comes first, under the plan's id, with basis run_rate: every seat priced " \
+              "for the year from the base date, totals carrying only `scenario`, never compared with a period total. " \
+              "Each scenario has basis period. Totals are per currency " \
               "in `native`, and `converted` is the same in the reference currency at each period's start, null with " \
               "`missing` saying why. `unpriced` counts the seats that can't be priced and so are left out, never " \
               "counted as zero; team_planning_cost names them. A scenario that can't be priced has `error` instead " \
@@ -21,7 +24,7 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
 
   parameter :plan_id, String, required: true
 
-  # @return [Hash] `{ plan_id, reference_currency, bands_changed_at, scenarios: [{ scenario_id, period, total, unpriced }
+  # @return [Hash] `{ plan_id, reference_currency, bands_changed_at, scenarios: [{ scenario_id, basis, period, total, unpriced }
   #   or { scenario_id, error }] }`
   def perform
     plan = plan!
@@ -37,8 +40,7 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
   def scenario(scenario_id, report)
     return { scenario_id:, error: report.message } unless report.is_a?(::TeamPlanning::Cost::Report)
 
-    unpriced = (report.scenario.unpriced + report.baseline.unpriced).uniq { [ it.seat_id, it.unit_id, it.reason ] }
-    { scenario_id:, period: { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601 },
-      total: compared(report, report.scenario.total, report.baseline.total), unpriced: unpriced.size }
+    { scenario_id:, basis: report.basis, period: period(report),
+      total: compared(report, report.scenario.total, report.baseline&.total), unpriced: unpriced_lines(report).size }
   end
 end
