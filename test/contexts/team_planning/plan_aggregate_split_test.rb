@@ -142,16 +142,18 @@ class TeamPlanning::PlanAggregateSplitTest < ActiveSupport::TestCase
   end
 
   should "carry each moved change's redo slot into the agreed part, and leave the rest's with the original" do
-    moved = set(@q1, "Lead")
-    staying = set(@q1, "Staff", subject_id: "ola")
+    kept = set(@q1, "Lead")
+    moved = set(@q1, "Senior")
     @plan.undo_change(scenario_id: @q1, event_id: moved, undone_by_id: @ada_id)
-    kept = set(@q1, "Senior")
+    set(@q1, "Principal", subject_id: "kim", by: @grace_id)
+    staying = set(@q1, "Staff", subject_id: "ola", by: @grace_id)
     @plan.undo_change(scenario_id: @q1, event_id: staying, undone_by_id: @grace_id)
-    set(@q1, "Principal", subject_id: "kim")
 
     agreed = split(@q1, kept)
 
-    assert_equal [ moved, kept ], @plan.log_of(agreed).map(&:event_id)
+    assert_equal [ kept, moved ], @plan.log_of(agreed).map(&:event_id)
+    assert_equal moved, @plan.last_redoable_by(agreed, @ada_id)
+    assert_nil @plan.last_redoable_by(@q1, @ada_id)
     assert_equal staying, @plan.last_redoable_by(@q1, @grace_id)
     assert_nil @plan.last_redoable_by(agreed, @grace_id)
   end
