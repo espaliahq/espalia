@@ -44,8 +44,11 @@ class Views::Plans::ScenarioMap < Views::Base
   # @param position_marks [#call] position hash => components beside the position's label
   # @param summary [Phlex::SGML, nil] drawn under the date line, such as the capacity strip
   # @param can_edit [Boolean] whether the caller edits the plan: renaming the scenario shown, and moving people on it
-  def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, position_marks: NONE, summary: nil, can_edit: false)
+  # @param can_upload_pay [Boolean] whether the caller may hold actual pay from a file, an editor with the see-pay right
+  def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, position_marks: NONE, summary: nil, can_edit: false,
+                 can_upload_pay: false)
     @can_edit = can_edit
+    @can_upload_pay = can_upload_pay
     @map = map
     @moving = can_edit && !baseline?(map[:scenario_id])
     @scenarios = scenarios
@@ -77,6 +80,7 @@ class Views::Plans::ScenarioMap < Views::Base
       scenario_pills
       scenario_select
       edit_button if @can_edit && !baseline?(@map[:scenario_id])
+      upload_pay_link if @can_upload_pay
     end
   end
 
@@ -119,6 +123,11 @@ class Views::Plans::ScenarioMap < Views::Base
       variant: :ghost, size: :sm,
       data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@map[:plan_id], current[:scenario_id]), current)
     ) { "Edit…" }
+  end
+
+  def upload_pay_link
+    scenario = @map[:scenario_id] unless baseline?(@map[:scenario_id])
+    render Components::Kit::Button.new(variant: :ghost, size: :sm, href: pay_upload_plan_path(@map[:plan_id], scenario:)) { "Upload pay…" }
   end
 
   def scenario_label(scenario) = baseline?(scenario[:scenario_id]) ? "Today" : scenario[:name]
