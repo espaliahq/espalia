@@ -74,8 +74,8 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_same recast, TeamPlanning::Attention.new(map, changes, unclassified:).call.sole.change
   end
 
-  def uncovered(reason, position_id: nil)
-    place = TeamPlanning::CapacityModel::Place.new(unit_id: LIVE, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id:)
+  def uncovered(reason, position_id: nil, unit_id: LIVE)
+    place = TeamPlanning::CapacityModel::Place.new(unit_id:, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id:)
     seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])
     [ [ TeamPlanning::Capacity::Seat.new(seat:, places: []), TeamPlanning::Capacity::Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason:) ] ]
   end
@@ -88,6 +88,22 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
     assert_same plan_wide, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_model")).call.sole.change
     assert_same placed, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_title")).call.sole.change
+  end
+
+  should "credit a later capacity rule for a place it left with no level, as a switch to a model that needs one does" do
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    switched = change(TeamPlanning::Events::RuleSet, LIVE, rule: "capacity_model", value: {})
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, switched.key => switched }
+
+    assert_same switched, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_level")).call.sole.change
+  end
+
+  should "credit a unit's later retirement for a place it left with no model, as it drops the rule set there" do
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    retired = change(TeamPlanning::Events::UnitRetired, RETIRED, name: "Unit", parent_id: ROOT, level_id: LEVEL)
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, retired.key => retired }
+
+    assert_same retired, TeamPlanning::Attention.new(map, changes, unclassified: uncovered("no_model", unit_id: RETIRED)).call.sole.change
   end
 
   should "not credit a person's own level change for a position's place, whose level is the position's" do
