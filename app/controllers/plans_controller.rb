@@ -98,6 +98,11 @@ class PlansController < ApplicationController
   def rebase_plan
     plan = read(Operations::TeamPlanning::Plan)
     authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    today = Time.now.utc.to_date.iso8601
+    # A second click lands after the first has moved the base to the day it confirmed.
+    return redirect_to(changes_plan_path(plan[:plan_id]), notice: "Updated to today, #{day(today)}.") if plan[:base_on] == today && params[:to] == today
+    return redirect_to(rebase_plan_path(plan[:plan_id]), alert: "The day has turned since you looked, so check the update again.") if params[:to] != today
+
     result = Operations::TeamPlanning::RebasePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id], base_on: params[:base_on] })
     redirect_to changes_plan_path(plan[:plan_id]), notice: rebased(result)
   rescue Operations::Base::ParameterError => e
@@ -109,8 +114,10 @@ class PlansController < ApplicationController
   def rebased(result)
     count = result[:conflicts].size
     carried = count.zero? ? "" : " #{count} planned #{count == 1 ? 'change stays' : 'changes stay'} conflicting."
-    "Updated to today, #{I18n.l(Date.iso8601(result[:base_on]), format: '%-d %b %Y')}.#{carried}"
+    "Updated to today, #{day(result[:base_on])}.#{carried}"
   end
+
+  def day(iso) = I18n.l(Date.iso8601(iso), format: "%-d %b %Y")
 
   # Cost comes before capacity, in the strips above the map and beside each
   # unit's name.

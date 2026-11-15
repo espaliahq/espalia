@@ -99,6 +99,7 @@ class Views::Plans::UpdateToToday < Views::Base
     form(action: rebase_plan_path(plan_id), method: "post", class: "flex flex-wrap items-center gap-2") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "base_on", value: @preview[:base_on])
+      input(type: "hidden", name: "to", value: @preview[:to])
       render Components::Kit::Button.new(type: :submit) { "Update to #{day(@preview[:to])}" }
       render Components::Kit::Button.new(variant: :ghost, href: changes_plan_path(plan_id)) { "Cancel" }
     end

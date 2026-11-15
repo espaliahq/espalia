@@ -154,9 +154,10 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       get rebase_plan_path(@plan_id)
       assert_response :success
       assert_select "[data-update-to-today] input[name='base_on'][value='2026-11-14']"
+      assert_select "[data-update-to-today] input[name='to'][value='2026-11-20']"
       assert_includes response.body, "The plan stands on 14 Nov 2026"
 
-      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14" }
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
       assert_redirected_to changes_plan_path(@plan_id)
       assert_equal "Updated to today, 20 Nov 2026.", flash[:notice]
       assert_equal "2026-11-20", plan_base_on
@@ -165,14 +166,32 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_select "a[href='#{rebase_plan_path(@plan_id)}']", count: 0
     end
 
+    should "take a second click on the confirm as the update it already made" do
+      sign_in @editor.user
+      2.times { post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" } }
+
+      assert_redirected_to changes_plan_path(@plan_id)
+      assert_equal "Updated to today, 20 Nov 2026.", flash[:notice]
+      assert_nil flash[:alert]
+    end
+
+    should "send an editor back to the preview when the day has turned since it was read" do
+      sign_in @editor.user
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-19" }
+
+      assert_redirected_to rebase_plan_path(@plan_id)
+      assert_equal "The day has turned since you looked, so check the update again.", flash[:alert]
+      assert_equal "2026-11-14", plan_base_on
+    end
+
     should "refuse an update since the preview was read, and send back a plan already on today" do
       sign_in @editor.user
-      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-01" }
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-01", to: "2026-11-20" }
       assert_redirected_to changes_plan_path(@plan_id)
       assert_match(/\ACouldn't update to today: This plan has moved since you looked/, flash[:alert])
       assert_equal "2026-11-14", plan_base_on
 
-      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14" }
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
       get rebase_plan_path(@plan_id)
       assert_redirected_to changes_plan_path(@plan_id)
       assert_equal "Can't update to today: This plan already stands on today, 2026-11-20", flash[:alert]
@@ -184,14 +203,14 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_select "a[href='#{rebase_plan_path(@plan_id)}']", count: 0
       get rebase_plan_path(@plan_id)
       assert_redirected_to root_path
-      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14" }
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
       assert_redirected_to root_path
       assert_equal "2026-11-14", plan_base_on
 
       sign_out @viewer.user
       sign_in @admin.user
       get plans_path
-      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14" }
+      post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
       assert_response :not_found
     end
   end
