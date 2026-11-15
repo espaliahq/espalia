@@ -22,6 +22,9 @@ class TeamPlanning::Events::PlaceholderSet < TeamPlanning::Events::Change
   # @return [String]
   def self.facet = "placeholder"
 
+  # @return [Boolean]
+  def self.creates_subject? = true
+
   # @param end_state [Hash] `{ label:, level:, fte: }`, level and FTE optional
   # @return [Hash]
   # @raise [TeamPlanning::Error] without a label, or with an FTE out of range

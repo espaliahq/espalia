@@ -10,7 +10,8 @@ class Operations::TeamPlanning::Scenarios < Operations::Base
 
   description "List the scenarios of a Team Planning plan the caller is in. The baseline comes first: its id is " \
               "the plan's, it stands on the base date and has no parent, relation or end. Each other scenario has " \
-              "its parent_id, its relation ('then' follows the parent, 'instead' is an alternative to it), its " \
+              "its parent_id, its relation ('then' follows the parent, 'instead' is an alternative to it, 'on' is " \
+              "the rest of a split step, sitting on its agreed part), its " \
               "period and what it is for, if an editor has said. Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none

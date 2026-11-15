@@ -90,12 +90,13 @@ class TeamPlanning::Capacity
     def unit_id = place.unit_id
   end
 
-  # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
+  # @param context [AuthorizationContext]
   # @param scenario_id [String] the plan's id for the root
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
-    @resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:)
+  # @param resolution [TeamPlanning::Resolution, nil] the scenario's, when the caller already holds one
+  def initialize(plan:, context: nil, scenario_id: nil, repository: TeamPlanning::Repository.new, resolution: nil)
+    @resolution = resolution || TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:)
     @plan = plan
   end
 

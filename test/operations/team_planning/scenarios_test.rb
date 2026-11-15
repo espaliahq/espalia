@@ -21,6 +21,14 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
 
   def fork(**params) = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, **params)
 
+  def set(kind, subject_id, scenario_id: @q1, **end_state)
+    ActsAsTenant.with_tenant(@tenant) do
+      TeamPlanning::CommandHandler.new(actor: AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person))
+        .set_change(@plan_id, kind, scenario_id:, subject_id:, end_state:)
+      TeamPlanningOverride.find_by!(scenario_id:, subject_id:).event_id
+    end
+  end
+
   def described_count = Rails.configuration.event_store.read.of_type([ TeamPlanning::Events::ScenarioDescribed ]).count
 
   def refusal(operation, as: @admin, **params)
@@ -106,6 +114,32 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
       assert_equal({ plan_id: @plan_id, scenario_id: @lean, removed: true },
                    call(Operations::TeamPlanning::RemoveScenario, plan_id: @plan_id, scenario_id: @lean))
       assert_equal [ @plan_id, @q1 ], call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].pluck(:scenario_id)
+    end
+
+    should "split a scenario, list the agreed part in its place with the rest on it, and refuse a bad split" do
+      moving = set(TeamPlanning::Events::LevelSet, @admin.person_id, level: "4")
+      set(TeamPlanning::Events::LevelSet, @other_admin.person_id, level: "5")
+
+      split = call(Operations::TeamPlanning::SplitScenario, plan_id: @plan_id, scenario_id: @q1, event_ids: [ moving.upcase ], name: " Agreed  Q1 ")
+
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, agreed_id: split[:agreed_id], name: "Agreed Q1", moved_event_ids: [ moving ] }, split)
+      listed = call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].index_by { it[:scenario_id] }
+      assert_equal [ @plan_id, "then", "2027-03-31" ], listed[split[:agreed_id]].values_at(:parent_id, :relation, :ends_on)
+      assert_equal [ split[:agreed_id], "on" ], listed[@q1].values_at(:parent_id, :relation)
+      assert_equal "Every change would move: approve the scenario whole instead",
+                   refusal(Operations::TeamPlanning::SplitScenario, scenario_id: split[:agreed_id], event_ids: [ moving ], name: "Again")
+      assert_equal "event_ids must hold event ids, got \"lin\"",
+                   refusal(Operations::TeamPlanning::SplitScenario, scenario_id: @q1, event_ids: [ "lin" ], name: "Again")
+    end
+
+    should "name the event id of each change a moving one needs, so the caller can move it across too" do
+      unit_id = SecureRandom.uuid_v7
+      creates = set(TeamPlanning::Events::UnitSet, unit_id, name: "Payments", parent_id: nil, level_id: SecureRandom.uuid_v7)
+      placed = set(TeamPlanning::Events::AssignmentSet, @admin.person_id, placements: [ { unit_id:, allocation: 1.0 } ])
+      set(TeamPlanning::Events::LevelSet, @other_admin.person_id, level: "5")
+
+      assert_equal "The agreed part can't stand without a change that stays: unit of #{unit_id}. Move it across too (event_ids #{creates})",
+                   refusal(Operations::TeamPlanning::SplitScenario, scenario_id: @q1, event_ids: [ placed ], name: "Agreed")
     end
 
     should "read as missing to an admin outside the plan" do

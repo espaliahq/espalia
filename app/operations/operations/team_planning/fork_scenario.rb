@@ -19,7 +19,7 @@ class Operations::TeamPlanning::ForkScenario < Operations::Base
 
   parameter :plan_id, String, required: true
   parameter :parent_id, String, allow_blank: false
-  parameter :relation, String, required: true, schema: { enum: ::TeamPlanning::PlanAggregate::RELATIONS }
+  parameter :relation, String, required: true, schema: { enum: ::TeamPlanning::PlanAggregate::FORK_RELATIONS }
   parameter :name, String, required: true, allow_blank: false,
     schema: { description: "What the scenario is, such as 'Lean Q1'. Don't put a person's name in it." }
   parameter :starts_on, String, allow_blank: false, schema: DATE_SCHEMA

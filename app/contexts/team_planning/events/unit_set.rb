@@ -16,6 +16,13 @@ class TeamPlanning::Events::UnitSet < TeamPlanning::Events::Change
 
   def self.facet = FACET
 
+  # @param data [Hash]
+  # @return [Array<String>] the parent unit, if any
+  def self.refers_to(data) = [ data[:parent_id] ].compact
+
+  # @return [Boolean]
+  def self.creates_subject? = true
+
   # @param end_state [Hash] `{ name:, parent_id:, level_id: }`
   # @return [Hash]
   # @raise [TeamPlanning::Error] for a blank or long name, or a level or parent that isn't an id

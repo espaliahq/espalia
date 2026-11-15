@@ -291,7 +291,7 @@ facet, so a later step or an alternative can have the person stay.
 
 A write refuses only a malformed change. Fit is read, never refused
 ([#257](https://github.com/espaliahq/espalia/issues/257)). `TeamPlanning::Attention` walks a
-resolved scenario and lists what no longer fits. `Resolution#attention` runs it on the settled
+resolved scenario and lists what no longer fits. `Attention.for` runs it on the settled
 map and the changes that won, and nothing is stored. Each item has the subject and facet, a
 reason a planner can read, and the change it belongs to: the later to land of the subject's own
 winning change and the change that broke it, such as its unit's `UnitRetired`.
@@ -310,7 +310,7 @@ It also checks each person (4.6):
   nowhere.
 - **Since left.** Someone the scenario still has, with no planned departure, whom the Org Graph
   has had leave by today, a UTC day. They are placed but left, or, with no place, left. Either
-  way that is their only allocation item. `Resolution#attention` reads them from
+  way that is their only allocation item. `Attention.for` reads them from
   `org_leavers`, since the base map can't know.
 - **Manager.** A contributor with no manager, though not the head of the tree, who owns a unit
   with no parent. A manager, or a manager's position, no longer in the scenario. A manager who
@@ -454,7 +454,9 @@ share of the seat) is priced on its own:
 A place no model covers counts nowhere and is listed as unclassified with its reason: no
 title, a title mapped to no role, a role not in the framework, a position since closed, no
 model chosen, or a model no longer registered. A place in a unit gone from the map counts
-for the scenario but under no unit.
+for the scenario but under no unit. For no model, or one no longer registered, the checks
+credit the plan's capacity rule that decided it, the nearest unit's or else the plan's,
+however late the person's own change landed.
 
 **A planner's override** (7.3, `CapacitySet`) replaces one place's figure: a person's
 capacity in a position, or straight in a unit, as a number in that place's model's units.
@@ -566,9 +568,10 @@ it once, for the scenario and the baseline together.
   nothing in the period, and their backfill holds the whole of it. A backfill for several
   leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
   period any FTE no leaver opens.
-- **A cost centre** is the person's, from the Org Graph, or none. An open seat has none
-  until positions carry a cost-centre label in 6.2. No cost centre is a bucket of its own,
-  counted like any other.
+- **A cost centre** is the person's, from the Org Graph, or none. An open seat takes its
+  position's cost centre, resolved as [Position to cost centre](#which-budget-line-a-position-draws-on)
+  describes, and the working says how (`cost_centre_source`). No cost centre is a bucket of
+  its own, counted like any other.
 - **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
   that refuses it, or a level or FTE lost with a forgotten person's key), never counted
   as zero.
@@ -1076,6 +1079,14 @@ from the framework, or a unit and a role together. The list is ordered because
 organisations differ on whether the unit or the role decides. Rules start from the
 tenant default, and a plan or scenario can change them.
 
+As built in 6.2 ([#325](https://github.com/espaliahq/espalia/issues/325)): the rules are the
+`cost_centre` rule kind, set through the generic rule write. A matcher names a unit, a role
+or a role family, or a unit with one of the other two. Each position's result records its
+source (`position`, `person`, `rule` with the rule's index, or `none`). Step 2 reads only the
+occupant's own cost centre, the one with the largest allocation first: no event carries a
+plan's change to a person's cost centre yet, and the mismatch check in 6.6 is where one is
+needed.
+
 **Cost centre to budget line.** The most specific budget line that matches the position's cost centre and
 period, and whichever of role, level and location the budget line states. `PositionFundingSet` is
 the exception only: a position funded from another centre, or split across budget lines. A position no
@@ -1213,11 +1224,18 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
   3 and later to 4, moving only the 4 would leave the 3 behind to win. The earlier
   changes for the same subject and facet go across with it.
 - The two parts cover the same period. This is a third relation beside `then` and
-  `instead`: the rest sits on top of the agreed part. The timeline shows them as one
+  `instead`, named `on`: the rest sits on the agreed part. The timeline shows them as one
   column with the agreed part marked.
 - The agreed part must stand without the rest. A change cannot move across if it depends
   on one that stays, such as a person placed in a unit the rest creates. The split says
   which changes block it.
+- Only a split makes `on`. A fork is `then` or `instead`, and the next step forks from the
+  rest, which keeps the original's id, its alternatives and its next step.
+- A split step is one step. Cost, capacity and the headcount walk count the pair once over
+  the one period, and the timeline gives it one column. A split part can be split again.
+- `team_planning_split_scenario` splits from an MCP client. It takes the moving changes'
+  event ids as `team_planning_history` lists them, and its refusal names the event ids
+  that block the split.
 - The agreed part can then be approved and carried out. As its changes are done they leave
   the difference, and the rest is what remains to be argued.
 
