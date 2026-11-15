@@ -65,6 +65,31 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  should "show a non-holder no pay where an override reads what it inherits off the parent's map" do
+    TeamPlanningOverride.where(scenario_id: @plan_id).delete_all
+
+    { "viewer" => @viewer, "editor" => @editor }.each do |who, account|
+      overrides = call(Operations::TeamPlanning::Overrides, account, plan_id: @plan_id, scenario_id: @q1)
+      pay = overrides[:overrides].find { it[:facet] == "data:pay" }
+
+      assert_equal({ scenario_id: nil, end_state: { "field" => "pay" } }, pay[:inherits], who)
+      assert_not_includes overrides.to_json, AMOUNT, who
+    end
+  end
+
+  should "capture the log the leak check reads" do
+    Rails.logger.info("probe #{AMOUNT}")
+
+    assert_includes @log.string, AMOUNT
+  end
+
+  should "read the Team Planning tables in a form that would show a clear amount" do
+    tables = ActiveRecord::Base.connection.tables.grep(/\Ateam_planning/)
+
+    assert_predicate tables, :any?
+    assert_includes ActiveRecord::Base.connection.select_values("SELECT row_to_json(t)::text FROM (SELECT '#{AMOUNT}' AS amount) t").join, AMOUNT
+  end
+
   should "keep pay out of the log, the read models and the event store in clear" do
     assert_not_includes @log.string, AMOUNT
 
