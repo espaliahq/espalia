@@ -181,6 +181,19 @@ class TeamPlanning::PlanAggregateSplitTest < ActiveSupport::TestCase
     assert_equal [ [ creates, under ] ], error.blocks.map { [ it.event_id, it.blocks_event_id ] }
   end
 
+  should "block a split when a moving change needs what the rest created and has since cleared" do
+    parent_id = SecureRandom.uuid_v7
+    child_id = SecureRandom.uuid_v7
+    creates = set_unit(@q1, parent_id)
+    under = set_unit(@q1, child_id, parent_id:)
+    alone = set_unit(@q1, child_id)
+    @plan.clear_change(scenario_id: @q1, subject_id: parent_id, facet: TeamPlanning::Events::UnitSet.facet, cleared_by_id: @ada_id)
+    set(@q1, "Staff")
+
+    error = assert_raises(TeamPlanning::SplitBlocked) { split(@q1, alone) }
+    assert_equal [ [ creates, under ] ], error.blocks.map { [ it.event_id, it.blocks_event_id ] }
+  end
+
   should "let a change move when what it needs stands in the parent or moves with it" do
     standing_id = SecureRandom.uuid_v7
     set_unit(@q1, standing_id)

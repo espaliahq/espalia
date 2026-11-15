@@ -402,8 +402,8 @@ class TeamPlanning::PlanAggregate
     staying = latest_by_key(in_effect).reject { keys.include?(it.key) }
     raise TeamPlanning::Error, "Every change would move: approve the scenario whole instead" if staying.empty?
 
-    moved = @logs.fetch(scenario_id, []).select { keys.include?(key_of(it)) }
-    ensure_stands_alone!(moved.grep(TeamPlanning::Events::Change), staying, standing_ids.to_set)
+    moved, kept = @logs.fetch(scenario_id, []).partition { keys.include?(key_of(it)) }
+    ensure_stands_alone!(moved.grep(TeamPlanning::Events::Change), kept.grep(TeamPlanning::Events::Change), standing_ids.to_set)
     apply(TeamPlanning::Events::ScenarioSplit.new(data: {
       plan_id: @plan_id, scenario_id:, agreed_id:, name: require_name(name, "scenario"), keys:,
       moved_event_ids: moved.map(&:event_id), split_by_id:
@@ -886,7 +886,8 @@ class TeamPlanning::PlanAggregate
   # ids it refers to. Each must stand in the parent or be created by a moving
   # change; one that only a staying change creates blocks the split. Every
   # change that moves counts, since an undo in the agreed part can bring an
-  # earlier one back.
+  # earlier one back. Every staying change counts too, cleared or undone,
+  # since an undo in the rest can bring its creation back.
   def ensure_stands_alone!(moving, staying, standing_ids)
     created = moving.select { it.class.creates_subject? }.to_set { it.data[:subject_id] }
     creators = staying.select { it.class.creates_subject? }.group_by { it.data[:subject_id] }
