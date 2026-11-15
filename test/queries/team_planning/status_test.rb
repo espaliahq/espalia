@@ -350,6 +350,24 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal "Brook Tamsin", status.name_of(@brook.id)
   end
 
+  should "read a withdrawal of a departure the step before plans conflicting once the person has left" do
+    plan(TeamPlanning::Events::DepartureSet, @brook.id, leaves_in_id: @q1)
+    q2 = as_tenant { fork("Q2", parent_id: @q1, relation: "then", ends_on: "2026-09-30") }
+    plan(TeamPlanning::Events::DepartureWithdrawn, @brook.id, q2)
+    assert_equal :done, statuses(status(q2))[[ @brook.id, "departure" ]]
+
+    on(Time.utc(2026, 3, 10, 9)) { @org.leave(@brook.id, **ESPALIA, effective_on: "2026-03-10") }
+    assert_equal :conflicting, statuses(status(q2))[[ @brook.id, "departure" ]]
+  end
+
+  should "read a withdrawn departure for a hire the plan adds as staying" do
+    plan(TeamPlanning::Events::PlaceholderSet, "hire-1", label: "Designer")
+    plan(TeamPlanning::Events::DepartureWithdrawn, "hire-1")
+
+    entry = status.statuses.find { it.facet == "departure" }
+    assert_equal [ :plan_only, true ], [ entry.status, entry.staying ]
+  end
+
   should "name every status it gives in the status tool's description" do
     TeamPlanning::Status::STATUSES.each { assert_includes Operations::TeamPlanning::Status.description, "'#{it}'" }
   end

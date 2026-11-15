@@ -107,7 +107,8 @@ class TeamPlanning::Status
   end
 
   def plan_only(change, (subject_id, facet))
-    Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:, status: :plan_only, since: nil, sources: [])
+    Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:, status: :plan_only, since: nil, sources: [],
+              staying: staying?(change))
   end
 
   # Today, and the base to hold it against. A succession the Org Graph held on
@@ -120,6 +121,8 @@ class TeamPlanning::Status
     [ now.with(successions: now.successions - base.successions), base.with(retired_units: [], successions: [], left_ids: []) ]
   end
 
+  def staying?(change) = change.is_a?(TeamPlanning::Events::DepartureWithdrawn)
+
   def winning(scenario_id) = @winning[scenario_id] ||= @repository.sealed(@aggregate.winning_changes(scenario_id))
 
   def entry(change, key, base:, now:, unit_ids:)
@@ -131,7 +134,7 @@ class TeamPlanning::Status
     since = @carried[key] unless %i[done unknown].include?(status)
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
               status: since ? :conflicting : status, since:, sources: @sources.of_plan(facet, unit_ids:),
-              staying: kind == TeamPlanning::Events::DepartureWithdrawn)
+              staying: staying?(change))
   end
 
   # A move touches the units someone is in today, the ones the scenario places
