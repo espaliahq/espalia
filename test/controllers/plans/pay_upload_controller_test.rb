@@ -105,7 +105,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       upload(intent: "confirm", signature:, text: CSV_TEXT.sub("91234.56", "91235.56"))
 
       assert_response :unprocessable_content
-      assert_includes response.body, "The file, basis or scenario changed since the preview"
+      assert_select "turbo-frame#pay-upload-preview [role='alert']", text: /The file, basis or scenario changed since the preview/
       assert_not_includes response.body, "91235.56"
       assert_not held_pay?
     end
@@ -113,7 +113,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
     should "ask for a file and a basis before reading anything" do
       post pay_upload_plan_path(@plan_id), params: { scenario_id: @plan_id, basis: "full_time", intent: "preview" }
       assert_response :unprocessable_content
-      assert_includes response.body, "Choose a file to upload."
+      assert_select "turbo-frame#pay-upload-preview [role='alert']", text: "Choose a file to upload."
 
       upload(basis: "")
       assert_response :unprocessable_content

@@ -56,7 +56,6 @@ class Views::Plans::PayUpload < Views::Base
             "The file is read to check it and then dropped: nothing is held until you confirm."
         end
       end
-      render(Components::Kit::Alert.new(tone: :danger, role: "alert")) { @error } if @error
       upload_form
     end
   end
@@ -73,7 +72,10 @@ class Views::Plans::PayUpload < Views::Base
       file_field
       basis_field
       render Components::Kit::Button.new(type: :submit, variant: :outline, name: "intent", value: "preview") { "Check the file" }
-      turbo_frame_tag(FRAME_ID) { preview if @preview }
+      turbo_frame_tag(FRAME_ID) do
+        render(Components::Kit::Alert.new(tone: :danger, role: "alert")) { @error } if @error
+        preview if @preview
+      end
     end
   end
 
