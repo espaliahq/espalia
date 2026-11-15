@@ -1,0 +1,174 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
+  FACET = TeamPlanning::Events::BudgetLineSet.facet
+  YEAR = { starts_on: "2026-07-01", ends_on: "2027-06-30" }.freeze
+
+  setup do
+    @tenant = create(:tenant)
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      @editor = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
+      @viewer = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant))
+      @outsider = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant))
+      @engineers = BudgetLine.create!(**YEAR, origin: "new", amount: 480_000, currency: "AUD", period: "year", head_count: 4)
+      @support = BudgetLine.create!(**YEAR, origin: "existing", head_count: 2)
+    end
+    @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-03-02")[:plan_id]
+    call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @viewer.person_id, role: "viewer")
+    @q1 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1", ends_on: "2026-06-30")[:scenario_id]
+    @q2 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2",
+                                                       ends_on: "2026-09-30")[:scenario_id]
+  end
+
+  def as_tenant(tenant = @tenant, &) = ActsAsTenant.with_tenant(tenant, &)
+
+  def call(operation, as: @editor, **params)
+    as_tenant { operation.call(context: AuthorizationContext.new(user: as.user, tenant_user: as, person: as.person), params:) }
+  end
+
+  def set(scenario_id: @q1, **params)
+    call(Operations::TeamPlanning::SetBudgetLine, plan_id: @plan_id, scenario_id:, **YEAR, origin: "new", **params)
+  end
+
+  def cut(line_id, scenario_id: @q1) = call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id:, budget_line_id: line_id)
+
+  def lines(scenario_id = @q2, as: @editor) = call(Operations::TeamPlanning::BudgetLines, as:, plan_id: @plan_id, scenario_id:)
+
+  def line(id, scenario_id = @q2) = lines(scenario_id)[:budget_lines].find { it[:budget_line_id] == id }
+
+  def refusal(as: @editor, &)
+    assert_raises(Operations::Base::ParameterError, &).message
+  end
+
+  def attention(scenario_id = @q2) = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id:)[:items]
+
+  should "give every scenario the organisation's lines, an amount in its own currency and a head count with no amount" do
+    assert_equal [ [ @engineers.id, "tenant", "480000.00", "AUD", "year", "4.00" ], [ @support.id, "tenant", nil, nil, nil, "2.00" ] ],
+                 lines(@plan_id)[:budget_lines].map { it.values_at(:budget_line_id, :source, :amount, :currency, :period, :head_count) }
+    assert_equal lines(@plan_id)[:budget_lines], lines[:budget_lines]
+    assert_empty lines[:orphaned]
+  end
+
+  should "change a tenant line by its id and add a plan line, each reaching the steps after and not before" do
+    assert_equal({ plan_id: @plan_id, scenario_id: @q1, budget_line_id: @engineers.id, source: "changed" },
+                 set(budget_line_id: @engineers.id, amount: "520000", currency: "AUD", period: "year", head_count: "5"))
+    added = set(amount: "9000", currency: "NZD", period: "month", cost_centre: " Platform ")
+
+    assert_equal [ "changed", "520000.00", "5.00" ], line(@engineers.id).values_at(:source, :amount, :head_count)
+    assert_equal [ "plan", "9000.00", "NZD", "month", "Platform" ],
+                 line(added[:budget_line_id]).values_at(:source, :amount, :currency, :period, :cost_centre)
+    assert_equal "480000.00", line(@engineers.id, @plan_id)[:amount]
+    assert_nil line(added[:budget_line_id], @plan_id)
+  end
+
+  should "reach every scenario that hasn't changed a line when the organisation changes it, and none that has" do
+    set(budget_line_id: @support.id, head_count: "3")
+    as_tenant do
+      @support.update!(head_count: 6)
+      @engineers.update!(amount: 500_000)
+    end
+
+    assert_equal "3.00", line(@support.id)[:head_count]
+    assert_equal "6.00", line(@support.id, @plan_id)[:head_count]
+    assert_equal "500000.00", line(@engineers.id)[:amount]
+  end
+
+  should "cut a line, bring it back by setting it again, and undo and clear like any change" do
+    cut(@engineers.id)
+    assert_nil line(@engineers.id)
+
+    set(scenario_id: @q2, budget_line_id: @engineers.id, head_count: "1")
+    assert_equal [ "changed", "1.00" ], line(@engineers.id).values_at(:source, :head_count)
+
+    call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @q2)
+    assert_nil line(@engineers.id)
+
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @q1, subject_id: @engineers.id, facet: FACET)
+    assert_equal "tenant", line(@engineers.id)[:source]
+  end
+
+  should "bring back a line the plan added after a scenario cuts it" do
+    added = set(head_count: "2")[:budget_line_id]
+    cut(added, scenario_id: @q2)
+    assert_nil line(added)
+
+    assert_equal "plan", set(scenario_id: @q2, budget_line_id: added, head_count: "3")[:source]
+    assert_equal [ "plan", "3.00" ], line(added).values_at(:source, :head_count)
+  end
+
+  should "keep a level that has left the framework when a scenario sets its line again, after a set or a cut of either kind of line" do
+    level = as_tenant do
+      role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+      create(:framework_level, tenant: @tenant, role_id: role.role_id, code: "E2", title: "Engineer II")
+    end
+    as_tenant { @support.tap { it.take_level(level) }.save! }
+    added, added_then_cut = Array.new(2) { set(head_count: "1", level_id: level.level_id)[:budget_line_id] }
+    [ added_then_cut, @support.id ].each { cut(it) }
+    as_tenant { level.destroy! }
+
+    [ added, added_then_cut, @support.id ].each do |id|
+      set(scenario_id: @q2, budget_line_id: id, origin: "existing", head_count: "2", level_id: level.level_id)
+      assert_equal [ level.level_id, "E2 Engineer II" ], line(id).values_at(:level_id, :level_name)
+    end
+  end
+
+  should "keep a line the organisation removed orphaned when a scenario sets it again" do
+    set(budget_line_id: @engineers.id, head_count: "5")
+    as_tenant { @engineers.destroy! }
+
+    assert_equal "changed", set(scenario_id: @q2, budget_line_id: @engineers.id, head_count: "6")[:source]
+    assert_equal [ { budget_line_id: @engineers.id, kind: "set" } ], lines[:orphaned]
+    assert_equal [ @engineers.id ], attention.map { it[:subject_id] }
+  end
+
+  should "keep a change to a line the organisation removed, listed as orphaned and flagged by Attention" do
+    set(budget_line_id: @engineers.id, head_count: "5")
+    cut(@support.id, scenario_id: @q2)
+    as_tenant { BudgetLine.where(id: [ @engineers.id, @support.id ]).destroy_all }
+
+    read = lines
+    assert_empty read[:budget_lines]
+    assert_equal [ { budget_line_id: @engineers.id, kind: "set" }, { budget_line_id: @support.id, kind: "cut" } ], read[:orphaned]
+    assert_equal [ [ @engineers.id, FACET, "Changes a budget line the organisation has since removed", "BudgetLineSet" ],
+                   [ @support.id, FACET, "Cuts a budget line the organisation has since removed", "BudgetLineCut" ] ],
+                 attention.map { [ *it.values_at(:subject_id, :facet, :reason), it.dig(:change, :kind) ] }
+    assert_empty attention(@plan_id)
+  end
+
+  should "refuse the baseline, a line the scenario doesn't hold, and a broken line, never repeating a figure" do
+    baseline = "The baseline holds the organisation's approved budget as it is: change a line in a scenario"
+    assert_equal baseline, refusal { set(scenario_id: @plan_id, head_count: "1") }
+    assert_equal baseline, refusal { cut(@engineers.id, scenario_id: @plan_id) }
+
+    unknown = SecureRandom.uuid_v7
+    assert_equal "This scenario has no such budget line", refusal { set(budget_line_id: unknown, head_count: "1") }
+    assert_equal "This scenario has no such budget line", refusal { cut(unknown) }
+
+    assert_equal "A budget line needs an amount, a head count or both", refusal { set }
+    assert_equal "amount must be a number with at most two decimal places", refusal { set(amount: "52,50", currency: "AUD", period: "year") }
+    assert_equal "Currency #{Currency::INVALID}", refusal { set(amount: "777", currency: "ZZZ", period: "year") }
+  end
+
+  should "show the lines to plan members only, and let only editors change them" do
+    assert_equal 2, lines(as: @viewer)[:budget_lines].size
+    assert_equal "No such plan", refusal { lines(as: @outsider) }
+    assert_equal "No such plan", refusal { call(Operations::TeamPlanning::SetBudgetLine, as: @viewer, plan_id: @plan_id, scenario_id: @q1, **YEAR, origin: "new", head_count: "1") }
+    assert_equal "No such plan", refusal { call(Operations::TeamPlanning::CutBudgetLine, as: @outsider, plan_id: @plan_id, scenario_id: @q1, budget_line_id: @engineers.id) }
+  end
+
+  should "shred a plan's own amount with the plan, leaving the organisation's line as it was" do
+    added = set(amount: "70000", currency: "AUD", period: "year")[:budget_line_id]
+    repository = TeamPlanning::Repository.new
+    change = as_tenant { repository.sealed(repository.load_plan(@plan_id).winning_changes(@q1)) }[[ added, FACET ]]
+    assert_equal "70000.00", change.data[:amount].reveal
+
+    call(Operations::TeamPlanning::DeletePlan, plan_id: @plan_id)
+
+    stored = Rails.configuration.event_store.read.event(change.event_id)
+    assert_predicate stored.data[:amount], :removed?
+    assert_equal 480_000, as_tenant { @engineers.reload.amount }
+  end
+end

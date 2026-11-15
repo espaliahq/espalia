@@ -1,0 +1,138 @@
+{
+  "name": "team_planning_set_budget_line",
+  "description": "Change a budget line in a scenario of a Team Planning plan, or add one. Give budget_line_id from team_planning_budget_lines to change a line the scenario holds, or leave it out to add one. Give every field as the line reads afterwards: a field left out is cleared. The change reaches the scenarios that follow, and a later change by the organisation to the same line no longer does. Give an amount, a head count or both. An amount needs a currency (ISO 4217) and a period, year or month, and is kept as entered, never converted; a line with no amount reads as no amount, never zero. Figures are decimal strings with at most two decimal places. origin is existing (a person's seat), replacement or new; approved_on applies to a new position only. role_id and level_id (from frameworks_get) are optional, as are location and cost_centre. Refused on the baseline, which holds the organisation's approved budget, and unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "note": {
+        "type": "string",
+        "description": "Why this is in the plan, such as the business reason for a move. Optional, at most 2000 characters; it never changes what the scenario resolves to. A note on a change to a person goes when they are forgotten. Any other note, such as one on a unit, a position or a rule, stays until the plan is deleted, so keep personal details out of it."
+      },
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The scenario. The baseline is refused."
+      },
+      "budget_line_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "Omit to add a line."
+      },
+      "starts_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "ends_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "origin": {
+        "type": "string",
+        "enum": [
+          "existing",
+          "replacement",
+          "new"
+        ]
+      },
+      "approved_on": {
+        "type": "string",
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "amount": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "currency": {
+        "type": "string"
+      },
+      "period": {
+        "type": "string",
+        "enum": [
+          "year",
+          "month"
+        ]
+      },
+      "head_count": {
+        "type": "string",
+        "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+      },
+      "role_id": {
+        "type": "string"
+      },
+      "level_id": {
+        "type": "string"
+      },
+      "location": {
+        "type": "string"
+      },
+      "cost_centre": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id",
+      "starts_on",
+      "ends_on",
+      "origin"
+    ],
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "anyOf": [
+          {
+            "required": [
+              "amount"
+            ]
+          },
+          {
+            "required": [
+              "head_count"
+            ]
+          }
+        ]
+      },
+      {
+        "if": {
+          "properties": {
+            "origin": {
+              "enum": [
+                "existing",
+                "replacement"
+              ]
+            }
+          },
+          "required": [
+            "origin"
+          ]
+        },
+        "then": {
+          "not": {
+            "required": [
+              "approved_on"
+            ]
+          }
+        }
+      },
+      {
+        "dependentRequired": {
+          "amount": [
+            "currency",
+            "period"
+          ]
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

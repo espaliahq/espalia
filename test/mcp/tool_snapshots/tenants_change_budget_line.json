@@ -71,6 +71,20 @@
     "additionalProperties": false,
     "allOf": [
       {
+        "anyOf": [
+          {
+            "required": [
+              "amount"
+            ]
+          },
+          {
+            "required": [
+              "head_count"
+            ]
+          }
+        ]
+      },
+      {
         "if": {
           "properties": {
             "origin": {
