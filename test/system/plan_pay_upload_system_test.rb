@@ -37,16 +37,16 @@ class PlanPayUploadSystemTest < ApplicationSystemTestCase
         visit map_plan_path(@plan_id)
         click_link_with_js_fallback("Upload pay…", expect_text: "Upload actual pay")
 
-        check_file("person,amount,currency,period\nada.quill@example.com,91234,EUR,year\nnobody@example.com,1,EUR,year\n",
+        check_file("person,amount,currency,period\nada.quill@example.com,91234.56,EUR,year\nnobody@example.com,1,EUR,year\n",
                    expect_text: "1 line needs fixing")
         assert_text "Line 3 names no one in the organisation."
         assert_no_button "Hold pay for 1 person"
         assert_no_sideways_overflow
 
-        check_file("person,amount,currency,period\nada.quill@example.com,91234,EUR,year\n", expect_text: "Hold pay for 1 person")
+        check_file("person,amount,currency,period\nada.quill@example.com,91234.56,EUR,year\n", expect_text: "Hold pay for 1 person")
         assert_text "Every amount reads as full-time pay, in Today."
         assert_text "People on the map the file leaves out (1)"
-        assert_no_text "91234"
+        assert_no_text "91234.56"
         assert_no_sideways_overflow
 
         click_button_with_js_fallback("Hold pay for 1 person", expect_text: "Held actual pay for 1 person.")

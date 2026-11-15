@@ -6,7 +6,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
   ESPALIA = { provider: "espalia" }.freeze
-  CSV_TEXT = "person,amount,currency,period\nada.quill@example.com,91234,EUR,year\n"
+  CSV_TEXT = "person,amount,currency,period\nada.quill@example.com,91234.56,EUR,year\n"
 
   setup do
     @tenant = create(:tenant)
@@ -79,7 +79,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-pay-upload-preview='ok']"
       assert_includes response.body, "Ada Quill"
       assert_includes response.body, "Hold pay for 1 person"
-      assert_not_includes response.body, "91234"
+      assert_not_includes response.body, "91234.56"
       assert_not held_pay?
 
       upload(intent: "confirm", signature: signature_from_preview)
@@ -92,21 +92,21 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "list each bad line by number and reason, with no signature to confirm" do
-      upload(text: "person,amount,currency,period\nnobody@example.com,-417,EUR,year\n")
+      upload(text: "person,amount,currency,period\nnobody@example.com,-619.37,EUR,year\n")
       assert_response :success
       assert_select "[data-pay-upload-line='2']", text: /Line 2 names no one in the organisation and has an amount/
       assert_select "input[name='signature']", count: 0
       assert_not_includes response.body, "nobody@example.com"
-      assert_not_includes response.body, "-417"
+      assert_not_includes response.body, "619.37"
     end
 
     should "refuse a confirm for a file changed since the preview, and hold nothing" do
       signature = signature_from_preview
-      upload(intent: "confirm", signature:, text: CSV_TEXT.sub("91234", "91235"))
+      upload(intent: "confirm", signature:, text: CSV_TEXT.sub("91234.56", "91235.56"))
 
       assert_response :unprocessable_content
       assert_includes response.body, "The file, basis or scenario changed since the preview"
-      assert_not_includes response.body, "91235"
+      assert_not_includes response.body, "91235.56"
       assert_not held_pay?
     end
 
@@ -129,7 +129,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
     ensure
       ActionController::Base.logger = Rails.logger = original
       assert_includes log.string, "[FILTERED]"
-      assert_not_includes log.string, "91234"
+      assert_not_includes log.string, "91234.56"
       assert_not_includes log.string, "ada.quill@example.com"
     end
   end

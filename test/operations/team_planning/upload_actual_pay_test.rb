@@ -67,9 +67,12 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
 
   def event_count = Rails.configuration.event_store.read.count
 
+  # Ids and the signature are hex, so a short amount can turn up inside one.
+  def without_ids(result) = result.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}|\h{64}/, "")
+
   should "match people by id, HRIS id or either email, and preview what the file would change" do
     csv = "Amount,PERIOD,ignored,Person,Currency\n" \
-          "90000,year,x,E-100,eur\n" \
+          "90413,year,x,E-100,eur\n" \
           "7000,month,y,CY.WORK@example.com,EUR\n"
     preview = upload("\u{FEFF}#{csv}")
 
@@ -79,14 +82,14 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     assert_equal [ @ada.id, @cy.id ], preview[:newly_priced_ids]
     assert_equal({ @ada.id => "Ada Quill", @cy.id => "Cy Quill" }, preview[:names])
     assert_match(/\A\h{64}\z/, preview[:signature])
-    assert_not_includes preview.to_json, "90000"
+    assert_not_includes without_ids(preview), "90413"
 
-    by_id = upload("#{HEADER}#{@ada.id.upcase},90000,EUR,year\n#{@cy.email.upcase},1,EUR,year\n")
+    by_id = upload("#{HEADER}#{@ada.id.upcase},90413,EUR,year\n#{@cy.email.upcase},1,EUR,year\n")
     assert_equal [ @ada.id, @cy.id ], by_id[:matched_ids]
   end
 
   should "count the people on the map the file leaves out, and the seats it would reprice" do
-    preview_and_confirm("#{HEADER}E-100,90000,EUR,year\n")
+    preview_and_confirm("#{HEADER}E-100,90413,EUR,year\n")
     preview = upload("#{HEADER}E-100,95000,EUR,year\n")
 
     assert_equal [ @cy.id ], preview[:missing_ids]
@@ -99,11 +102,11 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
 
     %w[full_time actual].each do |basis|
       call(Operations::TeamPlanning::SetActualPay, plan_id: @plan_id, scenario_id: @year, person_id: @ada.id,
-                                                   amount: "90000", currency: "EUR", period: "year", basis:)
+                                                   amount: "90413", currency: "EUR", period: "year", basis:)
       expected = cost
       call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @year, subject_id: @ada.id, facet: "data:pay")
 
-      assert_equal 1, preview_and_confirm("#{HEADER}E-100,90000,EUR,year\n", basis:)[:written]
+      assert_equal 1, preview_and_confirm("#{HEADER}E-100,90413,EUR,year\n", basis:)[:written]
       assert_equal expected[:total], cost[:total], basis
       assert_equal seat(expected, @ada).slice(:base, :amount, :basis), seat(cost, @ada).slice(:base, :amount, :basis), basis
     end
@@ -111,11 +114,11 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
 
   should "give each bad row its line and codes only, and write nothing while any row is bad" do
     csv = HEADER +
-          "E-100,90000,EUR,year\n" \
+          "E-100,90413,EUR,year\n" \
           "nobody@example.com,1,EUR,year\n" \
           "#{@off_map.id},2,EUR,year\n" \
           "ada.quill@example.com,3,EUR,year\n" \
-          "#{@cy.id},-417,XYZ,week\n" \
+          "#{@cy.id},-61937,XYZ,week\n" \
           "#{@cy.id},50,EUR,hour\n"
     before = event_count
     preview = upload(csv, basis: "actual")
@@ -125,7 +128,7 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
                    { line: 6, codes: %w[bad_amount bad_currency bad_period] },
                    { line: 7, codes: [ "duplicate_person", "hourly_actual" ] } ], preview[:failures]
     assert_nil preview[:signature]
-    %w[90000 -417 XYZ week nobody].each { assert_not_includes preview.to_json, it }
+    %w[90413 -61937 XYZ week nobody].each { assert_not_includes without_ids(preview), it }
     assert_equal before, event_count
   end
 
@@ -140,22 +143,22 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
 
   should "name what is wrong with a file it can't read, never a line of it" do
     { "" => "empty", HEADER => "empty", "person,amount\nE-100,1\n" => "missing_column",
-      "#{HEADER}\"E-100,90000\n" => "bad_csv", "#{HEADER}\xFF,1,EUR,year\n".b => "bad_encoding",
+      "#{HEADER}\"E-100,90413\n" => "bad_csv", "#{HEADER}\xFF,1,EUR,year\n".b => "bad_encoding",
       HEADER + ("E-100,1,EUR,year\n" * 5_001) => "too_many_rows",
       "x" * (TeamPlanning::PayUpload::MAX_BYTES + 1) => "too_large" }.each do |csv, problem|
       preview = upload(csv)
       assert_equal problem, preview[:problem], problem
-      assert_not_includes preview.to_json, "90000"
+      assert_not_includes without_ids(preview), "90413"
       assert_nil preview[:signature]
     end
   end
 
   should "refuse a confirm whose file, basis or scenario changed by so much as a byte" do
-    csv = "#{HEADER}E-100,90000,EUR,year\n"
+    csv = "#{HEADER}E-100,90413,EUR,year\n"
     signature = upload(csv).fetch(:signature)
     changed = "The file, basis or scenario changed since the preview"
 
-    assert_equal changed, refusal { upload(csv.sub("90000", "90001"), signature:) }
+    assert_equal changed, refusal { upload(csv.sub("90413", "90414"), signature:) }
     assert_equal changed, refusal { upload(csv, basis: "actual", signature:) }
     assert_equal changed, refusal { upload(csv, scenario_id: @plan_id, signature:) }
     assert_equal changed, refusal { upload(csv, signature: signature.reverse) }
@@ -163,7 +166,7 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
   end
 
   should "write once when the same signature is confirmed twice" do
-    csv = "#{HEADER}E-100,90000,EUR,year\ncy.quill@example.com,80000,EUR,year\n"
+    csv = "#{HEADER}E-100,90413,EUR,year\ncy.quill@example.com,80000,EUR,year\n"
     signature = upload(csv).fetch(:signature)
 
     assert_equal 2, upload(csv, signature:)[:written]
@@ -180,11 +183,11 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     stored = [ ActiveRecord::Base.connection.select_values("SELECT data::text FROM event_store_events").join,
                *ActiveRecord::Base.connection.tables.grep(/\Ateam_planning/).map { ActiveRecord::Base.connection.select_values("SELECT t::text FROM #{it} t").join },
                ActiveRecord::Base.connection.select_values("SELECT t::text FROM mcp_pending_approvals t").join ].join
-    assert_not_includes stored, "91234"
+    assert_not_includes stored, "91234.5678"
   end
 
   should "answer an editor without the see-pay right, a viewer and an outsider as if there were no plan" do
-    csv = "#{HEADER}E-100,90000,EUR,year\n"
+    csv = "#{HEADER}E-100,90413,EUR,year\n"
     signature = upload(csv).fetch(:signature)
 
     [ @editor, @viewer, @outsider ].each do |caller|
