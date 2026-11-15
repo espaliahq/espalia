@@ -374,6 +374,11 @@ holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKin
 A kind names itself, gives a built-in default and checks a value. A value is always an
 object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2) and `working_hours` (5.4), all below; 8.1 brings more.
 
+A forecast assumption is a kind too, a subclass of `TeamPlanning::ForecastKind`
+(`RuleKinds.forecasts` lists them). It sets and resolves like any rule, and adds
+`forecast(frame)`, which returns rows; *Actual, planned and forecast as built* below has
+the frame.
+
 `RuleSet` sets one rule for a subject: the plan's id for the whole plan, or a unit's id for
 that unit and the units below it. Every rule is its own facet (`rule:<name>`), so two rules
 on one subject both land. A plan editor sets one with `team_planning_set_rule`, which takes
@@ -1229,6 +1234,32 @@ in the plan, because it is the plan's statement about them. A pay figure typed i
 
 Forecast promotions and pay increases draw on a pool: a budget line approved for
 promotions and increases, matched by cost centre and period like any other.
+
+### Actual, planned and forecast as built
+
+[#351](https://github.com/espaliahq/espalia/issues/351) built the frame (10.1). The
+attrition, hiring and ramp assumptions (10.2 to 10.4) are stories of their own.
+
+- **A step is the scenario's period**, the unit the timeline and cost already use. Today
+  has no period, so it has no forecast and is all actual.
+- **`TeamPlanning::Forecast` reads the rows** for a scenario. It hands each forecast kind
+  a frame holding the resolved map, the step and who is covered: the subject of every
+  change in effect along the scenario's chain. A kind leaves out anyone `covered?` names.
+  A row (`kind`, `unit_id`, `cost_centre`, the step, `headcount`, `cost` per currency,
+  `capacity` per model) has no id, and reading one writes nothing.
+- **The split is by what a figure measures, not by who moved.** Actual is the baseline's
+  figure for the same unit or cost centre over the same days. Planned is what the plan's
+  changes add or take away, so it can be negative. Forecast is what the assumptions add.
+  A person moved between units is actual in the old unit with a negative planned there,
+  and a positive planned in the new one, netting to zero in the total.
+- **The parts add up exactly**, per currency or model, per unit and overall. Rounding
+  happens only at display. With no forecast kinds, forecast is zero and planned is the
+  existing difference from Today.
+- **The reads carry it.** `team_planning_cost` and `team_planning_scenario_costs` give
+  every total a `parts` of actual, planned and forecast. `team_planning_capacity` does the
+  same per model for the plan and each unit. `team_planning_forecast` lists the rows. No
+  screen shows the split yet: [#352](https://github.com/espaliahq/espalia/issues/352)
+  does.
 
 Two of these forecasts add a dependency this module did not have before.
 
