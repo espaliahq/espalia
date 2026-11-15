@@ -104,6 +104,15 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @return [Array<String>]
   def self.refers_to(data) = []
 
+  # What a change's own fields say once a split moves it from one scenario to
+  # another. Most name no scenario, so they say the same.
+  #
+  # @param end_state [Hash] the change's fields, keys as symbols
+  # @param from [String] the scenario it was set in
+  # @param to [String] the agreed part it moves to
+  # @return [Hash]
+  def self.moved_end_state(end_state, from:, to:) = end_state
+
   # @return [Boolean] whether this kind can bring its subject into the plan, as a new unit, position or hire
   def self.creates_subject? = false
 

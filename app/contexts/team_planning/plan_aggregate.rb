@@ -789,7 +789,8 @@ class TeamPlanning::PlanAggregate
     moved = data[:moved_event_ids].to_set
     @scenarios[agreed_id] = original.with(id: agreed_id)
     @scenarios[original.id] = original.with(parent_id: agreed_id, relation: "on", ends_on: nil)
-    @logs[agreed_id], @logs[original.id] = @logs.fetch(original.id, []).partition { moved.include?(it.event_id) }
+    moving, @logs[original.id] = @logs.fetch(original.id, []).partition { moved.include?(it.event_id) }
+    @logs[agreed_id] = moving.map { moved_to(it, agreed_id) }
     @redo_stacks.fetch(original.id, {}).each do |person_id, stack|
       redo_stack(agreed_id, person_id).concat(stack.select { moved.include?(it) })
       stack.reject! { moved.include?(it) }
@@ -907,6 +908,14 @@ class TeamPlanning::PlanAggregate
     later = later_in_effect(@logs.fetch(scenario_id), entry) or return
 
     raise TeamPlanning::Error, "A later change to this replaced it (#{later.event_id}): undo that first, then #{action} this"
+  end
+
+  # A moved change names the agreed part as where it is set, so every reader
+  # finds it where the log holds it.
+  def moved_to(entry, agreed_id)
+    data = entry.data.merge(scenario_id: agreed_id)
+    data = entry.class.moved_end_state(data, from: entry.data[:scenario_id], to: agreed_id) if entry.is_a?(TeamPlanning::Events::Change)
+    entry.class.new(event_id: entry.event_id, data:, metadata: entry.metadata.to_h)
   end
 
   def record_change(event)

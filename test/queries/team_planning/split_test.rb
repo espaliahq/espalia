@@ -112,6 +112,25 @@ class TeamPlanning::SplitTest < ActiveSupport::TestCase
     assert_not_equal before, undone
   end
 
+  should "report a moved change as the agreed part's, in its status and in what needs attention" do
+    departure = change_on(@brook.id)
+    agreed = split(departure)
+
+    entry = query(TeamPlanning::Status, agreed).statuses.find { it.change_id == departure }
+    assert_equal agreed, entry&.scenario_id
+    assert_not_includes query(TeamPlanning::Status, @h1).statuses.map(&:scenario_id), nil
+    items = operation(Operations::TeamPlanning::Attention, scenario_id: agreed)[:items]
+    assert(items.filter_map { it[:change] }.all? { it[:scenario_id] != @h1 }, "no item points at the rest for a change it no longer holds")
+  end
+
+  should "keep a moved departure leaving in the agreed part once the rest is gone" do
+    agreed = split(change_on(@brook.id))
+    operation(Operations::TeamPlanning::RemoveScenario, scenario_id: @h2)
+    operation(Operations::TeamPlanning::RemoveScenario, scenario_id: @h1)
+
+    assert resolved(agreed).people.find { it.id == @brook.id }&.departure, "Brook still leaves in the agreed step"
+  end
+
   should "count a departure that moves into the agreed part as leaving in its step, there and in the rest" do
     agreed = split(change_on(@brook.id))
 

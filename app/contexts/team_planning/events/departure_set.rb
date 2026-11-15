@@ -42,6 +42,17 @@ class TeamPlanning::Events::DepartureSet < TeamPlanning::Events::Change
     leaves_on ? state.merge(leaves_on: leaves_on.iso8601) : state
   end
 
+  # A departure set where it leaves moves with its step, so the agreed part
+  # still has them leave in it once the rest is gone.
+  #
+  # @param end_state [Hash]
+  # @param from [String]
+  # @param to [String]
+  # @return [Hash]
+  def self.moved_end_state(end_state, from:, to:)
+    end_state[:leaves_in_id] == from ? end_state.merge(leaves_in_id: to) : end_state
+  end
+
   # @param value [Date, String, nil]
   # @return [Date, nil]
   # @raise [TeamPlanning::Error] for anything but an ISO date
