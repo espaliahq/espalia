@@ -78,6 +78,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
                    [ @head.id, "capacity:#{@engineering}", reason ] ].sort,
                  result[:items].map { it.values_at(:subject_id, :facet, :reason) }.sort
     assert_equal({ @ada.id => "Ada Quill", @bo.id => "Bo Reyes", @head.id => "Hal Head" }, result[:names])
+    assert_equal [ "unclassified" ], result[:items].map { it[:check] }.uniq
   end
 
   should "list unclassified places once a model is chosen, even when no place takes it" do

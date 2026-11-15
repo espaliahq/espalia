@@ -49,6 +49,16 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ "capacity:unassigned" ], TeamPlanning::Attention.new(map, {}, unclassified:).call.map(&:facet)
   end
 
+  should "name the check that found each item" do
+    place = TeamPlanning::CapacityModel::Place.new(unit_id: nil, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id: nil)
+    seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])
+    unclassified = [ [ TeamPlanning::Capacity::Seat.new(seat:, places: []),
+                       TeamPlanning::Capacity::Place.new(place:, model: nil, chosen_for: nil, figure: nil, reason: "no_model") ] ]
+
+    assert_equal %i[leavers unclassified],
+                 TeamPlanning::Attention.new(map(people: [ member ]), {}, left_ids: [ PERSON ], unclassified:).call.map(&:check)
+  end
+
   should "credit the level change that left a place with no level, when it lands after the placement" do
     place = TeamPlanning::CapacityModel::Place.new(unit_id: LIVE, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id: nil)
     seat = TeamPlanning::CapacityModel::Seat.new(id: PERSON, kind: "person", fte: 1r, fte_known: true, places: [ place ])

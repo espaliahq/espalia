@@ -27,8 +27,9 @@ class TeamPlanning::Attention
   #   nil only when no change explains it
   # @!attribute unit_ids [Array<String>] the units it touches, whose providers are its source of truth
   # @!attribute fact [String, nil] the person fact it rests on instead, for someone the plan can't place
-  Item = Data.define(:subject_id, :facet, :reason, :change, :unit_ids, :fact) do
-    def initialize(unit_ids: [], fact: nil, **) = super
+  # @!attribute check [Symbol, nil] the entry in {CHECKS} that found it
+  Item = Data.define(:subject_id, :facet, :reason, :change, :unit_ids, :fact, :check) do
+    def initialize(unit_ids: [], fact: nil, check: nil, **) = super
   end
 
   CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
@@ -82,7 +83,7 @@ class TeamPlanning::Attention
   end
 
   # @return [Array<Item>] in {CHECKS} order, then by subject id and reason
-  def call = CHECKS.flat_map { |check| send(check).sort_by { [ it.subject_id, it.reason ] } }
+  def call = CHECKS.flat_map { |check| send(check).sort_by { [ it.subject_id, it.reason ] }.map { it.with(check:) } }
 
   private
 

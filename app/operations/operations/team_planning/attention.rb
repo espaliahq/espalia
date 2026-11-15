@@ -21,7 +21,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "`sources` names where to fix each item: the provider of employment status for someone who joined " \
               "after the base or has left, the provider of the manager fact for a manager item, else the providers " \
               "of the units the item touches (\"espalia\" for a unit only the plan holds). " \
-              "Items come grouped by check, in a fixed order, then " \
+              "Items come grouped by check, named in each item's `check`, in this order: " \
+              "#{::TeamPlanning::Attention::CHECKS.join(', ')}; then " \
               "by subject_id and reason. Fix an item with a new change, or by pinning or clearing one. `names` maps each person id to a " \
               "name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless " \
               "the caller is a member."
@@ -60,7 +61,7 @@ class Operations::TeamPlanning::Attention < Operations::Base
   def item_row(item, sources)
     change = item.change && { kind: item.change.class.name.demodulize, scenario_id: item.change.data[:scenario_id],
                               event_id: item.change.event_id }
-    { subject_id: item.subject_id, facet: item.facet, reason: item.reason, change:,
+    { check: item.check.to_s, subject_id: item.subject_id, facet: item.facet, reason: item.reason, change:,
       sources: item.fact ? sources.of_fact(item.fact) : sources.of_units(item.unit_ids) }
   end
 end
