@@ -35,10 +35,11 @@ class TeamPlanning::Baseline
   # @!attribute departed [Array<Departed>] the people a departure in an earlier step took off the map
   # @!attribute budget_lines [Array<BudgetLine>] the tenant's approved lines, read live, with the plan's changes on top
   # @!attribute orphaned_lines [Hash{String => String}] each tenant line the tenant has since removed, by id, to "set" or "cut", whichever change came last
+  # @!attribute fundings [Hash{String => Array<Hash>}] position id => the draws a {TeamPlanning::Events::PositionFundingSet} sets
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
-                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines) do
+                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
-                   orphaned_lines: {}, **) = super
+                   orphaned_lines: {}, fundings: {}, **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -48,7 +49,7 @@ class TeamPlanning::Baseline
     # @return [Map]
     def settled
       gone, staying = people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
-      departed = self.departed + gone.map { Departed.new(person_id: it.id, **it.departure) }
+      departed = self.departed + gone.map { Departed.new(person_id: it.id, country: it.country, **it.departure) }
       unit_of = positions.to_h { [ it.id, it.unit_id ] }
       people = staying.map do |person|
         person.with(memberships: person.memberships.map { it.position_id ? it.with(unit_id: unit_of[it.position_id]) : it })
@@ -274,8 +275,8 @@ class TeamPlanning::Baseline
   # Someone a departure in an earlier step took off the map, the step they
   # left in, the position backfilling them, if any, and the date within the
   # step, if the plan gave one.
-  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on) do
-    def initialize(leaves_on: nil, **) = super
+  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on, :country) do
+    def initialize(leaves_on: nil, country: nil, **) = super
 
     # @return [Hash] as {TeamPlanning::Events::DepartureSet} set it, `leaves_on` only when given
     def departure = { leaves_in_id:, position_id: }.merge(leaves_on ? { leaves_on: } : {})
