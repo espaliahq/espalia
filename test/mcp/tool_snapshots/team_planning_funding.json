@@ -1,0 +1,27 @@
+{
+  "name": "team_planning_funding",
+  "description": "Get which budget lines each position, filled or open, in a scenario of a Team Planning plan the caller is in draws on. A position draws on the most specific line that matches it: the line's cost_centre is the position's (as team_planning_cost resolves it), its period overlaps the days the position is held, and each of role, level and location the line states is the position's (location is an occupant's country, else that of the person it replaces). A line with no cost centre matches any position and is the least specific; past that, the more of role, level and location a line states, the more specific. source is 'derived', or 'set' by team_planning_set_position_funding, which wins. A position is unfunded with a reason: no_line, ambiguous (matching_ids lists the lines that tie; none is picked) or line_gone (its funding names a line the scenario no longer holds). Each line lists its positions in draw order, filled first, then open positions replacing a leaver, then other open positions, each by starts_on then id, with draw_reason saying which. Totals count positions and FTE: funded counts the positions funded whole and the FTE every draw funds, each position at its whole FTE, and funded plus unfunded is always the total, over the positions team_planning_cost reads. A set funding is taken as given, whatever the line. FTE and shares are decimal strings. The baseline has no period, so it can't be the scenario. Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "A scenario of the plan; not the plan's id, as the baseline has no period."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

@@ -19,7 +19,7 @@ class Operations::TeamPlanning::Timeline < Operations::Base
               "give the columns a place is held (from and to are column indexes); a unit_id of null is " \
               "Unassigned, listed in unassigned_lane_ids. A person's bar carries shares, their share of their time in " \
               "that place in each of its columns, counting every place they hold as the map does. moves name the units a person left and joined after a " \
-              "column, and departures the column they leave in, with its backfill. positions are keyed by id, each as " \
+              "column (crossing is \"out\" when they leave the units a scoped plan covers and \"in\" when they join them), and departures the column they leave in, with its backfill. positions are keyed by id, each as " \
               "it stands in the last column it appears in. `names` maps every person id " \
               "to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, " \
               "unless the caller is a member."
@@ -61,7 +61,7 @@ class Operations::TeamPlanning::Timeline < Operations::Base
   end
 
   def lane(lane)
-    { lane_id: lane.id, bars: lane.bars.map(&:to_h), moves: lane.moves.map(&:to_h),
+    { lane_id: lane.id, bars: lane.bars.map(&:to_h), moves: lane.moves.map { it.crossing ? it.to_h : it.to_h.except(:crossing) },
       departures: lane.departures.map(&:to_h) }
   end
 

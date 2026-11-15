@@ -243,6 +243,7 @@ because a binding budget guardrail needs them.
 | 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes | 1.2, 1.3 |
 | 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
 | 1.6 | Read-only map of any scenario, the baseline by default: units, people with their allocation and role, open positions, and the Unassigned bucket, read through `team_planning_scenario_map` | 1.4 |
+| 1.7 | What a plan covers: the whole organisation or chosen units, set when it starts and widened later, through `PlanScopeSet`, `team_planning_set_plan_scope` and `team_planning_coverable_units`. Units only; narrowing is refused while a change falls outside; the picker reaches the whole organisation ([#338](https://github.com/espaliahq/espalia/issues/338)) | 1.5, 1.6 |
 
 ### P2 Shreddable plan fields
 

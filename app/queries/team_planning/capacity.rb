@@ -189,8 +189,8 @@ class TeamPlanning::Capacity
     fte_known = ![ nil, TeamPlanning::Baseline::UNKNOWN ].include?(member.planned_or_own(:fte))
     fte = exact(member.fte_or_one)
     own = member.own_target(titles)
-    placements = member.memberships.presence || [ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]
-    places, reasons = TeamPlanning::Baseline::Membership.shares(placements).map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
+    shares = member.memberships.empty? ? TeamPlanning::Baseline::Membership.shares([ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]) : @map.counted_shares(member)
+    places, reasons = shares.map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
     reasons = reasons.map { "leaving" } if member.leaving?
     (@own_levels ||= {})[member.id] = own.level&.level_id
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]

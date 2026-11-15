@@ -52,9 +52,25 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
   def read(operation, as: @viewer) = call(operation, as:, plan_id: @plan_id)
 
   should "give a member the plan, with their own role" do
-    assert_equal({ plan_id: @plan_id, name: "Next year", base_on: "2026-03-02", role: "viewer", frozen: false },
+    assert_equal({ plan_id: @plan_id, name: "Next year", base_on: "2026-03-02", role: "viewer",
+                   scope: { whole_organisation: true, units: [] }, frozen: false },
                  read(Operations::TeamPlanning::Plan))
     assert_equal "editor", read(Operations::TeamPlanning::Plan, as: @editor)[:role]
+  end
+
+  should "name the units a plan covers" do
+    plan_id = call(Operations::TeamPlanning::CreatePlan, as: @editor, name: "Payments only", base_on: BASE_ON.iso8601,
+                                                         unit_ids: [ @payments.upcase ])[:plan_id]
+
+    assert_equal({ whole_organisation: false, units: [ { unit_id: @payments, name: "Payments" } ] },
+                 call(Operations::TeamPlanning::Plan, as: @editor, plan_id:)[:scope])
+  end
+
+  should "refuse to create a plan over a unit the organisation hasn't" do
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::CreatePlan, as: @editor, name: "Ghost", unit_ids: [ SecureRandom.uuid_v7 ])
+    end
+    assert_equal "A plan covers units the organisation has", error.message
   end
 
   should "say a plan is frozen once its editors have all left" do
