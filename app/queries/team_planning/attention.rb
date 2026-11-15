@@ -32,7 +32,7 @@ class TeamPlanning::Attention
   end
 
   CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
-              budget_lines].freeze
+              budget_lines fundings].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
@@ -42,6 +42,7 @@ class TeamPlanning::Attention
   LEVEL = TeamPlanning::Events::LevelSet.facet
   BUDGET_LINE = TeamPlanning::Events::BudgetLineSet.facet
   DEPARTURE = TeamPlanning::Events::DepartureSet.facet
+  FUNDING = TeamPlanning::Events::PositionFundingSet.facet
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
   # A place in no unit has no id an override could name, as the map's own drop target hasn't.
   UNASSIGNED = "unassigned"
@@ -275,6 +276,18 @@ class TeamPlanning::Attention
     end
   end
 
+  # A funding stands when its position closes or a line it draws on goes, so name it.
+  def fundings
+    open = @map.positions.to_set(&:id)
+    held = @map.budget_lines.to_set(&:id)
+    @map.fundings.flat_map do |position_id, draws|
+      next [ item(position_id, FUNDING, "Funds a closed position", broken_by: [ [ position_id, POSITION ] ]) ] unless open.include?(position_id)
+
+      gone = draws.map { it[:budget_line_id] }.reject { held.include?(it) }
+      gone.empty? ? [] : [ item(position_id, FUNDING, "Draws on a budget line this scenario no longer holds", broken_by: gone.map { [ it, BUDGET_LINE ] }) ]
+    end
+  end
+
   # @param units [Array<String>] units the item touches beyond its subject's and broken_by's
   def item(subject_id, facet, reason, broken_by: [], fact: nil, units: [])
     keys = [ [ subject_id, facet ], *broken_by ].select { @order.key?(it) }
@@ -285,7 +298,7 @@ class TeamPlanning::Attention
   def units_touched(subject_id, facet, broken_by)
     own = case facet
     when UNIT then [ subject_id ]
-    when POSITION then [ @position_units[subject_id] ]
+    when POSITION, FUNDING then [ @position_units[subject_id] ]
     when SUCCESSION then @map.successions.find { it.id == subject_id }&.then { it.predecessor_ids + it.successor_ids }
     when /\A#{CAPACITY}:/ then [ place_unit(facet.delete_prefix("#{CAPACITY}:")) ]
     else []

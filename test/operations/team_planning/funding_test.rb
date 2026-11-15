@@ -105,4 +105,17 @@ class Operations::TeamPlanning::FundingTest < ActiveSupport::TestCase
     assert_empty funding[:budget_lines]
     assert_equal "set", funding(@q1)[:positions].sole[:source]
   end
+
+  should "flag a funding whose line goes or whose position closes, under the position's unit" do
+    set_funding([ { budget_line_id: @platform.id } ])
+    call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @q2, budget_line_id: @platform.id)
+    flagged = ->(scenario_id) { call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id:)[:items].select { it[:facet] == "funding" } }
+
+    assert_empty flagged.(@q1)
+    assert_equal [ [ @seat, "Draws on a budget line this scenario no longer holds" ] ], flagged.(@q2).map { it.values_at(:subject_id, :reason) }
+
+    call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @q2, position_id: @seat)
+    assert_equal [ "Funds a closed position" ], flagged.(@q2).pluck(:reason)
+    assert_equal [ [ "espalia" ] ], flagged.(@q2).pluck(:sources), "the position's unit names where to fix it"
+  end
 end
