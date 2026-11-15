@@ -462,7 +462,7 @@ class TeamPlanning::CommandHandler
   end
 
   def facet_set_by(kind, end_state)
-    "#{kind.facet}:#{end_state[:field]}" if kind == TeamPlanning::Events::PlanDataSet
+    "#{kind.facet}:#{end_state.to_h.symbolize_keys[:field]}" if kind == TeamPlanning::Events::PlanDataSet
   end
 
   # A plan is private to its members, so to anyone else it reads as missing:

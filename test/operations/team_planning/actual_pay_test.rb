@@ -53,6 +53,17 @@ class Operations::TeamPlanning::ActualPayTest < ActiveSupport::TestCase
     assert_equal "missing required parameter: basis", refusal { call(Operations::TeamPlanning::SetActualPay, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, **PAY.except(:basis)) }
   end
 
+  should "refuse pay to a non-holder whose change names the field with a string key" do
+    context = AuthorizationContext.new(user: @editor.user, tenant_user: @editor, person: @editor.person)
+    error = assert_raises(TeamPlanning::Error) do
+      as_tenant do
+        TeamPlanning::CommandHandler.new(actor: context).set_change(@plan_id, TeamPlanning::Events::PlanDataSet, scenario_id: @q1,
+                                                                    subject_id: @ada.id, end_state: { "field" => "pay", "value" => PAY })
+      end
+    end
+    assert_equal NO_RIGHT, error.message
+  end
+
   should "refuse pay through the generic plan value tool" do
     assert_raises(Operations::Base::ParameterError) do
       call(Operations::TeamPlanning::SetPlanValue, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, field: "pay", value: "1")
