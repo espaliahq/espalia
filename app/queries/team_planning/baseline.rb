@@ -400,6 +400,30 @@ class TeamPlanning::Baseline
 
     # @return [String] see {.budget_of}
     def budget = self.class.budget_of(basis)
+
+    # @param basis [String]
+    # @param role_name [String, nil]
+    # @return [String] what the map calls it, such as "Backfill: Software Engineer"
+    def self.label(basis:, role_name:)
+      kind = basis == "backfill" ? "Backfill" : "New position"
+      role_name ? "#{kind}: #{role_name}" : kind
+    end
+
+    # @return [String] see {.label}
+    def label = self.class.label(basis:, role_name:)
+
+    # Positions in a unit that share a label and level are numbered oldest
+    # first, so the map, the move dialog and the checks name each one alike.
+    #
+    # @param positions [Array<Array(String, String, String)>] one unit's positions, as [id, label, level id]
+    # @return [Hash{String => String}] each position's name, by id
+    def self.names(positions)
+      alike = positions.group_by { |_, label, level_id| [ label, level_id ] }.transform_values { |group| group.map(&:first).sort }
+      positions.to_h do |id, label, level_id|
+        group = alike[[ label, level_id ]]
+        [ id, group.size > 1 ? "#{label} (#{group.index(id) + 1})" : label ]
+      end
+    end
   end
 
   BUDGET_FIGURES = %i[starts_on ends_on origin approved_on amount currency period head_count role_id level_id role_name level_name

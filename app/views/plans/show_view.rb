@@ -118,8 +118,8 @@ class Views::Plans::ShowView < Views::Base
 
   def tab_strip
     if tabs.size > 1
-      nav(aria: { label: "Plan views" }, class: "mb-4 flex gap-1 border-b border-default") do
-        tabs.each { tab(it) }
+      nav(aria: { label: "Plan views" }, class: "mb-4 border-b border-default") do
+        div(class: "-mb-px flex flex-wrap gap-x-1") { tabs.each { tab(it) } }
       end
     end
     h2(id: "plan-main-heading", class: ("sr-only" if tabs.size > 1) || "mb-3 text-base font-semibold text-default") do
@@ -130,7 +130,7 @@ class Views::Plans::ShowView < Views::Base
   def tab(tab)
     open = tab.key == @open_tab
     a(href: tab.href, aria: { current: ("page" if open) },
-      class: "-mb-px whitespace-nowrap border-b-2 px-2 py-2 text-sm font-medium sm:px-3 " \
+      class: "shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-sm font-medium sm:px-3 " \
              "#{open ? 'border-brand text-default' : 'border-transparent text-muted hover:text-default'}") { tab.label }
   end
 
