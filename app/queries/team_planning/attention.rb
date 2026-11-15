@@ -7,7 +7,8 @@
 # read marks them, each with a reason and the change it belongs to.
 #
 # It also checks each person: allocation, someone still placed after the
-# Org Graph has them leave, and their manager (4.6).
+# Org Graph has them leave, and their manager (4.6), and each seat whose
+# reports cost more to manage than it delivers (7.5).
 #
 # Derived from the map and the changes that won, never stored. The changes
 # tab (4.4) and the checks tab (4.7) both read it.
@@ -31,8 +32,8 @@ class TeamPlanning::Attention
     def initialize(unit_ids: [], fact: nil, **) = super
   end
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
-              budget_lines].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers overloaded
+              unclassified budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
@@ -62,7 +63,7 @@ class TeamPlanning::Attention
     map, changes = resolution.resolved(aggregate)
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
     new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
-                      unclassified: capacity.configured? ? capacity.unclassified : []).call
+                      unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats).call
   end
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
@@ -70,10 +71,12 @@ class TeamPlanning::Attention
   # @param left_ids [Array<String>] the people the Org Graph has had leave by today
   # @param closed_units [Hash{String => String}] the unit of each position the scenario closed
   # @param unclassified [Array<Array(TeamPlanning::Capacity::Seat, TeamPlanning::Capacity::Place)>] from {TeamPlanning::Capacity::Report#unclassified}
-  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [])
+  # @param priced [Array<TeamPlanning::Capacity::Seat>] from {TeamPlanning::Capacity::Report#seats}
+  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [])
     @map = map
     @position_units = closed_units.merge(map.positions.to_h { [ it.id, it.unit_id ] })
     @unclassified = unclassified
+    @priced = priced
     @changes = changes
     @left = left_ids.to_set
     @order = changes.keys.each_with_index.to_h
@@ -245,6 +248,37 @@ class TeamPlanning::Attention
   def gone?(person) = @left.include?(person.id) && !person.leaving?
 
   def percent(total) = "#{fte(total * 100)}%"
+
+  # An override hides the number, never the reports, so the model's own
+  # figure decides. The excess is the whole seat's, so each seat is one item
+  # however many places it holds. An open position that people report to is
+  # flagged as a filled seat is, so leaving it empty never hides the load.
+  def overloaded
+    @priced.filter_map do |priced|
+      places = priced.places.select { (it.calculated || it.figure)&.overloaded }
+      next if places.empty?
+
+      figure = places.first.calculated || places.first.figure
+      reports = figure.working.filter_map(&:subject_id).uniq
+      reason = "Managing #{pluralize(reports.size, 'report')} costs #{decimal(figure.excess)} more than the seat delivers"
+      reason += "; its figure is overridden" if places.any?(&:overridden)
+      item(priced.seat.id, CAPACITY, reason, broken_by: overload_causes(priced.seat, reports, places))
+    end
+  end
+
+  # The seat's own level and place, each report's line to it, and the
+  # capacity rule that chose the model can each tip a seat over.
+  def overload_causes(seat, report_ids, places)
+    own = seat.kind == "person" ? [ [ seat.id, ASSIGNMENT ], [ seat.id, LEVEL ] ] : [ [ seat.id, POSITION ] ]
+    positions = @map.positions.to_set(&:id)
+    lines = report_ids.map { positions.include?(it) ? [ it, POSITION ] : [ it, LINE ] }
+    rules = places.flat_map { rule_keys(it.unit_id) }.select { it.last == CAPACITY_RULE }
+    [ *own, *lines, *rules ].uniq
+  end
+
+  def decimal(value) = BigDecimal(value, 20).round(4).to_s("F").delete_suffix(".0")
+
+  def pluralize(count, noun) = "#{count} #{count == 1 ? noun : noun.pluralize}"
 
   # A leaver's backfill carries their seat, a forgotten person's override is
   # gone with them, and a closed position is the placements check's item.
