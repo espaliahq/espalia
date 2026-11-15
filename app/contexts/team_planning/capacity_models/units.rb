@@ -52,6 +52,9 @@ class TeamPlanning::CapacityModels::Units < TeamPlanning::CapacityModel
   # @return [String]
   def self.description = "Units on a curve by level, less what managing the seat's reports costs"
 
+  # @return [String]
+  def self.symbol = "u"
+
   # @return [Hash{String => String}]
   def self.notes = Graph::NOTES
 

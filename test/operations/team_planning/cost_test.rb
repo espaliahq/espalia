@@ -202,4 +202,12 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_match(/baseline has no period/, assert_raises(Operations::Base::ParameterError) { cost(scenario_id: @plan_id) }.message)
     assert_raises(Operations::Base::ParameterError) { cost(as: @outsider) }
   end
+
+  should "read the Org Graph once for the scenario and the baseline together" do
+    reads = 0
+    as_of = OrgGraph::AsOf.method(:new)
+    OrgGraph::AsOf.stub(:new, ->(**args) { reads += 1; as_of.call(**args) }) { cost }
+
+    assert_equal 1, reads
+  end
 end
