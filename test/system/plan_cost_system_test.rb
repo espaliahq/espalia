@@ -72,7 +72,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         sign_in_as(@planner.user)
         visit map_plan_path(@plan_id, scenario: @year)
 
-        within("[data-cost-strip]") { assert_text "Priced from the actual pay the plan holds for 1 seat here and 0 seats in Today" }
+        within("[data-cost-strip]") { assert_text "Priced from the actual pay the plan holds for 1 seat here, and at pay band midpoints for the rest" }
         assert_no_sideways_overflow
       end
     end

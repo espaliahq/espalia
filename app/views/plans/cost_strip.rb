@@ -61,8 +61,8 @@ class Views::Plans::CostStrip < Views::Base
     held = @marks.cost[:actual_pay_seats]
     return "Priced at pay band midpoints" unless held && held.values.any?(&:positive?)
 
-    "Priced from the actual pay the plan holds for #{seats(held[:scenario])} here and #{seats(held[:baseline])} in Today, " \
-      "and at pay band midpoints for the rest"
+    where = { scenario: "here", baseline: "in Today" }.filter_map { |side, place| "#{seats(held[side])} #{place}" if held[side].to_i.positive? }
+    "Priced from the actual pay the plan holds for #{where.join(' and ')}, and at pay band midpoints for the rest"
   end
 
   def seats(count) = "#{count} #{count == 1 ? 'seat' : 'seats'}"
