@@ -514,6 +514,12 @@ resolves to none. The figure is max(base − cost, 0) × allocation × FTE: the 
 taken before the seat splits across places. A cost past the base floors at zero and marks
 the figure overloaded, with the excess. Each step names what it charges for.
 
+An overloaded seat is an Attention item (7.5), once per seat under the facet `capacity`,
+whether a person or an open position holds it. A floor hides a smell, so the check reads
+the model's own figure: an override changes the number, not the reports, and the reason
+says the figure is overridden. It credits the latest of the seat's placement and level,
+each report's line to it, and the capacity rule that chose the model.
+
 `Units::Graph` reads who a seat manages from reporting lines, never from unit owners:
 ownership says who may edit a unit, not who manages it. One principle runs through the
 rules: a vacant seat and a filled one must stay comparable, so leaving a seat empty never
@@ -537,6 +543,10 @@ flatters a scenario.
 - **A vacant manager seat never takes its own manager as a report.** The head of the tree
   has no manager, so without this an open seat beneath them would take them, and with them
   everyone.
+- **Nor does it take someone who owns its unit or a unit above it.** An owner with no line
+  sits above the seat even when the seat has no line to them, so they count against nobody,
+  as the head of the tree does. A line-less member who owns nothing up the tree is still
+  taken ([#341](https://github.com/espaliahq/espalia/issues/341)).
 - **A leaver is never a report.** Their reports pass to their backfill, or to nobody,
   whether the line names the leaver or a position only the leaver fills.
 - **A leaver keeps the positions they fill filled for the step**, so their capacity goes to
@@ -1029,6 +1039,22 @@ rather than vanishing, so the change doesn't look as if nobody explained it. An 
 rewrites or clears a note in place, through `team_planning_note_change`, on the scenario that
 made the change. For an inherited change that is not the scenario shown. Rules and positions
 have no status, so their notes don't appear here.
+
+### The checks tab as built
+
+The Checks tab ([#350](https://github.com/espaliahq/espalia/issues/350)) shows what no longer
+fits in one scenario, Today included, and reads `team_planning_attention` alone. Items come
+grouped by the check that found them, in Attention's order, each under a heading and a sentence
+saying what the check looks for. Every check shows, and one that found nothing says so in an
+empty state of its own. A check the tab has no heading for still shows, under its key,
+and a test fails when Attention gains one the tab doesn't name. A row of counts at the top links
+to each group that found something.
+
+Each item names its subject, the reason, the change behind it and its `sources`. Attention names
+units, positions and successions the way the scenario's map does. One the map no longer holds
+has no name, and a succession calls a missing side "A removed unit". The change links to its row on the Changes tab, which carries the id
+`change-<change_id>`, whenever that tab lists it for the same scenario; a change it doesn't list
+is named without a link. An item no change explains says so.
 
 ## Plan-held data
 

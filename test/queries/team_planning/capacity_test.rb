@@ -207,7 +207,7 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
 
   should "list each place that counts nowhere as needing attention, naming why, once the plan measures capacity" do
     attention = lambda do
-      as_tenant { TeamPlanning::Attention.for(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id) }
+      as_tenant { TeamPlanning::Attention.for(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id).items }
         .select { it.facet.start_with?("#{TeamPlanning::Attention::CAPACITY}:") }
     end
     assert_empty attention.call
@@ -294,8 +294,9 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     @tenant.update!(hris_config: config)
     as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @plan_id, subject_id: @ada.id, end_state: { level: "5" }) }
 
-    place = seat(capacity, @ada.id).places.sole.place
-    assert_equal [ @engineer.role_id, @e5.level_id ], [ place.role_id, place.level_id ]
+    ada = seat(capacity, @ada.id)
+    place = ada.places.sole.place
+    assert_equal [ @engineer.role_id, @e5.level_id, true ], [ place.role_id, place.level_id, ada.own_level ]
   end
 
   should "leave a planned level that names no ordinal unresolved, though the title's mapping fixes a level" do
@@ -304,8 +305,9 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     @tenant.update!(hris_config: config)
     as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::LevelSet, scenario_id: @plan_id, subject_id: @ada.id, end_state: { level: "Senior" }) }
 
-    place = seat(capacity, @ada.id).places.sole.place
-    assert_equal [ @engineer.role_id, nil ], [ place.role_id, place.level_id ]
+    ada = seat(capacity, @ada.id)
+    place = ada.places.sole.place
+    assert_equal [ @engineer.role_id, nil, false ], [ place.role_id, place.level_id, ada.own_level ]
   end
 
   should "keep a removed planned level unknown, though the title's mapping fixes a level" do

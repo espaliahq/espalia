@@ -78,12 +78,50 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
                    [ @head.id, "capacity:#{@engineering}", reason ] ].sort,
                  result[:items].map { it.values_at(:subject_id, :facet, :reason) }.sort
     assert_equal({ @ada.id => "Ada Quill", @bo.id => "Bo Reyes", @head.id => "Hal Head" }, result[:names])
+    assert_equal [ "unclassified" ], result[:items].map { it[:check] }.uniq
   end
 
   should "list unclassified places once a model is chosen, even when no place takes it" do
     write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
 
     assert_equal [ @ada.id, @bo.id, @head.id ].sort, attention(@q1)[:items].map { it[:subject_id] }.sort
+  end
+
+  def overloading_rule
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model",
+                                                       value: { roles: { @engineer.role_id => { model: "units", params: { per_report: { direct: "1" } } } } })
+  end
+
+  def overloaded(scenario_id = @q1) = attention(scenario_id)[:items].select { it[:facet] == "capacity" }
+
+  should "mark a manager whose reports cost more than their seat delivers, crediting the line that tipped it, by name" do
+    overloading_rule
+    seat = open_position(@q1, unit_id: @engineering)
+    assign(@q1, @head, { position_id: seat, allocation: 1 })
+    write(Operations::TeamPlanning::SetReportingLine, @q1, person_id: @bo.id, manager_id: @head.id)
+    result = attention(@q1)
+
+    item = overloaded.sole
+    assert_equal [ @head.id, "Managing 2 reports costs 1.4 more than the seat delivers" ], item.values_at(:subject_id, :reason)
+    assert_equal "ReportingLineSet", item[:change][:kind]
+    assert_equal "Hal Head", result[:names][@head.id]
+  end
+
+  should "mark an open manager position as a filled one, so leaving the seat empty never hides the load" do
+    overloading_rule
+    seat = open_position(@q1, unit_id: @engineering)
+    [ @ada, @bo ].each { write(Operations::TeamPlanning::SetReportingLine, @q1, person_id: it.id, manager_position_id: seat) }
+
+    assert_equal [ [ seat, "Managing 2 reports costs 1.4 more than the seat delivers" ] ], overloaded.map { it.values_at(:subject_id, :reason) }
+  end
+
+  should "mark no manager overloaded under a model that doesn't price reports" do
+    write(Operations::TeamPlanning::SetRule, @plan_id, rule: "capacity_model", value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    seat = open_position(@q1, unit_id: @engineering)
+    assign(@q1, @head, { position_id: seat, allocation: 1 })
+    write(Operations::TeamPlanning::SetReportingLine, @q1, person_id: @bo.id, manager_id: @head.id)
+
+    assert_empty overloaded
   end
 
   should "read a scenario that fits as needing nothing" do
@@ -100,7 +138,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ [ @ada.id, "assignment", "Placed in a retired unit" ], [ risk, "unit", "Its parent is a retired unit" ] ], items
     assert_equal({ kind: "AssignmentSet", scenario_id: @q2 }, change_of(@ada.id).except(:event_id))
     assert_equal({ kind: "UnitSet", scenario_id: @q2 }, change_of(risk).except(:event_id))
-    assert_equal({ @ada.id => "Ada Quill" }, attention[:names])
+    assert_equal({ @ada.id => "Ada Quill", risk => "Risk" }, attention[:names])
     assert_empty items(@q1)
   end
 
@@ -124,6 +162,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assign(@q2, @ada, { position_id: position, allocation: 1 })
     assign(@q2, @bo, { position_id: position, allocation: 1 })
     assert_equal [ [ position, "position", "Overfilled by 0.8 FTE" ] ], items
+    assert_equal "New position: #{@engineer.name}", attention[:names][position]
     assert_equal({ kind: "AssignmentSet", scenario_id: @q2 }, change_of(position).except(:event_id))
 
     write(Operations::TeamPlanning::ClosePosition, @q1, position_id: position)

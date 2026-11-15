@@ -80,6 +80,20 @@ class PlansController < ApplicationController
     render plan_page(plan, scenarios:, open_tab: :changes, body: tab)
   end
 
+  # GET /planning/:id/checks?scenario=:scenario_id
+  #
+  # What no longer fits in one scenario, grouped by the check that found it
+  # ([#350](https://github.com/espaliahq/espalia/issues/350)). The baseline is the default.
+  def checks
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = params[:scenario].presence || plan[:plan_id]
+    linked_ids = read(Operations::TeamPlanning::Status, scenario_id:)[:statuses].to_set { it[:change_id] }
+    tab = Views::Plans::ChecksTab.new(plan:, scenarios:, attention: read(Operations::TeamPlanning::Attention, scenario_id:), linked_ids:)
+    render plan_page(plan, scenarios:, open_tab: :checks, body: tab)
+  end
+
   # GET /planning/:id/update-to-today
   #
   # What updating the plan to today would take in, for an editor to confirm
@@ -254,7 +268,8 @@ class PlansController < ApplicationController
       tabs: [ Views::Plans::ShowView::Tab.new(key: :scenarios, label: "Scenarios", href: plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :timeline, label: "Timeline", href: timeline_plan_path(plan[:plan_id])),
-              Views::Plans::ShowView::Tab.new(key: :changes, label: "Changes", href: changes_plan_path(plan[:plan_id])) ],
+              Views::Plans::ShowView::Tab.new(key: :changes, label: "Changes", href: changes_plan_path(plan[:plan_id])),
+              Views::Plans::ShowView::Tab.new(key: :checks, label: "Checks", href: checks_plan_path(plan[:plan_id])) ],
       open_tab:,
       body:,
       can_edit: can_edit?,
