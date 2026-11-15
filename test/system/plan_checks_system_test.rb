@@ -65,6 +65,9 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       visit checks_plan_path(@plan_id)
       assert_text "Checks on Today"
       assert_no_selector "nav[aria-label='Scenario']", visible: true
+      assert page.evaluate_script(<<~JS), "every plan tab, the open one included, is on screen"
+        [...document.querySelectorAll("nav[aria-label='Plan views'] a")].every((tab) => tab.getBoundingClientRect().right <= innerWidth)
+      JS
 
       select "· Q1 hires", from: "checks-scenario"
       assert_text "Checks on Q1 hires"
