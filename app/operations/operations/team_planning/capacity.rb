@@ -27,7 +27,7 @@ class Operations::TeamPlanning::Capacity < Operations::Base
               "plan can't read, since its person was forgotten, leaves the place unclassified with the model's " \
               "figure still in `calculated`. `overridden` marks every place the plan holds an override for, so one " \
               "on a place that counts nowhere for another reason, such as a leaver's, stays visible. Figures are " \
-              "decimal strings. Each total carries `parts`, which add up to it per model: actual is the baseline's capacity, " \
+              "decimal strings. Each total carries `parts`, which add up to it per model: actual is the baseline's capacity (the baseline's figure, not actual pay), " \
               "planned is what the plan's changes add or take away (negative where they take away, so someone moved between " \
               "units is negative in the old unit and positive in the new), and forecast is what the plan's forecast " \
               "assumptions add, zero until a forecast rule is set. The baseline is all actual. `units` lists each unit " \

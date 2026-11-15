@@ -15,7 +15,7 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
               "for every scenario at once. Today comes first, under the plan's id, with basis run_rate: every seat priced " \
               "for the year from the base date, totals carrying only `scenario`, never compared with a period total. " \
               "Each scenario has basis period. Each total carries `parts`: actual, planned and forecast, as " \
-              "team_planning_cost defines them, adding up to it. Totals are per currency " \
+              "team_planning_cost defines them, adding up to it; actual there means the baseline's figure, not actual pay. Totals are per currency " \
               "in `native`, and `converted` is the same in the reference currency at each period's start, null with " \
               "`missing` saying why. `unpriced` counts the seats that can't be priced and so are left out, never " \
               "counted as zero; team_planning_cost names them. A scenario that can't be priced has `error` instead " \

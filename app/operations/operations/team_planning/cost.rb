@@ -32,7 +32,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "cost_centre_source says which (position, person, rule or none), and cost_centre_rule is the " \
               "winning rule's index in the cost_centre list that unit reads. " \
               "Unit, cost-centre and plan totals always agree. Every total carries `parts`, which add up to its " \
-              "`scenario` figure exactly: actual is the baseline's figure for the same unit or cost centre over the same days, " \
+              "`scenario` figure exactly. In `parts`, actual means the baseline's figure, not actual pay: actual is the baseline's figure for the same unit or cost centre over the same days, " \
               "planned is what the plan's changes add or take away (negative where they take away, so someone moved between " \
               "units is negative in the old unit and positive in the new), and forecast is what the plan's forecast " \
               "assumptions add, zero until a forecast rule is set; team_planning_forecast lists its rows. A run rate is all actual. A seat that can't be priced is in `unpriced` with its reason, " \

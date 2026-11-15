@@ -14,7 +14,8 @@ class Operations::TeamPlanning::Forecast < Operations::Base
               "kind (the rule that made it), its unit (null for none) and cost centre, the step it covers " \
               "(the scenario's period), the headcount it adds or takes away, its cost per currency and its capacity " \
               "per model. A forecast leaves out anyone a planned change already covers, along the scenario and every " \
-              "scenario it follows. These rows are the forecast part of team_planning_cost and team_planning_capacity. " \
+              "scenario it follows. These rows are the forecast part of team_planning_cost and team_planning_capacity, beside " \
+              "their actual part, which means the baseline's figure, not actual pay. " \
               "A row has no id and is not a change: it can't be pinned, cleared, noted or listed among the changes; " \
               "change the rule to change it. The plan's own id, Today, has no period and so no rows. Figures are " \
               "decimal strings. Refused, as an unknown plan, unless the caller is a member."
