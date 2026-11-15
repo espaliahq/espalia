@@ -148,7 +148,6 @@ class Views::Plans::ChangesTab < Views::Base
     end
   end
 
-  # A rule or a capacity names its own kind after the colon, as in "rule:on_cost".
   # An erased note keeps its place, so the change doesn't read as never explained.
   # Its person was forgotten, so it takes no new one.
   def change_note(note)

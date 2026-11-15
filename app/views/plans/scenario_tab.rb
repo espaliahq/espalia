@@ -2,8 +2,9 @@
 
 # What the Changes and Checks tabs share: they each show one scenario of a plan,
 # so a fix to the picker, a scenario's name or a source badge lands in both
-# ([#354](https://github.com/espaliahq/espalia/issues/354)). A tab that
-# includes it defines `plan_id` and `scenario_id`, and sets `@scenarios`.
+# ([#354](https://github.com/espaliahq/espalia/issues/354)). The update-to-today
+# preview names scenarios and facets with it too. A view that includes it
+# defines `plan_id` and sets `@scenarios`; the picker also needs `scenario_id`.
 module Views::Plans::ScenarioTab
   FACETS = {
     "assignment" => "Placement", "level" => "Level", "reporting_line" => "Manager", "departure" => "Leaving",
@@ -50,6 +51,7 @@ module Views::Plans::ScenarioTab
     providers.each { render Components::Kit::Badge.new("Source: #{HrisConfig.provider_label(it)}", variant: :outline) }
   end
 
+  # A rule or a capacity names its own kind after the colon, as in "rule:on_cost".
   def facet_name(facet) = FACETS.fetch(facet) { FACETS.fetch(facet.split(":").first, facet.humanize) }
 
   def scenario_name(id)
