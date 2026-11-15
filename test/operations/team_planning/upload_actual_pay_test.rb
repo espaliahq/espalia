@@ -132,7 +132,13 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     assert_equal before, event_count
   end
 
-  should "call an email two people share ambiguous" do
+  should "number a bad row by the line its record starts on, though a quoted field spans lines" do
+    csv = "#{HEADER}\"E-100\",90413,EUR,\"year\"\nnobody@example.com,1,EUR,\"year\nor so\"\nnobody@example.com,1,EUR,year\n"
+
+    assert_equal [ 3, 5 ], upload(csv)[:failures].pluck(:line)
+  end
+
+    should "call an email two people share ambiguous" do
     ActsAsTenant.with_tenant(@tenant) do
       create(:tenant_user, tenant: @tenant, person: @off_map, user: create(:user, email: "shared@example.com"))
       @cy.update!(email: "Shared@example.com")

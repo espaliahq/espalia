@@ -115,11 +115,16 @@ class TeamPlanning::PayUpload
     return Report.new(problem: "missing_column") unless columns
 
     rows = []
-    csv.each do |row|
+    # CSV#lineno counts records, so a quoted field across lines would push every later line number out.
+    next_line = 1 + csv.line.to_s.count("\n")
+    loop do
+      row = csv.shift or break
+      line = next_line
+      next_line += csv.line.count("\n")
       next if row.fields.all?(&:blank?)
       return Report.new(problem: "too_many_rows") if rows.size == MAX_ROWS
 
-      rows << Row.new(line: csv.lineno, **columns.transform_values { row[it].to_s.strip })
+      rows << Row.new(line:, **columns.transform_values { row[it].to_s.strip })
     end
     rows.empty? ? Report.new(problem: "empty") : rows
   end
