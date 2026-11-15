@@ -10,11 +10,13 @@
 # 3. the cost centre rules read at the position's unit, the first match
 #    winning, its index kept so a later check can flag two that both match.
 #
-# Otherwise it has none.
+# Otherwise it has none. The rule index is a place in the list the position's
+# unit reads, wherever up the units that list was set. A placeholder hire
+# has no cost centre of their own, so they never give one in step 2.
 #
 # @example
-#   TeamPlanning::PositionCostCentres.new(map, tenant_id:).call
-#   # => { position_id => Resolved(cost_centre: "Platform", source: "rule", rule_index: 0) }
+#   TeamPlanning::PositionCostCentres.new(map, tenant_id:).of(position)
+#   # => Resolved(cost_centre: "Platform", source: "rule", rule_index: 0)
 class TeamPlanning::PositionCostCentres
   SOURCES = %w[position person rule none].freeze
 
@@ -32,18 +34,21 @@ class TeamPlanning::PositionCostCentres
   def initialize(map, tenant_id:)
     @map = map
     @tenant_id = tenant_id
+    @resolved = {}
+    @chains = {}
   end
 
-  # @return [Hash{String => Resolved}] position id => its cost centre
-  def call
-    occupants = @map.occupants
-    live = @map.units.to_set(&:id)
-    @map.positions.to_h do |position|
-      [ position.id, own(position) || occupied(occupants.fetch(position.id, [])) || ruled(position, live) || NONE ]
-    end
+  # @param position [TeamPlanning::Baseline::Position]
+  # @return [Resolved]
+  def of(position)
+    @resolved[position.id] ||= own(position) || occupied(occupants.fetch(position.id, [])) || ruled(position) || NONE
   end
 
   private
+
+  def occupants = @occupants ||= @map.occupants
+
+  def live = @live ||= @map.units.to_set(&:id)
 
   def own(position) = position.cost_centre && Resolved.new(cost_centre: position.cost_centre, source: "position")
 
@@ -52,12 +57,16 @@ class TeamPlanning::PositionCostCentres
     person && Resolved.new(cost_centre: person.cost_centre, source: "person")
   end
 
-  def ruled(position, live)
+  def ruled(position)
     unit_id = position.unit_id if live.include?(position.unit_id)
-    index, rule = TeamPlanning::RuleKinds::CostCentre.match(@map.rule("cost_centre", unit_id:), unit_ids: unit_id ? @map.units_up_from(unit_id) : [],
-                                                                                                role_id: position.role_id, family_id: families[position.role_id])
+    index, rule = TeamPlanning::RuleKinds::CostCentre.match(rules_at(unit_id), unit_ids: chain(unit_id), role_id: position.role_id,
+                                                                               family_id: families[position.role_id])
     rule && Resolved.new(cost_centre: rule["cost_centre"], source: "rule", rule_index: index)
   end
+
+  def rules_at(unit_id) = (@rules ||= {})[unit_id] ||= @map.rule("cost_centre", unit_id:)
+
+  def chain(unit_id) = unit_id ? @chains[unit_id] ||= @map.units_up_from(unit_id) : []
 
   def families
     @families ||= FrameworkState::Role.where(tenant_id: @tenant_id, role_id: @map.positions.map(&:role_id).uniq).pluck(:role_id, :role_family_id).to_h
