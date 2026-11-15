@@ -7,7 +7,8 @@
 # read marks them, each with a reason and the change it belongs to.
 #
 # It also checks each person: allocation, someone still placed after the
-# Org Graph has them leave, and their manager (4.6).
+# Org Graph has them leave, and their manager (4.6), and each seat whose
+# reports cost more to manage than it delivers (7.5).
 #
 # Derived from the map and the changes that won, never stored. The changes
 # tab (4.4) and the checks tab (4.7) both read it.
@@ -31,8 +32,8 @@ class TeamPlanning::Attention
     def initialize(unit_ids: [], fact: nil, **) = super
   end
 
-  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers unclassified
-              budget_lines].freeze
+  CHECKS = %i[placements positions units unresolved successions capacity_overrides allocations leavers managers overloaded
+              unclassified budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
@@ -62,7 +63,7 @@ class TeamPlanning::Attention
     map, changes = resolution.resolved(aggregate)
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
     new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
-                      unclassified: capacity.configured? ? capacity.unclassified : []).call
+                      unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats).call
   end
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
@@ -70,10 +71,12 @@ class TeamPlanning::Attention
   # @param left_ids [Array<String>] the people the Org Graph has had leave by today
   # @param closed_units [Hash{String => String}] the unit of each position the scenario closed
   # @param unclassified [Array<Array(TeamPlanning::Capacity::Seat, TeamPlanning::Capacity::Place)>] from {TeamPlanning::Capacity::Report#unclassified}
-  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [])
+  # @param priced [Array<TeamPlanning::Capacity::Seat>] from {TeamPlanning::Capacity::Report#seats}
+  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [])
     @map = map
     @position_units = closed_units.merge(map.positions.to_h { [ it.id, it.unit_id ] })
     @unclassified = unclassified
+    @priced = priced
     @changes = changes
     @left = left_ids.to_set
     @order = changes.keys.each_with_index.to_h
@@ -246,6 +249,52 @@ class TeamPlanning::Attention
 
   def percent(total) = "#{fte(total * 100)}%"
 
+  # An override hides the number, never the reports, so the model's own
+  # figure decides. The excess is the whole seat's, so each seat is one item
+  # however many places it holds. An open position that people report to is
+  # flagged as a filled seat is, so leaving it empty never hides the load.
+  def overloaded
+    @priced.filter_map do |priced|
+      places = priced.places.select { (it.calculated || it.figure)&.overloaded }
+      next if places.empty?
+
+      figure = places.first.calculated || places.first.figure
+      reports = figure.working.filter_map(&:subject_id).uniq
+      reason = "Managing #{pluralize(reports.size, 'report')} costs #{decimal(figure.excess)} more than the seat delivers"
+      reason += "; its figure is overridden" if places.any?(&:overridden)
+      item(priced.seat.id, CAPACITY, reason, broken_by: overload_causes(priced.seat, reports, places), units: places.map(&:unit_id))
+    end
+  end
+
+  # The seat's own level and place, a position it fills (whose role picks the
+  # model), each report's line to it and level (a report costs more the more
+  # junior), and the capacity rule that chose the model can each tip a seat
+  # over. A person's level is their own before a position's, so both count,
+  # though a report with a level of their own costs the same whatever the
+  # position they fill.
+  def overload_causes(seat, report_ids, places)
+    filled = places.filter_map { it.place.position_id }
+    own = seat.kind == "person" ? [ [ seat.id, ASSIGNMENT ], *level_keys(seat.id, filled) ] : [ [ seat.id, POSITION ] ]
+    positions = @map.positions.to_set(&:id)
+    own_level = @own_level_ids ||= @priced.select(&:own_level).to_set { it.seat.id }
+    reports = report_ids.flat_map do
+      next [ [ it, POSITION ] ] if positions.include?(it)
+
+      [ [ it, LINE ], [ it, ASSIGNMENT ], *level_keys(it, ([] if own_level.include?(it))) ]
+    end
+    rules = places.filter_map { effective_rule(it.unit_id) }
+    [ *own, *reports, *rules ].uniq
+  end
+
+  def level_keys(person_id, position_ids = nil)
+    position_ids ||= (@people_by_id ||= @map.people.index_by(&:id))[person_id]&.memberships.to_a.filter_map(&:position_id)
+    [ [ person_id, LEVEL ], *position_ids.map { [ it, POSITION ] } ]
+  end
+
+  def decimal(value) = BigDecimal(value, 20).round(4).to_s("F").delete_suffix(".0")
+
+  def pluralize(count, noun) = "#{count} #{count == 1 ? noun : noun.pluralize}"
+
   # A leaver's backfill carries their seat, a forgotten person's override is
   # gone with them, and a closed position is the placements check's item.
   UNCLASSIFIED_ELSEWHERE = %w[leaving override_unknown closed_position].freeze
@@ -265,9 +314,11 @@ class TeamPlanning::Attention
   # Whether a place has a model is the rule's choice alone, so the plan's
   # rule that decided it is the cause, however late the seat's own change
   # landed. The nearest unit to set the rule decides, then the plan.
-  def deciding_rule(unit_id)
+  def deciding_rule(unit_id) = effective_rule(unit_id)&.then { it if @changes.key?(it) }
+
+  def effective_rule(unit_id)
     keys = rule_keys(unit_id).select { it.last == CAPACITY_RULE }
-    keys.find { |subject_id, _| @map.rules.by_subject.fetch(subject_id, {}).key?(CAPACITY_RULE_NAME) }&.then { it if @changes.key?(it) }
+    keys.find { |subject_id, _| @map.rules.by_subject.fetch(subject_id, {}).key?(CAPACITY_RULE_NAME) }
   end
 
   # A place in a position takes the position's role and level, so a later

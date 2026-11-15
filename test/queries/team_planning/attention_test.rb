@@ -106,6 +106,123 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                                                        changes.except(at_unit.key), unclassified: uncovered("no_model")).call.sole.change
   end
 
+  should "credit the nearest capacity rule, though the plan-wide one landed after it" do
+    at_unit = change(TeamPlanning::Events::RuleSet, LIVE, rule: "capacity_model", value: { "roles" => {} })
+    plan_wide = change(TeamPlanning::Events::RuleSet, ROOT, rule: "capacity_model", value: {})
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    rules = B::Rules.new(plan_id: ROOT, defaults: {}, by_subject: { ROOT => { "capacity_model" => {} }, LIVE => { "capacity_model" => {} } })
+    changes = { at_unit.key => at_unit, plan_wide.key => plan_wide, [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed }
+
+    %w[no_model unknown_model].each do |reason|
+      assert_same at_unit, TeamPlanning::Attention.new(map(rules:), changes, unclassified: uncovered(reason)).call.sole.change
+    end
+  end
+
+  REPORT, OTHER_REPORT = Array.new(2) { SecureRandom.uuid_v7 }
+
+  def priced_seat(kind: "person", id: PERSON, units: [ LIVE ], overloaded: true, overridden: false, position_id: nil)
+    working = [ TeamPlanning::CapacityModel::Step.new(label: "Base at L3", amount: 1r, op: "+"),
+                *[ REPORT, OTHER_REPORT ].map { TeamPlanning::CapacityModel::Step.new(label: "Report, direct", amount: -0.65r, op: "+", subject_id: it) } ]
+    calculated = TeamPlanning::CapacityModel::Figure.new(amount: 0r, working:, overloaded:, excess: overloaded ? 0.3r : 0r)
+    places = units.map do |unit_id|
+      place = TeamPlanning::CapacityModel::Place.new(unit_id:, allocation: 1r, allocation_known: true, role_id: nil, level_id: nil, position_id:)
+      figure = overridden ? TeamPlanning::CapacityModel::Figure.new(amount: 2r, working: []) : calculated
+      TeamPlanning::Capacity::Place.new(place:, model: "units", chosen_for: "family", figure:, reason: nil,
+                                        calculated: (calculated if overridden), overridden:)
+    end
+    seat = TeamPlanning::CapacityModel::Seat.new(id:, kind:, fte: 1r, fte_known: true, places: places.map(&:place))
+    TeamPlanning::Capacity::Seat.new(seat:, places:)
+  end
+
+  def overloads(priced, changes: {}, map: self.map) = TeamPlanning::Attention.new(map, changes, priced:).call
+
+  should "mark a manager whose reports cost more than the seat delivers, once however many places they hold" do
+    items = overloads([ priced_seat(units: [ LIVE, ROOT ]), priced_seat(id: REPORT, overloaded: false) ])
+
+    assert_equal [ [ PERSON, "capacity", "Managing 2 reports costs 0.3 more than the seat delivers", [ LIVE, ROOT ] ] ],
+                 items.map { [ it.subject_id, it.facet, it.reason, it.unit_ids ] }
+  end
+
+  should "mark an open manager position that prices as overloaded, as a filled seat is, so leaving it empty never hides the load" do
+    position_id = SecureRandom.uuid_v7
+
+    assert_equal [ [ position_id, "Managing 2 reports costs 0.3 more than the seat delivers" ] ],
+                 overloads([ priced_seat(kind: "position", id: position_id) ]).map { [ it.subject_id, it.reason ] }
+  end
+
+  should "still mark an overloaded manager whose figure is overridden, as the reports still cost what they cost" do
+    assert_equal [ "Managing 2 reports costs 0.3 more than the seat delivers; its figure is overridden" ],
+                 overloads([ priced_seat(overridden: true) ]).map(&:reason)
+  end
+
+  should "credit the report's later line, or the capacity rule, over the manager's own placement" do
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    line = change(TeamPlanning::Events::ReportingLineSet, OTHER_REPORT)
+    rule = change(TeamPlanning::Events::RuleSet, ROOT, rule: "capacity_model", value: {})
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ OTHER_REPORT, TeamPlanning::Attention::LINE ] => line }
+
+    ruled = map(rules: B::Rules.new(plan_id: ROOT, defaults: {}, by_subject: { ROOT => { "capacity_model" => {} } }))
+
+    assert_same line, overloads([ priced_seat ], changes:, map: ruled).sole.change
+    assert_same rule, overloads([ priced_seat ], changes: changes.merge(rule.key => rule), map: ruled).sole.change
+    assert_same placed, overloads([ priced_seat ], changes: changes.except([ OTHER_REPORT, TeamPlanning::Attention::LINE ])).sole.change
+  end
+
+  should "credit only the capacity rule that chose the seat's model, not a later one further up" do
+    at_unit = change(TeamPlanning::Events::RuleSet, LIVE, rule: "capacity_model", value: {})
+    plan_wide = change(TeamPlanning::Events::RuleSet, ROOT, rule: "capacity_model", value: {})
+    rules = B::Rules.new(plan_id: ROOT, defaults: {}, by_subject: { ROOT => { "capacity_model" => {} }, LIVE => { "capacity_model" => {} } })
+
+    assert_same at_unit, overloads([ priced_seat ], changes: { at_unit.key => at_unit, plan_wide.key => plan_wide }, map: map(rules:)).sole.change
+  end
+
+  should "credit a later edit to the position the manager fills" do
+    position_id = SecureRandom.uuid_v7
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    edited = change(TeamPlanning::Events::PositionSet, position_id)
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ position_id, TeamPlanning::Attention::POSITION ] => edited }
+
+    assert_same edited, overloads([ priced_seat(position_id:) ], changes:).sole.change
+  end
+
+  should "credit an open seat's own change when the report is a position" do
+    position_id = SecureRandom.uuid_v7
+    position = B::Position.new(id: position_id, unit_id: LIVE, role_id: nil, level_id: nil, fte: 1, basis: "new", role_name: nil, level_name: nil)
+    moved = change(TeamPlanning::Events::PositionSet, position_id)
+    seat = priced_seat
+    working = seat.places.first.figure.working.map { it.subject_id == REPORT ? it.with(subject_id: position_id) : it }
+    seat = seat.with(places: seat.places.map { it.with(figure: it.figure.with(working:)) })
+
+    assert_same moved, overloads([ seat ], changes: { [ position_id, TeamPlanning::Attention::POSITION ] => moved }, map: map(positions: [ position ])).sole.change
+  end
+
+  should "credit a report's later level, its placement, or the position that gives the report its level when they have none of their own, as a junior report costs more" do
+    placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
+    line = change(TeamPlanning::Events::ReportingLineSet, REPORT)
+    demoted = change(TeamPlanning::Events::LevelSet, REPORT)
+    changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed, [ REPORT, TeamPlanning::Attention::LINE ] => line,
+                [ REPORT, TeamPlanning::Attention::LEVEL ] => demoted }
+
+    assert_same demoted, overloads([ priced_seat ], changes:).sole.change
+
+    position_id = SecureRandom.uuid_v7
+    report = member(REPORT).then { it.with(memberships: [ B::Membership.new(unit_id: LIVE, allocation: 1, role: nil, position_id:) ]) }
+    regraded = change(TeamPlanning::Events::PositionSet, position_id)
+    assert_same regraded, overloads([ priced_seat ], changes: changes.merge([ position_id, TeamPlanning::Attention::POSITION ] => regraded),
+                                                     map: map(people: [ report ])).find { it.facet == "capacity" }.change
+
+    leveled = priced_seat(id: REPORT, overloaded: false).with(own_level: true)
+    assert_same demoted, overloads([ priced_seat, leveled ], changes: changes.merge([ position_id, TeamPlanning::Attention::POSITION ] => regraded),
+                                                             map: map(people: [ report ])).find { it.facet == "capacity" }.change
+
+    moved = change(TeamPlanning::Events::AssignmentSet, REPORT)
+    assert_same moved, overloads([ priced_seat ], changes: changes.merge([ REPORT, TeamPlanning::Attention::ASSIGNMENT ] => moved)).sole.change
+  end
+
+  should "mark nothing for a seat no model prices as overloaded" do
+    assert_empty overloads([ priced_seat(overloaded: false) ])
+  end
+
   should "credit the placement for a place with no model when no rule the plan set decides it" do
     placed = change(TeamPlanning::Events::AssignmentSet, PERSON)
     changes = { [ PERSON, TeamPlanning::Attention::ASSIGNMENT ] => placed }
