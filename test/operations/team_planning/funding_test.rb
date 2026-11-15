@@ -83,6 +83,7 @@ class Operations::TeamPlanning::FundingTest < ActiveSupport::TestCase
                  refusal { set_funding([ { budget_line_id: @platform.id, share: "0.5" }, { budget_line_id: @platform.id, share: "0.5" } ]) }
     assert_match(/share is a decimal above 0/, refusal { set_funding([ { budget_line_id: @platform.id, share: "0" }, { budget_line_id: @engineers.id, share: "1" } ]) })
     assert_match(/at least one|draws/, refusal { set_funding([]) })
+    assert_equal "Each draw names a budget line by its id", refusal { set_funding([ @platform.id ]) }
   end
 
   should "refuse the baseline, a position that isn't open, a line the scenario doesn't hold or has cut, and a viewer" do
@@ -117,5 +118,13 @@ class Operations::TeamPlanning::FundingTest < ActiveSupport::TestCase
     call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @q2, position_id: @seat)
     assert_equal [ "Funds a closed position" ], flagged.(@q2).pluck(:reason)
     assert_equal [ [ "espalia" ] ], flagged.(@q2).pluck(:sources), "the position's unit names where to fix it"
+  end
+
+  should "pin a scenario's funding to the one it inherits, past a later change in its parent" do
+    set_funding([ { budget_line_id: @platform.id } ])
+    call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @q2, subject_id: @seat, facet: "funding")
+    set_funding([ { budget_line_id: @engineers.id } ])
+
+    assert_equal [ @platform.id ], funding[:positions].sole[:draws].pluck(:budget_line_id)
   end
 end

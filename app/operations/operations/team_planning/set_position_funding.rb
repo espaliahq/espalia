@@ -17,7 +17,7 @@ class Operations::TeamPlanning::SetPositionFunding < Operations::Base
       type: "object", additionalProperties: false, required: [ "budget_line_id" ],
       properties: {
         budget_line_id: { type: "string", description: "A line from team_planning_budget_lines." },
-        share: { type: "string", pattern: KIND::SHARE.source.delete_prefix("\\A").delete_suffix("\\z"),
+        share: { type: "string", pattern: "^#{KIND::SHARE.source.delete_prefix("\\A").delete_suffix("\\z")}$",
                  description: "The part of the position it funds, a decimal above 0 and at most 1, such as \"0.5\"." }
       }
     }

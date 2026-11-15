@@ -136,6 +136,17 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     assert_equal [ [], "no_line" ], drawn_on(report, from_july)
   end
 
+  should "hold a backfill from the period's start when a leaver has no date or leaves part of it open, as the cost read does" do
+    undated, part_open = Array.new(2) { open_position(basis: "backfill") }
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, position_id: undated, leaves_on: "2026-06-30")
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @cy.id, position_id: undated)
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @brook.id, position_id: part_open, leaves_on: "2026-06-30")
+
+    report = funding
+    assert_equal Date.new(2026, 1, 1), of(report, undated).starts_on, "Cy, with no date, opens it all step"
+    assert_equal Date.new(2026, 1, 1), of(report, part_open).starts_on, "Brook opens 0.8 of it; the rest is held all step"
+  end
+
   should "list a line's positions filled first, then backfills, then other open ones, each by the day it is first held" do
     budget = line
     open_later, open_sooner = Array.new(2) { open_position }.sort.reverse

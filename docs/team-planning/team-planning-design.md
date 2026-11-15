@@ -1064,8 +1064,9 @@ position and is the least specific; past that, the more of role, level and locat
 states, the more specific. Two choices fill gaps the plan doesn't record:
 
 - **When a position is first held.** A filled one is held all period. An open one replacing
-  someone is held from the day after the earliest of them leaves; any other from the period's
-  start.
+  someone is held from the day the cost read first holds it: the day after a leaver goes, or
+  the period's start when a leaver has no date or leaves part of it open. Any other open one is
+  held from the period's start.
 - **Where a position is.** An occupant's country, the largest allocation first, else the
   country of a person it replaces.
 

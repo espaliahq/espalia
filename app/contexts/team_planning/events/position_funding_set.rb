@@ -27,7 +27,7 @@ class TeamPlanning::Events::PositionFundingSet < TeamPlanning::Events::Change
   # @raise [TeamPlanning::Error] for no draws, too many, a line named twice, or shares that aren't
   #   each above 0 and together 1
   def self.end_state(end_state)
-    draws = Array(end_state.to_h.symbolize_keys[:draws]).map { it.to_h.symbolize_keys }
+    draws = Array(end_state.to_h.symbolize_keys[:draws]).map { draw!(it) }
     raise TeamPlanning::Error, "Funding names at least one budget line" if draws.empty?
     raise TeamPlanning::Error, "Funding names at most #{MAX_DRAWS} budget lines" if draws.size > MAX_DRAWS
 
@@ -43,6 +43,20 @@ class TeamPlanning::Events::PositionFundingSet < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map]
   def self.apply_to(map, data)
     map.with(fundings: map.fundings.merge(data[:subject_id] => data[:draws].map { it.to_h.symbolize_keys }))
+  end
+
+  # @return [Hash, nil] the draws the map holds for the position, for pinning and comparing with a parent
+  def self.read_from(map, subject_id:, facet: self.facet)
+    draws = map.fundings[subject_id] or return nil
+
+    { draws: draws.map { it.slice(:budget_line_id, :share) } }
+  end
+
+  def self.draw!(value)
+    value = value.to_unsafe_h if value.respond_to?(:to_unsafe_h)
+    raise TeamPlanning::Error, "Each draw names a budget line by its id" unless value.is_a?(Hash)
+
+    value.symbolize_keys
   end
 
   def self.line_id!(value)
@@ -61,5 +75,5 @@ class TeamPlanning::Events::PositionFundingSet < TeamPlanning::Events::Change
     share
   end
 
-  private_class_method :line_id!, :share!
+  private_class_method :draw!, :line_id!, :share!
 end

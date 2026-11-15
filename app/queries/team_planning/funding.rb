@@ -20,7 +20,8 @@
 # other open ones, each group by the day it is first held, then by id.
 #
 # Positions are the resolved map's, the same ones {TeamPlanning::Cost} reads,
-# so funded and unfunded always add up to the positions and FTE it prices.
+# each at its whole FTE, so funded and unfunded always add up to its
+# positions and their FTE.
 #
 # @example
 #   TeamPlanning::Funding.new(context:, plan:, scenario_id:).call.totals
@@ -161,16 +162,29 @@ class TeamPlanning::Funding
     position.basis == "backfill" || backfills.key?(position.id) ? "backfill" : "open"
   end
 
-  # An occupied position is held all period. An open one replacing someone
-  # still here is held from the day after the earliest of them leaves.
+  # The first day any part of it is held, as {TeamPlanning::Cost} opens it:
+  # each leaver it replaces opens their FTE the day after they go, or all
+  # step without a date, and FTE no leaver here opens is held all step.
   def starts_on(position)
     return @period.begin if occupants.key?(position.id)
 
-    dates = backfills.fetch(position.id, []).filter_map { people[it]&.departure&.dig(:leaves_on) }
-                     .filter_map { TeamPlanning::Events::DepartureSet.leaving_date(it) }
-    return @period.begin if dates.empty?
+    open = Rational(position.fte.to_s)
+    leavers = @map.people.select { it.leaving? && it.backfill_id == position.id }
+                  .map { [ fte_of(it), TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) ] }
+    starts = leavers.sort_by { |_, last| last || Date.new(0) }.filter_map do |fte, last|
+      fte = [ fte, open ].min
+      next unless fte.positive?
 
-    (dates.min + 1).clamp(@period.begin, @period.end)
+      open -= fte
+      last ? last + 1 : @period.begin
+    end
+    starts << @period.begin if open.positive?
+    starts.min.clamp(@period.begin, @period.end)
+  end
+
+  def fte_of(member)
+    fte = member.planned_or_own(:fte)
+    fte == TeamPlanning::Baseline::UNKNOWN || fte.nil? ? 1r : Rational(fte.to_s)
   end
 
   def location_of(position)
