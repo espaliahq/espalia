@@ -96,7 +96,25 @@ class Operations::TeamPlanning::ActualPayTest < ActiveSupport::TestCase
     set_pay(as: @editor)
     call(Operations::TeamPlanning::WithdrawSeePay, plan_id: @plan_id, person_id: @editor.person_id)
 
-    assert_equal NO_RIGHT, refusal { call(Operations::TeamPlanning::UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
+    pay_change = history[:entries].find { it[:facet] == "data:pay" }[:event_id]
+    assert_equal NO_RIGHT, refusal { call(Operations::TeamPlanning::UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1, event_id: pay_change) }
+  end
+
+  should "pass over pay on a former holder's Undo and Redo, to the change they may still touch" do
+    call(Operations::TeamPlanning::GrantSeePay, plan_id: @plan_id, person_id: @editor.person_id)
+    call(Operations::TeamPlanning::SetPlanValue, as: @editor, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, field: "level", value: "4")
+    set_pay(as: @editor)
+    level_change = history[:entries].find { it[:facet] == "data:level" }[:event_id]
+    call(Operations::TeamPlanning::UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1, event_id: level_change)
+    call(Operations::TeamPlanning::UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
+    call(Operations::TeamPlanning::RedoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
+    call(Operations::TeamPlanning::WithdrawSeePay, plan_id: @plan_id, person_id: @editor.person_id)
+
+    undo_last = -> { call(Operations::TeamPlanning::UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
+    redo_last = -> { call(Operations::TeamPlanning::RedoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
+    assert_equal level_change, redo_last.call[:event_id]
+    assert_equal level_change, undo_last.call[:event_id]
+    assert_equal "You have nothing here to undo", refusal { undo_last.call }
   end
 
   should "never defer to an in-app approval, which would store pay in clear" do

@@ -397,7 +397,8 @@ class TeamPlanning::CommandHandler
     chosen = nil
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      chosen = event_id.presence || plan.public_send(pick, scenario_id, actor_id!) or raise TeamPlanning::Error, nothing
+      chosen = event_id.presence || plan.public_send(pick, scenario_id, actor_id!, except_facets: untouchable_facets(plan)) or
+        raise TeamPlanning::Error, nothing
       ensure_pay_right!(plan, plan.facet_of(scenario_id, chosen))
       yield plan, chosen
     end
@@ -460,6 +461,8 @@ class TeamPlanning::CommandHandler
 
     raise TeamPlanning::Error, "Only a member with the see-pay right can change pay"
   end
+
+  def untouchable_facets(plan) = PlanPolicy.new(@actor, plan).see_pay? ? [] : [ TeamPlanning::Events::PlanDataSet::PAY_FACET ]
 
   def facet_set_by(kind, end_state)
     "#{kind.facet}:#{end_state.to_h.symbolize_keys[:field]}" if kind == TeamPlanning::Events::PlanDataSet
