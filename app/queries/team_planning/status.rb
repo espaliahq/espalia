@@ -54,7 +54,10 @@ class TeamPlanning::Status
   # @!attribute status [Symbol] one of {STATUSES}
   # @!attribute since [Date, nil] for a conflict an update to today carried forward, the day of that update
   # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
-  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since, :sources)
+  # @!attribute staying [Boolean] whether the change withdraws a departure, so the person stays
+  Entry = Data.define(:scenario_id, :change_id, :subject_id, :facet, :status, :since, :sources, :staying) do
+    def initialize(staying: false, **) = super
+  end
 
   STATUSES = %i[done pending conflicting unknown plan_only].freeze
 
@@ -127,7 +130,8 @@ class TeamPlanning::Status
     status = status_of(kind, today, [ end_state_of(change), resolved(@scenario_id) ], before)
     since = @carried[key] unless %i[done unknown].include?(status)
     Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:,
-              status: since ? :conflicting : status, since:, sources: @sources.of_plan(facet, unit_ids:))
+              status: since ? :conflicting : status, since:, sources: @sources.of_plan(facet, unit_ids:),
+              staying: kind == TeamPlanning::Events::DepartureWithdrawn)
   end
 
   # A move touches the units someone is in today, the ones the scenario places

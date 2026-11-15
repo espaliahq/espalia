@@ -340,6 +340,16 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :pending, statuses(status)[[ @brook.id, "departure" ]]
   end
 
+  should "read a withdrawn departure done while the person stays, and conflicting once the Org Graph has them leave" do
+    plan(TeamPlanning::Events::DepartureWithdrawn, @brook.id)
+    assert_equal :done, statuses(status)[[ @brook.id, "departure" ]]
+
+    on(Time.utc(2026, 3, 10, 9)) { @org.leave(@brook.id, **ESPALIA, effective_on: "2026-03-10") }
+    withdrawn = status.statuses.find { it.subject_id == @brook.id }
+    assert_equal :conflicting, withdrawn.status
+    assert_equal "Brook Tamsin", status.name_of(@brook.id)
+  end
+
   should "name every status it gives in the status tool's description" do
     TeamPlanning::Status::STATUSES.each { assert_includes Operations::TeamPlanning::Status.description, "'#{it}'" }
   end

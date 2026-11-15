@@ -21,6 +21,7 @@ class Views::Plans::ChangesTab < Views::Base
     "done" => [ "Done", :success ], "pending" => [ "Pending", :neutral ],
     "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ], "plan_only" => [ "Plan only", :info ]
   }.freeze
+  STAYING = "Staying"
   PLAN_ONLY = "Only in this plan"
   WHOLE_PLAN = "The whole plan"
   REMOVED_UNIT = "A removed unit"
@@ -139,7 +140,7 @@ class Views::Plans::ChangesTab < Views::Base
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
           strong(class: "font-medium") { planned_subject(entry[:subject_id]) }
-          plain " · #{facet_name(entry[:facet])}"
+          plain " · #{entry[:staying] ? STAYING : facet_name(entry[:facet])}"
         end
         p(class: "text-xs text-muted") { "Planned in #{scenario_name(entry[:scenario_id])}" } if entry[:scenario_id] != scenario_id
         change_note(entry[:note])

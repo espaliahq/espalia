@@ -30,4 +30,11 @@ class TeamPlanning::Events::DepartureWithdrawn < TeamPlanning::Events::Change
   # @param facet [String]
   # @return [Hash, nil] empty when they stay, nil when they leave or aren't on the map
   def self.read_from(map, subject_id:, facet: self.facet) = (map.people.any? { it.id == subject_id && !it.leaving? } ? {} : nil)
+
+  # The Org Graph knows only who has left, so the person stays until it has them leave.
+  #
+  # @param map [TeamPlanning::Baseline::Map] read off the Org Graph
+  # @param change [TeamPlanning::Events::DepartureWithdrawn]
+  # @return [Hash, nil] empty while they stay, nil once they have left
+  def self.read_org_graph(map, change) = ({} unless map.left_ids.include?(change.data[:subject_id]))
 end

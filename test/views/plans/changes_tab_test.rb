@@ -96,6 +96,16 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_includes rows[2], "#{Views::Plans::ChangesTab::PLAN_ONLY} · Unit"
     end
 
+    should "read a withdrawn departure as staying, conflicting once the person has left" do
+      rows = texts(render_tab(statuses: [
+        { scenario_id: Q1, change_id: "d1", subject_id: BO, facet: "departure", status: "conflicting", since: nil, sources: %w[hibob], staying: true }
+      ]), "[data-planned-change='conflicting']")
+
+      assert_equal 1, rows.size
+      assert_includes rows.sole, "Bo Reyes · #{Views::Plans::ChangesTab::STAYING}"
+      assert_includes rows.sole, "Source: HiBob"
+    end
+
     should "badge every status the query gives, a plan-only change included, with no fallback" do
       statuses = TeamPlanning::Status::STATUSES.map do |status|
         { scenario_id: Q1, change_id: status.to_s, subject_id: BO, facet: "data:pay", status: status.to_s, since: nil, sources: [] }
