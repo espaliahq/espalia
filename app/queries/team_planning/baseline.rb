@@ -38,11 +38,12 @@ class TeamPlanning::Baseline
   # @!attribute scope_ids [Array<String>, nil] the units the plan covers, each with everything under it; nil for the whole organisation
   # @!attribute outside [Array<Member>] the people outside the plan's scope, kept so a change can bring one in. Never shown
   # @!attribute cut_positions [Array<Position>] the positions in units outside the plan's scope. Never shown
+  # @!attribute fundings [Hash{String => Array<Hash>}] position id => the draws a {TeamPlanning::Events::PositionFundingSet} sets
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
-                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :scope_ids, :outside,
+                    :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings, :scope_ids, :outside,
                     :cut_positions) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
-                   orphaned_lines: {}, scope_ids: nil, outside: [], cut_positions: [], **) = super
+                   orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -61,7 +62,7 @@ class TeamPlanning::Baseline
       map = with(people: people.map(&placed), outside: outside.map(&placed))
       map = map.cut if scope_ids
       gone, staying = map.people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
-      map = map.with(people: staying, departed: departed + gone.map { Departed.new(person_id: it.id, **it.departure) })
+      map = map.with(people: staying, departed: departed + gone.map { Departed.new(person_id: it.id, country: it.country, **it.departure) })
       live = map.units.to_set(&:id)
       map.with(unassigned_ids: map.people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
     end
@@ -355,8 +356,8 @@ class TeamPlanning::Baseline
   # Someone a departure in an earlier step took off the map, the step they
   # left in, the position backfilling them, if any, and the date within the
   # step, if the plan gave one.
-  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on) do
-    def initialize(leaves_on: nil, **) = super
+  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on, :country) do
+    def initialize(leaves_on: nil, country: nil, **) = super
 
     # @return [Hash] as {TeamPlanning::Events::DepartureSet} set it, `leaves_on` only when given
     def departure = { leaves_in_id:, position_id: }.merge(leaves_on ? { leaves_on: } : {})

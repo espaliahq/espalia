@@ -1176,6 +1176,30 @@ period, and whichever of role, level and location the budget line states. `Posit
 the exception only: a position funded from another centre, or split across budget lines. A position no
 budget line matches is unfunded.
 
+As built in 6.3 ([#345](https://github.com/espaliahq/espalia/issues/345)): `team_planning_funding`
+reads it for a scenario, never the baseline, which has no period. A line matches when its cost
+centre is blank or the position's, its period overlaps the days the position is held, and each of
+role, level and location it states is the position's. A line with no cost centre matches any
+position and is the least specific; past that, the more of role, level and location a line
+states, the more specific. Two choices fill gaps the plan doesn't record:
+
+- **When a position is first held.** A filled one is held all period. An open one replacing
+  someone is held from the day the cost read first holds it: the day after a leaver goes, or
+  the period's start when a leaver has no date or leaves part of it open. Any other open one is
+  held from the period's start.
+- **Where a position is.** An occupant's country, the largest allocation first, else the
+  country of a person it replaces.
+
+Each line lists its positions in draw order: filled first, then open positions replacing a
+leaver, as that budget is already committed, then other open positions, each group by the day
+it is first held, then by id. Each position names its `draw_reason`. `PositionFundingSet` is
+the `funding` facet, written by `team_planning_set_position_funding` with shares summing to 1.
+A draw on a line the scenario no longer holds funds nothing, and the checks flag it, as they
+do a funding on a closed position. Funded counts the positions funded whole and the FTE each
+draw funds, so funded and unfunded always add up to the scenario's positions and FTE. That
+holds whether or not a pay band prices a position: one with no band is still funded or
+unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
+
 The projection records how each position's cost centre was reached (set here, from the Org
 Graph, by which rule) and reports three conditions as checks:
 
@@ -1183,8 +1207,10 @@ Graph, by which rule) and reports three conditions as checks:
   give the position. The known value is used and the mismatch is always flagged. It is
   resolved by planning the cost centre change, which joins the change list to be raised
   upstream. The rules never move a person's cost on their own.
-- **Unplaced.** An open position no rule matches. It draws on no budget line. This is a warning
-  while drafting, and a guardrail a tenant can make binding at approval.
+- **Unplaced.** An open position with no cost centre: it has no label of its own and no rule
+  matches it. It can draw only on a budget line that states
+  no cost centre, which matches any position, and is unfunded when none matches. This is a
+  warning while drafting, and a guardrail a tenant can make binding at approval.
 - **Ambiguous.** Two budget lines match a position equally well. Nothing is picked silently.
 
 A tenant's approved budget reaches a new plan as a default, the way configuration does.
