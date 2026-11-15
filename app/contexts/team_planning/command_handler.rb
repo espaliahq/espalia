@@ -340,6 +340,36 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Settles a conflict an update to today carried forward in a scenario.
+  # Keeping the plan restates the change that conflicts, pinning it where the
+  # scenario inherits a value the plan holds in clear, and keeps its note
+  # unless given another. Following
+  # reality sets what the Org Graph holds today in this scenario alone.
+  #
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param subject_id [String]
+  # @param facet [String]
+  # @param choice [String] "plan" or "reality"
+  # @param note [String, nil] why; for keeping the plan, blank keeps the change's own
+  # @param today [Date] as a UTC date
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to settle
+  # @see TeamPlanning::PlanAggregate#settle_conflict
+  def settle_conflict(plan_id, scenario_id:, subject_id:, facet:, choice:, note: nil, today: Time.now.utc.to_date)
+    key = [ subject_id, facet.to_s ]
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.ensure_settleable!(scenario_id, key)
+      change = plan.winning_changes(scenario_id).fetch(key)
+      kind, end_state = choice.to_s == "reality" ? todays(plan, change, today) : [ change.class, kept(change) ]
+      from_id, = plan.inherited_change(scenario_id, key) unless scenario_id == plan.plan_id
+      note = note.presence || note_of(change) if choice.to_s == "plan"
+      plan.settle_conflict(kind, scenario_id:, subject_id:, facet: key.last, choice: choice.to_s, end_state:, settled_by_id: actor_id!,
+                                 pinned_from: (from_id && [ from_id, change.event_id ]), note:)
+    end
+  end
+
   # Writes, rewrites or clears the note on a change or pin that stands in a scenario.
   #
   # @param plan_id [String]
@@ -416,6 +446,32 @@ class TeamPlanning::CommandHandler
       return [ kind, end_state, nil ] if end_state
     end
     raise TeamPlanning::Error, "The baseline doesn't hold this"
+  end
+
+  # The aggregate holds a change without its sealed values, so they are read
+  # off the stored event, to be sealed again as the restated change is written.
+  def kept(change)
+    stored = @repository.sealed({ change.key => change }).fetch(change.key)
+    stored.data.except(*TeamPlanning::Events::Change::FIELDS).transform_values { it.is_a?(Shreddable::Value) ? it.reveal : it }
+  end
+
+  # A note is rewritten apart from its change, so it is read off the override.
+  def note_of(change)
+    sealed = TeamPlanningOverride.find_by(event_id: change.event_id)&.note or return nil
+    Operations::TeamPlanning::MapPayload.sealed(sealed)[:value]
+  end
+
+  # What the Org Graph holds today for a change's key, read by the first kind
+  # sharing its facet that finds it, as a person staying reads as a departure
+  # withdrawn.
+  def todays(plan, change, today)
+    now = TeamPlanning::Baseline.new(context: @actor, plan: TeamPlanningPlan.find(plan.plan_id)).map_on(today, history: true)
+    kinds = [ change.class ] | TeamPlanning::ChangeKinds.all.select { it.holds?(change.key.last) && it.readable? }
+    kinds.each do |kind|
+      end_state = kind == change.class ? kind.read_org_graph(now, change) : kind.read_from(now, subject_id: change.data[:subject_id], facet: change.key.last)
+      return [ kind, end_state ] if end_state
+    end
+    raise TeamPlanning::Error, "The Org Graph doesn't hold this today, so there is nothing to follow"
   end
 
   # Someone who has left may still be made a viewer of a plan they are in, so

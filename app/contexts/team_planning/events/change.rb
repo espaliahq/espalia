@@ -17,6 +17,8 @@
 #   @option data [Shreddable::Value, nil] :note why the planner made it, sealed under its subject's key:
 #     the person's in the plan for a kind {.about_a_person}, else the plan's; absent when there is none. It is no part of the end state, so it never decides how a change
 #     resolves, compares or reads against the Org Graph.
+#   @option data [Hash, nil] :settles for a change that settled a conflict an update to today carried forward,
+#     `since` (that update's day) and `choice` ("plan" or "reality"); absent for an ordinary change
 #   The kind adds its end state alongside these.
 #
 class TeamPlanning::Events::Change < RubyEventStore::Event
@@ -25,7 +27,7 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   shreddable :note, by: :plan
 
   # The fields every change may hold, which no end state may set.
-  FIELDS = %i[plan_id scenario_id subject_id set_by_id note].freeze
+  FIELDS = %i[plan_id scenario_id subject_id set_by_id note settles].freeze
 
   # @return [String] the part of a subject this kind sets
   def self.facet = raise(NotImplementedError, "#{name} must name its facet")
