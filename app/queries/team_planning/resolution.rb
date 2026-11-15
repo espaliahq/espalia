@@ -29,7 +29,28 @@ class TeamPlanning::Resolution
   # @return [TeamPlanning::Baseline::Map] with names joined
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call(aggregate = @repository.load_plan(@plan.id)) = @baseline.named(structure(aggregate))
+  def call(aggregate = nil)
+    CurrentPlanReads.fetch([ :scenario, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @scenario_id ]) do
+      @baseline.named(structure(aggregate || @repository.load_plan(@plan.id)))
+    end
+  end
+
+  # Reuses every scenario and baseline read inside the block, so a page that
+  # shows a scenario's map and prices it, beside the baseline's, reads the
+  # Org Graph once. A plan write empties it ({TeamPlanning::Repository#with_plan}).
+  #
+  # @yield the unit of work
+  # @return [Object] what the block returns
+  def self.reusing
+    return yield if CurrentPlanReads.memo
+
+    begin
+      CurrentPlanReads.memo = {}
+      yield
+    ensure
+      CurrentPlanReads.memo = nil
+    end
+  end
 
   # @param aggregate [TeamPlanning::PlanAggregate] the plan as loaded; a write
   #   passes the one it holds under the lock
@@ -38,20 +59,11 @@ class TeamPlanning::Resolution
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def structure(aggregate = @repository.load_plan(@plan.id)) = resolved(aggregate).first
 
-  # @return [Array<TeamPlanning::Attention::Item>] what no longer fits, each with the change it belongs to
+  # @param aggregate [TeamPlanning::PlanAggregate]
+  # @return [Array(TeamPlanning::Baseline::Map, Hash{Array(String, String) => TeamPlanning::Events::Change})]
+  #   the settled map by id, and the winning changes by key
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def attention
-    aggregate = @repository.load_plan(@plan.id)
-    map, changes = resolved(aggregate)
-    capacity = TeamPlanning::Capacity.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository)
-                                     .report_for(map)
-    TeamPlanning::Attention.new(map, changes, left_ids: left_since(map), closed_units: closed_position_units(aggregate, changes),
-                                              unclassified: capacity.configured? ? capacity.unclassified : []).call
-  end
-
-  private
-
   def resolved(aggregate = @repository.load_plan(@plan.id))
     winning = @repository.sealed(aggregate.winning_changes(@scenario_id))
     base = (@base || @baseline.structure).with(step_ids: step_of(aggregate))
@@ -60,8 +72,18 @@ class TeamPlanning::Resolution
     [ explained(map.settled), winning ]
   end
 
+  # @param map [TeamPlanning::Baseline::Map]
+  # @return [Array<String>] the people on the map the Org Graph has had leave by today, a UTC day
+  def left_since(map)
+    OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..Time.now.utc.to_date).pluck(:person_id)
+  end
+
   # A closed position is off the map, so its unit comes from the last
   # PositionSet the chain made for it.
+  #
+  # @param aggregate [TeamPlanning::PlanAggregate]
+  # @param winning [Hash{Array(String, String) => TeamPlanning::Events::Change}]
+  # @return [Hash{String => String}] each closed position's unit, by position id
   def closed_position_units(aggregate, winning)
     closed = winning.values.select { it.is_a?(TeamPlanning::Events::PositionClosed) }.to_set { it.data[:subject_id] }
     return {} if closed.empty?
@@ -71,6 +93,8 @@ class TeamPlanning::Resolution
              .to_h { [ it.data[:subject_id], it.data[:unit_id] ] }
   end
 
+  private
+
   # The scenario and those it is an alternative of: the chain after the step
   # before it on the timeline. The scenarios that step replaced come earlier
   # in the chain, so they drop off too.
@@ -79,11 +103,6 @@ class TeamPlanning::Resolution
     before = aggregate.timeline_path(@scenario_id)[-2]
     step = before ? chain.drop(chain.index(before) + 1) : chain
     (step + aggregate.resting_on(@scenario_id)).uniq
-  end
-
-  # The people on the map the Org Graph has had leave by today, a UTC day.
-  def left_since(map)
-    OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..Time.now.utc.to_date).pluck(:person_id)
   end
 
   # A person off the map either left by the base date, or was forgotten, or

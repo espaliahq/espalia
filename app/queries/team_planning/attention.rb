@@ -13,7 +13,7 @@
 # tab (4.4) and the checks tab (4.7) both read it.
 #
 # @example
-#   TeamPlanning::Resolution.new(context:, plan:, scenario_id:).attention
+#   TeamPlanning::Attention.for(context:, plan:, scenario_id:)
 class TeamPlanning::Attention
   # One thing that no longer fits.
   #
@@ -45,6 +45,25 @@ class TeamPlanning::Attention
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
   # A place in no unit has no id an override could name, as the map's own drop target hasn't.
   UNASSIGNED = "unassigned"
+
+  # Resolves the scenario, then prices it, so the unclassified check reads
+  # the same map as every other.
+  #
+  # @param context [AuthorizationContext]
+  # @param plan [TeamPlanningPlan]
+  # @param scenario_id [String] the plan's id for the root
+  # @param repository [TeamPlanning::Repository]
+  # @return [Array<Item>]
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def self.for(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
+    resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:)
+    aggregate = repository.load_plan(plan.id)
+    map, changes = resolution.resolved(aggregate)
+    capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
+    new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
+                      unclassified: capacity.configured? ? capacity.unclassified : []).call
+  end
 
   # @param map [TeamPlanning::Baseline::Map] settled, as {TeamPlanning::Resolution#structure} gives it
   # @param changes [Hash{Array(String, String) => TeamPlanning::Events::Change}] the winning changes, by key
@@ -235,9 +254,20 @@ class TeamPlanning::Attention
     @unclassified.reject { |_, place| UNCLASSIFIED_ELSEWHERE.include?(place.reason) }.map do |priced, place|
       seat = priced.seat
       facet = "#{CAPACITY}:#{place.place.position_id || place.unit_id || UNASSIGNED}"
-      item(seat.id, facet, "Counts for no capacity: #{TeamPlanning::Capacity::REASONS.fetch(place.reason).downcase_first}",
-           broken_by: unclassified_causes(seat, place))
+      reason = "Counts for no capacity: #{TeamPlanning::Capacity::REASONS.fetch(place.reason).downcase_first}"
+      deciding = deciding_rule(place.unit_id) if MODEL_REASONS.include?(place.reason)
+      next Item.new(subject_id: seat.id, facet:, reason:, change: @changes[deciding], unit_ids: units_touched(seat.id, facet, [])) if deciding
+
+      item(seat.id, facet, reason, broken_by: unclassified_causes(seat, place))
     end
+  end
+
+  # Whether a place has a model is the rule's choice alone, so the plan's
+  # rule that decided it is the cause, however late the seat's own change
+  # landed. The nearest unit to set the rule decides, then the plan.
+  def deciding_rule(unit_id)
+    keys = rule_keys(unit_id).select { it.last == CAPACITY_RULE }
+    keys.find { |subject_id, _| @map.rules.by_subject.fetch(subject_id, {}).key?(CAPACITY_RULE_NAME) }&.then { it if @changes.key?(it) }
   end
 
   # A place in a position takes the position's role and level, so a later
@@ -255,7 +285,9 @@ class TeamPlanning::Attention
   end
 
   RULE_REASONS = %w[no_model unknown_model no_level].freeze
-  CAPACITY_RULE = "#{TeamPlanning::Events::RuleSet.facet}:#{TeamPlanning::RuleKinds::Capacity.rule_name}".freeze
+  MODEL_REASONS = %w[no_model unknown_model].freeze
+  CAPACITY_RULE_NAME = TeamPlanning::RuleKinds::Capacity.rule_name
+  CAPACITY_RULE = "#{TeamPlanning::Events::RuleSet.facet}:#{CAPACITY_RULE_NAME}".freeze
 
   def rule_keys(unit_id)
     parent_of = @map.units.to_h { [ it.id, it.parent_id ] }
