@@ -32,7 +32,7 @@ class Operations::TeamPlanning::Capacity < Operations::Base
               "units is negative in the old unit and positive in the new), and forecast is what the plan's forecast " \
               "assumptions add, zero until a forecast rule is set. The baseline is all actual. `units` lists each unit " \
               "on the scenario's map that counts in any part, so a unit everyone left still shows its negative planned; " \
-              "a unit gone from the scenario's map counts in the scenario's parts only. `models` maps each model a place uses to its symbol, what follows its figures on " \
+              "a unit gone from the scenario's map counts in the scenario's parts only. `models` maps each model a place or a figure uses to its symbol, what follows its figures on " \
               "screen, and its description. People are named by id, and `names` maps each to a name. Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
@@ -49,13 +49,15 @@ class Operations::TeamPlanning::Capacity < Operations::Base
     report = split.report
     { plan_id: plan.id, scenario_id:, **totals(split.parts), units: units(split),
       seats: report.seats.map { seat(it) }, unclassified: report.unclassified.map { |seat, place| unclassified(seat, place) },
-      models: models(report), names: names(report) }
+      models: models(split), names: names(report) }
   end
 
   private
 
-  def models(report)
-    used = report.seats.flat_map { |seat| seat.places.filter_map(&:model) }.uniq.select { ::TeamPlanning::CapacityModels.registered?(it) }.sort
+  def models(split)
+    parts = split.parts
+    used = (split.report.seats.flat_map { |seat| seat.places.filter_map(&:model) } + [ parts.actual, parts.planned, parts.forecast ].flat_map(&:keys))
+           .uniq.select { ::TeamPlanning::CapacityModels.registered?(it) }.sort
     used.to_h { |name| model = ::TeamPlanning::CapacityModels.fetch(name); [ name, { symbol: model.symbol, description: model.description } ] }
   end
 

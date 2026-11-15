@@ -77,6 +77,25 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_match(/\A-0\.3333/, payments[:parts][:planned]["per_fte"])
   end
 
+  should "name a model only a forecast uses, so every figure has its symbol" do
+    hiring = Class.new(TeamPlanning::ForecastKind) do
+      def self.rule_name = "test_units_hiring"
+      def self.description = "A fixed forecast in units"
+      def self.default = {}
+      def self.forecast(frame) = [ frame.row(unit_id: nil, headcount: 1r, capacity: { "units" => 1r }) ]
+    end
+    TeamPlanning::RuleKinds.register(hiring)
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "capacity_model",
+                                            value: { roles: { @engineer.role_id => { model: "per_fte" } } })
+    year = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+    result = call(Operations::TeamPlanning::Capacity, plan_id: @plan_id, scenario_id: year)
+
+    assert_equal "1", result[:parts][:forecast]["units"]
+    assert_equal %w[per_fte units], result[:models].keys
+  ensure
+    TeamPlanning::RuleKinds.unregister(hiring)
+  end
+
   should "show each working step's op and subject, and a figure's overload and notes, as the units model gives them" do
     ActsAsTenant.with_tenant(@tenant) do
       context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
