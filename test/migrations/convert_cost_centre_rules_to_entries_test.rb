@@ -46,4 +46,11 @@ class ConvertCostCentreRulesToEntriesTest < ActiveSupport::TestCase
 
     assert_equal({ "rules" => RULES }, row.reload.value)
   end
+
+  should "refuse to go down once an entry matches on a level or location, leaving the entries as they are" do
+    row = stored("cost_centre", { "entries" => [ { "level_ordinal" => 3, "cost_centre" => "Seniors" } ] })
+
+    assert_raises(ActiveRecord::IrreversibleMigration) { migrate(:down) }
+    assert_equal({ "entries" => [ { "level_ordinal" => 3, "cost_centre" => "Seniors" } ] }, row.reload.value)
+  end
 end

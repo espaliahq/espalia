@@ -8,7 +8,15 @@
 class ConvertCostCentreRulesToEntries < ActiveRecord::Migration[8.1]
   def up = flip("rules", "entries")
 
-  def down = flip("entries", "rules")
+  def down
+    newer = select_value(<<~SQL.squish)
+      SELECT 1 FROM planning_rule_defaults, jsonb_array_elements(value->'entries') AS list(item)
+      WHERE rule = 'cost_centre' AND (item ? 'level_ordinal' OR item ? 'location') LIMIT 1
+    SQL
+    raise ActiveRecord::IrreversibleMigration, "A cost-centre entry matches on a level or location, which a rules list can't hold" if newer
+
+    flip("entries", "rules")
+  end
 
   private
 
