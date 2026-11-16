@@ -135,14 +135,16 @@ Two of them close review threads, and they are not the same thing.
   stale "changes requested" verdict.
 - **`@coderabbitai resolve` closes every thread at once and approves the PR,
   checking nothing first.** Use it only when all three hold:
-  1. CodeRabbit is rate limited, so a fresh review cannot be had.
+  1. CodeRabbit is rate limited: your request for a review of the latest
+     commit was refused with "Review rate limited".
   2. Every CodeRabbit comment has been answered in full, with a fix or a
      stated reason, including any in a review body.
   3. The code written to answer them has been through the fallback:
-     `/code-review` on the branch, twice, on two models (see the rate-limit
-     bullets above).
+     `/code-review` on the branch at its latest commit, twice, on two models
+     (see the rate-limit bullets above). A commit after those passes needs
+     them again.
 
-  Say on the PR that all three hold before you post it. When CodeRabbit is not
+  CI must also be green. Say on the PR that all three hold before you post it. When CodeRabbit is not
   rate limited, ask it for a review instead: one plain `@coderabbitai review`
   when its verdict has not updated for the latest commit.
 - **Nobody posts `@coderabbitai approve`.** An approval should follow a review,
