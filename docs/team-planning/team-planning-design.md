@@ -83,7 +83,7 @@ Every change event has the same shape:
 
 | Group | Events |
 |---|---|
-| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanDeleted` |
+| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanArchived`, `PlanRestored`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
 | People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
@@ -861,6 +861,31 @@ repository holds the plan's lock from load to store, so a second editor's change
 only after the first has landed: no version conflict reaches the aggregate, and there is
 nothing to retry. Two changes to the same subject and facet are a real conflict: the last
 write wins and both stay in the history.
+
+### Archiving as built
+
+[#383](https://github.com/espaliahq/espalia/issues/383) lets an editor set a plan aside
+and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
+
+- An archived plan refuses every write with "This plan is archived: restore it to change
+  it". Four things still work, so nobody is trapped: deleting it, a member leaving or an
+  editor removing a departed member, and a tenant admin restoring the see-pay right.
+- The lock-outs still hold. The last editor can't leave, and the last member who sees pay
+  can't give that up. A plan whose editors have all gone is frozen as before, archived or
+  not, and a tenant admin can delete it.
+- `team_planning_plans` gains `archived_on` and `archived_by_id`. New events fill them,
+  so no past event projects differently and `CODE_VERSION` stays put. The history shows
+  an archive and a restore entry.
+- The structure reads stand still: the drift, status and attention reads return nothing,
+  with `checked: false` and a note beside `archived_on`, so an empty list is never read
+  as "nothing wrong". Restoring checks the plan again from that day.
+- The figures don't stand still. Cost, scenario costs, capacity, forecast, budget,
+  funding and budget lines still price with today's bands, rates and rules, and say so
+  in a note. Freezing them is a pay-path change, left for a follow-up under
+  [#183](https://github.com/espaliahq/espalia/issues/183).
+- The plans list shows live plans by default; `state` asks for archived ones, or all.
+  On the web a Live and Archived switch does the same, and the plan page carries a banner
+  with the day, the editor and, for editors, a Restore button.
 
 ## The base pointer
 

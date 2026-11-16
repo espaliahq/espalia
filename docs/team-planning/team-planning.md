@@ -492,6 +492,15 @@ web or through an MCP client. Much of the planning this module is modelled on ha
 that way: a planner talking a restructure through with an assistant that makes the
 changes, runs the checks and reports what moved.
 
+### Set a plan aside
+
+A plan nobody is working on can be archived instead of deleted. It keeps everything in
+it, and its members can still read it, but nobody can change it and it stops being
+checked against the organisation. Any editor can restore it, and it is checked again from
+that day. Its costs, budgets and capacity are still worked out with today's pay bands,
+exchange rates and rules, not those of the day it was archived. Deleting a plan is the
+step that can't be undone.
+
 ## Sensitive by default
 
 A plan holds who might leave, who might move, where headcount goes and what it costs.
