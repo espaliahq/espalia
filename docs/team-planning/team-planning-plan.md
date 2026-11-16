@@ -311,7 +311,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 6.1 | Budget lines: the tenant's approved budget as a table and Budget page held by tenant admins ([#302](https://github.com/espaliahq/espalia/issues/302)), read live as the root's default; `BudgetLineSet` and `BudgetLineCut`, amounts shreddable, a change to a removed line orphaned and flagged by Attention, read through `team_planning_budget_lines` | 2.2, 3.3 |
 | 6.2 | Cost centre rules: an ordered list of matchers. A filled position takes its person's cost centre from `AsOf::Person`. Adds the position's own cost-centre label, which 5.4 left out | 3.3, 3.5 |
 | 6.3 | Funding: the most specific matching budget line, draw order, and `PositionFundingSet` for trades | 6.1, 6.2, 5.4 |
-| 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated | 6.3 |
+| 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated by the `budget_basis` rule, read through `team_planning_budget` ([#369](https://github.com/espaliahq/espalia/issues/369)) | 6.3 |
 | 6.5 | Strictness: position control, envelope, or the dimensions that must match | 6.3 |
 | 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line | 6.4, 4.6 |
 | 6.7 | Budget tab | 6.4 |
