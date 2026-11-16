@@ -161,6 +161,18 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal [ [ 2, "level" ] ], history(@q1).pluck(:position, :facet)
   end
 
+  should "leave an undo that names no subject with the step, unless it reverses a dates entry" do
+    set_cap(@q1, 8)
+    set_level(@q1, "4")
+    @handler.undo_change(@plan_id, scenario_id: @q1)
+    history(@q1).last.update!(subject_id: nil)
+    set_level(@q1, "5")
+
+    split(@q1, history(@q1).first.id)
+
+    assert_equal [ [ 2, "set" ], [ 3, "undo" ], [ 4, "set" ] ], history(@q1).pluck(:position, :action)
+  end
+
   def place(scenario_id)
     @handler.set_change(@plan_id, TeamPlanning::Events::AssignmentSet, scenario_id:, subject_id: @person.id,
                                                                        end_state: { placements: [ { unit_id: @plan_id, allocation: 1.0 } ] })

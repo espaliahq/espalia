@@ -101,17 +101,23 @@ class TeamPlanning::Projections::History
 
   def split(data)
     keys = data[:keys].map(&:to_a).to_set
-    moving = TeamPlanningHistoryEntry.where(scenario_id: data[:scenario_id]).order(:position)
-                                     .select { keys.include?([ it.subject_id, it.facet ]) || dates?(it) }
+    dates = Set.new
+    moving = TeamPlanningHistoryEntry.where(scenario_id: data[:scenario_id]).order(:position).select do |entry|
+      keys.include?([ entry.subject_id, entry.facet ]) || dates?(entry, dates)
+    end
     moving.each.with_index(next_position(data[:agreed_id])) do |entry, position|
       end_state = TeamPlanning::ChangeEntry.moved_end_state(entry.kind, entry.end_state, from: entry.scenario_id, to: data[:agreed_id])
       entry.update!(scenario_id: data[:agreed_id], position:, end_state:)
     end
   end
 
-  # A step's dates, and each undo and redo of them, name no subject: an undo
-  # or redo of a change always does.
-  def dates?(entry) = entry.subject_id.nil? && entry.action.in?(%w[dates undo redo])
+  # A step's dates entry, or an undo or redo that reverses one; read in order,
+  # so `dates` already holds every dates entry before this one.
+  def dates?(entry, dates)
+    return false unless entry.action == "dates" || (entry.action.in?(%w[undo redo]) && dates.include?(entry.reverses_event_id))
+
+    dates << entry.id
+  end
 
   def recorded?(event) = TeamPlanningHistoryEntry.exists?(id: event.event_id)
 
