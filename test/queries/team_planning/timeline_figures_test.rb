@@ -98,8 +98,8 @@ class TeamPlanning::TimelineFiguresTest < ActiveSupport::TestCase
 
   # Each preset judges a different figure: the line, the cost centre or the total.
   { "position_control" => [ -> { BudgetLine.update_all(amount: 1_000) }, ->(budget) { budget.lines.first.over } ],
-    "cost_centre" => [ -> {}, ->(budget) { budget.cost_centres.fetch("Platform").over } ],
-    "envelope" => [ -> {}, ->(budget) { budget.totals.over } ] }.each do |preset, (overspend, judged)|
+    "cost_centre" => [ -> { }, ->(budget) { budget.cost_centres.fetch("Platform").over } ],
+    "envelope" => [ -> { }, ->(budget) { budget.totals.over } ] }.each do |preset, (overspend, judged)|
     should "mark a step over where the Budget tab does under #{preset}" do
       as_tenant do
         overspend.call
