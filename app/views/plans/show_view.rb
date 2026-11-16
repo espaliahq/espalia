@@ -21,12 +21,19 @@ class Views::Plans::ShowView < Views::Base
   # @param actions [Array<Phlex::SGML>] buttons beside the plan's name
   # @param panels [Array<Phlex::SGML>] sidebar panels; the rules and the members when nil
   # @param drawer [Phlex::SGML, nil] a component that renders a drawer over the page
-  # @param can_edit [Boolean] whether the viewer may fork and rename scenarios
+  # @param can_edit [Boolean] whether the viewer may fork and rename scenarios; never on an archived plan
+  # @param can_archive [Boolean] whether the viewer may archive the plan
+  # @param can_restore [Boolean] whether the viewer may restore the archived plan
+  # @param can_delete [Boolean] whether the viewer may delete the plan
   # @param see_pay [Hash] the members panel's see-pay options: `can_manage_see_pay`, `reachable_ids`, `locked_out`
   # @param coverable_units [Array<Hash>, nil] from `team_planning_coverable_units`, for an editor to change the scope
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
-                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, see_pay: {}, coverable_units: nil)
+                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, can_archive: false, can_restore: false, can_delete: false,
+                 see_pay: {}, coverable_units: nil)
     @plan = plan
+    @can_archive = can_archive
+    @can_restore = can_restore
+    @can_delete = can_delete
     @coverable_units = coverable_units
     @see_pay = see_pay
     @can_edit = can_edit
@@ -45,9 +52,10 @@ class Views::Plans::ShowView < Views::Base
 
   def view_template
     render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal", action: "keydown.esc@window->modal#escape" } if @can_edit)) do
+      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal", action: "keydown.esc@window->modal#escape" } if @can_edit || @can_archive || @can_delete)) do
         header
         frozen_notice if @plan[:frozen]
+        archived_notice if @plan[:archived]
         div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
           section(class: "flex-1 min-w-0", aria: { labelledby: "plan-main-heading" }) do
             tab_strip
@@ -59,6 +67,8 @@ class Views::Plans::ShowView < Views::Base
         end
         render Views::Plans::ScenarioDialogs.new(plan_id: @plan[:plan_id], scenarios: @scenarios) if @can_edit
         render Views::Plans::ScopeDialog.new(plan: @plan, units: @coverable_units) if changes_scope?
+        render Views::Plans::ArchiveDialog.new(plan_id: @plan[:plan_id]) if @can_archive
+        render Views::Plans::DeleteDialog.new(plan: @plan) if @can_delete
       end
       render @drawer if @drawer
     end
@@ -79,9 +89,15 @@ class Views::Plans::ShowView < Views::Base
         end
         scope_line
       end
-      if @actions.any? || @can_edit
+      if @actions.any? || @can_edit || @can_archive || @can_delete
         div(class: "flex flex-wrap items-center gap-2") do
           @actions.each { render it }
+          if @can_archive
+            render Components::Kit::Button.new(variant: :outline, data: Views::Plans::ArchiveDialog.trigger) { "Archive plan" }
+          end
+          if @can_delete
+            render Components::Kit::Button.new(variant: :outline, tone: :danger, data: Views::Plans::DeleteDialog.trigger) { "Delete plan" }
+          end
           new_scenario_button if @can_edit
         end
       end
@@ -113,6 +129,23 @@ class Views::Plans::ShowView < Views::Base
   def frozen_notice
     render Components::Kit::Alert.new(tone: :warning, title: "This plan is frozen", class: "mt-4") do
       "None of its editors is still in the organisation, so nobody can change it. Its viewers can still read it."
+    end
+  end
+
+  def archived_notice
+    archived = @plan[:archived]
+    title = "Archived on #{Date.iso8601(archived[:on]).strftime("%-d %B %Y")}#{" by #{archived[:by_name]}" if archived[:by_name]}"
+    render Components::Kit::Alert.new(tone: :info, title:, class: "mt-4") do |alert|
+      alert.action { restore_button } if @can_restore
+      p { "Nobody can change this plan, and it isn't checked against the organisation, until an editor restores it." }
+      p(class: "mt-1") { "Its costs, budgets and capacity still use today's pay bands, exchange rates and rules." }
+    end
+  end
+
+  def restore_button
+    form(action: restore_plan_path(@plan[:plan_id]), method: "post") do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit) { "Restore plan" }
     end
   end
 

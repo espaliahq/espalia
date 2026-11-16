@@ -6,7 +6,7 @@
 class PlansController < ApplicationController
   around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map]
 
-  # GET /planning
+  # GET /planning?state=archived
   def index
     authorize TeamPlanningPlan, :index?, policy_class: PlanPolicy
     render index_view
@@ -36,6 +36,44 @@ class PlansController < ApplicationController
     redirect_to plan_path(plan[:plan_id]), alert: "Couldn't change what this plan covers: #{e.message}"
   end
 
+  # POST /planning/:id/archive
+  def archive
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    Operations::TeamPlanning::ArchivePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
+    redirect_to plan_path(plan[:plan_id]), notice: "Plan archived. Restore it whenever you want to work on it again."
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), alert: "Couldn't archive this plan: #{e.message}"
+  end
+
+  # POST /planning/:id/restore
+  def restore
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    Operations::TeamPlanning::RestorePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
+    redirect_to plan_path(plan[:plan_id]), notice: "Plan restored. It takes changes again, and its checks cover everything since its base date."
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), alert: "Couldn't restore this plan: #{e.message}"
+  end
+
+  # DELETE /planning/:id
+  #
+  # The editor types the plan's name to confirm, so a slip of the mouse can't
+  # delete it ([#382](https://github.com/espaliahq/espalia/issues/382)).
+  def destroy
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :destroy?, policy_class: PlanPolicy
+    unless params[:confirm_name].to_s.squish == plan[:name]
+      return redirect_to(plan_path(plan[:plan_id]), status: :see_other, alert: "The name you typed doesn't match, so the plan is still here.")
+    end
+
+    Operations::TeamPlanning::DeletePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
+    # The name stays out of the flash, which would carry it in the session cookie after its key is shredded.
+    redirect_to plans_path(state: ("archived" if plan[:archived])), status: :see_other, notice: "Plan deleted."
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), status: :see_other, alert: "Couldn't delete this plan: #{e.message}"
+  end
+
   # GET /planning/:id
   def show
     plan = read(Operations::TeamPlanning::Plan)
@@ -59,7 +97,7 @@ class PlansController < ApplicationController
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
     render plan_page(plan, scenarios:, open_tab: :map,
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
-                                                               can_upload_pay: policy_for(@plan_record).upload_pay?,
+                                                               can_upload_pay: policy_for(@plan_record).upload_pay? && !@plan_record.archived?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
 
@@ -182,6 +220,8 @@ class PlansController < ApplicationController
   # Anyone but an editor with the see-pay right gets the same 404 as someone outside the plan.
   def pay_upload
     plan = pay_uploader_plan
+    return redirect_to(plan_path(plan[:plan_id]), alert: TeamPlanning::PlanAggregate::ARCHIVED) if @plan_record.archived?
+
     render pay_upload_page(plan, scenario_id: params[:scenario].presence || plan[:plan_id])
   end
 
@@ -192,6 +232,12 @@ class PlansController < ApplicationController
   # and never kept: its tempfile goes at the end of the request.
   def upload_pay
     plan = pay_uploader_plan
+    if @plan_record.archived?
+      return render_turbo_frame_recovery(TeamPlanning::PlanAggregate::ARCHIVED) if turbo_frame_request?
+
+      return redirect_to(plan_path(plan[:plan_id]), alert: TeamPlanning::PlanAggregate::ARCHIVED)
+    end
+
     upload = params.permit(:scenario_id, :basis, :signature, :intent)
     scenario_id = upload[:scenario_id].presence || plan[:plan_id]
     return render(pay_upload_page(plan, scenario_id:, basis: upload[:basis], error: "Choose a file to upload."), status: :unprocessable_content) unless params[:file].respond_to?(:read)
@@ -350,6 +396,9 @@ class PlansController < ApplicationController
       open_tab:,
       body:,
       can_edit: can_edit?,
+      can_archive: editor? && !plan[:archived],
+      can_restore: editor? && plan[:archived].present?,
+      can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
       **layout
     )
@@ -357,8 +406,10 @@ class PlansController < ApplicationController
 
   def index_view(error: nil, draft: {})
     can_create = policy_for(TeamPlanningPlan).create?
+    archived = params[:state] == "archived"
     Views::Plans::IndexView.new(
-      plans: Operations::TeamPlanning::Plans.call(context: pundit_user)[:plans],
+      plans: Operations::TeamPlanning::Plans.call(context: pundit_user, params: { state: archived ? "archived" : "live" })[:plans],
+      archived:,
       can_create:,
       units: can_create ? Operations::TeamPlanning::CoverableUnits.call(context: pundit_user)[:units] : [],
       error:,
@@ -378,15 +429,22 @@ class PlansController < ApplicationController
   def policy_for(record) = PlanPolicy.new(pundit_user, record)
 
   def see_pay(members)
-    { can_manage_see_pay: policy_for(@plan_record).manage_see_pay?,
+    { can_manage_see_pay: policy_for(@plan_record).manage_see_pay? && !@plan_record.archived?,
       reachable_ids: PlanPolicy.reachable_ids(members.pluck(:person_id)),
       locked_out: PlanPolicy.locked_out?(@plan_record) && !PlanPolicy.frozen?(@plan_record) }
   end
 
+  # An archived plan takes no changes, so its editors see it as its viewers do.
   def can_edit?
     return @can_edit if defined?(@can_edit)
 
-    @can_edit = policy_for(@plan_record).update?
+    @can_edit = editor? && !@plan_record.archived?
+  end
+
+  def editor?
+    return @editor if defined?(@editor)
+
+    @editor = policy_for(@plan_record).update?
   end
 
   def layout

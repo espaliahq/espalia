@@ -1,0 +1,22 @@
+{
+  "name": "team_planning_archive_plan",
+  "description": "Archive a Team Planning plan: it keeps everything, takes no changes and is no longer checked against the organisation until an editor restores it. Its members can still leave, and it can still be deleted. Refused unless the caller is one of its editors, or when the plan is already archived.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}

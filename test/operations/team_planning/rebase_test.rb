@@ -98,7 +98,7 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
                                 { scenario_id: @q1, done: 1, pending: 0, conflicting: 1 },
                                 { scenario_id: @lean, done: 1, pending: 0, conflicting: 1 } ],
                    conflicts: brook_conflicts, names: { @brook.id => "Brook Tamsin" } }, result.except(:drift))
-    assert_equal call(:Drift, plan_id: @plan_id).except(:plan_id), result[:drift]
+    assert_equal call(:Drift, plan_id: @plan_id).except(:plan_id, :checked), result[:drift]
     assert_equal [ [ @brook.id, "Staff Engineer" ], [ @ada.id, "Senior Engineer" ] ],
                  result[:drift][:changes].map { [ it[:person_id], it[:after]["title"] ] }
     assert_equal({ "from" => "2026-03-01", "names" => "Brook Tamsin" },

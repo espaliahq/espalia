@@ -28,7 +28,7 @@ class TeamPlanning::Projections::History
     TeamPlanning::ChangeKinds.all + [
       TeamPlanning::Events::ChangePinned, TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangeUndone,
       TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::PlanRebased,
-      TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::ScenarioSplit,
+      TeamPlanning::Events::PlanArchived, TeamPlanning::Events::PlanRestored, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::ScenarioSplit,
       TeamPlanning::Events::PlanDeleted
     ]
   end
