@@ -30,8 +30,9 @@ class Operations::TeamPlanning::PeriodPreview < Operations::Base
     step, period, moves = refusing_bad_plans do
       aggregate.period_moves(scenario_id!(:scenario_id), ends_on: parse_date(:ends_on), starts_on: parse_date(:starts_on))
     end
+    before = aggregate.period_of(step)
     { plan_id: plan.id, scenario_id: step, starts_on: period.begin.iso8601, ends_on: period.end.iso8601,
-      previous_starts_on: aggregate.period_of(step).begin.iso8601, previous_ends_on: aggregate.period_of(step).end.iso8601,
+      previous_starts_on: before.begin.iso8601, previous_ends_on: before.end.iso8601,
       moves: moves.map do |id, before, after|
         { scenario_id: id, starts_on: after.begin.iso8601, ends_on: after.end.iso8601,
           previous_starts_on: before.begin.iso8601, previous_ends_on: before.end.iso8601 }
