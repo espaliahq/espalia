@@ -21,7 +21,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "their kind prices them on either basis. Funded plus unfunded is team_planning_cost's scenario total, per " \
               "currency, on an inclusive basis. Remaining is approved less funded in the line's own currency, and " \
               "head_count less the FTE drawn. Money stays per currency: a line drawn on in another currency lists it in " \
-              "mismatched_currencies, never converted, and only the total carries `converted` and `missing`, in the " \
+              "mismatched_currencies, never converted, and only the scenario-wide total and forecast carry `converted` and `missing`, in the " \
               "reference currency at the period's start; every group sum is `native` alone. cost_centres (by the cost " \
               "centre a line was approved for, null for none; unfunded money by the seat's cost centre, unfunded head " \
               "count by the position's) carry all four; budget_lines carry approved, funded and remaining; units carry " \

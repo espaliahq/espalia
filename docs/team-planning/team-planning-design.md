@@ -1262,7 +1262,7 @@ gives the four numbers for a scenario, never the baseline.
   funded plus unfunded is the cost read's total, per currency.
 - **Remaining** is approved less funded, in the line's own currency, and head count less the
   FTE drawn. A line drawn on in another currency lists it as mismatched and never converts
-  it. Only the grand totals convert, once, to the reference currency; every group sum stays
+  it. Only the grand totals, the scenario total and its forecast, convert, once, to the reference currency; every group sum stays
   per currency.
 - **Where it adds up.** Cost centres carry all four. Lines carry approved, funded and
   remaining, since a line's unfunded money has no line to sit on. Units carry funded and
