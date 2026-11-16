@@ -8,7 +8,7 @@ class Operations::TeamPlanning::Overrides < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
   description "List what a scenario of a Team Planning plan the caller is in overrides: each subject and facet " \
-              "it sets or pinned, its end state, its note when it has one (`{ value }`, or `{ removed: true }` once erased), who set it and when. Each also shows what the scenario would " \
+              "it sets or pinned, its end state, its note when it has one (`{ value }`, or `{ removed: true }` once erased; a note on a pay change only for a member with the see-pay right), who set it and when. Each also shows what the scenario would " \
               "inherit without it: the nearest ancestor scenario that changes it, or the baseline. A pin names " \
               "where its value came from (a null scenario_id: read off its parent's organisation, as a rule " \
               "above the subject or the baseline gave it), and parent_moved whether its parent would now give " \
@@ -29,12 +29,14 @@ class Operations::TeamPlanning::Overrides < Operations::Base
     rows = TeamPlanningOverride.where(scenario_id:).order(:subject_id, :facet).to_a
     names = Person.where(id: rows.map(&:set_by_id).compact.uniq).pluck(:id, :name).to_h
     inherits = Inherits.new(context:, plan:, scenario_id:, rows:)
+    see_pay = PlanPolicy.new(context, plan).see_pay?
     rows.map do |row|
+      note = Operations::TeamPlanning::ChangeNote.payload(row.note, facet: row.facet, see_pay:)
       above = inherits.of(row)
       { subject_id: row.subject_id, facet: row.facet, kind: row.kind.demodulize.underscore, end_state: row.end_state,
         pinned: row.pinned, pinned_from: (pinned_from(row) if row.pinned), parent_moved: (above[:end_state] != row.end_state if row.pinned),
         inherits: above, set_by: { person_id: row.set_by_id, name: names.fetch(row.set_by_id, Person::FORMER_MEMBER) },
-        set_at: row.set_at.utc.iso8601, **({ note: Operations::TeamPlanning::MapPayload.sealed(row.note) } if row.note) }
+        set_at: row.set_at.utc.iso8601, **({ note: } if note) }
     end
   end
 
