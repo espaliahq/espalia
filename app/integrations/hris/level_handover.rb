@@ -14,6 +14,9 @@ class Hris::LevelHandover
   class Refused < StandardError; end
 
   RETIRE = "retire"
+  # The history joins the mirror's projections so its guard lasts until the
+  # handover commits, not just until the provider change is applied.
+  GUARDED_FROM = [ *Hris::LevelMirror::PLANNED_FROM, OrgGraph::Projections::History::PROJECTION_NAME ].freeze
 
   Reading = Data.define(:value) do
     def field_value(*, **) = value
@@ -65,9 +68,9 @@ class Hris::LevelHandover
   # @return [Comparison] what was written
   # @raise [Refused] when the comparison changed, a unit is unresolved, or the
   #   counts over the brake were not confirmed
-  # @raise [ProjectionVersion::Rebuilding] while the units or members are rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the units, members or history are rebuilt
   def hand_over!(field_id:, matches:, resolutions:, fingerprint:, actor:, confirm: {})
-    ProjectionVersion.unless_rebuilding(*Hris::LevelMirror::PLANNED_FROM) do
+    ProjectionVersion.unless_rebuilding(*GUARDED_FROM) do
       comparison = compare(field_id:, matches:, resolutions:)
       raise Refused, "The HRIS or the level has changed since that comparison: compare again" unless
         comparison.fingerprint == fingerprint
@@ -105,9 +108,9 @@ class Hris::LevelHandover
   # @param actor [AuthorizationContext]
   # @return [Handback]
   # @raise [Refused] when the level changed since the comparison
-  # @raise [ProjectionVersion::Rebuilding] while the units or members are rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the units, members or history are rebuilt
   def hand_back!(fingerprint:, actor:)
-    ProjectionVersion.unless_rebuilding(*Hris::LevelMirror::PLANNED_FROM) do
+    ProjectionVersion.unless_rebuilding(*GUARDED_FROM) do
       handback = compare_handback
       raise Refused, "The level has changed since that comparison: compare again" unless handback.fingerprint == fingerprint
 
