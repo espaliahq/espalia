@@ -68,7 +68,10 @@ module Operations::TeamPlanning::BudgetLineWrite
     raise Operations::Base::ParameterError, AMOUNT_NEEDS_PAY
   end
 
-  def see_pay? = PlanPolicy.new(context, TeamPlanningPlan.find(plan_id!)).see_pay?
+  def see_pay?
+    @see_pay = PlanPolicy.new(context, TeamPlanningPlan.find(plan_id!)).see_pay? unless defined?(@see_pay)
+    @see_pay
+  end
 
   # Judged as {WithinScope#lines_within_scope!} judges it under the lock.
   def outside_line?(plan, line_id)
