@@ -139,7 +139,7 @@ class Views::Plans::BudgetTab < Views::Base
       end
       p(class: "text-xs text-muted break-words") { terms_text(described) } if described
       dl(class: "grid grid-cols-1 gap-1 text-sm sm:grid-cols-3") do
-        figure("Approved", line[:approved][:amount] ? amount(line[:approved][:amount], line[:currency]) : "No amount", head_count_text(line[:approved][:head_count]))
+        figure("Approved", line[:approved][:amount] ? money_text(line[:approved][:amount], line[:currency]) : "No amount", head_count_text(line[:approved][:head_count]))
         figure("Funded", natives(line[:funded][:native]), heads_text(line[:funded]))
         figure("Remaining", remaining_text(line), head_count_text(line[:remaining][:head_count]), data: { budget_remaining: "" })
       end
@@ -158,7 +158,7 @@ class Views::Plans::BudgetTab < Views::Base
   end
 
   def remaining_text(line)
-    return amount(line[:remaining][:amount], line[:currency]) if line[:remaining][:amount]
+    return money_text(line[:remaining][:amount], line[:currency]) if line[:remaining][:amount]
     return "Not worked out: its positions cost in another currency" if line[:mismatched_currencies].any?
 
     "No amount"
@@ -250,10 +250,10 @@ class Views::Plans::BudgetTab < Views::Base
   def unit_names = @unit_names ||= @map[:units].to_h { [ it[:id], it[:name] ] }
 
   def natives(native)
-    native.empty? ? "Nothing" : native.map { |currency, figure| amount(figure, currency) }.join(" + ")
+    native.empty? ? "Nothing" : native.map { |currency, figure| money_text(figure, currency) }.join(" + ")
   end
 
-  def amount(figure, currency) = Views::Plans::CostMarks::Format.amount(figure, currency)
+  def money_text(figure, currency) = Views::Plans::CostMarks::Format.amount(figure, currency)
 
   def heads_text(heads) = "#{positions_count(heads[:positions])}, #{decimal(heads[:fte])} FTE"
 
