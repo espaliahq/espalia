@@ -191,4 +191,28 @@ class ProjectionVersionCommitTest < ActiveSupport::TestCase
   ensure
     other&.close
   end
+
+  # An MCP approval runs the write inside a transaction of its own, which
+  # commits only after the write's block returns.
+  should "hold the rebuild guard until the transaction around the write commits or rolls back" do
+    config = ActiveRecord::Base.connection_db_config.configuration_hash
+    other = PG.connect({ dbname: config[:database], user: config[:username], password: config[:password],
+                         host: config[:host], port: config[:port] }.compact)
+    key = ProjectionVersion.lock_key("some/projection")
+    free = -> { other.exec("SELECT pg_try_advisory_lock(#{key})").getvalue(0, 0) == "t" && other.exec("SELECT pg_advisory_unlock(#{key})") }
+
+    ActiveRecord::Base.transaction do
+      ProjectionVersion.unless_rebuilding("some/projection") { }
+      assert_not free.call, "a rebuild could start before the write commits"
+    end
+    assert free.call, "the commit lets go"
+
+    ActiveRecord::Base.transaction do
+      ProjectionVersion.unless_rebuilding("some/projection") { }
+      raise ActiveRecord::Rollback
+    end
+    assert free.call, "the rollback lets go"
+  ensure
+    other&.close
+  end
 end

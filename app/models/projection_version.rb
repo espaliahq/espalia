@@ -73,7 +73,9 @@ class ProjectionVersion < ApplicationRecord
   # first reset to its final stamp, so its tables are empty or half replayed
   # throughout; a write that read them then would decide from a wrong list.
   # Shares the same key, so the write refuses at once, and a rebuild that
-  # starts meanwhile waits for it to finish.
+  # starts meanwhile waits for it to finish. Inside a transaction the locks
+  # last until it ends, as a rebuild that starts before the commit would
+  # replay without the write.
   #
   # @param names [Array<String>] `PROJECTION_NAME`s
   # @yield while no rebuild can start
@@ -89,8 +91,19 @@ class ProjectionVersion < ApplicationRecord
     end
     yield
   ensure
-    release_shared(held) if held
+    release_when_transaction_ends(held) if held
   end
+
+  # With no transaction to join (none open, or a test's own, which never
+  # commits), the locks go when the block returns.
+  def self.release_when_transaction_ends(keys)
+    transaction = connection.current_transaction
+    return release_shared(keys) unless transaction.joinable?
+
+    transaction.after_commit { release_shared(keys) }
+    transaction.after_rollback { release_shared(keys) }
+  end
+  private_class_method :release_when_transaction_ends
 
   # A failed statement aborts the transaction around it, and an aborted
   # transaction runs nothing more, an unlock included, until it ends. A caller
