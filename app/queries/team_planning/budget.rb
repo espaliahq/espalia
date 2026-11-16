@@ -128,12 +128,17 @@ class TeamPlanning::Budget
   # @param scenario_id [String] a scenario, never the root, which has no period
   # @param repository [TeamPlanning::Repository]
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil)
+  # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already read
+  # @param map [TeamPlanning::Baseline::Map, nil] the scenario, already resolved
+  #   over that base and aggregate, by id ({TeamPlanning::Resolution#structure})
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, base: nil, map: nil)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
     @aggregate = aggregate
+    @base = base
+    @scenario_map = map
   end
 
   # @return [Report]
@@ -141,8 +146,14 @@ class TeamPlanning::Budget
   # @raise [TeamPlanning::Error] for the root, or a scenario the plan doesn't have
   def call
     aggregate = @aggregate || @repository.load_plan(@plan.id)
-    funding = TeamPlanning::Funding.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
-    cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call(at_end: false)
+    raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
+
+    base = @base || TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    map = @scenario_map || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:)
+                                                   .structure(aggregate)
+    shared = { context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:, base: }
+    funding = TeamPlanning::Funding.new(**shared, map:).call
+    cost = TeamPlanning::Cost.new(**shared, map:).call(at_end: false)
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}

@@ -346,6 +346,26 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal [ { "USD" => 150_000r }, [] ], budget.then { [ of(it, platform).funded, it.unpriced ] }
   end
 
+  should "read the same funding, cost and budget from a base and map its caller already resolved" do
+    euros(250_000, cost_centre: "Platform", head_count: 3)
+    line(head_count: 1, cost_centre: "CC-1")
+    fill(open_position, @ada)
+    open_position(fte: 0.5, cost_centre: nil)
+    as_tenant do
+      context = context_for(@planner)
+      plan = TeamPlanningPlan.find(@plan_id)
+      aggregate = TeamPlanning::Repository.new.load_plan(@plan_id)
+      base = TeamPlanning::Baseline.new(context:, plan:).structure
+      map = TeamPlanning::Resolution.new(context:, plan:, scenario_id: @year, base:).structure(aggregate)
+      read = ->(query, **shared) { query.new(context:, plan:, scenario_id: @year, aggregate:, **shared) }
+
+      assert_equal read.(TeamPlanning::Funding).call, read.(TeamPlanning::Funding, base:, map:).call
+      assert_equal read.(TeamPlanning::Cost).call(at_end: false), read.(TeamPlanning::Cost, base:, map:).call(at_end: false)
+      assert_equal read.(TeamPlanning::Budget).call, read.(TeamPlanning::Budget, base:, map:).call
+      assert_equal budget, read.(TeamPlanning::Budget).call
+    end
+  end
+
   should "refuse the baseline, which has no period" do
     error = assert_raises(TeamPlanning::Error) do
       as_tenant { TeamPlanning::Budget.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id).call }
