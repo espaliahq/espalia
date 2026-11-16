@@ -11,7 +11,7 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    @departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
+    @departments, @teams = Array.new(2) { SecureRandom.uuid_v7 }
     @engineering, @payments, @sales = Array.new(3) { SecureRandom.uuid_v7 }
 
     travel_to Time.utc(2025, 12, 15, 9)
@@ -20,9 +20,9 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       @engineer = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: @family.role_family_id)
       @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5, title: "Senior SWE")
 
-      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
+      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: @teams, name: "Team" } ], effective_on: "2025-01-01")
       structure.create_unit(@engineering, "Engineering", level_id: @departments, effective_on: "2025-01-01")
-      structure.create_unit(@payments, "Payments", level_id: teams, parent_id: @engineering, effective_on: "2025-01-01")
+      structure.create_unit(@payments, "Payments", level_id: @teams, parent_id: @engineering, effective_on: "2025-01-01")
       structure.create_unit(@sales, "Sales", level_id: @departments, effective_on: "2025-01-01")
 
       @ada, @brook, @cy, @dee = %w[Ada Brook Cy Dee].map { create(:person, tenant: @tenant, name: "#{it} Quill") }
@@ -179,13 +179,313 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
 
   should "never let a unit or person outside the scope reach a plan read, though a whole-organisation plan shows them" do
     as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).set_membership(@brook.id, @payments, **ESPALIA, allocation: 0.7) }
-    leaked = [ @sales, @cy.id, @dee.id ]
+    # After the base, so Drift and the rebase preview have news about Sales
+    # to leak. Before #435 this ran before the base, with no drift at all.
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      at = { provider: "espalia", effective_on: "2026-01-15" }
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_title(@dee.id, "Principal Engineer", **at)
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_level(@cy.id, "8", **at)
+    end
+    leaked = [ @sales, @cy.id, @dee.id, "Cy Quill", "Dee Quill", "Principal Engineer" ]
     scoped = every_read(@plan_id, @h1)
     leaked.each { assert_not_includes scoped, it }
 
     whole = every_read(@whole_id, @whole_h1)
     leaked.each { assert_includes whole, it, "the control proves the reads would carry it" }
     assert person(scenario_map(@plan_id, @h1), @ada)[:manager_outside]
+  end
+
+  # A level and a manager the plan gave Dee once it brought them in, left
+  # behind when the change that brought them in was cleared.
+  def plan_change_about_dee
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, manager_id: @ada.id)
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "assignment")
+  end
+
+  should "walk every read with a change about someone the plan no longer covers, and through an update to today, naming no one" do
+    plan_change_about_dee
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      at = { provider: "espalia", effective_on: "2026-01-15" }
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_title(@dee.id, "Principal Engineer", **at)
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_manager(@dee.id, @cy.id, **at)
+    end
+    record = %w[Attention History Overrides Status SplitNeeds UndoStep].map { "Operations::TeamPlanning::#{it}" }
+    walk = lambda do
+      reads = JSON.parse(every_read(@plan_id, @h1))
+      [ @sales, @cy.id, "Cy Quill", "Dee Quill", "Principal Engineer" ].each { assert_not_includes reads.to_json, it }
+      assert_not_includes reads.except(*record).to_json, @dee.id
+      reads
+    end
+
+    preview = walk.call["Operations::TeamPlanning::RebasePreview"]
+    assert_empty preview["conflicts"]
+    assert_equal 0, preview["scenarios"].sum { it["conflicting"] }, "an outside change is no conflict to settle"
+    call(Operations::TeamPlanning::RebasePlan, plan_id: @plan_id, base_on: BASE_ON.iso8601)
+    reads = walk.call
+
+    statuses = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)[:statuses].select { it[:subject_id] == @dee.id }
+    assert_equal [ %w[level outside], %w[reporting_line outside] ], statuses.map { it.values_at(:facet, :status) }, "carried forward, untouched"
+    flagged = reads.dig("Operations::TeamPlanning::Attention", "items").select { it["subject_id"] == @dee.id }
+    assert_equal [ %w[uncovered level], %w[uncovered reporting_line] ], flagged.map { it.values_at("check", "facet") }
+  end
+
+  should "keep the same cut once the plan is archived" do
+    plan_change_about_dee
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant { handler.archive_plan(@plan_id) }
+
+    reads = JSON.parse(every_read(@plan_id, @h1))
+    assert reads.dig("Operations::TeamPlanning::Plan", "archived")
+    [ @sales, @cy.id, "Cy Quill", "Dee Quill" ].each { assert_not_includes reads.to_json, it }
+    assert_equal [ false, [] ], reads["Operations::TeamPlanning::Status"].values_at("checked", "statuses"), "an archived plan is checked against nothing"
+  end
+
+  should "read a change about someone the plan no longer covers as outside, with only its ids and the plan's own note" do
+    plan_change_about_dee
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @ada.id, level: "6")
+
+    status = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)
+    dee = status[:statuses].find { it[:subject_id] == @dee.id && it[:facet] == "level" }
+    assert_equal %i[scenario_id change_id subject_id facet status clearable undoable].sort, dee.keys.sort
+    assert_equal [ @h1, "level", "outside", true, true ], dee.values_at(:scenario_id, :facet, :status, :clearable, :undoable)
+    call(Operations::TeamPlanning::NoteChange, plan_id: @plan_id, scenario_id: @h1, event_id: dee[:change_id], note: "Agreed in March")
+    noted = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)[:statuses].find { it[:change_id] == dee[:change_id] }
+    assert_equal [ "outside", { value: "Agreed in March" } ], noted.values_at(:status, :note)
+    assert_not_includes status[:names], @dee.id
+    assert_equal [ @dee.id, @dee.id, @ada.id ], status[:statuses].map { it[:subject_id] }.select { [ @dee.id, @ada.id ].include?(it) }, "in the order the changes land"
+    assert_equal "Ada Quill", status[:names][@ada.id]
+  end
+
+  should "offer Clear but not Undo on an outside change whose undo would bring an earlier one back" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "7")
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, manager_id: @ada.id)
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "assignment")
+
+    rows = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)[:statuses].select { it[:subject_id] == @dee.id }
+    assert_equal({ "level" => [ "outside", true, false ], "reporting_line" => [ "outside", true, true ] },
+                 rows.to_h { [ it[:facet], it.values_at(:status, :clearable, :undoable) ] })
+    viewer = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant))
+    as_tenant { call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: viewer.person.id, role: "viewer") }
+    as_viewer = as_tenant do
+      Operations::TeamPlanning::Status.call(context: AuthorizationContext.new(user: viewer.user, tenant_user: viewer, person: viewer.person),
+                                            params: { plan_id: @plan_id, scenario_id: @h1 })
+    end
+    assert(as_viewer[:statuses].select { it[:status] == "outside" }.none? { it[:undoable] }, "nothing is undoable that isn't clearable")
+  end
+
+  should "refuse to pin what a step inherits about someone the plan no longer covers" do
+    plan_change_about_dee
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @brook.id, manager_id: @ada.id)
+
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @h2, subject_id: @dee.id, facet: "reporting_line")
+    end
+    assert_equal "This person is outside the units this plan covers. Place them in one of its units first.", error.message
+    assert_empty as_tenant { TeamPlanning::Repository.new.load_plan(@plan_id) }.changes_in(@h2)
+
+    assert call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @h2, subject_id: @brook.id, facet: "reporting_line")[:pinned]
+  end
+
+  should "refuse to settle a conflict about someone the plan no longer covers, as one status doesn't read" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, manager_id: @ada.id)
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).change_manager(@dee.id, @cy.id, provider: "espalia", effective_on: "2026-01-15") }
+    call(Operations::TeamPlanning::RebasePlan, plan_id: @plan_id, base_on: BASE_ON.iso8601)
+    dee = -> { call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)[:statuses].find { it[:subject_id] == @dee.id && it[:facet] == "reporting_line" } }
+    assert_equal "conflicting", dee.call[:status], "the update carried the conflict while the plan covered Dee"
+
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "assignment")
+    assert_equal "outside", dee.call[:status]
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::SettleConflict, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "reporting_line", choice: "reality")
+    end
+    assert_equal "Status doesn't read this as conflicting, so there is nothing to settle", error.message
+  end
+
+  should "keep drift to what the plan covers, saying a covered person left without saying where to" do
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      at = { provider: "espalia", effective_on: "2026-01-15" }
+      people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+      people.move_membership(@ada.id, @payments, @sales, effective_on: at[:effective_on])
+      people.change_manager(@brook.id, @dee.id, **at)
+      people.change_title(@dee.id, "Principal Engineer", **at)
+    end
+
+    drift = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)
+    moved = drift[:changes].find { it[:kind] == "moved" }
+    assert_equal [ @ada.id, nil, @payments, [ "unit_id" ] ], moved.values_at(:person_id, :unit_id, :from_unit_id, :outside)
+    manager = drift[:changes].find { it[:fact] == "manager" }
+    assert_equal [ @brook.id, nil, [ "after" ] ], [ manager[:person_id], manager.dig(:after, "manager_id"), manager[:outside] ]
+    assert_empty drift[:changes].select { it[:person_id] == @dee.id }
+    [ @sales, @dee.id, "Sales", "Dee Quill", "Principal Engineer" ].each { assert_not_includes drift.to_json, it }
+
+    whole = call(Operations::TeamPlanning::Drift, plan_id: @whole_id)
+    [ @sales, @dee.id, "Dee Quill", "Principal Engineer" ].each { assert_includes whole.to_json, it, "the control proves drift would carry it" }
+    assert(whole[:changes].all? { it[:outside].empty? })
+  end
+
+  def drift_after(&)
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant { yield OrgGraph::CommandHandler.new(actor: SYSTEM), OrgGraph::StructureCommandHandler.new(actor: SYSTEM) }
+    call(Operations::TeamPlanning::Drift, plan_id: @plan_id)[:changes]
+  end
+
+  def on(day) = { provider: "espalia", effective_on: format("2026-01-%02d", day) }
+
+  def titles(changes, person) = changes.select { it[:person_id] == person.id && it[:fact] == "title" }.map { it.dig(:after, "title") }
+
+  should "count someone the window brings in from the move in, which doesn't say where from" do
+    changes = drift_after do |people, _|
+      people.change_title(@dee.id, "Sales Engineer", **on(10))
+      people.move_membership(@dee.id, @sales, @payments, effective_on: on(15)[:effective_on])
+      people.change_title(@dee.id, "Staff Engineer", **on(20))
+    end
+
+    moved = changes.find { it[:kind] == "moved" }
+    assert_equal [ @dee.id, @payments, nil, [ "from_unit_id" ] ], moved.values_at(:person_id, :unit_id, :from_unit_id, :outside)
+    assert_equal [ "Staff Engineer" ], titles(changes, @dee)
+    [ @sales, "Sales Engineer" ].each { assert_not_includes changes.to_json, it }
+  end
+
+  should "drop the value someone held before the window brought them in, and judge a day's moves before its facts" do
+    changes = drift_after do |people, _|
+      people.move_membership(@dee.id, @sales, @payments, effective_on: on(10)[:effective_on])
+      people.change_title(@dee.id, "Staff Engineer", **on(10))
+      people.move_membership(@ada.id, @payments, @sales, effective_on: on(12)[:effective_on])
+      people.change_title(@ada.id, "Sales Engineer", **on(12))
+    end
+
+    title = changes.find { it[:person_id] == @dee.id && it[:fact] == "title" }
+    assert_equal [ nil, "Staff Engineer", [ "before" ] ], [ title[:before], title.dig(:after, "title"), title[:outside] ]
+    assert_empty titles(changes, @ada), "a title that changes the day someone leaves goes with them"
+  end
+
+  should "keep counting someone whose last place ends, as the baseline keeps them unassigned" do
+    changes = drift_after do |people, _|
+      people.end_membership(@ada.id, @payments, **on(10))
+      people.change_title(@ada.id, "Staff Engineer", **on(20))
+    end
+
+    assert_equal [ "Staff Engineer" ], titles(changes, @ada)
+  end
+
+  should "count someone a scenario holds throughout, though the baseline has them outside" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    changes = drift_after { |people, _| people.change_title(@dee.id, "Staff Engineer", **on(20)) }
+
+    title = changes.find { it[:person_id] == @dee.id && it[:fact] == "title" }
+    assert_equal [ "Software Engineer", "Staff Engineer", [] ], [ title.dig(:before, "title"), title.dig(:after, "title"), title[:outside] ]
+  end
+
+  should "follow a move known before the base from the day it takes effect, out of the plan and into it" do
+    as_tenant do
+      people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+      people.move_membership(@ada.id, @payments, @sales, effective_on: on(10)[:effective_on])
+      people.move_membership(@dee.id, @sales, @payments, effective_on: on(10)[:effective_on])
+    end
+    changes = drift_after do |people, _|
+      [ @ada, @dee ].each do |person|
+        people.change_title(person.id, "Senior Engineer", **on(5))
+        people.change_title(person.id, "Staff Engineer", **on(20))
+      end
+    end
+
+    assert_equal [ [ "Senior Engineer" ], [ "Staff Engineer" ] ], [ titles(changes, @ada), titles(changes, @dee) ]
+    assert_equal [ [ nil, [ "before" ] ] ], changes.select { it[:person_id] == @dee.id }.map { it.values_at(:before, :outside) }
+    assert_empty changes.select { it[:kind] == "moved" }, "a move known before the base is never reported"
+  end
+
+  should "stop counting someone from the move out, and count them again once they come back" do
+    changes = drift_after do |people, _|
+      people.change_title(@ada.id, "Senior Engineer", **on(5))
+      people.move_membership(@ada.id, @payments, @sales, effective_on: on(10)[:effective_on])
+      people.change_title(@ada.id, "Sales Engineer", **on(12))
+      people.move_membership(@ada.id, @sales, @payments, effective_on: on(15)[:effective_on])
+      people.change_title(@ada.id, "Staff Engineer", **on(20))
+    end
+
+    moves = changes.select { it[:kind] == "moved" }.map { it.values_at(:unit_id, :from_unit_id, :outside) }
+    assert_equal [ [ nil, @payments, [ "unit_id" ] ], [ @payments, nil, [ "from_unit_id" ] ] ], moves
+    assert_equal [ "Senior Engineer", "Staff Engineer" ], titles(changes, @ada)
+    [ @sales, "Sales Engineer" ].each { assert_not_includes changes.to_json, it }
+  end
+
+  should "follow a unit out of the plan and back, and another into it, as it follows a person" do
+    field = SecureRandom.uuid_v7
+    as_tenant { OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(field, "Field", level_id: @teams, parent_id: @sales, effective_on: "2025-01-01") }
+    changes = drift_after do |_, structure|
+      structure.rename_unit(@payments, "Payments Core", **on(5))
+      structure.move_unit(@payments, @sales, **on(10))
+      structure.rename_unit(@payments, "Revenue Ops", **on(12))
+      structure.rename_unit(field, "Field Ops", **on(8))
+      structure.move_unit(field, @engineering, **on(15))
+      structure.rename_unit(field, "Platform", **on(20))
+      structure.move_unit(@payments, @engineering, **on(25))
+      structure.rename_unit(@payments, "Payments", **on(28))
+    end
+
+    moved = changes.select { it[:kind] == "unit_moved" }.map { [ it[:unit_id], it.dig(:before, "parent_id"), it.dig(:after, "parent_id"), it[:outside] ] }
+    assert_equal [ [ @payments, @engineering, nil, [ "after" ] ], [ field, nil, @engineering, [ "before" ] ], [ @payments, nil, @engineering, [ "before" ] ] ], moved
+    renames = changes.select { it[:kind] == "unit_renamed" }.map { [ it[:unit_id], it.dig(:before, "name"), it.dig(:after, "name") ] }
+    assert_equal [ [ @payments, "Payments", "Payments Core" ], [ field, nil, "Platform" ], [ @payments, nil, "Payments" ] ], renames
+    [ @sales, "Revenue Ops", "Field Ops" ].each { assert_not_includes changes.to_json, it }
+  end
+
+  should "not name a unit that has left the plan, whose name now may have been set outside it" do
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+      structure.move_unit(@payments, @sales, **on(10))
+      structure.rename_unit(@payments, "Revenue Ops", **on(12))
+    end
+    drift = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)
+
+    assert_equal [ [ "unit_moved", @payments ] ], drift[:changes].map { [ it[:kind], it[:unit_id] ] }
+    assert_not_includes drift[:names].keys, @payments
+    assert_not_includes drift.to_json, "Revenue Ops"
+  end
+
+  should "not name a unit that enters the plan only after today, by a name set while it was outside" do
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    field = SecureRandom.uuid_v7
+    as_tenant { structure.create_unit(field, "Field", level_id: @teams, parent_id: @sales, effective_on: "2025-01-01") }
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      structure.rename_unit(field, "Revenue Ops", **on(12))
+      structure.move_unit(field, @engineering, provider: "espalia", effective_on: "2026-02-20")
+    end
+    drift = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)
+
+    assert_includes drift[:changes].map { [ it[:kind], it[:unit_id] ] }, [ "unit_moved", field ]
+    assert_not_includes drift[:names].keys, field
+    assert_not_includes drift.to_json, "Revenue Ops"
+  end
+
+  should "not name a unit a move known before the base takes out after the window's last change" do
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    as_tenant do
+      structure.move_unit(@payments, @sales, **on(10))
+      structure.rename_unit(@payments, "Revenue Ops", **on(12))
+    end
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant { structure.rename_unit(@payments, "Ledger", **on(5)) }
+    drift = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)
+
+    assert_equal [ [ "unit_renamed", @payments ] ], drift[:changes].map { [ it[:kind], it[:unit_id] ] }
+    assert_not_includes drift[:names].keys, @payments
+    assert_not_includes drift.to_json, "Revenue Ops"
   end
 
   # Platform is Ada's own; Core and Engineers come from entries a seat in
@@ -459,6 +759,20 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])
     call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
     assert_includes resolve(@plan_id, @h1).people.map(&:id), @dee.id
+  end
+
+  # No write puts a seat with no unit on the map, as PositionSet needs a unit;
+  # this guards the check should one ever reach it.
+  should "bring someone in only through a seat in a unit the plan covers" do
+    map = resolve(@plan_id, @h1)
+    seat = TeamPlanning::Baseline::Position.new(id: SecureRandom.uuid_v7, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: nil,
+                                                fte: 1, basis: "new", role_name: nil, level_name: nil)
+    covered = seat.with(id: SecureRandom.uuid_v7, unit_id: @payments)
+    assert_includes map.known_unit_ids, @payments
+    map = map.with(positions: map.positions + [ seat, covered ])
+    scope = Object.new.extend(Operations::TeamPlanning::WithinScope)
+
+    assert_equal [ false, true ], [ seat, covered ].map { scope.send(:brings_in?, map, { placements: [ { position_id: it.id, allocation: 1 } ] }) }
   end
 
   should "refuse to redo a change about someone a narrower plan no longer covers, unless it places them in" do

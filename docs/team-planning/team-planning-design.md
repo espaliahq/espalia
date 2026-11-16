@@ -225,7 +225,10 @@ plans projection keeps the list in `scope_unit_ids`.
   An undone bring-in, or an Org Graph move out of the plan's units, leaves the person's
   other changes in the plan. Attention lists each one under "A change about someone this
   plan no longer covers", with the change, so a planner can clear it or bring the person
-  back. History, status and overrides keep naming the subject by id, unnamed.
+  back. History, status and overrides keep naming the subject by id, unnamed. The changes
+  tab names the row "Someone this plan no longer covers" and offers Clear, Undo and its
+  note: a removing write and a note stay allowed, while a pin or a settle about the subject is refused
+  ([#435](https://github.com/espaliahq/espalia/issues/435)).
 - **The scope cut runs before the pay filter.** The cut runs first, in `Map#settled`, so
   people outside never reach `map.people`. The see-pay filter runs after it, per person, in
   `map_payload`. Cost drops places outside before pricing, and reads actual pay only for
@@ -1060,7 +1063,11 @@ Each row of the Changes tab that `team_planning_status` marks `clearable` carrie
 behind a dialog that names the step the scenario follows again: its own parent, whatever
 its relation. A row is clearable when
 the scenario shown makes the change itself, the caller may edit, the facet isn't pay
-withheld from them, and the subject is still inside a scoped plan's units. Undo, Redo and
+withheld from them. A change about someone a scoped plan no longer covers stays clearable,
+and its row adds an Undo of that change alone, since the plan page's Undo never offers it
+([#435](https://github.com/espaliahq/espalia/issues/435)). The Undo shows only when the
+status read marks the row `undoable`: when undoing it brings no earlier change about that
+subject and facet back, which the plan could no longer show. Clear stays either way. Undo, Redo and
 Clear each return to the tab and scenario they were pressed on, and a refusal shows the
 operation's own words.
 
@@ -1322,7 +1329,9 @@ reads. `team_planning_settle_conflict` takes one of two choices, in one scenario
   retirements written with it wouldn't follow, so the editor changes it on the map.
 
 Settling is refused once status no longer reads the row as conflicting: the Org Graph
-has caught up with the plan, or the person was forgotten.
+has caught up with the plan, or the person was forgotten. It is refused, with the same
+answer as an unknown subject, for someone the plan no longer covers: the changes tab
+offers Clear there instead.
 
 No new event records the choice. The write carries a `settles` marker, the day the
 conflict was found and the choice, and the conflict ends by the rule above: a newer
@@ -1377,6 +1386,32 @@ A change applied from this plan comes back `from_plan`, matched through the `pla
 its event; nothing sets one until approval exists. Whether a planned change is done,
 pending or conflicting is 4.3's status, below.
 
+A plan covering some units sees only drift about the people and units it covers
+([#435](https://github.com/espaliahq/espalia/issues/435)). `TeamPlanning::DriftScope`
+follows the window in date order, judging each change by who and what the plan covers
+when it happens. Someone the baseline covers stops counting from the change that takes
+them out of the plan's units, and counts again if they come back. Someone whose last
+place ends stays, as the baseline keeps them unassigned. Someone the window brings in
+counts from that change on, and so does anyone in a unit beneath one it brings in.
+Anyone a scenario holds, and any unit a scenario created, count throughout. Units
+follow the same rule. Within a day, the changes that move someone or some unit are
+judged first, so a title that changes on the day someone leaves goes with them. A move
+the Org Graph knew before the window but that takes effect after the base moves them
+too, on its own day and ahead of that day's changes, though drift never reports it. A
+change about anything the plan doesn't cover at that point is dropped, names and all.
+
+The change that takes a person or unit out keeps the plan's side and nulls the
+destination: the reader learns they left the plan's units, not where they went. The
+change that brings them in nulls where they came from. A covered person now reporting
+to someone the plan can't name reads the same way, and so does the earlier value of a
+fact or name last set while its subject was outside, before the window or in it.
+A change that took effect before the base, learned since, always drops its earlier
+value, since coverage is judged only from the base on; a plan covering the whole
+organisation keeps it. A unit is named only if the plan covers it today, since a unit's
+name now may have been set after it left. A joiner's first-day facts keep only the units, owned units and manager the plan
+covers. `outside` lists the fields nulled or trimmed,
+and the Changes tab words each one.
+
 `team_planning_drift` gives the same report to MCP, with people by id and a `names` map
 beside them.
 
@@ -1411,6 +1446,9 @@ reads its end state off both with `read_from`.
 - **Plan only**: the Org Graph never holds what the change plans, so it is never compared
   and counts as no Org Graph work: a rule, a position, a capacity, a budget line, a hire
   the plan adds, or a person's pay. It still shows, so an editor sees the change exists.
+- **Outside**: a scoped plan no longer covers the subject, in the scenario's map or the
+  baseline. The entry carries only the scenario, the change, the subject's id, the
+  facet and the plan's own note: no name, no `since` and no sources.
 
 A plan whose base is still to come holds every change against today, so nothing reads
 conflicting before the plan starts.
