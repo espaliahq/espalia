@@ -162,7 +162,7 @@ class PlansController < ApplicationController
     result = Operations::TeamPlanning::SplitScenario.call(context: pundit_user,
                                                           params: { plan_id: plan[:plan_id], scenario_id: params.expect(:scenario_id), **draft })
     count = result[:moved_event_ids].size
-    redirect_to timeline_plan_path(plan[:plan_id], scenario: result[:agreed_id]),
+    redirect_to timeline_plan_path(plan[:plan_id], scenario: result[:agreed_id], step: split_step(result)),
                 notice: "Split #{count} #{count == 1 ? 'change' : 'changes'} off into #{result[:name]}."
   rescue Operations::Base::ParameterError => e
     refused = -> { redirect_to plan_path(plan[:plan_id]), alert: "Couldn't split the scenario: #{e.message}" }
@@ -176,6 +176,13 @@ class PlansController < ApplicationController
   end
 
   private
+
+  # The column a phone opens on: the agreed part shares one with the rest.
+  def split_step(result)
+    halves = result.values_at(:agreed_id, :scenario_id)
+    read(Operations::TeamPlanning::Timeline, scenario_id: result[:agreed_id])[:columns]
+      .index { ([ it[:scenario_id] ] + it[:alternative_ids]).intersect?(halves) }
+  end
 
   def split_page(plan, draft: {}, error: nil)
     scenario_id = params.expect(:scenario_id)

@@ -102,11 +102,11 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_select "input[name='event_ids[]']", count: 0
     end
 
-    should "split the chosen changes off and land on the agreed part" do
+    should "split the chosen changes off and land on the agreed part, in its own step on a phone" do
       post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @to_payments ], name: "Agreed moves" }
 
       agreed = ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).order(:created_at).last.id }
-      assert_redirected_to timeline_plan_path(@plan_id, scenario: agreed)
+      assert_redirected_to timeline_plan_path(@plan_id, scenario: agreed, step: 1)
       assert_equal "Split 1 change off into Agreed moves.", flash[:notice]
     end
 
