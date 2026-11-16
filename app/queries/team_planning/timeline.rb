@@ -195,14 +195,17 @@ class TeamPlanning::Timeline
         next Walk.new(opening: nil, hires: nil, transfers_in: nil, departures: nil, transfers_out: nil, closing:) if column.zero?
 
         opened = heads[column - 1] - leaving_ids[column - 1]
-        arrived = now - opened
-        hires = arrived.count { !@maps[column - 1].holds?(it) }
-        Walk.new(opening: opened.size, hires:, transfers_in: arrived.size - hires, departures: (now & leaving_ids[column]).size,
-                 transfers_out: (opened - now).size, closing:)
+        arrived, gone = now - opened, opened - now
+        hires = (arrived - held_ids[column - 1]).size
+        Walk.new(opening: opened.size, hires:, transfers_in: arrived.size - hires,
+                 departures: ((now | gone) & leaving_ids[column]).size, transfers_out: (gone - leaving_ids[column]).size, closing:)
       end
     end
 
-    def leaving_ids = @leaving_ids ||= @maps.map { |map| map.people.select(&:leaving?).to_set(&:id) }
+    # A leaver the same step takes outside a scoped plan is in `outside`, and still leaves.
+    def leaving_ids = @leaving_ids ||= @maps.map { |map| (map.people + map.outside).select(&:leaving?).to_set(&:id) }
+
+    def held_ids = @held_ids ||= @maps.map { |map| map.people.to_set(&:id) | map.outside_ids }
 
     def continues_from(block_id)
       successions.select { |succession| succession.successor_ids.any? { @block_of[it] == block_id } }
@@ -348,7 +351,7 @@ class TeamPlanning::Timeline
     end
 
     def units_of(map, person)
-      live = map.units.to_set(&:id)
+      live = (@live_unit_ids ||= {}.compare_by_identity)[map] ||= map.units.to_set(&:id)
       units = person.memberships.map(&:unit_id).select { live.include?(it) }.uniq.sort
       units.empty? ? [ nil ] : units
     end

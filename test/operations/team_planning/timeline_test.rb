@@ -280,4 +280,16 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
     assert_nil block(result, @growth)
     assert_walks_reconcile(result)
   end
+
+  should "count a leaver as a departure though the same step also takes them outside a scoped plan" do
+    @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Payments", base_on: "2026-03-02", unit_ids: [ @payments ])[:plan_id]
+    h1 = fork(relation: "then", name: "H1", ends_on: "2026-06-30")
+    leave(h1, @bo)
+    assign(h1, @bo, { unit_id: @growth, allocation: 1 })
+    result = timeline(h1)
+
+    assert_equal walk(3, 0, 0, 1, 0, 2), result[:walk].last
+    assert_equal walk(3, 0, 0, 1, 0, 2), block(result, @payments)[:walk].last
+    assert_walks_reconcile(result)
+  end
 end
