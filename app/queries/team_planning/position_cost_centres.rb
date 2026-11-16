@@ -48,6 +48,29 @@ class TeamPlanning::PositionCostCentres
     @resolved[position.id] ||= own(position) || occupied(occupants.fetch(position.id, [])) || ruled(position) || NONE
   end
 
+  # A person's cost centre in one of their places
+  # ([#387](https://github.com/espaliahq/espalia/issues/387)). Someone with a
+  # real cost centre keeps it unless the plan changes their unit, role, level
+  # or location. Otherwise the first of these that gives one wins: their
+  # position's own label; the entries read at their planned place; their real
+  # cost centre. A placeholder hire has none of their own.
+  #
+  # @param cost_centre [String, nil] their real cost centre
+  # @param changed [Boolean] whether the plan changes their unit, role, level or location
+  # @param position [TeamPlanning::Baseline::Position, nil] the position the place is in
+  # @param unit_id [String, nil] the place's live unit
+  # @param role_id [String, nil] the role they hold there
+  # @param level_id [String, nil] the level they are priced at there
+  # @param location [String, nil] their country
+  # @return [Resolved]
+  def person(cost_centre:, changed:, position:, unit_id:, role_id:, level_id:, location:)
+    real = Resolved.new(cost_centre:, source: "person") if cost_centre.present?
+    return real if real && !changed
+
+    (position && own(position)) ||
+      by_rules(unit_id:, role_id:, level_id:, location:) || real || NONE
+  end
+
   private
 
   def occupants = @occupants ||= @map.occupants
@@ -62,10 +85,12 @@ class TeamPlanning::PositionCostCentres
   end
 
   def ruled(position)
-    unit_id = position.unit_id if live.include?(position.unit_id)
-    entry, index = TeamPlanning::RuleKinds::CostCentre.match(rules_at(unit_id), unit_ids: chain(unit_id), role_id: position.role_id,
-                                                                                role_family_id: families[position.role_id],
-                                                                                level_ordinal: ordinals[position.level_id])
+    by_rules(unit_id: (position.unit_id if live.include?(position.unit_id)), role_id: position.role_id, level_id: position.level_id, location: nil)
+  end
+
+  def by_rules(unit_id:, role_id:, level_id:, location:)
+    entry, index = TeamPlanning::RuleKinds::CostCentre.match(rules_at(unit_id), unit_ids: chain(unit_id), role_id:, role_family_id: family(role_id),
+                                                                                level_ordinal: ordinal(level_id), location:)
     entry && Resolved.new(cost_centre: entry["cost_centre"], source: "rule", rule_index: index, rule_matcher: entry.except("cost_centre"))
   end
 
@@ -73,11 +98,13 @@ class TeamPlanning::PositionCostCentres
 
   def chain(unit_id) = unit_id ? @chains[unit_id] ||= @map.units_up_from(unit_id) : []
 
-  def ordinals
-    @ordinals ||= FrameworkState::Level.where(tenant_id: @tenant_id, level_id: @map.positions.map(&:level_id).uniq).pluck(:level_id, :ordinal).to_h
+  def ordinal(level_id)
+    @ordinals ||= FrameworkState::Level.where(tenant_id: @tenant_id).pluck(:level_id, :ordinal).to_h
+    @ordinals[level_id]
   end
 
-  def families
-    @families ||= FrameworkState::Role.where(tenant_id: @tenant_id, role_id: @map.positions.map(&:role_id).uniq).pluck(:role_id, :role_family_id).to_h
+  def family(role_id)
+    @families ||= FrameworkState::Role.where(tenant_id: @tenant_id).pluck(:role_id, :role_family_id).to_h
+    @families[role_id]
   end
 end
