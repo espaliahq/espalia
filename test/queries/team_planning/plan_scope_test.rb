@@ -75,6 +75,22 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
 
   def scenario_map(plan_id, scenario_id) = call(Operations::TeamPlanning::ScenarioMap, plan_id:, scenario_id:)
 
+  # A plan no longer places a position outside its scope, so this stands in
+  # for one placed before the plan narrowed.
+  def sales_seat(scenario_id)
+    position_id = SecureRandom.uuid_v7
+    as_tenant do
+      handler.set_change(@plan_id, TeamPlanning::Events::PositionSet, scenario_id:, subject_id: position_id,
+                                                                      end_state: { role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new" })
+    end
+    position_id
+  end
+
+  UNIT_OUTSIDE = "This unit is outside the units this plan covers. Place it in one of its units first."
+  POSITION_OUTSIDE = "This position is outside the units this plan covers. Place it in one of its units first."
+
+  def refusal(&) = assert_raises(Operations::Base::ParameterError, &).message
+
   def set_scope(plan_id, unit_ids) = call(Operations::TeamPlanning::SetPlanScope, plan_id:, unit_ids:)
 
   def uncovered(scenario_id)
@@ -119,9 +135,8 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
   end
 
   should "keep an override on a closed position outside the scope out of what needs attention" do
-    position = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
-                                                           level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
-    call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @h2, position_id: position)
+    position = sales_seat(@h1)
+    as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::PositionClosed, scenario_id: @h2, subject_id: position, end_state: {}) }
     call(Operations::TeamPlanning::SetCapacityOverride, plan_id: @plan_id, scenario_id: @h2, person_id: @ada.id, position_id: position, amount: "0.4")
 
     assert_not_includes call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @h2).to_json, position
@@ -232,6 +247,79 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_empty uncovered(@h1)
   end
 
+  should "refuse to place a unit or position outside the scope, or to change one the plan doesn't cover" do
+    teams = resolve(@plan_id, @h1).units.find { it.id == @payments }.level_id
+    assert_equal POSITION_OUTSIDE, refusal { call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                                                         level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new") }
+    assert_equal UNIT_OUTSIDE, refusal { call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id: @h1, name: "Labs", top_level: true, level_id: @departments) }
+    assert_equal UNIT_OUTSIDE, refusal { call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id: @h1, unit_id: @payments, top_level: true) }
+
+    call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id: @h1, name: "Platform", parent_id: @engineering, level_id: teams)
+    seat = sales_seat(@h1)
+    assert_equal POSITION_OUTSIDE, refusal { call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @h1, position_id: seat) }
+    assert_empty uncovered(@h1)
+  end
+
+  should "refuse to redo a move that took a unit the scenario created out of a narrower plan" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    teams = resolve(@plan_id, @h1).units.find { it.id == @payments }.level_id
+    platform = call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id: @h1, name: "Platform", parent_id: @engineering, level_id: teams)[:unit_id]
+    call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id: @h1, unit_id: platform, parent_id: @sales)
+    call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1)
+    set_scope(@plan_id, [ @engineering ])
+
+    assert_equal UNIT_OUTSIDE, refusal { call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @h1) }
+    assert_includes resolve(@plan_id, @h1).units.map(&:id), platform
+  end
+
+  should "refuse to undo a funding clear on a closed position a narrower plan no longer covers" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    line_id = SecureRandom.uuid_v7
+    seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                       level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    as_tenant do
+      handler.set_change(@plan_id, TeamPlanning::Events::PositionFundingSet, scenario_id: @h1, subject_id: seat,
+                                                                             end_state: { draws: [ { budget_line_id: line_id, share: "1" } ] })
+    end
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: seat, facet: "funding")
+    call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @h1, position_id: seat)
+    set_scope(@plan_id, [ @engineering ])
+    cleared = call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id: @h1)[:entries].find { it[:facet] == "funding" && it[:action] == "clear" }
+
+    assert_equal POSITION_OUTSIDE, refusal { call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1, event_id: cleared[:event_id]) }
+  end
+
+  should "refuse to redo a succession that names a unit a narrower plan no longer covers" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    call(Operations::TeamPlanning::SetUnitSuccession, plan_id: @plan_id, scenario_id: @h1, predecessor_ids: [ @payments ], successor_ids: [ @sales ])
+    call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1)
+    set_scope(@plan_id, [ @engineering ])
+
+    assert_equal UNIT_OUTSIDE, refusal { call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @h1) }
+    assert_empty resolve(@plan_id, @h1).successions
+  end
+
+  should "refuse to undo a clear that would bring back a position a narrower plan no longer covers" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                       level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: seat, facet: "position")
+    set_scope(@plan_id, [ @engineering ])
+
+    assert_equal POSITION_OUTSIDE, refusal { call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1) }
+    assert_empty uncovered(@h1)
+  end
+
+  should "refuse to undo a move back in when the move it brings back takes a unit out of a narrower plan" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id: @h1, unit_id: @payments, parent_id: @sales)
+    call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id: @h1, unit_id: @payments, parent_id: @engineering)
+    set_scope(@plan_id, [ @engineering ])
+
+    assert_equal UNIT_OUTSIDE, refusal { call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1) }
+    assert_includes resolve(@plan_id, @h1).units.map(&:id), @payments
+  end
+
   should "flag a change about someone the plan no longer covers, whether a bring-in was undone or the Org Graph moved them out" do
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])
@@ -271,16 +359,14 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
   end
 
   should "leave a position in a unit outside the scope off the map and out of its totals" do
-    position = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
-                                                           level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    position = sales_seat(@h1)
     assert_not_includes resolve(@plan_id, @h1).positions.map(&:id), position
     assert_equal({ "per_fte" => 1.5 }, capacity(@plan_id, @h1)[:totals].transform_values(&:to_f))
   end
 
   should "keep a funding on a position outside the scope out of what needs attention" do
     line = as_tenant { BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", head_count: 1) }
-    position = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
-                                                           level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    position = sales_seat(@h1)
     as_tenant do
       handler.set_change(@plan_id, TeamPlanning::Events::PositionFundingSet, scenario_id: @h1, subject_id: position,
                                                                              end_state: { draws: [ { budget_line_id: line.id } ] })
@@ -313,10 +399,9 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
   end
 
   should "mask a manager seat or a backfill outside the scope, as it masks a manager outside" do
-    sales_seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
-                                                             level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    outside_seat = sales_seat(@h1)
     [ @plan_id, @whole_id ].zip([ @h1, @whole_h1 ]).each do |plan_id, scenario_id|
-      seat = plan_id == @plan_id ? sales_seat : call(Operations::TeamPlanning::SetPosition, plan_id:, scenario_id:, role_id: @engineer.role_id,
+      seat = plan_id == @plan_id ? outside_seat : call(Operations::TeamPlanning::SetPosition, plan_id:, scenario_id:, role_id: @engineer.role_id,
                                                                                          level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
       call(Operations::TeamPlanning::SetReportingLine, plan_id:, scenario_id:, person_id: @ada.id, manager_position_id: seat)
     end
@@ -324,19 +409,18 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     ada = person(scenario_map(@plan_id, @h1), @ada)
     assert_nil ada[:manager_position_id]
     assert ada[:manager_outside]
-    assert_not_includes scenario_map(@plan_id, @h1).to_json, sales_seat
+    assert_not_includes scenario_map(@plan_id, @h1).to_json, outside_seat
     assert person(scenario_map(@whole_id, @whole_h1), @ada)[:manager_position_id], "the control proves the payload would carry it"
 
     attention = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @h1)
     assert_empty attention[:items].select { it[:subject_id] == @ada.id && it[:facet] == "reporting_line" }
-    assert_not_includes attention.to_json, sales_seat
+    assert_not_includes attention.to_json, outside_seat
   end
 
   should "keep a place in a position outside the scope outside, however often the map settles, and read it as done once it shows" do
-    sales_seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @plan_id, role_id: @engineer.role_id,
-                                                             level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    outside_seat = sales_seat(@plan_id)
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @plan_id, person_id: @brook.id,
-                                                  placements: [ { unit_id: @payments, allocation: 0.5 }, { position_id: sales_seat, allocation: 0.5 } ])
+                                                  placements: [ { unit_id: @payments, allocation: 0.5 }, { position_id: outside_seat, allocation: 0.5 } ])
 
     map = resolve(@plan_id, @plan_id)
     brook = map.people.find { it.id == @brook.id }

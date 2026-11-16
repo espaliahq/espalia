@@ -119,11 +119,20 @@ plans projection keeps the list in `scope_unit_ids`.
   outside counts for the part inside, and the rest reads as one `outside: { share: }`,
   never as the units it is spent in. A manager outside reads as `manager_outside: true`.
   A change that places someone inside brings them in; undoing it lets them go.
-- **A plan changes only the people it covers.** A change about someone outside is refused
-  unless it is the assignment that places them in a covered unit, and the refusal says
-  nothing about them. A reporting line from someone inside to a manager outside is allowed.
-  A redo is held to the same rule, so narrowing a plan past an undone change can't bring
-  that change back about someone the plan no longer covers.
+- **A plan changes only the people, units and positions it covers.** A change about someone
+  outside is refused unless it is the assignment that places them in a covered unit, and the
+  refusal says nothing about them. A reporting line from someone inside to a manager outside
+  is allowed. A change about a unit or position outside is refused unless it places that unit
+  or position under a covered unit, and no change may place one outside. A unit a scenario
+  created inside and later moved out is treated like any other unit outside. A succession that
+  names a unit outside is refused. Budget lines sit under no unit, so a scope never drops one
+  ([#378](https://github.com/espaliahq/espalia/issues/378) asks which ones a member should see).
+- **The guard, not narrowing, stops a change coming back.** Narrowing checks only the
+  changes in effect. A change a clear, an undo or a later change took back escapes it, and
+  nothing can remove one, so counting them would stop the plan ever narrowing past it.
+  Instead every path that can restore a change runs the same guard as a write: a redo, an
+  undo of a clear, and an undo that brings back an earlier change
+  ([#365](https://github.com/espaliahq/espalia/issues/365)).
 - **A change left about someone outside is flagged, never hidden from its own record.**
   An undone bring-in, or an Org Graph move out of the plan's units, leaves the person's
   other changes in the plan. Attention lists each one under "A change about someone this
