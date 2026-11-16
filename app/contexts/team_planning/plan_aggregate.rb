@@ -1169,6 +1169,8 @@ class TeamPlanning::PlanAggregate
     else
       (@dates[step_id] ||= []) << event
       @sequence[event.event_id] = @sequence.size
+      redo_stack(step_id, data[:set_by_id]).clear
+      @dates_redo.dig(step_id, data[:set_by_id])&.clear
     end
   end
 
@@ -1369,6 +1371,8 @@ class TeamPlanning::PlanAggregate
     (@logs[event.data[:scenario_id]] ||= []) << event
     @sequence[event.event_id] = @sequence.size
     redo_stack(event.data[:scenario_id], actor_of(event)).clear
+    step_id = dates_step(event.data[:scenario_id])
+    @dates_redo.dig(step_id, actor_of(event))&.clear if step_id
   end
 
   def move_target(scenario_id, direction, to_scenario_id)

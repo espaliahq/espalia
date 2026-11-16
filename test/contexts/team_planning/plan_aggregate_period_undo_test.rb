@@ -208,6 +208,19 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
       assert_equal edit, @plan.last_redoable_by(@q1, @editor_id)
     end
 
+    should "end what the person can redo once they make a change or a date edit, whichever they undid" do
+      edit = set(@q1, ends_on: "2027-02-28")
+      undo_edit(@q1, edit)
+      @plan.set_change(TeamPlanning::Events::AssignmentSet, scenario_id: @q1, subject_id: SecureRandom.uuid_v7, set_by_id: @editor_id,
+                                                            end_state: { placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1.0 } ] })
+      assert_nil @plan.last_redoable_by(@q1, @editor_id)
+
+      undo_edit(@q1, last_event.event_id)
+      set(@q2, ends_on: "2027-06-15")
+      set(@q1, ends_on: "2027-03-15")
+      assert_nil @plan.last_redoable_by(@q1, @editor_id)
+    end
+
     should "not offer an edit someone else's later edit replaced, nor a redo once a new edit stands" do
       edit = set(@q1, ends_on: "2027-02-28")
       set(@q1, ends_on: "2027-02-15", by: @other_id)
