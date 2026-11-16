@@ -85,6 +85,18 @@ class PlanMapSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
+      should "keep the scenario picker's controls apart, with room to read the scenario" do
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id, scenario: @q1)
+        assert_selector "[data-map-unit]", text: "Growth"
+
+        assert_empty overlapping_picker_controls
+        if size == MOBILE_SIZE
+          assert_operator evaluate_script("document.getElementById('map-scenario').getBoundingClientRect().width"), :>=, 120
+        end
+        assert_no_sideways_overflow
+      end
+
       should "fit a full unit with a long role on one line a person, with what was cut reachable" do
         plan_id, scenario_id = plan_with_a_full_unit
         sign_in_as(@planner.user)
@@ -202,6 +214,19 @@ class PlanMapSystemTest < ApplicationSystemTestCase
       assert_text "with this scenario's changes"
     end
   end
+
+  def overlapping_picker_controls = evaluate_script(<<~JS)
+    (() => {
+      const picker = document.querySelector('nav[aria-label="Scenario"]').parentElement
+      const controls = [...picker.querySelectorAll("span, label, select, a, button")]
+        .filter(it => it.children.length === 0 || it.matches("select"))
+        .map(it => [it.textContent.trim() || it.tagName, it.getBoundingClientRect()])
+        .filter(([, box]) => box.width > 0 && box.height > 0)
+      return controls.flatMap(([a, p], i) => controls.slice(i + 1)
+        .filter(([, q]) => p.left < q.right - 1 && q.left < p.right - 1 && p.top < q.bottom - 1 && q.top < p.bottom - 1)
+        .map(([b]) => `${a} overlaps ${b}`))
+    })()
+  JS
 
   def unit(name) = find("[data-map-unit]", text: name, match: :first)
 
