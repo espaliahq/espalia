@@ -17,7 +17,9 @@
 # conflicts it carried forward. Archiving and restoring the plan are
 # baseline entries too, `archive` and `restore`. A step's new dates are a
 # `dates` entry of that step, with its period before and after; a fork that
-# closes a step with no end date is a `dates` entry of the step it closes. A set or pin that settled one of those
+# closes a step with no end date is a `dates` entry of the step it closes. An
+# undo or redo of a date edit is an `undo` or `redo` entry of that step, with
+# the period it restores. A set or pin that settled one of those
 # conflicts holds {#settles}: the conflict's since and the choice made.
 TeamPlanning::ChangeEntry = Data.define(
   :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
@@ -61,7 +63,9 @@ TeamPlanning::ChangeEntry = Data.define(
         { action: "dates", scenario_id: data[:closes_scenario_id], actor_id: data[:forked_by_id],
           end_state: { "ends_on" => data[:closes_on], "previous_ends_on" => nil } }
     when TeamPlanning::Events::ScenarioPeriodSet
-      { action: "dates", end_state: data.slice(:starts_on, :ends_on, :previous_starts_on, :previous_ends_on).stringify_keys, actor_id: data[:set_by_id] }
+      reverses = data.values_at(:undoes_event_id, :redoes_event_id)
+      { action: reverses.first ? "undo" : (reverses.last ? "redo" : "dates"), reverses_event_id: reverses.compact.first,
+        end_state: data.slice(:starts_on, :ends_on, :previous_starts_on, :previous_ends_on).stringify_keys, actor_id: data[:set_by_id] }.compact
     when TeamPlanning::Events::PlanArchived
       { action: "archive", actor_id: data[:archived_by_id] }
     when TeamPlanning::Events::PlanRestored

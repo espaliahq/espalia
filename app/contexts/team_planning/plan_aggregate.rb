@@ -75,6 +75,8 @@ class TeamPlanning::PlanAggregate
   FORK_RELATIONS = %w[then instead].freeze
   # The facets a change can move between steps along the timeline.
   MOVABLE_FACETS = %w[assignment position departure].freeze
+  # What a step's date edit changes, as Undo and Redo name it.
+  DATES_FACET = "dates"
   DIRECTIONS = %w[earlier later].freeze
   # How a carried conflict is settled: keep the plan, or follow reality.
   SETTLE_CHOICES = %w[plan reality].freeze
@@ -102,6 +104,9 @@ class TeamPlanning::PlanAggregate
     @carried = {}
     @sequence = {}
     @pinned_from = {}
+    @dates = {}
+    @dates_redo = {}
+    @undone_at = {}
   end
 
   # Opens the plan.
@@ -413,18 +418,7 @@ class TeamPlanning::PlanAggregate
   # @raise [Date::Error] for a date that isn't YYYY-MM-DD
   def set_scenario_period(scenario_id, ends_on:, set_by_id:, starts_on: nil)
     ensure_open!
-    scenario_id = step_with_period!(scenario_id)
-    before = period_of(scenario_id)
-    moved = moved_period(scenario_id, starts_on, ends_on)
-    after = period_of(scenario_id, moved)
-    return if after == before
-
-    ensure_periods_fit!(moved)
-    ensure_departures_within!(moved)
-    apply(TeamPlanning::Events::ScenarioPeriodSet.new(data: {
-      plan_id: @plan_id, scenario_id: scenario_id, starts_on: after.begin.iso8601, ends_on: after.end&.iso8601,
-      previous_starts_on: before.begin.iso8601, previous_ends_on: before.end&.iso8601, set_by_id: set_by_id
-    }))
+    write_period(step_with_period!(scenario_id), starts_on, ends_on, set_by_id)
   end
 
   # What moving a step's end would do, without doing it: every other live
@@ -640,6 +634,8 @@ class TeamPlanning::PlanAggregate
   #   changes the same subject and facet
   def undo_change(scenario_id:, event_id:, undone_by_id:)
     ensure_open!
+    return undo_dates(scenario_id, event_id, undone_by_id) if dates_edit?(event_id)
+
     entry = log_entry!(live_scenario!(scenario_id), event_id)
     raise TeamPlanning::Error, "That change is already undone" if undone?(event_id)
 
@@ -662,6 +658,8 @@ class TeamPlanning::PlanAggregate
   # @param event_id [String] an entry of the scenario's log
   # @return [TeamPlanning::Events::Change, nil] the change of this scenario in effect once that entry is undone
   def restored_by_undo(scenario_id, event_id)
+    return if dates_edit?(event_id)
+
     key = key_of(log_entry!(live_scenario!(scenario_id), event_id))
     in_effect(scenario_id, @undone | [ event_id ]).reverse_each.find { it.key == key }
   end
@@ -676,6 +674,8 @@ class TeamPlanning::PlanAggregate
   #   changes the same subject and facet
   def redo_change(scenario_id:, event_id:, redone_by_id:)
     ensure_open!
+    return redo_dates(scenario_id, event_id, redone_by_id) if dates_edit?(event_id)
+
     entry = log_entry!(live_scenario!(scenario_id), event_id)
     raise TeamPlanning::Error, "That change isn't undone, so there is nothing to redo" unless undone?(event_id)
 
@@ -695,7 +695,11 @@ class TeamPlanning::PlanAggregate
   # @param event_id [String] an entry of its log
   # @return [String] the facet the entry changes, pins or clears
   # @raise [TeamPlanning::Error] if the scenario is unknown or the entry not in its log
-  def facet_of(scenario_id, event_id) = key_of(log_entry!(live_scenario!(scenario_id), event_id)).last
+  def facet_of(scenario_id, event_id)
+    return DATES_FACET if dates_edit?(event_id)
+
+    key_of(log_entry!(live_scenario!(scenario_id), event_id)).last
+  end
 
   # Writes, rewrites or clears the note on a change or pin, which must still
   # stand in its scenario: not undone, not cleared and not replaced.
@@ -730,14 +734,8 @@ class TeamPlanning::PlanAggregate
   # @return [String, nil] its event id
   def last_undoable_by(scenario_id, person_id, except_facets: [])
     ensure_open!
-    replaced = Set.new
-    @logs.fetch(live_scenario!(scenario_id), []).reverse_each do |entry|
-      next if undone?(entry.event_id) || except_facets.include?(key_of(entry).last)
-      return entry.event_id if actor_of(entry) == person_id && !replaced.include?(key_of(entry))
-
-      replaced << key_of(entry) unless entry.is_a?(TeamPlanning::Events::ChangeMoved)
-    end
-    nil
+    [ last_change_undoable_by(live_scenario!(scenario_id), person_id, except_facets), last_dates_undoable_by(scenario_id, person_id) ]
+      .compact.max_by { @sequence.fetch(it) }
   end
 
   # What a Redo button restores for one person: the change of their latest
@@ -751,10 +749,11 @@ class TeamPlanning::PlanAggregate
   def last_redoable_by(scenario_id, person_id, except_facets: [])
     ensure_open!
     log = @logs.fetch(live_scenario!(scenario_id), [])
-    redo_stack(scenario_id, person_id).reverse.find do |event_id|
+    change = redo_stack(scenario_id, person_id).reverse.find do |event_id|
       entry = log.find { it.event_id == event_id }
       undone?(event_id) && entry && !except_facets.include?(key_of(entry).last) && later_in_effect(log, entry).nil?
     end
+    [ change, last_dates_redoable_by(scenario_id, person_id) ].compact.max_by { @undone_at.fetch(it, -1) }
   end
 
   # Moves a scenario's change to the step before or after it on the timeline
@@ -1024,6 +1023,7 @@ class TeamPlanning::PlanAggregate
     data = event.data
     if data[:closes_scenario_id]
       @scenarios[data[:closes_scenario_id]] = @scenarios.fetch(data[:closes_scenario_id]).with(ends_on: Date.iso8601(data[:closes_on]))
+      (@dates[data[:closes_scenario_id]] ||= []) << event
     end
     ends_on = Date.iso8601(data[:ends_on]) if data[:relation] == "then" && data[:ends_on]
     starts_on = Date.iso8601(data[:starts_on]) if data[:parent_id] == @plan_id
@@ -1042,6 +1042,7 @@ class TeamPlanning::PlanAggregate
     scenario = @scenarios.fetch(id)
     starts_on = Date.iso8601(event.data[:starts_on]) if scenario.parent_id == @plan_id
     @scenarios[id] = scenario.with(starts_on:, ends_on: event.data[:ends_on] && Date.iso8601(event.data[:ends_on]))
+    record_dates(id, event)
   end
 
   on TeamPlanning::Events::ScenarioSplit do |event|
@@ -1057,6 +1058,8 @@ class TeamPlanning::PlanAggregate
       redo_stack(agreed_id, person_id).concat(stack.select { moved.include?(it) })
       stack.reject! { moved.include?(it) }
     end
+    @dates[agreed_id] = @dates.delete(original.id) if @dates.key?(original.id)
+    @dates_redo[agreed_id] = @dates_redo.delete(original.id) if @dates_redo.key?(original.id)
     carried = @carried.fetch(original.id, {}).slice(*data[:keys].map(&:to_a))
     @carried[agreed_id] = carried if carried.any?
   end
@@ -1086,6 +1089,7 @@ class TeamPlanning::PlanAggregate
       relocate(event.data[:moved_event_ids], from: event.data[:scenario_id], to:, before: event.data[:moves_before_id])
     end
     @undone << event.data[:undone_event_id]
+    @undone_at[event.data[:undone_event_id]] = @undone_at.size
     redo_stack(event.data[:scenario_id], event.data[:undone_by_id]) << event.data[:undone_event_id]
   end
 
@@ -1104,6 +1108,8 @@ class TeamPlanning::PlanAggregate
     @scenarios.delete(event.data[:scenario_id])
     @logs.delete(event.data[:scenario_id])
     @redo_stacks.delete(event.data[:scenario_id])
+    @dates.delete(event.data[:scenario_id])
+    @dates_redo.delete(event.data[:scenario_id])
     @carried.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
   end
@@ -1132,6 +1138,119 @@ class TeamPlanning::PlanAggregate
   end
 
   private
+
+  def write_period(scenario_id, starts_on, ends_on, set_by_id, **reverses)
+    before = period_of(scenario_id)
+    moved = moved_period(scenario_id, starts_on, ends_on)
+    after = period_of(scenario_id, moved)
+    return if after == before && reverses.empty?
+
+    ensure_periods_fit!(moved)
+    ensure_departures_within!(moved)
+    apply(TeamPlanning::Events::ScenarioPeriodSet.new(data: {
+      plan_id: @plan_id, scenario_id: scenario_id, starts_on: after.begin.iso8601, ends_on: after.end&.iso8601,
+      previous_starts_on: before.begin.iso8601, previous_ends_on: before.end&.iso8601, set_by_id: set_by_id, **reverses
+    }))
+  end
+
+  # A step's dates log holds its date edits and the fork that closed it. An
+  # undo or redo writes a {TeamPlanning::Events::ScenarioPeriodSet} too, which
+  # marks the edit it reverses rather than joining the log.
+  def record_dates(step_id, event)
+    data = event.data
+    if (undone_id = data[:undoes_event_id])
+      @undone << undone_id
+      @undone_at[undone_id] = @undone_at.size
+      ((@dates_redo[step_id] ||= {})[data[:set_by_id]] ||= []) << undone_id
+    elsif (redone_id = data[:redoes_event_id])
+      @undone.delete(redone_id)
+      @dates_redo.fetch(step_id, {}).each_value { it.delete(redone_id) }
+    else
+      (@dates[step_id] ||= []) << event
+      @sequence[event.event_id] = @sequence.size
+    end
+  end
+
+  def dates_edit?(event_id) = @dates.each_value.any? { |log| log.any? { it.event_id == event_id } }
+
+  def undo_dates(scenario_id, event_id, undone_by_id)
+    step_id = step_with_period!(scenario_id)
+    entry = dates_entry!(step_id, event_id)
+    raise TeamPlanning::Error, "That change is already undone" if undone?(event_id)
+
+    ensure_dates_standing!(step_id, entry, "undo")
+    write_period(step_id, first_step_start(step_id, entry.data[:previous_starts_on]), entry.data[:previous_ends_on],
+                 undone_by_id, undoes_event_id: event_id)
+  end
+
+  def redo_dates(scenario_id, event_id, redone_by_id)
+    step_id = step_with_period!(scenario_id)
+    entry = dates_entry!(step_id, event_id)
+    raise TeamPlanning::Error, "That change isn't undone, so there is nothing to redo" unless undone?(event_id)
+
+    ensure_dates_standing!(step_id, entry, "redo")
+    write_period(step_id, first_step_start(step_id, entry.data[:starts_on]), entry.data[:ends_on], redone_by_id, redoes_event_id: event_id)
+  end
+
+  # Only a first step holds its own start; a later one follows the step before it.
+  def first_step_start(step_id, starts_on) = @scenarios.fetch(step_id).parent_id == @plan_id ? starts_on : nil
+
+  def dates_entry!(step_id, event_id)
+    entry = @dates.fetch(step_id, []).find { it.event_id == event_id } or
+      raise TeamPlanning::Error, "#{this(step_id)} has no such change"
+    return entry unless entry.is_a?(TeamPlanning::Events::ScenarioForked)
+
+    raise TeamPlanning::Error, "Forking the next step closed these dates, and undo doesn't reopen them: set the dates directly instead"
+  end
+
+  # The fork that closed a step stands for good, so it keeps every edit before it.
+  def ensure_dates_standing!(step_id, entry, action)
+    log = @dates.fetch(step_id)
+    later = log.drop(log.index(entry) + 1).reverse_each.find { !undone?(it.event_id) } or return
+    if later.is_a?(TeamPlanning::Events::ScenarioForked)
+      raise TeamPlanning::Error, "The next step forked after this, closing these dates on #{later.data[:closes_on]}, " \
+                                 "so this can't be #{action}ne: set the dates directly instead"
+    end
+
+    raise TeamPlanning::Error, "A later change to these dates replaced it (#{later.event_id}): undo that first, then #{action} this"
+  end
+
+  # The step whose dates a scenario edits: itself, or the agreed part the rest
+  # of a split sits on. The root and an alternative have none.
+  def dates_step(scenario_id)
+    scenario = @scenarios[scenario_id] or return
+    case scenario.relation
+    in "then" then scenario_id
+    in "on" then dates_step(scenario.parent_id)
+    in "instead" then nil
+    end
+  end
+
+  def last_change_undoable_by(scenario_id, person_id, except_facets)
+    replaced = Set.new
+    @logs.fetch(scenario_id, []).reverse_each do |entry|
+      next if undone?(entry.event_id) || except_facets.include?(key_of(entry).last)
+      return entry.event_id if actor_of(entry) == person_id && !replaced.include?(key_of(entry))
+
+      replaced << key_of(entry) unless entry.is_a?(TeamPlanning::Events::ChangeMoved)
+    end
+    nil
+  end
+
+  def last_dates_undoable_by(scenario_id, person_id)
+    step_id = dates_step(scenario_id) or return
+    entry = @dates.fetch(step_id, []).reverse_each.find { !undone?(it.event_id) }
+    entry.event_id if entry.is_a?(TeamPlanning::Events::ScenarioPeriodSet) && entry.data[:set_by_id] == person_id
+  end
+
+  def last_dates_redoable_by(scenario_id, person_id)
+    step_id = dates_step(scenario_id) or return
+    log = @dates.fetch(step_id, [])
+    @dates_redo.fetch(step_id, {}).fetch(person_id, []).reverse.find do |event_id|
+      index = log.index { it.event_id == event_id }
+      undone?(event_id) && index && log.drop(index + 1).none? { !undone?(it.event_id) }
+    end
+  end
 
   def first_steps = children_of(@plan_id).select { it.relation == "then" }
 

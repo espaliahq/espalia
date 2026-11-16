@@ -28,7 +28,8 @@ class Operations::TeamPlanning::History < Operations::Base
               "A dates entry is a step's new period, whose end_state holds starts_on, ends_on, previous_ends_on and, " \
               "unless written before a first step could start later, previous_starts_on. A null ends_on or previous_ends_on " \
               "means no end date. A step after one with no end date closes it, a dates entry of the closed step " \
-              "whose end_state holds only ends_on and a null previous_ends_on. " \
+              "whose end_state holds only ends_on and a null previous_ends_on. An undo or redo of a dates entry holds the " \
+              "period it brings back in the same fields. " \
               "An entry that stands undone says who undid it. A change, pin or note entry shows its note " \
               "as note: { value }, or { removed: true } once the plan is deleted. Any other value " \
               "that can be erased is never shown here: sealed_fields names any such field. A forgotten person reads as " \
