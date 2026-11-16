@@ -4,8 +4,11 @@
 class Kit::SidePanelPreview < Lookbook::Preview
   # @param open toggle
   # @param narrow select { choices: [overlay, stack] }
-  def playground(open: true, narrow: :overlay)
-    side_panel(id: "playground-panel", open:, narrow: narrow.to_sym)
+  # @param heading toggle
+  # @param sticky toggle
+  # @param fit_viewport toggle
+  def playground(open: true, narrow: :overlay, heading: true, sticky: false, fit_viewport: false)
+    side_panel(id: "playground-panel", open:, narrow: narrow.to_sym, heading:, sticky:, fit_viewport:)
   end
 
   # @!group States
@@ -59,9 +62,9 @@ class Kit::SidePanelPreview < Lookbook::Preview
 
   private
 
-  def side_panel(id:, open:, narrow:)
+  def side_panel(id:, open:, narrow:, **)
     render Components::Kit::SidePanel.new(id:, title: "About this plan", open:, narrow:,
-                                          cookie: "lookbook_#{id.underscore}_open", url_key: id) do |panel|
+                                          cookie: "lookbook_#{id.underscore}_open", url_key: id, **) do |panel|
       panel.main do
         panel.div(class: "mb-4 flex items-center justify-between gap-3") do
           panel.h2(class: "text-base font-semibold text-default") { "Scenarios" }
