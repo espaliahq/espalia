@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Finds the band that prices a seat at a level and in a country (#368).
+# Finds the band that prices a seat at a level and in a country ([#368](https://github.com/espaliahq/espalia/issues/368)).
 #
 # A seat's attributes are its level's role, role family and level number,
 # the level itself and the country's location key. Of the bands that match
@@ -25,7 +25,10 @@ class PayBand::Lookup
   # @param level_id [String, nil]
   # @param country [String, nil] as the Org Graph holds it
   # @return [Array(PayBand, Integer), nil] the band with the last word and its index, or nil when none matches
-  def deciding(level_id, country) = LastMatch.find(@bands, subject(level_id, country), PayBand::MATCHER, &:matcher)
+  def deciding(level_id, country)
+    key = [ level_id, PayBand.location_key(country) ]
+    (@deciding ||= {}).fetch(key) { @deciding[key] = LastMatch.find(@bands, subject(level_id, country), PayBand::MATCHER, &:matcher) }
+  end
 
   # @param level_id [String, nil]
   # @param country [String, nil]
