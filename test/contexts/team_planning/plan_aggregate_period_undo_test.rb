@@ -198,6 +198,17 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
       assert_equal edit, @plan.last_redoable_by(@q1, @editor_id)
     end
 
+    should "not take back a date edit while a later change of the person's stands, though a move put an older one last" do
+      moved = SecureRandom.uuid_v7
+      older = place(@q1, subject_id: moved)
+      edit = set(@q2, ends_on: "2027-06-15")
+      place(@q2)
+      @plan.move_change(scenario_id: @q1, subject_id: moved, facet: "assignment", direction: "later", moved_by_id: @other_id)
+
+      assert_equal older, @plan.last_undoable_by(@q2, @editor_id)
+      refute_equal edit, @plan.last_undoable_by(@q2, @editor_id)
+    end
+
     should "offer to redo the latest undo, though an earlier one was undone, redone and undone again" do
       @plan.set_change(TeamPlanning::Events::AssignmentSet, scenario_id: @q1, subject_id: SecureRandom.uuid_v7, set_by_id: @editor_id,
                                                             end_state: { placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1.0 } ] })

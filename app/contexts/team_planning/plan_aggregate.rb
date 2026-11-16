@@ -736,8 +736,11 @@ class TeamPlanning::PlanAggregate
   # @return [String, nil] its event id
   def last_undoable_by(scenario_id, person_id, except_facets: [])
     ensure_open!
-    [ last_change_undoable_by(live_scenario!(scenario_id), person_id, except_facets), last_dates_undoable_by(scenario_id, person_id) ]
-      .compact.max_by { @sequence.fetch(it) }
+    changes = changes_undoable_by(live_scenario!(scenario_id), person_id, except_facets)
+    dates = last_dates_undoable_by(scenario_id, person_id)
+    return changes.first unless dates && changes.none? { @sequence.fetch(it) > @sequence.fetch(dates) }
+
+    dates
   end
 
   # What a Redo button restores for one person: the change of their latest
@@ -1249,15 +1252,17 @@ class TeamPlanning::PlanAggregate
     end
   end
 
-  def last_change_undoable_by(scenario_id, person_id, except_facets)
+  # The person's changes an undo could take back, the one it takes first:
+  # a move puts the changes it carries after those already in the step.
+  def changes_undoable_by(scenario_id, person_id, except_facets)
     replaced = Set.new
-    @logs.fetch(scenario_id, []).reverse_each do |entry|
+    @logs.fetch(scenario_id, []).reverse_each.filter_map do |entry|
       next if undone?(entry.event_id) || except_facets.include?(key_of(entry).last)
-      return entry.event_id if actor_of(entry) == person_id && !replaced.include?(key_of(entry))
 
+      eligible = actor_of(entry) == person_id && !replaced.include?(key_of(entry))
       replaced << key_of(entry) unless entry.is_a?(TeamPlanning::Events::ChangeMoved)
+      entry.event_id if eligible
     end
-    nil
   end
 
   def last_dates_undoable_by(scenario_id, person_id)
