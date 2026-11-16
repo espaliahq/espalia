@@ -22,7 +22,9 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
               "step whose dates it set in scenario_id. Neither ever names a value. A pay change is offered only to " \
               "a member with the see-pay right; anyone else is offered their latest other change, or null. Both " \
               "are null for a viewer, for the baseline, and for an archived or frozen plan, and when the change is " \
-              "about someone or something outside the units a scoped plan covers. Refused, as an unknown plan, " \
+              "about someone or something outside the units a scoped plan covers. An undo of a clear that " \
+              "brings someone back into those units is offered with subject null, since the plan covers them " \
+              "only once it lands. Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
   approval :none
@@ -37,6 +39,7 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
     known_scenario!(plan, scenario_id)
     return { plan_id: plan.id, scenario_id:, undo: nil, redo: nil } unless offered?(plan, scenario_id)
 
+    @named_in = [ plan, scenario_id ]
     aggregate = ::TeamPlanning::Repository.new.load_plan(plan.id)
     except_facets = ::Operations::TeamPlanning::ChangeNote.hidden_facets(see_pay: PlanPolicy.new(context, plan).see_pay?)
     actor_id = context.person.id
@@ -101,7 +104,23 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
     end
   end
 
+  # The scope hides the name of anyone the scenario doesn't cover, even when
+  # the undo on offer would bring them back in ([#435](https://github.com/espaliahq/espalia/issues/435)).
   def name_of(subject_id)
+    return nil if hidden_ids.include?(subject_id)
+
     Person.find_by(id: subject_id)&.name || OrgUnit.find_by(id: subject_id)&.name
+  end
+
+  def hidden_ids
+    @hidden_ids ||= begin
+      plan, scenario_id = @named_in
+      plan.scope_unit_ids.blank? ? Set.new : outside_of(plan, scenario_id)
+    end
+  end
+
+  def outside_of(plan, scenario_id)
+    map = ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure
+    map.outside_ids | map.cut_ids
   end
 end

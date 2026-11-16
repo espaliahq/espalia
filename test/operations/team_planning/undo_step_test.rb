@@ -171,6 +171,16 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
   end
 
+  should "offer the undo of a clear that brings someone back into a scoped plan's units, without naming them" do
+    call(:SetPlanScope, plan_id: @plan_id, unit_ids: [ @engineering ])
+    call(:SetAssignment, as: @editor, plan_id: @plan_id, scenario_id: @q1, person_id: @cy.id, placements: [ { unit_id: @engineering, allocation: 1 } ])
+    assert_equal "Cy Rowe", step[:undo][:subject]
+
+    call(:ClearChange, as: @editor, plan_id: @plan_id, scenario_id: @q1, subject_id: @cy.id, facet: "assignment")
+
+    assert_equal({ action: "clear", subject_id: @cy.id, subject: nil, facet: "assignment" }, step[:undo].slice(:action, :subject_id, :subject, :facet))
+  end
+
   should "offer no redo of a change about someone who has left a scoped plan's units" do
     set_level("4")
     call(:SetPlanScope, plan_id: @plan_id, unit_ids: [ @engineering ])

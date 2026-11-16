@@ -214,7 +214,7 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       OrgGraph::CommandHandler.new(actor: SYSTEM).change_title(@dee.id, "Principal Engineer", **at)
       OrgGraph::CommandHandler.new(actor: SYSTEM).change_manager(@dee.id, @cy.id, **at)
     end
-    record = %w[Attention History Overrides Status SplitNeeds].map { "Operations::TeamPlanning::#{it}" }
+    record = %w[Attention History Overrides Status SplitNeeds UndoStep].map { "Operations::TeamPlanning::#{it}" }
     walk = lambda do
       reads = JSON.parse(every_read(@plan_id, @h1))
       [ @sales, @cy.id, "Cy Quill", "Dee Quill", "Principal Engineer" ].each { assert_not_includes reads.to_json, it }
