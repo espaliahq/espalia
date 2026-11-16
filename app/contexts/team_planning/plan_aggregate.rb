@@ -564,16 +564,13 @@ class TeamPlanning::PlanAggregate
   end
 
   # Narrowing a plan's scope checks only the changes in effect, so a change a
-  # clear took back is one it never saw.
+  # clear or a later change took back is one it never saw.
   #
   # @param scenario_id [String]
   # @param event_id [String] an entry of the scenario's log
-  # @return [TeamPlanning::Events::Change, nil] the change undoing that entry brings back when it is a clear
+  # @return [TeamPlanning::Events::Change, nil] the change of this scenario in effect once that entry is undone
   def restored_by_undo(scenario_id, event_id)
-    entry = log_entry!(live_scenario!(scenario_id), event_id)
-    return unless entry.is_a?(TeamPlanning::Events::ChangeCleared)
-
-    key = key_of(entry)
+    key = key_of(log_entry!(live_scenario!(scenario_id), event_id))
     in_effect(scenario_id, @undone | [ event_id ]).reverse_each.find { it.key == key }
   end
 
