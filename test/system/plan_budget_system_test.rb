@@ -41,6 +41,39 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       end
       assert_no_sideways_overflow
     end
+
+    should "add a line to a scenario, change it, and split a position's funding between two lines" do
+      sign_in_as(@planner.user)
+      visit budget_plan_path(@plan_id, scenario: @q1)
+      click_link_with_js_fallback("Add a line", expect_text: "Add a budget line to Q1 hires")
+      fill_in "budget-line-starts-on", with: @line.starts_on
+      fill_in "budget-line-ends-on", with: @line.ends_on
+      fill_in "budget-line-amount", with: "40,000"
+      fill_in "budget-line-currency", with: "EUR"
+      fill_in "budget-line-cost-centre", with: "Growth"
+      click_button "Add the line"
+      assert_text "Budget line added."
+      assert_text "Cost centre Growth"
+
+      within("[data-budget-line='#{@line.id}']") { click_link "Change" }
+      assert_text "Change"
+      fill_in "budget-line-head-count", with: "2"
+      click_button "Save the line"
+      assert_text "Budget line changed."
+
+      within("[data-budget-line='#{@line.id}']") { first("[data-funding-action]").click }
+      within("#funding-modal") do
+        assert_field "funding[parts][#{@line.id}]", with: "100"
+        assert_no_button "Clear the funding"
+        fill_in "funding[parts][#{@line.id}]", with: "50"
+        find("input[name^='funding[parts]']:not([name$='[#{@line.id}]'])").fill_in(with: "50")
+        click_button "Save funding"
+      end
+      assert_text "Funding set."
+      assert_text "Open · 50% of it · 0.5 FTE"
+      assert_selector "[data-budget-draw]", count: 3, visible: :all
+      assert_no_stolen_taps
+    end
   end
 
   context "on a phone" do
@@ -59,6 +92,22 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       assert_selector "[data-budget-total]", count: 4
       assert_selector "details[open][data-budget-draws]"
       assert_no_sideways_overflow
+    end
+
+    should "set a position's funding from the dialog, then clear it" do
+      sign_in_as(@planner.user)
+      visit budget_plan_path(@plan_id, scenario: @q1)
+      within("[data-budget-line='#{@line.id}']") { first("[data-funding-action]").click }
+      within("#funding-modal") do
+        fill_in "funding[parts][#{@line.id}]", with: "100"
+        click_button "Save funding"
+      end
+      assert_text "Funding set."
+      assert_no_sideways_overflow
+
+      within("[data-budget-line='#{@line.id}']") { first("[data-funding-action]").click }
+      within("#funding-modal") { click_button "Clear the funding" }
+      assert_text "Funding goes back to the line the plan finds."
     end
   end
 
