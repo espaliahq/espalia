@@ -153,7 +153,7 @@ class TeamPlanning::Budget
                                                    .structure(aggregate)
     shared = { context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:, base: }
     funding = TeamPlanning::Funding.new(**shared, map:).call
-    cost = TeamPlanning::Cost.new(**shared, map:).call(at_end: false)
+    cost = TeamPlanning::Cost.new(**shared, map:).call(at_end: false, baseline: false)
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}

@@ -360,7 +360,9 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
       read = ->(query, **shared) { query.new(context:, plan:, scenario_id: @year, aggregate:, **shared) }
 
       assert_equal read.(TeamPlanning::Funding).call, read.(TeamPlanning::Funding, base:, map:).call
-      assert_equal read.(TeamPlanning::Cost).call(at_end: false), read.(TeamPlanning::Cost, base:, map:).call(at_end: false)
+      alone = read.(TeamPlanning::Cost).call(at_end: false)
+      assert_equal alone, read.(TeamPlanning::Cost, base:, map:).call(at_end: false)
+      assert_equal alone.with(baseline: nil), read.(TeamPlanning::Cost, base:, map:).call(at_end: false, baseline: false)
       assert_equal read.(TeamPlanning::Budget).call, read.(TeamPlanning::Budget, base:, map:).call
       assert_equal budget, read.(TeamPlanning::Budget).call
     end

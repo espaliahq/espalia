@@ -286,10 +286,11 @@ class TeamPlanning::Cost
   end
 
   # @param at_end [Boolean] false skips the run rate at the scenario's end, for a caller that never reads it
+  # @param baseline [Boolean] false skips pricing the root, leaving the report's baseline nil, for a caller that never reads it
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call(at_end: true)
+  def call(at_end: true, baseline: true)
     aggregate = prepare
     run_rate = @scenario_id == @plan.id
     earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
@@ -298,7 +299,7 @@ class TeamPlanning::Cost
     rows = TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows
     forecast = forecasted(rows)
     at_end = (run_rate_at_end(scenario.map, rows) if at_end && !run_rate)
-    baseline = priced(at_end ? at_end.baseline.map : resolved(@plan.id)) unless run_rate
+    baseline = (priced(at_end ? at_end.baseline.map : resolved(@plan.id)) if baseline && !run_rate)
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, open_ended: @figured&.open_ended || false,
                horizon_months: @figured&.horizon_months, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: @inputs.bands_changed_at,
