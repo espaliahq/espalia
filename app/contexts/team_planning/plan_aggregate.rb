@@ -109,6 +109,7 @@ class TeamPlanning::PlanAggregate
     @dates_redo = {}
     @undone_at = {}
     @undo_clock = 0
+    @closed = []
   end
 
   # Opens the plan.
@@ -228,6 +229,8 @@ class TeamPlanning::PlanAggregate
     end
     raise TeamPlanning::Error, "This plan already stands on #{@base_on.iso8601}" if base_on == @base_on
     raise TeamPlanning::Error, "This plan stands on #{@base_on.iso8601}, after #{base_on.iso8601}: a base only moves forward" if base_on < @base_on
+
+    raise TeamPlanning::Error, "This plan has a closed step: reopen it to update the plan to today" if @closed.any?
 
     ensure_first_steps_reach!(base_on)
     apply(TeamPlanning::Events::PlanRebased.new(data: {
@@ -350,7 +353,8 @@ class TeamPlanning::PlanAggregate
     relation = relation.to_s
     raise TeamPlanning::Error, "A scenario forks as then or instead" unless FORK_RELATIONS.include?(relation)
 
-    period, closes = forked_period(live_scenario!(parent_id), relation, starts_on:, ends_on:)
+    ensure_fork_open!(live_scenario!(parent_id), relation)
+    period, closes = forked_period(parent_id, relation, starts_on:, ends_on:)
     apply(TeamPlanning::Events::ScenarioForked.new(data: {
       plan_id: @plan_id, scenario_id: scenario_id, parent_id: parent_id, relation: relation,
       name: require_name(name, "scenario"), starts_on: period.begin.iso8601, ends_on: period.end&.iso8601,
@@ -420,7 +424,7 @@ class TeamPlanning::PlanAggregate
   # @raise [Date::Error] for a date that isn't YYYY-MM-DD
   def set_scenario_period(scenario_id, ends_on:, set_by_id:, starts_on: nil)
     ensure_open!
-    write_period(step_with_period!(scenario_id), starts_on, ends_on, set_by_id)
+    write_period(open_step_with_period!(scenario_id), starts_on, ends_on, set_by_id)
   end
 
   # What moving a step's end would do, without doing it: every other live
@@ -435,7 +439,7 @@ class TeamPlanning::PlanAggregate
   # @raise [TeamPlanning::Error] as {#set_scenario_period}
   def period_moves(scenario_id, ends_on:, starts_on: nil)
     ensure_open!
-    scenario_id = step_with_period!(scenario_id)
+    scenario_id = open_step_with_period!(scenario_id)
     moved = moved_period(scenario_id, starts_on, ends_on)
     ensure_periods_fit!(moved)
     ensure_departures_within!(moved)
@@ -445,6 +449,83 @@ class TeamPlanning::PlanAggregate
       [ id, before, after ] unless before == after
     end
     [ scenario_id, period_of(scenario_id, moved), moves ]
+  end
+
+  # Closes a step once its period has ended. Steps close in timeline order,
+  # so the step before it on its path must be the last one closed. From then
+  # on the steps after it stand on the Org Graph ({#standing_after}), and the
+  # closed step, the steps before it and every alternative not taken refuse
+  # changes ({#frozen?}).
+  #
+  # @param scenario_id [String] a step as the timeline lays it out
+  # @param today [Date] as a UTC date
+  # @param closed_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone or archived, the scenario
+  #   unknown or the baseline, already closed or not taken, open-ended or not
+  #   yet ended, or the step before it is still open
+  def close_step(scenario_id, today:, closed_by_id:)
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline can't be closed" if live_scenario!(scenario_id) == @plan_id
+
+    ensure_step_open!(scenario_id)
+    ensure_closable!(scenario_id, today)
+    apply(TeamPlanning::Events::StepClosed.new(data: {
+      plan_id: @plan_id, scenario_id:, ends_on: period_of(scenario_id).end.iso8601, base_on: @base_on.iso8601, closed_by_id:
+    }))
+  end
+
+  # Opens the last step closed again, so the plan stands as it did before.
+  #
+  # @param scenario_id [String]
+  # @param reopened_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone or archived, or the
+  #   scenario isn't the last step closed
+  def reopen_step(scenario_id, reopened_by_id:)
+    ensure_open!
+    live_scenario!(scenario_id)
+    raise TeamPlanning::Error, "This step isn't closed" unless closed?(scenario_id)
+    raise TeamPlanning::Error, "Only the last step closed can be reopened: reopen the steps after it first" unless @closed.last.first == scenario_id
+
+    apply(TeamPlanning::Events::StepReopened.new(data: { plan_id: @plan_id, scenario_id:, reopened_by_id: }))
+  end
+
+  # Why a step can't close yet, as {#close_step} would refuse it, or nil.
+  #
+  # @param scenario_id [String] a live scenario
+  # @param today [Date]
+  # @return [String, nil]
+  def not_closable_because(scenario_id, today)
+    ensure_step_open!(scenario_id)
+    ensure_closable!(scenario_id, today)
+    nil
+  rescue TeamPlanning::Error => e
+    e.message
+  end
+
+  # @return [Array<Array(String, Date)>] each step closed, with the last day of its period, in the order closed
+  def closed_steps = @closed.dup
+
+  # @param scenario_id [String]
+  # @return [Boolean] whether the scenario is a step closed on the timeline
+  def closed?(scenario_id) = @closed.any? { |id, _| id == scenario_id }
+
+  # Whether a scenario takes no more changes: a step closed, a step before
+  # one, or an alternative not taken, which leaves the timeline at a closed
+  # step. The root stays open, as it holds the plan's own inputs.
+  #
+  # @param scenario_id [String] a live scenario or the root
+  # @return [Boolean]
+  def frozen?(scenario_id)
+    scenario_id != @plan_id && path_frozen?(timeline_path(scenario_id))
+  end
+
+  # The last step closed on a scenario's path, when the scenario comes after
+  # it, so the scenario stands on the Org Graph the day after that step ends.
+  #
+  # @param scenario_id [String] a live scenario or the root
+  # @return [Array(String, Date), nil] the step closed and the last day of its period
+  def standing_after(scenario_id)
+    @closed.last unless frozen?(scenario_id) || scenario_id == @plan_id || @closed.empty?
   end
 
   # Removes a scenario nothing forks from.
@@ -458,6 +539,7 @@ class TeamPlanning::PlanAggregate
     scenario = @scenarios[live_scenario!(scenario_id)]
     raise TeamPlanning::Error, "The baseline can't be removed" unless scenario
 
+    ensure_step_open!(scenario_id)
     children = children_of(scenario_id).size
     if children.positive?
       raise TeamPlanning::Error,
@@ -488,6 +570,8 @@ class TeamPlanning::PlanAggregate
   def split_scenario(scenario_id, agreed_id:, name:, event_ids:, split_by_id:, standing_ids: Set.new)
     ensure_open!
     raise TeamPlanning::Error, "The baseline can't be split" unless @scenarios[live_scenario!(scenario_id)]
+
+    ensure_step_open!(scenario_id)
     raise TeamPlanning::Error, "This plan already has that scenario" if scenario_id_taken?(agreed_id)
 
     latest = latest_by_key(changes_in(scenario_id))
@@ -520,6 +604,8 @@ class TeamPlanning::PlanAggregate
   def split_needs(scenario_id, standing_ids: Set.new)
     ensure_open!
     raise TeamPlanning::Error, "The baseline can't be split" unless @scenarios[live_scenario!(scenario_id)]
+
+    ensure_step_open!(scenario_id)
 
     log = @logs.fetch(scenario_id, [])
     latest_by_key(changes_in(scenario_id)).to_h do |change|
@@ -555,7 +641,7 @@ class TeamPlanning::PlanAggregate
     raise ArgumentError, "#{kind} must name its facet and say how it lands on a map" unless kind.complete?
 
     ensure_open!
-    live_scenario!(scenario_id)
+    ensure_step_open!(live_scenario!(scenario_id))
     note = require_note(note)
     yield self if block_given?
     write_change(kind, scenario_id:, subject_id:, set_by_id:, end_state:, note:)
@@ -605,7 +691,8 @@ class TeamPlanning::PlanAggregate
   # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, or nothing carried there stands
   def ensure_settleable!(scenario_id, key)
     ensure_open!
-    carried_conflicts(live_scenario!(scenario_id)).fetch(key) do
+    ensure_step_open!(live_scenario!(scenario_id))
+    carried_conflicts(scenario_id).fetch(key) do
       raise TeamPlanning::Error, "No update to today carried a conflict here forward, so there is nothing to settle: update the plan to today first"
     end
   end
@@ -636,6 +723,7 @@ class TeamPlanning::PlanAggregate
   #   changes the same subject and facet
   def undo_change(scenario_id:, event_id:, undone_by_id:)
     ensure_open!
+    ensure_step_open!(live_scenario!(scenario_id))
     return undo_dates(scenario_id, event_id, undone_by_id) if dates_edit?(event_id)
 
     entry = log_entry!(live_scenario!(scenario_id), event_id)
@@ -676,6 +764,7 @@ class TeamPlanning::PlanAggregate
   #   changes the same subject and facet
   def redo_change(scenario_id:, event_id:, redone_by_id:)
     ensure_open!
+    ensure_step_open!(live_scenario!(scenario_id))
     return redo_dates(scenario_id, event_id, redone_by_id) if dates_edit?(event_id)
 
     entry = log_entry!(live_scenario!(scenario_id), event_id)
@@ -785,6 +874,8 @@ class TeamPlanning::PlanAggregate
   def move_change(scenario_id:, subject_id:, facet:, direction:, moved_by_id:, to_scenario_id: nil)
     ensure_open!
     raise TeamPlanning::Error, "Today can't be edited. Fork a scenario and edit that." if live_scenario!(scenario_id) == @plan_id
+
+    ensure_step_open!(scenario_id)
     raise TeamPlanning::Error, "Only a place, a position or a departure moves between steps" unless MOVABLE_FACETS.include?(facet)
     raise TeamPlanning::Error, "A change moves earlier or later" unless DIRECTIONS.include?(direction)
 
@@ -792,6 +883,7 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "#{this(scenario_id)} doesn't change this, so there is nothing to move" unless own_change?(scenario_id, key)
 
     target_id = move_target(scenario_id, direction, to_scenario_id)
+    ensure_step_open!(target_id)
     moved_event_ids = @logs.fetch(scenario_id).select { key_of(it) == key }.map(&:event_id)
     ensure_movable!(scenario_id, target_id, key)
     ensure_references_kept!(scenario_id, target_id, moved_event_ids)
@@ -813,7 +905,8 @@ class TeamPlanning::PlanAggregate
   # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, or it doesn't change that facet
   def clear_change(scenario_id:, subject_id:, facet:, cleared_by_id:)
     ensure_open!
-    ensure_overrides!(live_scenario!(scenario_id), [ subject_id, facet ])
+    ensure_step_open!(live_scenario!(scenario_id))
+    ensure_overrides!(scenario_id, [ subject_id, facet ])
 
     apply(TeamPlanning::Events::ChangeCleared.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, cleared_by_id: }))
   end
@@ -872,6 +965,8 @@ class TeamPlanning::PlanAggregate
   def ensure_pinnable!(scenario_id, key)
     ensure_open!
     raise TeamPlanning::Error, "The baseline inherits nothing to pin" if live_scenario!(scenario_id) == @plan_id
+
+    ensure_step_open!(scenario_id)
     return unless own_change?(scenario_id, key)
 
     raise TeamPlanning::Error, "#{this(scenario_id)} already changes this: clear it to follow its parent, or set it"
@@ -1133,6 +1228,14 @@ class TeamPlanning::PlanAggregate
     @removed_scenario_ids << event.data[:scenario_id]
   end
 
+  on TeamPlanning::Events::StepClosed do |event|
+    @closed << [ event.data[:scenario_id], Date.iso8601(event.data[:ends_on]) ]
+  end
+
+  on TeamPlanning::Events::StepReopened do |_event|
+    @closed.pop
+  end
+
   # A first step that ends before a new base would leave a gap, so a rebase,
   # and its preview, refuse one.
   #
@@ -1195,7 +1298,7 @@ class TeamPlanning::PlanAggregate
   def dates_edit?(event_id) = @date_edits.include?(event_id)
 
   def undo_dates(scenario_id, event_id, undone_by_id)
-    step_id = step_with_period!(scenario_id)
+    step_id = open_step_with_period!(scenario_id)
     entry = dates_entry!(step_id, event_id)
     raise TeamPlanning::Error, "That change is already undone" if undone?(event_id)
 
@@ -1205,7 +1308,7 @@ class TeamPlanning::PlanAggregate
   end
 
   def redo_dates(scenario_id, event_id, redone_by_id)
-    step_id = step_with_period!(scenario_id)
+    step_id = open_step_with_period!(scenario_id)
     entry = dates_entry!(step_id, event_id)
     raise TeamPlanning::Error, "That change isn't undone, so there is nothing to redo" unless undone?(event_id)
 
@@ -1697,6 +1800,40 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "This plan has no such scenario"
   end
 
+  # A path ends frozen unless it runs through every step closed and on past the last.
+  def path_frozen?(path)
+    return false if @closed.empty?
+
+    taken = timeline_path(@closed.last.first)
+    path.size <= taken.size || path.first(taken.size) != taken
+  end
+
+  def ensure_step_open!(scenario_id)
+    return unless frozen?(scenario_id)
+    raise TeamPlanning::Error, "This step is closed: reopen it to change it" if resolution_chain(@closed.last.first).include?(scenario_id)
+
+    raise TeamPlanning::Error, "This scenario wasn't taken: another step closed in its place"
+  end
+
+  def ensure_closable!(scenario_id, today)
+    ends_on = period_of(scenario_id).end
+    raise TeamPlanning::Error, "A step with no end date can't be closed: give it an end date first" unless ends_on
+    raise TeamPlanning::Error, "This step ends on #{ends_on.iso8601}: it can be closed from the day after" unless ends_on < today
+    raise TeamPlanning::Error, "This step is split: close the rest, which stands on this part" if resting_on(scenario_id).any?
+
+    before = @closed.empty? ? [ @plan_id ] : timeline_path(@closed.last.first)
+    raise TeamPlanning::Error, "Close the step before this one first" unless timeline_path(scenario_id)[0...-1] == before
+  end
+
+  def ensure_fork_open!(parent_id, relation)
+    path = timeline_path(parent_id)
+    path = case relation
+    in "instead" | "on" then path[0...-1] + [ nil ]
+    in "then" then path + [ nil ]
+    end
+    raise TeamPlanning::Error, "A scenario can't fork there: a step closed on the timeline in its place" if path_frozen?(path)
+  end
+
   def children_of(scenario_id) = @scenarios.values.select { it.parent_id == scenario_id }
 
   # A `then` starts where the tree says and ends where asked, or nowhere yet;
@@ -1779,6 +1916,10 @@ class TeamPlanning::PlanAggregate
 
   # The `then` step whose end a period edit moves: the scenario itself, or the
   # agreed part the rest of a split sits on.
+  def open_step_with_period!(scenario_id)
+    step_with_period!(scenario_id).tap { ensure_step_open!(it) }
+  end
+
   def step_with_period!(scenario_id)
     scenario = period_scenario(live_scenario!(scenario_id))
     raise TeamPlanning::Error, "The baseline stands on the base date and has no period" unless scenario

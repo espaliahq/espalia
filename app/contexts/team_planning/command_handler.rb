@@ -326,6 +326,31 @@ class TeamPlanning::CommandHandler
   end
 
   # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param today [Date] as a UTC date
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#close_step
+  def close_step(plan_id, scenario_id, today: Time.now.utc.to_date)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.close_step(scenario_id, today:, closed_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#reopen_step
+  def reopen_step(plan_id, scenario_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.reopen_step(scenario_id, reopened_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
   # @param kind [Class<TeamPlanning::Events::Change>]
   # @param scenario_id [String]
   # @param subject_id [String]
