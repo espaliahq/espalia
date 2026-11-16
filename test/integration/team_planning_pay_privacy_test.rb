@@ -135,12 +135,12 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
     assert_equal [ @plan_id, @q1 ], holder[:steps].pluck(:scenario_id)
     assert_equal call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: @plan_id)[:total][:scenario], holder[:steps].first[:cost]
-    assert_includes holder.to_json, AMOUNT, "Today's run rate is a year of the held pay"
+    assert_pay_figure holder, AMOUNT, "Today's run rate is a year of the held pay"
     [ @editor, @viewer ].each do |account|
       other = call(Operations::TeamPlanning::TimelineFigures, account, plan_id: @plan_id, scenario_id: @q1)
 
       assert_equal [ "band_midpoints", false ], other.values_at(:pay_view, :money)
-      assert_not_includes other.to_json, AMOUNT
+      assert_no_pay_figure other, AMOUNT
     end
   end
 
@@ -722,8 +722,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         if account == @holder
           assert_equal held, figures[:steps].last[:budget][:funded][:native]["AUD"]
         else
-          text = figures.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
-          [ held[0, 5], "500000", "654321", *SCOPED.values ].each { assert_not_includes text, it, who }
+          [ held[0, 5], "500000", "654321", *SCOPED.values ].each { assert_no_pay_figure figures, it, who }
         end
       end
     end
