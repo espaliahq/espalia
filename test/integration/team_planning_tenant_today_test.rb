@@ -189,6 +189,25 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
       assert_equal Time.utc(2026, 11, 2).end_of_day, row.base_known_at
       assert_equal Time.utc(2026, 11, 16).end_of_day, row.archived_known_at
     end
+
+    should "replay a plan created and updated before tenants had zones to UTC day ends" do
+      plan_id = SecureRandom.uuid_v7
+      created = TeamPlanning::Events::PlanCreated.new(data: { plan_id:, name: "Next year", base_on: "2026-11-03",
+                                                              created_by_id: @editor.person_id })
+      rebased = TeamPlanning::Events::PlanRebased.new(data: { plan_id:, base_on: "2026-11-10", previous_base_on: "2026-11-03",
+                                                              conflicts: [], rebased_by_id: @editor.person_id })
+      publish(plan_id, created)
+
+      assert_equal Time.utc(2026, 11, 2).end_of_day, plan(plan_id).base_known_at
+
+      publish(plan_id, rebased)
+      @tenant.update!(time_zone: "America/Los_Angeles")
+      replay(plan_id)
+      row = plan(plan_id)
+
+      assert_nil row.read_attribute(:base_known_at)
+      assert_equal Time.utc(2026, 11, 9).end_of_day, row.base_known_at
+    end
   end
 
   private
@@ -219,6 +238,14 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
   end
 
   def event_store = Rails.configuration.event_store
+
+  def publish(plan_id, event)
+    ActsAsTenant.with_tenant(@tenant) do
+      event_store.with_metadata(tenant_id: @tenant.id) do
+        event_store.publish(event, stream_name: EventStreamNaming.plan_stream(plan_id), expected_version: :any)
+      end
+    end
+  end
 
   def replay(plan_id)
     projection = TeamPlanning::Projections::Plans.new
