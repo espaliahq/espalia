@@ -109,6 +109,8 @@ class TeamPlanning::Status
   # Someone the plan moves out of its units is still its own to plan, so only
   # a subject the baseline also leaves out reads outside.
   def outside?(subject_id)
+    return false if @plan.scope_unit_ids.blank?
+
     @outside_maps ||= [ resolved(@scenario_id), @baseline.structure ]
     @outside_maps.all? { |map| map.outside_ids.include?(subject_id) || map.cut_ids.include?(subject_id) }
   end
