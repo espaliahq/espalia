@@ -65,7 +65,7 @@ class Hris::LevelMirror
   #   writes; by default each change is its own
   # @param brake [Boolean] false for a handover, whose admin has confirmed
   #   what it ends
-  def initialize(provider:, catalogue:, readings:, result:, levels: self.class.levels(provider), today: Date.current,
+  def initialize(provider:, catalogue:, readings:, result:, levels: self.class.levels(provider), today: Tenant.today,
                  cause_id: nil, brake: true)
     @provider = provider
     @levels = levels

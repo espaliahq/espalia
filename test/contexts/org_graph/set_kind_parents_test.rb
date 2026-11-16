@@ -156,6 +156,26 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
                  error.message
   end
 
+  context "on a tenant ahead of UTC, at 09:00 in Sydney" do
+    setup do
+      travel_to Time.utc(2026, 11, 16, 22)
+      @tenant.update!(time_zone: "Australia/Sydney")
+    end
+
+    should "accept a change dated the tenant's today, a day ahead of UTC" do
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: Date.new(2026, 11, 17)) }
+
+      assert_equal [ [ @tribe, @squad ], false ], rules(@squad)
+    end
+
+    should "refuse a change dated the tenant's tomorrow" do
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: Date.new(2026, 11, 18)) }
+      end
+      assert_match "can't be dated after today", error.message
+    end
+  end
+
   should "hold a change of a type's provider to the same dates" do
     @tenant = create(:tenant)
     division, department = SecureRandom.uuid_v7, SecureRandom.uuid_v7

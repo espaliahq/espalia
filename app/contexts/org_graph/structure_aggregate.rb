@@ -856,7 +856,7 @@ class OrgGraph::StructureAggregate
   # them; one that a later move ends before today answers only to those days.
   def ensure_placeable!(provider, level_id, parent_id, on:, until_on: nil)
     rules = taxonomy
-    held_today = until_on.nil? || until_on > iso_date(Date.current)
+    held_today = until_on.nil? || until_on > today
     parent = parent_id && @units[parent_id]
     if parent_id.nil?
       raise "#{rules.kind(level_id).name} can't sit at the top" if held_today && !rules.may_be_top?(level_id)
@@ -1035,7 +1035,7 @@ class OrgGraph::StructureAggregate
   # dated today or earlier. A future-dated change an older stream holds is
   # left out of the comparison, so it can't lock out today's changes.
   def ensure_not_before_last_change!(effective_on)
-    on, today = iso_date(effective_on), Date.current.iso8601
+    on = iso_date(effective_on)
     raise "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan" if on > today
 
     last = @kinds_change_dates.select { it <= today }.max
@@ -1043,6 +1043,8 @@ class OrgGraph::StructureAggregate
 
     raise "The unit types last changed on #{last}, so a change can't be dated before it"
   end
+
+  def today = Tenant.today.iso8601
 
   def normalise_levels(levels)
     levels = Array(levels).map do |level|
