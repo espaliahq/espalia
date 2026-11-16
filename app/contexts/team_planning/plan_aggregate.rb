@@ -72,6 +72,7 @@ class TeamPlanning::PlanAggregate
     @undone = Set.new
     @redo_stacks = {}
     @carried = {}
+    @pinned_from = {}
   end
 
   # Opens the plan.
@@ -467,9 +468,10 @@ class TeamPlanning::PlanAggregate
   # stops reading conflicting: the write is newer than the change the update
   # saw, which ends the conflict ({#carried_conflicts}). Keeping the plan sets
   # the same end state again, or pins it where the scenario inherits the
-  # change; a pin holds its end state in clear, so a sealed one is set. Following reality sets what the Org Graph holds today, in this
-  # scenario only, so the scenario that made the change and its other
-  # children keep it. Either write carries `settles`, the conflict's since and
+  # change or keeps it with its own pin, which the new pin keeps as it was; a
+  # pin holds its end state in clear, so a sealed one is set. Following
+  # reality sets what the Org Graph holds today, in this scenario only, so the
+  # scenario that made the change and its other children keep it. Either write carries `settles`, the conflict's since and
   # the choice, so its history tells it from an ordinary edit.
   #
   # @param kind [Class<TeamPlanning::Events::Change>]
@@ -479,7 +481,8 @@ class TeamPlanning::PlanAggregate
   # @param choice [String] "plan" or "reality"
   # @param end_state [Hash] what to keep, or what the Org Graph holds today, as the kind stores it
   # @param settled_by_id [String] person_id of the actor
-  # @param pinned_from [Array(String, String), nil] for keeping an inherited change, the scenario and event id it keeps
+  # @param pinned_from [Array(String, String), nil] for keeping an inherited change, the scenario and event id it keeps;
+  #   ignored where the scenario's own pin is kept, which keeps what that pin kept
   # @param note [String, nil] why; blank for none
   # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the choice unknown, the note too long,
   #   or no update to today carried a conflict there forward
@@ -488,9 +491,11 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "A conflict is settled by keeping the plan or following reality" unless SETTLE_CHOICES.include?(choice)
 
     settles = { since: since.iso8601, choice: }
-    if choice == "reality" || own_change?(scenario_id, [ subject_id, facet ]) || kind.seals_end_state?
+    own = changes_in(scenario_id).reverse_each.find { it.key == [ subject_id, facet ] }
+    if choice == "reality" || kind.seals_end_state? || (own && !@pinned_from.key?(own.event_id))
       write_change(kind, scenario_id:, subject_id:, set_by_id: settled_by_id, end_state:, note: require_note(note), settles:)
     else
+      pinned_from = @pinned_from.fetch(own.event_id) if own
       write_pin(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id: settled_by_id, pinned_from:, note:, settles:)
     end
   end
@@ -887,6 +892,7 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::ChangePinned do |event|
     data = event.data
+    @pinned_from[event.event_id] = data.values_at(:pinned_from_scenario_id, :pinned_from_event_id)
     record_change(pinned_change(data[:kind].constantize, { plan_id: data[:plan_id], scenario_id: data[:scenario_id],
                                                            subject_id: data[:subject_id], set_by_id: data[:pinned_by_id] },
                                 data[:end_state], event_id: event.event_id))

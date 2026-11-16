@@ -57,6 +57,10 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
 
   def map(scenario_id) = call(:ScenarioMap, plan_id: @plan_id, scenario_id:).to_json
 
+  def departure_override(scenario_id)
+    call(:Overrides, plan_id: @plan_id, scenario_id:)[:overrides].find { it[:subject_id] == @brook.id && it[:facet] == "departure" }
+  end
+
   def refusal(&) = assert_raises(Operations::Base::ParameterError, &).message
 
   def settle_pay(as:)
@@ -203,6 +207,26 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
                  refusal { settle(@q1, "reality") }
     settle(@q1, "plan")
     assert_equal "plan", last_entry(@q1)[:settles]["choice"]
+  end
+
+  should "keep the plan on a scenario's own pin as a pin of the same change, the overrides row still pinned" do
+    call(:SetDeparture, plan_id: @plan_id, scenario_id: @plan_id, person_id: @brook.id)
+    call(:WithdrawDeparture, plan_id: @plan_id, scenario_id: @q1, person_id: @brook.id)
+    call(:PinChange, plan_id: @plan_id, scenario_id: @lean, subject_id: @brook.id, facet: "departure")
+    pinned = departure_override(@lean)
+    assert_equal @q1, pinned[:pinned_from][:scenario_id]
+    travel_to(Time.utc(2026, 3, 20, 9)) { as_tenant { @org.leave(@brook.id, **ESPALIA, effective_on: "2026-03-20") } }
+    rebase
+    departure = -> { call(:Status, plan_id: @plan_id, scenario_id: @lean)[:statuses].find { it[:subject_id] == @brook.id && it[:facet] == "departure" } }
+    assert_equal "2026-03-25", departure.call[:since]
+
+    settle(@lean, "plan", facet: "departure")
+    assert_nil departure.call[:since]
+
+    assert_equal [ "pin", { "since" => "2026-03-25", "choice" => "plan" } ], last_entry(@lean).values_at(:action, :settles)
+    kept = departure_override(@lean)
+    assert kept[:pinned]
+    assert_equal pinned[:pinned_from], kept[:pinned_from]
   end
 
   should "refuse to follow reality for a withdrawn departure once the person has left, while keeping the plan still works" do
