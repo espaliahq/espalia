@@ -49,10 +49,19 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
       assert payments.at_css("[data-map-position]")
     end
 
-    should "carry a clamped role label's full text on hover" do
-      ada = { id: ADA, fte: 1.0, memberships: [ place(PAYMENTS, 1.0, role: "Infrastructure reliability") ] }
+    should "name each group's full role in an eyebrow above its people" do
+      ada = { id: ADA, fte: 1.0, memberships: [ place(PAYMENTS, 1.0, role: "Infrastructure reliability engineering") ] }
+      eyebrow = card(render_map(people: [ ada ]), "Payments").at_css("dt")
 
-      assert_equal "Infrastructure reliability", card(render_map(people: [ ada ]), "Payments").at_css("dt")["title"]
+      assert_equal "Infrastructure reliability engineering", eyebrow.text
+      assert_nil eyebrow["title"]
+      assert_no_match(/line-clamp|truncate|text-ellipsis/, eyebrow["class"])
+    end
+
+    should "call a group with no role No role" do
+      ada = { id: ADA, fte: 1.0, memberships: [ place(PAYMENTS, 1.0, role: nil) ] }
+
+      assert_equal "No role", card(render_map(people: [ ada ]), "Payments").at_css("dt").text
     end
   end
 
