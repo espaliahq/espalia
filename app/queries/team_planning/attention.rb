@@ -475,12 +475,13 @@ class TeamPlanning::Attention
     end
   end
 
-  # A seat that ends with no cost centre: no label, real value or entry gives
-  # it one. A plan where no line and no seat has a cost centre uses none.
+  # A seat held some of the period that ends with no cost centre: no label,
+  # real value or entry gives it one. A plan where no line and no seat has a
+  # cost centre uses none.
   def unplaced
     return [] unless @budget && (@budget.lines.any? { it.line.cost_centre.present? } || @budget.seats.any? { it.cost_centre.present? })
 
-    @budget.seats.select { it.cost_centre.blank? }.uniq { [ it.kind, it.seat_id ] }.map do |seat|
+    @budget.seats.select { it.cost_centre.blank? && it.days.positive? }.uniq { [ it.kind, it.seat_id ] }.map do |seat|
       if seat.kind == "person"
         item(seat.seat_id, ASSIGNMENT, "Has no cost centre: no position label, cost centre of their own or entry gives one", units: [ seat.unit_id ])
       else
@@ -494,20 +495,20 @@ class TeamPlanning::Attention
   def budget_variance
     return [] unless @budget
 
-    lines = @budget.lines.filter_map { |line| over_item(line.line.id, BUDGET_LINE, line.over, broken_by: [ [ line.line.id, BUDGET_LINE ] ]) }
+    lines = @budget.lines.filter_map { |line| over_item(line.line.id, BUDGET_LINE, line.over) }
     centres = @budget.cost_centres.filter_map { |name, totals| name && over_item(name, COST_CENTRE, totals.over) }
     lines + centres + [ over_item(@map.rules.plan_id, BUDGET, @budget.totals.over) ].compact
   end
 
-  # A line in the period nothing draws on.
+  # A line two positions tie on is ambiguous_funding's to fix, so it is not unused.
   def unused_budget_lines
     return [] unless @budget
 
-    drawn = @budget.funding.by_line
+    drawn = @budget.funding.by_line.keys.to_set | funded_positions.flat_map(&:matching_ids)
     period = @budget.period
     @budget.lines.select { |line| line.line.starts_on <= period.end && line.line.ends_on >= period.begin }
-           .reject { drawn.key?(it.line.id) }.map do |line|
-      item(line.line.id, BUDGET_LINE, "Nothing in this scenario draws on it", broken_by: [ [ line.line.id, BUDGET_LINE ] ])
+           .reject { drawn.include?(it.line.id) }.map do |line|
+      item(line.line.id, BUDGET_LINE, "Nothing in this scenario draws on it")
     end
   end
 

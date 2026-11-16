@@ -1523,13 +1523,14 @@ holds no budget line. An archived plan stays unchecked, as before.
   only by a removed line is the existing funding check's item, and a tie is ambiguous.
 - **Ambiguous funding.** A position two or more lines could fund equally well, with no funding
   set to choose.
-- **No cost centre.** A seat no label, real value or entry gives a cost centre, once the plan
+- **No cost centre.** A seat held in the period that no label, real value or entry gives a cost centre, once the plan
   uses cost centres at all: a line names one, or any seat has one. A plan where nothing has a
   cost centre stays quiet.
 - **Over budget.** A line, a cost centre or the whole budget over its approved amount, its head
   count or both, at the scope `budget_strictness` checks. The head count says by how many FTE,
   as heads are not pay. Nothing says by how much money.
 - **Unused budget line.** A line whose period overlaps the scenario's that nothing draws on.
+  A line positions tie on is not unused: choosing a funding fixes it.
 
 The mismatch check, a seat whose rules give a cost centre other than the one it keeps, follows
 in its own change.

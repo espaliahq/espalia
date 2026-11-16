@@ -94,6 +94,7 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
 
     assert_equal [ [ seat, "2 budget lines could fund it equally, and no funding is set" ] ], reasons(:ambiguous_funding)
     assert_empty reasons(:unfunded)
+    assert_empty reasons(:unused_budget_lines), "the tie is the thing to fix, not the lines"
   end
 
   should "mark a seat with no cost centre once a line or another seat has one, and only then" do
@@ -109,6 +110,15 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
 
     line(cost_centre: "Platform")
     assert_includes reasons(:unplaced), [ seat, "Has no cost centre: no label, occupant or entry gives one" ]
+  end
+
+  should "leave out a seat held for none of the period" do
+    line(cost_centre: "Platform")
+    open_position
+    assert_includes reasons(:unplaced).map(&:first), @ada.id
+
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id)
+    assert_not_includes reasons(:unplaced).map(&:first), @ada.id, "a leaver with no date holds the seat for none of the step"
   end
 
   should "mark a line spent past its amount and head count, saying by how many FTE but never by how much money" do
