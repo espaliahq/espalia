@@ -2144,6 +2144,8 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - The next step resolves over the Org Graph, not over what the closed step planned.
 - Changes still pending in the closed step are shown in the next step as carried over.
   This is derived: no event copies them.
+- A seat still open at the close opens the day after it. At a close we know the seat is
+  still open, so its time to hire runs from the day after, as in a fresh plan.
 - The closed step is read as planned against actual, using the Org Graph as of its end (R4).
 - Alternatives to the closed step that were not taken are kept with it and no longer
   offered.
