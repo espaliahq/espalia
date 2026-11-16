@@ -197,11 +197,12 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
       rebased = TeamPlanning::Events::PlanRebased.new(data: { plan_id:, base_on: "2026-11-10", previous_base_on: "2026-11-03",
                                                               conflicts: [], rebased_by_id: @editor.person_id })
       publish(plan_id, created)
+      @tenant.update!(time_zone: "America/Los_Angeles")
+      replay(plan_id)
 
       assert_equal Time.utc(2026, 11, 2).end_of_day, plan(plan_id).base_known_at
 
       publish(plan_id, rebased)
-      @tenant.update!(time_zone: "America/Los_Angeles")
       replay(plan_id)
       row = plan(plan_id)
 
