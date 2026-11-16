@@ -75,8 +75,16 @@ export default class extends BaseController {
     if (!item) return
 
     // The page still shows the old step until Turbo's redirect lands, and a
-    // second drop from it would move the change twice.
+    // second drop from it would move the change twice. A request that fails
+    // leaves the page as it was, so it frees the grips again.
     this.sent = true
+    const path = new URL(item.href).pathname
+    const settled = e => {
+      if (new URL(e.target.action).pathname !== path) return
+      document.removeEventListener("turbo:submit-end", settled)
+      if (!e.detail.success) this.sent = false
+    }
+    document.addEventListener("turbo:submit-end", settled)
     item.click()
   }
 

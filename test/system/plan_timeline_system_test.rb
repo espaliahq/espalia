@@ -292,6 +292,26 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         assert_selector "body[data-shift-posts='1']"
       end
 
+      should "free the grips again when a move's request fails" do
+        page.execute_script(<<~JS)
+          const send = window.fetch
+          window.fetch = (url, options = {}) => {
+            if ((options.method || "GET").toUpperCase() !== "POST") return send(url, options)
+            document.body.dataset.failedPosts = "1"
+            return Promise.reject(new TypeError("Failed to fetch"))
+          }
+        JS
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        release
+        assert_selector "body[data-failed-posts='1']"
+        assert_no_selector MOVE_FORM, visible: :all
+
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
+        press_escape
+        release
+      end
+
       should "save nothing for a drop above the grid, over a lit column" do
         hold_move_requests
         step = find("[data-timeline-step='2']")
