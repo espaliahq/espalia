@@ -88,6 +88,39 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_selector "[data-change-note-editor] summary", text: "Add a note"
     end
 
+    should "hold a long note to three lines until asked, without widening the row" do
+      long_note_on_bo
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_clamped_note_opens
+    end
+
+    should "show a note that fits three lines whole, with no toggle" do
+      medium_note_on_bo
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-planned-change='done'] [data-change-note]", text: "every weekend in the quarter"
+      assert_no_selector "[data-change-note-more] summary", visible: true
+    end
+
+    should "show a pay change's note to a member with the see-pay right, and neither the note nor its form to anyone else" do
+      call(Operations::TeamPlanning::SetActualPay, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
+                                                             amount: "93871", currency: "AUD", period: "year", basis: "full_time")
+      pay_id = call(Operations::TeamPlanning::Status, @planner, plan_id: @plan_id, scenario_id: @q1)[:statuses]
+               .find { it[:facet] == "data:pay" }[:change_id]
+      call(Operations::TeamPlanning::NoteChange, @planner, plan_id: @plan_id, scenario_id: @q1, event_id: pay_id, note: "Matched to 93871")
+
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-planned-change='plan_only']", text: "Ada Quill"
+      assert_no_text "Matched to"
+      assert_no_selector "[data-planned-change] [data-change-note]"
+
+      call(Operations::TeamPlanning::GrantSeePay, @planner, plan_id: @plan_id, person_id: @viewer.person.id)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-planned-change='plan_only'] [data-change-note]", text: "Matched to 93871"
+    end
+
     should "show a viewer the note but no way to change it" do
       call(Operations::TeamPlanning::NoteChange, @planner, plan_id: @plan_id, scenario_id: @q1, event_id: bo_change_id,
                                                            note: "Agreed in the October 1:1")
@@ -187,6 +220,25 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    should "hold a long note to three lines on a phone until asked, without widening the page" do
+      long_note_on_bo
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_clamped_note_opens
+    end
+
+    should "hold a medium note to three lines on a phone, where it runs longer" do
+      medium_note_on_bo
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      note = "[data-planned-change='done'] [data-change-note]"
+      assert_selector note, text: "Bo moves to Growth"
+      assert_operator note_lines(note), :<=, 3
+
+      click_selector_with_js_fallback("[data-planned-change='done'] [data-change-note-more] summary", expect_text: "Show less")
+      assert_operator note_lines(note), :>, 3
+    end
+
     should "note a change in a form that fits, and mark a note erased with its person as removed, with no way to write another" do
       sign_in_as(@planner.user)
       visit changes_plan_path(@plan_id, scenario: @q1)
@@ -259,6 +311,38 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
                               .change_level(@ada.id, "6", **ESPALIA, effective_on: Date.current.iso8601)
     end
+  end
+
+  LONG_NOTE = (("Bo moves to Growth once the second hire lands and the on-call rota has a replacement for the weekend. " * 5) +
+              "https://example.test/notes/#{'a' * 90}").freeze
+  MEDIUM_NOTE = "Bo moves to Growth once the second hire lands, and the on-call rota has a replacement for every weekend in the quarter.".freeze
+
+  def medium_note_on_bo
+    call(Operations::TeamPlanning::NoteChange, @planner, plan_id: @plan_id, scenario_id: @q1, event_id: bo_change_id, note: MEDIUM_NOTE)
+  end
+
+  def long_note_on_bo
+    call(Operations::TeamPlanning::NoteChange, @planner, plan_id: @plan_id, scenario_id: @q1, event_id: bo_change_id, note: LONG_NOTE)
+  end
+
+  def assert_clamped_note_opens
+    note = "[data-planned-change='done'] [data-change-note]"
+    assert_selector note, text: "Bo moves to Growth"
+    assert_operator note_lines(note), :<=, 3
+    assert_no_sideways_overflow
+
+    click_selector_with_js_fallback("[data-planned-change='done'] [data-change-note-more] summary", expect_text: "Show less")
+    assert_operator note_lines(note), :>, 3
+    assert_no_sideways_overflow
+  end
+
+  def note_lines(selector)
+    evaluate_script(<<~JS)
+      (() => {
+        const note = document.querySelector("#{selector}")
+        return Math.round(note.getBoundingClientRect().height / parseFloat(getComputedStyle(note).lineHeight))
+      })()
+    JS
   end
 
   def today_label = I18n.l(Time.now.utc.to_date, format: "%-d %b %Y")

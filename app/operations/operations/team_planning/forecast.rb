@@ -22,7 +22,7 @@ class Operations::TeamPlanning::Forecast < Operations::Base
               "change the rule to change it. The plan's own id, Today, has no period and so no rows. A step with no " \
               "end date forecasts over the plan's open_step_horizon rule in whole months from its start, with open_ended " \
               "true and horizon_months the months shown; otherwise open_ended is false and horizon_months null. Figures are " \
-              "decimal strings. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
+              "decimal strings. #{PRICED_AS_ARCHIVED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -41,7 +41,7 @@ class Operations::TeamPlanning::Forecast < Operations::Base
       measured = capacity.forecast.index_by { key(it) }
       cost.forecast.rows.map { row(it.with(capacity: measured[key(it)]&.capacity || {}), names) }
     end
-    { plan_id: plan.id, **priced_today(plan), scenario_id:, open_ended: cost.open_ended, horizon_months: cost.horizon_months, rows: }
+    { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, open_ended: cost.open_ended, horizon_months: cost.horizon_months, rows: }
   end
 
   private

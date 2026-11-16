@@ -142,7 +142,7 @@ Every change event has the same shape:
 
 | Group | Events |
 |---|---|
-| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanArchived`, `PlanRestored`, `PlanDeleted` |
+| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanArchived`, `PlanPricesFrozen` (the pricing inputs an archive holds to), `PlanRestored`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
 | People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
@@ -761,7 +761,7 @@ it once, for the scenario and the baseline together.
 Every figure stays in its band's currency, exact, and the totals hold one sum per currency.
 Each converts once, at the read, at the rate in force on the period's first day. A missing
 rate leaves the converted total empty and names the pair and the date. Only the display
-rounds. Plans reprice live: a changed band changes every plan's cost, and the report says
+rounds. A live plan reprices: a changed band changes its cost, and the report says
 when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
 time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
 to a rate, reprices plans too but does not move the stamp.
@@ -1055,6 +1055,19 @@ change and pin may carry a `note`, the planner's reason, such as why someone mov
   it was made with; each `note` row keeps one rewrite and names the change in
   `noted_event_id`. `team_planning_overrides` and `team_planning_history` show it as
   `{ value: }`.
+- **A note on a pay change reaches only a member who sees pay**
+  ([#292](https://github.com/espaliahq/espalia/issues/292)). A note is free text, so it
+  may state an amount. `Operations::TeamPlanning::ChangeNote` decides, once, whether a
+  reader may see a change's note, and status, overrides and history each ask it. Anyone
+  else gets no note on a `data:pay` change and no sign one exists: no `note` key, no
+  `note` entry in the history, and no note form on the Changes tab. The right is read on
+  every request, so withdrawing it hides those notes at once. Every other read carries
+  no note: the timeline, rebase preview, move, split, fork and frozen-plan reads return
+  none, and a refused note write names only the limit it broke.
+- **A long note shows three lines.** The Changes tab clamps a note over 320 characters,
+  or of four lines or more not counting blank ones, behind a native `details` toggle,
+  with no JavaScript. A note over 100 characters clamps only below `md`, where a row is
+  narrow, so a toggle never opens a note that already fits.
 - **No rebuild.** No stored event held a note before 3.13b and the new columns start empty,
   so neither projection's `CODE_VERSION` moved.
 
@@ -1085,10 +1098,33 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
   with `checked: false` and a note beside `archived_on`, so an empty list is never read
   as "nothing wrong". Restoring checks the plan again against everything since its base
   date, the time it sat archived included.
-- The figures don't stand still. Cost, scenario costs, capacity, forecast, budget,
-  funding and budget lines still price with today's bands, rates and rules, and say so
-  in a note. Freezing them is a pay-path change, left to
-  [#394](https://github.com/espaliahq/espalia/issues/394).
+- The figures stand still too
+  ([#394](https://github.com/espaliahq/espalia/issues/394)). Archiving records
+  `PlanPricesFrozen` beside `PlanArchived`: a copy of the tenant's pay bands, reference
+  currency, exchange rates, budget lines and planning rule defaults, sealed under the
+  plan's key. Every pricing read takes its inputs from `TeamPlanning::PricingInputs`,
+  which serves the copy for an archived plan and the tables for a live one. Cost,
+  scenario costs, capacity, forecast, budget, funding and budget lines then return
+  `priced_on` and a note: priced as on the archive day.
+- What stays live is structure. Framework roles and levels, and HRIS title mappings, say
+  who is at which level, not what a level costs. A plan reads the Org Graph as known the
+  day before its base date, or on the archive day if that comes first, so someone
+  recorded as leaving after the archive moves no archived figure. Actual pay is never in
+  the copy: it stays sealed per person, and the reader's see-pay view applies at read
+  time, so forgetting a person still removes it.
+- The copy carries tenant configuration text as it stood: location, cost centre, a
+  cost-centre rule's label, on-cost item names and country keys. Forgetting a person
+  doesn't scrub it, the same as the live tables; the wider free-text question is
+  [#110](https://github.com/espaliahq/espalia/issues/110). Who last edited a row is
+  left out.
+- A restore sets the copy aside, and the plan prices with today's inputs again.
+  Archiving again takes a fresh copy. The old event is never read after a restore,
+  though it stays readable under the plan's key until the plan is deleted.
+- A plan archived before the copy existed, or where the plan keys were unavailable, has
+  none. It reads live and keeps the note saying its figures use today's.
+- `TeamPlanningFrozenPricesTest` changes every input in turn and checks no read moves,
+  and fails if a frozen read queries a table outside the plan and the organisation's
+  structure, so a new input can't bypass the copy.
 - The plans list shows live plans by default; `state` asks for archived ones, or all.
   On the web a Live and Archived switch does the same, and the plan page carries a banner
   with the day, the editor and, for editors, a Restore button.
@@ -1359,7 +1395,7 @@ to each group that found something.
 
 Each item names its subject, the reason, the change behind it and its `sources`. Attention names
 units, positions and successions the way the scenario's map does. One the map no longer holds
-has no name, and a succession calls a missing side "A removed unit". The change links to its row on the Changes tab, which carries the id
+has no name, and a succession calls a missing side "A removed unit". A budget line reads as its role and level, or "Any role", then its cost centre; a cost centre reads as its own name. The change links to its row on the Changes tab, which carries the id
 `change-<change_id>`, whenever that tab lists it for the same scenario; a change it doesn't list
 is named without a link. An item no change explains says so.
 
@@ -1529,7 +1565,31 @@ A draw on a line the scenario no longer holds funds nothing, and the checks flag
 do a funding on a closed position. Funded counts the positions funded whole and the FTE each
 draw funds, so funded and unfunded always add up to the scenario's positions and FTE. That
 holds whether or not a pay band prices a position: one with no band is still funded or
-unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
+unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read, and the 6.6 checks surface them.
+
+As built in 6.6 ([#421](https://github.com/espaliahq/espalia/issues/421)): five budget checks
+join `TeamPlanning::Attention`, the Checks tab and `team_planning_attention`. Each reads one
+`TeamPlanning::Budget` report for the scenario, built as the viewer, and works out no figure
+of its own. A check names seats, budget lines and cost centres, and never an amount, so held pay
+can tip a line over for someone with the see-pay right and never shows them, or anyone else, a
+figure. The baseline has no period, so it has no budget checks, and neither has a scenario that
+holds no budget line. An archived plan stays unchecked, as before.
+
+- **Unfunded.** A held position no line matches, with no funding set. A share left unfunded
+  only by a removed line is the existing funding check's item, and a tie is ambiguous.
+- **Ambiguous funding.** A position two or more lines could fund equally well, with no funding
+  set to choose.
+- **No cost centre.** A seat held in the period that no label, real value or entry gives a cost centre, once the plan
+  uses cost centres at all: a line names one, or any seat has one. A plan where nothing has a
+  cost centre stays quiet.
+- **Over budget.** A line, a cost centre or the whole budget over its approved amount, its head
+  count or both, at the scope `budget_strictness` checks. The head count says by how many FTE,
+  as heads are not pay. Nothing says by how much money.
+- **Unused budget line.** A line whose period overlaps the scenario's that nothing draws on.
+  A line positions tie on is not unused: choosing a funding fixes it.
+
+The mismatch check, a seat whose rules give a cost centre other than the one it keeps, follows
+in its own change.
 
 As built in 6.5 ([#384](https://github.com/espaliahq/espalia/issues/384)): the
 `budget_strictness` rule says how strictly positions follow budget lines. It is plan-wide, like

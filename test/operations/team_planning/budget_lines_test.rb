@@ -43,7 +43,7 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError, &).message
   end
 
-  def attention(scenario_id = @q2) = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id:)[:items]
+  def attention(scenario_id = @q2) = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id:)[:items].select { it[:check] == "budget_lines" }
 
   should "give every scenario the organisation's lines, an amount in its own currency and a head count with no amount" do
     assert_equal [ [ @engineers.id, "tenant", "480000.00", "AUD", "year", "4.00" ], [ @support.id, "tenant", nil, nil, nil, "2.00" ] ],

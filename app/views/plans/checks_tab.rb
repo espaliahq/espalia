@@ -23,7 +23,12 @@ class Views::Plans::ChecksTab < Views::Base
     overloaded: [ "Overloaded managers", "Seats whose reports cost more to manage than the seat delivers." ],
     unclassified: [ "Capacity", "Places no capacity model covers." ],
     budget_lines: [ "Budget lines", "Changes to budget lines the organisation has since removed." ],
-    fundings: [ "Funding", "Funding set on a position that has closed, or on a budget line this scenario no longer holds." ]
+    fundings: [ "Funding", "Funding set on a position that has closed, or on a budget line this scenario no longer holds." ],
+    unfunded: [ "Unfunded positions", "Held positions no budget line matches, with no funding set." ],
+    ambiguous_funding: [ "Ambiguous funding", "Positions more than one budget line could fund, with no funding set to choose." ],
+    unplaced: [ "No cost centre", "Seats with no cost centre: no label, cost centre of their own or entry gives one." ],
+    budget_variance: [ "Over budget", "Budget lines, cost centres or the whole budget over their approved amount or head count." ],
+    unused_budget_lines: [ "Unused budget lines", "Budget lines in this scenario's period that nothing draws on." ]
   }.freeze
   # @param check [String, Symbol]
   # @return [String] the group's heading, or the key itself for a check with none

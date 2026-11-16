@@ -20,6 +20,8 @@ class Views::Plans::ChangesTab < Views::Base
   STAYING = "Staying"
   PLAN_ONLY = "Only in this plan"
   WHOLE_PLAN = "The whole plan"
+  NARROW_NOTE = 100
+  WIDE_NOTE = 320
 
   # @param plan [Hash] from `team_planning_plan`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
@@ -27,9 +29,11 @@ class Views::Plans::ChangesTab < Views::Base
   # @param status [Hash] from `team_planning_status`, for the scenario shown
   # @param attention [Hash] from `team_planning_attention`, for the same scenario
   # @param can_edit [Boolean] whether the viewer may note a change or settle a conflict
-  def initialize(plan:, scenarios:, drift:, status:, attention:, can_edit: false)
+  # @param see_pay [Boolean] whether the viewer holds the see-pay right, without which a pay change takes no note from them
+  def initialize(plan:, scenarios:, drift:, status:, attention:, can_edit: false, see_pay: false)
     @plan = plan
     @can_edit = can_edit
+    @see_pay = see_pay
     @scenarios = scenarios
     @drift = drift
     @status = status
@@ -178,7 +182,7 @@ class Views::Plans::ChangesTab < Views::Base
         end
         planned_in(entry[:scenario_id]) if entry[:scenario_id] != scenario_id
         change_note(entry[:note])
-        note_form(entry) if @can_edit && !entry.dig(:note, :removed)
+        note_form(entry) if notable?(entry)
         settle(entry) if @can_edit && entry[:status].to_s == "conflicting"
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
@@ -230,9 +234,35 @@ class Views::Plans::ChangesTab < Views::Base
   def change_note(note)
     if note&.dig(:removed)
       p(class: "text-sm italic text-muted", data: { change_note: "removed" }) { "Note removed" }
+    elsif note && (reach = clamp_reach(note[:value]))
+      narrow = reach == :narrow
+      div(class: "group/note space-y-1") do
+        render Components::Kit::Prose.new(note[:value], class: [ "text-sm text-muted break-words line-clamp-3 group-has-[details[open]]/note:line-clamp-none", ("md:line-clamp-none" if narrow) ].compact.join(" "),
+                                                        data: { change_note: "" })
+        details(data: { change_note_more: "" }, class: [ "group/more text-xs", ("md:hidden" if narrow) ].compact.join(" ")) do
+          summary(class: "inline-flex min-h-6 w-fit cursor-pointer list-none items-center rounded font-medium text-link hover:underline " \
+                         "[&::-webkit-details-marker]:hidden") do
+            span(class: "group-open/more:hidden") { "Show the whole note" }
+            span(class: "hidden group-open/more:inline") { "Show less" }
+          end
+        end
+      end
     elsif note
       render Components::Kit::Prose.new(note[:value], class: "text-sm text-muted break-words", data: { change_note: "" })
     end
+  end
+
+  # Where a note may run past the three lines a row shows: everywhere, only on
+  # a row as narrow as a phone's, or nowhere. Lengths are a row's three lines
+  # at each width, so a toggle never opens a note that already fits.
+  def clamp_reach(text)
+    if text.length > WIDE_NOTE || text.lines.count { it.strip.present? } > 3 then :everywhere
+    elsif text.length > NARROW_NOTE then :narrow
+    end
+  end
+
+  def notable?(entry)
+    @can_edit && !entry.dig(:note, :removed) && Operations::TeamPlanning::ChangeNote.visible?(entry[:facet], see_pay: @see_pay)
   end
 
   # The note is written on the scenario that made the change, which for an

@@ -59,6 +59,21 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       click_link_with_js_fallback("Review them in Checks", expect_text: "Checks on Q1 hires")
       assert_selector "#checks-placements [data-check-item]", text: "Placed in a retired unit"
     end
+
+    should "list a budget line nothing draws on under its own heading, with no amount" do
+      idle_line
+      sign_in_as(@planner.user)
+      visit checks_plan_path(@plan_id, scenario: @q1)
+      assert_text "Checks on Q1 hires"
+
+      within("#checks-unused-budget-lines") do
+        assert_selector "h4", text: "Unused budget lines"
+        assert_selector "[data-check-item]", text: /Any role · Growth.*Nothing in this scenario draws on it/m
+        assert_no_text "90,000"
+      end
+      assert_includes all("nav[aria-label='Checks'] a").map { it.text.squish }, "Unused budget lines 1"
+      assert_no_sideways_overflow
+    end
   end
 
   context "on a phone" do
@@ -78,9 +93,26 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_selector "#checks-placements [data-check-item]", text: "Placed in a retired unit"
       assert_no_sideways_overflow
     end
+
+    should "read a budget line nothing draws on without scrolling sideways" do
+      idle_line
+      sign_in_as(@planner.user)
+      visit checks_plan_path(@plan_id, scenario: @q1)
+      assert_text "Checks on Q1 hires"
+
+      assert_selector "#checks-unused-budget-lines [data-check-item]", text: /Any role · Growth.*Nothing in this scenario draws on it/m
+      assert_no_sideways_overflow
+    end
   end
 
   private
+
+  def idle_line
+    ActsAsTenant.with_tenant(@tenant) do
+      BudgetLine.create!(starts_on: Date.current - 60, ends_on: Date.current + 300, origin: "new", amount: 90_000, currency: "AUD",
+                         period: "year", cost_centre: "Growth")
+    end
+  end
 
   def account(role: :member, name: "Someone", **grants)
     user = create(:user, password: TEST_PASSWORD)

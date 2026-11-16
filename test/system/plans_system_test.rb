@@ -103,7 +103,7 @@ class PlansSystemTest < ApplicationSystemTestCase
         click_selector_with_js_fallback("##{Views::Plans::ArchiveDialog::ID} button[type='submit']", expect_text: "Plan archived.")
 
         assert_text "Archived on"
-        assert_text "still use today's pay bands"
+        assert_text "budget lines and rules of"
         assert_button "Restore plan"
         assert_no_button "Archive plan"
         assert_no_sideways_overflow

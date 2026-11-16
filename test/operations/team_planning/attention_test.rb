@@ -264,6 +264,19 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ @ada.id, @bo.id ].sort, read[:items].map { it[:subject_id] }
   end
 
+  should "list the budget checks' rows by check, naming a line nothing draws on and no amount" do
+    idle = ActsAsTenant.with_tenant(@tenant) do
+      BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 90_000, currency: "AUD", period: "year", cost_centre: "Growth").id
+    end
+
+    read = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @q1)
+    row = read[:items].find { it[:check] == "unused_budget_lines" }
+
+    assert_equal [ idle, "budget_line", "Nothing in this scenario draws on it" ], row.values_at(:subject_id, :facet, :reason)
+    assert_equal "Any role · Growth", read[:names][idle]
+    assert_not_includes read.to_json, "90000"
+  end
+
   should "refuse someone outside the plan, and a plan in another tenant" do
     assert_equal "No such plan", assert_raises(Operations::Base::ParameterError) { attention(as: @outsider) }.message
 

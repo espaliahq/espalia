@@ -333,13 +333,26 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
     end
 
     should "be archived and restored by an editor, and by nobody else" do
-      event = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).to_a.last
-      assert_kind_of TeamPlanning::Events::PlanArchived, event
+      event = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).of_type(TeamPlanning::Events::PlanArchived).last
       assert_equal({ plan_id: @plan_id, archived_by_id: @editor.id }, event.data)
 
       assert_equal "No such plan", assert_raises(TeamPlanning::Error) { handler(@colleague_context).restore_plan(@plan_id) }.message
       assert_not handler(@owner).restore_plan(@plan_id).archived?
       assert_equal "No such plan", assert_raises(TeamPlanning::Error) { handler(@colleague_context).archive_plan(@plan_id) }.message
+    end
+
+    should "copy the tenant's pricing inputs with the archive, sealed under the plan's key and naming nobody" do
+      frozen = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).to_a.last
+      assert_kind_of TeamPlanning::Events::PlanPricesFrozen, frozen
+      assert_equal %w[budget_lines exchange_rates pay_bands pay_bands_changed_at planning_rule_defaults reference_currencies],
+                   frozen.data[:inputs].reveal.keys.sort
+      stored = ActiveRecord::Base.connection.select_value(
+        ActiveRecord::Base.sanitize_sql_array([ "SELECT convert_from(data, 'UTF8') FROM event_store_events WHERE event_id = ?", frozen.event_id ])
+      )
+      assert_not_includes stored, "pay_bands"
+
+      PlanKeyStore.new.forget(PlanKeyStore.plan_identifier(@tenant.id, @plan_id))
+      assert_predicate event_store.read.event(frozen.event_id).data[:inputs], :removed?
     end
 
     should "refuse an editor's write with the archived message" do

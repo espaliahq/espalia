@@ -145,8 +145,15 @@ class Views::Plans::ShowView < Views::Base
     render Components::Kit::Alert.new(tone: :info, title:, class: "mt-4") do |alert|
       alert.action { restore_button } if @can_restore
       p { "Nobody can change this plan, and it isn't checked against the organisation, until an editor restores it." }
-      p(class: "mt-1") { "Its costs, budgets and capacity still use today's pay bands, exchange rates and rules." }
+      p(class: "mt-1") { pricing_line(archived[:priced_on]) }
     end
+  end
+
+  def pricing_line(priced_on)
+    return "Its costs, budgets and capacity still use today's pay bands, exchange rates and rules." unless priced_on
+
+    "Its costs, budgets and capacity use the pay bands, exchange rates, budget lines and rules of " \
+      "#{Date.iso8601(priced_on).strftime("%-d %B %Y")}. Framework roles and levels are read as they are now."
   end
 
   def restore_button
