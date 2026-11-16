@@ -62,7 +62,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
       second = Thread.new do
         on_another_connection { |connection| pids << connection.select_value("SELECT pg_backend_pid()"); PayBand.reorder!(read.rotate, from: read) }
       end
-      assert_waiting_for_list(pids.pop, second)
+      assert_waiting_for_list(pids, second)
     end
 
     assert_equal :stale, second.value
@@ -80,7 +80,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
           PayBand.new(location: "Lemuria", currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2).tap { it.match_on }.tap(&:save!)
         end
       end
-      assert_waiting_for_list(pids.pop, added)
+      assert_waiting_for_list(pids, added)
     end
 
     added.join
@@ -113,7 +113,8 @@ class PayBandLockingTest < ActiveSupport::TestCase
 
   # Polls until the worker's backend waits on an advisory lock, so the test
   # proves contention rather than a worker that simply hadn't started.
-  def assert_waiting_for_list(pid, worker, within: 5)
+  def assert_waiting_for_list(pids, worker, within: 5)
+    pid = pids.pop(timeout: within) or flunk "the worker never reported its connection"
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + within
     until PayBand.connection.select_value(PayBand.sanitize_sql_array([ "SELECT 1 FROM pg_locks WHERE pid = ? AND locktype = 'advisory' AND NOT granted", pid ]))
       flunk "the worker finished while the list was held" unless worker.alive?
