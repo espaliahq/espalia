@@ -14,6 +14,10 @@
 #   say what it planned.
 # - **plan_only**: the Org Graph never holds what it plans, such as a rule, a
 #   position, a hire the plan adds or a person's pay, so it is never compared.
+# - **outside**: the change is about someone or some unit a scoped plan no
+#   longer covers: outside its units at the base and in the scenario. The scope hides the organisation's data about them, so it
+#   is never compared, and its entry carries no since, sources or name
+#   ([#435](https://github.com/espaliahq/espalia/issues/435)).
 #
 # A plan whose base is still to come holds every change against today, so
 # nothing it plans reads conflicting before the plan starts.
@@ -59,7 +63,7 @@ class TeamPlanning::Status
     def initialize(staying: false, **) = super
   end
 
-  STATUSES = %i[done pending conflicting unknown plan_only].freeze
+  STATUSES = %i[done pending conflicting unknown plan_only outside].freeze
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -90,6 +94,7 @@ class TeamPlanning::Status
     changes = winning(@scenario_id)
     return Report.new(on: @today, statuses: [], names: {}) if changes.empty?
 
+    outside, changes = changes.partition { |(subject_id, _), _| outside?(subject_id) }.map(&:to_h)
     tracked = tracked(changes)
     now, base = maps
     units = tracked.to_h { |key, change| [ key, units_of(change, key, now) ] }
@@ -97,10 +102,29 @@ class TeamPlanning::Status
     statuses = changes.map do |key, change|
       tracked.key?(key) ? entry(change, key, base:, now:, unit_ids: units[key]) : plan_only(change, key)
     end
-    Report.new(on: @today, statuses:, names: names_for(statuses.map(&:subject_id), base, now))
+    Report.new(on: @today, statuses: in_order(statuses + outside.map { outside_entry(*it) }),
+               names: names_for(statuses.map(&:subject_id), base, now))
   end
 
   private
+
+  # Someone the plan moves out of its units is still its own to plan, so only
+  # a subject the baseline also leaves out reads outside.
+  def outside?(subject_id)
+    return false if @plan.scope_unit_ids.blank?
+
+    @outside_ids ||= [ resolved(@scenario_id), @baseline.structure ].map { it.outside_ids | it.cut_ids }
+    @outside_ids.all? { it.include?(subject_id) }
+  end
+
+  def outside_entry((subject_id, facet), change)
+    Entry.new(scenario_id: change.data[:scenario_id], change_id: change.event_id, subject_id:, facet:, status: :outside, since: nil, sources: [])
+  end
+
+  def in_order(statuses)
+    order = winning(@scenario_id).values.each_with_index.to_h { |change, index| [ change.event_id, index ] }
+    statuses.sort_by { order.fetch(it.change_id) }
+  end
 
   # A placeholder hire never reaches the Org Graph, so nothing it holds is compared.
   def tracked(changes)

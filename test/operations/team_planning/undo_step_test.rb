@@ -107,7 +107,7 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     set_pay
 
     assert_equal [ "set", "data:pay" ], step[:undo].values_at(:action, :facet)
-    assert_not_includes step.to_json, PAY[:amount]
+    assert_no_pay_figure step, PAY[:amount]
   end
 
   should "offer the latest other change as undo once the see-pay right is withdrawn" do
@@ -169,6 +169,16 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
 
     assert_nil step[:undo]
     assert_raises(Operations::Base::ParameterError) { call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
+  end
+
+  should "offer the undo of a clear that brings someone back into a scoped plan's units, without naming them" do
+    call(:SetPlanScope, plan_id: @plan_id, unit_ids: [ @engineering ])
+    call(:SetAssignment, as: @editor, plan_id: @plan_id, scenario_id: @q1, person_id: @cy.id, placements: [ { unit_id: @engineering, allocation: 1 } ])
+    assert_equal "Cy Rowe", step[:undo][:subject]
+
+    call(:ClearChange, as: @editor, plan_id: @plan_id, scenario_id: @q1, subject_id: @cy.id, facet: "assignment")
+
+    assert_equal({ action: "clear", subject_id: @cy.id, subject: nil, facet: "assignment" }, step[:undo].slice(:action, :subject_id, :subject, :facet))
   end
 
   should "offer no redo of a change about someone who has left a scoped plan's units" do
@@ -289,12 +299,12 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
       assert_equal({ "level" => true, "data:pay" => false }, clearable)
     end
 
-    should "not mark a change about someone who has left a scoped plan's units" do
+    should "still mark a change about someone who has left a scoped plan's units, so it can be removed" do
       call(:SetPlanScope, plan_id: @plan_id, unit_ids: [ @engineering ])
       assert_equal [ true ], clearable.values.uniq
 
       as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).move_membership(@ada.id, @engineering, @sales, effective_on: "2026-01-15") }
-      assert_equal [ false ], clearable.values.uniq
+      assert_equal [ true ], clearable.values.uniq
     end
   end
 end
