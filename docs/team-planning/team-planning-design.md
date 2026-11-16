@@ -244,13 +244,19 @@ The move is refused into the baseline, past the last step, into a step that alre
 the same thing (naming that change), past a step in between that does, as the step an
 alternative stands in for may, into or out of a split step, and for a departure whose date
 falls outside the step it would reach. It is refused, too, when it would leave a change
-without the position it fills, or bring a change ahead of the position it needs. When more than one step follows, the editor
+without the position it fills, or bring a change ahead of the position it needs. It is
+refused while the last update to today carried a conflict with the change that isn't
+settled, since the move would drop the warning unseen; the editor settles it on the Changes
+tab first. When more than one step follows, the editor
 names the one. Moving touches only the place, position or departure, so a `data:pay` change
 on the same person stays where it was and the move needs no see-pay right.
 Undo takes the whole move back as one step, and redo puts it back, each leaving every step
 resolving as it did. Undo is refused once the step it left, or a later change in the step it
 reached, changes the same thing, and the refusal names that change. An undo is checked as
-a move the other way, so it is refused for the same reasons.
+a move the other way, so it is refused for the same reasons, and redo as the move again.
+Both are refused once another move, undo or redo has taken the change elsewhere. An undo
+puts the change back where it stood among the step's entries, so the next undo picks what
+it did before.
 The timeline offers the move through a "When…" menu on the bar where the change shows, with
 "earlier" missing next to Today, and it saves through `MoveChange`, which MCP shares as
 `team_planning_move_change`. Each timeline column lists the keys it can move. The menu
