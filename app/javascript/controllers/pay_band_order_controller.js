@@ -24,7 +24,8 @@ export default class extends BaseController {
     if (event.target.closest("button, a, input, select, form")) return event.preventDefault()
 
     this.dragged = event.currentTarget
-    this.before = this.#order()
+    this.dropped = false
+    this.before = [...this.listTarget.children]
     event.dataTransfer.effectAllowed = "move"
     event.dataTransfer.setData("text/plain", this.dragged.dataset.payBandId)
     // Changing the page inside dragstart cancels the drag in Chrome.
@@ -44,15 +45,22 @@ export default class extends BaseController {
   }
 
   drop(event) {
-    if (this.dragged) event.preventDefault()
+    if (!this.dragged) return
+
+    event.preventDefault()
+    this.dropped = true
   }
 
-  // The rows already stand where the drag left them, so that is the order saved.
+  // The rows already stand where the drag left them, so that is the order
+  // saved. A drag cancelled with Escape or dropped outside the list never
+  // drops on a row, and the rows go back.
   end() {
     if (!this.dragged) return
 
     delete this.dragged.dataset.dragSource
     this.dragged = null
+    if (!this.dropped) return this.listTarget.append(...this.before)
+
     this.#save()
   }
 
@@ -60,7 +68,7 @@ export default class extends BaseController {
 
   #save() {
     const order = this.#order()
-    if (order.join() === this.before.join()) return
+    if (order.join() === this.before.map((row) => row.dataset.payBandId).join()) return
 
     this.formTarget.querySelectorAll("[name='pay_band_ids[]']").forEach((input) => input.remove())
     order.forEach((id) => {

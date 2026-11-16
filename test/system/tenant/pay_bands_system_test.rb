@@ -29,16 +29,16 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
   def locations_in_order = ActsAsTenant.with_tenant(@tenant) { PayBand.order(:position).pluck(:location) }
 
   # Selenium can't drive an HTML drag, so this sends the events a drag sends.
-  def drag_below(source, target)
-    page.execute_script(<<~JS, source, target)
-      const [source, target] = arguments
+  def drag_below(source, target, cancel: false)
+    page.execute_script(<<~JS, source, target, cancel)
+      const [source, target, cancel] = arguments
       const dataTransfer = new DataTransfer()
       const fire = (element, type, clientY) =>
         element.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer, clientY }))
       const { bottom } = target.getBoundingClientRect()
       fire(source, "dragstart", 0)
       fire(target, "dragover", bottom - 1)
-      fire(target, "drop", bottom - 1)
+      if (!cancel) fire(target, "drop", bottom - 1)
       fire(source, "dragend", 0)
     JS
   end
@@ -145,6 +145,22 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
     assert_text "Saved the new order."
     assert_equal %w[Beta Gamma Alpha], locations_in_order
     assert_selector "#pay-bands-order li:last-child", text: "3."
+  end
+
+  should "put the rows back and save nothing when a drag is cancelled" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    sign_in_as(@admin_user)
+    first = store_band("Alpha")
+    store_band("Beta")
+    visit tenant_pay_bands_path
+    assert_text "The order"
+    wait_for_stimulus "pay-band-order"
+
+    drag_below(find("#pay-band-#{first.id}"), find("#pay-bands-order li:last-child"), cancel: true)
+
+    assert_selector "#pay-bands-order li:first-child#pay-band-#{first.id}"
+    assert_no_text "Saved the new order."
+    assert_equal %w[Alpha Beta], locations_in_order
   end
 
   should "keep the screen and its menu link from members" do
