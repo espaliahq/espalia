@@ -36,6 +36,12 @@ class Operations::Tenants::SetTimeZoneTest < ActiveSupport::TestCase
     end
   end
 
+  should "set an IANA zone the settings page doesn't list" do
+    call({ time_zone: "America/Toronto" })
+
+    assert_equal "America/Toronto", @tenant.reload.time_zone
+  end
+
   should "refuse a zone it doesn't know as bad input" do
     error = assert_raises(Operations::Base::ParameterError) { call({ time_zone: "Middle Earth" }) }
 
