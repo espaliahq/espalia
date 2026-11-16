@@ -84,7 +84,8 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal({ native: nil, positions: 1, fte: "0.5" }, read[:units].sole[:funded])
     assert_equal({ native: nil, converted: nil, missing: nil }, read[:forecast])
     assert_equal shape(holder), shape(read), "only values differ, never keys"
-    [ "36000", "27000", "9000" ].each { assert_not_includes read.to_json, it }
+    figures = read.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+    [ "36000", "27000", "9000" ].each { assert_not_includes figures, it }
   end
 
   should "follow the budget_basis rule" do
