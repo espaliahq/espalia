@@ -974,6 +974,23 @@ their latest undo took back. Each person redoes only their own undos, and a chan
 make ends what they can redo, as in an editor. Undo and redo are for editors, like any
 other change.
 
+On the plan page ([#424](https://github.com/espaliahq/espalia/issues/424)), Undo and Redo
+sit beside the side panel toggle on the Map, Changes, Checks and Budget tabs, for the
+scenario the tab shows. `team_planning_undo_step` says what each would act on: the same
+pick as an undo or redo with no event named, named by subject and facet ("Undo: Ada Quill
+· Level"), or by step for a date edit ("Undo: Q1 · Dates"). It never names a value. It
+skips a pay change for a member without the see-pay right, offering their latest other
+change or nothing, and it offers nothing the operation would refuse on scope. Viewers,
+Today, frozen plans and archived plans get neither. A phone shows the arrow alone, with the
+full name kept for a screen reader.
+
+Each row of the Changes tab that `team_planning_status` marks `clearable` carries Clear,
+behind a dialog that says which step the scenario follows again. A row is clearable when
+the scenario shown makes the change itself, the caller may edit, the facet isn't pay
+withheld from them, and the subject is still inside a scoped plan's units. Undo, Redo and
+Clear each return to the tab and scenario they were pressed on, and a refusal shows the
+operation's own words.
+
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
 undo, redo, move, note and date edit, in order, with who made it and, while it stands undone, who undid it.
 The baseline's history also lists each update to today, with the base it left and the
