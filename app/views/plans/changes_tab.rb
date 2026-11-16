@@ -209,7 +209,7 @@ class Views::Plans::ChangesTab < Views::Base
         form(action: plan_clears_path(plan_id), method: "post", class: "mt-6 flex flex-wrap items-center gap-3") do
           input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
           { scenario_id:, subject_id: entry[:subject_id], facet: entry[:facet], tab: "changes" }.each do |name, value|
-            input(type: "hidden", name:, value:)
+            input(type: "hidden", name: name.to_s, value:)
           end
           render Components::Kit::Button.new(tone: :danger, type: :submit) { "Clear change" }
           render Components::Kit::Button.new(variant: :outline, data: { action: "click->modal#close" }) { "Cancel" }

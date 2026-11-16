@@ -186,7 +186,7 @@ class Views::Plans::ShowView < Views::Base
 
   def tab_strip(panel)
     if tabs.size > 1
-      div(class: "mb-4 flex items-end gap-3 border-b border-default") do
+      div(class: "@container mb-4 flex items-end gap-3 border-b border-default") do
         nav(aria: { label: "Plan views" }, class: "min-w-0 flex-1") do
           div(class: "-mb-px flex flex-wrap gap-x-1") { tabs.each { tab(it) } }
         end
@@ -197,7 +197,7 @@ class Views::Plans::ShowView < Views::Base
       end
       h2(id: "plan-main-heading", class: "sr-only") { current_tab.label }
     else
-      div(class: "mb-3 flex items-center justify-between gap-3") do
+      div(class: "@container mb-3 flex items-center justify-between gap-3") do
         h2(id: "plan-main-heading", class: "text-base font-semibold text-default") { current_tab.label }
         div(class: "flex items-center gap-1") do
           undo_controls
@@ -208,7 +208,7 @@ class Views::Plans::ShowView < Views::Base
   end
 
   # Each names what it acts on, in full to a screen reader and as far as the
-  # width allows on screen; a phone shows the arrow alone.
+  # the strip's width allows on screen, so the tabs never wrap for them.
   def undo_controls
     return unless @undo_step
 
@@ -225,7 +225,7 @@ class Views::Plans::ShowView < Views::Base
         render Components::Kit::Button.new(variant: :ghost, size: :sm, compact: true, type: :submit, aria_label: label, title: label,
                                            class: "max-w-56") do
           icon(key, class: "size-4 shrink-0")
-          span(class: "hidden min-w-0 truncate lg:inline") { label }
+          span(class: "hidden min-w-0 truncate @5xl:inline") { label }
         end
       end
     end
