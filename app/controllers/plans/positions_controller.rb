@@ -63,12 +63,14 @@ class Plans::PositionsController < ApplicationController
     notice = yield == :unchanged ? "Nothing changed." : NOTICES.fetch(mode)
     redirect_to map_plan_path(plan_id, scenario: scenario_id), notice:, status: :see_other
   rescue Operations::Base::ParameterError, TeamPlanning::Error => e
+    form = refused_form(mode, e.message) if request.format.turbo_stream?
     respond_to do |format|
-      format.turbo_stream do
-        render turbo_stream: turbo_stream.replace(Views::Plans::PositionForm.dom_id_for(mode), refused_form(mode, e.message)),
-               status: :unprocessable_content
+      if form
+        format.turbo_stream do
+          render turbo_stream: turbo_stream.replace(Views::Plans::PositionForm.dom_id_for(mode), form), status: :unprocessable_content
+        end
       end
-      format.html { redirect_back_or_to map_plan_path(plan_id), alert: "Couldn't save the position: #{e.message}", status: :see_other }
+      format.any { redirect_back_or_to map_plan_path(plan_id), alert: "Couldn't save the position: #{e.message}", status: :see_other }
     end
   end
 
@@ -112,8 +114,14 @@ class Plans::PositionsController < ApplicationController
     raise Operations::Base::ParameterError, "Give the FTE as a number above 0 and at most 1"
   end
 
+  # Nil once the scenario itself is gone, say removed by another editor:
+  # there is no map left to show the form against.
   def refused_form(mode, error)
-    map = Operations::TeamPlanning::ScenarioMap.call(context: pundit_user, params: { plan_id:, scenario_id: })
+    map = begin
+      Operations::TeamPlanning::ScenarioMap.call(context: pundit_user, params: { plan_id:, scenario_id: })
+    rescue Operations::Base::ParameterError
+      return
+    end
     scenario = Operations::TeamPlanning::Scenarios.call(context: pundit_user, params: { plan_id: })[:scenarios].find { it[:scenario_id] == scenario_id }
     Views::Plans::PositionForm.new(
       mode:, scenario_id:, scenario_name: scenario&.dig(:name) || "this scenario", units: Views::Plans::ScenarioMap.ordered_units(map[:units]),

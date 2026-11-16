@@ -132,6 +132,14 @@ class Plans::PositionsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Platform", position[:cost_centre]
     end
 
+    should "send the dialog back to the map when its scenario has gone" do
+      ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::RemoveScenario, @editor, plan_id: @plan_id, scenario_id: @q1) }
+      edit_position(as: :turbo_stream, fte: "0.5")
+
+      assert_redirected_to map_plan_path(@plan_id)
+      assert_match "Couldn't save the position", flash[:alert]
+    end
+
     should "refuse a position with no role and level" do
       open_position(as: :turbo_stream, level_id: "")
 
