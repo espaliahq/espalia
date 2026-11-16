@@ -36,6 +36,18 @@ class TeamPlanning::Projections::PlansTest < ActiveSupport::TestCase
     assert_not TeamPlanningPlan.exists?(plan_id)
   end
 
+  should "mark an archived plan with the day and who archived it, and clear both on restore" do
+    plan_id = SecureRandom.uuid_v7
+    @handler.create_plan(plan_id, name: "Next year", base_on: "2026-11-14")
+    travel_to(Time.utc(2026, 11, 20, 23, 30)) { @handler.archive_plan(plan_id) }
+
+    plan = TeamPlanningPlan.find(plan_id)
+    assert_equal [ Date.new(2026, 11, 20), @person.id ], [ plan.archived_on, plan.archived_by_id ]
+
+    @handler.restore_plan(plan_id)
+    assert_equal [ nil, nil ], plan.reload.slice(:archived_on, :archived_by_id).values
+  end
+
   should "date the row from its events, so a rebuild keeps the dates" do
     plan_id = SecureRandom.uuid_v7
     travel_to(Time.zone.parse("2026-11-01 09:00")) { @handler.create_plan(plan_id, name: "Next year", base_on: "2026-11-01") }
@@ -54,6 +66,7 @@ class TeamPlanning::Projections::PlansTest < ActiveSupport::TestCase
       @handler.create_plan(kept, name: "Kept", base_on: "2026-11-14")
       @handler.create_plan(renamed, name: "Draft", base_on: "2026-07-01")
       @handler.rename_plan(renamed, "Second half")
+      @handler.archive_plan(renamed)
       @handler.create_plan(deleted, name: "Gone", base_on: "2026-11-14")
       @handler.delete_plan(deleted)
 

@@ -1,9 +1,19 @@
 {
   "name": "team_planning_plans",
-  "description": "List the Team Planning plans the caller is a member of, with each one's name, base date and the caller's role in it (editor or viewer). Being a tenant admin or a planner adds no plans.",
+  "description": "List the Team Planning plans the caller is a member of, with each one's name, base date and the caller's role in it (editor or viewer), and archived_on, the day it was archived, or null for a live plan. state picks which: live (the default), archived or all. Being a tenant admin or a planner adds no plans.",
   "inputSchema": {
     "type": "object",
-    "properties": {},
+    "properties": {
+      "state": {
+        "type": "string",
+        "enum": [
+          "live",
+          "archived",
+          "all"
+        ],
+        "description": "Which plans: live (the default), archived or all."
+      }
+    },
     "required": [],
     "additionalProperties": false
   },

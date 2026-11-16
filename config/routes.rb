@@ -425,6 +425,9 @@ Rails.application.routes.draw do
     post :pay_upload, on: :member, path: "pay-upload", action: :upload_pay
     # Change which units the plan covers ([#338](https://github.com/espaliahq/espalia/issues/338)).
     patch :scope, on: :member
+    # Set a plan aside, and bring it back ([#383](https://github.com/espaliahq/espalia/issues/383)).
+    post :archive, on: :member
+    post :restore, on: :member
     # Fork and rename a scenario (#271).
     resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
