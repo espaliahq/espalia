@@ -37,6 +37,7 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
       end
 
       ReferenceCurrency.create!(currency: "EUR")
+      PayBand.new(currency: "EUR", period: "year", minimum: 0, midpoint: 60_000, maximum: 70_000).tap { it.match_on(role: @engineer) }.save!
       @band = PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       PayBand.create!(level: @e6, currency: "USD", period: "hour", minimum: 0, midpoint: 75, maximum: 150)
       @rate = ExchangeRate.create!(from_currency: "USD", to_currency: "EUR", rate: "0.9", applies_from: "2025-01-01")
@@ -78,7 +79,7 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
 
   def plan = as_tenant { TeamPlanningPlan.find(@plan_id) }
 
-  def e5_midpoint = as_tenant { TeamPlanning::PricingInputs.for(plan).bands.find { it.level_id == @e5.level_id }.midpoint }
+  def e5_midpoint = as_tenant { TeamPlanning::PricingInputs.for(plan).bands.find { it.id == @band.id }.midpoint }
 
   def changes
     { "a band's figures" => -> { @band.update!(midpoint: 120_000, maximum: 240_000) },
@@ -95,7 +96,8 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
       "the time to hire rule" => -> { rule("time_to_hire", { days: "200" }) },
       "the budget basis rule" => -> { rule("budget_basis", { basis: "base_only" }) },
       "the budget strictness rule" => -> { rule("budget_strictness", TeamPlanning::RuleKinds::BudgetStrictness::PRESETS.fetch("envelope")) },
-      "a removed band" => -> { PayBand.find_by(level_id: @e6.level_id).destroy! } }
+      "a removed band" => -> { PayBand.find_by(level_id: @e6.level_id).destroy! },
+      "the band order" => -> { PayBand.reorder!(PayBand.order(:position).pluck(:id).reverse) } }
   end
 
   should "give every pricing read the same figures after each input changes, until the plan is restored" do
