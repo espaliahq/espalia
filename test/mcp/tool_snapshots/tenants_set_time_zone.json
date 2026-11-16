@@ -1,0 +1,24 @@
+{
+  "name": "tenants_set_time_zone",
+  "description": "Set the active tenant's time zone, any IANA name such as Australia/Sydney or America/Toronto. It decides the tenant's today in team planning: the date a new plan starts from or is updated to, and the last day drift and status read. It moves today from now on and rewrites no stored date. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "time_zone": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "time_zone"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

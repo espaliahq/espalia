@@ -8,7 +8,7 @@
 class Operations::TeamPlanning::RebasePreview < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
-  description "Preview updating a Team Planning plan the caller is in to today (a UTC day), before " \
+  description "Preview updating a Team Planning plan the caller is in to today (in the tenant's time zone), before " \
               "team_planning_rebase_plan does it. `drift` is what the update takes in: the from, to, changes " \
               "and names that team_planning_drift gives for the same base, in the same shape. " \
               "For the baseline (scenario_id equal to the plan_id) and each scenario, it counts the planned " \

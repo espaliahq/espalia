@@ -16,6 +16,7 @@
 #   @option data [String] :previous_base_on YYYY-MM-DD
 #   @option data [Array<Hash>] :conflicts `{ scenario_id, subject_id, facet, change_id }`
 #   @option data [String] :rebased_by_id person_id of the actor
+#   @option data [String] :time_zone the tenant's zone, as on {TeamPlanning::Events::PlanCreated}
 #
 class TeamPlanning::Events::PlanRebased < RubyEventStore::Event
 end

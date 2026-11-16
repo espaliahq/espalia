@@ -53,7 +53,7 @@ class TeamPlanning::StepOutcome
     raise TeamPlanning::Error, NOT_CLOSED unless ends_on
 
     planned = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).structure(aggregate)
-    actual = TeamPlanning::Baseline.new(context: @context, plan: @plan).map_on(ends_on, known_on: @plan.archived_on)
+    actual = TeamPlanning::Baseline.new(context: @context, plan: @plan).map_on(ends_on, known_on: @plan.archived_on, known_at: @plan.archived_known_at)
     units = rows(planned, actual)
     Outcome.new(ends_on:, known_on: @plan.archived_on, units:, names: names(planned, units))
   end

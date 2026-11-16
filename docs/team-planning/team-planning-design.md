@@ -528,7 +528,7 @@ It also checks each person (4.6):
   only in a gone unit or a closed position already has that item, so they are not also placed
   nowhere.
 - **Since left.** Someone the scenario still has, with no planned departure, whom the Org Graph
-  has had leave by today, a UTC day. They are placed but left, or, with no place, left. Either
+  has had leave by the tenant's today. They are placed but left, or, with no place, left. Either
   way that is their only allocation item. `Attention.for` reads them from
   `org_leavers`, since the base map can't know.
 - **Manager.** A contributor with no manager, though not the head of the tree, who owns a unit
@@ -1232,7 +1232,10 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
 - What stays live is structure. Framework roles and levels, and HRIS title mappings, say
   who is at which level, not what a level costs. A plan reads the Org Graph as known the
   day before its base date, or on the archive day if that comes first, so someone
-  recorded as leaving after the archive moves no archived figure. Actual pay is never in
+  recorded as leaving after the archive moves no archived figure. Each day ends at
+  midnight in the zone the tenant had when the plan recorded it, so changing the zone
+  later moves neither cut-off. A plan recorded before tenants had zones ends its days at
+  midnight UTC. Actual pay is never in
   the copy: it stays sealed per person, and the reader's see-pay view applies at read
   time, so forgetting a person still removes it.
 - The copy carries tenant configuration text as it stood: location, cost centre, a
@@ -1280,7 +1283,7 @@ day before its base date has passed. Until then its base moves as edits land.
 
 ### Updating to today
 
-`team_planning_rebase_plan` moves a plan's base to today, a UTC day, and nothing else.
+`team_planning_rebase_plan` moves a plan's base to the tenant's today and nothing else.
 Every scenario keeps its changes and resolves them over the Org Graph as of the new base,
 so someone who joined since the old base comes onto the map, and someone who left drops
 off it, with "has left" against any change that still places them. The first step after

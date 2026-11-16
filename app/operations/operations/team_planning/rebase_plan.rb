@@ -7,7 +7,7 @@ class Operations::TeamPlanning::RebasePlan < Operations::Base
   include Operations::TeamPlanning::PlanRead
   include Operations::OrgGraph::DateParameter
 
-  description "Update a Team Planning plan to today (a UTC day): its base moves to today and every scenario " \
+  description "Update a Team Planning plan to today (in the tenant's time zone): its base moves to today and every scenario " \
               "reads the Org Graph as of it, with nothing else rewritten. A first step after the baseline that " \
               "starts before the new base starts on it; one that starts later keeps its start. Read team_planning_rebase_preview first and pass the base_on it gave, so " \
               "an update made since is refused rather than taken in unseen. A change that conflicts with the Org " \
@@ -28,7 +28,7 @@ class Operations::TeamPlanning::RebasePlan < Operations::Base
     raise Operations::Base::ParameterError, "No such plan" unless PlanPolicy.new(context, plan).update?
 
     expected_base_on = parse_date(:base_on)
-    today = Time.now.utc.to_date
+    today = Tenant.today
     refusing_bad_plans do
       conflicts = []
       handler.rebase_plan(plan.id, base_on: today, expected_base_on:) do

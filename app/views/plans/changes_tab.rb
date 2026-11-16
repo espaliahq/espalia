@@ -66,7 +66,7 @@ class Views::Plans::ChangesTab < Views::Base
     section(aria: { labelledby: "changes-drift-heading" }, data: { changes_section: "drift" }) do
       h3(id: "changes-drift-heading", class: "text-base font-semibold text-default") { "In the Org Graph since #{day(@plan[:base_on])}" }
       p(class: "mt-1 text-sm text-muted") { "What the Org Graph has learned since the plan's base, and the planned changes each one meets." }
-      update_to_today if @can_edit && Date.iso8601(@plan[:base_on]) < Time.now.utc.to_date
+      update_to_today if @can_edit && Date.iso8601(@plan[:base_on]) < today
       if @drift[:changes].empty?
         render Components::Kit::EmptyState.new(title: "Nothing has changed in the Org Graph since the base.", size: :panel)
       else
@@ -279,7 +279,7 @@ class Views::Plans::ChangesTab < Views::Base
 
   def update_first
     p(class: "text-xs text-muted", data: { settle_conflict: "live" }) do
-      if Date.iso8601(@plan[:base_on]) < Time.now.utc.to_date
+      if Date.iso8601(@plan[:base_on]) < today
         a(href: rebase_plan_path(plan_id), class: "text-link underline") { "Update the plan to today" }
         plain " to keep the plan or follow reality here."
       else
@@ -427,8 +427,11 @@ class Views::Plans::ChangesTab < Views::Base
 
   def unit_name(id) = id && @drift[:names].fetch(id, TeamPlanning::Attention::REMOVED_UNIT)
 
+  # The drift window ends on the tenant's today; an archived plan's drift has no window.
+  def today = @today ||= @drift[:to]&.then { Date.iso8601(it) } || Tenant.today
+
   def day(value)
     date = value.is_a?(Date) ? value : Date.iso8601(value)
-    I18n.l(date, format: date.year == Date.current.year ? "%-d %b" : "%-d %b %Y")
+    I18n.l(date, format: date.year == today.year ? "%-d %b" : "%-d %b %Y")
   end
 end

@@ -6,11 +6,10 @@
 # By effective date (the default), the changes that took effect after `from`,
 # up to and including `to`: the steps from `OrgGraph::AsOf` on `from` to
 # `OrgGraph::AsOf` on `to`. It reads what the Org Graph knows now, or with
-# `known_on` what it knew at 23:59:59 UTC on that day, not in the tenant's
-# local time.
+# `known_on` what it knew at the end of that day in the tenant's time zone.
 #
-# By learned date, what the Org Graph learned after 23:59:59 UTC on `from`,
-# up to 23:59:59 UTC on `to`, whatever day each change took effect. A backdated
+# By learned date, what the Org Graph learned after the end of `from`, up to
+# the end of `to`, each in the tenant's time zone, whatever day each change took effect. A backdated
 # correction shows here with its earlier date. A change it no longer
 # believes, such as one changed back on its own day, comes back `withdrawn`.
 #
@@ -79,19 +78,26 @@ class OrgGraph::ChangesBetween
   # @param to [Date] the window's last day
   # @param by [Symbol] :effective or :learned
   # @param known_on [Date, nil] by effective date only: read what was known
-  #   at 23:59:59 UTC on this day
+  #   at the end of this day in the tenant's time zone
+  # @param known_at [Time, nil] by effective date only: the instant `known_on`
+  #   ended, when the reader fixed it
+  # @param opened_at [Time, nil] by learned date only: the instant `from`
+  #   ended, when the reader fixed it
   # @raise [ArgumentError] for an unknown `by`, a `to` before `from`, or a
   #   `known_on` by learned date
-  def initialize(context:, from:, to:, by: :effective, known_on: nil)
+  def initialize(context:, from:, to:, by: :effective, known_on: nil, known_at: nil, opened_at: nil)
     raise ArgumentError, "by must be one of #{BY.join(", ")}" unless BY.include?(by)
     raise ArgumentError, "to must not be before from" if to < from
-    raise ArgumentError, "known_on reads by effective date only" if known_on && by == :learned
+    raise ArgumentError, "known_on reads by effective date only" if (known_on || known_at) && by == :learned
+    raise ArgumentError, "opened_at reads by learned date only" if opened_at && by == :effective
 
     @context = context
     @from = from
     @to = to
     @by = by
     @known_on = known_on
+    @known_at = known_at
+    @opened_at = opened_at
   end
 
   # @return [Result]
@@ -109,10 +115,10 @@ class OrgGraph::ChangesBetween
 
   def effective_changes
     window = (@from + 1)..@to
-    rows = facts(OrgFactPeriod.known_on(@known_on))
+    rows = facts(OrgFactPeriod.known_on(@known_on, at: @known_at))
     rows = rows.where(effective_from: window).or(rows.where(effective_to: window))
     changes_from(first_learned(steps(rows.to_a).select { window.cover?(it.on) }), withdrawn: false,
-                                                                                   knowledge: OrgFactPeriod.known_on(@known_on))
+                                                                                   knowledge: OrgFactPeriod.known_on(@known_on, at: @known_at))
   end
 
   # A row is rewritten whenever a later change cuts its period short, so its
@@ -130,7 +136,8 @@ class OrgGraph::ChangesBetween
   # end. A step only the end knows was learned; one only the start knew was
   # withdrawn.
   def learned_changes
-    opened, closed = [ @from, @to ].map { it.in_time_zone("UTC").end_of_day }
+    opened = @opened_at || Tenant.end_of(@from)
+    closed = Tenant.end_of(@to)
     periods = OrgFactPeriod.arel_table
     inside = ->(column) { OrgFactPeriod.where(periods[column].gt(opened).and(periods[column].lteq(closed))) }
     touched = facts(inside.(:learned_at).or(inside.(:superseded_at)))
@@ -141,7 +148,7 @@ class OrgGraph::ChangesBetween
     learned, withdrawn = rows.to_a.select { touched.include?(timeline(it)) }.group_by { timeline(it) }.values
                              .map { learned_on(it, opened, closed) }.transpose.map(&:flatten)
     changes_from(learned, withdrawn: false, knowledge: OrgFactPeriod.known_on(@to)) +
-      changes_from(withdrawn, withdrawn: true, knowledge: OrgFactPeriod.known_on(@from))
+      changes_from(withdrawn, withdrawn: true, knowledge: OrgFactPeriod.known_on(@from, at: @opened_at))
   end
 
   # One timeline's steps learned and withdrawn in the window, each with the

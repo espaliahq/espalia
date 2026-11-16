@@ -17,6 +17,9 @@ class TenantPolicy < ApplicationPolicy
   #   framework and has its own bar)
   def update_scoring_vocabulary? = tenant_admin?
 
+  # @return [Boolean] whether the viewer can set the time zone that decides the tenant's today
+  def update_time_zone? = tenant_admin?
+
   # An admin's alone, and not an Org Graph editor's: how long a leaver's
   # identifiers are kept is the organisation's data-protection decision,
   # not a change to its structure.
