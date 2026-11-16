@@ -108,7 +108,7 @@ class TeamPlanning::Resolution
     base = (@base || @baseline.structure).with(step_ids: step_of(aggregate))
     hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
     map = (hires + others).reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
-    [ explained(opened(map.settled, aggregate)), winning ]
+    [ explained(stepped(opened(map.settled, aggregate), aggregate)), winning ]
   end
 
   # Each position's open date: the first day of the earliest step in the
@@ -175,6 +175,12 @@ class TeamPlanning::Resolution
       gone.map { TeamPlanning::Events::DepartureSet.leaving_date(it.leaves_on)&.next_day || aggregate.period_of(it.leaves_in_id)&.begin }.compact.max
     end
     map.with(positions: map.positions.map { it.with(opened_on: [ dates.fetch(it.id, aggregate.base_on), vacated[it.id] ].compact.max) })
+  end
+
+  # Today runs for a year from the base date, as its run rate does.
+  def stepped(map, aggregate)
+    period = TeamPlanning::FiguredPeriod.for(aggregate, @scenario_id, map)&.period || TeamPlanning::Cost.year_from(aggregate.base_on)
+    map.with(step: period)
   end
 
   # A person off the map either left by the base date, or was forgotten, or

@@ -42,12 +42,13 @@ class TeamPlanning::Baseline
   # @!attribute fundings [Hash{String => Array<Hash>}] position id => the draws a {TeamPlanning::Events::PositionFundingSet} sets
   # @!attribute held_cost_centres [Set<String>, nil] the cost centres a scoped plan's lines may name, fixed by its baseline; nil holds every line
   # @!attribute outside_lines [Array<BudgetLine>] the lines naming a cost centre the plan doesn't hold. Never shown, named or counted
+  # @!attribute step [Range<Date>, nil] the days the scenario's figures run over, which resolution fills in; nil starts every seat
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
                     :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings, :scope_ids, :outside,
-                    :cut_positions, :cut_unit_ids, :held_cost_centres, :outside_lines) do
+                    :cut_positions, :cut_unit_ids, :held_cost_centres, :outside_lines, :step) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
                    orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], cut_unit_ids: Set.new,
-                   held_cost_centres: nil, outside_lines: [], **) = super
+                   held_cost_centres: nil, outside_lines: [], step: nil, **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -162,6 +163,9 @@ class TeamPlanning::Baseline
 
     # A leaver never fills the position that backfills them.
     #
+    # @return [Hash{String => Position}] by id
+    def positions_by_id = positions.index_by(&:id)
+
     # @return [Hash{String => Array<Array(Member, Membership)>}] position id => each person placed there, with the placement
     def occupants
       people.flat_map { |person| person.memberships.select { it.position_id && it.position_id != person.backfill_id }.map { [ person, it ] } }
@@ -174,6 +178,22 @@ class TeamPlanning::Baseline
       (people.filter_map { [ it.backfill_id, it.id ] if it.backfill_id } + departed.filter_map { [ it.position_id, it.person_id ] if it.position_id })
         .group_by(&:first).transform_values { it.map(&:last) }
     end
+
+    # A placeholder hire fills the first position it is placed in, so it
+    # starts when that seat does; one in no position starts with the step.
+    #
+    # @param member [Member]
+    # @return [Boolean] whether the person is in post by the step's last day
+    def started?(member)
+      return true unless step && member.placeholder?
+
+      position = member.memberships.lazy.filter_map { positions_by_id[it.position_id] if it.position_id }.first
+      position.nil? || TeamPlanning::SeatStart.new(position).started_in?(step)
+    end
+
+    # @param position [Position]
+    # @return [Boolean] whether the position's open seat has started by the step's last day
+    def seat_started?(position) = step.nil? || TeamPlanning::SeatStart.new(position).started_in?(step)
 
     # The people whose line points at a person or a position. For a vacant
     # manager position, this is the span the open seat carries.

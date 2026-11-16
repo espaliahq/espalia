@@ -414,7 +414,7 @@ class TeamPlanning::Cost
 
   def person_lines(member)
     places = TeamPlanning::Baseline::Membership.shares(member.memberships)
-    held = held_by(member)
+    held = member.placeholder? ? placeholder_held(member) : held_by(member)
     seat = { seat_id: member.id, kind: "person", fte: fte_of(member) || 1r }
     pay = member.plan_data[:pay] if @actual_pay
     unpriced = ("pay_unknown" if pay&.removed?) || ("fte_unknown" unless fte_of(member)) ||
@@ -471,7 +471,7 @@ class TeamPlanning::Cost
       next unless open.positive?
 
       cost_centre = @cost_centres.of(position)
-      openings(open, leavers.fetch(position.id, [])).map do |fte, held|
+      openings(position, open, leavers.fetch(position.id, [])).map do |fte, held|
         line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id,
              **cost_centre_working(cost_centre),
              level_id: position.level_id, level_source: nil, country: nil, fte:, fraction: 1r, held:, reason: nil)
@@ -524,28 +524,29 @@ class TeamPlanning::Cost
     last && (@period.begin..[ last, @period.end ].min)
   end
 
+  # A placeholder hire starts when the position it fills does
+  # ({TeamPlanning::SeatStart}); one in no position holds the whole step.
+  def placeholder_held(member)
+    position = member.memberships.lazy.filter_map { @positions[it.position_id] if it.position_id }.first
+    position ? TeamPlanning::SeatStart.new(position).held_in(@period) : @period
+  end
+
   # A backfill opens a leaver's FTE the day after they leave, or for the
   # whole step when they have no date, as they then cost none of it. The
-  # earliest leaver is replaced first, and FTE no leaver opens is held all
-  # step like any open seat. Each opening is its own line, so no seat is
-  # ever held by a leaver and their backfill at once.
-  def openings(open, leavers)
+  # earliest leaver is replaced first, and FTE no leaver opens opens when the
+  # position does. Each opening is its own line, so no seat is ever held by a
+  # leaver and their backfill at once. Each starts by {TeamPlanning::SeatStart}:
+  # no earlier than it opens, from its target start, and never while on hold.
+  def openings(position, open, leavers)
     dated = leavers.map { [ fte_of(it) || 1r, TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) ] }
     held = dated.sort_by { |_, last| last || Date.new(0) }.filter_map do |fte, last|
       fte = [ fte, open ].min
       next unless fte.positive?
 
       open -= fte
-      [ fte, backfill_held(last) ]
+      [ fte, TeamPlanning::SeatStart.new(position, opens_on: last&.next_day).held_in(@period) ]
     end
-    open.positive? ? held << [ open, @period ] : held
-  end
-
-  def backfill_held(last)
-    return @period unless last
-    return nil if last >= @period.end
-
-    [ last + 1, @period.begin ].max..@period.end
+    open.positive? ? held << [ open, TeamPlanning::SeatStart.new(position).held_in(@period) ] : held
   end
 
   def fte_of(member)

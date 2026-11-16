@@ -39,6 +39,7 @@ class TeamPlanning::Capacity
     "unknown_role" => "The role isn't in the framework",
     "closed_position" => "The position this place is in has closed",
     "leaving" => "The person leaves in this step, so a backfill position carries the seat if the plan gives one",
+    "not_started" => "The seat is filled after this step ends, or recruiting for it is on hold, so it delivers nothing yet",
     "no_level" => "The level resolves to none, so the model has nothing to price",
     "no_model" => "No capacity model is chosen for the role or its family",
     "unknown_model" => "The chosen capacity model isn't available",
@@ -116,8 +117,10 @@ class TeamPlanning::Capacity
   # @!attribute units [Hash{String => Hash{String => Rational}}] live unit id => model => total
   # @!attribute totals [Hash{String => Rational}] model => total
   Report = Data.define(:map, :seats, :units, :totals) do
+    # A seat not yet started counts nowhere by design, so it is not listed.
+    #
     # @return [Array<Array(Seat, Place)>] each place that counts nowhere, with its seat
-    def unclassified = seats.flat_map { |seat| seat.places.select(&:unclassified?).map { [ seat, it ] } }
+    def unclassified = seats.flat_map { |seat| seat.places.select { it.unclassified? && it.reason != "not_started" }.map { [ seat, it ] } }
 
     # What each person's places in a unit deliver, so a forecast takes away
     # what an empty seat would have delivered.
@@ -209,6 +212,7 @@ class TeamPlanning::Capacity
     shares = member.memberships.empty? ? TeamPlanning::Baseline::Membership.shares([ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]) : @map.counted_shares(member)
     places, reasons = shares.map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
     reasons = reasons.map { "leaving" } if member.leaving?
+    reasons = reasons.map { "not_started" } unless @map.started?(member)
     (@own_levels ||= {})[member.id] = own.level&.level_id
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]
   end
@@ -226,7 +230,9 @@ class TeamPlanning::Capacity
   end
 
   # A position counts only for the FTE its occupants leave open, so a filled
-  # one is counted once, through the people in it.
+  # one is counted once, through the people in it. Capacity is the step's end
+  # state, so an open seat counts in full once it has started by the step's
+  # last day and not at all before ({TeamPlanning::SeatStart}).
   def open_positions(people)
     filled = Hash.new(0r)
     backfill = @map.people.to_h { [ it.id, it.backfill_id ] }
@@ -237,7 +243,8 @@ class TeamPlanning::Capacity
 
       place = Model::Place.new(unit_id: position.unit_id, allocation: 1r, allocation_known: true, role_id: position.role_id,
                                level_id: position.level_id, position_id: position.id)
-      [ Model::Seat.new(id: position.id, kind: "position", fte: open, fte_known: true, places: [ place ]), [ nil ] ]
+      [ Model::Seat.new(id: position.id, kind: "position", fte: open, fte_known: true, places: [ place ]),
+        [ ("not_started" unless @map.seat_started?(position)) ] ]
     end
   end
 
