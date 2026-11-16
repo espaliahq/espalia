@@ -105,28 +105,31 @@ class TeamPlanning::PayUpload
     text = text.delete_prefix(BOM)
     return Report.new(problem: "empty") if text.strip.empty?
 
+    @lines_read = 0
     rows_of(CSV.new(text, headers: true, return_headers: true))
-  rescue CSV::MalformedCSVError => e
-    Report.new(problem: "bad_csv", line: e.line_number)
+  rescue CSV::MalformedCSVError
+    Report.new(problem: "bad_csv", line: @lines_read + 1)
   end
 
+  # CSV#lineno counts records, so a quoted field across lines would push every later line number out.
   def rows_of(csv)
-    columns = column_indexes(csv.shift&.headers || [])
+    columns = column_indexes(read_from(csv)&.headers || [])
     return Report.new(problem: "missing_column") unless columns
 
     rows = []
-    # CSV#lineno counts records, so a quoted field across lines would push every later line number out.
-    next_line = 1 + csv.line.to_s.count("\n")
     loop do
-      row = csv.shift or break
-      line = next_line
-      next_line += csv.line.count("\n")
+      line = @lines_read + 1
+      row = read_from(csv) or break
       next if row.fields.all?(&:blank?)
       return Report.new(problem: "too_many_rows") if rows.size == MAX_ROWS
 
       rows << Row.new(line:, **columns.transform_values { row[it].to_s.strip })
     end
     rows.empty? ? Report.new(problem: "empty") : rows
+  end
+
+  def read_from(csv)
+    csv.shift.tap { @lines_read += csv.line.to_s.scan(/\r\n|\r|\n/).size }
   end
 
   # @return [Hash{Symbol => Integer}, nil] each column's index, nil when one is missing

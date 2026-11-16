@@ -138,6 +138,16 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     assert_equal [ 3, 5 ], upload(csv)[:failures].pluck(:line)
   end
 
+  should "count a lone carriage return as a line ending" do
+    assert_equal [ 2, 3 ], upload(HEADER.sub("\n", "\r") + "nobody@example.com,1,EUR,year\rnobody,1,EUR,year\r")[:failures].pluck(:line)
+  end
+
+  should "name the line a file stops reading as CSV, counting the lines a quoted field spans" do
+    csv = "#{HEADER}nobody@example.com,1,EUR,\"year\nor so\"\n\"E-100\"x,1,EUR,year\n"
+
+    assert_equal [ "bad_csv", 4 ], upload(csv).values_at(:problem, :line)
+  end
+
     should "call an email two people share ambiguous" do
     ActsAsTenant.with_tenant(@tenant) do
       create(:tenant_user, tenant: @tenant, person: @off_map, user: create(:user, email: "shared@example.com"))

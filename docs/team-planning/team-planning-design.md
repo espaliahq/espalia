@@ -757,7 +757,8 @@ and a scenario. `TeamPlanning::PayUpload` reads and matches the file in memory.
   The page and both posts answer them with the same 404.
 - **Where the file never goes.** `file` and `csv` are filtered from the log.
   The preview carries counts and names, never an amount. A parse failure gives a line
-  number, never the line.
+  number, never the line: the line its record starts on, counting `\r`, `\n` and `\r\n`
+  alike.
 - **Web only.** The operation declares `mcp false`. An MCP client would hand the file's
   pay to a model in clear, so a tool waits for its own design. `team_planning_set_actual_pay`
   still holds one person's pay over MCP.
