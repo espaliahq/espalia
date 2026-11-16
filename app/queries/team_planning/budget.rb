@@ -146,6 +146,7 @@ class TeamPlanning::Budget
   def call
     aggregate = @aggregate || @repository.load_plan(@plan.id)
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
+    raise TeamPlanning::Error, TeamPlanning::Funding::NO_PERIOD if @scenario_id == @plan.id
 
     shared = @shared || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).shared(aggregate).first
     reads = { context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:, shared: }

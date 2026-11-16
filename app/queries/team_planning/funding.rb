@@ -111,6 +111,8 @@ class TeamPlanning::Funding
     end
   end
 
+  NO_PERIOD = "The baseline has no period to fund, so read one of the plan's scenarios"
+
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] a scenario, never the root, which has no period
@@ -134,7 +136,7 @@ class TeamPlanning::Funding
   def call
     aggregate = @aggregate || @repository.load_plan(@plan.id)
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
-    raise TeamPlanning::Error, "The baseline has no period to fund, so read one of the plan's scenarios" if @scenario_id == @plan.id
+    raise TeamPlanning::Error, NO_PERIOD if @scenario_id == @plan.id
 
     base = @shared&.base || TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     @map = @shared&.map || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:).structure(aggregate)
