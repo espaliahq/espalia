@@ -174,11 +174,11 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_not_includes OrgUnitActivity.feed(@search).first.summary, "changed the terms"
     end
 
-    should "refuse while the units or members are rebuilt, writing nothing" do
+    should "refuse while the units, members or history are rebuilt, writing nothing" do
       fingerprint = compare(matches: @matches, resolutions: retire_legacy).fingerprint
       before = Rails.configuration.event_store.read.backward.limit(1).first.event_id
 
-      [ OrgGraph::Projections::Structure, OrgGraph::Projections::Members ].each do |projection|
+      [ OrgGraph::Projections::Structure, OrgGraph::Projections::Members, OrgGraph::Projections::History ].each do |projection|
         level = handover
         while_rebuilding(@tenant, projection) do
           assert_raises(ProjectionVersion::Rebuilding) do

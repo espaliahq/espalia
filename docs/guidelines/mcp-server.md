@@ -634,7 +634,7 @@ MCP configuration.
 that the operation then rejected. The gap is invisible until an MCP client
 trusts the schema.
 
-Five declarations close the common shapes; each enforces at the parameter
+Six declarations close the common shapes; each enforces at the parameter
 boundary AND emits the matching JSON Schema, which is the point — a constraint
 that lives in only one of those two places is the bug:
 
@@ -691,6 +691,11 @@ that lives in only one of those two places is the bug:
   `to_stable_id` with no `mapping_type` was discarded) while advertising the
   combination as valid. Pointless on a `required:` parameter, so that is
   rejected at load time rather than emitting a rule that can never fire.
+- **`excludes :a, :b, :c`** — `a` must not arrive alongside `b` or `c` →
+  one `not: { required: [a, b] }` per pair, under `allOf`. "Supplied" is the
+  key arriving non-nil, as for `forbids_when`, so a blank alongside counts and
+  a web form must send nil for the side it doesn't use. The pay band tools use
+  it for a role against a role family, and a level_id against the rest.
 
 A subschema must not introduce a **new** property name:
 `additionalProperties: false` is evaluated against the top-level `properties`

@@ -294,7 +294,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
-| 5.1 | Pay bands as tenant configuration: role and level from the framework, location, currency. Held by tenant admins | none |
+| 5.1 | Pay bands as tenant configuration: an ordered list, each band matching any mix of role family, role, level number and location, or one framework level by its id with a location, the last match winning ([#368](https://github.com/espaliahq/espalia/issues/368)). A band made from a level follows it through a renumbering, and keeps pricing its seats once it leaves the framework. Held by tenant admins | none |
 | 5.2 | On-cost models (flat, by country, itemised) as rules with a tenant default | 5.1, 3.3 |
 | 5.3 | Exchange rates and a reference currency, applied once at report time | 5.1 |
 | 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). | 5.2, 5.3, 3.5, 3.7 |

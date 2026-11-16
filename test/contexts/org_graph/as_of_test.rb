@@ -133,6 +133,23 @@ class OrgGraph::AsOfTest < ActiveSupport::TestCase
     assert_equal [ "Engineer", Date.new(2026, 2, 5) ], [ known.people.sole.title, known.known_on ]
   end
 
+  should "read the kinds of unit, and where each may sit, as they stood on a day" do
+    guild = SecureRandom.uuid_v7
+    as_tenant do
+      @structure.add_level(guild, "Guild", effective_on: "2026-03-01")
+      @structure.reorder_levels([ guild, @departments, @squads ], effective_on: "2026-03-01")
+      @structure.set_level_provider(guild, "hibob", effective_on: "2026-04-01", field: "work.guild")
+    end
+
+    assert_empty as_of("2025-12-31").kinds
+    assert_equal [ [ @departments, "Department", "espalia", [] ], [ @squads, "Squad", "espalia", [ @departments ] ] ],
+                 as_of("2026-02-15").kinds.map { [ it.id, it.name, it.provider, it.parent_ids ] }
+    assert_equal [ [ guild, "espalia" ], [ @departments, "espalia" ] ],
+                 as_of("2026-03-15").kinds.first(2).map { [ it.id, it.provider ] }
+    assert_equal [ [], [ guild, @departments ] ], as_of("2026-04-01").kinds.values_at(0, 2).map(&:parent_ids)
+    assert_equal "hibob", as_of("2026-04-01").kinds.first.provider
+  end
+
   should "refuse someone outside the tenant" do
     @context = AuthorizationContext.new(user: create(:user), tenant_user: nil, person: nil)
 
