@@ -110,6 +110,21 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Split 1 change off into Agreed moves.", flash[:notice]
     end
 
+    should "split the agreed part again, so agreement can come in stages" do
+      post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @creates, @to_platform ], name: "Agreed moves" }
+      agreed = ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).order(:created_at).last.id }
+
+      get split_plan_path(@plan_id, scenario_id: agreed)
+      assert_select "h3", text: "Split Agreed moves"
+      assert_select "input[name='event_ids[]']", count: 2
+
+      post split_plan_path(@plan_id, scenario_id: agreed), params: { event_ids: [ @creates ], name: "Agreed unit" }
+      first = ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).order(:created_at).last.id }
+      assert_not_equal agreed, first
+      assert_redirected_to timeline_plan_path(@plan_id, scenario: first, step: 1)
+      assert_equal "Split 1 change off into Agreed unit.", flash[:notice]
+    end
+
     should "show a refused split again with the operation's reason and the choice kept" do
       post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @to_platform ], name: "Agreed moves" }
 
