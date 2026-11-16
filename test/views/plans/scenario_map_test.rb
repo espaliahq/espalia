@@ -48,6 +48,12 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
       assert payments.at_css("dl").css("> *").all? { it.name == "div" && it.at_css("> dt") && it.at_css("> dd") }
       assert payments.at_css("[data-map-position]")
     end
+
+    should "carry a clamped role label's full text on hover" do
+      ada = { id: ADA, fte: 1.0, memberships: [ place(PAYMENTS, 1.0, role: "Infrastructure reliability") ] }
+
+      assert_equal "Infrastructure reliability", card(render_map(people: [ ada ]), "Payments").at_css("dt")["title"]
+    end
   end
 
   should "name who fills each position under that position" do

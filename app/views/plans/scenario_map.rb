@@ -219,8 +219,9 @@ class Views::Plans::ScenarioMap < Views::Base
     groups = people.group_by { |_, place| place[:role].presence }
     dl(class: "divide-y divide-subtle") do
       groups.keys.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.each do |role|
+        label = role || "No role"
         div(class: "flex gap-2 px-2 py-1") do
-          dt(class: "w-10 shrink-0 pt-1.5 pl-2 text-xs font-semibold uppercase text-muted line-clamp-2 text-ellipsis") { role || "No role" }
+          dt(class: "w-10 shrink-0 pt-1.5 pl-2 text-xs font-semibold uppercase text-muted line-clamp-2 text-ellipsis", title: label) { label }
           dd(class: "min-w-0 flex-1") do
             ul { groups[role].sort_by { |person, _| name(person[:id]) }.each { |person, place| person_row(person, place) } }
           end
