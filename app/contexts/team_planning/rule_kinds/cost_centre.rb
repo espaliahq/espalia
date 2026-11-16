@@ -1,86 +1,129 @@
 # frozen_string_literal: true
 
-# Which cost centre a position draws on when it names none and nobody fills
-# it: an ordered list of a matcher and a label, where the first match wins. A
-# matcher names a unit (and so its subtree), a role, a role family, or a unit
-# with a role or role family. The rules never move a person's own cost.
+# Which cost centre a seat draws on where nothing more authoritative decides
+# ([#387](https://github.com/espaliahq/espalia/issues/387)): an ordered list
+# of entries, each a matcher and a label, read as pay bands are read. Every
+# entry that matches applies, so the last one to match has the last word
+# ({LastMatch}).
+#
+# A matcher names any of a unit (and so its subtree), a role or a role
+# family (never both), a level number and a location, and ignores the
+# fields it leaves out. A location matches ignoring case and spacing.
+#
+# The kind first stored a `rules` list where the first match won. RuleSet
+# events can't be rewritten, so a stored `rules` list reads as its entries
+# in reverse, which picks the same rule for every seat.
 #
 # @example
-#   { "rules" => [ { "unit_id" => platform_id, "role_family_id" => engineering_id, "cost_centre" => "Platform Eng" },
-#                  { "unit_id" => platform_id, "cost_centre" => "Platform" } ] }
+#   { "entries" => [ { "role_family_id" => engineering_id, "cost_centre" => "Engineering" },
+#                    { "unit_id" => venues_id, "cost_centre" => "Venues" } ] }
 class TeamPlanning::RuleKinds::CostCentre < TeamPlanning::RuleKind
-  MATCHERS = %w[unit_id role_id role_family_id].freeze
+  IDS = %w[unit_id role_id role_family_id].freeze
+  MATCHERS = (IDS + %w[level_ordinal location]).freeze
   KEYS = (MATCHERS + %w[cost_centre]).freeze
-  MAX_RULES = 200
+  FIELDS = MATCHERS.map(&:to_sym).freeze
+  MAX_ENTRIES = 200
 
   # @return [String]
   def self.rule_name = "cost_centre"
 
   # @return [String]
-  def self.description = "Which cost centre an open position draws on, as an ordered list of a matcher and a label; the first match wins"
+  def self.description
+    "Which cost centre a seat draws on, as an ordered list of a matcher and a label; every entry that matches applies, so the last has the last word"
+  end
 
   # @return [Hash]
-  def self.default = { "rules" => [] }
+  def self.default = { "entries" => [] }
 
   # @return [Hash]
   def self.json_schema
-    rule = { type: "object", required: [ "cost_centre" ], additionalProperties: false,
-             description: "Names at least one of unit_id, role_id and role_family_id, and never both role_id and role_family_id",
-             properties: { unit_id: { type: "string", description: "A unit, matching it and every unit below it" },
-                           role_id: { type: "string" }, role_family_id: { type: "string", description: "Not with role_id" },
-                           cost_centre: { type: "string", maxLength: TeamPlanning::Events::PositionSet::COST_CENTRE_LENGTH } },
-             anyOf: MATCHERS.map { { required: [ it ] } }, not: { required: %w[role_id role_family_id] } }
-    { type: "object", additionalProperties: false, properties: { rules: { type: "array", items: rule, maxItems: MAX_RULES } } }
+    entry = { type: "object", required: [ "cost_centre" ], additionalProperties: false,
+              description: "Names at least one matcher, and never both role_id and role_family_id",
+              properties: { unit_id: { type: "string", description: "A unit, matching it and every unit below it" },
+                            role_id: { type: "string" }, role_family_id: { type: "string", description: "Not with role_id" },
+                            level_ordinal: { type: "integer", minimum: 1, description: "A level number" },
+                            location: { type: "string", description: "A country, matched ignoring case and spacing" },
+                            cost_centre: { type: "string", maxLength: TeamPlanning::Events::PositionSet::COST_CENTRE_LENGTH } },
+              anyOf: MATCHERS.map { { required: [ it ] } }, not: { required: %w[role_id role_family_id] } }
+    { type: "object", additionalProperties: false, required: [ "entries" ],
+      properties: { entries: { type: "array", items: entry, maxItems: MAX_ENTRIES,
+                               description: "In order; the last entry that matches a seat decides its cost centre" } } }
   end
 
-  # @param value [Hash] with string keys
-  # @return [Hash] each id downcased, each label squished
-  # @raise [TeamPlanning::Error] for another key, a rule without a matcher or label, or one naming a role and a family
+  # @param value [Hash] with string keys: `entries`, or a first-match `rules` list from before
+  # @return [Hash] `entries`, each id downcased and each label and location squished
+  # @raise [TeamPlanning::Error] for another key, an entry without a matcher or label, or one naming a role and a family
   def self.check(value)
-    extra = value.keys - %w[rules]
-    raise TeamPlanning::Error, "A cost_centre rule takes only rules, not #{extra.join(", ")}" if extra.any?
+    extra = value.keys - %w[entries rules]
+    raise TeamPlanning::Error, "A cost_centre rule takes only entries, not #{extra.join(", ")}" if extra.any?
+    raise TeamPlanning::Error, "A cost_centre rule takes entries or rules, not both" if value.key?("entries") && value.key?("rules")
 
-    rules = value.fetch("rules", [])
-    raise TeamPlanning::Error, "A cost_centre rule's rules must be a list" unless rules.is_a?(Array)
-    raise TeamPlanning::Error, "A cost_centre rule holds at most #{MAX_RULES} rules" if rules.size > MAX_RULES
+    listed = value.fetch("entries") { value.fetch("rules", []) }
+    raise TeamPlanning::Error, "A cost_centre rule's entries must be a list" unless listed.is_a?(Array)
+    raise TeamPlanning::Error, "A cost_centre rule holds at most #{MAX_ENTRIES} entries" if listed.size > MAX_ENTRIES
 
-    { "rules" => rules.map { rule!(it) } }
+    entries = listed.map { entry!(it) }
+    { "entries" => value.key?("rules") ? entries.reverse : entries }
   end
 
-  # @param value [Hash] as {.check} stored it
-  # @param unit_ids [Array<String>] the position's unit and every unit above it
-  # @param role_id [String]
-  # @param family_id [String, nil]
-  # @return [Array(Integer, Hash), nil] the first matching rule's index and the rule, nil when none matches
-  def self.match(value, unit_ids:, role_id:, family_id:)
-    value["rules"].each_with_index do |rule, index|
-      next if rule["unit_id"] && !unit_ids.include?(rule["unit_id"])
-      next if rule["role_id"] && rule["role_id"] != role_id
-      next if rule["role_family_id"] && rule["role_family_id"] != family_id
+  # @param value [Hash] as stored, by {.check} now or as a `rules` list before
+  # @return [Array<Hash>] the entries in order
+  def self.entries(value) = value["entries"] || value.fetch("rules", []).reverse
 
-      return [ index, rule ]
-    end
-    nil
+  # @param entry [Hash] one of {.entries}
+  # @return [Hash{Symbol => Object}] what it matches on, its location as a key
+  def self.matcher(entry)
+    FIELDS.to_h { [ it, entry[it.to_s] ] }.merge(location: location_key(entry["location"]))
   end
 
-  def self.rule!(rule)
-    raise TeamPlanning::Error, "Each cost centre rule must be an object" unless rule.is_a?(Hash)
+  # @param location [String, nil]
+  # @return [String, nil] the location as entries and seats compare it
+  def self.location_key(location) = location.to_s.squish.downcase.presence
 
-    extra = rule.keys - KEYS
-    raise TeamPlanning::Error, "A cost centre rule takes only #{KEYS.join(", ")}, not #{extra.join(", ")}" if extra.any?
+  # @param value [Hash] as stored
+  # @param unit_ids [Array<String>] the seat's unit and every unit above it
+  # @param role_id [String, nil]
+  # @param role_family_id [String, nil]
+  # @param level_ordinal [Integer, nil]
+  # @param location [String, nil]
+  # @return [Array(Hash, Integer), nil] the entry with the last word and its place in the list, nil when none matches
+  def self.match(value, unit_ids:, role_id:, role_family_id:, level_ordinal: nil, location: nil)
+    subject = { unit_id: unit_ids, role_id:, role_family_id:, level_ordinal:, location: location_key(location) }
+    LastMatch.find(entries(value), subject, FIELDS) { matcher(it) }
+  end
 
-    ids = MATCHERS.to_h { [ it, rule[it].to_s.strip.downcase.presence ] }.compact
-    raise TeamPlanning::Error, "Each cost centre rule names a unit, a role or a role family" if ids.empty?
-    raise TeamPlanning::Error, "A cost centre rule names a role or a role family, not both" if ids.key?("role_id") && ids.key?("role_family_id")
+  def self.entry!(entry)
+    raise TeamPlanning::Error, "Each cost centre entry must be an object" unless entry.is_a?(Hash)
 
-    label = rule["cost_centre"].to_s.squish
-    raise TeamPlanning::Error, "Each cost centre rule names a cost centre" if label.empty?
+    extra = entry.keys - KEYS
+    raise TeamPlanning::Error, "A cost centre entry takes only #{KEYS.join(", ")}, not #{extra.join(", ")}" if extra.any?
+
+    matcher = { **IDS.to_h { [ it, entry[it].to_s.strip.downcase.presence ] }, "level_ordinal" => ordinal!(entry["level_ordinal"]),
+                "location" => entry["location"].to_s.squish.presence }.compact
+    raise TeamPlanning::Error, "Each cost centre entry names a unit, role, role family, level or location" if matcher.empty?
+    raise TeamPlanning::Error, "A cost centre entry names a role or a role family, not both" if matcher.key?("role_id") && matcher.key?("role_family_id")
+
+    { **matcher, "cost_centre" => label!(entry["cost_centre"]) }
+  end
+
+  def self.ordinal!(ordinal)
+    return if ordinal.nil? || ordinal.to_s.strip.empty?
+
+    number = Integer(ordinal.to_s.strip, exception: false)
+    raise TeamPlanning::Error, "A cost centre entry's level is a whole number from 1" unless number && number >= 1
+
+    number
+  end
+
+  def self.label!(label)
+    label = label.to_s.squish
+    raise TeamPlanning::Error, "Each cost centre entry names a cost centre" if label.empty?
 
     length = TeamPlanning::Events::PositionSet::COST_CENTRE_LENGTH
     raise TeamPlanning::Error, "A cost centre is at most #{length} characters" if label.length > length
 
-    { **ids, "cost_centre" => label }
+    label
   end
 
-  private_class_method :rule!
+  private_class_method :entry!, :ordinal!, :label!
 end

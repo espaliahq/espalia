@@ -59,9 +59,9 @@ class TeamPlanning::PositionCostCentres
 
   def ruled(position)
     unit_id = position.unit_id if live.include?(position.unit_id)
-    index, rule = TeamPlanning::RuleKinds::CostCentre.match(rules_at(unit_id), unit_ids: chain(unit_id), role_id: position.role_id,
-                                                                               family_id: families[position.role_id])
-    rule && Resolved.new(cost_centre: rule["cost_centre"], source: "rule", rule_index: index)
+    entry, index = TeamPlanning::RuleKinds::CostCentre.match(rules_at(unit_id), unit_ids: chain(unit_id), role_id: position.role_id,
+                                                                                role_family_id: families[position.role_id])
+    entry && Resolved.new(cost_centre: entry["cost_centre"], source: "rule", rule_index: index)
   end
 
   def rules_at(unit_id) = (@rules ||= {})[unit_id] ||= @map.rule("cost_centre", unit_id:)
