@@ -29,7 +29,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "each position drawing on it once, at the FTE it draws, while units and the total count the positions " \
               "funded whole, as team_planning_funding does, so funded and unfunded add up to every position. A position with a seat no pay band prices still counts in head count and is listed under " \
               "unpriced with no money; so is one whose on-cost is refused, unless the basis is base_only, which funds its base. Figures are decimal strings. The baseline has no period, so it can't be the " \
-              "scenario. Refused, as an unknown plan, unless the caller is a member."
+              "scenario. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -42,7 +42,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Budget.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, scenario_id:, basis: report.basis, period: period(report), pay_view: report.pay_view,
+    { plan_id: plan.id, **priced_today(plan), scenario_id:, basis: report.basis, period: period(report), pay_view: report.pay_view,
       reference_currency: report.reference_currency, total: totals(report.totals), forecast: sum(report.forecast),
       budget_lines: report.lines.map { line(it) },
       cost_centres: report.cost_centres.map { |cost_centre, totals| { cost_centre:, **totals(totals, money: method(:native)) } },
