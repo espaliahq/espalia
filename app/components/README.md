@@ -51,6 +51,22 @@ end
 
 Use `strategy: :fixed` inside a scrolling container, so the menu isn't clipped.
 
+**`Kit::DelegatedMenu`**: one menu for a ⋮ on every row. The page renders the
+items once; each row's trigger carries the values that fill each `{name}`.
+
+```ruby
+div(data: Components::Kit::DelegatedMenu.root_data) do
+  render Components::Kit::DelegatedMenu.new(kind: "position") do |menu|
+    menu.item(data: { action: "click->modal#open", modal_target_id: "edit-modal", edit_url: "{path}" }) { "Edit…" }
+    menu.item(tone: :danger, data: { action: "click->modal#open", modal_target_id: "close-modal", close_url: "{path}" }) { "Close…" }
+  end
+  positions.each do |position|
+    render Components::Kit::DelegatedMenu::Trigger.new(label: "Actions for #{position.name}", kind: "position",
+                                                       values: { path: position_path(position) })
+  end
+end
+```
+
 **`Kit::SegmentedControl`**: one choice from a few, on a shared track.
 
 ```ruby
