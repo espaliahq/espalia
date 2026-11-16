@@ -5,11 +5,15 @@
 class Plans::RedosController < ApplicationController
   include Plans::MapEditing
   include Plans::TabReturn
+  include Plans::UndoOffer
 
   # POST /planning/:plan_id/redos
   def create
     authorize_editor
-    Operations::TeamPlanning::RedoChange.call(context: pundit_user, params: { plan_id:, scenario_id:, event_id: params.expect(:event_id) })
+    event_id = params.expect(:event_id)
+    return redirect_to(back_to_tab, alert: STALE, status: :see_other) unless still_offered?(:redo, event_id)
+
+    Operations::TeamPlanning::RedoChange.call(context: pundit_user, params: { plan_id:, scenario_id:, event_id: })
     redirect_to back_to_tab, notice: "Change redone.", status: :see_other
   rescue Operations::Base::ParameterError => e
     redirect_to back_to_tab, alert: "Couldn't redo: #{e.message}", status: :see_other

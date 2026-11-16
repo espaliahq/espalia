@@ -53,13 +53,28 @@ class Plans::UndosControllerTest < ActionDispatch::IntegrationTest
       assert_equal "clear", step[:undo][:action]
     end
 
-    should "show the operation's own refusal, and send an unknown tab to the map" do
-      event_id = step[:undo][:event_id]
-      post plan_undos_path(@plan_id), params: { event_id:, scenario_id: @q1, tab: "changes" }
-      post plan_undos_path(@plan_id), params: { event_id:, scenario_id: @q1, tab: "https://example.com" }
+    should "show the operation's own refusal, from a race the offer can't see, and send an unknown tab to the map" do
+      refuse = ->(**) { raise Operations::Base::ParameterError, "That change is already undone" }
+      Operations::TeamPlanning::UndoChange.stub(:call, refuse) do
+        post plan_undos_path(@plan_id), params: { event_id: step[:undo][:event_id], scenario_id: @q1, tab: "https://example.com" }
+      end
 
       assert_redirected_to map_plan_path(@plan_id, scenario: @q1)
-      assert_match(/\ACouldn't undo: ./, flash[:alert])
+      assert_equal "Couldn't undo: That change is already undone", flash[:alert]
+    end
+
+    should "change nothing when the page named a change that is no longer the one to undo or redo" do
+      first = step[:undo][:event_id]
+      call_as_editor(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "5")
+      post plan_undos_path(@plan_id), params: { event_id: first, scenario_id: @q1, tab: "changes" }
+
+      assert_redirected_to changes_plan_path(@plan_id, scenario: @q1)
+      assert_equal Plans::UndoOffer::STALE, flash[:alert]
+      assert_nil step[:redo]
+
+      post plan_redos_path(@plan_id), params: { event_id: first, scenario_id: @q1, tab: "changes" }
+      assert_equal Plans::UndoOffer::STALE, flash[:alert]
+      assert_equal [ "level" ], statuses.pluck(:facet)
     end
   end
 
@@ -85,6 +100,8 @@ class Plans::UndosControllerTest < ActionDispatch::IntegrationTest
   private
 
   def step = ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::UndoStep, @editor, plan_id: @plan_id, scenario_id: @q1) }
+
+  def call_as_editor(operation, **params) = ActsAsTenant.with_tenant(@tenant) { call(operation, @editor, **params) }
 
   def statuses
     ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::Status, @editor, plan_id: @plan_id, scenario_id: @q1)[:statuses] }
