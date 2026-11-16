@@ -166,7 +166,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
   end
 
   # Quinn joins while still in the organisation, as an editor of the lead's
-  # plan, sets a rule in one of its scenarios, is the last to grant the lead
+  # plan, sets a rule in one of its scenarios, removes another, is the last to grant the lead
   # the see-pay right, and archives another of the lead's plans.
   def plan_with_quinn
     @plan_id = SecureRandom.uuid_v7
@@ -184,7 +184,17 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     end
     TeamPlanning::CommandHandler.new(actor: quinn).set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id: @scenario_id, subject_id: @plan_id,
                                                                                                        end_state: { rule: "test_headcount_cap", value: { cap: 4 } })
+    removed_by_quinn(quinn)
     archived_by_quinn(quinn)
+  end
+
+  # A scenario Quinn forks and removes, so the removed list names its remover.
+  def removed_by_quinn(quinn)
+    dropped = SecureRandom.uuid_v7
+    TeamPlanning::CommandHandler.new(actor: quinn).tap do |handler|
+      handler.fork_scenario(@plan_id, dropped, parent_id: @scenario_id, relation: "instead", name: "Dropped")
+      handler.remove_scenario(@plan_id, dropped)
+    end
   end
 
   # A second plan, which Quinn archives, so the plan read names its archiver.
