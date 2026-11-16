@@ -37,6 +37,16 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "your organisation&#39;s defaults"
     end
 
+    should "keep the side panel's choice to the person who made it" do
+      cookies[Views::Plans::ShowView.panel_cookie(@editor.user)] = "closed"
+      get plan_path(@plan_id)
+      assert_select "aside#plan-side-panel[data-pane-state='open']"
+
+      cookies[Views::Plans::ShowView.panel_cookie(@viewer.user)] = "closed"
+      get plan_path(@plan_id)
+      assert_select "aside#plan-side-panel[data-pane-state='closed']"
+    end
+
     should "open the map on today, and on a scenario" do
       get map_plan_path(@plan_id)
       assert_response :success

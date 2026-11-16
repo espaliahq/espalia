@@ -12,6 +12,8 @@ class Views::Plans::ShowView < Views::Base
   # A tab over the main column. The page marks the one whose key is open.
   Tab = Data.define(:key, :label, :href)
 
+  PANEL_URL_KEY = "panel"
+
   # @param plan [Hash] from `team_planning_plan`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
   # @param members [Array<Hash>] from `team_planning_plan_members`
@@ -27,9 +29,11 @@ class Views::Plans::ShowView < Views::Base
   # @param can_delete [Boolean] whether the viewer may delete the plan
   # @param see_pay [Hash] the members panel's see-pay options: `can_manage_see_pay`, `reachable_ids`, `locked_out`
   # @param coverable_units [Array<Hash>, nil] from `team_planning_coverable_units`, for an editor to change the scope
+  # @param panel_open [Boolean] whether the side panel renders open; see `.panel_open?`
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
                  body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, can_archive: false, can_restore: false, can_delete: false,
-                 see_pay: {}, coverable_units: nil)
+                 see_pay: {}, coverable_units: nil, panel_open: true)
+    @panel_open = panel_open
     @plan = plan
     @can_archive = can_archive
     @can_restore = can_restore
@@ -56,13 +60,16 @@ class Views::Plans::ShowView < Views::Base
         header
         frozen_notice if @plan[:frozen]
         archived_notice if @plan[:archived]
-        div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
-          section(class: "flex-1 min-w-0", aria: { labelledby: "plan-main-heading" }) do
-            tab_strip
-            render(@body || Views::Plans::ScenarioTable.new(plan_id: @plan[:plan_id], scenarios: @scenarios, can_edit: @can_edit))
-          end
-          aside(class: "w-full lg:w-80 shrink-0 space-y-6", aria: { label: "About this plan" }) do
-            (@panels || default_panels).each { render it }
+        div(class: "mt-6") do
+          render Components::Kit::SidePanel.new(id: "plan-side-panel", title: "About this plan", open: @panel_open,
+                                                cookie: self.class.panel_cookie(@user), url_key: PANEL_URL_KEY, narrow: :stack) do |panel|
+            panel.main do
+              section(aria: { labelledby: "plan-main-heading" }) do
+                tab_strip(panel)
+                render(@body || Views::Plans::ScenarioTable.new(plan_id: @plan[:plan_id], scenarios: @scenarios, can_edit: @can_edit))
+              end
+            end
+            panel.body { (@panels || default_panels).each { render it } }
           end
         end
         render Views::Plans::ScenarioDialogs.new(plan_id: @plan[:plan_id], scenarios: @scenarios) if @can_edit
@@ -156,14 +163,39 @@ class Views::Plans::ShowView < Views::Base
     end
   end
 
-  def tab_strip
+  # The cookie that remembers the side panel's choice. It names the user, so a
+  # second person signing in on the same browser starts from their own default.
+  #
+  # @param user [User]
+  # @return [String]
+  def self.panel_cookie(user) = "plan_side_panel_open_#{user.id}"
+
+  # Whether the side panel opens: as the viewer last left it, from the URL or
+  # the cookie; otherwise closed on the map of a plan with scenarios, where the
+  # map wants the width, and open on a new plan, whose rules and members come next.
+  #
+  # @param url [String, nil] the query parameter's value
+  # @param cookie [String, nil] the cookie's value
+  # @param open_tab [Symbol]
+  # @param scenarios [Array<Hash>] the baseline first
+  def self.panel_open?(url:, cookie:, open_tab:, scenarios:)
+    Components::Kit::SidePanel.open?(url:, cookie:, default: !(open_tab == :map && scenarios.size > 1))
+  end
+
+  def tab_strip(panel)
     if tabs.size > 1
-      nav(aria: { label: "Plan views" }, class: "mb-4 border-b border-default") do
-        div(class: "-mb-px flex flex-wrap gap-x-1") { tabs.each { tab(it) } }
+      div(class: "mb-4 flex items-end gap-3 border-b border-default") do
+        nav(aria: { label: "Plan views" }, class: "min-w-0 flex-1") do
+          div(class: "-mb-px flex flex-wrap gap-x-1") { tabs.each { tab(it) } }
+        end
+        div(class: "shrink-0 pb-1.5") { panel.toggle }
       end
-    end
-    h2(id: "plan-main-heading", class: ("sr-only" if tabs.size > 1) || "mb-3 text-base font-semibold text-default") do
-      current_tab.label
+      h2(id: "plan-main-heading", class: "sr-only") { current_tab.label }
+    else
+      div(class: "mb-3 flex items-center justify-between gap-3") do
+        h2(id: "plan-main-heading", class: "text-base font-semibold text-default") { current_tab.label }
+        panel.toggle
+      end
     end
   end
 
