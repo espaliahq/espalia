@@ -165,6 +165,8 @@ class TeamPlanning::Budget
       draws = funded ? funded.draws.select(&:held) : []
       drawn = draws.sum(0r) do |draw|
         part = money * draw.share * covered(@budget_lines[draw.budget_line_id], seat)
+        next part if part.zero?
+
         @drawn[draw.budget_line_id][seat.currency] += part
         @drawn_by_unit[seat.unit_id][seat.currency] += part
         part

@@ -312,6 +312,16 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
                  "100,000 euros against 50,000 dollars is neither over nor under"
   end
 
+  should "not flag a line as drawn on in another currency for a draw on days its period misses" do
+    dollars = line(amount: 150_000, currency: "USD", period: "year", cost_centre: "Platform", starts_on: "2027-01-01", ends_on: "2027-12-31")
+    seat = open_position(cost_centre: "Elsewhere")
+    operation(Operations::TeamPlanning::SetPositionFunding, position_id: seat, draws: [ { budget_line_id: dollars, share: "1" } ])
+    report = budget
+
+    assert_equal [ {}, [], 0r ], of(report, dollars).then { [ it.funded, it.mismatched, it.remaining ] }
+    assert_empty report.totals.remaining_left_out
+  end
+
   should "count a position no band prices in head count, under unpriced with no money" do
     platform = line(head_count: 2, cost_centre: "Platform")
     staff = open_position(level: @e6)
