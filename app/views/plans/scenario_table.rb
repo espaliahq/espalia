@@ -222,6 +222,8 @@ class Views::Plans::ScenarioTable < Views::Base
     period[:open_ended] ? "#{days}, the first #{period[:horizon_months]} months of a step with no end date" : days
   end
 
+  # @param iso [String] an ISO 8601 date
+  # @return [String] such as "1 Apr 2027"
   def self.day(iso) = Date.iso8601(iso).strftime("%-d %b %Y")
 
   def ordered = self.class.tree(@scenarios)
