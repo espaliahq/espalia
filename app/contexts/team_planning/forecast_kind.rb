@@ -12,9 +12,11 @@
 #     def self.forecast(frame) = frame.map.units.map { frame.row(unit_id: it.id, headcount: -1r) }
 #   end
 class TeamPlanning::ForecastKind < TeamPlanning::RuleKind
-  # What the assumption adds to one step of a scenario. A kind leaves out
-  # anyone {TeamPlanning::Forecast::Frame#covered?} names, as a planned change
-  # already says what happens to them.
+  # What the assumption adds to one step of a scenario. A kind decides which
+  # planned changes already say what happens to someone:
+  # {TeamPlanning::Forecast::Frame#covered?} names every subject a change sets,
+  # and attrition drops only planned leavers, as a pay or level change keeps a
+  # seat filled.
   #
   # @param frame [TeamPlanning::Forecast::Frame]
   # @return [Array<TeamPlanning::Forecast::Row>]

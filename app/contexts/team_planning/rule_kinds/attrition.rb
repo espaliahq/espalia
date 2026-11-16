@@ -59,7 +59,7 @@ class TeamPlanning::RuleKinds::Attrition < TeamPlanning::ForecastKind
   def self.yearly_rate(value) = value.fetch("yearly_rate").to_r
 
   # @param frame [TeamPlanning::Forecast::Frame]
-  # @return [Array<TeamPlanning::Forecast::Row>] one per unit and cost centre with filled FTE and a rate above 0
+  # @return [Array<TeamPlanning::Forecast::Row>] one per unit and cost centre with filled FTE, a rate and a time to hire above 0
   def self.forecast(frame)
     days = frame.step.count
     frame.filled.group_by { [ it.unit_id, it.cost_centre ] }.sort_by { |key, _| key.map(&:to_s) }.filter_map do |(unit_id, cost_centre), places|
@@ -69,6 +69,8 @@ class TeamPlanning::RuleKinds::Attrition < TeamPlanning::ForecastKind
       hire = TeamPlanning::RuleKinds::TimeToHire.days(frame.map.rule(TeamPlanning::RuleKinds::TimeToHire.rule_name, unit_id:))
       fte = places.sum(0r, &:fte)
       empty_days = rate * fte / YEAR_DAYS * (hire < days ? (hire * days) - Rational(hire * hire, 2) : Rational(days * days, 2))
+      next if empty_days.zero?
+
       average = frame.average(unit_id)
       frame.row(unit_id:, cost_centre:, headcount: -(rate * fte * [ hire, days ].min / YEAR_DAYS),
                 cost: average.cost.transform_values { -(it * empty_days / YEAR_DAYS) },
