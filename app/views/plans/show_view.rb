@@ -195,8 +195,8 @@ class Views::Plans::ShowView < Views::Base
           undo_controls
           panel.toggle do
             span do
-              plain "About"
-              span(class: "sr-only @3xl:not-sr-only") { " this plan" }
+              plain "About "
+              span(class: "sr-only @3xl:not-sr-only") { "this plan" }
             end
           end
         end
