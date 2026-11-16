@@ -14,7 +14,7 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    departments = SecureRandom.uuid_v7
+    @departments = departments = SecureRandom.uuid_v7
     teams = SecureRandom.uuid_v7
     @engineering = SecureRandom.uuid_v7
     @platform = SecureRandom.uuid_v7
@@ -49,6 +49,8 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
   end
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
+
+  def org = as_tenant { yield OrgGraph::CommandHandler.new(actor: SYSTEM) }
 
   def context = AuthorizationContext.new(user: @planner.user, tenant_user: @planner, person: @planner.person)
 
@@ -135,6 +137,51 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
       operation(Operations::TeamPlanning::SetDeparture, scenario_id: @year, person_id: @dee.id)
       assert_not rows.key?([ @platform, nil ])
       assert_empty as_tenant { TeamPlanning::Cost.new(context:, plan:, scenario_id: @plan_id).call }.forecast.rows
+    end
+  end
+
+  context "at 20% with a year to hire, priced at the average over every filled seat" do
+    setup do
+      rule(@plan_id, "attrition", { yearly_rate: "0.2" })
+      rule(@plan_id, "time_to_hire", { days: "365" })
+    end
+
+    should "count an unpriced seat in the unit's FTE and not its figure, so the unit loses no more than it costs" do
+      eve = as_tenant { create(:person, tenant: @tenant, name: "Eve Quill") }
+      org do |people|
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed")
+        people.set_membership(eve.id, @platform, **ESPALIA, allocation: 1.0)
+      end
+      platform = rows.fetch([ @platform, nil ])
+
+      assert_equal decimal("-0.4"), decimal(platform.headcount)
+      assert_equal({ "EUR" => decimal("-10000") }, platform.cost.transform_values { decimal(it) })
+      assert_equal({ "per_fte" => decimal("-0.1") }, capacities.fetch([ @platform, nil ]))
+    end
+
+    should "take away what a part-allocated seat delivers, not a whole FTE's capacity" do
+      org { it.set_membership(@dee.id, @platform, **ESPALIA, allocation: 0.5) }
+
+      assert_equal({ "per_fte" => decimal("-0.05") }, capacities.fetch([ @platform, nil ]))
+    end
+
+    should "leave out a place outside a scoped plan, as cost does" do
+      data = SecureRandom.uuid_v7
+      as_tenant { OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(data, "Data", level_id: @departments, effective_on: "2025-01-01") }
+      org do |people|
+        people.set_membership(@dee.id, @platform, **ESPALIA, allocation: 0.5)
+        people.set_membership(@dee.id, data, **ESPALIA, allocation: 0.5)
+      end
+      operation(Operations::TeamPlanning::SetPlanScope, unit_ids: [ @engineering ])
+
+      assert_not rows.key?([ nil, nil ]), "Dee's place in Data is outside the plan"
+      assert_equal decimal("-0.1"), decimal(rows.fetch([ @platform, nil ]).headcount)
+    end
+
+    should "forecast nothing with no time to hire, as no seat stays empty" do
+      rule(@plan_id, "time_to_hire", { days: "0" })
+
+      assert_empty cost.forecast.rows
     end
   end
 

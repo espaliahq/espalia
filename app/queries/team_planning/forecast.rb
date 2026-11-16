@@ -43,12 +43,12 @@ class TeamPlanning::Forecast
   Average = Data.define(:cost, :capacity)
   NO_AVERAGE = Average.new(cost: {}, capacity: {})
 
-  # Each filled place priced per FTE, keyed by person id and unit id, as the
-  # caller measures it. A place missing from a hash is left out of that
-  # average, as an unpriced seat is.
+  # Each filled place priced as the caller measures it, keyed by person id and
+  # unit id. A place missing from a hash adds nothing, as an unpriced seat adds
+  # nothing to the actual figure.
   #
   # @!attribute cost [Hash{Array(String, String) => Hash{String => Rational}}] currency => yearly amount per FTE
-  # @!attribute capacity [Hash{Array(String, String) => Hash{String => Rational}}] model => amount per FTE
+  # @!attribute capacity [Hash{Array(String, String) => Hash{String => Rational}}] model => what the place delivers
   Pricing = Data.define(:cost, :capacity) do
     def initialize(cost: {}, capacity: {}) = super
 
@@ -118,8 +118,9 @@ class TeamPlanning::Forecast
 
   # A filled seat is a person's: an open position fills none. A planned leaver
   # and a placeholder hire are left out, as the plan already says what happens
-  # to them; a change to pay, level or place keeps the seat filled. A person's places share their FTE as
-  # cost shares it, so the places add up to the seat.
+  # to them; a change to pay, level or place keeps the seat filled. A person's
+  # places share their FTE as cost shares it, and a place outside a scoped
+  # plan drops out as it does from cost.
   def filled_places
     live = @map.units.to_set(&:id)
     @map.people.reject { it.leaving? || it.placeholder? }.flat_map do |person|
@@ -129,27 +130,29 @@ class TeamPlanning::Forecast
       cost_centre = person.cost_centre.presence
       next [ Filled.new(person_id: person.id, unit_id: nil, cost_centre:, fte:) ] unless weight.positive?
 
-      places.map do |placement, share, _|
+      away = @map.outside_places(person)
+      places.reject { |placement, _| away.include?(placement) }.map do |placement, share, _|
         Filled.new(person_id: person.id, unit_id: live.include?(placement.unit_id) ? placement.unit_id : nil, cost_centre:,
                    fte: fte * Rational(share.to_s) / weight)
       end
     end
   end
 
-  # Each unit's figures per FTE, weighted by the FTE each place holds. A place
-  # the caller didn't price counts in neither the sum nor the weight.
+  # Each unit's figures over all its filled FTE. An unpriced place adds to the
+  # FTE and nothing to the figure, so attrition never takes away more than the
+  # actual figure holds.
   def averages(filled)
     filled.group_by(&:unit_id).transform_values do |places|
-      Average.new(cost: average(places, @pricing.cost), capacity: average(places, @pricing.capacity))
+      fte = places.sum(0r, &:fte)
+      cost = places.map { |place| @pricing.cost.fetch([ place.person_id, place.unit_id ], {}).transform_values { it * place.fte } }
+      capacity = places.map { |place| @pricing.capacity.fetch([ place.person_id, place.unit_id ], {}) }
+      Average.new(cost: average(cost, fte), capacity: average(capacity, fte))
     end
   end
 
-  def average(places, priced)
-    known = places.filter_map { |place| (figures = priced[[ place.person_id, place.unit_id ]]) && [ place.fte, figures ] }
-    weight = known.sum(0r, &:first)
-    return {} unless weight.positive?
+  def average(totals, fte)
+    return {} unless fte.positive?
 
-    known.flat_map { |fte, figures| figures.map { |key, amount| [ key, fte * amount ] } }
-         .group_by(&:first).transform_values { |pairs| pairs.sum(0r, &:last) / weight }.sort.to_h
+    totals.flat_map(&:to_a).group_by(&:first).transform_values { |pairs| pairs.sum(0r, &:last) / fte }.sort.to_h
   end
 end

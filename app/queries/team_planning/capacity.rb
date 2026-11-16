@@ -116,19 +116,18 @@ class TeamPlanning::Capacity
     # @return [Array<Array(Seat, Place)>] each place that counts nowhere, with its seat
     def unclassified = seats.flat_map { |seat| seat.places.select(&:unclassified?).map { [ seat, it ] } }
 
-    # What each person's places in a unit deliver per FTE, so a forecast
-    # takes away what an empty seat would have delivered.
+    # What each person's places in a unit deliver, so a forecast takes away
+    # what an empty seat would have delivered.
     #
     # @return [TeamPlanning::Forecast::Pricing]
     def pricing
       live = map.units.to_set(&:id)
       places = seats.select { it.seat.kind == "person" }.flat_map do |seat|
-        seat.places.select { it.figure && it.model }.map { [ seat.seat.id, live.include?(it.unit_id) ? it.unit_id : nil, seat.seat.fte * it.place.allocation, it ] }
+        seat.places.select { it.figure && it.model }.map { [ seat.seat.id, live.include?(it.unit_id) ? it.unit_id : nil, it ] }
       end
-      TeamPlanning::Forecast::Pricing.new(capacity: places.group_by { it.first(2) }.filter_map do |key, group|
-        fte = group.sum(0r) { it[2] }
-        [ key, TeamPlanning::Capacity.add(group.map { { it[3].model => it[3].figure.amount } }).transform_values { it / fte } ] if fte.positive?
-      end.to_h)
+      TeamPlanning::Forecast::Pricing.new(capacity: places.group_by { it.first(2) }.transform_values do |group|
+        TeamPlanning::Capacity.add(group.map { { it[2].model => it[2].figure.amount } })
+      end)
     end
 
     # @return [Boolean] whether any place has a model chosen, so the plan measures capacity at all
