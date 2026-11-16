@@ -54,6 +54,10 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       click_selector_with_js_fallback("#checks-placements [data-check-item] a", expect_text: "Planned in Q1 hires")
       assert page.evaluate_script("document.getElementById(location.hash.slice(1))?.matches('[data-planned-change]') ?? false"),
              "the link lands on the change's row"
+
+      within("[data-changes-section='attention']") { assert_text "2 items in Q1 hires no longer fit." }
+      click_link_with_js_fallback("Review them in Checks", expect_text: "Checks on Q1 hires")
+      assert_selector "#checks-placements [data-check-item]", text: "Placed in a retired unit"
     end
   end
 
