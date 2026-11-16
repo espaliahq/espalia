@@ -133,6 +133,7 @@ class Views::Tenant::PayBands::IndexView < Views::Base
     settings_form(reorder_tenant_pay_bands_path, method: :patch, class: "contents") do
       input(type: "hidden", name: "pay_band_id", value: band[:pay_band_id])
       input(type: "hidden", name: "direction", value: direction)
+      @bands.each { input(type: "hidden", name: "from_pay_band_ids[]", value: it[:pay_band_id]) }
       render Components::Kit::Button.new(
         variant: :ghost, tone: :neutral, size: :sm, icon: true, compact: true, type: :submit,
         id: "pay-band-#{direction}-#{band[:pay_band_id]}", aria_label: "Move the band for #{band_name(band)} #{direction}"

@@ -149,13 +149,13 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       second = stored_band(location: "Beta")
       third = stored_band(location: "Gamma")
 
-      patch reorder_tenant_pay_bands_path, params: { pay_band_id: third.id, direction: "up" }
+      patch reorder_tenant_pay_bands_path, params: { pay_band_id: third.id, direction: "up", from_pay_band_ids: [ first.id, second.id, third.id ] }
 
       assert_redirected_to tenant_pay_bands_path
       assert_equal "Moved the band for Software Engineer, E2 Engineer II, Gamma to 2 in the list.", flash[:notice]
       assert_equal %w[Alpha Gamma Beta], positions
 
-      patch reorder_tenant_pay_bands_path, params: { pay_band_id: first.id, direction: "up" }
+      patch reorder_tenant_pay_bands_path, params: { pay_band_id: first.id, direction: "up", from_pay_band_ids: [ first.id, third.id, second.id ] }
       assert_equal %w[Alpha Gamma Beta], positions
 
       patch reorder_tenant_pay_bands_path, params: { pay_band_ids: [ second.id, third.id, first.id ], from_pay_band_ids: [ first.id, third.id, second.id ] }
@@ -171,15 +171,29 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       patch reorder_tenant_pay_bands_path, params: { pay_band_ids: [ first.id ] }
       assert_equal stale, flash[:alert]
 
-      patch reorder_tenant_pay_bands_path, params: { pay_band_id: SecureRandom.uuid_v7, direction: "down" }
+      patch reorder_tenant_pay_bands_path, params: { pay_band_id: SecureRandom.uuid_v7, direction: "down", from_pay_band_ids: [ first.id, last.id ] }
       assert_equal stale, flash[:alert]
 
-      patch reorder_tenant_pay_bands_path, params: { pay_band_id: last.id, direction: "down" }
+      patch reorder_tenant_pay_bands_path, params: { pay_band_id: last.id, direction: "down", from_pay_band_ids: [ first.id, last.id ] }
       assert_equal stale, flash[:alert]
+
+      patch reorder_tenant_pay_bands_path, params: { pay_band_id: last.id, direction: "up" }
+      assert_equal stale, flash[:alert], "a button that doesn't say what order it saw"
 
       patch reorder_tenant_pay_bands_path, params: { pay_band_ids: [ last.id, first.id ], from_pay_band_ids: [ last.id, first.id ] }
       assert_equal stale, flash[:alert]
       assert_equal %w[Alpha Beta], positions
+    end
+
+    should "move nothing from a button on a page showing an order another admin has since changed" do
+      alpha = stored_band(location: "Alpha")
+      beta = stored_band(location: "Beta")
+      gamma = stored_band(location: "Gamma")
+
+      patch reorder_tenant_pay_bands_path, params: { pay_band_id: beta.id, direction: "down", from_pay_band_ids: [ beta.id, alpha.id, gamma.id ] }
+
+      assert_equal "The list changed since you opened it, so nothing moved. Here it is as it stands.", flash[:alert]
+      assert_equal %w[Alpha Beta Gamma], positions
     end
 
     should "answer 404 for a band the tenant doesn't hold" do

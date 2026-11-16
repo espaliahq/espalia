@@ -69,16 +69,16 @@ class Tenant::PayBandsController < ApplicationController
 
   private
 
-  # A drag sends the order the page showed beside the new one, so a list
+  # A drag and a move button both send the order the page showed, so a list
   # another admin has moved since refuses rather than undoing their move.
   #
-  # @return [Array(Array<String>, Array<String>)] the order read and every band's id in the new order;
+  # @return [Array(Array<String>, Array<String>)] the order the page showed and every band's id in the new order;
   #   the new order is nil when the band to move is gone or can't move that way
   def new_order
-    return [ params[:from_pay_band_ids]&.then { Array(it).map(&:to_s) }, Array(params[:pay_band_ids]).map(&:to_s) ] if params.key?(:pay_band_ids)
+    from = params[:from_pay_band_ids]&.then { Array(it).map(&:to_s) }
+    return [ from, Array(params[:pay_band_ids]).map(&:to_s) ] if params.key?(:pay_band_ids)
 
-    from = PayBand.order(:position).pluck(:id)
-    index = from.index(params[:pay_band_id]) or return [ from, nil ]
+    index = from&.index(params[:pay_band_id]) or return [ from, nil ]
     other = params[:direction] == "up" ? index - 1 : index + 1
     return [ from, nil ] unless other.between?(0, from.size - 1)
 
