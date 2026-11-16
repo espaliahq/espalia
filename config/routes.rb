@@ -446,8 +446,10 @@ Rails.application.routes.draw do
     resources :scenarios, only: [ :create, :update, :destroy ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"
-    # Move a position to another unit on the scenario map; the id is the position's.
-    resources :positions, only: [ :update ], controller: "plans/positions"
+    # Open, edit, close and move a position on the scenario map (#285, [#461](https://github.com/espaliahq/espalia/issues/461)).
+    resources :positions, only: [ :create, :update, :destroy ], controller: "plans/positions" do
+      patch :move, on: :member
+    end
     # Which budget lines a position draws on, from the Budget tab ([#411](https://github.com/espaliahq/espalia/issues/411)); the id is the position's.
     resources :fundings, only: [ :update, :destroy ], controller: "plans/fundings"
     # Move a place, position or departure a step earlier or later on the timeline ([#309](https://github.com/espaliahq/espalia/issues/309)).

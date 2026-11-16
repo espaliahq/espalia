@@ -10,9 +10,10 @@
 # draws under the date line: capacity (#255), items needing attention (#257),
 # a leaving mark and reporting lines (#256). An editor on a scenario other
 # than Today can move people and positions ([#285](https://github.com/espaliahq/espalia/issues/285)): units take drops, and
-# so do positions, for people. Each person row and each position is draggable,
-# with a "Move…" button that opens {Views::Plans::MoveDialog} or
-# {Views::Plans::MovePositionDialog}.
+# so do positions, for people. Each person row and each position is draggable.
+# A person has a "Move…" button that opens {Views::Plans::MoveDialog}; a
+# position has a menu of Edit…, Move… and Close…, and each unit an "Open a
+# position" button ([#461](https://github.com/espaliahq/espalia/issues/461)).
 class Views::Plans::ScenarioMap < Views::Base
   NONE = ->(*) { [] }
 
@@ -30,6 +31,21 @@ class Views::Plans::ScenarioMap < Views::Base
   # @return [Hash{String => String}] every position's name, numbered within its unit
   def self.all_position_names(map) = map[:positions].group_by { it[:unit_id] }.values.map { position_names(it) }.reduce({}, :merge)
 
+  # @param units [Array<Hash>] the map's units
+  # @return [Array<Array(Hash, Array<String>)>] each unit with the names above it, parents before children, by name
+  def self.ordered_units(units)
+    children = units.group_by { it[:parent_id] }
+    ids = units.to_set { it[:id] }
+    seen = Set.new
+    walk = lambda do |unit, path|
+      next [] unless seen.add?(unit[:id])
+
+      [ [ unit, path ] ] + children.fetch(unit[:id], []).sort_by { it[:name] }.flat_map { walk.(it, path + [ unit[:name] ]) }
+    end
+    roots, rest = units.sort_by { it[:name] }.partition { !ids.include?(it[:parent_id]) }
+    (roots + rest).flat_map { walk.(it, []) }
+  end
+
   # @param map [Hash] from `team_planning_scenario_map`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param unit_marks [#call] unit hash => components beside the unit's name
@@ -39,8 +55,10 @@ class Views::Plans::ScenarioMap < Views::Base
   # @param can_edit [Boolean] whether the caller edits the plan: renaming the scenario shown, and moving people on it
   # @param can_upload_pay [Boolean] whether the caller may hold actual pay from a file, an editor with the see-pay right
   # @param removable [Array<String>] the scenarios that offer Remove, each with its dialog on the page
+  # @param roles [Array<FrameworkState::Role>] with their levels, for opening and editing positions
   def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, position_marks: NONE, summary: nil, can_edit: false,
-                 can_upload_pay: false, removable: [])
+                 can_upload_pay: false, removable: [], roles: [])
+    @roles = roles
     @can_edit = can_edit
     @removable = removable
     @can_upload_pay = can_upload_pay
@@ -158,6 +176,11 @@ class Views::Plans::ScenarioMap < Views::Base
     render Views::Plans::MoveDialog.new(scenario_id: @map[:scenario_id], scenario_name:, units: ordered_units,
                                         positions: @map[:positions].group_by { it[:unit_id] })
     render Views::Plans::MovePositionDialog.new(scenario_id: @map[:scenario_id], scenario_name:, units: ordered_units)
+    %i[open edit].each do |mode|
+      form = Views::Plans::PositionForm.new(mode:, scenario_id: @map[:scenario_id], scenario_name:, units: ordered_units, roles: @roles)
+      render Views::Plans::PositionDialog.new(mode:, form:)
+    end
+    render Views::Plans::ClosePositionDialog.new(scenario_id: @map[:scenario_id], scenario_name:)
   end
 
   # Where a unit card takes a dragged person.
@@ -193,6 +216,7 @@ class Views::Plans::ScenarioMap < Views::Base
         p(class: "mt-1 text-sm text-muted") { unit_summary(unit, people) }
       end
       rows(people, positions_in(unit[:id]))
+      open_position_button(unit) if @moving
     end
   end
 
@@ -316,7 +340,7 @@ class Views::Plans::ScenarioMap < Views::Base
         position.fetch(:occupants, []).sort_by { name(it[:person_id]) }.each do |occupant|
           span(data: { map_occupant: occupant[:person_id] }, class: "min-w-0 break-words text-muted") { "#{name(occupant[:person_id])} · #{allocation(occupant)}" }
         end
-        span(class: "ml-auto") { move_position_button(position) } if movable?(position)
+        span(class: "ml-auto") { position_menu(position) } if movable?(position)
       end
     end
   end
@@ -333,13 +357,33 @@ class Views::Plans::ScenarioMap < Views::Base
       action: "dragstart->map-move#start dragend->map-move#end dragover->map-move#over dragleave->map-move#leave drop->map-move#drop" }
   end
 
-  def move_position_button(position)
+  # Edit…, Move… and Close… for one position. Move… is a button in the row
+  # even while the menu is shut, so a drop on a unit can click it.
+  def position_menu(position)
     label = position_name(position)
-    render Components::Kit::Button.new(
-      variant: :ghost, size: :sm, aria_label: "Move #{label} in #{units_by_id[position[:unit_id]][:name]}",
-      data: Views::Plans::MovePositionDialog.trigger(url: plan_position_path(@map[:plan_id], position[:position_id]), name: label,
-                                                     from: position[:unit_id])
-    ) { "Move…" }
+    url = plan_position_path(@map[:plan_id], position[:position_id])
+    render Components::Kit::Dropdown.new(align: :right, strategy: :fixed) do |menu|
+      menu.trigger(label: "Actions for #{label} in #{units_by_id[position[:unit_id]][:name]}",
+                   button: { variant: :ghost, size: :sm, icon: true, compact: true }) { icon(:kebab, class: "size-4") }
+      menu.menu(width: "w-44") do
+        menu.item(data: Views::Plans::PositionDialog.trigger(mode: :edit, url:, name: label, values: position)) { "Edit…" }
+        menu.item(data: Views::Plans::MovePositionDialog.trigger(url: move_plan_position_path(@map[:plan_id], position[:position_id]),
+                                                                 name: label, from: position[:unit_id])) { "Move…" }
+        menu.item(tone: :danger, data: Views::Plans::ClosePositionDialog.trigger(
+          url:, name: label, occupants: position.fetch(:occupants, []).map { name(it[:person_id]) }.sort
+        )) { "Close…" }
+      end
+    end
+  end
+
+  def open_position_button(unit)
+    div(class: "border-t border-subtle px-2 py-1") do
+      render Components::Kit::Button.new(
+        variant: :ghost, size: :sm, aria_label: "Open a position in #{unit[:name]}",
+        data: Views::Plans::PositionDialog.trigger(mode: :open, url: plan_positions_path(@map[:plan_id]), name: unit[:name],
+                                                   values: { unit_id: unit[:id] })
+      ) { "Open a position" }
+    end
   end
 
   def units_by_id = @units_by_id ||= @map[:units].index_by { it[:id] }
@@ -379,20 +423,7 @@ class Views::Plans::ScenarioMap < Views::Base
   # Each unit with the names of the units above it, parents before children.
   # Scenarios can set any unit's parent, so units caught in a loop come last
   # rather than not at all.
-  def ordered_units
-    @ordered_units ||= begin
-      children = @map[:units].group_by { it[:parent_id] }
-      ids = @map[:units].to_set { it[:id] }
-      seen = Set.new
-      walk = lambda do |unit, path|
-        next [] unless seen.add?(unit[:id])
-
-        [ [ unit, path ] ] + children.fetch(unit[:id], []).sort_by { it[:name] }.flat_map { walk.(it, path + [ unit[:name] ]) }
-      end
-      roots, rest = @map[:units].sort_by { it[:name] }.partition { !ids.include?(it[:parent_id]) }
-      (roots + rest).flat_map { walk.(it, []) }
-    end
-  end
+  def ordered_units = @ordered_units ||= self.class.ordered_units(@map[:units])
 
   # @return [Array<Array(Hash, Hash)>] each person in the unit with their place there
   def members_of(unit_id)

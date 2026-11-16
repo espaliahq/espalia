@@ -29,15 +29,32 @@ class Plans::PositionsControllerTest < ActionDispatch::IntegrationTest
       call(Operations::TeamPlanning::AddPlanMember, @editor, plan_id: @plan_id, person_id: @viewer.person.id, role: "viewer")
       @q1 = call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, relation: "then", name: "Q1 hires",
                                                                   ends_on: "2027-03-31")[:scenario_id]
-      role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
-      level = create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 2, title: "Engineer II")
-      @position = call(Operations::TeamPlanning::SetPosition, @editor, plan_id: @plan_id, scenario_id: @q1, role_id: role.role_id,
-                                                                     level_id: level.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]
+      @role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+      @level = create(:framework_level, tenant: @tenant, role_id: @role.role_id, ordinal: 2, title: "Engineer II", code: "E2")
+      @senior = create(:framework_level, tenant: @tenant, role_id: @role.role_id, ordinal: 3, title: "Senior Engineer", code: "E3")
+      @position = call(Operations::TeamPlanning::SetPosition, @editor, plan_id: @plan_id, scenario_id: @q1, role_id: @role.role_id,
+                                                                     level_id: @level.level_id, unit_id: @payments, fte: 1, basis: "new",
+                                                                     cost_centre: "Platform")[:position_id]
     end
   end
 
   def move(scenario_id: @q1, to_unit_id: @growth)
-    patch plan_position_path(@plan_id, @position), params: { move: { scenario_id:, to_unit_id: } }
+    patch move_plan_position_path(@plan_id, @position), params: { move: { scenario_id:, to_unit_id: } }
+  end
+
+  def open_position(as: :html, **fields)
+    post plan_positions_path(@plan_id), as:, params: { position: { scenario_id: @q1, unit_id: @growth, level_id: @senior.level_id,
+                                                                   fte: "0.5", basis: "backfill", cost_centre: "" }.merge(fields) }
+  end
+
+  ORIGINAL = { basis: "new", cost_centre: "Platform", fte: "1.0" }.freeze
+
+  def edit_position(scenario_id: @q1, original: ORIGINAL, as: :html, **fields)
+    patch plan_position_path(@plan_id, @position), as:, params: { position: { scenario_id:, **fields }, original: }
+  end
+
+  def close_position(scenario_id: @q1)
+    delete plan_position_path(@plan_id, @position), params: { scenario_id: }
   end
 
   context "an editor" do
@@ -58,23 +75,110 @@ class Plans::PositionsControllerTest < ActionDispatch::IntegrationTest
       assert_equal @payments, unit_of_position
     end
 
-    should "be offered Move on a scenario's positions, naming the scenario" do
+    should "be offered Edit, Move and Close on a scenario's positions, and Open on each unit" do
       get map_plan_path(@plan_id, scenario: @q1)
-      assert_select "[data-map-position='#{@position}'][draggable='true'] button[data-move-from='#{@payments}']", text: "Move…"
+      row = "[data-map-position='#{@position}'][draggable='true']"
+      assert_select "#{row} [role=menu] [role=menuitem]", text: /Edit…|Move…|Close…/, count: 3
+      assert_select "#{row} button[data-move-from='#{@payments}'][data-modal-target-id='move-position-modal']", text: "Move…"
+      assert_select "#{row} button[data-modal-target-id='edit-position-modal'][data-position-level-id='#{@level.level_id}']" \
+                    "[data-position-cost-centre='Platform']", text: "Edit…"
+      assert_select "button[aria-label='Open a position in Growth'][data-position-unit-id='#{@growth}']"
       assert_select "#move-position-modal form strong", text: "Q1 hires"
+      assert_select "#edit-position-modal optgroup[label='Software Engineer'] option[value='#{@senior.level_id}']",
+                    text: "Software Engineer, E3 Senior Engineer"
+    end
+
+    should "open a position in a unit" do
+      open_position
+
+      assert_redirected_to map_plan_path(@plan_id, scenario: @q1)
+      assert_equal "Position opened.", flash[:notice]
+      opened = positions.find { it[:unit_id] == @growth }
+      assert_equal [ @role.role_id, @senior.level_id, 0.5, "backfill", nil ], opened.values_at(:role_id, :level_id, :fte, :basis, :cost_centre)
+    end
+
+    should "save only the fields the dialog changed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::TeamPlanning::EditPosition, @editor, plan_id: @plan_id, scenario_id: @q1, position_id: @position, fte: 0.8)
+      end
+      edit_position(fte: "1.0", basis: "new", cost_centre: "Ledger", level_id: @senior.level_id, unit_id: @payments)
+
+      assert_redirected_to map_plan_path(@plan_id, scenario: @q1)
+      assert_equal "Position saved.", flash[:notice]
+      assert_equal [ @senior.level_id, 0.8, "Ledger" ], position.values_at(:level_id, :fte, :cost_centre)
+    end
+
+    should "say when nothing changed" do
+      edit_position(fte: "1.0", basis: "new", cost_centre: "Platform")
+      assert_equal "Nothing changed.", flash[:notice]
+    end
+
+    should "keep what was typed in the dialog when a save is refused" do
+      edit_position(as: :turbo_stream, fte: "1.5", cost_centre: "Ledger")
+
+      assert_response :unprocessable_content
+      assert_select "turbo-stream[action=replace][target=edit-position-form] template" do
+        assert_select "[role=alert]", text: /FTE/
+        assert_select "input[name='position[cost_centre]'][value=Ledger]"
+        assert_select "input[name='position[fte]'][value='1.5']"
+        assert_select "input[name='original[cost_centre]'][value=Platform]"
+      end
+      assert_equal "Platform", position[:cost_centre]
+    end
+
+    should "refuse a position with no role and level" do
+      open_position(as: :turbo_stream, level_id: "")
+
+      assert_response :unprocessable_content
+      assert_select "turbo-stream[target=open-position-form] template [role=alert]", text: /Choose a role and level/
+    end
+
+    should "close a position" do
+      close_position
+
+      assert_redirected_to map_plan_path(@plan_id, scenario: @q1)
+      assert_equal "Position closed.", flash[:notice]
+      assert_nil position
+    end
+
+    should "refuse to change Today, whichever way" do
+      edit_position(scenario_id: @plan_id, cost_centre: "Ledger")
+      assert_equal "Couldn't save the position: #{Plans::PositionsController::TODAY}", flash[:alert]
+      open_position(scenario_id: @plan_id)
+      assert_equal "Couldn't save the position: #{Plans::PositionsController::TODAY}", flash[:alert]
+      close_position(scenario_id: @plan_id)
+      assert_equal "Couldn't close the position: #{Plans::PositionsController::TODAY}", flash[:alert]
+      assert_equal "Platform", position[:cost_centre]
+    end
+
+    should "be refused on an archived plan" do
+      ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id) }
+      edit_position(cost_centre: "Ledger")
+      assert_equal "Couldn't save the position: This plan is archived: restore it to change it", flash[:alert]
+      close_position
+      assert_equal "Couldn't close the position: This plan is archived: restore it to change it", flash[:alert]
+      assert_equal "Platform", position[:cost_centre]
     end
   end
 
   context "a viewer" do
     setup { sign_in @viewer.user }
 
-    should "be refused a move and offered no handles" do
+    should "be refused a move, an open, an edit and a close, and offered no handles" do
       move
       assert_redirected_to root_path
       assert_equal @payments, unit_of_position
+      [ -> { open_position }, -> { edit_position(cost_centre: "Ledger") }, -> { close_position } ].each do |request|
+        request.call
+        assert_redirected_to root_path
+      end
+      assert_equal "Platform", position[:cost_centre]
+      assert_equal 1, positions.size
 
       get map_plan_path(@plan_id, scenario: @q1)
       assert_select "button", text: "Move…", count: 0
+      assert_select "button", text: "Open a position", count: 0
+      assert_select "#edit-position-modal", count: 0
       assert_select "[draggable]", count: 0
     end
   end
@@ -84,9 +188,21 @@ class Plans::PositionsControllerTest < ActionDispatch::IntegrationTest
     get plans_path
     move
     assert_response :not_found
+    edit_position(cost_centre: "Ledger")
+    assert_response :not_found
+    close_position
+    assert_response :not_found
   end
 
   private
+
+  def positions
+    ActsAsTenant.with_tenant(@tenant) do
+      call(Operations::TeamPlanning::ScenarioMap, @editor, plan_id: @plan_id, scenario_id: @q1)[:positions]
+    end
+  end
+
+  def position = positions.find { it[:position_id] == @position }
 
   def unit_of_position
     ActsAsTenant.with_tenant(@tenant) do
