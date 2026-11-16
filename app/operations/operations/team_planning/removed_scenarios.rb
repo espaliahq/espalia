@@ -18,7 +18,7 @@ class Operations::TeamPlanning::RemovedScenarios < Operations::Base
   def self.per_page = PER_PAGE
 
   description "List the scenarios removed from a Team Planning plan the caller is in, newest first, #{PER_PAGE} a page, " \
-              "with next_page true when another follows. Each has its scenario_id, its name, its relation ('then', " \
+              "with next_page true when another follows and total counting them all. Each has its scenario_id, its name, its relation ('then', " \
               "'instead' or 'on') and the period it had when removed (a null ends_on means no end date), who removed it " \
               "and when, and changes: how many changes it still held, one for each subject and facet it changed, " \
               "counting pay and anything else the caller can't see, with undone and cleared ones left out. Nothing " \
@@ -30,19 +30,19 @@ class Operations::TeamPlanning::RemovedScenarios < Operations::Base
   parameter :plan_id, String, required: true
   parameter :page, Integer, required: false
 
-  # @return [Hash] `{ plan_id, page, next_page, removed: [{ scenario_id, name, relation, starts_on, ends_on, changes,
+  # @return [Hash] `{ plan_id, page, next_page, total, removed: [{ scenario_id, name, relation, starts_on, ends_on, changes,
   #   removed_by: { person_id, name }, removed_at }] }`
   def perform
     plan = plan!
     page = params[:page].to_i.clamp(1..)
     per_page = self.class.per_page
-    rows = TeamPlanningRemovedScenario.where(plan_id: plan.id).order(removed_at: :desc, id: :desc)
-                                      .offset((page - 1) * per_page).limit(per_page + 1).to_a
+    scope = TeamPlanningRemovedScenario.where(plan_id: plan.id)
+    rows = scope.order(removed_at: :desc, id: :desc).offset((page - 1) * per_page).limit(per_page + 1).to_a
     next_page = rows.size > per_page
     rows = rows.first(per_page)
     held = TeamPlanningRemovedScenarioTally.where(id: rows.map(&:id)).to_h { [ it.id, it.changes_held ] }
     names = Person.where(id: rows.map(&:removed_by_id).compact.uniq).pluck(:id, :name).to_h
-    { plan_id: plan.id, page:, next_page:, removed: rows.map { entry(it, held, names) } }
+    { plan_id: plan.id, page:, next_page:, total: scope.count, removed: rows.map { entry(it, held, names) } }
   end
 
   private

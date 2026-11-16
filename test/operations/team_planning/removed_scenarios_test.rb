@@ -61,7 +61,7 @@ class Operations::TeamPlanning::RemovedScenariosTest < ActiveSupport::TestCase
     remove(@q2)
 
     result = call(as: @viewer)
-    assert_equal [ @plan_id, 1, false ], result.values_at(:plan_id, :page, :next_page)
+    assert_equal [ @plan_id, 1, false, 2 ], result.values_at(:plan_id, :page, :next_page, :total)
     assert_equal [
       { scenario_id: @q2, name: "Q2", relation: "then", starts_on: "2026-07-01", ends_on: nil, changes: 0,
         removed_by: { person_id: @editor.person_id, name: "Ada Editor" }, removed_at: "2026-02-02T09:00:00Z" },
@@ -88,6 +88,7 @@ class Operations::TeamPlanning::RemovedScenariosTest < ActiveSupport::TestCase
     remove(@lean)
     remove(@q2)
     Operations::TeamPlanning::RemovedScenarios.stub(:per_page, 1) do
+      assert_equal 2, call[:total]
       assert_equal [ [ @q2 ], true ], call.then { [ it[:removed].pluck(:scenario_id), it[:next_page] ] }
       assert_equal [ [ @lean ], false ], call(page: 2).then { [ it[:removed].pluck(:scenario_id), it[:next_page] ] }
     end

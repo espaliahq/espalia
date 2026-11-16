@@ -1,6 +1,6 @@
 {
   "name": "team_planning_removed_scenarios",
-  "description": "List the scenarios removed from a Team Planning plan the caller is in, newest first, 100 a page, with next_page true when another follows. Each has its scenario_id, its name, its relation ('then', 'instead' or 'on') and the period it had when removed (a null ends_on means no end date), who removed it and when, and changes: how many changes it still held, one for each subject and facet it changed, counting pay and anything else the caller can't see, with undone and cleared ones left out. Nothing about those changes is listed. A removed scenario's own history is gone. A forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
+  "description": "List the scenarios removed from a Team Planning plan the caller is in, newest first, 100 a page, with next_page true when another follows and total counting them all. Each has its scenario_id, its name, its relation ('then', 'instead' or 'on') and the period it had when removed (a null ends_on means no end date), who removed it and when, and changes: how many changes it still held, one for each subject and facet it changed, counting pay and anything else the caller can't see, with undone and cleared ones left out. Nothing about those changes is listed. A removed scenario's own history is gone. A forgotten person reads as \"Former member\". Refused, as an unknown plan, unless the caller is a member.",
   "inputSchema": {
     "type": "object",
     "properties": {
