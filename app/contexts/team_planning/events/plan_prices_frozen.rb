@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 # The tenant's pricing inputs as they stood when the plan was archived, so
-# its figures hold still until it is restored. Recorded with each
-# {PlanArchived}; a {PlanRestored} sets it aside, and the next archive
-# records a fresh copy.
+# its figures hold still until it is restored. Recorded right after
+# {PlanArchived} wherever plan keys can be issued, so an archive without one,
+# or from before the copy existed, has none. A {PlanRestored} sets it aside,
+# and the next archive records a fresh copy.
 #
 # The copy is tenant configuration, sealed under the plan's key so deleting
 # the plan erases it. It names nobody: who last edited a row is left out, and

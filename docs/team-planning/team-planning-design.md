@@ -83,7 +83,7 @@ Every change event has the same shape:
 
 | Group | Events |
 |---|---|
-| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanArchived`, `PlanRestored`, `PlanDeleted` |
+| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanArchived`, `PlanPricesFrozen` (the pricing inputs an archive holds to), `PlanRestored`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
 | People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
