@@ -154,6 +154,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
     # Q2 holds pay of its own, so a holder's run rate at its end is 2894 above
     # Today's: a figure that is in no one else's read.
+    # Ids are stripped first, as a random one could hold any of these digits.
     should "price the run rate at a step's end from held pay for a holder alone, in the reads, the strip and the table" do
       q2 = call(Operations::TeamPlanning::ForkScenario, @holder, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2", ends_on: "2026-09-30")[:scenario_id]
       hold_pay(q2, @ada, "95311", "full_time")
@@ -169,7 +170,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
         assert_equal [ "2026-09-30", yearly ], cost[:run_rate_at_end].then { [ it[:on], it[:total][:scenario][:converted] ] }, who
         assert_equal cost[:run_rate_at_end].slice(:on, :total), row[:run_rate_at_end], who
-        [ account, [ cost.to_json, costs.to_json, strip, cell ] ]
+        [ account, [ cost.to_json, costs.to_json, strip, cell ].map { it.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "") } ]
       end
 
       assert_equal [ "2894" ] * 2 + [ "+AUD 2.89k" ] * 2, seen[@holder].map { it[/\+AUD 2\.89k|2894/] }, "the holder sees the change on Today's"
