@@ -27,9 +27,11 @@ class Views::Plans::ChangesTab < Views::Base
   # @param status [Hash] from `team_planning_status`, for the scenario shown
   # @param attention [Hash] from `team_planning_attention`, for the same scenario
   # @param can_edit [Boolean] whether the viewer may note a change or settle a conflict
-  def initialize(plan:, scenarios:, drift:, status:, attention:, can_edit: false)
+  # @param see_pay [Boolean] whether the viewer holds the see-pay right, without which a pay change takes no note from them
+  def initialize(plan:, scenarios:, drift:, status:, attention:, can_edit: false, see_pay: false)
     @plan = plan
     @can_edit = can_edit
+    @see_pay = see_pay
     @scenarios = scenarios
     @drift = drift
     @status = status
@@ -178,7 +180,7 @@ class Views::Plans::ChangesTab < Views::Base
         end
         planned_in(entry[:scenario_id]) if entry[:scenario_id] != scenario_id
         change_note(entry[:note])
-        note_form(entry) if @can_edit && !entry.dig(:note, :removed)
+        note_form(entry) if notable?(entry)
         settle(entry) if @can_edit && entry[:status].to_s == "conflicting"
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
@@ -233,6 +235,10 @@ class Views::Plans::ChangesTab < Views::Base
     elsif note
       render Components::Kit::Prose.new(note[:value], class: "text-sm text-muted break-words", data: { change_note: "" })
     end
+  end
+
+  def notable?(entry)
+    @can_edit && !entry.dig(:note, :removed) && Operations::TeamPlanning::ChangeNote.visible?(entry[:facet], see_pay: @see_pay)
   end
 
   # The note is written on the scenario that made the change, which for an

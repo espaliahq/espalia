@@ -130,7 +130,8 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     tab = Views::Plans::ChangesTab.new(plan:, scenarios:, drift: read(Operations::TeamPlanning::Drift),
                                        status: read(Operations::TeamPlanning::Status, scenario_id:),
-                                       attention: read(Operations::TeamPlanning::Attention, scenario_id:), can_edit: can_edit?)
+                                       attention: read(Operations::TeamPlanning::Attention, scenario_id:), can_edit: can_edit?,
+                                       see_pay: policy_for(@plan_record).see_pay?)
     render plan_page(plan, scenarios:, open_tab: :changes, body: tab)
   end
 
