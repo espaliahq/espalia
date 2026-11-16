@@ -52,4 +52,12 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
 
     assert_equal [ "eve" ], cuts(moved, title, parents: { "field" => @sales, @sales => nil }).filter_map { it.change.person_id }
   end
+
+  should "stop naming someone the baseline covers once they leave the plan's units" do
+    @base = @base.with(people: [ Someone.new("ada", [ Place.new(@engineering) ]), Someone.new("bo", [ Place.new(@engineering) ]) ])
+    left = change(:moved, 10, person_id: "ada", unit_id: @sales, from_unit_id: @engineering)
+    manager = change(:fact_changed, 20, person_id: "bo", fact: "manager", before: { "manager_id" => nil }, after: { "manager_id" => "ada" })
+
+    assert_equal [ { "manager_id" => nil }, [ "after" ] ], cuts(left, manager).last.then { [ it.change.after, it.outside ] }
+  end
 end

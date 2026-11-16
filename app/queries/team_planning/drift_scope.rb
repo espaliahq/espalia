@@ -40,7 +40,7 @@ class TeamPlanning::DriftScope
     @pinned = maps.flat_map { held_people(it).to_a }.to_set - based
     @unplaced = base.people.select { it.memberships.none?(&:unit_id) }.to_set(&:id)
     @placed = (base.people + base.outside).to_h { [ it.id, it.memberships.filter_map(&:unit_id).to_set ] }
-    @nameable = [ base, *maps ].flat_map(&:person_ids).to_set | based | @pinned
+    @named = [ base, *maps ].flat_map(&:person_ids).to_set - based
     @roots = Set.new(base.scope_ids) | (maps.flat_map { it.known_unit_ids.to_a }.to_set - base.known_unit_ids)
     @parents = parents.merge([ base, *maps ].flat_map { it.units + it.retired_units }.to_h { [ it.id, it.parent_id ] })
     @shown = based | @pinned | @unplaced | base.known_unit_ids | @roots
@@ -66,7 +66,9 @@ class TeamPlanning::DriftScope
     @pinned.include?(person_id) || @unplaced.include?(person_id) || Array(@placed[person_id]).any? { covered_unit?(it) }
   end
 
-  def nameable?(person_id) = @nameable.include?(person_id) || covered?(person_id)
+  # Someone the baseline holds is nameable only while the plan covers them;
+  # anyone else a plan's map names stays nameable.
+  def nameable?(person_id) = @named.include?(person_id) || covered?(person_id)
 
   def covered_unit?(unit_id)
     seen = Set.new
