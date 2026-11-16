@@ -136,20 +136,26 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
   end
 
   should "list a pay change to an editor without the right by its facet alone, and let them split it across sealed" do
+    q1_amount = "57203"
+    hold_pay(@q1, @ada, q1_amount, "full_time")
+    moved = call(Operations::TeamPlanning::History, @holder, plan_id: @plan_id, scenario_id: @q1)[:entries].select { it[:facet] == "data:pay" }.last[:event_id]
     call(Operations::TeamPlanning::SetPlannedLevel, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "4")
     needs = call(Operations::TeamPlanning::SplitNeeds, @editor, plan_id: @plan_id, scenario_id: @q1)
     pay = needs[:changes].find { it[:facet] == "data:pay" }
 
-    assert_equal({ event_id: @event_id, subject_id: @ada.id, facet: "data:pay", needs: [] }, pay)
-    assert_not_includes needs.to_json, AMOUNT
+    assert_equal({ event_id: moved, subject_id: @ada.id, facet: "data:pay", needs: [] }, pay)
+    assert_not_includes needs.to_json, q1_amount
 
-    split = call(Operations::TeamPlanning::SplitScenario, @editor, plan_id: @plan_id, scenario_id: @q1, event_ids: [ @event_id ], name: "Agreed")
+    split = call(Operations::TeamPlanning::SplitScenario, @editor, plan_id: @plan_id, scenario_id: @q1, event_ids: [ moved ], name: "Agreed")
 
-    assert_equal [ @event_id ], split[:moved_event_ids]
-    assert_not_includes split.to_json, AMOUNT
-    assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: split[:agreed_id]).to_json, AMOUNT
-    [ split[:agreed_id], @q1 ].each { assert_no_pay_read(it) }
-    assert_not_includes @log.string, AMOUNT
+    assert_includes split[:moved_event_ids], moved
+    assert_not_includes split.to_json, q1_amount
+    agreed = call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: split[:agreed_id]).to_json
+    assert_includes agreed, q1_amount
+    assert_not_includes agreed, AMOUNT
+    assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: @plan_id).to_json, AMOUNT
+    [ split[:agreed_id], @q1, @plan_id ].each { assert_no_pay_read(it, amounts: [ AMOUNT, q1_amount ]) }
+    assert_not_includes @log.string, q1_amount
   end
 
   should "read pay as its field alone where an override inherits it off the parent's map, to a holder too" do
