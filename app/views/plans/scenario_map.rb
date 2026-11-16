@@ -381,7 +381,7 @@ class Views::Plans::ScenarioMap < Views::Base
   def position_menu(position)
     label = position_name(position)
     render Components::Kit::DelegatedMenu::Trigger.new(
-      label: "Actions for #{label} in #{units_by_id[position[:unit_id]][:name]}", kind: MENU,
+      label: "Actions for #{label} in #{units_by_id.dig(position[:unit_id], :name) || "no unit"}", kind: MENU,
       values: { id: position[:position_id], name: label,
                 unit: position[:unit_id], level: position[:level_id], fte: position[:fte], basis: position[:basis],
                 cost_centre: position[:cost_centre], occupants: position.fetch(:occupants, []).map { name(it[:person_id]) }.sort.to_sentence }
