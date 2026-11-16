@@ -369,7 +369,9 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
       assert_equal read.(TeamPlanning::Funding).call, read.(TeamPlanning::Funding, shared: resolved).call
       alone = read.(TeamPlanning::Cost).call(at_end: false)
       assert_equal alone, read.(TeamPlanning::Cost, shared: resolved).call(at_end: false)
-      assert_equal alone.with(baseline: nil), read.(TeamPlanning::Cost, shared: resolved).call(at_end: false, baseline: false)
+      unpriced = read.(TeamPlanning::Cost, shared: resolved).call(at_end: false, baseline: false)
+      assert_equal alone.with(baseline: nil), unpriced
+      assert_raises(ArgumentError) { unpriced.parts }
       assert_equal read.(TeamPlanning::Budget).call, read.(TeamPlanning::Budget, shared: resolved).call
       assert_equal budget, read.(TeamPlanning::Budget).call
     end

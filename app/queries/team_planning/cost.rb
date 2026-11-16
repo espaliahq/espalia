@@ -224,11 +224,13 @@ class TeamPlanning::Cost
     # @param scope [Symbol] :total, :units, :units_with_below or :cost_centres
     # @param key [String, nil] the unit or cost centre, nil for none
     # @return [Parts]
+    # @raise [ArgumentError] for a period priced with baseline: false
     def parts(scope = :total, key = nil)
       nothing = TeamPlanning::Cost.nothing(reference_currency)
       pick = ->(figures) { (scope == :total ? figures&.total : figures&.public_send(scope)&.[](key)) || nothing }
       priced = pick.(scenario)
       return Parts.new(actual: priced, planned: nothing, forecast: nothing, total: priced) if run_rate?
+      raise ArgumentError, "This cost was priced without its baseline, so it can't split its total" unless baseline
 
       Parts.of(priced, pick.(baseline), pick.(forecast))
     end
@@ -265,7 +267,7 @@ class TeamPlanning::Cost
     @scenario_id = scenario_id
     @repository = repository
     @shared = shared&.for!(context, plan, scenario_id)
-    @base = base || @shared&.base
+    @base = @shared&.base || base
     @aggregate = aggregate
     @steps = steps
   end
