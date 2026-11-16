@@ -9,7 +9,9 @@ module Views::Tenant::BudgetLines::LineFields
   # @param values [Hash] what the form shows: a line's payload, or what was typed
   # @param roles [Array<FrameworkState::Role>] with their levels
   # @param countries [Array<String>]
-  def line_fields(values, roles:, countries:)
+  # @param money [Boolean] false leaves out amount, currency and period, which a member without the see-pay right
+  #   may not set ([#367](https://github.com/espaliahq/espalia/issues/367))
+  def line_fields(values, roles:, countries:, money: true)
     div(class: "grid gap-4 sm:grid-cols-2") do
       date_field(:starts_on, "Starts on", values)
       date_field(:ends_on, "Ends on", values)
@@ -24,7 +26,7 @@ module Views::Tenant::BudgetLines::LineFields
       end
       date_field(:approved_on, "Approved on", values, required: false, hint: "For a new position. Leave it blank if you don't know.")
     end
-    money_fields(values)
+    money_fields(values, money:)
     div(class: "grid gap-4 sm:grid-cols-2") do
       field("budget-line-position", "Role and level", hint: "Leave it as any role for a line not tied to one.") do
         position_select(values, roles)
@@ -42,16 +44,20 @@ module Views::Tenant::BudgetLines::LineFields
     end
   end
 
-  def money_fields(values)
+  def money_fields(values, money:)
     div(class: "grid gap-4 sm:grid-cols-4") do
-      text_field(:amount, "Amount", values, inputmode: "decimal", hint: "Leave it blank for a head count alone.")
-      text_field(:currency, "Currency", values, maxlength: 3, extra: "uppercase", hint: "Such as AUD.")
-      field("budget-line-period", "Per") do
-        select(id: "budget-line-period", name: "budget_line[period]", class: Components::Kit::Field::SELECT) do
-          PERIOD_LABELS.each { |value, label| option(value:, selected: (values[:period] || "year") == value) { label } }
-        end
-      end
+      priced_fields(values) if money
       text_field(:head_count, "Head count", values, inputmode: "decimal")
+    end
+  end
+
+  def priced_fields(values)
+    text_field(:amount, "Amount", values, inputmode: "decimal", hint: "Leave it blank for a head count alone.")
+    text_field(:currency, "Currency", values, maxlength: 3, extra: "uppercase", hint: "Such as AUD.")
+    field("budget-line-period", "Per") do
+      select(id: "budget-line-period", name: "budget_line[period]", class: Components::Kit::Field::SELECT) do
+        PERIOD_LABELS.each { |value, label| option(value:, selected: (values[:period] || "year") == value) { label } }
+      end
     end
   end
 

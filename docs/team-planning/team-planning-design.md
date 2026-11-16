@@ -1546,6 +1546,23 @@ values, under the plan's key and deleted with it
 - **Money keeps its currency.** An amount keeps its own currency and period, a year or a
   month, as a pay band's does, and is never converted. A line with a head count and no amount
   has no amount, never zero.
+- **A line's amount is pay** ([#367](https://github.com/espaliahq/espalia/issues/367)). A
+  line approved for one hire is close to that person's pay, so its amount, currency and
+  period reach only a member with the see-pay right, as band ranges and actual pay do.
+  `TeamPlanning::Budget.money_shown?` gates the reads: the budget, its lines, History and
+  Overrides give anyone else head counts and dates alone, and a priced line reads exactly as
+  one that never held an amount. A note on a budget-line change follows the note rule for
+  pay changes.
+  - **Writing.** An editor without the right may add a line and change or cut one by head
+    count. A line that carries an amount is closed to them: change, cut, undo, redo, clear
+    and settle refuse with "Changing this budget line needs the see-pay right." A line
+    carries an amount when the organisation's line has one, or when any change along the
+    scenario's chain gave it one, undone or not, so no undo can bring an amount back to
+    them. `TeamPlanning::LineMoney` decides, apart from the note gate. Sending an amount,
+    currency or period refuses with "Setting a budget amount needs the see-pay right."
+  - **Only the refusal tells.** The tab offers Change on every line, and its form for
+    them holds head count alone, so nothing shows which line is priced until they try.
+    An undo with no event named skips a priced line's change rather than refuse.
 - **On-cost models.** What a position costs beyond base pay is calculated by an on-cost
   model: a flat rate, rates by country, or itemised components. Models are chosen and
   set like capacity models, with a tenant default that a plan or scenario can change.

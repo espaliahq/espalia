@@ -78,6 +78,10 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     as_tenant { TeamPlanning::Budget.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).call }
   end
 
+  def budget_as(context)
+    as_tenant { TeamPlanning::Budget.new(context:, plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).call }
+  end
+
   def cost
     as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).call }
   end
@@ -235,6 +239,41 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
 
     assert_equal TeamPlanning::Budget::Over.new(money: [ "EUR" ], heads: nil, mismatched: []), report.totals.over, "an envelope holds money, not heads"
     assert_nil report.cost_centres["Platform"].over
+  end
+
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)).
+  context "read by a member without the see-pay right" do
+    setup do
+      viewer = as_tenant { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
+      operation(Operations::TeamPlanning::AddPlanMember, scenario_id: nil, person_id: viewer.person_id, role: "viewer")
+      @viewer = context_for(viewer)
+    end
+
+    should "keep every head count and drop every money figure" do
+      platform = euros(150_000, cost_centre: "Platform", head_count: 1)
+      dollars = line(amount: 1000, currency: "USD", period: "year", cost_centre: "Platform")
+      2.times { open_position }
+      held = budget
+      report = budget_as(@viewer)
+
+      assert_equal [ true, false ], [ held.money, report.money ]
+      assert_equal [ nil, nil, nil ], of(report, platform).then { [ it.approved, it.funded, it.remaining ] }
+      assert_equal of(held, platform).remaining_head_count, of(report, platform).remaining_head_count
+      assert_equal of(held, platform).over.with(money: nil, mismatched: []), of(report, platform).over
+      assert_equal [ [], nil ], of(report, dollars).then { [ it.mismatched, it.over&.money ] }
+      assert_equal [ nil, nil, nil, nil, [] ], report.totals.then { [ it.approved, it.funded, it.remaining, it.unfunded, it.remaining_left_out ] }
+      assert_equal held.totals.head_count, report.totals.head_count
+      assert_nil report.forecast
+      assert(report.units.values.all? { it.funded.nil? && it.unfunded.nil? })
+    end
+
+    should "judge a line over on money alone as not over" do
+      platform = euros(50_000, cost_centre: "Platform")
+      open_position
+
+      assert_equal [ "EUR" ], of(budget, platform).over.money
+      assert_equal TeamPlanning::Budget::Over.new(money: nil, heads: nil, heads_by: nil, mismatched: []), of(budget_as(@viewer), platform).over
+    end
   end
 
   should "spend a cost centre's unfunded money against its budget, and hold no money where no line approves any" do
