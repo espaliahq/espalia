@@ -245,7 +245,11 @@ export default class extends BaseController {
       this.close()
       return
     }
+    // The listener captures the menu's own scroll too, and #position() lifts
+    // its max-height to measure, which would clamp it back to the top.
+    const scrollTop = this.menu.scrollTop
     this.#position()
+    this.menu.scrollTop = scrollTop
   }
 
   // Under the trigger, clamped into the viewport, and above it when there is
