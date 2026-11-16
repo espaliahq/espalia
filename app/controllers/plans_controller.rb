@@ -492,7 +492,7 @@ class PlansController < ApplicationController
       can_restore: editor? && plan[:archived].present?,
       can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
-      undo_step: (read(Operations::TeamPlanning::UndoStep, scenario_id: undo_in.downcase) if can_edit? && undo_in && undo_in.downcase != plan[:plan_id]),
+      undo_step: (read(Operations::TeamPlanning::UndoStep, scenario_id: undo_in.downcase) if can_edit? && undo_in),
       panel_open: Views::Plans::ShowView.panel_open?(
         url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView.panel_cookie(current_user)],
         open_tab:, scenarios:
