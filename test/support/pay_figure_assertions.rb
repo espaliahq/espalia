@@ -8,6 +8,8 @@
 # Each id becomes "<id>" rather than nothing, so digits on either side of it
 # can't join into a figure that was never there. A figure written beside an
 # id still counts.
+#
+# Use these for every pay check, never a bare assert_not_includes on a payload.
 module PayFigureAssertions
   OPAQUE_ID = /\h{8}-\h{4}-\h{4}-\h{4}-\h{12}|(?<!\h)\h{64}(?!\h)/
 
