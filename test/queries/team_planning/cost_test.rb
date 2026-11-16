@@ -190,8 +190,12 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
                  "Payments sits under Engineering, and only Ada is in no unit"
   end
 
-  def cost_centre_rules(*rules, unit_id: nil)
-    operation(Operations::TeamPlanning::SetRule, unit_id:, rule: "cost_centre", value: { rules: })
+  def cost_centre_rules(*entries, unit_id: nil)
+    operation(Operations::TeamPlanning::SetRule, unit_id:, rule: "cost_centre", value: { entries: })
+  end
+
+  def position_cost_centre(priced, position_id)
+    TeamPlanning::PositionCostCentres.new(priced.map, tenant_id: @tenant.id).of(priced.map.positions.find { it.id == position_id })
   end
 
   def open_cost_centre(priced, position_id) = lines(priced, position_id).sole.then { [ it.cost_centre, it.cost_centre_source, it.cost_centre_rule ] }
@@ -208,16 +212,25 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal [ "CC-1", "person", nil ], open_cost_centre(cost.scenario, shared), "Ada fills half of it and brings CC-1"
   end
 
-  should "put an unfilled position under the first cost centre rule that matches at its unit, and none without one" do
+  should "put an unfilled position under the last cost centre entry that matches at its unit, and none without one" do
     seat = open_position(unit_id: @payments)
     assert_equal [ nil, "none", nil ], open_cost_centre(cost.scenario, seat)
 
-    cost_centre_rules({ role_id: @manager.role_id, cost_centre: "Managers" },
+    cost_centre_rules({ unit_id: @payments, cost_centre: "Payments" },
                       { unit_id: @engineering, role_family_id: @engineer.role_family_id, cost_centre: "Engineering" },
-                      { unit_id: @payments, cost_centre: "Payments" })
+                      { role_id: @manager.role_id, cost_centre: "Managers" })
 
     assert_equal [ "Engineering", "rule", 1 ], open_cost_centre(cost.scenario, seat), "Payments sits under Engineering"
     assert_includes cost.scenario.cost_centres.keys, "Engineering"
+    assert_equal({ "unit_id" => @engineering, "role_family_id" => @engineer.role_family_id }, position_cost_centre(cost.scenario, seat).rule_matcher)
+  end
+
+  should "match an open position's level number, and never decide it by a location it does not have" do
+    senior, staff = open_position(unit_id: @payments), open_position(level: @e6, unit_id: @payments)
+    cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" }, { level_ordinal: 6, cost_centre: "Staff" },
+                      { location: "Mu", cost_centre: "Mu" })
+
+    assert_equal [ [ "Engineering", "rule", 0 ], [ "Staff", "rule", 1 ] ], [ senior, staff ].map { open_cost_centre(cost.scenario, it) }
   end
 
   should "never move a person's own cost centre by the rules" do
