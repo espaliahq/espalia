@@ -90,6 +90,8 @@ class TeamPlanning::PositionCostCentres
   end
 
   def by_rules(unit_id:, role_id:, level_id:, location:)
+    return if TeamPlanning::RuleKinds::CostCentre.entries(rules_at(unit_id)).empty?
+
     entry, index = TeamPlanning::RuleKinds::CostCentre.match(rules_at(unit_id), unit_ids: chain(unit_id), role_id:, role_family_id: family(role_id),
                                                                                 level_ordinal: ordinal(level_id), location:)
     entry && Resolved.new(cost_centre: entry["cost_centre"], source: "rule", rule_index: index, rule_matcher: entry.except("cost_centre"))
