@@ -258,6 +258,20 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
       end
     end
 
+    should "count a retired Basket under Checkout on its retirement day, and accept the change from the day after" do
+      as_tenant { @handler.retire_unit(@basket, effective_on: @today - 3) }
+
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 3) }
+      end
+      assert_equal "These units sat where this structure wouldn't allow after #{(@today - 3).iso8601}, " \
+                   "so date it #{(@today - 2).iso8601} or later: Basket (Squad under Squad until #{(@today - 2).iso8601})",
+                   error.message
+
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 2) }
+      assert_equal [ [ @tribe ], false ], rules(@squad)
+    end
+
     should "accept the change dated from the day the Basket moved" do
       as_tenant { @handler.move_unit(@basket, @payments, effective_on: @today - 3) }
       as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 3) }

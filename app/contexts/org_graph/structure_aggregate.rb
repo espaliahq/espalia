@@ -817,11 +817,13 @@ class OrgGraph::StructureAggregate
           "#{held.map { describe_held(it, prospective) }.join(', ')}"
   end
 
-  # The placements that ended, by a move or a retirement, after a day.
+  # The placements that ended, by a move or a retirement, after a day. Each
+  # ends on the first day it no longer held: a move's date, or the day after a
+  # retirement, since a unit is still live on the day it retires.
   def placements_ended_after(day)
     @units.values.flat_map do |unit|
       points = @parents.fetch(unit.unit_id, {}).sort
-      ends = points.drop(1).map(&:first) + [ unit.retired_on ]
+      ends = points.drop(1).map(&:first) + [ unit.retired_on && (Date.iso8601(unit.retired_on) + 1).iso8601 ]
       points.zip(ends).filter_map do |(from, parent_id), until_on|
         Placement.new(unit:, parent_id:, until_on:) if until_on && until_on > day && until_on > from
       end
