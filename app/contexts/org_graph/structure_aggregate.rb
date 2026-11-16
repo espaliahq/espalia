@@ -56,11 +56,13 @@ class OrgGraph::StructureAggregate
   #
   # A new level can name its provider, so a level can be added above one an
   # HRIS provides. An existing level changes provider through
-  # {#set_level_provider}.
+  # {#set_level_provider}. Each kind keeps the rules it stated, and a kind
+  # that goes leaves every list that named it.
   #
   # @param levels [Array<Hash>] each `{ level_id:, name: }`, top first, with an
   #   optional `provider:` for a new level
-  # @param effective_on [Date, String] when the taxonomy took effect
+  # @param effective_on [Date, String] when the taxonomy took effect, no
+  #   earlier than the kinds' last change
   # @param defined_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the levels are empty, blank or duplicated
   # @raise [RuntimeError] if a level any unit has held is dropped, naming the
