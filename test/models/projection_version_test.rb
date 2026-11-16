@@ -222,14 +222,19 @@ class ProjectionVersionCommitTest < ActiveSupport::TestCase
                          host: config[:host], port: config[:port] }.compact)
     key = ProjectionVersion.lock_key("some/projection")
 
-    assert_raises(RuntimeError) do
-      ActiveRecord::Base.transaction do
-        ActiveRecord::Base.current_transaction.after_commit { raise "an earlier callback fails" }
-        ProjectionVersion.unless_rebuilding("some/projection") { }
+    [ false, true ].each do |in_savepoint|
+      assert_raises(RuntimeError) do
+        ActiveRecord::Base.transaction do
+          ActiveRecord::Base.current_transaction.after_commit { raise "an earlier callback fails" }
+          ActiveRecord::Base.transaction(requires_new: in_savepoint) do
+            ProjectionVersion.unless_rebuilding("some/projection") { }
+          end
+        end
       end
-    end
 
-    assert_equal "t", other.exec("SELECT pg_try_advisory_lock(#{key})").getvalue(0, 0)
+      assert_equal "t", other.exec("SELECT pg_try_advisory_lock(#{key})").getvalue(0, 0), "in a savepoint: #{in_savepoint}"
+      other.exec("SELECT pg_advisory_unlock(#{key})")
+    end
   ensure
     other&.close
   end

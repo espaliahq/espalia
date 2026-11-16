@@ -82,7 +82,7 @@ class ProjectionVersion < ApplicationRecord
   # @return [Object] the block's value
   # @raise [Rebuilding] when a rebuild holds any of them
   def self.unless_rebuilding(*names, &)
-    return unless_rebuilding_until_commit(names, &) if in_outer_transaction?
+    return unless_rebuilding_until_commit(names, &) if in_real_transaction?
 
     held = []
     names.each do |name|
@@ -104,15 +104,18 @@ class ProjectionVersion < ApplicationRecord
   end
   private_class_method :unless_rebuilding_until_commit
 
-  # Only the outermost transaction takes its own locks: a test's transaction
-  # never commits, so its locks would outlive the write.
-  def self.in_outer_transaction?
-    connection.open_transactions == 1 && connection.current_transaction.joinable?
+  # A savepoint's lock passes to the transaction around it. A test's own
+  # transaction, the one Rails won't let a write join, never commits, so a lock
+  # under it would outlive the write. Rails lists open transactions nowhere
+  # public.
+  def self.in_real_transaction?
+    transactions = connection.transaction_manager.instance_variable_get(:@stack)
+    transactions.any? && transactions.all?(&:joinable?)
   end
-  private_class_method :in_outer_transaction?
+  private_class_method :in_real_transaction?
 
-  # A savepoint's locks go once its outermost transaction ends, or at once
-  # when nothing can join it (none open, or a test's own, which never commits).
+  # Under a test's own transaction, or none, the locks go when the outermost
+  # transaction a write can join ends, or at once.
   def self.release_when_transaction_ends(keys)
     transaction = connection.current_transaction
     return release_shared(keys) unless transaction.joinable?
