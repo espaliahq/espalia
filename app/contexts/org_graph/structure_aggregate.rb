@@ -38,6 +38,7 @@ class OrgGraph::StructureAggregate
     @levels = []
     @level_rules = {}
     @units = {}
+    @parents = {}
     @level_providers = {}
     @level_fields = {}
     @fact_providers = {}
@@ -401,7 +402,7 @@ class OrgGraph::StructureAggregate
 
     effective_on = dated_after_creation(unit, effective_on)
     ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on)
-    raise "A unit can't move beneath itself or a unit below it" if parent_id && [ parent_id, *ancestor_ids(parent_id) ].include?(unit_id)
+    raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit_id,
@@ -553,6 +554,7 @@ class OrgGraph::StructureAggregate
       provider: data[:provider], external_ref: data[:external_ref], retired: false, owner_ids: Set.new,
       created_on: data[:effective_on], changed_on: data[:effective_on]
     )
+    @parents[data[:unit_id]] = { data[:effective_on] => data[:parent_id] }
     touch(data[:parent_id], data[:effective_on])
   end
 
@@ -575,6 +577,7 @@ class OrgGraph::StructureAggregate
     unit = @units.fetch(event.data[:unit_id])
     [ unit.unit_id, unit.parent_id, event.data[:parent_id] ].each { |id| touch(id, event.data[:effective_on]) }
     unit.parent_id = event.data[:parent_id]
+    @parents[unit.unit_id][event.data[:effective_on]] = event.data[:parent_id]
   end
 
   on OrgGraph::Events::UnitRetired do |event|
@@ -769,6 +772,30 @@ class OrgGraph::StructureAggregate
       ids << unit_id
     end
     ids
+  end
+
+  # Whether placing a unit beneath a parent from a date makes it its own
+  # ancestor, today or on any day the move covers. A back-dated move can loop
+  # on a day between other moves when today's placement shows no loop.
+  def loops?(unit_id, parent_id, from:)
+    return true if [ parent_id, *ancestor_ids(parent_id) ].include?(unit_id)
+
+    until_on = @parents[unit_id].keys.select { |on| on > from }.min
+    days = @parents.values.flat_map(&:keys).select { |on| on > from && (until_on.nil? || on < until_on) }
+    [ from, *days ].uniq.any? { |on| ancestor_ids_on(parent_id, on).include?(unit_id) }
+  end
+
+  # The ids above a unit on a day, its parent first, by each unit's dated moves.
+  def ancestor_ids_on(unit_id, on)
+    ids = [ unit_id ]
+    while (parent_id = parent_on(ids.last, on)) && !ids.include?(parent_id)
+      ids << parent_id
+    end
+    ids.drop(1)
+  end
+
+  def parent_on(unit_id, on)
+    @parents.fetch(unit_id, {}).select { |from, _| from <= on }.max_by(&:first)&.last
   end
 
   def level_index(level_id)

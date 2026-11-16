@@ -42,6 +42,19 @@ class OrgGraph::StatedKindRulesTest < ActiveSupport::TestCase
     end
   end
 
+  should "refuse a back-dated move that would loop on a day between other moves" do
+    a = create_unit("Checkout", @squad, parent_id: @payments, on: Date.new(2026, 11, 1))
+    b = create_unit("Basket", @squad, parent_id: @payments, on: Date.new(2026, 11, 1))
+    as_tenant do
+      @handler.move_unit(b, a, effective_on: "2026-11-10")
+      @handler.move_unit(b, @payments, effective_on: "2026-11-20")
+    end
+
+    error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(a, b, effective_on: "2026-11-15") } }
+    assert_equal "A unit can't move beneath itself or a unit below it", error.message
+    assert_nothing_raised { as_tenant { @handler.move_unit(a, b, effective_on: "2026-11-20") } }
+  end
+
   should "retire the deepest units first when kinds no longer set the order" do
     checkout = create_unit("Checkout", @squad, parent_id: @payments)
     basket = create_unit("Basket", @squad, parent_id: checkout)
@@ -87,9 +100,9 @@ class OrgGraph::StatedKindRulesTest < ActiveSupport::TestCase
     )
   end
 
-  def create_unit(name, level_id, parent_id: nil)
+  def create_unit(name, level_id, parent_id: nil, on: @today)
     unit_id = SecureRandom.uuid_v7
-    as_tenant { @handler.create_unit(unit_id, name, level_id:, parent_id:, effective_on: @today) }
+    as_tenant { @handler.create_unit(unit_id, name, level_id:, parent_id:, effective_on: on) }
     unit_id
   end
 

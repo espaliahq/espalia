@@ -177,7 +177,8 @@ lists the people with no membership of a live unit, for the "in no team" tray.
 - **A unit sits where its kind allows.** Each kind of unit (a taxonomy level) lists the
   kinds its parent may be, and whether it may sit at the top. A parent is live, and is
   never the unit itself or a unit beneath it; a move checks the new parent's chain to
-  the root, since kinds may list each other. A unit with live sub-units can't be
+  the root, since kinds may list each other. It checks the chain on every day the move
+  covers, so a back-dated move can't loop on a day between other moves. A unit with live sub-units can't be
   retired, and a succession retires the deepest units first. A back-dated move is
   checked against today's rules, not those in force on its date.
 - **A kind written before kinds stated their rules keeps the rule it had.** No event
