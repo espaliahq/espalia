@@ -19,10 +19,16 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
 
   teardown { ActsAsTenant.current_tenant = nil }
 
-  def fork(parent_id = @plan_id, relation: "then", name: "Q1", ends_on: nil)
+  def fork(parent_id = @plan_id, relation: "then", name: "Q1", ends_on: nil, starts_on: nil, plan_id: @plan_id)
     SecureRandom.uuid_v7.tap do |id|
-      @handler.fork_scenario(@plan_id, id, parent_id:, relation:, name:, ends_on:)
+      @handler.fork_scenario(plan_id, id, parent_id:, relation:, name:, ends_on:, starts_on:)
     end
+  end
+
+  def period(id) = TeamPlanningScenario.find(id).then { [ it.starts_on.iso8601, it.ends_on.iso8601 ] }
+
+  def aggregate_period(plan_id, id)
+    TeamPlanning::Repository.new.load_plan(plan_id).period_of(id).then { [ it.begin.iso8601, it.end.iso8601 ] }
   end
 
   # Sets two levels in the scenario and moves one of them into an agreed part.
@@ -146,7 +152,57 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
     assert TeamPlanningScenario.exists?(q2)
   end
 
+  should "start a first step on its own day, and on the base once an update to today passes it" do
+    q1 = fork(ends_on: "2027-03-31", starts_on: "2027-01-14")
+    lean = fork(q1, relation: "instead", name: "Lean Q1")
+    q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")
+    assert_equal [ %w[2027-01-14 2027-03-31] ] * 2, [ period(q1), period(lean) ]
+
+    @handler.set_scenario_period(@plan_id, q1, starts_on: "2027-01-20", ends_on: "2027-04-30")
+    assert_equal [ %w[2027-01-20 2027-04-30], %w[2027-01-20 2027-04-30], %w[2027-05-01 2027-06-30] ], [ q1, lean, q2 ].map { period(it) }
+
+    @handler.rebase_plan(@plan_id, base_on: "2027-01-10", expected_base_on: "2027-01-01")
+    assert_equal %w[2027-01-20 2027-04-30], period(lean)
+
+    @handler.rebase_plan(@plan_id, base_on: "2027-02-01", expected_base_on: "2027-01-10")
+    assert_equal [ %w[2027-02-01 2027-04-30] ] * 2, [ period(q1), period(lean) ]
+  end
+
   context "rebuild contract" do
+    # A plan written before a first step could start after the base: its
+    # first step's start is the base at the fork, and its period edit carries
+    # no previous start. Beside it, a plan whose first step starts later.
+    should "read a stream from before a first step's own start as it did, and one with a later start the same after a rebuild" do
+      old_q1 = fork(ends_on: "2027-03-31")
+      old_q2 = fork(old_q1, name: "Q2", ends_on: "2027-06-30")
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        Rails.configuration.event_store.publish(
+          TeamPlanning::Events::ScenarioPeriodSet.new(data: {
+            plan_id: @plan_id, scenario_id: old_q1, starts_on: "2027-01-01", ends_on: "2027-04-30",
+            previous_ends_on: "2027-03-31", set_by_id: @person.id
+          }),
+          stream_name: EventStreamNaming.plan_stream(@plan_id)
+        )
+      end
+      @handler.rebase_plan(@plan_id, base_on: "2027-01-10", expected_base_on: "2027-01-01")
+      @handler.rebase_plan(@plan_id, base_on: "2027-02-01", expected_base_on: "2027-01-10")
+
+      later = SecureRandom.uuid_v7
+      @handler.create_plan(later, name: "Later start", base_on: "2027-01-01")
+      new_q1 = fork(later, ends_on: "2027-03-31", starts_on: "2027-01-14", plan_id: later)
+      @handler.rebase_plan(later, base_on: "2027-01-10", expected_base_on: "2027-01-01")
+
+      expected = { old_q1 => %w[2027-02-01 2027-04-30], old_q2 => %w[2027-05-01 2027-06-30], new_q1 => %w[2027-01-14 2027-03-31] }
+      assert_equal expected, expected.keys.index_with { period(it) }
+      assert_equal expected, expected.keys.index_with { aggregate_period(TeamPlanningScenario.find(it).plan_id, it) }
+
+      before = snapshot_read_models(TeamPlanning::Projections::Scenarios, @tenant)
+      TeamPlanning::Projections::Scenarios.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: TeamPlanning::Projections::Scenarios, tenant: @tenant)
+
+      assert_equal before, snapshot_read_models(TeamPlanning::Projections::Scenarios, @tenant)
+    end
+
     should "reset! + replay produce identical read-model state, including the stable ids" do
       q1 = fork(ends_on: "2027-03-31")
       fork(q1, relation: "instead", name: "Lean Q1")

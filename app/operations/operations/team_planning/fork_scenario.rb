@@ -10,7 +10,8 @@ class Operations::TeamPlanning::ForkScenario < Operations::Base
   include Operations::OrgGraph::DateParameter
 
   description "Fork a scenario in a Team Planning plan. relation 'then' adds the step after parent_id: it starts " \
-              "the day after its parent ends (on the plan's base date after the baseline) and needs ends_on. " \
+              "the day after its parent ends and needs ends_on. After the baseline it starts on starts_on, on or after " \
+              "the plan's base date and defaulting to it; the days before it read as today. " \
               "relation 'instead' adds an alternative to parent_id over the same period. parent_id defaults to the " \
               "baseline, whose id is the plan's. A parent has at most one 'then' step. " \
               "Refused unless the caller is one of the plan's editors."

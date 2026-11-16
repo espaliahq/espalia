@@ -102,14 +102,29 @@ class Views::Plans::ScenarioDialogs < Views::Base
               maxlength: TeamPlanning::PlanAggregate::NAME_LIMIT, autocomplete: "off", title: "The name can't be blank",
               aria: { describedby: "fork-scenario-name-hint" }, class: Components::Kit::Field::INPUT)
       end
+      starts_on_field
       div(data: { scenario_fork_form_target: "endsOnField" }) do
-        field("fork-scenario-ends-on", "Ends on", hint: "It starts the day after the scenario it follows ends.") do
+        field("fork-scenario-ends-on", "Ends on", hint: "Its last day. A step after another starts the day after that one ends.") do
           input(id: "fork-scenario-ends-on", type: "date", name: "scenario[ends_on]", required: true,
                 aria: { describedby: "fork-scenario-ends-on-hint" }, class: Components::Kit::Field::INPUT,
                 data: { scenario_fork_form_target: "endsOn" })
         end
       end
       actions("Create scenario", data: { scenario_fork_form_target: "submit" })
+    end
+  end
+
+  # Only a first step can start later than the day the one before it ends:
+  # Today then carries on until it starts.
+  def starts_on_field
+    base_on = @scenarios.find { it[:scenario_id] == @plan_id }&.dig(:starts_on)
+    div(hidden: true, data: { scenario_fork_form_target: "startsOnField" }) do
+      field("fork-scenario-starts-on", "Starts on",
+            hint: "On or after the plan's base date#{", #{Date.iso8601(base_on).strftime('%-d %b %Y')}" if base_on}. Today continues until then.") do
+        input(id: "fork-scenario-starts-on", type: "date", name: "scenario[starts_on]", value: base_on, min: base_on, disabled: true,
+              aria: { describedby: "fork-scenario-starts-on-hint" }, class: Components::Kit::Field::INPUT,
+              data: { scenario_fork_form_target: "startsOn" })
+      end
     end
   end
 
