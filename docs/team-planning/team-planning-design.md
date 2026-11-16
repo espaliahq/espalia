@@ -1315,9 +1315,9 @@ Rules that follow:
   cannot be pinned, cleared or undone, because nothing was written.
 - **Only planned changes are approved.** The pinned point covers events. The change list
   is built from events. A forecast can appear in neither.
-- **Planned removes from forecast.** A read model leaves out of a forecast anyone a
-  planned change already covers: a person with a `DepartureSet` is not in expected
-  attrition, and a person with a `LevelSet` is not in forecast promotions.
+- **Planned removes from forecast.** Each forecast kind decides which planned changes
+  leave a person out of it: a person with a `DepartureSet` is not in expected attrition,
+  and a person with a `LevelSet` is not in forecast promotions.
 - **Read models keep the three apart** in every total, so a total can state its make-up
   and a closed step can compare its forecast with what happened.
 
