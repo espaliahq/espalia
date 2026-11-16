@@ -878,7 +878,8 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
   an archive and a restore entry.
 - The structure reads stand still: the drift, status and attention reads return nothing,
   with `checked: false` and a note beside `archived_on`, so an empty list is never read
-  as "nothing wrong". Restoring checks the plan again from that day.
+  as "nothing wrong". Restoring checks the plan again against everything since its base
+  date, the time it sat archived included.
 - The figures don't stand still. Cost, scenario costs, capacity, forecast, budget,
   funding and budget lines still price with today's bands, rates and rules, and say so
   in a note. Freezing them is a pay-path change, left to

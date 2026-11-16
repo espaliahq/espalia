@@ -341,7 +341,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
 
       post restore_plan_path(@plan_id)
       assert_redirected_to plan_path(@plan_id)
-      assert_equal "Plan restored. It takes changes again, and checks against the organisation from today.", flash[:notice]
+      assert_equal "Plan restored. It takes changes again, and its checks cover everything since its base date.", flash[:notice]
       get plan_path(@plan_id)
       assert_select "button", text: "New scenario"
 

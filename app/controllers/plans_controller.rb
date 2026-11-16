@@ -51,7 +51,7 @@ class PlansController < ApplicationController
     plan = read(Operations::TeamPlanning::Plan)
     authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
     Operations::TeamPlanning::RestorePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
-    redirect_to plan_path(plan[:plan_id]), notice: "Plan restored. It takes changes again, and checks against the organisation from today."
+    redirect_to plan_path(plan[:plan_id]), notice: "Plan restored. It takes changes again, and its checks cover everything since its base date."
   rescue Operations::Base::ParameterError => e
     redirect_to plan_path(plan[:plan_id]), alert: "Couldn't restore this plan: #{e.message}"
   end

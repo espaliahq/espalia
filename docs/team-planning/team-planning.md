@@ -496,8 +496,8 @@ changes, runs the checks and reports what moved.
 
 A plan nobody is working on can be archived instead of deleted. It keeps everything in
 it, and its members can still read it, but nobody can change it and it stops being
-checked against the organisation. Any editor can restore it, and it is checked again from
-that day. Its costs, budgets and capacity are still worked out with today's pay bands,
+checked against the organisation. Any editor can restore it, and its checks then cover
+everything that changed since the plan's base date. Its costs, budgets and capacity are still worked out with today's pay bands,
 exchange rates and rules, not those of the day it was archived. Deleting a plan is the
 step that can't be undone.
 
