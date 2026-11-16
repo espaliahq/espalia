@@ -29,30 +29,45 @@ class OrgGraph::StructureCommandHandler
     @repository = repository
   end
 
+  # The history records each kind, so every change to the kinds waits for
+  # its rebuild, as a provider change does.
+  #
   # @see OrgGraph::StructureAggregate#define_taxonomy
+  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
   def define_taxonomy(levels, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_taxonomy!
-    with_structure(plan) { |structure| structure.define_taxonomy(levels, **attributed(options, :defined_by_id)) }
+    unless_history_rebuilding do
+      with_structure(plan) { |structure| structure.define_taxonomy(levels, **attributed(options, :defined_by_id)) }
+    end
   end
 
   # @see OrgGraph::StructureAggregate#add_level
+  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
   def add_level(level_id, name, **options)
     authorize_taxonomy!
-    with_structure(OrgGraph::PlanReference.new) { |structure| structure.add_level(level_id, name, **attributed(options, :defined_by_id)) }
+    unless_history_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.add_level(level_id, name, **attributed(options, :defined_by_id)) }
+    end
   end
 
   # @see OrgGraph::StructureAggregate#reorder_levels
+  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
   def reorder_levels(level_ids, **options)
     authorize_taxonomy!
-    with_structure(OrgGraph::PlanReference.new) { |structure| structure.reorder_levels(level_ids, **attributed(options, :defined_by_id)) }
+    unless_history_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.reorder_levels(level_ids, **attributed(options, :defined_by_id)) }
+    end
   end
 
   # @see OrgGraph::StructureAggregate#remove_level
+  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
   def remove_level(level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_taxonomy!
-    with_structure(plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
+    unless_history_rebuilding do
+      with_structure(plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
+    end
   end
 
   # @see OrgGraph::StructureAggregate#set_level_provider

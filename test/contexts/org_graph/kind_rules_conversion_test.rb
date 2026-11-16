@@ -89,6 +89,24 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
     end
   end
 
+  should "refuse to change the kinds while the history is rebuilt, writing nothing" do
+    stream = as_tenant { EventStreamNaming.org_structure_stream }
+    before = Rails.configuration.event_store.read.stream(stream).count
+    current = %w[Division Department Team Squad].map { { level_id: id(it), name: it } }
+    renamed = [ { **current[0], name: "Business unit" }, *current.drop(1) ]
+
+    while_rebuilding(@tenant, OrgGraph::Projections::History) do
+      as_tenant do
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.define_taxonomy(renamed, effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.add_level(SecureRandom.uuid_v7, "Guild", effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.reorder_levels(current.map { it[:level_id] }.reverse, effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.remove_level(id("Squad"), effective_on: @today) }
+      end
+    end
+
+    assert_equal before, Rails.configuration.event_store.read.stream(stream).count
+  end
+
   should "let every live unit sit where it is, and every kind at the top" do
     structure = as_tenant { OrgGraph::Repository.new.load_structure }
 
