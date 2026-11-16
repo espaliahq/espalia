@@ -15,10 +15,14 @@ class Views::Plans::ChangesTab < Views::Base
   }.freeze
   STATUSES = {
     "done" => [ "Done", :success ], "pending" => [ "Pending", :neutral ],
-    "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ], "plan_only" => [ "Plan only", :info ]
+    "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ], "plan_only" => [ "Plan only", :info ],
+    "outside" => [ "Outside this plan", :warning ]
   }.freeze
   STAYING = "Staying"
+  OUTSIDE = "Someone outside this plan"
+  OUTSIDE_MANAGER = "someone outside this plan"
   PLAN_ONLY = "Only in this plan"
+  NO_LONGER_COVERED = "Someone this plan no longer covers"
   WHOLE_PLAN = "The whole plan"
   NARROW_NOTE = 100
   WIDE_NOTE = 320
@@ -177,7 +181,7 @@ class Views::Plans::ChangesTab < Views::Base
        data: { planned_change: entry[:status] }) do
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
-          strong(class: "font-medium") { planned_subject(entry[:subject_id]) }
+          strong(class: "font-medium") { subject_label(entry) }
           plain " · #{entry[:staying] ? STAYING : facet_name(entry[:facet])}"
         end
         planned_in(entry[:scenario_id]) if entry[:scenario_id] != scenario_id
@@ -187,8 +191,11 @@ class Views::Plans::ChangesTab < Views::Base
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         status_badge(entry)
-        sources(entry[:sources])
-        clear(entry) if @can_edit && entry[:clearable]
+        sources(entry[:sources].to_a)
+        if @can_edit && entry[:clearable]
+          clear(entry)
+          undo(entry) if entry[:undoable]
+        end
       end
     end
   end
@@ -196,15 +203,15 @@ class Views::Plans::ChangesTab < Views::Base
   # The read decides which rows may be cleared, so a pay change a member may
   # not touch never offers it. The dialog names the facet and never a value.
   def clear(entry)
-    subject = planned_subject(entry[:subject_id])
+    subject = subject_label(entry)
     facet = entry[:staying] ? STAYING : facet_name(entry[:facet])
-    render Components::Kit::Modal.new(id: "clear-#{entry[:change_id]}", title: "Clear #{subject}'s #{facet.downcase}?", size: :md) do |modal|
+    title = no_longer_covered?(entry) ? "Clear this #{facet.downcase} change?" : "Clear #{subject}'s #{facet.downcase}?"
+    render Components::Kit::Modal.new(id: "clear-#{entry[:change_id]}", title:, size: :md) do |modal|
       render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, compact: true, data: { action: "modal#open", clear_change: entry[:facet] },
                                          aria_label: "Clear #{subject} · #{facet}") { "Clear" }
       modal.body do
         p(class: "text-sm text-default") do
-          "#{scenario_name(scenario_id)} will follow #{scenario_name(parent_of(scenario_id))} again here. " \
-            "The change stays in the history, and Undo brings it back."
+          "#{scenario_name(scenario_id)} will follow #{scenario_name(parent_of(scenario_id))} again here. #{clear_keeps(entry)}"
         end
         form(action: plan_clears_path(plan_id), method: "post", class: "mt-6 flex flex-wrap items-center gap-3") do
           input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
@@ -243,6 +250,30 @@ class Views::Plans::ChangesTab < Views::Base
       else
         render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "settlement[choice]", value: "reality") { "Follow reality" }
       end
+    end
+  end
+
+  def no_longer_covered?(entry) = entry[:status].to_s == "outside"
+
+  # Undo restores a change about someone outside the plan only if it places them back in its units.
+  def clear_keeps(entry)
+    return "The change stays in the history, and Undo brings it back." unless no_longer_covered?(entry)
+
+    "The change stays in the history. Since the plan no longer covers them, Undo brings it back only if the change places them in its units."
+  end
+
+  def subject_label(entry) = no_longer_covered?(entry) ? NO_LONGER_COVERED : planned_subject(entry[:subject_id])
+
+  # A scope keeps the plan's own record of a change about someone it no longer
+  # covers, so the plan can still take the change out, and nothing else. The
+  # plan page's Undo never offers it, so its row does, when the read says an
+  # undo would bring nothing back.
+  def undo(entry)
+    form(action: plan_change_undos_path(plan_id), method: "post", class: "contents", data: { undo_change: entry[:facet] }) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      { scenario_id:, event_id: entry[:change_id], tab: "changes" }.each { |name, value| input(type: "hidden", name: name.to_s, value:) }
+      render Components::Kit::Button.new(type: :submit, variant: :ghost, size: :sm, compact: true,
+                                         aria_label: "Undo #{NO_LONGER_COVERED} · #{facet_name(entry[:facet])}") { "Undo" }
     end
   end
 
@@ -353,29 +384,40 @@ class Views::Plans::ChangesTab < Views::Base
     when "membership_started" then "#{person} joined #{unit}"
     when "membership_ended" then "#{person} left #{unit}"
     when "membership_changed" then "#{person}'s place in #{unit} changed"
-    when "moved" then "#{person} moved from #{unit_name(change[:from_unit_id])} to #{unit}"
+    when "moved" then moved_line(person, change)
     when "unit_created" then "#{unit} was created"
-    when "unit_renamed" then "#{change.dig(:before, 'name') || unit} was renamed #{change.dig(:after, 'name') || unit}"
-    when "unit_moved" then "#{unit} moved"
+    when "unit_renamed"
+      renamed = change.dig(:after, "name") || unit
+      outside?(change, "before") ? "Renamed #{renamed}" : "#{change.dig(:before, 'name') || unit} was renamed #{renamed}"
+    when "unit_moved" then outside?(change, "after") ? "#{unit} left the units this plan covers" : "#{unit} moved"
     when "unit_retired" then "#{unit} was retired"
     when "unit_succeeded" then "A succession was recorded"
-    when "owner_added" then "#{person} became an owner of #{unit}"
-    when "owner_removed" then "#{person} stopped owning #{unit}"
+    when "owner_added" then "#{outside?(change, 'person_id') ? OUTSIDE : person} became an owner of #{unit}"
+    when "owner_removed" then "#{outside?(change, 'person_id') ? OUTSIDE : person} stopped owning #{unit}"
     else change[:kind].humanize
     end
   end
 
+  def moved_line(person, change)
+    return "#{person} left the units this plan covers" if outside?(change, "unit_id")
+    return "#{person} joined #{unit_name(change[:unit_id])} from outside the units this plan covers" if outside?(change, "from_unit_id")
+
+    "#{person} moved from #{unit_name(change[:from_unit_id])} to #{unit_name(change[:unit_id])}"
+  end
+
+  def outside?(change, field) = Array(change[:outside]).include?(field)
+
   def fact_line(person, change)
     fact = FACTS.fetch(change[:fact], change[:fact].to_s.humanize(capitalize: false))
-    before = fact_value(change[:fact], change[:before])
-    after = fact_value(change[:fact], change[:after])
+    before, after = %w[before after].map { fact_value(change[:fact], change[it.to_sym], outside: outside?(change, it)) }
     return "#{person}'s #{fact} changed" unless after
 
     before ? "#{person}'s #{fact} changed from #{before} to #{after}" : "#{person}'s #{fact} is now #{after}"
   end
 
-  def fact_value(fact, fields)
+  def fact_value(fact, fields, outside:)
     return unless fields.is_a?(Hash)
+    return OUTSIDE_MANAGER if outside
     return name_of(fields["manager_id"]) if fact == "manager" && fields["manager_id"]
 
     fields.values.select { it.is_a?(String) || it.is_a?(Numeric) }.join(", ").presence
