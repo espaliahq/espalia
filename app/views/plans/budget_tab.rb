@@ -19,7 +19,8 @@ class Views::Plans::BudgetTab < Views::Base
   # @param funding [Hash, nil] from `team_planning_funding`; nil on Today
   # @param map [Hash, nil] from `team_planning_scenario_map`, for position and unit names; nil on Today
   # @param can_edit [Boolean] whether the viewer may change this scenario's lines and funding
-  def initialize(plan:, scenarios:, lines:, budget: nil, funding: nil, map: nil, can_edit: false)
+  # @param funded_here [Set<String>] the positions whose funding this scenario sets itself
+  def initialize(plan:, scenarios:, lines:, budget: nil, funding: nil, map: nil, can_edit: false, funded_here: Set.new)
     @plan = plan
     @scenarios = scenarios
     @lines = lines
@@ -27,6 +28,7 @@ class Views::Plans::BudgetTab < Views::Base
     @funding = funding
     @map = map
     @can_edit = can_edit
+    @funded_here = funded_here
   end
 
   def view_template
@@ -168,7 +170,8 @@ class Views::Plans::BudgetTab < Views::Base
 
   def funding_button(position_id, **)
     name = position_name(position_id)
-    trigger = Views::Plans::FundingDialog.trigger(url: plan_funding_path(plan_id, position_id), name:, position: funding_by_position.fetch(position_id))
+    trigger = Views::Plans::FundingDialog.trigger(url: plan_funding_path(plan_id, position_id), name:, position: funding_by_position.fetch(position_id),
+                                                   clearable: @funded_here.include?(position_id))
     render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true, aria_label: "Change the funding of #{name}", data: trigger, **) { "Funding…" }
   end
 

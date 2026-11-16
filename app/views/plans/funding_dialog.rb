@@ -15,11 +15,12 @@ class Views::Plans::FundingDialog < Views::Base
   # @param url [String] the position's funding path
   # @param name [String] what the tab calls the position
   # @param position [Hash] from `team_planning_funding`
+  # @param clearable [Boolean] whether this scenario sets the position's funding itself
   # @return [Hash]
-  def self.trigger(url:, name:, position:)
+  def self.trigger(url:, name:, position:, clearable:)
     draws = position[:draws].map { "#{it[:budget_line_id]}=#{(BigDecimal(it[:share]) * 100).to_s('F').delete_suffix('.0')}" }
     { action: "click->modal#open", modal_target_id: ID, funding_action: url, funding_name: name,
-      funding_draws: draws.join(","), funding_set: position[:source] == "set" ? "true" : "false" }
+      funding_draws: draws.join(","), funding_set: clearable.to_s }
   end
 
   # @param scenario_id [String]

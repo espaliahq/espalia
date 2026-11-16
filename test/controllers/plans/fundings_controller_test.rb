@@ -70,6 +70,21 @@ class Plans::FundingsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "derived", funding[:source]
     end
 
+    should "offer Clear only where this scenario sets the funding, not where it follows another's" do
+      patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: { @growth => "100" } } }
+      q2 = ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2 hires",
+                                                              ends_on: "2027-06-30")[:scenario_id]
+      end
+
+      get budget_plan_path(@plan_id, scenario: @q1)
+      assert_select "[data-funding-action][data-funding-set=?]", "true"
+
+      get budget_plan_path(@plan_id, scenario: q2)
+      assert_select "[data-funding-action]"
+      assert_select "[data-funding-set=?]", "true", count: 0
+    end
+
     should "say why it refused parts that don't add up, or that aren't percentages" do
       patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: { @platform => "60", @growth => "30" } } }
       assert_equal "Couldn't set the funding: The parts add up to 100", flash[:alert]

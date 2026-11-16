@@ -164,9 +164,19 @@ class PlansController < ApplicationController
     else
             Views::Plans::BudgetTab.new(plan:, scenarios:, lines:, can_edit: can_edit?, budget: read(Operations::TeamPlanning::Budget, scenario_id:),
                                         funding: read(Operations::TeamPlanning::Funding, scenario_id:),
-                                        map: read(Operations::TeamPlanning::ScenarioMap, scenario_id:))
+                                        map: read(Operations::TeamPlanning::ScenarioMap, scenario_id:), funded_here: funded_here(scenario_id))
     end
     render plan_page(plan, scenarios:, open_tab: :budget, body: tab)
+  end
+
+  # The positions whose funding this scenario sets itself, which are the only
+  # ones `team_planning_clear_change` will hand back.
+  #
+  # @return [Set<String>]
+  def funded_here(scenario_id)
+    return Set.new unless can_edit?
+
+    read(Operations::TeamPlanning::Overrides, scenario_id:)[:overrides].filter_map { it[:subject_id] if it[:facet] == "funding" }.to_set
   end
 
   # GET /planning/:id/update-to-today
