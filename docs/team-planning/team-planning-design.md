@@ -1227,8 +1227,14 @@ values, under the plan's key and deleted with it
   line the plan adds gets one the plan mints. The baseline holds the approved budget as it
   is, so only a scenario changes it. Removing a tenant line a plan has changed or cut
   leaves the plan's change orphaned: `team_planning_budget_lines` lists it under `orphaned`,
-  and Attention flags it rather than dropping it. Until the budget tab (6.7), a plan's lines
-  are reached over MCP.
+  and Attention flags it rather than dropping it.
+- **The Budget tab shows the reads, read-only.** On Today it lists the lines as approved,
+  since Today has no period to fund against, and links each scenario's budget. On a scenario
+  it shows `team_planning_budget`'s four totals, each line's approved, funded and remaining
+  figures, the positions `team_planning_funding` draws on each line (open when the line is
+  over or a position is short), and the unfunded positions. Every figure is the read's,
+  under the viewer's pay view, so the tab and an agent never disagree. Editing lines on the
+  tab comes later.
 - **Money keeps its currency.** An amount keeps its own currency and period, a year or a
   month, as a pay band's does, and is never converted. A line with a head count and no amount
   has no amount, never zero.
