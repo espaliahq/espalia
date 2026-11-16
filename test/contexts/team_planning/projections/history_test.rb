@@ -170,6 +170,20 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
                    "previous_ends_on" => "2027-03-31" }, entry.end_state)
   end
 
+  should "mark a date edit undone by its undo, unmark it on redo, and record both as entries of the step" do
+    @handler.set_scenario_period(@plan_id, @q1, ends_on: "2027-04-30")
+    edit = @handler.undo_change(@plan_id, scenario_id: @q1)
+
+    set, undo = history(@q1).to_a
+    assert_equal [ edit, @person.id ], [ set.id, set.undone_by_id ]
+    assert_equal [ "undo", edit ], [ undo.action, undo.reverses_event_id ]
+    assert_equal({ "starts_on" => "2027-01-01", "ends_on" => "2027-03-31", "previous_starts_on" => "2027-01-01",
+                   "previous_ends_on" => "2027-04-30" }, undo.end_state)
+
+    @handler.redo_change(@plan_id, scenario_id: @q1)
+    assert_equal [ [ "dates", false ], [ "undo", false ], [ "redo", false ] ], history(@q1).map { [ it.action, it.undone? ] }
+  end
+
   should "record a step with no end date closed by the step forked after it, and nothing for a fork that closes none" do
     q2 = fork(@q1, "then", "Q2")
     assert_empty history(q2)
@@ -194,6 +208,16 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal({ "starts_on" => "2027-01-01", "ends_on" => "2027-04-30", "previous_ends_on" => "2027-03-31" }, history(@q1).sole.end_state)
   end
 
+  should "record a date edit that names no one who set it, with no actor" do
+    event = TeamPlanning::Events::ScenarioPeriodSet.new(
+      data: { plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-04-30", previous_ends_on: "2027-03-31" },
+      metadata: { tenant_id: @tenant.id, timestamp: Time.current }
+    )
+    TeamPlanning::Projections::History.new.call(event)
+
+    assert_equal [ "dates", nil, nil ], history(@q1).sole.then { [ it.action, it.actor_id, it.reverses_event_id ] }
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       q2 = fork(@q1, "then", "Q2", ends_on: "2027-06-30")
@@ -212,9 +236,11 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
       @handler.note_change(@plan_id, scenario_id: @q1, event_id: history(@q1).last.id, note: "Ready, and asked for it")
       split(@q1, history(@q1).last.noted_event_id)
       @handler.set_scenario_period(@plan_id, q2, ends_on: "2027-07-31")
+      @handler.undo_change(@plan_id, scenario_id: q2)
+      @handler.redo_change(@plan_id, scenario_id: q2)
 
       before = snapshot_read_models(TeamPlanning::Projections::History, @tenant)
-      assert_equal 13, before[:history].size
+      assert_equal 15, before[:history].size
 
       TeamPlanning::Projections::History.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningHistoryEntry.count
