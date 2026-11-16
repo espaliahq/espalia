@@ -59,10 +59,7 @@ class Operations::TeamPlanning::SetAssignment < Operations::Base
 
   private
 
-  # An unknown allocation is only ever followed from the Org Graph, never set.
   def place!(plan, placement)
-    raise Operations::Base::ParameterError, "An allocation is above 0 and at most 1" if placement[:allocation].nil?
-
     placement.slice(*ASSIGNMENT::PLACES).compact.each do |name, id|
       raise Operations::Base::ParameterError, "#{name} must be a UUID, got #{id.inspect}" unless id.match?(UUID_RE)
     end

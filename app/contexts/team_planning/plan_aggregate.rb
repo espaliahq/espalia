@@ -493,7 +493,7 @@ class TeamPlanning::PlanAggregate
     settles = { since: since.iso8601, choice: }
     own = changes_in(scenario_id).reverse_each.find { it.key == [ subject_id, facet ] }
     if choice == "reality" || kind.seals_end_state? || (own && !@pinned_from.key?(own.event_id))
-      write_change(kind, scenario_id:, subject_id:, set_by_id: settled_by_id, end_state:, note: require_note(note), settles:)
+      write_change(kind, scenario_id:, subject_id:, set_by_id: settled_by_id, end_state:, note: require_note(note), settles:, followed: true)
     else
       pinned_from = @pinned_from.fetch(own.event_id) if own
       write_pin(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_by_id: settled_by_id, pinned_from:, note:, settles:)
@@ -1057,8 +1057,8 @@ class TeamPlanning::PlanAggregate
   # Only a settle carries the marker, so every other write is stored as before.
   def with_settles(data, settles) = settles ? data.merge(settles:) : data
 
-  def write_change(kind, scenario_id:, subject_id:, set_by_id:, end_state:, note:, settles: nil)
-    fields = kind.end_state(own_fields!(end_state.to_h.symbolize_keys))
+  def write_change(kind, scenario_id:, subject_id:, set_by_id:, end_state:, note:, settles: nil, followed: false)
+    fields = kind.public_send(followed ? :followed_end_state : :end_state, own_fields!(end_state.to_h.symbolize_keys))
     data = with_note({ plan_id: @plan_id, scenario_id:, subject_id:, **own_fields!(fields), set_by_id: }, note)
     apply(kind.new(data: with_settles(data, settles)))
   end

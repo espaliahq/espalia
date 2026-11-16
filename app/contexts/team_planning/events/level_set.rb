@@ -25,14 +25,18 @@ class TeamPlanning::Events::LevelSet < TeamPlanning::Events::Change
   # @return [String]
   def self.facet = "level"
 
-  # @param end_state [Hash] `{ level: }`, the level nil or {CLEARED} for no level
-  # @return [Hash] `{ level: }`, no level as {CLEARED}
-  # @raise [TeamPlanning::Error] without the level key
+  # @param end_state [Hash] `{ level: }`
+  # @return [Hash]
+  # @raise [TeamPlanning::Error] without a level
   def self.end_state(end_state)
-    raise TeamPlanning::Error, "A planned level names the level" unless end_state.key?(:level)
+    level = end_state[:level].to_s.strip.presence or raise TeamPlanning::Error, "A planned level names the level"
 
-    { level: end_state[:level].to_s.strip }
+    { level: }
   end
+
+  # @param end_state [Hash] `{ level: }`, nil or blank where the Org Graph cleared it
+  # @return [Hash] `{ level: }`, no level as {CLEARED}
+  def self.followed_end_state(end_state) = end_state[:level].to_s.strip.empty? ? { level: CLEARED } : end_state(end_state)
 
   # Whether a planned level says no level. One whose key is gone says nothing anyone can read.
   #

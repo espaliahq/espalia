@@ -34,13 +34,19 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   # @param end_state [Hash] `{ placements: [{ position_id or unit_id, allocation, role }] }`
   # @return [Hash] the ids downcased, each allocation a Float
   # @raise [TeamPlanning::Error] for a placement in both a position and a unit, or neither, an
-  #   allocation outside (0, 1], or a place held twice. A total over 1 is never refused, and a nil
-  #   allocation, unknown as the Org Graph can hold it, is kept as nil.
-  def self.end_state(end_state)
+  #   allocation outside (0, 1], or a place held twice. A total over 1 is never refused.
+  def self.end_state(end_state) = checked(end_state, known: true)
+
+  # @param end_state [Hash] as {end_state}, an allocation nil where the Org Graph holds none
+  # @return [Hash]
+  # @raise [TeamPlanning::Error] as {end_state}
+  def self.followed_end_state(end_state) = checked(end_state, known: false)
+
+  def self.checked(end_state, known:)
     placements = end_state[:placements]
     raise TeamPlanning::Error, "An assignment lists its placements, or none to leave the person unassigned" unless placements.is_a?(Array)
 
-    placements = placements.map { placement!(it) }
+    placements = placements.map { placement!(it, known) }
     raise TeamPlanning::Error, "A person holds each position and unit once" if placements.map { it.slice(*PLACES) }.uniq.size < placements.size
 
     { placements: }
@@ -122,7 +128,7 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
       (wanted["role"].nil? || place["role"] == wanted["role"])
   end
 
-  def self.placement!(placement)
+  def self.placement!(placement, known)
     raise TeamPlanning::Error, "A placement names a position or a unit" unless placement.is_a?(Hash)
 
     placement = placement.symbolize_keys
@@ -130,11 +136,11 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "A placement is in a position or a unit, not both" if places.values.all?
     raise TeamPlanning::Error, "A placement names a position or a unit" if places.values.none?
 
-    { **places, allocation: allocation!(placement[:allocation]), role: placement[:role].to_s.strip.presence }
+    { **places, allocation: allocation!(placement[:allocation], known), role: placement[:role].to_s.strip.presence }
   end
 
-  def self.allocation!(value)
-    return nil if value.nil?
+  def self.allocation!(value, known)
+    return nil if value.nil? && !known
 
     allocation = Float(value, exception: false)
     return allocation if allocation&.positive? && allocation <= 1
@@ -142,5 +148,5 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "An allocation is above 0 and at most 1"
   end
 
-  private_class_method :placement!, :allocation!, :in_order, :placement_of, :shows_place?
+  private_class_method :checked, :placement!, :allocation!, :in_order, :placement_of, :shows_place?
 end

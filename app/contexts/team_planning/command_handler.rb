@@ -534,7 +534,7 @@ class TeamPlanning::CommandHandler
   # withdrawn.
   # The Org Graph can hold what no change kind can, so that is refused.
   def followable(kind, end_state)
-    kind.end_state(end_state.to_h.symbolize_keys)
+    kind.followed_end_state(end_state.to_h.symbolize_keys)
     [ kind, end_state ]
   rescue TeamPlanning::Error
     raise TeamPlanning::Error, "The Org Graph holds a value this plan can't hold yet, so this can't follow reality. You can still keep the plan"
