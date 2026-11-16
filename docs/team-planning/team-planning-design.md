@@ -1043,6 +1043,19 @@ change and pin may carry a `note`, the planner's reason, such as why someone mov
   it was made with; each `note` row keeps one rewrite and names the change in
   `noted_event_id`. `team_planning_overrides` and `team_planning_history` show it as
   `{ value: }`.
+- **A note on a pay change reaches only a member who sees pay**
+  ([#292](https://github.com/espaliahq/espalia/issues/292)). A note is free text, so it
+  may state an amount. `Operations::TeamPlanning::ChangeNote` decides, once, whether a
+  reader may see a change's note, and status, overrides and history each ask it. Anyone
+  else gets no note on a `data:pay` change and no sign one exists: no `note` key, no
+  `note` entry in the history, and no note form on the Changes tab. The right is read on
+  every request, so withdrawing it hides those notes at once. Every other read carries
+  no note: the timeline, rebase preview, move, split, fork and frozen-plan reads return
+  none, and a refused note write names only the limit it broke.
+- **A long note shows three lines.** The Changes tab clamps a note over 320 characters,
+  or of four lines or more not counting blank ones, behind a native `details` toggle,
+  with no JavaScript. A note over 100 characters clamps only below `md`, where a row is
+  narrow, so a toggle never opens a note that already fits.
 - **No rebuild.** No stored event held a note before 3.13b and the new columns start empty,
   so neither projection's `CODE_VERSION` moved.
 
@@ -1370,7 +1383,7 @@ to each group that found something.
 
 Each item names its subject, the reason, the change behind it and its `sources`. Attention names
 units, positions and successions the way the scenario's map does. One the map no longer holds
-has no name, and a succession calls a missing side "A removed unit". The change links to its row on the Changes tab, which carries the id
+has no name, and a succession calls a missing side "A removed unit". A budget line reads as its role and level, or "Any role", then its cost centre; a cost centre reads as its own name. The change links to its row on the Changes tab, which carries the id
 `change-<change_id>`, whenever that tab lists it for the same scenario; a change it doesn't list
 is named without a link. An item no change explains says so.
 
@@ -1540,7 +1553,31 @@ A draw on a line the scenario no longer holds funds nothing, and the checks flag
 do a funding on a closed position. Funded counts the positions funded whole and the FTE each
 draw funds, so funded and unfunded always add up to the scenario's positions and FTE. That
 holds whether or not a pay band prices a position: one with no band is still funded or
-unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
+unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read, and the 6.6 checks surface them.
+
+As built in 6.6 ([#421](https://github.com/espaliahq/espalia/issues/421)): five budget checks
+join `TeamPlanning::Attention`, the Checks tab and `team_planning_attention`. Each reads one
+`TeamPlanning::Budget` report for the scenario, built as the viewer, and works out no figure
+of its own. A check names seats, budget lines and cost centres, and never an amount, so held pay
+can tip a line over for someone with the see-pay right and never shows them, or anyone else, a
+figure. The baseline has no period, so it has no budget checks, and neither has a scenario that
+holds no budget line. An archived plan stays unchecked, as before.
+
+- **Unfunded.** A held position no line matches, with no funding set. A share left unfunded
+  only by a removed line is the existing funding check's item, and a tie is ambiguous.
+- **Ambiguous funding.** A position two or more lines could fund equally well, with no funding
+  set to choose.
+- **No cost centre.** A seat held in the period that no label, real value or entry gives a cost centre, once the plan
+  uses cost centres at all: a line names one, or any seat has one. A plan where nothing has a
+  cost centre stays quiet.
+- **Over budget.** A line, a cost centre or the whole budget over its approved amount, its head
+  count or both, at the scope `budget_strictness` checks. The head count says by how many FTE,
+  as heads are not pay. Nothing says by how much money.
+- **Unused budget line.** A line whose period overlaps the scenario's that nothing draws on.
+  A line positions tie on is not unused: choosing a funding fixes it.
+
+The mismatch check, a seat whose rules give a cost centre other than the one it keeps, follows
+in its own change.
 
 As built in 6.5 ([#384](https://github.com/espaliahq/espalia/issues/384)): the
 `budget_strictness` rule says how strictly positions follow budget lines. It is plan-wide, like
