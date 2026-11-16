@@ -58,8 +58,11 @@ class PayBandLockingTest < ActiveSupport::TestCase
     second = nil
 
     holding(-> { PayBand.reorder!(read.reverse, from: read) }) do
-      second = Thread.new { on_another_connection { PayBand.reorder!(read.rotate, from: read) } }
-      assert_nil second.join(0.5), "the second reorder ran while the first held the list"
+      pids = Queue.new
+      second = Thread.new do
+        on_another_connection { |connection| pids << connection.select_value("SELECT pg_backend_pid()"); PayBand.reorder!(read.rotate, from: read) }
+      end
+      assert_waiting_for_list(pids.pop, second)
     end
 
     assert_equal :stale, second.value
@@ -70,12 +73,14 @@ class PayBandLockingTest < ActiveSupport::TestCase
     added = nil
 
     holding(-> { PayBand.reorder!(@bands.reverse.map(&:id)) }) do
+      pids = Queue.new
       added = Thread.new do
-        on_another_connection do
+        on_another_connection do |connection|
+          pids << connection.select_value("SELECT pg_backend_pid()")
           PayBand.new(location: "Lemuria", currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2).tap { it.match_on }.tap(&:save!)
         end
       end
-      assert_nil added.join(0.5), "the band was added while the reorder held the list"
+      assert_waiting_for_list(pids.pop, added)
     end
 
     added.join
@@ -104,6 +109,17 @@ class PayBandLockingTest < ActiveSupport::TestCase
   ensure
     finish << true
     writer&.join
+  end
+
+  # Polls until the worker's backend waits on an advisory lock, so the test
+  # proves contention rather than a worker that simply hadn't started.
+  def assert_waiting_for_list(pid, worker, within: 5)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + within
+    until PayBand.connection.select_value(PayBand.sanitize_sql_array([ "SELECT 1 FROM pg_locks WHERE pid = ? AND locktype = 'advisory' AND NOT granted", pid ]))
+      flunk "the worker finished while the list was held" unless worker.alive?
+      flunk "the worker never waited for the list" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      sleep 0.02
+    end
   end
 
   def insert_rate
