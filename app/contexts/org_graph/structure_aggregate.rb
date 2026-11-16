@@ -224,6 +224,7 @@ class OrgGraph::StructureAggregate
 
     effective_on = iso_date(effective_on)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+    ensure_units_still_fit!(level_id => provider)
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id:, provider:, previous_provider: ESPALIA, field:, effective_on:, set_by_id:
     }))
@@ -608,8 +609,7 @@ class OrgGraph::StructureAggregate
   # The live units sitting where their kind's rules no longer allow.
   #
   # @return [Array<Unit>] by name
-  def misplaced_units
-    rules = taxonomy
+  def misplaced_units(rules = taxonomy)
     live_units.reject do |unit|
       parent = unit.parent_id && @units[unit.parent_id]
       parent ? rules.allows?(unit.level_id, beneath: parent.level_id) : rules.may_be_top?(unit.level_id)
@@ -727,6 +727,16 @@ class OrgGraph::StructureAggregate
     return if providers.drop(first_espalia).all?(ESPALIA)
 
     raise "Levels an HRIS provides must sit above every level Espalia holds"
+  end
+
+  # A level an HRIS takes over may sit only beneath the HRIS level directly
+  # above it, so a unit Espalia placed further up would be left where it can't sit.
+  def ensure_units_still_fit!(provider_changes)
+    prospective = OrgGraph::Taxonomy.new(with_stated_rules(@levels), providers: @level_providers.merge(provider_changes))
+    stranded = misplaced_units(prospective) - misplaced_units
+    return if stranded.empty?
+
+    raise "Move these units beneath a unit the handover allows first: #{stranded.map(&:name).join(', ')}"
   end
 
   # A unit's latest change includes a sub-unit arriving beneath it or leaving,

@@ -36,13 +36,30 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
   should "refuse a mirrored unit beneath an HRIS level other than the one directly above, which order allowed" do
     as_tenant { @handler.hand_over_level(id("Department"), "hibob", field: "work.department", matches: { @engineering => "eng", @marketing => "mkt" }, effective_on: @today) }
     region = as_tenant { unit("Region", "Department", parent_id: @ops, provider: "hibob", external_ref: "region") }
-    as_tenant { @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches: { @payments => "pay", @lending => "lend", @platform => "plat" }, effective_on: @today) }
+    as_tenant do
+      @handler.move_unit(@platform, region, effective_on: @today)
+      @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches: { @payments => "pay", @lending => "lend", @platform => "plat" }, effective_on: @today)
+    end
 
     error = assert_raises(RuntimeError) do
       as_tenant { @handler.move_unit(@lending, @ops, effective_on: @today, provider: "hibob") }
     end
     assert_equal "A parent must sit at a higher level", error.message
     assert_nothing_raised { as_tenant { @handler.move_unit(@lending, region, effective_on: @today, provider: "hibob") } }
+  end
+
+  should "refuse to hand a level to an HRIS while one of its units sits beneath a level the HRIS rule skips" do
+    as_tenant { @handler.hand_over_level(id("Department"), "hibob", field: "work.department", matches: { @engineering => "eng", @marketing => "mkt" }, effective_on: @today) }
+    matches = { @payments => "pay", @lending => "lend", @platform => "plat" }
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches:, effective_on: @today) }
+    end
+    assert_equal "Move these units beneath a unit the handover allows first: Platform", error.message
+    assert_equal "espalia", as_tenant { OrgTaxonomyLevel.find(id("Team")).provider }
+
+    as_tenant { @handler.move_unit(@platform, @engineering, effective_on: @today) }
+    assert_nothing_raised { as_tenant { @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches:, effective_on: @today) } }
   end
 
   should "let every live unit sit where it is, and every kind at the top" do

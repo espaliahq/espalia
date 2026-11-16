@@ -31,12 +31,19 @@ class OrgGraphTaxonomyCheckTaskTest < ActiveSupport::TestCase
     assert_match "[#{@tenant.id}] 0 misplaced units, 0 changes to the kinds dated out of order", run_task
   end
 
-  should "fail on a mirrored unit beneath anything but the level directly above it" do
+  should "fail on a unit of an HRIS level beneath anything but the HRIS level directly above it" do
     as_tenant do
-      { @division => { @ops => "ops" }, @department => {}, @team => { @payments => "payments" } }.each do |level_id, matches|
+      { @division => { @ops => "ops" }, @department => {} }.each do |level_id, matches|
         @handler.hand_over_level(level_id, "hibob", field: "work.#{level_id.first(4)}", matches:, effective_on: "2026-02-01")
       end
     end
+    # A handover now refuses to strand Payments, so publish one from before it did.
+    Rails.configuration.event_store.publish(
+      OrgGraph::Events::LevelProviderSet.new(data: { level_id: @team, provider: "hibob", previous_provider: "espalia", field: "work.team",
+                                                     effective_on: "2026-02-01", set_by_id: nil },
+                                             metadata: { tenant_id: @tenant.id }),
+      stream_name: EventStreamNaming.org_structure_stream(tenant: @tenant)
+    )
 
     error = assert_raises(SystemExit) { run_task }
     assert_not error.success?
