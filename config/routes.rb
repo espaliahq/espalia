@@ -465,6 +465,8 @@ Rails.application.routes.draw do
     resources :undos, only: [ :create ], controller: "plans/undos"
     resources :redos, only: [ :create ], controller: "plans/redos"
     resources :clears, only: [ :create ], controller: "plans/clears"
+    # Undo a change about someone the plan no longer covers, from its own row ([#435](https://github.com/espaliahq/espalia/issues/435)).
+    resources :change_undos, only: [ :create ], controller: "plans/change_undos", path: "change-undos"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.
