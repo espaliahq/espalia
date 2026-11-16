@@ -188,9 +188,37 @@ class Views::Plans::ChangesTab < Views::Base
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         status_badge(entry)
         sources(entry[:sources])
+        clear(entry) if @can_edit && entry[:clearable]
       end
     end
   end
+
+  # The read decides which rows may be cleared, so a pay change a member may
+  # not touch never offers it. The dialog names the facet and never a value.
+  def clear(entry)
+    subject = planned_subject(entry[:subject_id])
+    facet = entry[:staying] ? STAYING : facet_name(entry[:facet])
+    render Components::Kit::Modal.new(id: "clear-#{entry[:change_id]}", title: "Clear #{subject}'s #{facet.downcase}?", size: :md) do |modal|
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, compact: true, data: { action: "modal#open", clear_change: entry[:facet] },
+                                         aria_label: "Clear #{subject} · #{facet}") { "Clear" }
+      modal.body do
+        p(class: "text-sm text-default") do
+          "#{scenario_name(scenario_id)} will follow #{scenario_name(parent_of(scenario_id))} again here. " \
+            "The change stays in the history, and Undo brings it back."
+        end
+        form(action: plan_clears_path(plan_id), method: "post", class: "mt-6 flex flex-wrap items-center gap-3") do
+          input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+          { scenario_id:, subject_id: entry[:subject_id], facet: entry[:facet], tab: "changes" }.each do |name, value|
+            input(type: "hidden", name: name.to_s, value:)
+          end
+          render Components::Kit::Button.new(tone: :danger, type: :submit) { "Clear change" }
+          render Components::Kit::Button.new(variant: :outline, data: { action: "click->modal#close" }) { "Cancel" }
+        end
+      end
+    end
+  end
+
+  def parent_of(id) = @scenarios.find { it[:scenario_id] == id }&.dig(:parent_id) || plan_id
 
   def planned_in(id)
     p(class: "text-xs text-muted", data: { planned_in: id }) do

@@ -30,10 +30,12 @@ class Views::Plans::ShowView < Views::Base
   # @param see_pay [Hash] the members panel's see-pay options: `can_manage_see_pay`, `reachable_ids`, `locked_out`
   # @param coverable_units [Array<Hash>, nil] from `team_planning_coverable_units`, for an editor to change the scope
   # @param panel_open [Boolean] whether the side panel renders open; see `.panel_open?`
+  # @param undo_step [Hash, nil] from `team_planning_undo_step`, for the scenario the open tab shows
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
                  body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, can_archive: false, can_restore: false, can_delete: false,
-                 see_pay: {}, coverable_units: nil, panel_open: true)
+                 see_pay: {}, coverable_units: nil, panel_open: true, undo_step: nil)
     @panel_open = panel_open
+    @undo_step = undo_step
     @plan = plan
     @can_archive = can_archive
     @can_restore = can_restore
@@ -184,20 +186,60 @@ class Views::Plans::ShowView < Views::Base
 
   def tab_strip(panel)
     if tabs.size > 1
-      div(class: "mb-4 flex items-end gap-3 border-b border-default") do
+      div(class: "@container mb-4 flex flex-wrap items-end gap-x-3 border-b border-default") do
         nav(aria: { label: "Plan views" }, class: "min-w-0 flex-1") do
           div(class: "-mb-px flex flex-wrap gap-x-1") { tabs.each { tab(it) } }
         end
-        div(class: "shrink-0 pb-1.5") { panel.toggle }
+        # On a phone the controls take a row above the tabs, so they never push a tab onto another line.
+        div(class: "order-first flex w-full shrink-0 items-center justify-end gap-1 sm:order-none sm:w-auto sm:pb-1.5") do
+          undo_controls
+          panel.toggle
+        end
       end
       h2(id: "plan-main-heading", class: "sr-only") { current_tab.label }
     else
-      div(class: "mb-3 flex items-center justify-between gap-3") do
+      div(class: "@container mb-3 flex items-center justify-between gap-3") do
         h2(id: "plan-main-heading", class: "text-base font-semibold text-default") { current_tab.label }
-        panel.toggle
+        div(class: "flex items-center gap-1") do
+          undo_controls
+          panel.toggle
+        end
       end
     end
   end
+
+  # Each names what it acts on, in full to a screen reader and as far as
+  # the strip's width allows on screen, so the tabs never wrap for them.
+  def undo_controls
+    return unless @undo_step
+
+    { undo: [ "Undo", :plan_undos_path ], redo: [ "Redo", :plan_redos_path ] }.each do |key, (verb, path)|
+      step = @undo_step[key]
+      next unless step
+
+      label = "#{verb}: #{undo_target(step)}"
+      form(action: send(path, @plan[:plan_id]), method: "post", data: { undo_control: key }) do
+        input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+        input(type: "hidden", name: "event_id", value: step[:event_id])
+        input(type: "hidden", name: "scenario_id", value: @undo_step[:scenario_id])
+        input(type: "hidden", name: "tab", value: @open_tab)
+        render Components::Kit::Button.new(variant: :ghost, size: :sm, compact: true, type: :submit, aria_label: label, title: label,
+                                           class: "max-w-56") do
+          icon(key, class: "size-4 shrink-0")
+          span(class: "hidden min-w-0 truncate @5xl:inline") { label }
+        end
+      end
+    end
+  end
+
+  def undo_target(step)
+    return "#{scenario_label(step[:scenario_id])} · Dates" if step[:action] == Operations::TeamPlanning::UndoStep::DATES
+
+    facet = Views::Plans::ScenarioTab.facet_name(step[:facet])
+    step[:subject] ? "#{step[:subject]} · #{facet}" : facet
+  end
+
+  def scenario_label(id) = @scenarios.find { it[:scenario_id] == id }&.dig(:name) || "A removed scenario"
 
   def tab(tab)
     open = tab.key == @open_tab
