@@ -47,8 +47,8 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
 
   def rebase = call(:RebasePlan, plan_id: @plan_id, base_on: BASE_ON.iso8601)
 
-  def settle(scenario_id, choice, as: @editor, **params)
-    call(:SettleConflict, as:, plan_id: @plan_id, scenario_id:, subject_id: @brook.id, facet: "level", choice:, **params)
+  def settle(scenario_id, choice, as: @editor, facet: "level", **params)
+    call(:SettleConflict, as:, plan_id: @plan_id, scenario_id:, subject_id: @brook.id, facet:, choice:, **params)
   end
 
   def brook(scenario_id) = call(:Status, plan_id: @plan_id, scenario_id:)[:statuses].find { it[:subject_id] == @brook.id }
@@ -202,6 +202,20 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
     assert_equal "The Org Graph holds a value this plan can't hold yet, so this can't follow reality. You can still keep the plan",
                  refusal { settle(@q1, "reality") }
     settle(@q1, "plan")
+    assert_equal "plan", last_entry(@q1)[:settles]["choice"]
+  end
+
+  should "refuse to follow reality for a withdrawn departure once the person has left, while keeping the plan still works" do
+    call(:SetDeparture, plan_id: @plan_id, scenario_id: @plan_id, person_id: @brook.id)
+    call(:WithdrawDeparture, plan_id: @plan_id, scenario_id: @q1, person_id: @brook.id)
+    travel_to(Time.utc(2026, 3, 20, 9)) { as_tenant { @org.leave(@brook.id, **ESPALIA, effective_on: "2026-03-20") } }
+    rebase
+    withdrawal = call(:Status, plan_id: @plan_id, scenario_id: @q1)[:statuses].find { it[:subject_id] == @brook.id && it[:facet] == "departure" }
+    assert_equal "conflicting", withdrawal[:status].to_s
+
+    assert_match(/has this person leaving, so a withdrawn departure can't follow reality/,
+                 refusal { settle(@q1, "reality", facet: "departure") })
+    settle(@q1, "plan", facet: "departure")
     assert_equal "plan", last_entry(@q1)[:settles]["choice"]
   end
 end

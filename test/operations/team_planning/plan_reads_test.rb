@@ -161,6 +161,23 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
     assert_equal({ @ada.id => "Ada Quill" }, status[:names])
   end
 
+  should "read a withdrawn departure conflicting once the Org Graph has the person leave" do
+    ActsAsTenant.with_tenant(@tenant) do
+      TeamPlanning::CommandHandler.new(actor: AuthorizationContext.new(user: @editor.user, tenant_user: @editor, person: @editor.person))
+        .set_change(@plan_id, TeamPlanning::Events::DepartureWithdrawn, scenario_id: @plan_id, subject_id: @ada.id, end_state: {})
+    end
+    travel_to Time.utc(2026, 3, 10, 9)
+    assert_equal "done", call(Operations::TeamPlanning::Status, as: @viewer, plan_id: @plan_id, scenario_id: @plan_id)[:statuses].sole[:status]
+
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).leave(@ada.id, **ESPALIA, effective_on: "2026-03-10")
+    end
+    travel_to Time.utc(2026, 3, 11, 9)
+    status = call(Operations::TeamPlanning::Status, as: @viewer, plan_id: @plan_id, scenario_id: @plan_id)
+    assert_equal [ @ada.id, "departure", "conflicting", %w[espalia], true ],
+                 status[:statuses].sole.values_at(:subject_id, :facet, :status, :sources, :staying)
+  end
+
   should "refuse a scenario the plan doesn't have, and a plan to anyone outside it" do
     error = assert_raises(Operations::Base::ParameterError) do
       call(Operations::TeamPlanning::Status, as: @viewer, plan_id: @plan_id, scenario_id: SecureRandom.uuid_v7)

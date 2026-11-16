@@ -1080,7 +1080,9 @@ has retired, the successions it holds and the people who have left, from `OrgGra
 `retired_units`, `successions` and `left_ids`. The plain map and the baseline leave all three
 out, as a plan keeps its own. A departure reads done once the Org Graph has the person
 leave, and pending while they stay. The Org Graph knows only that they left, not the step
-or the backfill, so a leaver reads as the plan has them leave. A
+or the backfill, so a leaver reads as the plan has them leave. A withdrawn departure
+reads done while the person stays and conflicting once the Org Graph has them leave, and
+the Changes tab names it "Staying" ([#347](https://github.com/espaliahq/espalia/issues/347)). A
 retirement reads done once the Org Graph has retired the unit, whatever it last looked
 like, and pending while the unit is live. The Org Graph mints its own succession ids, so
 a kind reads its end state off today's map through `Change.read_org_graph`, which a
@@ -1105,8 +1107,10 @@ name, and a subject only the plan holds has none. `Raised` will join these once
 
 The Changes tab ([#287](https://github.com/espaliahq/espalia/issues/287)) draws three reads
 and decides none of their rules: the drift, the status of one scenario's changes, and what
-in that scenario needs attention. A picker chooses the scenario, as pills on a wide screen
-and a list on a phone. Each drift change links the scenarios whose plan it meets.
+in that scenario needs attention. What needs attention reads as a count that links to the
+Checks tab for the same scenario, which lists the items grouped by check
+([#355](https://github.com/espaliahq/espalia/issues/355)). A picker chooses the scenario, as
+pills on a wide screen and a list on a phone. Each drift change links the scenarios whose plan it meets.
 
 Drift and status each give a change's `sources`, from `TeamPlanning::SourceOfTruth`: who
 supplies what the change moves, so the place someone goes to make it happen. A person fact
