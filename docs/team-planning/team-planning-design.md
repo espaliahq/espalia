@@ -881,8 +881,8 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
   as "nothing wrong". Restoring checks the plan again from that day.
 - The figures don't stand still. Cost, scenario costs, capacity, forecast, budget,
   funding and budget lines still price with today's bands, rates and rules, and say so
-  in a note. Freezing them is a pay-path change, left for a follow-up under
-  [#183](https://github.com/espaliahq/espalia/issues/183).
+  in a note. Freezing them is a pay-path change, left to
+  [#394](https://github.com/espaliahq/espalia/issues/394).
 - The plans list shows live plans by default; `state` asks for archived ones, or all.
   On the web a Live and Archived switch does the same, and the plan page carries a banner
   with the day, the editor and, for editors, a Restore button.
