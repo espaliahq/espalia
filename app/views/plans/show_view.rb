@@ -24,14 +24,16 @@ class Views::Plans::ShowView < Views::Base
   # @param can_edit [Boolean] whether the viewer may fork and rename scenarios; never on an archived plan
   # @param can_archive [Boolean] whether the viewer may archive the plan
   # @param can_restore [Boolean] whether the viewer may restore the archived plan
+  # @param can_delete [Boolean] whether the viewer may delete the plan
   # @param see_pay [Hash] the members panel's see-pay options: `can_manage_see_pay`, `reachable_ids`, `locked_out`
   # @param coverable_units [Array<Hash>, nil] from `team_planning_coverable_units`, for an editor to change the scope
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
-                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, can_archive: false, can_restore: false,
+                 body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, can_archive: false, can_restore: false, can_delete: false,
                  see_pay: {}, coverable_units: nil)
     @plan = plan
     @can_archive = can_archive
     @can_restore = can_restore
+    @can_delete = can_delete
     @coverable_units = coverable_units
     @see_pay = see_pay
     @can_edit = can_edit
@@ -50,7 +52,7 @@ class Views::Plans::ShowView < Views::Base
 
   def view_template
     render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal", action: "keydown.esc@window->modal#escape" } if @can_edit || @can_archive)) do
+      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal", action: "keydown.esc@window->modal#escape" } if @can_edit || @can_archive || @can_delete)) do
         header
         frozen_notice if @plan[:frozen]
         archived_notice if @plan[:archived]
@@ -66,6 +68,7 @@ class Views::Plans::ShowView < Views::Base
         render Views::Plans::ScenarioDialogs.new(plan_id: @plan[:plan_id], scenarios: @scenarios) if @can_edit
         render Views::Plans::ScopeDialog.new(plan: @plan, units: @coverable_units) if changes_scope?
         render Views::Plans::ArchiveDialog.new(plan_id: @plan[:plan_id]) if @can_archive
+        render Views::Plans::DeleteDialog.new(plan: @plan) if @can_delete
       end
       render @drawer if @drawer
     end
@@ -86,11 +89,14 @@ class Views::Plans::ShowView < Views::Base
         end
         scope_line
       end
-      if @actions.any? || @can_edit || @can_archive
+      if @actions.any? || @can_edit || @can_archive || @can_delete
         div(class: "flex flex-wrap items-center gap-2") do
           @actions.each { render it }
           if @can_archive
             render Components::Kit::Button.new(variant: :outline, data: Views::Plans::ArchiveDialog.trigger) { "Archive plan" }
+          end
+          if @can_delete
+            render Components::Kit::Button.new(variant: :outline, tone: :danger, data: Views::Plans::DeleteDialog.trigger) { "Delete plan" }
           end
           new_scenario_button if @can_edit
         end
