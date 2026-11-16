@@ -97,8 +97,9 @@ class OrgGraph::StructureAggregate
   # Adds a level Espalia holds below every other level. Works from the levels
   # this stream holds, so a level added or moved meanwhile is kept.
   #
-  # Without `parent_ids:` the new kind keeps the rule every level was first
-  # written under: it may sit under any kind above it, or at the top.
+  # Without `parent_ids:` or `top:` the new kind keeps the rule every level was
+  # first written under: it may sit under any kind above it, or at the top.
+  # With only `top:`, it may sit under any kind above it.
   #
   # @param level_id [String] a new level's id
   # @param name [String]
@@ -114,8 +115,12 @@ class OrgGraph::StructureAggregate
     level_id = require_id(level_id, "Level id")
     raise ArgumentError, "Level id is taken" if level_index(level_id)
 
+    rules = {}
+    unless parent_ids.nil? && top.nil?
+      parent_ids = level_ids(@levels) if parent_ids.nil?
+      rules = { level_id => kind_rules(level_id, parent_ids, top.nil? ? Array(parent_ids).empty? : top) }
+    end
     levels = [ *@levels, { level_id:, name: } ]
-    rules = parent_ids.nil? ? {} : { level_id => kind_rules(level_id, parent_ids, top.nil? ? Array(parent_ids).empty? : top) }
     write_taxonomy(levels, rules:, effective_on:, defined_by_id:)
   end
 

@@ -141,6 +141,13 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     assert_equal [ [ @tribe ], false ], rules(guild)
   end
 
+  should "keep a kind added with only top: false off the top, under any kind above it" do
+    guild = SecureRandom.uuid_v7
+    as_tenant { @handler.add_level(guild, "Guild", top: false, effective_on: @today) }
+
+    assert_equal [ [ @tribe, @squad ], false ], rules(guild)
+  end
+
   should "refuse a change dated after today, pointing to a plan" do
     error = assert_raises(RuntimeError) do
       as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: @today + 1) }
