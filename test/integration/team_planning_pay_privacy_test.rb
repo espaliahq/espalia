@@ -330,9 +330,10 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
 
-    # Q1 holds 121 of the year's 365 days.
+    # Q1 holds 121 of the year's 365 days. The line's 80,000 sits between the
+    # held pay and the midpoint, so over shows which of the two judged it.
     should "fund a budget line from held pay for a holder, and from midpoints alone for everyone else" do
-      line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD",
+      line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 80_000, currency: "AUD",
                                 period: "year", cost_centre: "Platform").id
       position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
                                                                          level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
@@ -350,7 +351,8 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         drawn = budget[:budget_lines].find { it[:budget_line_id] == line }
 
         assert_in_delta funded, BigDecimal(drawn[:funded][:native]["AUD"]), 1e-9, who
-        assert_in_delta 500_000 * share - funded, BigDecimal(drawn[:remaining][:amount]), 1e-9, who
+        assert_in_delta 80_000 * share - funded, BigDecimal(drawn[:remaining][:amount]), 1e-9, who
+        assert_equal({ money: account == @holder ? [] : [ "AUD" ], heads: nil, mismatched_currencies: [] }, drawn[:over], who)
         account == @holder ? assert_equal(held, drawn[:funded][:native]["AUD"], who) : assert_not_includes(budget.to_json, derived, who)
       end
     end
