@@ -45,7 +45,9 @@ class Views::Plans::ScenarioDates < Views::Base
 
   def first_step? = @scenario[:parent_id] == plan_id
 
-  def parent = @scenarios.find { it[:scenario_id] == @scenario[:parent_id] }
+  # The step whose end this one starts after: its parent, or the step that
+  # parent takes its period from when the parent is a split or an alternative.
+  def parent = Views::Plans::ScenarioTable.period_owner(@scenarios.find { it[:scenario_id] == @scenario[:parent_id] }, @scenarios)
 
   def back = @from == "map" ? map_plan_path(plan_id, scenario: id) : plan_path(plan_id)
 

@@ -101,7 +101,9 @@ class Views::Plans::ScenarioTable < Views::Base
           menu.item(data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@plan_id, scenario[:scenario_id]), scenario)) do
             "Edit…"
           end
-          menu.item(href: dates_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Dates…" } if self.class.dated?(scenario)
+          if (step = self.class.dated_step(scenario, @scenarios))
+            menu.item(href: dates_plan_path(@plan_id, scenario_id: step[:scenario_id])) { "Dates…" }
+          end
           menu.item(href: split_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Split off the agreed part…" }
         end
       end
@@ -142,6 +144,35 @@ class Views::Plans::ScenarioTable < Views::Base
     case scenario[:relation]
     in "then" then true
     in "on" | "instead" | nil then false
+    end
+  end
+
+  # The step whose dates a scenario's Dates… page changes, as the aggregate
+  # resolves it: a step itself, the rest of a split its step, and an
+  # alternative none, as it can't be moved apart from what it replaces.
+  #
+  # @param scenario [Hash] from `team_planning_scenarios`
+  # @param scenarios [Array<Hash>] the plan's scenarios
+  # @return [Hash, nil]
+  def self.dated_step(scenario, scenarios)
+    case scenario[:relation]
+    in "then" then scenario
+    in "on" then period_owner(scenario, scenarios)
+    in "instead" | nil then nil
+    end
+  end
+
+  # The step whose dates a scenario takes: itself for a step, else the
+  # nearest step above it. Nil for the baseline.
+  #
+  # @param scenario [Hash, nil] from `team_planning_scenarios`
+  # @param scenarios [Array<Hash>] the plan's scenarios
+  # @return [Hash, nil]
+  def self.period_owner(scenario, scenarios)
+    case scenario&.dig(:relation)
+    in "then" then scenario
+    in "on" | "instead" then period_owner(scenarios.find { it[:scenario_id] == scenario[:parent_id] }, scenarios)
+    in nil then nil
     end
   end
 
