@@ -241,13 +241,16 @@ place, a position or a departure, one subject and facet at a time, from its step
 step before or after on the path. Every entry of that key's log goes across, undone ones
 included, so undo and redo behave as before, and a departure leaves in the step it reached.
 The move is refused into the baseline, past the last step, into a step that already changes
-the same thing (naming that change), into or out of a split step, and for a departure whose
-date falls outside the step it would reach. When more than one step follows, the editor
+the same thing (naming that change), past a step in between that does, as the step an
+alternative stands in for may, into or out of a split step, and for a departure whose date
+falls outside the step it would reach. It is refused, too, when it would leave a change
+without the position it fills, or bring a change ahead of the position it needs. When more than one step follows, the editor
 names the one. Moving touches only the place, position or departure, so a `data:pay` change
 on the same person stays where it was and the move needs no see-pay right.
 Undo takes the whole move back as one step, and redo puts it back, each leaving every step
 resolving as it did. Undo is refused once the step it left, or a later change in the step it
-reached, changes the same thing, and the refusal names that change.
+reached, changes the same thing, and the refusal names that change. An undo is checked as
+a move the other way, so it is refused for the same reasons.
 The timeline offers the move through a "When…" menu on the bar where the change shows, with
 "earlier" missing next to Today, and it saves through `MoveChange`, which MCP shares as
 `team_planning_move_change`. Each timeline column lists the keys it can move. The menu
