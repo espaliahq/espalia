@@ -4,6 +4,8 @@ require "application_system_test_case"
 
 class PlanTimelineSystemTest < ApplicationSystemTestCase
   ESPALIA = { provider: "espalia" }.freeze
+  # Turbo turns a "When…" item into this form the moment it is clicked.
+  MOVE_FORM = "body > form[data-turbo='true'][hidden]"
 
   setup do
     @tenant = create(:tenant)
@@ -277,20 +279,17 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       end
 
       should "post one move while the first drop's request is still on its way" do
-        page.execute_script(<<~JS)
-          window.shiftPosts = 0
-          document.addEventListener("turbo:before-fetch-request", (event) => {
-            if (event.detail.fetchOptions.method.toUpperCase() !== "POST") return
-            window.shiftPosts += 1
-            event.preventDefault()
-          })
-        JS
-        2.times do
-          hold(leaver_end_grip, over: "[data-timeline-step='2']")
-          release
-        end
+        hold_move_requests
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        release
+        assert_selector "body[data-shift-posts='1']"
 
-        assert_equal 1, page.evaluate_script("window.shiftPosts")
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        release
+
+        assert_selector MOVE_FORM, count: 1, visible: :all
+        assert_selector "body[data-shift-posts='1']"
       end
 
       should "let go cleanly when the held grip leaves the page" do
@@ -358,6 +357,17 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
   end
 
   def release = page.driver.browser.action.release.perform
+
+  # Counts the move's POSTs and holds each one, so the page stays as it was.
+  def hold_move_requests
+    page.execute_script(<<~JS)
+      document.addEventListener("turbo:before-fetch-request", (event) => {
+        if (event.detail.fetchOptions.method.toUpperCase() !== "POST") return
+        document.body.dataset.shiftPosts = Number(document.body.dataset.shiftPosts || 0) + 1
+        event.preventDefault()
+      })
+    JS
+  end
 
   def leaver_end_grip
     find(:xpath, "//*[@data-timeline-grid]//div[.//*[@data-timeline-lane][contains(normalize-space(.), 'leaves in Q1 hires')]]" \
