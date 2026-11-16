@@ -47,6 +47,10 @@ class PlanCloseStepSystemTest < ApplicationSystemTestCase
         scroll_to(find(row), align: :center)
         open_dropdown(scope: row)
         click_button_with_js_fallback("Reopen step…", expect_text: "Reopen Q1?")
+        within("#step-closure-#{@q1}") do
+          assert_text "The steps after it will stand where they stood before it closed: on the step closed before it, " \
+                      "or on the plan's own base if no step closed before it."
+        end
         click_button_with_js_fallback("Reopen step", expect_text: "Reopened Q1.")
 
         assert_selector "#{row} [data-step-state=ready_to_close]"

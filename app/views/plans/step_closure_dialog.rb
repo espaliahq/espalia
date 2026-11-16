@@ -77,7 +77,7 @@ class Views::Plans::StepClosureDialog < Views::Base
   end
 
   def reopening
-    p { "The steps after it will stand on the plan's own base again, as before it closed." }
+    p { "The steps after it will stand where they stood before it closed: on the step closed before it, or on the plan's own base if no step closed before it." }
     p { "It can be changed again." }
   end
 
