@@ -863,7 +863,7 @@ export default class extends BaseController {
       // Swap just this card (#488): reloading the whole matrix to change one
       // card cost ~440 KB and a long main-thread block per click. The card's
       // top doesn't move when its contents change, so the scroll can start now.
-      this.#pushFocusToUrl(stableId, ordinal)
+      this.#syncCardFocusToUrl(stableId, ordinal)
       this.#loadCard(stableId, ordinal)
       this.#scrollCardUnderHeader(stableId, { awaitFrameLoad: false })
     } else {
@@ -895,7 +895,7 @@ export default class extends BaseController {
           // Whatever failed — network, a session bounce, a card no longer in
           // scope — the whole-frame reload has the recovery paths already.
           // The click already pushed its history entry.
-          this.#reloadMatrixWithFocus(stableId, load.next ?? target, { history: "replace" })
+          this.#reloadMatrixWithFocus(stableId, load.next ?? target)
           return
         }
         // The card arrives unfocused; the ring goes where focus is now.
@@ -945,12 +945,19 @@ export default class extends BaseController {
 
   // The browser URL is the selected-level map's source of truth: a broadcast
   // reload and the whole-frame paths below read it back.
-  #pushFocusToUrl(stableId, ordinal) {
+  #syncCardFocusToUrl(stableId, ordinal) {
     const browserUrl = new URL(window.location)
     browserUrl.searchParams.set("capability", stableId)
     browserUrl.searchParams.set("level_ordinal", ordinal.toString())
     browserUrl.searchParams.set(`levels[${stableId}]`, ordinal.toString())
-    window.history.pushState({}, "", browserUrl)
+    this.#replaceUrl(browserUrl)
+  }
+
+  // Clicks inside an assessment replace the history entry rather than add
+  // one, so one Back leaves the page (#433). Keeping `history.state` keeps
+  // Turbo's restoration id, which Turbo needs to restore the page on Back.
+  #replaceUrl(url) {
+    window.history.replaceState(window.history.state, "", url)
   }
 
   // A card swap updates only the browser URL, so a whole-frame reload built
@@ -1058,7 +1065,7 @@ export default class extends BaseController {
     }
   }
 
-  #reloadMatrixWithFocus(stableId, ordinal, { history = "push" } = {}) {
+  #reloadMatrixWithFocus(stableId, ordinal) {
     const frame = this.element.closest("turbo-frame") ||
                   this.element.querySelector("turbo-frame")
     if (!frame) return
@@ -1098,7 +1105,7 @@ export default class extends BaseController {
       browserUrl.searchParams.delete("capability")
       browserUrl.searchParams.delete("level_ordinal")
     }
-    window.history[history === "replace" ? "replaceState" : "pushState"]({}, "", browserUrl)
+    this.#replaceUrl(browserUrl)
   }
 
   scrollToCategory(event) {
@@ -1453,18 +1460,8 @@ export default class extends BaseController {
   // entering / leaving cell-level focus (assessment view only — explorer
   // doesn't render <colgroup> so the col target list is empty there).
   //
-  // `pushToUrl: false` opts out of `?capability=` / `?level_ordinal=`
-  // URL sync entirely.
-  //
-  // `replaceUrl: true` updates the URL via `replaceState` instead of
-  // `pushState` — used by the scroll-driven capability picker so
-  // continuous scroll keeps the URL current (so reload restores the
-  // focused capability) without thrashing the back-stack. Explicit
-  // clicks (card header, level chip, suggestion pane navigation) push
-  // so Back returns the user to their previous click.
   #setFocus({ level, categoryId = null, capabilityId = null, capabilityStableId = null,
-              levelOrdinal = null, expectationId = null },
-            { pushToUrl = true, replaceUrl = false } = {}) {
+              levelOrdinal = null, expectationId = null }) {
     this.currentFocus = {
       level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId
     }
@@ -1477,7 +1474,7 @@ export default class extends BaseController {
                            level === "cell" ? capabilityId : null)
     this.#applyCardFocus(capabilityStableId, level)
     this.#applyGridFocus()
-    if ((pushToUrl || replaceUrl) && this.urlSyncValue) {
+    if (this.urlSyncValue) {
       // Capability is part of the URL whenever a row is expanded — i.e.
       // for cell AND capability focus levels. For framework/category
       // focus, capability is cleared. Always use the stable_id so the
@@ -1486,7 +1483,7 @@ export default class extends BaseController {
         ? capabilityStableId
         : null
       const ordForUrl = level === "cell" ? levelOrdinal : null
-      this.#syncFocusToUrl(capForUrl, ordForUrl, { replace: replaceUrl })
+      this.#syncFocusToUrl(capForUrl, ordForUrl)
     }
     this.#dispatchFocusEvent({ ...this.currentFocus })
   }
@@ -1769,13 +1766,7 @@ export default class extends BaseController {
       return
     }
 
-    // `replaceUrl: true` keeps `?capability=` current with the
-    // scrolling-driven capability so a reload restores the focused
-    // capability the user has scrolled to. Uses replaceState (not push)
-    // so continuous scroll doesn't pile up history entries — Back
-    // returns to the user's last explicit click, not every card they
-    // scrolled past. The level_ordinal is implicitly cleared because
-    // scroll-driven updates set `levelOrdinal: null`.
+    // Keeps `?capability=` on the card scrolled to, so a reload restores it.
     this.#setFocus({
       level: "capability",
       categoryId,
@@ -1783,7 +1774,7 @@ export default class extends BaseController {
       capabilityStableId: stableId,
       levelOrdinal: null,
       expectationId: null
-    }, { pushToUrl: false, replaceUrl: true })
+    })
   }
 
   #stickyHeaderHeight() {
@@ -2460,21 +2451,12 @@ export default class extends BaseController {
       browserUrl.searchParams.delete("category")
     }
 
-    window.history.pushState({}, "", browserUrl)
+    this.#replaceUrl(browserUrl)
   }
 
-  // Batched URL sync for focus state. Updates capability + level_ordinal
-  // in a single history entry so Back/Forward maps 1:1 to explicit
-  // focus changes. No-ops when the URL already matches — important on
-  // initial connect, which dispatches focus from already-correct URL
-  // state and would otherwise pile up duplicate back-stack entries.
-  //
-  // `replace: true` swaps the current history entry instead of pushing
-  // a new one — used by scroll-driven updates that fire continuously
-  // and would otherwise spam history. Explicit click paths
-  // (focusChip, focusCapability, focusCategory) push so Back returns
-  // the user to their previous click.
-  #syncFocusToUrl(capId, levelOrdinal, { replace = false } = {}) {
+  // Batched URL sync for focus state: capability and level_ordinal in one
+  // write, skipped when the URL already matches, as on connect.
+  #syncFocusToUrl(capId, levelOrdinal) {
     const url = new URL(window.location)
     const desiredCap = capId || null
     const desiredOrd = levelOrdinal != null ? String(levelOrdinal) : null
@@ -2488,11 +2470,7 @@ export default class extends BaseController {
     if (desiredOrd != null) url.searchParams.set("level_ordinal", desiredOrd)
     else url.searchParams.delete("level_ordinal")
 
-    if (replace) {
-      window.history.replaceState({}, "", url)
-    } else {
-      window.history.pushState({}, "", url)
-    }
+    this.#replaceUrl(url)
   }
 
   // Dims sibling compact rows when a row is expanded for visual focus.

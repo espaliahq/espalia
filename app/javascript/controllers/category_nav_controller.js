@@ -112,7 +112,7 @@ export default class extends BaseController {
     this.#setActiveCategory(categoryId)
     this._suppressActiveUpdateUntil = Date.now() + 900
 
-    this.#pushFocusState({ level: "category", categoryId })
+    this.#syncFocusState({ level: "category", categoryId })
   }
 
   scrollToTop(event) {
@@ -120,14 +120,14 @@ export default class extends BaseController {
     window.scrollTo({ top: 0, behavior: "smooth" })
     this.#setActiveCategory(null)
     this._suppressActiveUpdateUntil = Date.now() + 900
-    this.#pushFocusState({ level: "framework", categoryId: null })
+    this.#syncFocusState({ level: "framework", categoryId: null })
   }
 
   // Updates the browser URL (?category=…) and broadcasts the focus
   // change so the activity feed narrows to match the clicked badge.
   // Clears capability/level params — switching category invalidates
   // any prior cell focus.
-  #pushFocusState({ level, categoryId }) {
+  #syncFocusState({ level, categoryId }) {
     const url = new URL(window.location)
     if (categoryId) {
       url.searchParams.set("category", categoryId)
@@ -136,7 +136,7 @@ export default class extends BaseController {
     }
     url.searchParams.delete("capability")
     url.searchParams.delete("level_ordinal")
-    window.history.pushState({}, "", url)
+    window.history.replaceState(window.history.state, "", url)
 
     window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
       detail: {
