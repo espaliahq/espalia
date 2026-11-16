@@ -1615,7 +1615,8 @@ class TeamPlanning::PlanAggregate
       period = period_of(id, moved)
       next if period == period_of(id)
 
-      leaves_on = changes_in(id).filter_map { it.data[:leaves_on] }.find { !period.cover?(Date.iso8601(it)) } or next
+      standing = changes_in(id).index_by(&:key).values
+      leaves_on = standing.filter_map { it.data[:leaves_on] }.find { !period.cover?(Date.iso8601(it)) } or next
       raise TeamPlanning::Error,
             "Someone leaves on #{leaves_on}, outside the dates this gives the scenario they leave in " \
             "(#{period.begin.iso8601} to #{period.end.iso8601}): change their date first"

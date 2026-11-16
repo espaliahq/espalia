@@ -162,6 +162,17 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       assert_equal %w[2027-04-06 2027-06-30], period(@q2)
     end
 
+    should "judge a departure by the date it has now, not one it was moved from" do
+      person_id = SecureRandom.uuid_v7
+      %w[2027-01-20 2027-02-15].each do |leaves_on|
+        @plan.set_change(TeamPlanning::Events::DepartureSet, scenario_id: @lean, subject_id: person_id, set_by_id: @editor_id,
+                                                             end_state: { leaves_in_id: @lean, leaves_on: })
+      end
+
+      @plan.set_scenario_period(@q1, starts_on: "2027-02-01", ends_on: "2027-03-31", set_by_id: @editor_id)
+      assert_equal %w[2027-02-01 2027-03-31], period(@q1)
+    end
+
     should "keep its start when only the end moves, and write nothing for the same period" do
       @plan.set_scenario_period(@q1, ends_on: "2027-02-28", set_by_id: @editor_id)
       assert_equal %w[2027-01-14 2027-02-28], period(@q1)
