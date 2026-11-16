@@ -150,7 +150,11 @@ class PayBand < ApplicationRecord
   # was made with, which can go stale.
   #
   # @return [Hash{Symbol => Object}] only the fields set
-  def matcher_fields = { **matcher.except(:location_key), location: location.presence }.compact
+  def matcher_fields
+    return { level_id:, location: location.presence }.compact if level_id
+
+    { role_family_id:, role_id:, level_ordinal:, location: location.presence }.compact
+  end
 
   # How narrow the band is, for where a new band lands: a role counts above
   # its family, a level number and a country one each.
