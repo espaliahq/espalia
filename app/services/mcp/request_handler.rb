@@ -137,7 +137,7 @@ class Mcp::RequestHandler
   end
 
   def handle_tools_list
-    tools = Operations::Registry.all
+    tools = Operations::Registry.tools
       .sort_by(&:name)
       .map { |op_class| Mcp::OperationToTool.call(op_class) }
 

@@ -514,12 +514,7 @@ class TeamPlanning::CommandHandler
     chosen
   end
 
-  def standing_ids(plan, scenario_id)
-    parent_id = plan.scenarios[scenario_id]&.parent_id or return Set.new
-
-    map = TeamPlanning::Resolution.new(context: @actor, plan: TeamPlanningPlan.find(plan.plan_id), scenario_id: parent_id).structure(plan)
-    [ map.units, map.positions, map.people ].flatten.to_set(&:id)
-  end
+  def standing_ids(plan, scenario_id) = TeamPlanning::SplitNeeds.standing_ids(context: @actor, aggregate: plan, scenario_id:)
 
   def inherited(plan, scenario_id, subject_id, facet)
     if TeamPlanning::ChangeKinds.holding(facet).any?(&:seals_end_state?)
@@ -557,9 +552,9 @@ class TeamPlanning::CommandHandler
   # What the Org Graph holds today for a change's key, read by the first kind
   # sharing its facet that finds it, as a person staying reads as a departure
   # withdrawn.
-  # The Org Graph can hold what a plan can't yet, such as a cleared level or an unknown allocation.
+  # The Org Graph can hold what no change kind can, so that is refused.
   def followable(kind, end_state)
-    kind.end_state(end_state.to_h.symbolize_keys)
+    kind.followed_end_state(end_state.to_h.symbolize_keys)
     [ kind, end_state ]
   rescue TeamPlanning::Error
     raise TeamPlanning::Error, "The Org Graph holds a value this plan can't hold yet, so this can't follow reality. You can still keep the plan"

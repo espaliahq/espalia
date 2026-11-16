@@ -111,6 +111,17 @@ class TeamPlanning::PlanAggregateSplitTest < ActiveSupport::TestCase
     assert_equal latest, resolved(@q1)[[ "lin", "title" ]]
   end
 
+  should "refuse an earlier change to a subject and facet, so a newer one never goes across unchosen" do
+    first = set(@q1, "Senior")
+    set(@q1, "Lead")
+    set(@q1, "Staff", subject_id: "ola")
+    before = @plan.unpublished_events.to_a
+
+    assert_equal "This scenario has no change #{first} to move. It has changed since you opened the split, so open it again",
+                 refusal { split(@q1, first) }
+    assert_equal before, @plan.unpublished_events.to_a
+  end
+
   should "resolve the same after an undo or redo in either part as it would have before the split" do
     undone = set(@q1, "Senior")
     @plan.undo_change(scenario_id: @q1, event_id: undone, undone_by_id: @ada_id)
@@ -225,7 +236,7 @@ class TeamPlanning::PlanAggregateSplitTest < ActiveSupport::TestCase
     assert_equal "The baseline can't be split", refusal { split(@plan_id, lead) }
     assert_equal "Name the changes that move into the agreed part", refusal { split(@q1) }
     assert_equal "Every change would move: approve the scenario whole instead", refusal { split(@q1, lead) }
-    assert_equal "This scenario has no change #{other} in effect to move", refusal { split(@q1, other) }
+    assert_equal "This scenario has no change #{other} to move. It has changed since you opened the split, so open it again", refusal { split(@q1, other) }
   end
 
   should "move a split step's end through either part, and refuse a second next step after the agreed part" do

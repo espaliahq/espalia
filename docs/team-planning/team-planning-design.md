@@ -767,6 +767,41 @@ on-cost on top.
   walks every plan read as a viewer and as an editor without the right, then checks the
   log, the read models and the event store for the amount in clear.
 
+### Uploading actual pay as built
+
+An editor with the see-pay right can hold pay for many people at once from a CSV file
+([#323](https://github.com/espaliahq/espalia/issues/323)), from "Upload pay…" on the map.
+`Operations::TeamPlanning::UploadActualPay` takes the file's text, one basis for every row,
+and a scenario. `TeamPlanning::PayUpload` reads and matches the file in memory.
+
+- **Columns.** `person`, `amount`, `currency` and `period`, in any order and any case.
+  Other columns are ignored. A person is tried as their Espalia id, then their HRIS
+  employee id, then their work email or their account's email, case-insensitively. Up to
+  5,000 rows and 1 MB.
+- **Preview, then confirm.** Without a signature the operation previews. It counts the
+  rows, the people matched, the seats moving from midpoints to actual pay, the seats whose
+  pay changes, those already held as the file has it, and the people on the map the file
+  leaves out. It returns an HMAC over the file, basis, scenario and the person each row
+  named, keyed per plan. The confirm sends the same file again with that signature, and
+  any changed byte refuses it. The confirm checks the file again against the scenario and
+  the plan's scope as they stand once the plan is locked. It refuses the file if a row no
+  longer names one person on the map, or names someone other than the preview showed.
+  Nothing is stored between the two calls.
+- **All rows or none.** One bad row holds nothing. Each bad row is reported as its line
+  number and reason codes, never its values, since the uploader has the file. The number is
+  the line the row starts on, so a quoted field across lines shifts nothing after it. Each good row
+  is one `data:pay` change with the note "From an upload". A row matching what the scenario
+  already holds writes nothing, so confirming twice writes once.
+- **Refusals.** A non-holder, a viewer and someone outside the plan all get "No such plan".
+  The page and both posts answer them with the same 404.
+- **Where the file never goes.** `file` and `csv` are filtered from the log.
+  The preview carries counts and names, never an amount. A parse failure gives a line
+  number, never the line: the line its record starts on, counting `\r`, `\n` and `\r\n`
+  alike.
+- **Web only.** The operation declares `mcp false`. An MCP client would hand the file's
+  pay to a model in clear, so a tool waits for its own design. `team_planning_set_actual_pay`
+  still holds one person's pay over MCP.
+
 ### Clearing and pinning
 
 `ChangeCleared` hands one facet of one subject back to the scenario's parent. The aggregate
@@ -961,7 +996,8 @@ still reads the Org Graph as of its old base, so keeping the plan would change n
 reads. `team_planning_settle_conflict` takes one of two choices, in one scenario:
 
 - **Keep the plan** writes the planned change again in the scenario. A scenario that made
-  the change sets it again. One that inherits it pins it, naming where it came from, unless
+  the change sets it again, and one that pinned it pins it again, naming what the first pin
+  kept. One that inherits it pins it, naming where it came from, unless
   its kind seals its value (a level, plan data): a pin holds its end state in clear, so a
   sealed change is set again in the child instead. The change keeps its own note unless
   the editor gives another.
@@ -969,8 +1005,11 @@ reads. `team_planning_settle_conflict` takes one of two choices, in one scenario
   would hand the facet back to the parent's change, which still conflicts, so the
   scenario that made the change and its other children keep it as it was. Settled in the
   scenario that made the change, it reaches the children that inherit it, as any change
-  there does. A unit succession can't follow reality yet: the retirements written with it
-  wouldn't follow, so the editor changes it on the map.
+  there does. A level the Org Graph cleared is followed as no level, and a membership it
+  holds with no allocation as an unknown allocation; no editor can set either, so each
+  comes only from following. Cost shows that person's seat unpriced with no level, and
+  capacity shows the place unresolved. A unit succession can't follow reality yet: the
+  retirements written with it wouldn't follow, so the editor changes it on the map.
 
 Settling is refused once status no longer reads the row as conflicting: the Org Graph
 has caught up with the plan, or the person was forgotten.
@@ -1503,6 +1542,9 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - A change moves with every earlier change it overwrites. If the scenario set a level to
   3 and later to 4, moving only the 4 would leave the 3 behind to win. The earlier
   changes for the same subject and facet go across with it.
+- Only the latest change to a subject and facet can be named. Naming an earlier one would
+  take a newer change across that nobody chose, so the split refuses it as stale: the
+  scenario changed since the split was opened, and the editor opens it again.
 - The two parts cover the same period. This is a third relation beside `then` and
   `instead`, named `on`: the rest sits on the agreed part. The timeline shows them as one
   column with the agreed part marked.
@@ -1513,9 +1555,21 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
   rest, which keeps the original's id, its alternatives and its next step.
 - A split step is one step. Cost, capacity and the headcount walk count the pair once over
   the one period, and the timeline gives it one column. A split part can be split again.
+- An editor splits from the plan page: "Split off the agreed part…" in a scenario's menu
+  opens a page headed with the scenario's name. It lists each change in effect by subject
+  and facet, with a box to choose it, and says beside a change which others it can't go
+  across without, following each need to what it needs in turn. A unit or position only
+  the plan creates goes by the name the scenario gives it. A refused split comes back to
+  the same page with the choice kept and the left-behind changes in names. When no part
+  could go across without taking every change or leaving a need behind, the page says so
+  and offers no form. A split lands on the agreed part's timeline. The baseline and a
+  frozen plan refuse with the operation's own message.
+- `team_planning_split_needs` gives an MCP client the same list: each change's event id,
+  subject and facet, and the changes it needs. A pay change shows its facet, never its
+  value, so an editor without see-pay can still move it; its sealed value travels intact.
 - `team_planning_split_scenario` splits from an MCP client. It takes the moving changes'
-  event ids as `team_planning_history` lists them, and its refusal names the event ids
-  that block the split.
+  event ids as `team_planning_history` or `team_planning_split_needs` lists them, and its
+  refusal names the event ids that block the split.
 - The agreed part can then be approved and carried out. As its changes are done they leave
   the difference, and the rest is what remains to be argued.
 

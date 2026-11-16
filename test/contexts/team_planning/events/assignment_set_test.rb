@@ -18,6 +18,14 @@ class TeamPlanning::Events::AssignmentSetTest < ActiveSupport::TestCase
     assert_raises(TeamPlanning::Error) { end_state("Payments") }
   end
 
+  should "keep an unknown allocation only where it follows the Org Graph" do
+    placement = { unit_id: UNIT, allocation: nil }
+    assert_equal "An allocation is above 0 and at most 1", assert_raises(TeamPlanning::Error) { end_state(placement) }.message
+    assert_equal({ placements: [ { position_id: nil, unit_id: UNIT.downcase, allocation: nil, role: nil } ] },
+                 TeamPlanning::Events::AssignmentSet.followed_end_state({ placements: [ placement ] }))
+    assert_raises(TeamPlanning::Error) { TeamPlanning::Events::AssignmentSet.followed_end_state({ placements: [ placement.merge(allocation: 2) ] }) }
+  end
+
   should "skip a person the map doesn't have, listing them as unresolved, and an empty list for them as nothing" do
     map = TeamPlanning::Baseline::Map.new(base_on: Date.current, known_on: Date.current, units: [], people: [], unassigned_ids: [],
                                           positions: [], names: {}, rules: nil)
