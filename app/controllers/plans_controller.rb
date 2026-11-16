@@ -104,7 +104,7 @@ class PlansController < ApplicationController
     removals = removals(plan, scenarios, [ scenario_id.downcase ])
     render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id, removals:,
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?, removable: removals.map(&:scenario_id),
-                                                               roles: (map_roles if can_edit?) || [],
+                                                               roles: (map_roles if can_edit? && scenario_id != plan[:plan_id]) || [],
                                                                can_upload_pay: policy_for(@plan_record).upload_pay? && !@plan_record.archived?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
@@ -573,10 +573,10 @@ class PlansController < ApplicationController
     end
   end
 
-  # An archived plan takes no changes, so its editors see it as its viewers do.
   # The roles a position can be, for the map's open and edit dialogs.
   def map_roles = FrameworkState::Role.includes(:levels).order(:name).to_a
 
+  # An archived plan takes no changes, so its editors see it as its viewers do.
   def can_edit?
     return @can_edit if defined?(@can_edit)
 
