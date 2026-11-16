@@ -158,6 +158,23 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
                    refusal { @plan.move_change(scenario_id: @q2, subject_id: "ada", facet: "assignment", direction: "earlier", moved_by_id: @editor_id) }
     end
 
+    should "refuse undoing or redoing a move that would put a change back into the closed step or take one out" do
+      @plan.reopen_step(@q1, reopened_by_id: @editor_id)
+      @plan.set_change(TeamPlanning::Events::AssignmentSet, scenario_id: @q1, subject_id: "ada", set_by_id: @editor_id,
+                                                            end_state: { placements: [ { unit_id: "sales", allocation: 1.0 } ] })
+      @plan.move_change(scenario_id: @q1, subject_id: "ada", facet: "assignment", direction: "later", moved_by_id: @editor_id)
+      moved = last_event.event_id
+      close(@q1)
+      assert_equal "This step is closed: reopen it to change it",
+                   refusal { @plan.undo_change(scenario_id: @q2, event_id: moved, undone_by_id: @editor_id) }
+
+      @plan.reopen_step(@q1, reopened_by_id: @editor_id)
+      @plan.undo_change(scenario_id: @q2, event_id: moved, undone_by_id: @editor_id)
+      close(@q1)
+      assert_equal "This step is closed: reopen it to change it",
+                   refusal { @plan.redo_change(scenario_id: @q2, event_id: moved, redone_by_id: @editor_id) }
+    end
+
     should "refuse updating the plan to today" do
       assert_equal TeamPlanning::PlanAggregate::CLOSED_REBASE,
                    refusal { @plan.rebase(base_on: "2027-02-01", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id) }

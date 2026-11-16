@@ -1665,6 +1665,8 @@ class TeamPlanning::PlanAggregate
     unless scenario?(from_id)
       raise TeamPlanning::Error, "The step this change moved from has been removed, so the move can't be undone"
     end
+    ensure_step_open!(from_id)
+    ensure_step_open!(marker.data[:to_scenario_id])
 
     key = key_of(marker)
     if (there = @logs.fetch(from_id, []).find { key_of(it) == key && !undone?(it.event_id) })
@@ -1684,6 +1686,8 @@ class TeamPlanning::PlanAggregate
     from_id = marker.data[:scenario_id]
     to_id = marker.data[:to_scenario_id]
     raise TeamPlanning::Error, "The step this change moved from has been removed, so the move can't be redone" unless scenario?(from_id)
+    ensure_step_open!(from_id)
+    ensure_step_open!(marker.data[:to_scenario_id])
 
     moved = marker.data[:moved_event_ids].to_set
     key = key_of(marker)
