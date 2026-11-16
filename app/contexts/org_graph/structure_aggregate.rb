@@ -167,13 +167,14 @@ class OrgGraph::StructureAggregate
   #
   # @param level_id [String] a level in the current taxonomy
   # @param provider [String] one of {PROVIDERS}
-  # @param effective_on [Date, String]
+  # @param effective_on [Date, String] today or earlier, no earlier than the kinds' last change
   # @param field [String, nil] the HRIS field id, such as
   #   "work.custom.department_x"; nil keeps the current one for the same provider
   # @param set_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the provider is unknown, or a field is named for Espalia
   # @raise [RuntimeError] if the level is unknown, holds live units while its
-  #   provider or field changes, or would break the order of providers
+  #   provider or field changes, would break the order of providers, or the
+  #   date is out of range
   def set_level_provider(level_id, provider, effective_on:, field: nil, set_by_id: nil)
     level_id = require_id(level_id, "Level id")
     provider = require_provider(provider)
@@ -192,6 +193,7 @@ class OrgGraph::StructureAggregate
       ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
       ensure_hris_kinds_fit!(with_stated_rules(@levels), level_id => provider)
     end
+    ensure_not_before_last_change!(effective_on)
 
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id: level_id,
@@ -216,7 +218,8 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param set_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError, RuntimeError] if the level is not Espalia's, a live
-  #   unit is unmatched, a match names another unit, or two units share a value
+  #   unit is unmatched, a match names another unit, two units share a value,
+  #   or the date is out of range
   def hand_over_level(level_id, provider, field:, matches:, effective_on:, set_by_id: nil)
     level_id = require_id(level_id, "Level id")
     provider = require_provider(provider)
@@ -236,6 +239,7 @@ class OrgGraph::StructureAggregate
     raise "Two units can't become the same value" unless matches.values.uniq.size == matches.size
 
     effective_on = iso_date(effective_on)
+    ensure_not_before_last_change!(effective_on)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
     ensure_hris_kinds_fit!(with_stated_rules(@levels), level_id => provider)
     ensure_units_still_fit!({ level_id => provider })
@@ -254,8 +258,8 @@ class OrgGraph::StructureAggregate
   # @param level_id [String] a level an HRIS supplies
   # @param effective_on [Date, String]
   # @param set_by_id [String, nil] person_id of the actor
-  # @raise [RuntimeError] if Espalia already holds the level, or a level below
-  #   it is still the HRIS's
+  # @raise [RuntimeError] if Espalia already holds the level, a level below
+  #   it is still the HRIS's, or the date is out of range
   def hand_back_level(level_id, effective_on:, set_by_id: nil)
     level_id = require_id(level_id, "Level id")
     raise "Level is not in the taxonomy" unless level_index(level_id)
@@ -266,6 +270,7 @@ class OrgGraph::StructureAggregate
     previous_field = @level_fields[level_id]
 
     effective_on = iso_date(effective_on)
+    ensure_not_before_last_change!(effective_on)
     ensure_no_hris_kind_lists!(level_id)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => ESPALIA)
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
@@ -900,8 +905,17 @@ class OrgGraph::StructureAggregate
     levels.map { |level| level.key?(:parent_level_ids) ? level.merge(parent_level_ids: ids & level[:parent_level_ids]) : level }
   end
 
+  # A kind's first unit sits at the top or under a unit of a kind that can
+  # already have one, so two kinds that list only each other can never start.
   def ensure_every_kind_can_sit!(levels)
-    stuck = levels.find { |level| level[:top] == false && (Array(level[:parent_level_ids]) - [ level[:level_id] ]).empty? }
+    seated = levels.reject { |level| level[:top] == false }.map { |level| level[:level_id] }
+    loop do
+      more = levels.select { |level| !seated.include?(level[:level_id]) && Array(level[:parent_level_ids]).intersect?(seated) }
+      break if more.empty?
+
+      seated += more.map { |level| level[:level_id] }
+    end
+    stuck = levels.find { |level| !seated.include?(level[:level_id]) }
     raise "#{stuck[:name]} would have nowhere to sit, so give it another place first" if stuck
   end
 

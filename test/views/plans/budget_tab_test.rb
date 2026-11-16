@@ -54,11 +54,11 @@ class Views::Plans::BudgetTabTest < ActiveSupport::TestCase
           positions: [ { position_id: SEAT, unit_id: UNIT, role_name: "Software Engineer", level_name: "Engineer II" },
                        { position_id: SHORT, unit_id: UNIT, role_name: "Software Engineer", level_name: "Engineer II" } ] }.freeze
 
-  def render_tab(scenario_id: Q1, lines: [ described(PLATFORM, cost_centre: "Platform") ], scope: nil, **reads)
+  def render_tab(scenario_id: Q1, lines: [ described(PLATFORM, cost_centre: "Platform") ], scope: nil, money: true, **reads)
     controller = ApplicationController.new
     controller.request = ActionDispatch::TestRequest.create
     tab = Views::Plans::BudgetTab.new(plan: { plan_id: PLAN, name: "Pay review", scope: }, scenarios: SCENARIOS,
-                                      lines: { plan_id: PLAN, scenario_id:, budget_lines: lines, orphaned: [] }, **reads)
+                                      lines: { plan_id: PLAN, scenario_id:, money:, budget_lines: lines, orphaned: [] }, **reads)
     Nokogiri::HTML5.fragment(controller.view_context.render(tab))
   end
 
@@ -79,6 +79,36 @@ class Views::Plans::BudgetTabTest < ActiveSupport::TestCase
     assert_equal sentence, render_tab(scope: scoped, budget: budget(lines: [ line(PLATFORM, remaining: "27000") ]), funding:, map: MAP)
       .at_css("[data-budget-scope]").text
     assert_empty render_tab(scenario_id: PLAN, scope: { whole_organisation: true, units: [] }).css("[data-budget-scope]")
+  end
+
+  def without_money(read)
+    hidden = ->(sum) { sum.merge(native: nil, converted: nil, missing: nil) }
+    read.merge(money: false, forecast: hidden.(read[:forecast]),
+               total: read[:total].to_h { |key, sum| [ key, sum.is_a?(Hash) ? hidden.(sum) : sum ] },
+               budget_lines: read[:budget_lines].map do
+                 it.merge(currency: nil, approved: it[:approved].merge(amount: nil), funded: it[:funded].merge(native: nil),
+                          remaining: it[:remaining].merge(amount: nil), mismatched_currencies: [], over: it[:over].merge(money: nil))
+               end)
+  end
+
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)).
+  should "show a member without the see-pay right head counts alone, never reading as a line with no amount" do
+    hidden = { amount: nil, currency: nil, period: nil }
+    lines = [ described(PLATFORM, cost_centre: "Platform").merge(hidden) ]
+    html = render_tab(budget: without_money(budget(lines: [ line(PLATFORM, remaining: "27000", over: OVER) ])), funding:, map: MAP, lines:, money: false)
+    today = render_tab(scenario_id: PLAN, lines:, money: false)
+
+    assert_equal({ "approved" => "Head count 4", "funded" => "2 positions, 1 FTE", "remaining" => "Head count 3", "unfunded" => "0 positions, 0 FTE" },
+                 html.css("[data-budget-total]").to_h { [ it["data-budget-total"], it.at_css("dd").text ] })
+    assert_equal [ "Head count 2", "1 position, 0.5 FTE", "Head count 1.5" ], html.css("[data-budget-line='#{PLATFORM}'] dd").map(&:text).reject(&:empty?)
+    assert_empty html.css("[data-budget-over]"), "over on money alone is no longer over"
+    assert_not_includes html.at_css("[data-budget-line='#{PLATFORM}']").text, "Over", "nor is the line"
+    [ html, today ].each do |page|
+      assert_equal "Budget amounts show only to members who may see pay.", page.at_css("[data-budget-no-money]").text
+      [ "EUR", "No amount", "a year", "base pay" ].each { assert_not_includes page.text, it }
+    end
+    assert_includes today.css("[data-budget-line='#{PLATFORM}'] p").map(&:text), "Head count 2"
+    assert_nil render_tab(budget: budget(lines: [ line(PLATFORM, remaining: "27000") ]).merge(money: true), funding:, map: MAP).at_css("[data-budget-no-money]")
   end
 
   should "show a scenario's four numbers as the read gives them" do

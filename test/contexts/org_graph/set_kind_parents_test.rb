@@ -73,6 +73,22 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     assert_equal [ [ @tribe ], false ], rules(@squad)
   end
 
+  should "refuse two kinds that may sit only under each other, since neither could have a first unit" do
+    guild, chapter = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    as_tenant do
+      @handler.add_level(guild, "Guild", effective_on: @today)
+      @handler.add_level(chapter, "Chapter", effective_on: @today)
+      @handler.set_kind_parents(guild, parent_ids: [ chapter ], top: false, effective_on: @today)
+    end
+    before = rules(chapter)
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @handler.set_kind_parents(chapter, parent_ids: [ guild, chapter ], top: false, effective_on: @today) }
+    end
+    assert_equal "Guild would have nowhere to sit, so give it another place first", error.message
+    assert_equal before, rules(chapter)
+  end
+
   should "refuse to remove the only kind another kind can sit under" do
     pod = SecureRandom.uuid_v7
     as_tenant do
@@ -134,6 +150,17 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
       error = assert_raises(RuntimeError) { as_tenant { @handler.hand_back_level(@division, effective_on: @today) } }
       assert_equal "Division can't come back to Espalia while Department, which comes from HiBob, can sit under it", error.message
     end
+
+    should "refuse a hand-over by field or by comparison when the HRIS can't keep the kind's rules" do
+      as_tenant { @handler.set_kind_parents(@team, parent_ids: [ @team ], top: true, effective_on: @today) }
+
+      [ -> { @handler.set_level_provider(@team, "hibob", effective_on: @today, field: "team") },
+        -> { @handler.hand_over_level(@team, "hibob", field: "team", matches: {}, effective_on: @today) } ].each do |hand|
+        error = assert_raises(RuntimeError) { as_tenant { hand.call } }
+        assert_equal "Team can sit only at the top, or under one type above it that an HRIS provides, while it comes from HiBob",
+                     error.message
+      end
+    end
   end
 
   should "write nothing when the same rules are restated in another order" do
@@ -157,6 +184,26 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     end
     assert_equal "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan",
                  error.message
+  end
+
+  should "hold a change of a type's provider to the same dates" do
+    @tenant = create(:tenant)
+    division, department = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    as_tenant do
+      @handler.add_level(division, "Division", effective_on: @today)
+      @handler.add_level(department, "Department", effective_on: @today)
+      @handler.set_level_provider(division, "hibob", effective_on: @today, field: "division")
+    end
+
+    { -> { @handler.set_level_provider(department, "hibob", effective_on: @today + 1, field: "department") } =>
+        "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan",
+      -> { @handler.hand_over_level(department, "hibob", field: "department", matches: {}, effective_on: @today + 1) } =>
+        "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan",
+      -> { @handler.hand_back_level(division, effective_on: @today - 1) } =>
+        "The unit types last changed on #{@today.iso8601}, so a change can't be dated before it" }.each do |change, message|
+      error = assert_raises(RuntimeError) { as_tenant { change.call } }
+      assert_equal message, error.message
+    end
   end
 
   context "on a tenant that already holds a future-dated kinds change" do

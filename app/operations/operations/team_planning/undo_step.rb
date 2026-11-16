@@ -19,8 +19,9 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
               "team_planning_redo_change pick one with no event_id. Each is { event_id, action, subject_id, " \
               "subject, facet, scenario_id } or null: action is set, clear, move or dates, subject the name of a " \
               "person or unit (null for anything else), and a dates entry has no subject or facet and names the " \
-              "step whose dates it set in scenario_id. Neither ever names a value. A pay change is offered only to " \
-              "a member with the see-pay right; anyone else is offered their latest other change, or null. Both " \
+              "step whose dates it set in scenario_id. Neither ever names a value. A pay change, or one on a " \
+              "budget line that carries an amount, is offered only to a member with the see-pay right; anyone " \
+              "else is offered their latest other change, or null. Both " \
               "are null for a viewer, for the baseline, and for an archived or frozen plan, and when the change is " \
               "about someone or something outside the units a scoped plan covers. Refused, as an unknown plan, " \
               "unless the caller is a member."
@@ -38,10 +39,10 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
     return { plan_id: plan.id, scenario_id:, undo: nil, redo: nil } unless offered?(plan, scenario_id)
 
     aggregate = ::TeamPlanning::Repository.new.load_plan(plan.id)
-    except_facets = ::Operations::TeamPlanning::ChangeNote.hidden_facets(see_pay: PlanPolicy.new(context, plan).see_pay?)
+    except_facets, except_keys = held_back(aggregate, plan, scenario_id)
     actor_id = context.person.id
-    undo_id = aggregate.last_undoable_by(scenario_id, actor_id, except_facets:)
-    redo_id = aggregate.last_redoable_by(scenario_id, actor_id, except_facets:)
+    undo_id = aggregate.last_undoable_by(scenario_id, actor_id, except_facets:, except_keys:)
+    redo_id = aggregate.last_redoable_by(scenario_id, actor_id, except_facets:, except_keys:)
     undo_offer = step(aggregate, scenario_id, undo_id) { aggregate.restored_by_undo(scenario_id, undo_id) }
     redo_offer = step(aggregate, scenario_id, redo_id) { |entry| entry if entry.is_a?(::TeamPlanning::Events::Change) }
     { plan_id: plan.id, scenario_id:,
@@ -50,6 +51,14 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
   end
 
   private
+
+  # A member without the see-pay right may not step a pay change, nor one on a
+  # budget line that carries an amount; a line with a head count alone stays theirs.
+  def held_back(aggregate, plan, scenario_id)
+    return [ [], Set.new ] if PlanPolicy.new(context, plan).see_pay?
+
+    [ [ ::TeamPlanning::Events::PlanDataSet::PAY_FACET ], ::TeamPlanning::LineMoney.priced_keys(aggregate, scenario_id) ]
+  end
 
   def offered?(plan, scenario_id)
     scenario_id != plan.id && !plan.archived? && !PlanPolicy.frozen?(plan) && context.person && PlanPolicy.new(context, plan).update?
