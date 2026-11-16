@@ -100,7 +100,7 @@ class TeamPlanning::Forecast
   # @param scenario_id [String] a scenario, or the plan's id for Today
   # @param map [TeamPlanning::Baseline::Map] the scenario's resolved map
   # @param pricing [Pricing] the scenario's filled places, priced as the caller sees them
-  # @param earlier [Hash{String => Step}] each of {.reaching}, by scenario id
+  # @param earlier [Hash{String => Step}] the earlier steps that can reach this one ({.reaching}), by scenario id
   def initialize(aggregate:, scenario_id:, map:, earlier:, pricing: Pricing.new)
     @aggregate = aggregate
     @scenario_id = scenario_id
@@ -147,10 +147,7 @@ class TeamPlanning::Forecast
   def rows
     step = @aggregate.period_of(@scenario_id) or return []
 
-    earlier = self.class.reaching(@aggregate, @scenario_id, defaults: @map.rules.defaults).map do |id|
-      reached = @earlier.fetch(id) { raise ArgumentError, "No earlier step #{id} to carry from" }
-      frame(id, @aggregate.period_of(id), reached.map, reached.pricing)
-    end
+    earlier = @earlier.map { |id, reached| frame(id, @aggregate.period_of(id), reached.map, reached.pricing) }
     own = frame(@scenario_id, step, @map, @pricing)
     TeamPlanning::RuleKinds.forecasts.flat_map do |kind|
       kind.forecast(own.with(kind:, earlier: earlier.map { it.with(kind:) })).each do |row|

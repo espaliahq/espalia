@@ -88,14 +88,10 @@ class TeamPlanning::RuleKinds::Attrition < TeamPlanning::ForecastKind
   end
 
   # What earlier steps' leavers leave empty on this step's dates, from the day
-  # after the latest of them ends. A unit this step no longer holds reads as
-  # unplaced, as a seat outside every unit does.
+  # after the latest of them ends.
   def self.carried(frame)
     from = frame.earlier.map { it.step.end + 1 }.max or return []
-    live = frame.map.units.to_set(&:id)
-    frame.earlier.flat_map { vacancies(it, [ from, frame.step.begin ].max, frame.step.end) }.map do |(unit_id, cost_centre), *rest|
-      [ [ (unit_id if live.include?(unit_id)), cost_centre ], *rest ]
-    end
+    frame.earlier.flat_map { vacancies(it, [ from, frame.step.begin ].max, frame.step.end) }
   end
   private_class_method :carried
 

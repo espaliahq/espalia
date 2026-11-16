@@ -287,8 +287,7 @@ class TeamPlanning::Cost
   #
   # @return [TeamPlanning::Forecast::Step]
   def step
-    prepare
-    @steps[@scenario_id] ||= priced(resolved(@scenario_id)).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+    @steps[@scenario_id] ||= prepare.then { priced(resolved(@scenario_id)) }.then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
   end
 
   private

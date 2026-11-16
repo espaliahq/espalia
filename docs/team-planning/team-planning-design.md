@@ -1504,11 +1504,12 @@ The rules for the carry:
   what the seat cost in the step it emptied. Capacity divides by the later step's days, as a
   step's own capacity does.
 - **One row per unit.** The carried days join the step's own row for the unit and cost
-  centre, so the row's shape is the same. A unit the later step no longer holds reads as
-  unplaced, as a seat outside every unit does.
-- **Reach.** A step reads an earlier step only if that step sets some rate above 0 and ends
-  within its longest time to hire of the step's start, from every value the rules take
-  along its chain. A plan with no attrition reads no earlier step. Each one read is
+  centre, so the row's shape is the same. A unit missing from the later step's map keeps its
+  id, and cost counts it under no unit, as it would any place outside a live unit.
+- **Reach.** A step reads an earlier step only if some attrition rate it could hold is above
+  0 and it ends within its longest time to hire of the step's start. Its values are the
+  tenant default plus every value its chain sets, on any unit. A plan with no attrition reads
+  no earlier step. Each one read is
   resolved and priced once per read: a cost read of the fifth of five steps resolves at
   most four earlier steps, and pricing every scenario of a plan at once shares them.
 - **A known overcount.** A later step's own rate falls on all its filled FTE, including seats

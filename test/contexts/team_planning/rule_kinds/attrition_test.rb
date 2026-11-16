@@ -3,19 +3,18 @@
 require "test_helper"
 
 class TeamPlanning::RuleKinds::AttritionTest < ActiveSupport::TestCase
-  Map = Struct.new(:rules, :unit_ids) do
+  Map = Struct.new(:rules) do
     def rule(name, unit_id:) = rules.fetch(name)
-    def units = unit_ids.map { Data.define(:id).new(id: it) }
   end
 
   def check(rule, value) = TeamPlanning::RuleKinds.check(rule, value)
 
   # One FTE in a unit losing 0.001 FTE a day with 180 days to hire, at a
   # yearly cost of 365 EUR, so a row's cost is minus its empty FTE-days.
-  def frame(from, to, earlier: [], unit_ids: [ "platform" ])
+  def frame(from, to, earlier: [])
     TeamPlanning::Forecast::Frame.new(
       kind: TeamPlanning::RuleKinds::Attrition, step: Date.parse(from)..Date.parse(to), covered: Set.new, earlier:,
-      map: Map.new({ "attrition" => { "yearly_rate" => "0.365" }, "time_to_hire" => { "days" => "180" } }, unit_ids),
+      map: Map.new({ "attrition" => { "yearly_rate" => "0.365" }, "time_to_hire" => { "days" => "180" } }),
       filled: [ TeamPlanning::Forecast::Filled.new(person_id: "ada", unit_id: "platform", cost_centre: nil, fte: 1r) ],
       averages: { "platform" => TeamPlanning::Forecast::Average.new(cost: { "EUR" => 365r }, capacity: { "per_fte" => 1r }) }
     )
@@ -79,14 +78,6 @@ class TeamPlanning::RuleKinds::AttritionTest < ActiveSupport::TestCase
     # Step 2 starts on 1 March, but step 1 holds its own days to 31 March, so
     # the carry starts on 1 April: 5,310 × 0.001 beside step 2's own 4,050.
     assert_equal [ Rational(-18, 100), Rational(-936, 100) ], forecast(frame("2026-03-01", "2026-05-29", earlier: [ first ]))
-  end
-
-  should "carry a unit the later step no longer holds as unplaced" do
-    first = frame("2026-01-01", "2026-03-31")
-    rows = TeamPlanning::RuleKinds::Attrition.forecast(frame("2026-04-01", "2026-06-29", earlier: [ first ], unit_ids: []))
-
-    assert_equal [ nil, "platform" ], rows.map(&:unit_id).sort_by(&:to_s)
-    assert_equal Rational(-81, 10), rows.find { it.unit_id.nil? }.cost.fetch("EUR"), "8,100 carried FTE-days × 0.001"
   end
 
   should "reach past its step only for a rate above 0, by the longest time to hire" do
