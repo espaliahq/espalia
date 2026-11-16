@@ -19,8 +19,8 @@
 # no amount approves none, never zero. Money keeps its currency: a line drawn
 # on in another currency is flagged and never converted, and its remaining is
 # in its own currency only. Only the grand totals convert, to the reference
-# currency at the period's start. A head count counts toward a total only
-# when its line's period overlaps the scenario's, as its money does.
+# currency at the period's start. A line whose period misses the
+# scenario's counts no heads, as it approves no money.
 #
 # Lines and cost centres carry all four numbers; a line's cost centre is the
 # one it was approved for. Units carry funded and unfunded only, as no line
@@ -188,7 +188,7 @@ class TeamPlanning::Budget
     approved = amount && Rational(amount.to_s) * PayBand::PER_YEAR.fetch(budget_line.period) * Rational(overlap(budget_line), TeamPlanning::Cost::YEAR_DAYS)
     funded = @drawn[budget_line.id].sort.to_h
     heads = heads_of(draws)
-    head_count = budget_line.head_count && Rational(budget_line.head_count.to_s)
+    head_count = head_count_of(budget_line)
     line = Line.new(line: budget_line, approved:, funded:, funded_heads: heads,
                     remaining: approved && approved - funded.fetch(budget_line.currency, 0r),
                     remaining_head_count: head_count && head_count - heads.fte,
@@ -209,6 +209,11 @@ class TeamPlanning::Budget
     money = approved.select { |currency, amount| amount < spent.fetch(currency, 0r) }.keys.sort if strictness.money?(@strictness) && approved.any?
     Over.new(money:, heads: (head_count < fte if strictness.heads?(@strictness) && head_count),
              mismatched: approved.any? ? (spent.keys - approved.keys).sort : [])
+  end
+
+  # A line outside the period counts no heads over it, as it approves no money.
+  def head_count_of(budget_line)
+    budget_line.head_count && (overlap(budget_line).positive? ? Rational(budget_line.head_count.to_s) : 0r)
   end
 
   def heads_of(draws) = Heads.new(positions: draws.map { it.first.position.id }.uniq.size, fte: draws.sum(0r) { |funded, draw| funded.fte * draw.share })
@@ -265,8 +270,8 @@ class TeamPlanning::Budget
 
   def summed(lines, funded_heads, unfunded, unfunded_heads, forecast_fte:, scope:)
     priced = lines.select(&:approved)
-    counted = lines.select { it.line.head_count && overlap(it.line).positive? }
-    head_count = counted.sum(0r) { Rational(it.line.head_count.to_s) } if counted.any?
+    counted = lines.select { it.line.head_count }
+    head_count = counted.sum(0r) { head_count_of(it.line) } if counted.any?
     approved = priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:approved) }
     Totals.new(approved: converted(approved), head_count:, funded: converted(lines.map(&:funded).reduce({}) { |sum, money| add(sum, money) }), funded_heads:,
                remaining: converted(priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:remaining) }),

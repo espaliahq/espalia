@@ -1320,9 +1320,10 @@ cost centre or the organisation's total, as `scope` says, carries `over`; the ot
 null. `over.money` lists the currencies a figure spends more of than its lines approve, and
 `over.heads` says whether it holds more FTE than they count. A cost centre or the organisation
 spends its unfunded money and heads too, a forecast's headcount among them, since nothing
-inside it is outside its budget. A line outside the scenario's period counts no heads. A line
-silent on money or heads is outside that limit: what it draws counts for neither, and a figure
-whose lines approve no amount, or count no heads, isn't held on it. Nothing is converted to
+inside it is outside its budget. A line outside the scenario's period counts no heads, as it
+approves no money, and what it draws still spends. A line silent on money or heads is outside
+that limit: what it draws counts for neither, and a figure whose lines approve no amount, or
+count no heads, isn't held on it. Nothing is converted to
 judge it: dollars left over never cover euros spent, and a currency no line approves goes in
 `over.mismatched_currencies`, never counted for or against. Under the default only lines carry
 `over`, and every other number is as it was.
