@@ -1,6 +1,6 @@
 {
   "name": "org_graph_set_kind_parents",
-  "description": "Set which unit types a unit type can sit under (parent_ids, other level_ids in the taxonomy; list the type itself to let it nest) and whether it can sit at the top, from effective_on (today by default). parent_ids replaces the whole list. A type needs somewhere to sit: a parent other than itself, or the top. Refused, naming them, while live units would no longer fit; refused for a type an HRIS provides, and for a date before the types last changed. Refused unless the caller is a tenant admin.",
+  "description": "Set which unit types a unit type can sit under (parent_ids, other level_ids in the taxonomy; list the type itself to let it nest) and whether it can sit at the top, from effective_on (today by default). parent_ids replaces the whole list. A type needs somewhere to sit: a parent other than itself, or the top. Refused, naming them, while live units would no longer fit, and for a date after today or before the types last changed. A type an HRIS provides can sit only at the top, or under one type above it that an HRIS provides. Refused unless the caller is a tenant admin.",
   "inputSchema": {
     "type": "object",
     "properties": {

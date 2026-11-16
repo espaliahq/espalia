@@ -164,12 +164,15 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_equal "These units wouldn't fit this structure, so move them first: Payments (Squad under Team)", error.message
     end
 
-    should "refuse a type an HRIS provides, naming the HRIS" do
+    should "hold a type an HRIS provides to the HRIS rule, naming the HRIS" do
       error = assert_raises(Operations::Base::ParameterError) do
-        call(Operations::OrgGraph::SetKindParents, level_id: @department, parent_ids: [], top: true)
+        call(Operations::OrgGraph::SetKindParents, level_id: @department, parent_ids: [ @team ], top: true)
       end
+      assert_equal "Department can sit only at the top, or under one type above it that an HRIS provides, while it comes from HiBob",
+                   error.message
 
-      assert_equal "Department comes from HiBob, so its rules follow it", error.message
+      call(Operations::OrgGraph::SetKindParents, level_id: @department, parent_ids: [], top: true)
+      assert_equal [ [], true ], kind_rules(@department)
     end
 
     should "leave the rules to a tenant admin" do

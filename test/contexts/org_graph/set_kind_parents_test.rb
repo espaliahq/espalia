@@ -62,20 +62,6 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     assert_equal "Not in the taxonomy: #{stranger}", error.message
   end
 
-  should "refuse the rules of a kind an HRIS supplies" do
-    @tenant = create(:tenant)
-    department = SecureRandom.uuid_v7
-    as_tenant do
-      @handler.add_level(department, "Department", effective_on: @today)
-      @handler.set_level_provider(department, "hibob", effective_on: @today, field: "department")
-    end
-
-    error = assert_raises(RuntimeError) do
-      as_tenant { @handler.set_kind_parents(department, parent_ids: [ department ], top: true, effective_on: @today) }
-    end
-    assert_equal "Department comes from hibob, so its rules follow hibob", error.message
-  end
-
   should "drop a removed kind from the lists that named it" do
     guild = SecureRandom.uuid_v7
     as_tenant do
@@ -98,15 +84,56 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     assert_equal "Squad would have nowhere to sit, so give it another place first", error.message
   end
 
-  should "keep a kind that states its own rules from an HRIS until the HRIS rule is a list" do
-    @tenant = create(:tenant)
-    division = SecureRandom.uuid_v7
-    as_tenant { @handler.add_level(division, "Division", parent_ids: [ division ], top: true, effective_on: @today) }
-
-    error = assert_raises(RuntimeError) do
-      as_tenant { @handler.set_level_provider(division, "hibob", effective_on: @today, field: "department") }
+  context "on a tenant whose top kinds an HRIS provides" do
+    setup do
+      @tenant = create(:tenant)
+      @division, @department, @team = SecureRandom.uuid_v7, SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      as_tenant do
+        @handler.add_level(@division, "Division", effective_on: @today)
+        @handler.add_level(@department, "Department", effective_on: @today)
+        @handler.add_level(@team, "Team", effective_on: @today)
+        @handler.set_level_provider(@division, "hibob", effective_on: @today, field: "division")
+        @handler.set_level_provider(@department, "hibob", effective_on: @today, field: "department")
+      end
     end
-    assert_equal "Division has its own rules for where it can sit, so it can't come from hibob yet", error.message
+
+    should "let a kind an HRIS provides list one HRIS kind above it, and the top" do
+      as_tenant { @handler.set_kind_parents(@department, parent_ids: [ @division ], top: true, effective_on: @today) }
+
+      assert_equal [ [ @division ], true ], rules(@department)
+    end
+
+    should "refuse an HRIS kind any other list, naming the HRIS" do
+      [ [ [ @team ], true ], [ [ @department ], true ], [ [ @division ], false ], [ [ @division, @team ], true ] ].each do |parent_ids, top|
+        error = assert_raises(RuntimeError) do
+          as_tenant { @handler.set_kind_parents(@department, parent_ids:, top:, effective_on: @today) }
+        end
+        assert_equal "Department can sit only at the top, or under one type above it that an HRIS provides, " \
+                     "while it comes from HiBob", error.message
+      end
+    end
+
+    should "hand an HRIS a kind whose rules it can keep, and refuse one whose rules it can't" do
+      as_tenant { @handler.set_kind_parents(@team, parent_ids: [ @team ], top: true, effective_on: @today) }
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_level_provider(@team, "hibob", effective_on: @today, field: "team") }
+      end
+      assert_equal "Team can sit only at the top, or under one type above it that an HRIS provides, while it comes from HiBob",
+                   error.message
+
+      as_tenant do
+        @handler.set_kind_parents(@team, parent_ids: [ @department ], top: true, effective_on: @today)
+        @handler.set_level_provider(@team, "hibob", effective_on: @today, field: "team")
+      end
+      assert_equal [ [ @department ], true ], rules(@team)
+    end
+
+    should "keep a kind with the HRIS while an HRIS kind lists it" do
+      as_tenant { @handler.set_kind_parents(@department, parent_ids: [ @division ], top: true, effective_on: @today) }
+
+      error = assert_raises(RuntimeError) { as_tenant { @handler.hand_back_level(@division, effective_on: @today) } }
+      assert_equal "Division can't come back to Espalia while Department, which comes from HiBob, can sit under it", error.message
+    end
   end
 
   should "write nothing when the same rules are restated in another order" do

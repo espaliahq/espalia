@@ -76,20 +76,20 @@ class OrgGraph::StructureAggregate
   # the top. A kind may list itself, so its units can nest. Refused while a
   # live unit would be left where the new rule doesn't let it sit.
   #
-  # @param level_id [String] a kind Espalia holds
+  # A kind an HRIS provides may sit only at the top, or under one kind above
+  # it that an HRIS provides, as the mirror reads one field per kind, top first.
+  #
+  # @param level_id [String]
   # @param parent_ids [Array<String>] kinds in the taxonomy
   # @param top [Boolean]
   # @param effective_on [Date, String] no earlier than the kinds' last change
   # @param defined_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if a kind is unknown, or the kind could sit nowhere
-  # @raise [RuntimeError] if an HRIS provides the kind, the date is too early,
-  #   or a live unit would no longer fit
+  # @raise [RuntimeError] if the date is too early, a live unit would no longer
+  #   fit, or an HRIS provides the kind and the rules break the HRIS rule
   def set_kind_parents(level_id, parent_ids:, top:, effective_on:, defined_by_id: nil)
     level_id = require_id(level_id, "Level id")
     raise ArgumentError, "Level is not in the taxonomy" unless level_index(level_id)
-    unless level_provider(level_id) == ESPALIA
-      raise "#{level_name(level_id)} comes from #{level_provider(level_id)}, so its rules follow #{level_provider(level_id)}"
-    end
 
     write_taxonomy(@levels, rules: { level_id => kind_rules(level_id, parent_ids, top) }, effective_on:, defined_by_id:)
   end
@@ -188,8 +188,9 @@ class OrgGraph::StructureAggregate
     else
       raise "Level still holds units from #{previous}; hand it over instead" if live_units.any? { |unit| unit.level_id == level_id }
 
-      ensure_no_stated_rules!(level_id, provider) unless provider == ESPALIA
+      ensure_no_hris_kind_lists!(level_id) if provider == ESPALIA
       ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+      ensure_hris_kinds_fit!(with_stated_rules(@levels), level_id => provider)
     end
 
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
@@ -236,6 +237,7 @@ class OrgGraph::StructureAggregate
 
     effective_on = iso_date(effective_on)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+    ensure_hris_kinds_fit!(with_stated_rules(@levels), level_id => provider)
     ensure_units_still_fit!({ level_id => provider })
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id:, provider:, previous_provider: ESPALIA, field:, effective_on:, set_by_id:
@@ -264,6 +266,7 @@ class OrgGraph::StructureAggregate
     previous_field = @level_fields[level_id]
 
     effective_on = iso_date(effective_on)
+    ensure_no_hris_kind_lists!(level_id)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => ESPALIA)
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id:, provider: ESPALIA, previous_provider: previous, field: nil, effective_on:, set_by_id:
@@ -660,6 +663,7 @@ class OrgGraph::StructureAggregate
     ensure_levels_in_use_keep_order!(levels, in_use)
 
     ensure_hris_levels_on_top!(level_ids(levels), new_providers)
+    ensure_hris_kinds_fit!(levels, new_providers)
     ensure_units_still_fit!(new_providers, levels:)
 
     apply(OrgGraph::Events::TaxonomyDefined.new(data: {
@@ -900,12 +904,31 @@ class OrgGraph::StructureAggregate
     raise "#{stuck[:name]} would have nowhere to sit, so give it another place first" if stuck
   end
 
-  # Stated rules outrank the HRIS rule, so a kind that states them stays
-  # Espalia's until the HRIS rule is a list too.
-  def ensure_no_stated_rules!(level_id, provider)
-    return unless @level_rules.key?(level_id)
+  # The mirror reads one field per kind, top first, so a kind an HRIS provides
+  # can take its parent only from one kind above it that an HRIS provides too.
+  def ensure_hris_kinds_fit!(levels, changes = {})
+    providers = @level_providers.merge(changes)
+    hris = ->(id) { providers.fetch(id, ESPALIA) != ESPALIA }
+    ids = level_ids(levels)
+    levels.each_with_index do |level, index|
+      next unless level.key?(:parent_level_ids) && hris.(level[:level_id])
 
-    raise "#{level_name(level_id)} has its own rules for where it can sit, so it can't come from #{provider} yet"
+      parents = level[:parent_level_ids]
+      next if level[:top] != false && parents.size <= 1 && (parents - ids.first(index).select(&hris)).empty?
+
+      raise "#{level[:name]} can sit only at the top, or under one type above it that an HRIS provides, " \
+            "while it comes from #{HrisConfig.provider_label(providers[level[:level_id]])}"
+    end
+  end
+
+  def ensure_no_hris_kind_lists!(level_id)
+    lister = with_stated_rules(@levels).find do |level|
+      level[:level_id] != level_id && level_provider(level[:level_id]) != ESPALIA && Array(level[:parent_level_ids]).include?(level_id)
+    end
+    return unless lister
+
+    raise "#{level_name(level_id)} can't come back to Espalia while #{lister[:name]}, " \
+          "which comes from #{HrisConfig.provider_label(level_provider(lister[:level_id]))}, can sit under it"
   end
 
   # A kind's rules as an event states them: its parent kinds, in taxonomy
