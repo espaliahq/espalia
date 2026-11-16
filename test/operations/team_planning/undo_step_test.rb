@@ -71,6 +71,25 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     assert_equal({ plan_id: @plan_id, scenario_id: @q1, undo: nil, redo: expected }, step)
   end
 
+  should "name the caller's latest date edit as undo, and once undone, as redo, with no subject or facet" do
+    call(:SetScenarioPeriod, as: @editor, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-09-30")
+    event_id = step[:undo][:event_id]
+    expected = { event_id:, action: "dates", subject_id: nil, subject: nil, facet: nil, scenario_id: @q1 }
+
+    assert_equal expected, step[:undo]
+    call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
+    assert_equal({ plan_id: @plan_id, scenario_id: @q1, undo: nil, redo: expected }, step)
+  end
+
+  should "offer the date edit before a later change once that change is undone" do
+    call(:SetScenarioPeriod, as: @editor, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-09-30")
+    set_level("4")
+    assert_equal "set", step[:undo][:action]
+
+    call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
+    assert_equal "dates", step[:undo][:action]
+  end
+
   should "call a clear a clear" do
     set_level("4")
     call(:ClearChange, as: @editor, plan_id: @plan_id, scenario_id: @q1, subject_id: @ada.id, facet: "level")
@@ -167,7 +186,7 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
   should "offer no undo that would bring back a departure outside the step's dates, as the operation refuses it" do
     leave("2026-05-15")
     leave("2026-04-01")
-    call(:SetScenarioPeriod, as: @editor, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-04-30")
+    call(:SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-04-30")
 
     assert_nil step[:undo]
     assert_raises(Operations::Base::ParameterError) { call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
@@ -176,7 +195,7 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
   should "offer no redo of a departure outside the step's dates" do
     leave("2026-05-15")
     call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
-    call(:SetScenarioPeriod, as: @editor, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-04-30")
+    call(:SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-04-30")
 
     assert_nil step[:redo]
     assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }

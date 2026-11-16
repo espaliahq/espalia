@@ -34,6 +34,18 @@ class Plans::UndosControllerTest < ActionDispatch::IntegrationTest
       assert_empty statuses
     end
 
+    should "name a date edit by its step, and undo it" do
+      call_as_editor(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-06-30")
+      get changes_plan_path(@plan_id, scenario: @q1)
+
+      assert_select "[data-undo-control=undo] button[aria-label='Undo: Q1 · Dates']"
+      post plan_undos_path(@plan_id), params: { event_id: step[:undo][:event_id], scenario_id: @q1, tab: "changes" }
+
+      assert_redirected_to changes_plan_path(@plan_id, scenario: @q1)
+      assert_equal "Change undone.", flash[:notice]
+      assert_equal "dates", step[:redo][:action]
+    end
+
     should "redo what they undid" do
       event_id = step[:undo][:event_id]
       post plan_undos_path(@plan_id), params: { event_id:, scenario_id: @q1, tab: "map" }
