@@ -81,9 +81,9 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
       call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28")
 
       assert_equal({ plan_id: @plan_id, scenarios: [
-        { scenario_id: @plan_id, parent_id: nil, relation: nil, name: "Baseline", description: nil, starts_on: "2027-01-01", ends_on: nil },
-        { scenario_id: @q1, parent_id: @plan_id, relation: "then", name: "Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28" },
-        { scenario_id: @lean, parent_id: @q1, relation: "instead", name: "Lean Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28" }
+        { scenario_id: @plan_id, parent_id: nil, relation: nil, name: "Baseline", description: nil, starts_on: "2027-01-01", ends_on: nil, changes: 0 },
+        { scenario_id: @q1, parent_id: @plan_id, relation: "then", name: "Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28", changes: 0 },
+        { scenario_id: @lean, parent_id: @q1, relation: "instead", name: "Lean Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28", changes: 0 }
       ] }, call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id))
     end
 
