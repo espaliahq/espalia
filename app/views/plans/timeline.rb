@@ -119,9 +119,9 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def header_row
-    div(class: "border-b border-default px-3 py-2 text-xs font-semibold uppercase text-muted", style: cell(1, 1)) { "Step" }
+    div(class: "border-b border-default px-3 py-2 text-xs font-semibold uppercase text-muted", style: "grid-row: 1 / 3; grid-column: 1") { "Step" }
     columns.each_index do |index|
-      div(class: "border-b border-l border-default px-3 py-2", style: cell(1, index + 2), data: { timeline_step: index }) do
+      div(class: "border-l border-default px-3 pt-2 pb-1", style: cell(1, index + 2), data: { timeline_step: index }) do
         p(class: "font-semibold text-default") { step_name(index) }
         p(class: "text-muted") { period(index) }
         today_continues(index)
@@ -132,7 +132,22 @@ class Views::Plans::Timeline < Views::Base
       end
     end
     @row += 1
+    figures_row
   end
+
+  # The figures arrive after the grid is drawn and usable, as a row of their
+  # own, so a slow or failed load never holds up the path.
+  def figures_row
+    div(class: "grid border-b border-default", style: "grid-row: #{@row}; grid-column: 2 / -1; grid-template-columns: subgrid",
+        data: { controller: "frame-error", frame_error_quiet_value: true }) do
+      render Views::Plans::TimelineFigures.new(src: figures_path)
+      render Components::Shared::FrameLoadError.new(id: "#{Views::Plans::TimelineFigures::WIDE_ID}-error", subject: "the figures",
+                                                    inline: true, classes: "border-l border-default px-3 pb-2 [grid-column:1/-1]")
+    end
+    @row += 1
+  end
+
+  def figures_path(**) = timeline_figures_plan_path(@timeline[:plan_id], scenario: @timeline[:scenario_id], **)
 
   def wide_block(block)
     block_heading(block_title(block), subtitle: continues_from(block), walk: block[:walk], lives: ->(index) { block[:units][index] || changed?(block[:walk][index]) })
@@ -232,6 +247,11 @@ class Views::Plans::Timeline < Views::Base
           today_continues(@step)
           alternatives(@step)
           walk_line(@timeline[:walk][@step], class: "mt-1")
+          div(data: { controller: "frame-error", frame_error_quiet_value: true }) do
+            render Views::Plans::TimelineFigures.new(src: figures_path(layout: "phone", step: @step), phone: true, step: @step)
+            render Components::Shared::FrameLoadError.new(id: "#{Views::Plans::TimelineFigures::PHONE_ID}-error", subject: "the figures",
+                                                          inline: true, classes: "mt-1")
+          end
         end
       end
       @timeline[:blocks].each { phone_block(it) }

@@ -141,14 +141,19 @@ class TeamPlanning::Budget
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
   # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
   #   resolved over that aggregate for this viewer
-  # @raise [ArgumentError] when shared was resolved for another viewer, plan or scenario
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, shared: nil)
+  # @param cost [TeamPlanning::Cost::Report, nil] the scenario, already priced for this viewer. The caller
+  #   must pass a report priced from the same loaded plan as this read.
+  # @raise [ArgumentError] when shared was resolved, or cost priced, for another viewer, plan or scenario
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, shared: nil, cost: nil)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
     @aggregate = aggregate
     @shared = shared&.for!(context, plan, scenario_id)
+    raise ArgumentError, "This cost was priced for another viewer, plan or scenario" if cost && cost.priced_for != TeamPlanning::Resolution::Shared.key(context, plan, scenario_id)
+
+    @cost = cost
   end
 
   # @return [Report]
@@ -162,7 +167,7 @@ class TeamPlanning::Budget
     shared = @shared || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).shared(aggregate).first
     reads = { context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:, shared: }
     funding = TeamPlanning::Funding.new(**reads).call
-    cost = TeamPlanning::Cost.new(**reads).call(at_end: false, baseline: false)
+    cost = @cost || TeamPlanning::Cost.new(**reads).call(at_end: false, baseline: false)
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}
