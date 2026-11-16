@@ -1821,7 +1821,10 @@ class TeamPlanning::PlanAggregate
 
   def split_parts(scenario_id)
     scenario = @scenarios[scenario_id]
-    scenario&.relation == "on" ? [ scenario_id, *split_parts(scenario.parent_id) ] : [ scenario_id ]
+    case scenario&.relation
+    in "on" then [ scenario_id, *split_parts(scenario.parent_id) ]
+    in "then" | "instead" | nil then [ scenario_id ]
+    end
   end
 
   # A path ends frozen unless it runs through every step closed and on past the last.
