@@ -262,6 +262,10 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     assert report.unfunded.positions.positive?, "the Staff position matches no line"
   end
 
+  should "compare every dimension budget_strictness names, in its order" do
+    assert_equal TeamPlanning::RuleKinds::BudgetStrictness::DIMENSIONS, TeamPlanning::Funding::MATCHED.keys
+  end
+
   should "refuse the baseline, which has no period, and a scenario the plan doesn't have" do
     assert_raises(TeamPlanning::Error, match: /baseline has no period/) { funding(@plan_id) }
     assert_raises(TeamPlanning::Error, match: /No such scenario/) { funding(SecureRandom.uuid_v7) }
