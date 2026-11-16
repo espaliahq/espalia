@@ -54,7 +54,7 @@ class TeamPlanning::Projections::History
         record(TeamPlanning::ChangeEntry.from(event))
       else
         from, to = TeamPlanning::ChangeEntry.moving(event)
-        rehome(event.data[:moved_event_ids], from:, to:, before: event.data[:redone_event_id]) if to && !recorded?(event)
+        rehome(event.data[:moved_event_ids], from:, to:, before: event.data[:redone_event_id] || event.data[:moves_before_id]) if to && !recorded?(event)
         record(TeamPlanning::ChangeEntry.from(event))
       end
     end
@@ -73,10 +73,13 @@ class TeamPlanning::Projections::History
 
   def recorded?(event) = TeamPlanningHistoryEntry.exists?(id: event.event_id)
 
-  # A redo puts the entries back ahead of the move's own entry, as the plan's
-  # log holds them; the shift goes through negatives to keep positions unique.
+  # The entries go with the undos, redos and notes that name them, as one
+  # block in front of the entry the plan's log puts them before; the shift goes
+  # through negatives to keep positions unique.
   def rehome(event_ids, from:, to:, before: nil)
-    moving = TeamPlanningHistoryEntry.where(scenario_id: from, id: event_ids).order(:position).to_a
+    in_from = TeamPlanningHistoryEntry.where(scenario_id: from)
+    moving = in_from.where(id: event_ids).or(in_from.where(reverses_event_id: event_ids)).or(in_from.where(noted_event_id: event_ids))
+                    .order(:position).to_a
     start = before && TeamPlanningHistoryEntry.find_by(id: before, scenario_id: to)&.position
     if start
       later = TeamPlanningHistoryEntry.where(scenario_id: to, position: start..)
