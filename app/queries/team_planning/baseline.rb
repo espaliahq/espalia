@@ -86,11 +86,11 @@ class TeamPlanning::Baseline
 
     # @param cost_centres [Enumerable<String>] what the plan's baseline seats can draw on
     # @return [Map] holding only the lines {#holds_cost_centre?} keeps
-    def holding_lines(cost_centres) = with(held_cost_centres: cost_centres.to_set).lines_cut
+    def holding_lines(cost_centres) = with(held_cost_centres: cost_centres.to_set { it.squish }).lines_cut
 
     # @param cost_centre [String, nil]
     # @return [Boolean] whether a line naming it is the plan's: one naming none is any seat's
-    def holds_cost_centre?(cost_centre) = held_cost_centres.nil? || cost_centre.blank? || held_cost_centres.include?(cost_centre)
+    def holds_cost_centre?(cost_centre) = held_cost_centres.nil? || cost_centre.blank? || held_cost_centres.include?(cost_centre.squish)
 
     # Moves each line the plan doesn't hold to {#outside_lines}, and drops a
     # funding that draws on one, so the seat reads as the plan's own lines fund it.
@@ -539,7 +539,7 @@ class TeamPlanning::Baseline
     map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people: scope_ids ? [] : people, outside: scope_ids ? people : [],
                   scope_ids:, unassigned_ids: [], positions: [], names: {}, step_ids: [ @plan.id ], budget_lines: approved_budget,
                   rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
-    map = map.holding_lines(baseline_cost_centres(map, units)) if scope_ids
+    map = map.holding_lines(held_on(date, known_on, map, units)) if scope_ids
     return map unless history
 
     map.with(retired_units: snapshot.retired_units.map { Unit.new(**it.to_h.slice(*Unit.members)) },
@@ -562,6 +562,14 @@ class TeamPlanning::Baseline
 
   # Configuration, so every day a reader asks for reads the lines as they are now.
   def approved_budget = @approved_budget ||= ::BudgetLine.where(tenant_id: @plan.tenant_id).order(:starts_on, :id).map { BudgetLine.approved(it) }
+
+  # The set is the baseline's on every day a reader asks for, so a later
+  # read can neither drop a line the plan holds nor reach one it doesn't.
+  def held_on(date, known_on, map, units)
+    return structure.held_cost_centres unless date == @plan.base_on && known_on == @plan.base_on - 1
+
+    baseline_cost_centres(map, units)
+  end
 
   # What a scoped plan's seats can draw on, as the Org Graph stands
   # ([#378](https://github.com/espaliahq/espalia/issues/378)): the real cost

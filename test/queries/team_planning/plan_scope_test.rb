@@ -242,6 +242,25 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       record = %w[History Overrides Status SplitNeeds].map { "Operations::TeamPlanning::#{it}" }
       scoped = JSON.parse(every_read(@plan_id, @h1)).except(*record).to_json
       [ *@lines.values_at("Field Sales", "Revenue"), "Field Sales" ].each { assert_not_includes scoped, it }
+
+      as_tenant { BudgetLine.find(@lines["Field Sales"]).destroy! }
+      assert_empty resolve(@plan_id, @h1).orphaned_lines, "a removed line the plan never held stays unnamed"
+    end
+
+    should "refuse to set again a hidden line a scenario cut, whatever cost centre it names" do
+      as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @h1, subject_id: @lines["Revenue"], end_state: { tenant_line: true }) }
+      line = { plan_id: @plan_id, scenario_id: @h1, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      assert_equal LINE_OUTSIDE, refusal { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Revenue"], cost_centre: "Platform") }
+    end
+
+    should "judge the lines by the baseline's cost centres on any day, not that day's" do
+      travel_to Time.utc(2026, 2, 1, 9)
+      as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@ada.id, "Field Sales", provider: "espalia", effective_on: Date.current.iso8601) }
+      baseline = TeamPlanning::Baseline.new(context:, plan: TeamPlanningPlan.find(@plan_id))
+      today = as_tenant { baseline.map_on(Date.current) }
+      assert_equal as_tenant { baseline.structure.held_cost_centres }, today.held_cost_centres
+      assert_includes today.budget_lines.map(&:id), @lines["Platform"]
+      assert_includes today.outside_lines.map(&:id), @lines["Field Sales"]
     end
 
     should "refuse to change, cut, add or draw on a line outside the plan's cost centres, without naming it" do

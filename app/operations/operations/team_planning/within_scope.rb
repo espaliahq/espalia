@@ -50,7 +50,8 @@ module Operations::TeamPlanning::WithinScope
   def lines_within_scope!(map, kind, subject_id, end_state)
     end_state = end_state.to_h.symbolize_keys
     outside = if kind == ::TeamPlanning::Events::BudgetLineSet
-                map.outside_line?(subject_id) || !map.holds_cost_centre?(end_state[:cost_centre])
+                map.outside_line?(subject_id) || !map.holds_cost_centre?(end_state[:cost_centre]) ||
+            !map.holds_cost_centre?(::BudgetLine.find_by(id: subject_id)&.cost_centre)
     elsif kind == ::TeamPlanning::Events::BudgetLineCut
                 map.outside_line?(subject_id)
     elsif kind == ::TeamPlanning::Events::PositionFundingSet
