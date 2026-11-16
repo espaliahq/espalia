@@ -85,11 +85,11 @@ class Operations::TeamPlanning::Status < Operations::Base
   # carries an amount are not the caller's to clear.
   def stays_theirs?(plan, scenario_id, entry)
     return false if entry.facet == ::TeamPlanning::Events::PlanDataSet::PAY_FACET
+    return true unless entry.facet == ::TeamPlanning::LineMoney::FACET
 
-    !::TeamPlanning::LineMoney.priced?(aggregate_of(plan), scenario_id, entry.subject_id, entry.facet)
+    @priced ||= ::TeamPlanning::LineMoney.priced_keys(::TeamPlanning::Repository.new.load_plan(plan.id), scenario_id)
+    !@priced.include?([ entry.subject_id, entry.facet ])
   end
-
-  def aggregate_of(plan) = @aggregate ||= ::TeamPlanning::Repository.new.load_plan(plan.id)
 
   def outside_scope(plan, scenario_id)
     return Set.new if plan.scope_unit_ids.blank?
