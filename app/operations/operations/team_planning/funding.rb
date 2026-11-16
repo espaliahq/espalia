@@ -29,7 +29,7 @@ class Operations::TeamPlanning::Funding < Operations::Base
               "positions funded whole and the FTE every draw funds, each position at its whole FTE, and funded plus unfunded is always " \
               "the total, over the positions team_planning_cost reads. A set funding is taken as given, whatever the line. " \
               "FTE and shares are decimal strings. The baseline has no period, so it can't be the scenario. " \
-              "#{PRICED_TODAY} #{OPEN_ENDED} Refused, as an unknown plan, unless the caller is a member."
+              "#{PRICED_AS_ARCHIVED} #{OPEN_ENDED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -41,7 +41,7 @@ class Operations::TeamPlanning::Funding < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Funding.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, **priced_today(plan), scenario_id:, period: period(report),
+    { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, period: period(report),
       strictness: ::TeamPlanning::RuleKinds::BudgetStrictness.describe(report.strictness), total: count(report.total), funded: count(report.funded), unfunded: count(report.unfunded),
       positions: report.positions.map { position(it) },
       budget_lines: report.by_line.sort.map { |budget_line_id, draws| { budget_line_id:, positions: draws.map { drawn(*it) } } } }
