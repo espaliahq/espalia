@@ -102,6 +102,7 @@ class Views::Plans::BudgetTabTest < ActiveSupport::TestCase
                  html.css("[data-budget-total]").to_h { [ it["data-budget-total"], it.at_css("dd").text ] })
     assert_equal [ "Head count 2", "1 position, 0.5 FTE", "Head count 1.5" ], html.css("[data-budget-line='#{PLATFORM}'] dd").map(&:text).reject(&:empty?)
     assert_empty html.css("[data-budget-over]"), "over on money alone is no longer over"
+    assert_not_includes html.at_css("[data-budget-line='#{PLATFORM}']").text, "Over", "nor is the line"
     [ html, today ].each do |page|
       assert_equal "Budget amounts show only to members who may see pay.", page.at_css("[data-budget-no-money]").text
       [ "EUR", "No amount", "a year", "base pay" ].each { assert_not_includes page.text, it }
