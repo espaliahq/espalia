@@ -56,10 +56,11 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
     held_now = now.transform_values { held_ids(it) }
     later = maps(narrower, aggregate, scenario_ids)
     held = later.transform_values { held_ids(it) }
+    cost_centres = line_cost_centres(changes.map(&:last), now.values)
     dropped = changes.select do |scenario_id, change|
       subject_id = change.data[:subject_id]
       (held_now[scenario_id].include?(subject_id) && !held[scenario_id].include?(subject_id)) ||
-        drops_line?(change, now[scenario_id], later[scenario_id])
+        line_ids(change).any? { now[scenario_id].holds_cost_centre?(cost_centres[it]) && !later[scenario_id].holds_cost_centre?(cost_centres[it]) }
     end
     return if dropped.empty?
 
@@ -81,17 +82,21 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
   # A cut line has left both maps, so a change about a line is judged by its
   # cost centre: held now, and not by the narrower plan
   # ([#378](https://github.com/espaliahq/espalia/issues/378)).
-  def drops_line?(change, now, later)
-    line_ids = case change
+  def line_ids(change)
+    case change
     when ::TeamPlanning::Events::BudgetLineSet, ::TeamPlanning::Events::BudgetLineCut then [ change.data[:subject_id] ]
     when ::TeamPlanning::Events::PositionFundingSet then Array(change.data[:draws]).map { it.to_h.symbolize_keys[:budget_line_id] }
-    else return false
+    else []
     end
-    lines = (now.budget_lines + now.outside_lines).index_by(&:id)
-    line_ids.any? do |id|
-      cost_centre = lines[id]&.cost_centre || ::BudgetLine.find_by(id:)&.cost_centre
-      now.holds_cost_centre?(cost_centre) && !later.holds_cost_centre?(cost_centre)
-    end
+  end
+
+  # Each line's cost centre as the maps hold it, else as the tenant does.
+  def line_cost_centres(changes, maps)
+    ids = changes.flat_map { line_ids(it) }.uniq
+    return {} if ids.empty?
+
+    ::BudgetLine.where(id: ids).pluck(:id, :cost_centre).to_h
+      .merge(maps.flat_map { it.budget_lines + it.outside_lines }.select { ids.include?(it.id) }.to_h { [ it.id, it.cost_centre ] })
   end
 
   # Names each subject once and counts every change it couldn't show.
