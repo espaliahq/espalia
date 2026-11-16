@@ -79,6 +79,16 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
       assert_equal [ [ "Actual", "EUR 1.2m" ], [ "Planned", "EUR 0" ] ], Format.parts(parts.merge(planned: sum({}, "0")), "EUR")
     end
 
+    should "name no currency for a planned part of nothing it cannot tell the currency of" do
+      none = { native: {}, converted: nil, missing: [] }
+      native = ->(figures) { { native: figures, converted: nil, missing: [] } }
+
+      assert_equal [ [ "Actual", "nothing" ], [ "Planned", "nothing" ] ], Format.parts({ actual: none, planned: none, forecast: none }, nil)
+      assert_equal [ "Planned", "GBP 0" ], Format.parts({ actual: native.({ "GBP" => "10" }), planned: none, forecast: none }, nil)[1]
+      assert_equal [ "Planned", "nothing" ],
+                   Format.parts({ actual: native.({ "EUR" => "10", "GBP" => "10" }), planned: none, forecast: none }, nil)[1]
+    end
+
     should "draw the split under a unit's figure and a table cell, and nothing under a run rate" do
       parts = { actual: sum({ "EUR" => "100000" }, "100000"), planned: sum({ "EUR" => "-20000" }, "-20000"), forecast: sum({ "EUR" => "5000" }, "5000") }
       figures = { scenario: sum({ "EUR" => "85000" }, "85000"), baseline: parts[:actual], difference: sum({ "EUR" => "-15000" }, "-15000"), parts: }

@@ -52,17 +52,19 @@ class Views::Plans::CostMarks
       value.round.to_i.to_s
     end
 
-    # Forecast shows only once it adds something, so before a forecast
-    # exists the line reads actual and planned alone.
-    #
     # @param parts [Hash] `{ actual:, planned:, forecast: }`, each a sum
     # @param reference [String, nil] the reference currency
     # @return [Array<Array(String, String)>] each part's label and figure
     def parts(parts, reference)
       forecast = sum_change(parts[:forecast], reference)
       [ [ "Actual", sum(parts[:actual], reference) ],
-        [ "Planned", sum_change(parts[:planned], reference) || amount(0, reference || parts[:actual][:native].keys.first) ],
+        [ "Planned", sum_change(parts[:planned], reference) || no_change(parts, reference) ],
         ([ "Forecast", forecast ] if forecast) ].compact
+    end
+
+    def no_change(parts, reference)
+      currencies = reference ? [ reference ] : parts.values.flat_map { it[:native].keys }.uniq
+      currencies.one? ? amount(0, currencies.first) : "nothing"
     end
 
     # @return [String] such as "EUR 1.2m a year"
