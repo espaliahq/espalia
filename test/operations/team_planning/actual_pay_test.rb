@@ -48,7 +48,7 @@ class Operations::TeamPlanning::ActualPayTest < ActiveSupport::TestCase
       { period: "hour", basis: "actual" } => "An hourly amount is a rate, which FTE scales, so its basis is full_time" }.each do |bad, message|
       error = refusal { set_pay(**bad) }
       assert_equal message, error
-      assert_not_includes error, bad[:amount] if bad[:amount]
+      assert_no_pay_figure error, bad[:amount] if bad[:amount]
     end
     assert_equal "missing required parameter: basis", refusal { call(Operations::TeamPlanning::SetActualPay, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, **PAY.except(:basis)) }
   end
