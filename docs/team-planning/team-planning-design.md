@@ -740,8 +740,8 @@ number and a country, and leaves the rest open; a band that sets none matches ev
 - **A seat at a level that has left the framework** has no role or number any more. It
   matches only the bands made from that level and those that set no role, family or
   number, so removing an unrelated band never changes its price. With none for its
-  country it is unpriced with the reason `level_left`, and an admin adds a band or moves
-  the seat to a current level.
+  country it is unpriced with the reason `level_left`. An admin prices it with a band for
+  every role and level in that country, or moves the seat to a current level.
 
 #### Run rate at the end
 
