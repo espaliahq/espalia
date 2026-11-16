@@ -11,7 +11,9 @@
 # An editor moves people in a step ([#309](https://github.com/espaliahq/espalia/issues/309)): drag a person's bar onto
 # another unit in a column the bar covers, or use its "Move…". Either opens
 # that step's {Views::Plans::MoveDialog}, so it is the map's move, written in
-# the column's scenario. Today, the first column, takes no moves.
+# the column's scenario. A bar that starts with a change of place, a new
+# position or a departure also has "When…", which moves that change a step
+# earlier or later. Today, the first column, takes no moves.
 class Views::Plans::Timeline < Views::Base
   UNASSIGNED = "Unassigned"
   UNNAMED = "Unnamed step"
@@ -189,7 +191,7 @@ class Views::Plans::Timeline < Views::Base
 
   def wide_bar(lane, bar)
     div(class: "z-10 px-1 py-1 group-data-[dragging]/move:pointer-events-none has-[[aria-expanded=true]]:z-20", style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
-      bar_box(lane, bar, steps: movable_steps(bar)) do
+      bar_box(lane, bar, steps: movable_steps(bar), shifts: shifts(lane, bar, bar[:from]..bar[:to])) do
         span(class: "sr-only") { "#{span_of(bar)}: " }
         bar_text(lane, bar, starts: bar[:from], ends: bar[:to])
       end
@@ -259,7 +261,11 @@ class Views::Plans::Timeline < Views::Base
     lane[:bars].select(&in_step).each do |bar|
       li(class: "px-3 py-2") do
         p(class: "text-xs font-medium uppercase text-muted") { lane_label(bar) }
-        div(class: "mt-1") { bar_box(lane, bar, steps: movable_steps(bar) & [ @step ], drag: false) { bar_text(lane, bar, starts: @step, ends: @step) } }
+        div(class: "mt-1") do
+          bar_box(lane, bar, steps: movable_steps(bar) & [ @step ], shifts: shifts(lane, bar, @step..@step), drag: false) do
+            bar_text(lane, bar, starts: @step, ends: @step)
+          end
+        end
       end
     end
   end
@@ -268,13 +274,16 @@ class Views::Plans::Timeline < Views::Base
 
   # -- A bar ------------------------------------------------------------------
 
-  def bar_box(lane, bar, steps: [], drag: true, &content)
+  def bar_box(lane, bar, steps: [], shifts: [], drag: true, &content)
     position = bar[:kind] == "position"
     div(class: "flex flex-wrap items-center gap-x-2 rounded border px-2 py-1 text-default " \
                "#{position ? 'border-dashed border-emphasized bg-default' : 'border-default bg-subtle'}#{' cursor-grab' if drag && steps.any?}",
         draggable: ("true" if drag && steps.any?), data: { timeline_lane: lane[:lane_id], **(drag ? drag_data(bar, steps) : {}) }) do
       content.call
-      move_control(bar, steps) if steps.any?
+      span(class: "ml-auto flex items-center gap-1") do
+        move_control(bar, steps) if steps.any?
+        when_control(bar, shifts) if shifts.any?
+      end
     end
   end
 
@@ -297,7 +306,7 @@ class Views::Plans::Timeline < Views::Base
   # One step moves from a button; a bar across several asks which step.
   def move_control(bar, steps)
     label = "Move #{name(bar[:subject_id])}"
-    span(class: "ml-auto") do
+    span do
       if steps.one?
         render Components::Kit::Button.new(variant: :ghost, size: :sm, compact: true, aria_label: "#{label} in #{step_name(steps.first)}",
                                            data: move_trigger(bar, steps.first)) { "Move…" }
@@ -321,6 +330,50 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def share_in(bar, step) = bar[:shares]&.dig(step - bar[:from])
+
+  # -- Moving a change a step earlier or later --------------------------------
+
+  SHIFT_WORDS = { "assignment" => "Change place in %s instead", "departure" => "Leave in %s instead",
+                  "position" => "Open it in %s instead" }.freeze
+
+  # The changes a bar shows the start of, in `range`, that its step makes
+  # itself: the place it starts with, the position it opens, or the departure
+  # it shows. Each moves to the column before or after; never into Today.
+  def shifts(lane, bar, range)
+    return [] unless @moving
+
+    changes = []
+    changes << [ bar[:from], bar[:kind] == "person" ? "assignment" : "position" ] if range.cover?(bar[:from]) && bar[:from].positive?
+    leaving = lane[:departures].find { it[:person_id] == bar[:subject_id] && (bar[:from]..bar[:to]).cover?(it[:column]) && range.cover?(it[:column]) }
+    changes << [ leaving[:column], "departure" ] if bar[:kind] == "person" && leaving
+    changes.select { |column, facet| movable?(column, bar[:subject_id], facet) }.flat_map do |column, facet|
+      [ ([ column, facet, "earlier", column - 1 ] if column >= 2), ([ column, facet, "later", column + 1 ] if column + 1 < columns.size) ].compact
+    end
+  end
+
+  def movable?(column, subject_id, facet) = columns[column].fetch(:movable, []).include?({ subject_id:, facet: })
+
+  def when_control(bar, shifts)
+    label = "Change when, for #{subject_name(bar)}"
+    render Components::Kit::Dropdown.new(strategy: :fixed) do |menu|
+      menu.trigger(label:, button: { variant: :ghost, size: :sm, compact: true }) { "When…" }
+      menu.menu(label:, width: "w-64") do
+        shifts.each do |column, facet, direction, to|
+          menu.item(href: shift_path(bar, column, facet, direction, to), data: { turbo_method: :post }) do
+            SHIFT_WORDS.fetch(facet) % step_name(to)
+          end
+        end
+      end
+    end
+  end
+
+  def shift_path(bar, column, facet, direction, to)
+    plan_change_moves_path(@timeline[:plan_id], return_to: timeline_plan_path(@timeline[:plan_id], scenario: @timeline[:scenario_id], step: @step),
+                                                move: { scenario_id: columns[column][:scenario_id], subject_id: bar[:subject_id], facet:, direction:,
+                                                        to_scenario_id: (columns[to][:scenario_id] if direction == "later") })
+  end
+
+  def subject_name(bar) = bar[:kind] == "person" ? name(bar[:subject_id]) : subject(bar)
 
   def move_dialog_id(step) = "#{Views::Plans::MoveDialog::ID}-#{step}"
 
