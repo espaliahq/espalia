@@ -48,7 +48,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Budget.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, scenario_id:, basis: report.basis, strictness: strictness(report.strictness), period: period(report), pay_view: report.pay_view,
+    { plan_id: plan.id, scenario_id:, basis: report.basis, strictness: ::TeamPlanning::RuleKinds::BudgetStrictness.describe(report.strictness), period: period(report), pay_view: report.pay_view,
       reference_currency: report.reference_currency, total: totals(report.totals), forecast: sum(report.forecast),
       budget_lines: report.lines.map { line(it) },
       cost_centres: report.cost_centres.map { |cost_centre, totals| { cost_centre:, **totals(totals, money: method(:native)) } },
@@ -73,8 +73,6 @@ class Operations::TeamPlanning::Budget < Operations::Base
       remaining: { **money.(totals.remaining), head_count: figure(totals.remaining_head_count) },
       unfunded: { **money.(totals.unfunded), **heads(totals.unfunded_heads) }, over: over(totals.over) }
   end
-
-  def strictness(value) = { preset: ::TeamPlanning::RuleKinds::BudgetStrictness.preset_of(value), **value.symbolize_keys }
 
   def over(over) = over && { money: over.money, heads: over.heads, mismatched_currencies: over.mismatched }
 

@@ -42,14 +42,12 @@ class Operations::TeamPlanning::Funding < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Funding.new(context:, plan:, scenario_id:).call }
     { plan_id: plan.id, scenario_id:, period: { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601 },
-      strictness: strictness(report.strictness), total: count(report.total), funded: count(report.funded), unfunded: count(report.unfunded),
+      strictness: ::TeamPlanning::RuleKinds::BudgetStrictness.describe(report.strictness), total: count(report.total), funded: count(report.funded), unfunded: count(report.unfunded),
       positions: report.positions.map { position(it) },
       budget_lines: report.by_line.sort.map { |budget_line_id, draws| { budget_line_id:, positions: draws.map { drawn(*it) } } } }
   end
 
   private
-
-  def strictness(value) = { preset: ::TeamPlanning::RuleKinds::BudgetStrictness.preset_of(value), **value.symbolize_keys }
 
   def count(count) = { positions: count.positions, fte: decimal(count.fte) }
 

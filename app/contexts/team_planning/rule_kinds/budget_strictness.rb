@@ -82,6 +82,10 @@ class TeamPlanning::RuleKinds::BudgetStrictness < TeamPlanning::RuleKind
   def self.preset_of(value) = PRESETS.key(value.slice("match", "limit", "scope"))
 
   # @param value [Hash] as {.check} stored it
+  # @return [Hash] preset, match, limit and scope, as the reads report it
+  def self.describe(value) = { preset: preset_of(value), match: value.fetch("match"), limit: value.fetch("limit"), scope: value.fetch("scope") }
+
+  # @param value [Hash] as {.check} stored it
   # @return [Boolean] whether money is held to the budget
   def self.money?(value) = value.fetch("limit") != "heads"
 
