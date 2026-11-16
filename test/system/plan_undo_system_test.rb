@@ -157,12 +157,15 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
         assert_equal tab_rows, with_controls, "Undo and Redo wrap the tab strip on #{path} on a phone"
       else
         assert_equal 1, tab_rows, "the tab strip wraps on #{path} at #{width}"
+        assert_equal 0, tabs_scrolled_away, "the tab strip hides a tab behind its scroll on #{path} at #{width}"
       end
       assert_no_sideways_overflow
     end
   end
 
   private
+
+  def tabs_scrolled_away = evaluate_script(%(document.querySelector('nav[aria-label="Plan views"] > div').scrollWidth - document.querySelector('nav[aria-label="Plan views"] > div').clientWidth))
 
   def tab_rows = evaluate_script(%(new Set([...document.querySelectorAll('nav[aria-label="Plan views"] a')].map(a => a.getBoundingClientRect().top)).size))
 
