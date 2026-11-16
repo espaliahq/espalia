@@ -76,7 +76,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     [ @holder, @editor, @viewer ].each do |account|
       removed = call(Operations::TeamPlanning::RemovedScenarios, account, plan_id: @plan_id)[:removed].sole
       assert_equal [ q2, "Q2", 1 ], removed.values_at(:scenario_id, :name, :changes)
-      assert_not_includes removed.to_json, "Gone with Q2"
+      assert_no_pay_figure removed, "Gone with Q2"
     end
     assert_no_pay_read(@q1, amounts: [ AMOUNT, "Gone with Q2" ])
   end
