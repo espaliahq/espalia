@@ -29,6 +29,8 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
 
   def level_ids = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_first.pluck(:id) }
 
+  def nothing_offered = { plan_id: @plan_id, scenario_id: @scenario_id, undo: nil, redo: nil }
+
   def undo_step = call(Operations::TeamPlanning::UndoStep, plan_id: @plan_id, scenario_id: @scenario_id)
 
   def assert_refused_bringing_back(&)
@@ -233,7 +235,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         assert undo_step[:undo]
 
         call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
-        assert_nil undo_step[:undo]
+        assert_equal nothing_offered, undo_step
       end
 
       should "stop offering Redo of the unit once its level is gone" do
@@ -241,7 +243,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         assert undo_step[:redo]
 
         call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
-        assert_nil undo_step[:redo]
+        assert_equal nothing_offered, undo_step
       end
 
       should "keep the level while the plan is live, counting the plans" do
