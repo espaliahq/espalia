@@ -61,7 +61,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
                                                                level_id: @e5.level_id, unit_id: @payments, fte: 0.5, basis: "new")[:position_id]
     result = cost
 
-    assert_equal({ starts_on: "2026-01-01", ends_on: "2026-12-31" }, result[:period])
+    assert_equal({ starts_on: "2026-01-01", ends_on: "2026-12-31", open_ended: false, horizon_months: nil }, result[:period])
     assert_equal [ "EUR", "2025-12-15T09:00:00Z" ], result.values_at(:reference_currency, :bands_changed_at)
     assert_equal({ scenario: { native: { "EUR" => "150000" }, converted: "150000", missing: [] },
                    baseline: { native: { "EUR" => "100000" }, converted: "100000", missing: [] },
@@ -308,7 +308,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
   should "give Today's run rate for the plan's id, with no baseline or difference anywhere in it" do
     result = cost(scenario_id: @plan_id, unit_id: @payments)
 
-    assert_equal [ "run_rate", { starts_on: "2026-01-01", ends_on: "2026-12-31" } ], result.values_at(:basis, :period)
+    assert_equal [ "run_rate", { starts_on: "2026-01-01", ends_on: "2026-12-31", open_ended: false, horizon_months: nil } ], result.values_at(:basis, :period)
     totals = [ result[:total], *result[:units], *result[:units].filter_map { it[:with_below] }, *result[:cost_centres] ]
     assert totals.all? { it.keys.intersect?(%i[baseline difference]).! }, "a run rate is never compared"
     assert_equal [ :scenario ], result[:seats].keys

@@ -19,7 +19,7 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
               "in `native`, and `converted` is the same in the reference currency at each period's start, null with " \
               "`missing` saying why. `unpriced` counts the seats that can't be priced and so are left out, never " \
               "counted as zero; team_planning_cost names them. A scenario that can't be priced has `error` instead " \
-              "of figures. Figures are decimal strings. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
+              "of figures. Figures are decimal strings. #{PRICED_TODAY} #{OPEN_ENDED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 

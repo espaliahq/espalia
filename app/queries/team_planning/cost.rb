@@ -170,14 +170,16 @@ class TeamPlanning::Cost
   Parts = Data.define(:actual, :planned, :forecast, :total)
 
   # @!attribute basis [String] "period" for a scenario, "run_rate" for Today's year
-  # @!attribute period [Range<Date>] the scenario's period, or Today's year
+  # @!attribute period [Range<Date>] the scenario's period as {TeamPlanning::FiguredPeriod} figures it, or Today's year
+  # @!attribute open_ended [Boolean] whether the step has no end date, so the period runs to the horizon
+  # @!attribute horizon_months [Integer, nil] the months shown, for an open step
   # @!attribute pay_view [String] a {PAY_VIEWS} entry
   # @!attribute reference_currency [String, nil]
   # @!attribute bands_changed_at [Time, nil] when a pay band last changed; plans reprice live
   # @!attribute scenario [Priced]
   # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
   # @!attribute forecast [Forecasted]
-  Report = Data.define(:basis, :period, :pay_view, :reference_currency, :bands_changed_at, :scenario, :baseline, :forecast) do
+  Report = Data.define(:basis, :period, :open_ended, :horizon_months, :pay_view, :reference_currency, :bands_changed_at, :scenario, :baseline, :forecast) do
     # @return [Boolean]
     def run_rate? = basis == "run_rate"
 
@@ -243,11 +245,12 @@ class TeamPlanning::Cost
     aggregate = prepare
     run_rate = @scenario_id == @plan.id
     earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
-    scenario = priced(resolved(@scenario_id))
+    scenario = priced(own_map)
     @steps[@scenario_id] ||= TeamPlanning::Forecast::Step.new(map: scenario.map, pricing: scenario.pricing) unless run_rate
     forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows)
     baseline = priced(resolved(@plan.id)) unless run_rate
-    Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
+    Report.new(basis: run_rate ? "run_rate" : "period", period: @period, open_ended: @figured&.open_ended || false,
+               horizon_months: @figured&.horizon_months, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *band_list.map(&:updated_at) ].compact.max,
                scenario:, baseline:, forecast:)
   end
@@ -288,7 +291,7 @@ class TeamPlanning::Cost
   #
   # @return [TeamPlanning::Forecast::Step]
   def step
-    @steps[@scenario_id] ||= prepare.then { priced(resolved(@scenario_id)) }.then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+    @steps[@scenario_id] ||= prepare.then { priced(own_map) }.then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
   end
 
   private
@@ -298,13 +301,21 @@ class TeamPlanning::Cost
     run_rate = @scenario_id == @plan.id
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
 
-    @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
+    @period = TeamPlanning::Cost.year_from(aggregate.base_on) if run_rate
     @year_days = run_rate ? @period.count : YEAR_DAYS
     @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
     @factors = {}
     @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     aggregate
+  end
+
+  # The scenario's own map, which holds the horizon an open step's period runs to.
+  def own_map
+    resolved(@scenario_id).tap do |map|
+      @figured = TeamPlanning::FiguredPeriod.for(@aggregate, @scenario_id, map)
+      @period = @figured.period if @figured
+    end
   end
 
   def resolved(scenario_id)

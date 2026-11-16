@@ -18,7 +18,10 @@ module Operations::TeamPlanning::CostFigures
 
   def unpriced_lines(report) = [ report.scenario, report.baseline ].compact.flat_map(&:unpriced).uniq { [ it.seat_id, it.unit_id, it.reason ] }
 
-  def period(report) = { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601 }
+  def period(report)
+    { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601, open_ended: report.open_ended,
+      horizon_months: report.horizon_months }
+  end
 
   def sum(sum) = { native: sum.native.transform_values { decimal(it) }, converted: sum.converted && decimal(sum.converted), missing: sum.missing }
 

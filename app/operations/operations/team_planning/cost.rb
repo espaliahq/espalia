@@ -48,7 +48,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "by FTE only when its basis is full_time, by the days held, plus on-cost), in a run rate as in a scenario: each seat's pay_source " \
               "says actual or band_midpoint, and actual_pay_seats counts the seats priced from actual pay. Held pay " \
               "the plan lost with the person's key leaves the seat unpriced as pay_unknown. Everyone else is priced " \
-              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. #{PRICED_TODAY} Refused, as an unknown " \
+              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. #{PRICED_TODAY} #{OPEN_ENDED} Refused, as an unknown " \
               "plan, unless the caller is a member."
   category :read
   approval :none

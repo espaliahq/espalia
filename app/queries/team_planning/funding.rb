@@ -88,11 +88,13 @@ class TeamPlanning::Funding
   # @!attribute fte [Rational]
   Count = Data.define(:positions, :fte)
 
-  # @!attribute period [Range<Date>]
+  # @!attribute period [Range<Date>] as {TeamPlanning::FiguredPeriod} figures it
+  # @!attribute open_ended [Boolean] whether the step has no end date, so the period runs to the horizon
+  # @!attribute horizon_months [Integer, nil] the months shown, for an open step
   # @!attribute map [TeamPlanning::Baseline::Map]
   # @!attribute strictness [Hash] the {TeamPlanning::RuleKinds::BudgetStrictness} value it matched under
   # @!attribute positions [Array<Funded>] by position id
-  Report = Data.define(:period, :map, :strictness, :positions) do
+  Report = Data.define(:period, :open_ended, :horizon_months, :map, :strictness, :positions) do
     # @return [Count] every position
     def total = Count.new(positions: positions.size, fte: positions.sum(0r, &:fte))
 
@@ -130,13 +132,14 @@ class TeamPlanning::Funding
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
     raise TeamPlanning::Error, "The baseline has no period to fund, so read one of the plan's scenarios" if @scenario_id == @plan.id
 
-    @period = aggregate.period_of(@scenario_id)
     @map = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).structure(aggregate)
+    figured = TeamPlanning::FiguredPeriod.for(aggregate, @scenario_id, @map)
+    @period = figured.period
     @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id)
     @lines = @map.budget_lines.index_by(&:id)
     @strictness = @map.rule(TeamPlanning::RuleKinds::BudgetStrictness.rule_name)
     @held = @strictness.fetch("match")
-    Report.new(period: @period, map: @map, strictness: @strictness, positions: @map.positions.sort_by(&:id).map { fund(it) })
+    Report.new(period: @period, **figured.payload, map: @map, strictness: @strictness, positions: @map.positions.sort_by(&:id).map { fund(it) })
   end
 
   private

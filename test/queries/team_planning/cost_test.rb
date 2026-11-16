@@ -351,6 +351,59 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_not_equal first_step_figures(base_on: "2026-01-01", starts_on: "2026-01-01")[:scenario], gap[:scenario]
   end
 
+  context "a step with no end date" do
+    setup do
+      open_position(unit_id: @payments, fte: 0.5)
+      @open = SecureRandom.uuid_v7
+      as_tenant { handler.fork_scenario(@plan_id, @open, parent_id: @year, relation: "then", name: "2027") }
+    end
+
+    def figures(report) = [ report.period, report.scenario.total, report.baseline.total, report.forecast.total ]
+
+    should "price over the twelve months the horizon shows, as the same step ending there would" do
+      open = cost(@open)
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 12, 31), true, 12 ], [ open.period, open.open_ended, open.horizon_months ]
+
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-12-31") }
+      ended = cost(@open)
+
+      assert_equal figures(ended), figures(open)
+      assert_equal [ false, nil ], [ ended.open_ended, ended.horizon_months ]
+    end
+
+    should "run over the tenant's horizon, and the plan's own over it" do
+      as_tenant { PlanningRuleDefault.create!(rule: "open_step_horizon", value: { "months" => "6" }) }
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 6, 30), 6 ], cost(@open).then { [ it.period, it.horizon_months ] }
+
+      operation(Operations::TeamPlanning::SetRule, scenario_id: @plan_id, rule: "open_step_horizon", value: { months: "18" })
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2028, 6, 30), 18 ], cost(@open).then { [ it.period, it.horizon_months ] }
+      assert_equal BASE_ON..Date.new(2026, 12, 31), cost.period, "a step with an end keeps it"
+    end
+
+    should "run to an end once one is set, whatever the horizon" do
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-03-31") }
+      report = cost(@open)
+
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 3, 31), false, nil ], [ report.period, report.open_ended, report.horizon_months ]
+    end
+
+    should "price an alternative sharing the open period over the same horizon" do
+      lean = SecureRandom.uuid_v7
+      as_tenant { handler.fork_scenario(@plan_id, lean, parent_id: @open, relation: "instead", name: "Lean 2027") }
+
+      assert_equal figures(cost(@open)), figures(cost(lean))
+      assert cost(lean).open_ended
+    end
+
+    should "spread each amount over a finite count of days" do
+      report = cost(@open)
+
+      assert_equal 365, report.period.count
+      assert_not_empty report.scenario.total.native
+      assert report.scenario.total.native.values.all? { it.to_f.finite? && it.positive? }, "every currency's total is a finite amount"
+    end
+  end
+
   should "set the scenario beside the baseline over the same days, with the difference" do
     open_position(unit_id: @payments, fte: 0.5)
     report = cost
