@@ -16,9 +16,10 @@
 #   inputs = TeamPlanning::PricingInputs.for(plan)
 #   inputs.priced_on # => nil while the plan is live
 class TeamPlanning::PricingInputs
-  # The models a copy holds, each with the attributes it leaves out.
+  # The models a copy holds, by the key each is held under.
   MODELS = { pay_bands: PayBand, exchange_rates: ExchangeRate, budget_lines: BudgetLine,
              reference_currencies: ReferenceCurrency, planning_rule_defaults: PlanningRuleDefault }.freeze
+  # What no copy keeps of a row: whose it is and who last edited it.
   LEFT_OUT = %w[tenant_id updated_by_id].freeze
 
   # @param tenant [Tenant]
@@ -80,12 +81,7 @@ class TeamPlanning::PricingInputs
   def budget_lines = @budget_lines ||= rows(:budget_lines).sort_by { [ it.starts_on, it.id ] }
 
   # @return [Hash{String => Hash}] each rule's value, the tenant's own over the built-in default
-  def rule_defaults
-    return PlanningRuleDefault.values_for(@plan.tenant_id) unless @copy
-
-    defaults = TeamPlanning::RuleKinds.defaults
-    defaults.merge(rows(:planning_rule_defaults).select { defaults.key?(it.rule) }.to_h { [ it.rule, it.value ] })
-  end
+  def rule_defaults = PlanningRuleDefault.values_over_defaults(rows(:planning_rule_defaults))
 
   private
 
