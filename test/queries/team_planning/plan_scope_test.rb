@@ -253,6 +253,34 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       assert_equal LINE_OUTSIDE, refusal { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Revenue"], cost_centre: "Platform") }
     end
 
+    should "leave a line outside the plan's cost centres out of the budget checks, which judge only the lines the plan holds" do
+      checks = %w[unused_budget_lines budget_variance]
+      items = ->(plan_id, scenario_id) { call(Operations::TeamPlanning::Attention, plan_id:, scenario_id:)[:items].select { it[:check].in?(checks) } }
+      held_names = [ "Platform", "Core", "Engineers", TeamPlanning::Attention::NO_COST_CENTRE ]
+
+      scoped = items.(@plan_id, @h1)
+      assert_equal @lines.values_at("Platform", "Core", "Engineers", nil).sort, scoped.select { it[:facet] == TeamPlanning::Attention::BUDGET_LINE }.map { it[:subject_id] }.sort,
+                   "every held line is unused, and no other"
+      assert_empty scoped.reject { it[:facet] == TeamPlanning::Attention::BUDGET_LINE || it[:subject_id].in?([ @plan_id, *held_names ]) }
+      cost_centres = call(Operations::TeamPlanning::Budget, plan_id: @plan_id, scenario_id: @h1)[:cost_centres].map { it[:cost_centre] }
+      assert_empty cost_centres - [ "Platform", "Core", "Engineers", nil ], "the no-cost-centre group sits beside held cost centres only"
+
+      whole = items.(@whole_id, @whole_h1).map { it[:subject_id] }
+      @lines.values_at("Field Sales", "Revenue").each { assert_includes whole, it, "the control proves the check would name it" }
+    end
+
+    should "read an archived scoped plan from its frozen lines, cut to its cost centres, though it was archived before its base date" do
+      as_tenant { handler.archive_plan(@plan_id) }
+      plan = TeamPlanningPlan.find(@plan_id)
+      assert_operator plan.archived_on, :<, plan.base_on - 1, "known_on is the archive day, not the day before the base"
+
+      leaked = [ *@lines.values_at("Field Sales", "Revenue"), "Field Sales", "Revenue" ]
+      reads = [ Operations::TeamPlanning::Budget, Operations::TeamPlanning::BudgetLines, Operations::TeamPlanning::Funding, Operations::TeamPlanning::Attention ]
+                .map { call(it, plan_id: @plan_id, scenario_id: @h1) }
+      assert_equal @lines.values_at("Platform", "Core", "Engineers", nil).sort, reads.first[:budget_lines].map { it[:budget_line_id] }.sort
+      leaked.each { assert_not_includes reads.to_json, it }
+    end
+
     should "judge the lines by the baseline's cost centres on any day, not that day's" do
       travel_to Time.utc(2026, 2, 1, 9)
       as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@ada.id, "Field Sales", provider: "espalia", effective_on: Date.current.iso8601) }
