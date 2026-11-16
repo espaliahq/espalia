@@ -542,17 +542,17 @@ class PlansController < ApplicationController
 
   # A Remove dialog for each of `ids` an editor may remove: never the baseline,
   # nor anything on an archived or frozen plan. Only a dialog that offers
-  # Remove asks the operation how much hidden pay goes with it.
+  # Remove asks the operation how much hidden pay goes with it, all in one load of the plan.
   def removals(plan, scenarios, ids)
     return [] if !can_edit? || PlanPolicy.frozen?(@plan_record)
 
-    scenarios.select { ids.include?(it[:scenario_id]) && it[:scenario_id] != plan[:plan_id] }.map do |scenario|
-      forks = Views::Plans::RemoveScenarioDialog.forks(scenario, scenarios)
-      hidden_pay = if forks.empty?
-        Operations::TeamPlanning::RemoveScenario.approval_notice(context: pundit_user,
-                                                                 params: { plan_id: plan[:plan_id], scenario_id: scenario[:scenario_id] })
-      end
-      Views::Plans::RemoveScenarioDialog.new(plan_id: plan[:plan_id], scenario:, forks:, hidden_pay:)
+    offered = scenarios.select { ids.include?(it[:scenario_id]) && it[:scenario_id] != plan[:plan_id] }
+                       .map { [ it, Views::Plans::RemoveScenarioDialog.forks(it, scenarios) ] }
+    notices = Operations::TeamPlanning::RemoveScenario.approval_notices(
+      context: pundit_user, plan_id: plan[:plan_id], scenario_ids: offered.filter_map { |scenario, forks| scenario[:scenario_id] if forks.empty? }
+    )
+    offered.map do |scenario, forks|
+      Views::Plans::RemoveScenarioDialog.new(plan_id: plan[:plan_id], scenario:, forks:, hidden_pay: notices[scenario[:scenario_id]])
     end
   end
 

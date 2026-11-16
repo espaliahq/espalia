@@ -19,25 +19,43 @@ class Operations::TeamPlanning::RemoveScenario < Operations::Base
   # @return [String, nil]
   def self.approval_notice(context:, params:)
     params = params.to_h.with_indifferent_access
-    plan = TeamPlanningPlan.find_by(id: params[:plan_id])
-    return unless plan
+    scenario_id = params[:scenario_id].to_s.downcase
+    approval_notices(context:, plan_id: params[:plan_id], scenario_ids: [ scenario_id ])[scenario_id]
+  end
+
+  # The approval notice for each of a plan's scenarios, loading the plan once,
+  # so a page that offers several removals doesn't replay it for each.
+  #
+  # @param context [AuthorizationContext]
+  # @param plan_id [String]
+  # @param scenario_ids [Array<String>]
+  # @return [Hash{String => String}] a notice by scenario id, only where one applies
+  def self.approval_notices(context:, plan_id:, scenario_ids:)
+    plan = TeamPlanningPlan.find_by(id: plan_id)
+    return {} unless plan
 
     policy = PlanPolicy.new(context, plan)
-    return if !policy.show? || policy.see_pay?
+    return {} if !policy.show? || policy.see_pay?
 
-    hidden = hidden_pay(::TeamPlanning::Repository.new.load_plan(plan.id), params[:scenario_id].to_s.downcase)
-    return unless hidden.positive?
-
-    "This scenario holds #{hidden} #{hidden == 1 ? "change" : "changes"} to pay you can't see. " \
-      "Removing it removes #{hidden == 1 ? "that" : "those"} too."
+    aggregate = ::TeamPlanning::Repository.new.load_plan(plan.id)
+    scenario_ids.map { it.to_s.downcase }.uniq.filter_map do |scenario_id|
+      hidden = hidden_pay(aggregate, scenario_id)
+      [ scenario_id, notice(hidden) ] if hidden.positive?
+    end.to_h
   rescue ::TeamPlanning::Error
-    nil
+    {}
   end
 
   def self.hidden_pay(aggregate, scenario_id)
     aggregate.changes_in(scenario_id).map(&:key).uniq.count { it.last == ::TeamPlanning::Events::PlanDataSet::PAY_FACET }
   end
   private_class_method :hidden_pay
+
+  def self.notice(hidden)
+    "This scenario holds #{hidden} #{hidden == 1 ? "change" : "changes"} to pay you can't see. " \
+      "Removing it removes #{hidden == 1 ? "that" : "those"} too."
+  end
+  private_class_method :notice
 
   # @return [Hash] `{ plan_id, scenario_id, removed }`
   def perform
