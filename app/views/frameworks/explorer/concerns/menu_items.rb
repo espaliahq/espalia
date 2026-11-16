@@ -37,17 +37,8 @@ module Views::Frameworks::Explorer::Concerns::MenuItems
   #   `explorer_menu_controller.js` for what each kind consumes
   # @return [void]
   def render_menu_trigger(scope:, label:, kind:, **menu)
-    button(
-      type: "button",
-      aria: { haspopup: "true", expanded: "false", label: label },
-      class: "explorer-kebab",
-      data: cluster_control_data(scope, "kebab")
-              .merge(action: "explorer-menu#toggle", menu: kind)
-              .merge(menu.transform_keys { |key| :"menu_#{key}" })
-              .compact
-    ) do
-      icon("kebab")
-    end
+    render Components::Kit::DelegatedMenu::Trigger.new(label:, kind:, values: menu, controller: "explorer-menu",
+                                                       class: "explorer-kebab", data: cluster_control_data(scope, "kebab").compact)
   end
 
   # `data-menu-*` for one pending suggestion the viewer may approve. The
