@@ -37,6 +37,7 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
   def perform
     plan = plan!(:update?)
     raise Operations::Base::ParameterError, "No such plan" unless PlanPolicy.new(context, plan).see_pay?
+    raise Operations::Base::ParameterError, ::TeamPlanning::PlanAggregate::ARCHIVED if plan.archived?
 
     scenario_id = scenario_id!(:scenario_id)
     inputs = { plan_id: plan.id, scenario_id:, basis: params[:basis], csv: params[:csv] }

@@ -47,7 +47,9 @@ class Views::Plans::ChecksTab < Views::Base
         p(class: "mt-1 text-sm text-muted") { "What no longer fits in this scenario, often because a scenario it follows changed later." }
         scenario_picker(path: :checks_plan_path, select_id: "checks-scenario")
       end
-      if @attention[:items].empty?
+      if @attention[:checked] == false
+        unchecked(@attention)
+      elsif @attention[:items].empty?
         render Components::Kit::EmptyState.new(title: "Everything in this scenario still fits.", size: :panel)
       else
         summary

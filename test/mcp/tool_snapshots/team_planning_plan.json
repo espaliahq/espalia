@@ -1,6 +1,6 @@
 {
   "name": "team_planning_plan",
-  "description": "Get one Team Planning plan the caller is a member of: its name, base date, the caller's role in it (editor or viewer), the units it covers (scope: the whole organisation, or chosen units, each with everything under it), and whether it is frozen, which means no editor can still reach it, so its viewers read it and nobody changes it. Refused, as an unknown plan, unless the caller is a member.",
+  "description": "Get one Team Planning plan the caller is a member of: its name, base date, the caller's role in it (editor or viewer), the units it covers (scope: the whole organisation, or chosen units, each with everything under it), and whether it is frozen, which means no editor can still reach it, so its viewers read it and nobody changes it. archived is null for a live plan, else the day it was archived and who archived it (a forgotten person reads as \"Former member\"): an archived plan takes no changes until an editor restores it, and its members can still leave. Refused, as an unknown plan, unless the caller is a member.",
   "inputSchema": {
     "type": "object",
     "properties": {

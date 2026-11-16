@@ -250,6 +250,96 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "archiving" do
+    setup do
+      create_plan
+      @other_id = SecureRandom.uuid_v7
+      @plan.add_member(@other_id, role: "editor", added_by_id: @creator_id)
+      @plan.fork_scenario(@scenario_id = SecureRandom.uuid_v7, parent_id: @plan_id, relation: "then", name: "Q1",
+                          ends_on: "2027-03-31", forked_by_id: @creator_id)
+      @plan.set_change(TeamPlanning::Events::LevelSet, scenario_id: @scenario_id, subject_id: @other_id,
+                       set_by_id: @creator_id, end_state: { level: "E5" })
+      @plan.archive(archived_by_id: @creator_id)
+    end
+
+    should "record who archived it, and refuse a second archive" do
+      assert_equal({ plan_id: @plan_id, archived_by_id: @creator_id }, @plan.unpublished_events.to_a.last.data)
+      assert @plan.archived?
+      assert_equal "This plan is already archived", assert_raises(TeamPlanning::Error) { @plan.archive(archived_by_id: @creator_id) }.message
+    end
+
+    should "refuse every change to what the plan holds, in one message" do
+      writes = [
+        -> { @plan.set_scope(unit_ids: [ SecureRandom.uuid_v7 ], set_by_id: @creator_id) },
+        -> { @plan.rename("Later", current: "Next year", renamed_by_id: @creator_id) },
+        -> { @plan.rebase(base_on: "2026-12-01", expected_base_on: "2026-11-14", conflicts: [], rebased_by_id: @creator_id) },
+        -> { @plan.add_member(SecureRandom.uuid_v7, role: "viewer", added_by_id: @creator_id) },
+        -> { @plan.remove_member(@other_id, removed_by_id: @creator_id) },
+        -> { @plan.grant_see_pay(@other_id, granted_by_id: @creator_id) },
+        -> { @plan.withdraw_see_pay(@creator_id, withdrawn_by_id: @creator_id) },
+        -> { @plan.fork_scenario(SecureRandom.uuid_v7, parent_id: @plan_id, relation: "instead", name: "B", forked_by_id: @creator_id) },
+        -> { @plan.rename_scenario(@scenario_id, name: "Q2", current: "Q1", renamed_by_id: @creator_id) },
+        -> { @plan.set_scenario_period(@scenario_id, ends_on: "2027-06-30", set_by_id: @creator_id) },
+        -> { @plan.remove_scenario(@scenario_id, removed_by_id: @creator_id) },
+        -> { @plan.set_change(TeamPlanning::Events::LevelSet, scenario_id: @scenario_id, subject_id: @creator_id, set_by_id: @creator_id, end_state: { level: "E6" }) },
+        -> { @plan.clear_change(scenario_id: @scenario_id, subject_id: @other_id, facet: "level", cleared_by_id: @creator_id) },
+        -> { @plan.undo_change(scenario_id: @scenario_id, event_id: @plan.changes_in(@scenario_id).last.event_id, undone_by_id: @creator_id) }
+      ]
+      before = @plan.unpublished_events.count
+
+      writes.each do |write|
+        assert_equal TeamPlanning::PlanAggregate::ARCHIVED, assert_raises(TeamPlanning::Error, &write).message
+      end
+      assert_equal before, @plan.unpublished_events.count
+    end
+
+    should "let a member leave, take off one who departed, and still be deleted" do
+      @plan.remove_member(@other_id, removed_by_id: @other_id)
+      viewer = SecureRandom.uuid_v7
+      @plan.restore(restored_by_id: @creator_id)
+      @plan.add_member(viewer, role: "viewer", added_by_id: @creator_id)
+      @plan.archive(archived_by_id: @creator_id)
+      @plan.remove_member(viewer, removed_by_id: @creator_id, departed: true)
+      @plan.delete(deleted_by_id: @creator_id)
+
+      assert_equal({ @creator_id => "editor" }, @plan.members)
+      assert @plan.deleted?
+    end
+
+    should "keep its last editor and its last pay holder while archived" do
+      leave = -> { @plan.remove_member(@creator_id, removed_by_id: @creator_id) }
+      assert_match "A plan needs someone who can see pay", assert_raises(TeamPlanning::Error, &leave).message
+
+      @plan.remove_member(@other_id, removed_by_id: @other_id)
+      assert_match "A plan needs an editor", assert_raises(TeamPlanning::Error, &leave).message
+    end
+
+    should "let a tenant admin restore see-pay to a locked-out plan" do
+      @plan.grant_see_pay(@other_id, granted_by_id: SecureRandom.uuid_v7, recovery: true)
+      assert @plan.sees_pay?(@other_id)
+    end
+
+    should "restore exactly as archived, and take changes again" do
+      changes = @plan.winning_changes(@scenario_id)
+      @plan.restore(restored_by_id: @other_id)
+
+      assert_equal({ plan_id: @plan_id, restored_by_id: @other_id }, @plan.unpublished_events.to_a.last.data)
+      assert_not @plan.archived?
+      assert_equal changes, @plan.winning_changes(@scenario_id)
+      @plan.rename("Later", current: "Next year", renamed_by_id: @creator_id)
+      assert_equal "This plan isn't archived", assert_raises(TeamPlanning::Error) { @plan.restore(restored_by_id: @creator_id) }.message
+    end
+
+    should "replay archived, then live again" do
+      replayed = TeamPlanning::PlanAggregate.new
+      @plan.unpublished_events.each { replayed.apply(it) }
+      assert replayed.archived?
+
+      replayed.restore(restored_by_id: @creator_id)
+      assert_not replayed.archived?
+    end
+  end
+
   context "#delete with a reason" do
     should "keep the reason, and leave it out when there is none" do
       create_plan
