@@ -23,19 +23,21 @@ class Views::Plans::BudgetTabTest < ActiveSupport::TestCase
 
   def money(native, converted) = { native:, converted:, missing: [] }
 
-  def line(id, remaining:, funded: { "EUR" => "9000" }, mismatched: [])
+  def line(id, remaining:, funded: { "EUR" => "9000" }, mismatched: [], over: nil)
     { budget_line_id: id, cost_centre: "Platform", currency: "EUR", approved: { amount: "36000", head_count: "2" },
       funded: { native: funded, positions: 1, fte: "0.5" }, remaining: { amount: remaining, head_count: "1.5" },
-      mismatched_currencies: mismatched }
+      mismatched_currencies: mismatched, over: over || { money: [], heads: false, mismatched_currencies: mismatched } }
   end
 
-  def budget(lines:, left_out: [])
+  OVER = { money: [ "EUR" ], heads: false, mismatched_currencies: [] }.freeze
+
+  def budget(lines:, left_out: [], over: nil)
     { plan_id: PLAN, scenario_id: Q1, basis: "inclusive", period: { starts_on: "2027-01-01", ends_on: "2027-03-31" },
       pay_view: "band_midpoints", reference_currency: "EUR",
       total: { approved: { **money({ "EUR" => "72000" }, "72000"), head_count: "4" },
                funded: { **money({ "EUR" => "9000", "USD" => "5000" }, "13500"), positions: 2, fte: "1" },
                remaining: { **money({ "EUR" => "27000" }, "27000"), head_count: "3", left_out: { mismatched_currencies: left_out } },
-               unfunded: { **money({}, "0"), positions: 0, fte: "0" } },
+               unfunded: { **money({}, "0"), positions: 0, fte: "0" }, over: },
       forecast: money({}, "0"), budget_lines: lines, cost_centres: [], units: [], unpriced: [] }
   end
 
@@ -96,7 +98,7 @@ class Views::Plans::BudgetTabTest < ActiveSupport::TestCase
 
   should "fold a line's positions, open only when it is over or a position drawing on it is unfunded" do
     fine = render_tab(budget: budget(lines: [ line(PLATFORM, remaining: "27000") ]), funding: funding, map: MAP)
-    over = render_tab(budget: budget(lines: [ line(PLATFORM, remaining: "-1000") ]), funding: funding, map: MAP)
+    over = render_tab(budget: budget(lines: [ line(PLATFORM, remaining: "-1000", over: OVER) ]), funding: funding, map: MAP)
     short = render_tab(budget: budget(lines: [ line(PLATFORM, remaining: "27000") ]),
                        funding: funding(draws: { PLATFORM => [ SEAT, SHORT ] }, unfunded: [ SHORT ]), map: MAP)
 
@@ -109,10 +111,14 @@ class Views::Plans::BudgetTabTest < ActiveSupport::TestCase
     assert short.at_css("[data-budget-unfunded='#{SHORT}']")
   end
 
-  should "take whether a line is over from the read once it says so" do
-    said = line(PLATFORM, remaining: "-1000").merge(over: false)
-    html = render_tab(budget: budget(lines: [ said ]), funding: funding, map: MAP)
+  should "mark over only what the read judges over, the remaining total included" do
+    unjudged = render_tab(budget: budget(lines: [ line(PLATFORM, remaining: "-1000").merge(over: nil) ]), funding: funding, map: MAP)
+    total = render_tab(budget: budget(lines: [ line(PLATFORM, remaining: "27000") ], over: { money: nil, heads: true, mismatched_currencies: [] }),
+                       funding: funding, map: MAP)
 
-    assert_no_match(/\bOver\b/, html.at_css("[data-budget-line='#{PLATFORM}'] .flex").text)
+    assert_no_match(/\bOver\b/, unjudged.at_css("[data-budget-line='#{PLATFORM}'] .flex").text)
+    assert_nil unjudged.at_css("[data-budget-total='remaining'] [data-budget-over]")
+    assert total.at_css("[data-budget-total='remaining'] [data-budget-over]")
+    assert_no_match(/\bOver\b/, total.at_css("[data-budget-line='#{PLATFORM}'] .flex").text)
   end
 end

@@ -100,14 +100,17 @@ class Views::Plans::BudgetTab < Views::Base
     dl(class: "grid grid-cols-2 gap-3 lg:grid-cols-4", data: { budget_totals: "" }) do
       tile("Approved", total[:approved], head_count_text(total[:approved][:head_count]))
       tile("Funded", total[:funded], heads_text(total[:funded]))
-      tile("Remaining", total[:remaining], head_count_text(total[:remaining][:head_count]), left_out: total[:remaining][:left_out])
+      tile("Remaining", total[:remaining], head_count_text(total[:remaining][:head_count]), left_out: total[:remaining][:left_out], over: over?(total))
       tile("Unfunded", total[:unfunded], heads_text(total[:unfunded]))
     end
   end
 
-  def tile(label, sum, heads, left_out: nil)
+  def tile(label, sum, heads, left_out: nil, over: false)
     div(class: "min-w-0 rounded-lg border border-default bg-default p-3", data: { budget_total: label.downcase }) do
-      dt(class: "text-xs font-medium text-muted") { label }
+      dt(class: "flex flex-wrap items-center gap-2 text-xs font-medium text-muted") do
+        plain label
+        render Components::Kit::Badge.new("Over", tone: :danger, data: { budget_over: "" }) if over
+      end
       dd(class: "mt-1 text-lg font-semibold text-default break-words") { Views::Plans::CostMarks::Format.sum(sum, reference) }
       dd(class: "text-xs text-muted") { heads } if heads
       left = left_out&.dig(:mismatched_currencies).to_a
@@ -222,12 +225,8 @@ class Views::Plans::BudgetTab < Views::Base
     end
   end
 
-  # The read says a line is over when it does; until then, a remaining below nothing is.
-  def over?(line)
-    return line[:over] if line.key?(:over)
-
-    [ line[:remaining][:amount], line[:remaining][:head_count] ].compact.any? { BigDecimal(it).negative? }
-  end
+  # Over is the read's judgement under budget_strictness; nil where its scope doesn't hold this figure.
+  def over?(figure) = (over = figure[:over]).present? && (over[:money].present? || over[:heads] == true)
 
   def described_lines = @described_lines ||= @lines[:budget_lines].index_by { it[:budget_line_id] }
 
