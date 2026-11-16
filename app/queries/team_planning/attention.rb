@@ -476,9 +476,9 @@ class TeamPlanning::Attention
   end
 
   # A seat that ends with no cost centre: no label, real value or entry gives
-  # it one. Only a budget with a line that names a cost centre needs one.
+  # it one. A plan where no line and no seat has a cost centre uses none.
   def unplaced
-    return [] unless @budget&.lines&.any? { it.line.cost_centre.present? }
+    return [] unless @budget && (@budget.lines.any? { it.line.cost_centre.present? } || @budget.seats.any? { it.cost_centre.present? })
 
     @budget.seats.select { it.cost_centre.blank? }.uniq { [ it.kind, it.seat_id ] }.map do |seat|
       if seat.kind == "person"

@@ -96,15 +96,19 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
     assert_empty reasons(:unfunded)
   end
 
-  should "mark a seat with no cost centre once a line names one, and only then" do
+  should "mark a seat with no cost centre once a line or another seat has one, and only then" do
     line
     seat = open_position(cost_centre: nil)
 
-    assert_empty reasons(:unplaced), "no line names a cost centre, so none is needed"
+    assert_empty reasons(:unplaced), "nothing in the plan has a cost centre, so it uses none"
+
+    open_position
+    assert_equal [ [ seat, "Has no cost centre: no label, occupant or entry gives one" ],
+                   [ @ada.id, "Has no cost centre: no position label, cost centre of their own or entry gives one" ] ].sort,
+                 reasons(:unplaced).sort, "a seat's label puts the plan on cost centres, though no line names one"
 
     line(cost_centre: "Platform")
     assert_includes reasons(:unplaced), [ seat, "Has no cost centre: no label, occupant or entry gives one" ]
-    assert_includes reasons(:unplaced), [ @ada.id, "Has no cost centre: no position label, cost centre of their own or entry gives one" ]
   end
 
   should "mark a line spent past its amount and head count, saying by how many FTE but never by how much money" do
