@@ -104,7 +104,7 @@ touches **before** writing code; do not rely on defaults.
 
 CodeRabbit can also post no review at all and still show a green row. Check for each skip before reading silence as clean:
 
-- **CodeRabbit's rate limit also refuses the manual `@coderabbitai review` trigger, and its "wait N minutes" is not reliable.** A limited PR shows a "Review limit reached" comment and `gh pr checks` reports the CodeRabbit row as `pass` with "Review rate limited" — a green row, no review. Posting `@coderabbitai review` inside the limit answers "Action not completed — Review rate limited" (one PR was refused 22 minutes after a "wait 7 minutes" notice; a later retry got "Review triggered"). So never read a rate-limited PR as clean, and don't keep posting the trigger: take the fallback in the next bullet. Outside a rate limit, when CodeRabbit's verdict has not updated for the latest commit, post one plain `@coderabbitai review`, then look for the summary comment ("No actionable comments…" / "Actionable comments posted: N") and the GraphQL unresolved-thread count. The "Run on-demand review" checkbox draws on paid capacity after the free window; leave that to a human.
+- **CodeRabbit's rate limit also refuses the manual `@coderabbitai review` trigger, and its "wait N minutes" is not reliable.** A limited PR shows a "Review limit reached" comment and `gh pr checks` reports the CodeRabbit row as `pass` with "Review rate limited" — a green row, no review. Posting `@coderabbitai review` inside the limit answers "Action not completed — Review rate limited" (one PR was refused 22 minutes after a "wait 7 minutes" notice; a later retry got "Review triggered"). So never read a rate-limited PR as clean, and don't keep posting the trigger: take the fallback in the next bullet. Outside a rate limit, ask once for a review as [Closing CodeRabbit's threads yourself](#closing-coderabbits-threads-yourself) says, then look for the summary comment ("No actionable comments…" / "Actionable comments posted: N") and the GraphQL unresolved-thread count. The "Run on-demand review" checkbox draws on paid capacity after the free window; leave that to a human.
 - **When CodeRabbit is rate-limited, run `/code-review` twice, on two models, and
   land the findings before merging.** A "Review rate limited" reply means no
   review happened, and the retry can keep failing for hours. The fallback (Tal,
@@ -144,9 +144,13 @@ Two of them close review threads, and they are not the same thing.
      (see the rate-limit bullets above). A commit after those passes needs
      them again.
 
-  CI must also be green. Say on the PR that all three hold before you post it. When CodeRabbit is not
-  rate limited, ask it for a review instead: one plain `@coderabbitai review`
-  when its verdict has not updated for the latest commit.
+  CI must also be green. Say on the PR that all three hold before you post it.
+- **Outside a rate limit, ask once for a review.** When CodeRabbit's verdict
+  has not updated for the latest commit, post one plain `@coderabbitai review`
+  (`@coderabbitai full review` after a base retarget). If it answers "Already
+  reviewed the last commit" and the stale verdict stays, the required review
+  comes from an independent GitHub approval or a maintainer's admin merge
+  recorded in a PR comment.
 - **Nobody posts `@coderabbitai approve`.** An approval should follow a review,
   and this command skips the review.
 
@@ -165,8 +169,9 @@ re-check for a result that will arrive on its own.
 CodeRabbit is the exception: its review arrives with no notification, so it has
 to be checked for. Once CI is green, wait a few minutes, then read the
 unresolved threads and the review bodies; re-check once after each push. If
-the verdict has not updated, post one plain `@coderabbitai review`; if CodeRabbit
-is rate limited, take the fallback instead (see
+the verdict has not updated, ask once for a review as
+[Closing CodeRabbit's threads yourself](#closing-coderabbits-threads-yourself)
+says; if CodeRabbit is rate limited, take the fallback instead (see
 [Reading a PR's review](#reading-a-prs-review-what-coderabbit-can-hide)).
 
 ## Working alongside other agents
