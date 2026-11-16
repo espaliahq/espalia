@@ -1254,8 +1254,14 @@ values, under the plan's key and deleted with it
   line the plan adds gets one the plan mints. The baseline holds the approved budget as it
   is, so only a scenario changes it. Removing a tenant line a plan has changed or cut
   leaves the plan's change orphaned: `team_planning_budget_lines` lists it under `orphaned`,
-  and Attention flags it rather than dropping it. Until the budget tab (6.7), a plan's lines
-  are reached over MCP.
+  and Attention flags it rather than dropping it.
+- **The Budget tab shows the reads, read-only.** On Today it lists the lines as approved,
+  since Today has no period to fund against, and links each scenario's budget. On a scenario
+  it shows `team_planning_budget`'s four totals, each line's approved, funded and remaining
+  figures, the positions `team_planning_funding` draws on each line (open when the line is
+  over or a position is short), and the unfunded positions. Every figure is the read's,
+  under the viewer's pay view, so the tab and an agent never disagree. Editing lines on the
+  tab comes later.
 - **Money keeps its currency.** An amount keeps its own currency and period, a year or a
   month, as a pay band's does, and is never converted. A line with a head count and no amount
   has no amount, never zero.
@@ -1370,8 +1376,10 @@ gives the four numbers for a scenario, never the baseline.
   forecast rows, which count as their kind prices them on either basis. On an inclusive basis,
   funded plus unfunded is the cost read's total, per currency.
 - **Remaining** is approved less funded, in the line's own currency, and head count less the
-  FTE drawn. A line drawn on in another currency lists it as mismatched and never converts
-  it. Only the grand totals, the scenario total and its forecast, convert, once, to the reference currency; every group sum stays
+  FTE drawn. A line drawn on in another currency lists it as mismatched, never converts
+  it, and has no remaining amount, as approved less only the part in its own currency would
+  overstate it. A remaining total leaves such lines out and names them, so a total that
+  leaves one out is never read as complete. Only the grand totals, the scenario total and its forecast, convert, once, to the reference currency; every group sum stays
   per currency.
 - **Where it adds up.** Cost centres carry all four. Lines carry approved, funded and
   remaining, since a line's unfunded money has no line to sit on. Units carry funded and

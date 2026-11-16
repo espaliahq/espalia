@@ -120,6 +120,6 @@ class Views::Plans::CostMarks
   end
 
   def position_names
-    @position_names ||= @map[:positions].group_by { it[:unit_id] }.values.map { Views::Plans::ScenarioMap.position_names(it) }.reduce({}, :merge)
+    @position_names ||= Views::Plans::ScenarioMap.all_position_names(@map)
   end
 end

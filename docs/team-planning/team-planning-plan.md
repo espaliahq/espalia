@@ -314,7 +314,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated by the `budget_basis` rule, read through `team_planning_budget` ([#369](https://github.com/espaliahq/espalia/issues/369)) | 6.3 |
 | 6.5 | Strictness: position control, envelope, or the dimensions that must match | 6.3 |
 | 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line | 6.4, 4.6 |
-| 6.7 | Budget tab | 6.4 |
+| 6.7 | Budget tab: read-only first ([#395](https://github.com/espaliahq/espalia/issues/395)), editing after | 6.4 |
 
 ### P7 Capacity
 
