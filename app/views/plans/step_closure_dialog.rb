@@ -71,7 +71,7 @@ class Views::Plans::StepClosureDialog < Views::Base
       "The steps after it will start from the organisation as the Org Graph holds it on #{Views::Plans::ScenarioTable.day(day_after)}. " \
         "Anything this step planned that hasn't happened by then carries over to them."
     end
-    p { "While it is closed, only its name can change." }
+    p { "While it is closed, only its name and description can change." }
     p(data: { not_taken: "" }) { "#{not_taken.to_sentence} will read Not taken." } if not_taken.any?
     p { "You can reopen it while no later step is closed." }
   end

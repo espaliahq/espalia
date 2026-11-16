@@ -130,6 +130,14 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
       assert_kind_of TeamPlanning::Events::ScenarioRenamed, last_event
     end
 
+    should "let a closed step's name and description change, and nothing else" do
+      @plan.rename_scenario(@q1, name: "Q1 as it went", current: "Step", renamed_by_id: @editor_id)
+      @plan.describe_scenario(@q1, description: "Hired two", described_by_id: @editor_id)
+
+      assert_equal "This step is closed: reopen it to change it", refusal { set(@q1) }
+      assert_equal "This step is closed: reopen it to change it", refusal { @plan.set_scenario_period(@q1, ends_on: "2027-04-30", set_by_id: @editor_id) }
+    end
+
     should "refuse moving a change into the closed step" do
       @plan.set_change(TeamPlanning::Events::AssignmentSet, scenario_id: @q2, subject_id: "ada", set_by_id: @editor_id,
                                                             end_state: { placements: [ { unit_id: "sales", allocation: 1.0 } ] })
