@@ -2,9 +2,9 @@
 
 # A scenario's four budget numbers, through {TeamPlanning::Budget}
 # ([#369](https://github.com/espaliahq/espalia/issues/369)). Funded and
-# unfunded price seats as team_planning_cost does for the same caller, so a
-# member without the see-pay right gets midpoints throughout and nothing
-# derived from actual pay. It names no person, but its money follows the
+# unfunded price seats as team_planning_cost does for the same caller, and a
+# member without the see-pay right gets no money at all, as a budget line's
+# amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)). It names no person, but its money follows the
 # people in each position, so the forgotten-person audit walks it.
 class Operations::TeamPlanning::Budget < Operations::Base
   include Operations::TeamPlanning::PlanRead
@@ -37,23 +37,26 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "(null when the limit is heads or no line approves an amount); over.heads says whether it holds more FTE " \
               "than its lines count (null when the limit is money or no line states a head count). A cost centre or the " \
               "total spends its unfunded money and heads too. Nothing is converted to judge it: a currency no line " \
-              "approves goes in over.mismatched_currencies, never counted. #{PRICED_AS_ARCHIVED} #{OPEN_ENDED} Refused, as an unknown plan, unless the caller is a member."
+              "approves goes in over.mismatched_currencies, never counted. A budget line's amount is pay: money is false for a " \
+              "caller without the plan's see-pay right, who gets every head count and no money, so every amount, currency, " \
+              "native, converted and missing is null, over.money is null and nothing is mismatched. #{PRICED_AS_ARCHIVED} #{OPEN_ENDED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "A scenario of the plan; not the plan's id, as the baseline has no period." }
 
-  # @return [Hash] `{ plan_id, scenario_id, basis, strictness, period, pay_view, reference_currency, total, forecast,
+  # @return [Hash] `{ plan_id, scenario_id, basis, strictness, period, pay_view, money, reference_currency, total, forecast,
   #   budget_lines, cost_centres, units, unpriced }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Budget.new(context:, plan:, scenario_id:).call }
+    @money = report.money
     { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, basis: report.basis, strictness: ::TeamPlanning::RuleKinds::BudgetStrictness.describe(report.strictness), period: period(report), pay_view: report.pay_view,
-      reference_currency: report.reference_currency, total: totals(report.totals), forecast: sum(report.forecast),
+      money: report.money, reference_currency: report.reference_currency, total: totals(report.totals), forecast: money(report.forecast),
       budget_lines: report.lines.map { line(it) },
-      cost_centres: report.cost_centres.map { |cost_centre, totals| { cost_centre:, **totals(totals, money: method(:native)) } },
+      cost_centres: report.cost_centres.map { |cost_centre, totals| { cost_centre:, **totals(totals, money: method(:native_money)) } },
       units: report.units.map { |unit_id, totals| { unit_id:, **unit(totals) } },
       unpriced: report.unpriced.map(&:to_h) }
   end
@@ -62,14 +65,14 @@ class Operations::TeamPlanning::Budget < Operations::Base
 
   def line(line)
     budget_line = line.line
-    { budget_line_id: budget_line.id, cost_centre: budget_line.cost_centre.presence, currency: budget_line.currency,
+    { budget_line_id: budget_line.id, cost_centre: budget_line.cost_centre.presence, currency: (budget_line.currency if @money),
       approved: { amount: figure(line.approved), head_count: figure(budget_line.head_count) },
-      funded: { native: line.funded.transform_values { decimal(it) }, **heads(line.funded_heads) },
+      funded: { native: line.funded&.transform_values { decimal(it) }, **heads(line.funded_heads) },
       remaining: { amount: figure(line.remaining), head_count: figure(line.remaining_head_count) },
       mismatched_currencies: line.mismatched, over: over(line.over) }
   end
 
-  def totals(totals, money: method(:sum))
+  def totals(totals, money: method(:money))
     { approved: { **money.(totals.approved), head_count: figure(totals.head_count) },
       funded: { **money.(totals.funded), **heads(totals.funded_heads) },
       remaining: { **money.(totals.remaining), head_count: figure(totals.remaining_head_count),
@@ -80,10 +83,13 @@ class Operations::TeamPlanning::Budget < Operations::Base
   def over(over) = over && { money: over.money, heads: over.heads, mismatched_currencies: over.mismatched }
 
   def unit(totals)
-    { funded: { **native(totals.funded), **heads(totals.funded_heads) }, unfunded: { **native(totals.unfunded), **heads(totals.unfunded_heads) } }
+    { funded: { **native_money(totals.funded), **heads(totals.funded_heads) }, unfunded: { **native_money(totals.unfunded), **heads(totals.unfunded_heads) } }
   end
 
-  def native(sum) = { native: sum.native.transform_values { decimal(it) } }
+  # A sum the caller may not see keeps its keys, each null, so its shape never says whether there was money to hide.
+  def money(sum) = sum ? sum(sum) : { native: nil, converted: nil, missing: nil }
+
+  def native_money(sum) = { native: sum&.native&.transform_values { decimal(it) } }
 
   def heads(heads) = { positions: heads.positions, fte: decimal(heads.fte) }
 
