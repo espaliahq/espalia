@@ -79,7 +79,8 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
   should "show a backdated correction learned since the base, with the day it took effect" do
     on(Time.utc(2026, 3, 10, 9)) { @org.change_title(@ada.id, "Staff Engineer", **ESPALIA, effective_on: "2026-02-15") }
 
-    assert_equal [ Date.new(2026, 2, 15) ], drift.changes.map { it.change.effective_on }
+    change = drift.changes.sole
+    assert_equal [ Date.new(2026, 2, 15), { "title" => "Engineer" }, [] ], [ change.change.effective_on, change.change.before, change.outside ]
   end
 
   should "say which of the plan's changes a drift meets, in every scenario that holds one" do
