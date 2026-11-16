@@ -99,6 +99,11 @@ export default class extends BaseController {
     this.narrowQuery.addEventListener("change", this.onNarrowChange)
 
     if (this.fitViewportValue) this.#observeViewport()
+
+    // A page that opens with the overlay up needs the entry Back closes it with.
+    if (initialState === "open" && this.#actsAsScreen() && !this.#onOwnEntry()) {
+      this.#recordInHistory("open", true)
+    }
   }
 
   disconnect() {

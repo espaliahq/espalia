@@ -125,6 +125,18 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     assert wait_until_js { page.evaluate_script("window.backLanded !== false") }, "Back never landed"
   end
 
+  # The matrix may push an entry over the overlay's as its frame loads (#433),
+  # so the overlay can take a second Back to close. Without an overlay entry
+  # of its own, those Backs leave the assessment instead.
+  def back_until_pane_closes
+    2.times do
+      break if page.has_css?("#assessment-activity-pane[data-pane-state='closed']", visible: :all, wait: 0)
+
+      go_back_and_wait_until_landed
+    end
+    assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+  end
+
   # A slow runner reloads the restored matrix frame, and its load pushes an
   # entry over the overlay's (#433). Holding that load keeps the test on the
   # pane's own entry; drop this once #433 is fixed.
@@ -579,6 +591,29 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         go_back_and_wait_until_landed
       end
       assert_current_path assessments_path
+    end
+
+    should "close the overlay on Back when the page opens with it up from the URL" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessments_path
+      assert_text "My Assessments"
+      visit assessment_path(@assignment, activity: "open")
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      back_until_pane_closes
+      assert_back_on_opening_entry
+    end
+
+    should "close the overlay on Back when the page opens with it up from the cookie" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessments_path
+      assert_text "My Assessments"
+      page.driver.browser.manage.add_cookie(name: "assessment_activity_pane_open", value: "open")
+      visit assessment_path(@assignment)
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      back_until_pane_closes
+      assert_back_on_opening_entry
     end
 
     should "take the overlay's history entry back when its close button shuts it" do
