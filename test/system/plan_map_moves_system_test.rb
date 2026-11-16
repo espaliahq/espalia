@@ -89,8 +89,7 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
         visit map_plan_path(@plan_id, scenario: @q1)
         assert_text "Drag a person or a position to another unit"
         wait_for_stimulus "move-form"
-        click_selector_with_js_fallback("button[aria-label='Move Backfill: Software Engineer in Payments']",
-                                        expect_text: "Moving Backfill: Software Engineer in Q1 hires")
+        use_position_menu("Move…", expect_text: "Moving Backfill: Software Engineer in Q1 hires")
         within("#move-position-modal") do
           assert_text "The people in it move with it, and their reporting lines stay as they are."
           select "Growth", from: "To"
@@ -99,6 +98,71 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
 
         within(unit("Growth")) { assert_text "Backfill: Software Engineer" }
         within(unit("Payments")) { assert_no_text "Backfill: Software Engineer" }
+        assert_no_sideways_overflow
+      end
+
+      should "open a position in a unit" do
+        visit_q1
+        wait_for_stimulus "position-form"
+        click_selector_with_js_fallback("button[aria-label='Open a position in Growth']", expect_text: "Opening a position in Growth")
+        within("#open-position-modal") do
+          select "Software Engineer, Engineer II", from: "Role and level"
+          js_fill_in "FTE", with: "0.5"
+          choose "New: planned budget"
+        end
+        click_button_with_js_fallback("Open position", expect_text: "Position opened.")
+
+        within(unit("Growth")) { assert_text "New: Software Engineer" }
+        assert_no_sideways_overflow
+      end
+
+      should "edit a position's cost centre, keeping the rest" do
+        visit_q1
+        wait_for_stimulus "position-form"
+        use_position_menu("Edit…", expect_text: "Editing Backfill: Software Engineer")
+        within("#edit-position-modal") do
+          assert_equal @e2.level_id, find_field("Role and level").value
+          assert_checked_field "Backfill: committed budget"
+          js_fill_in "Cost centre", with: "Ledger"
+        end
+        click_button_with_js_fallback("Save position", expect_text: "Position saved.")
+
+        assert_equal [ "Ledger", "backfill", @payments ], scenario_position.values_at(:cost_centre, :basis, :unit_id)
+        assert_no_sideways_overflow
+      end
+
+      should "keep what was typed when a save is refused" do
+        visit_q1
+        wait_for_stimulus "position-form"
+        use_position_menu("Edit…", expect_text: "Editing Backfill: Software Engineer")
+        within("#edit-position-modal") do
+          js_fill_in "Cost centre", with: "Ledger"
+          page.execute_script("document.getElementById('edit-position-fte').removeAttribute('max')")
+          js_fill_in "FTE", with: "1.5"
+        end
+        click_button_with_js_fallback("Save position", expect_text: "Couldn't save the position")
+
+        within("#edit-position-modal") do
+          assert_selector "[role=alert]", text: "FTE"
+          assert_field "Cost centre", with: "Ledger"
+          assert_field "FTE", with: "1.5"
+        end
+        assert_nil scenario_position[:cost_centre]
+      end
+
+      should "close a position, naming who stays in it" do
+        call(Operations::TeamPlanning::SetAssignment, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @cy.id,
+                                                                placements: [ { position_id: @position, allocation: 1 } ])
+        visit_q1
+        wait_for_stimulus "close-position-form"
+        use_position_menu("Close…", expect_text: "Closing Backfill: Software Engineer in Q1 hires")
+        within("#close-position-modal") do
+          assert_text "Cy Loose stay placed in it until you move them."
+          assert_text "you can undo the close from Changes"
+        end
+        click_button_with_js_fallback("Close position", expect_text: "Position closed.")
+
+        assert_nil scenario_position
         assert_no_sideways_overflow
       end
 
@@ -218,6 +282,8 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
     visit map_plan_path(@plan_id)
     assert_text "Pick or fork a scenario to move people."
     assert_no_button "Move…"
+    assert_no_button "Open a position"
+    assert_no_selector "button[aria-label^='Actions for']"
     assert_no_selector "[draggable]"
   end
 
@@ -238,6 +304,29 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
   end
 
   def position = find("[data-map-position='#{@position}']")
+
+  def visit_q1
+    visit map_plan_path(@plan_id, scenario: @q1)
+    assert_text "Drag a person or a position to another unit"
+  end
+
+  MENU_ITEMS = { "Edit…" => "edit-position-modal", "Move…" => "move-position-modal", "Close…" => "close-position-modal" }.freeze
+
+  # The menu opens fixed at its trigger, so the row has to be on screen, as it is
+  # under a real tap.
+  def use_position_menu(item, expect_text:)
+    row = "[data-map-position='#{@position}']"
+    page.execute_script("document.querySelector(arguments[0]).scrollIntoView({ block: 'center' })", row)
+    open_dropdown(scope: row)
+    click_selector_with_js_fallback("#{row} [role=menuitem][data-modal-target-id='#{MENU_ITEMS.fetch(item)}']", expect_text:)
+  end
+
+  def scenario_position
+    ActsAsTenant.with_tenant(@tenant) do
+      call(Operations::TeamPlanning::ScenarioMap, @planner, plan_id: @plan_id, scenario_id: @q1)[:positions]
+        .find { it[:position_id] == @position }
+    end
+  end
 
   def open_move(name)
     visit map_plan_path(@plan_id, scenario: @q1)
