@@ -53,9 +53,11 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
     Nokogiri::HTML5(response.body).at_css("input[name='signature']")["value"]
   end
 
-  def held_pay?
+  def held_pay? = pay_entries.positive?
+
+  def pay_entries
     ActsAsTenant.with_tenant(@tenant) do
-      call(Operations::TeamPlanning::History, @editor, plan_id: @plan_id, scenario_id: @plan_id)[:entries].any? { it[:facet] == "data:pay" }
+      call(Operations::TeamPlanning::History, @editor, plan_id: @plan_id, scenario_id: @plan_id)[:entries].count { it[:facet] == "data:pay" }
     end
   end
 
@@ -82,13 +84,15 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "91234.56"
       assert_not held_pay?
 
-      upload(intent: "confirm", signature: signature_from_preview)
+      signature = signature_from_preview
+      upload(intent: "confirm", signature:)
       assert_redirected_to map_plan_path(@plan_id)
       assert_equal "Held actual pay for 1 person.", flash[:notice]
-      assert held_pay?
+      assert_equal 1, pay_entries
 
-      upload(intent: "confirm", signature: signature_from_preview)
+      upload(intent: "confirm", signature:)
       assert_equal "Nothing to change: the plan already holds this pay.", flash[:notice]
+      assert_equal 1, pay_entries
     end
 
     should "list each bad line by number and reason, with no signature to confirm" do
