@@ -513,15 +513,18 @@ class TeamPlanning::Attention
     end
   end
 
+  # Whether a line's period meets any of the days the seat is held, as {TeamPlanning::Budget} funds it
+  def covers?(budget_line, seat) = budget_line && budget_line.starts_on <= seat.held.end && budget_line.ends_on >= seat.held.begin
+
   # @return [Array<(String, Array)>] each disagreement with the changes that could explain it
   def mismatches_of(seat, funded, lines)
     position_id = funded&.position&.id
     found = [ ([ "the cost centre entries give #{seat.rule_cost_centre}", [] ] if seat.rule_cost_centre) ]
     own = funded&.cost_centre&.cost_centre
     found << [ "their position is in #{own}", [ [ position_id, POSITION ] ] ] if own.present? && own != seat.cost_centre
-    held = funded ? funded.draws.select(&:held) : []
+    held = funded ? funded.draws.select { it.held && covers?(lines[it.budget_line_id], seat) } : []
     held.each do |draw|
-      third = lines[draw.budget_line_id]&.cost_centre.presence
+      third = lines[draw.budget_line_id].cost_centre.presence
       next if third.nil? || [ seat.cost_centre, own ].include?(third)
 
       found << [ "their position draws on a budget line for #{third}", [ [ position_id, FUNDING ], [ draw.budget_line_id, BUDGET_LINE ] ] ]

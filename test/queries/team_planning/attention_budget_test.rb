@@ -255,6 +255,17 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
                      "the funding that draws on Growth explains it"
     end
 
+    should "leave out a line their position draws on that covers none of the days they hold the seat" do
+      growth = line(cost_centre: "Growth", starts_on: "2026-07-01", ends_on: "2026-12-31")
+      position = open_position(cost_centre: nil)
+      seat(@bo, position)
+      operation(Operations::TeamPlanning::SetPositionFunding, position_id: position, draws: [ { budget_line_id: growth } ])
+      assert_equal [ [ @bo.id, "Costed in Platform, while their position draws on a budget line for Growth" ] ], reasons(:cost_centre_mismatches)
+
+      operation(Operations::TeamPlanning::SetDeparture, person_id: @bo.id, leaves_on: "2026-03-31")
+      assert_empty reasons(:cost_centre_mismatches), "Bo leaves in March, before the Growth line starts in July"
+    end
+
     should "name the cost centre of the seat that disagrees when a person is costed in two" do
       cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" })
       labelled = open_position(cost_centre: "Platform")
