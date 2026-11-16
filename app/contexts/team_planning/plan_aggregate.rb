@@ -431,6 +431,26 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
+  # What each change in effect would need to move across alone: the staying
+  # changes that create something it refers to, as {#split_scenario} would
+  # name them were it the only one chosen.
+  #
+  # @param scenario_id [String] a live scenario
+  # @param standing_ids [Set<String>] as {#split_scenario} takes them
+  # @return [Hash{TeamPlanning::Events::Change => Array<TeamPlanning::SplitBlocked::Block>}] the latest change per
+  #   subject and facet, oldest first
+  # @raise [TeamPlanning::Error] if the plan is gone, or the scenario unknown or the root
+  def split_needs(scenario_id, standing_ids: Set.new)
+    ensure_open!
+    raise TeamPlanning::Error, "The baseline can't be split" unless @scenarios[live_scenario!(scenario_id)]
+
+    log = @logs.fetch(scenario_id, [])
+    latest_by_key(changes_in(scenario_id)).to_h do |change|
+      moved, kept = log.partition { key_of(it) == change.key }
+      [ change, split_blocks(moved.grep(TeamPlanning::Events::Change), kept.grep(TeamPlanning::Events::Change), standing_ids.to_set) ]
+    end
+  end
+
   # @param scenario_id [String]
   # @return [Boolean] whether it is half of a split step: it sits `on` another, or another sits on it
   def split?(scenario_id) = @scenarios[scenario_id]&.relation == "on" || children_of(scenario_id).any? { it.relation == "on" }
@@ -973,9 +993,14 @@ class TeamPlanning::PlanAggregate
   # earlier one back. Every staying change counts too, cleared or undone,
   # since an undo in the rest can bring its creation back.
   def ensure_stands_alone!(moving, staying, standing_ids)
+    blocks = split_blocks(moving, staying, standing_ids)
+    raise TeamPlanning::SplitBlocked, blocks if blocks.any?
+  end
+
+  def split_blocks(moving, staying, standing_ids)
     created = moving.select { it.class.creates_subject? }.to_set { it.data[:subject_id] }
     creators = staying.select { it.class.creates_subject? }.group_by { it.data[:subject_id] }
-    blocks = moving.flat_map do |change|
+    moving.flat_map do |change|
       needs = change.class.refers_to(change.data) + (change.class.creates_subject? ? [] : [ change.data[:subject_id] ])
       needs.uniq.reject { standing_ids.include?(it) || created.include?(it) }.flat_map do |id|
         creators.fetch(id, []).map do |creator|
@@ -983,7 +1008,6 @@ class TeamPlanning::PlanAggregate
         end
       end
     end
-    raise TeamPlanning::SplitBlocked, blocks if blocks.any?
   end
 
   def log_entry!(scenario_id, event_id)

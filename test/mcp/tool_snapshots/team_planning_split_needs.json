@@ -1,0 +1,26 @@
+{
+  "name": "team_planning_split_needs",
+  "description": "Before team_planning_split_scenario, list what each change in a scenario of a Team Planning plan the caller is in would need to move into the agreed part. There is one entry per subject and facet the scenario itself changes, oldest first, with the event_id to pass to the split; moving it takes every earlier change to the same subject and facet along. `needs` lists the changes that create something it refers to and would stay, by subject_id, facet and the event_id to move across too; a need with a null event_id has no change in effect, so the entry can't move. A choice in which every entry's needs are chosen as well splits. No end state is shown. Subjects are named by id, and `names` maps those the Org Graph holds to a name, as team_planning_status does; a forgotten person reads as \"Former member\". Refused for the baseline (scenario_id equal to the plan_id) and, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
