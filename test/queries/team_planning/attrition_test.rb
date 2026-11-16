@@ -60,9 +60,9 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
     as_tenant { operation.call(context:, params: { plan_id: @plan_id, **params }) }
   end
 
-  def rule(subject_id, rule, value)
+  def rule(subject_id, rule, value, scenario_id: @plan_id)
     as_tenant do
-      handler.set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id: @plan_id, subject_id:, end_state: { rule:, value: })
+      handler.set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id:, subject_id:, end_state: { rule:, value: })
     end
   end
 
@@ -84,6 +84,24 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
   def add_up(parts) = [ parts.actual, parts.planned, parts.forecast ].reduce { TeamPlanning::Cost.plus(_1, _2) }
 
   def decimal(value) = BigDecimal(value, 20)
+
+  def step(parent_id, name, ends_on)
+    operation(Operations::TeamPlanning::ForkScenario, parent_id:, relation: "then", name:, ends_on:)[:scenario_id]
+  end
+
+  def cost_in(scenario_id) = as_tenant { TeamPlanning::Cost.new(context:, plan:, scenario_id:).call }
+
+  def step_row(scenario_id) = cost_in(scenario_id).forecast.rows.find { it.unit_id == @platform }
+
+  def capacities_in(scenario_id)
+    as_tenant { TeamPlanning::Capacity.split(context:, plan:, scenario_id:) }.forecast
+                                                                            .to_h { [ [ it.unit_id, it.cost_centre ], it.capacity.transform_values { decimal(it) } ] }
+  end
+
+  def assert_vacancy(row, headcount:, empty_days:)
+    assert_equal decimal(headcount), decimal(row.headcount)
+    assert_equal({ "EUR" => -100_000 * Rational(empty_days) / 365 }, row.cost)
+  end
 
   context "with a plan-wide rate, and a nearer one for Platform" do
     setup do
@@ -209,6 +227,82 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
       rule(@plan_id, "time_to_hire", { days: "0" })
 
       assert_empty cost.forecast.rows
+    end
+  end
+
+  # Three 90-day steps from 1 January. Platform loses 0.73 of Dee's FTE a
+  # year, 0.002 FTE a day, priced at the E5 midpoint of 100,000 EUR.
+  context "across back-to-back steps" do
+    setup do
+      operation(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: @year, ends_on: "2026-03-31")
+      @first = @year
+      @second = step(@first, "Q2", "2026-06-29")
+      rule(@platform, "attrition", { yearly_rate: "0.73" })
+    end
+
+    should "read step 1 only while a seat its leavers empty can still be waiting in step 2" do
+      defaults = TeamPlanning::RuleKinds.defaults.merge("time_to_hire" => { "days" => "0" })
+      reaching = -> { as_tenant { TeamPlanning::Forecast.reaching(TeamPlanning::Repository.new.load_plan(@plan_id), @second, defaults:) } }
+
+      assert_empty reaching.(), "no time to hire, so every seat is backfilled the day it empties"
+      rule(@platform, "time_to_hire", { days: "1" })
+      assert_equal [ @first ], reaching.()
+    end
+
+    should "take away step 1's seats still empty in step 2, beside step 2's own" do
+      rule(@platform, "time_to_hire", { days: "180" })
+
+      # 0.002 × 90² / 2 = 8.1 FTE-days in step 1, as before.
+      assert_vacancy step_row(@first), headcount: "-0.18", empty_days: "8.1"
+      # Step 2's own 8.1, and every seat step 1 emptied stays empty all 90 days:
+      # 0.002 × 90 × 90 = 16.2 more. Without the carry it took away 8.1 alone.
+      assert_vacancy step_row(@second), headcount: "-0.36", empty_days: "24.3"
+      assert_equal({ [ @platform, nil ] => { "per_fte" => decimal("-0.27") } }, capacities_in(@second))
+    end
+
+    should "carry only the seats still empty, and none past the time to hire" do
+      rule(@platform, "time_to_hire", { days: "30" })
+      third = step(@second, "Q3", "2026-09-27")
+
+      # Each step's own 0.002 × (30 × 90 − 30² / 2) = 4.5, and 0.002 × 30² / 2 =
+      # 0.9 from the step before; nothing from two steps back.
+      assert_vacancy step_row(@first), headcount: "-0.06", empty_days: "4.5"
+      [ @second, third ].each { assert_vacancy step_row(it), headcount: "-0.06", empty_days: "5.4" }
+    end
+
+    should "carry step 1's leavers into a step 2 that sets no rate of its own" do
+      rule(@platform, "time_to_hire", { days: "180" })
+      rule(@platform, "attrition", { yearly_rate: "0" }, scenario_id: @second)
+
+      assert_vacancy step_row(@second), headcount: "-0.18", empty_days: "16.2"
+    end
+
+    should "keep actual, planned and forecast adding up to the total in step 2, per unit and overall, and price every scenario alike" do
+      rule(@plan_id, "attrition", { yearly_rate: "0.1" })
+      rule(@platform, "time_to_hire", { days: "180" })
+      report = cost_in(@second)
+      [ [ :total, nil ], [ :units, @engineering ], [ :units, @platform ], [ :units_with_below, @engineering ],
+        [ :cost_centres, "CC-1" ], [ :cost_centres, nil ] ].each do |scope, key|
+        parts = report.parts(scope, key)
+        assert_equal parts.total.native, add_up(parts).native, "#{scope} #{key}"
+      end
+
+      split = as_tenant { TeamPlanning::Capacity.split(context:, plan:, scenario_id: @second) }
+      [ nil, @engineering, @platform ].each do |unit_id|
+        parts = split.parts(unit_id)
+        assert_equal parts.total, TeamPlanning::Capacity.add([ parts.actual, parts.planned, parts.forecast ]), unit_id.inspect
+      end
+
+      every = as_tenant { TeamPlanning::Cost.every_scenario(context:, plan:) }
+      [ @first, @second ].each { assert_equal cost_in(it).forecast.rows, every.fetch(it).forecast.rows }
+    end
+
+    should "list the carried figures in the forecast tool, cost and capacity together" do
+      rule(@platform, "time_to_hire", { days: "180" })
+      row = operation(Operations::TeamPlanning::Forecast, scenario_id: @second)[:rows].find { it[:unit_id] == @platform }
+
+      assert_equal [ "-0.36", { "per_fte" => "-0.27" } ], row.values_at(:headcount, :capacity)
+      assert_equal decimal(-100_000 * Rational(243, 10) / 365).round(10), decimal(row[:cost].fetch("EUR")).round(10)
     end
   end
 
