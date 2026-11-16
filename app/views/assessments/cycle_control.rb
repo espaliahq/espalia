@@ -2,9 +2,8 @@
 
 # The header's cycle switcher: every cycle the person joined on this
 # framework, newest first. The open cycle is the page as it always was; a
-# past one reloads the same page read-only with `?cycle_id=`
-# (https://github.com/mr-yum/growth-os/issues/669). Every entry is a plain
-# link, so a past cycle survives refresh, Back and sharing.
+# past one reloads the same page read-only with `?cycle_id=`.
+# Every entry is a plain link, so a past cycle survives refresh, Back and sharing.
 #
 # Shown only when there is somewhere else to go: a cycle other than the one
 # read, which includes a person whose only cycle has closed.

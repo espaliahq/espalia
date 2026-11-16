@@ -57,8 +57,8 @@ When responding in the chat, writing comments, docs or user facing copy, please 
 - Rewrite. Then rewrite again. First drafts are scaffolding. The real writing happens in the cut.
 - **Link every GitHub issue and PR you mention.** In chat, docs and anything else read
   outside GitHub, `#534` on its own makes the reader go and look it up; write
-  [#534](https://github.com/mr-yum/growth-os/issues/534) or
-  [PR #523](https://github.com/mr-yum/growth-os/pull/523) instead. Only GitHub's own
+  [#534](https://github.com/espaliahq/espalia/issues/534) or
+  [PR #523](https://github.com/espaliahq/espalia/pull/523) instead. Only GitHub's own
   UI (commit messages, issue and PR bodies) turns a bare number into a link, so a bare number
   is fine there and nowhere else. (Asked for 2026-09-15.)
 

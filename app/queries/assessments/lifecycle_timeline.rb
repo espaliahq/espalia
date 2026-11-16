@@ -13,7 +13,7 @@
 #
 # A cycle's home role is the one the aggregate holds (`@home_role_id`): the
 # role held at the join, moved by a transfer until any alignment starts in
-# the cycle (https://github.com/mr-yum/growth-os/issues/687). So the stream
+# the cycle. So the stream
 # is replayed: assignment and role changes track the role, a join records it,
 # and a transfer moves it while the cycle is unpinned. Historical events
 # lack fields added since (ADR-22's `role_id`, ADR-18's actors): a missing

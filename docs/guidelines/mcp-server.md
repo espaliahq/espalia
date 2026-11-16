@@ -176,13 +176,12 @@ next level and needs the meeting threshold plus nothing held there (no
 blocked capability, none unrated). The tool descriptions say
 "level-independent scale" for both reasons.
 
-**`blocked` and `unrated` are separate lists.** Only a rating can block
-([#485](https://github.com/mr-yum/growth-os/issues/485)): a capability nobody
-has rated is never in `blocked`. It still holds the state, so `scoring.unrated`
+**`blocked` and `unrated` are separate lists.** Only a rating can block:
+a capability nobody has rated is never in `blocked`. It still holds the state, so `scoring.unrated`
 names it, and an agent explaining a Progressing state reads both.
 
 A capability's score also carries `weight` and `required` — the two binding
-facts its card wears as chips ([#431](https://github.com/mr-yum/growth-os/issues/431)) — so an agent can explain a score the
+facts its card wears as chips — so an agent can explain a score the
 person can see the reason for. `required` is the resolved tolerance
 (binding, then category, then framework default) being 0, exactly what the
 card shows; the raw per-binding tolerance stays on the framework payload.
@@ -224,8 +223,7 @@ and the event stream holds the rest.
 
 **A past cycle reads through `cycle_id`.** `assessments_get` and
 `assessments_capability_get` take a `cycle_id` from `past_cycles` and read
-that cycle as its read-only web page does
-([#669](https://github.com/mr-yum/growth-os/issues/669)): its ratings, scored
+that cycle as its read-only web page does: its ratings, scored
 at its own enrollment snapshot's role and level, with `scoring.lens` carrying
 `cycle_id` and `past_cycle: true`. `Assessments::Lens.resolve(cycle_id:)` does
 the work, so the builder, the disclosure and the viewer's perspective all read
@@ -771,7 +769,7 @@ haven't noticed?
 The serializer sorted each category's capabilities by name, a choice made
 before capabilities could be reordered. Once a category was reordered the web
 and the MCP disagreed, and an agent asked to "follow Espalia's order" had no
-way to find it ([#492](https://github.com/mr-yum/growth-os/issues/492)). Order
+way to find it. Order
 is part of the content: a reader compares the two side by side. Keep the read
 model's own order (`CapabilityCategory#capabilities` is `[ordinal, created_at,
 id]`, categories the same) rather than re-sorting. Role families don't match

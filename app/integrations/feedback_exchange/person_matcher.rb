@@ -6,7 +6,7 @@
 # is nil, and the importer skips the record with a reason.
 #
 # @example
-#   FeedbackExchange::PersonMatcher.new(tenant).match({ "email" => "priya@meandu.com", "external_ids" => { "hibob" => "3141" } })
+#   FeedbackExchange::PersonMatcher.new(tenant).match({ "email" => "priya@example.com", "external_ids" => { "hibob" => "3141" } })
 class FeedbackExchange::PersonMatcher
   # @param tenant [Tenant]
   def initialize(tenant)
