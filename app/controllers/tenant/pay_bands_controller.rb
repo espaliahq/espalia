@@ -58,25 +58,32 @@ class Tenant::PayBandsController < ApplicationController
   # order, from a drag.
   def reorder
     authorize_pay_bands
-    ids = new_order or return redirect_to(tenant_pay_bands_path, alert: "That band has gone. Here is the list as it stands.",
-                                                                 status: :see_other)
+    ids = new_order or return list_changed
     bands = Operations::Tenants::ReorderPayBands.call(context: pundit_user, params: { pay_band_ids: ids })[:pay_bands]
     redirect_to tenant_pay_bands_path, notice: reorder_notice(bands), status: :see_other
-  rescue Operations::Base::ParameterError => e
-    redirect_to tenant_pay_bands_path, alert: "The bands could not be moved: #{e.message}.", status: :see_other
+  rescue Operations::Base::ParameterError
+    list_changed
   end
 
   private
 
-  # @return [Array<String>, nil] every band's id in the new order; nil when the band to move is gone
+  # @return [Array<String>, nil] every band's id in the new order; nil when the band to move is gone or can't move that way
   def new_order
     return Array(params[:pay_band_ids]).map(&:to_s) if params.key?(:pay_band_ids)
 
     ids = PayBand.order(:position).pluck(:id)
     index = ids.index(params[:pay_band_id]) or return
     other = params[:direction] == "up" ? index - 1 : index + 1
-    ids[index], ids[other] = ids[other], ids[index] if other.between?(0, ids.size - 1)
+    return unless other.between?(0, ids.size - 1)
+
+    ids[index], ids[other] = ids[other], ids[index]
     ids
+  end
+
+  # The page was out of date: a band was added, removed or moved since it loaded.
+  def list_changed
+    redirect_to tenant_pay_bands_path, alert: "The list changed since you opened it, so nothing moved. Here it is as it stands.",
+                                       status: :see_other
   end
 
   def reorder_notice(bands)

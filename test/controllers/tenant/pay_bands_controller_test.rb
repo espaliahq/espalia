@@ -162,15 +162,19 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       assert_equal %w[Beta Gamma Alpha], positions
     end
 
-    should "refuse an order that leaves a band out, and a move of a band that has gone" do
+    should "move nothing from a page the list has changed under" do
       first = stored_band(location: "Alpha")
-      stored_band(location: "Beta")
+      last = stored_band(location: "Beta")
+      stale = "The list changed since you opened it, so nothing moved. Here it is as it stands."
 
       patch reorder_tenant_pay_bands_path, params: { pay_band_ids: [ first.id ] }
-      assert_match "The bands could not be moved: List every pay band once", flash[:alert]
+      assert_equal stale, flash[:alert]
 
       patch reorder_tenant_pay_bands_path, params: { pay_band_id: SecureRandom.uuid_v7, direction: "down" }
-      assert_equal "That band has gone. Here is the list as it stands.", flash[:alert]
+      assert_equal stale, flash[:alert]
+
+      patch reorder_tenant_pay_bands_path, params: { pay_band_id: last.id, direction: "down" }
+      assert_equal stale, flash[:alert]
       assert_equal %w[Alpha Beta], positions
     end
 
