@@ -178,6 +178,14 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
     end
   end
 
+  should "give an archived plan's rule as its archive copied the tenant's default, and say so" do
+    as_tenant(&changes.fetch("the attrition rule"))
+    read = operation(Operations::TeamPlanning::Rule, rule: "attrition")
+
+    assert_equal({ "yearly_rate" => "0.2" }, read[:value])
+    assert_equal "2025-12-15", read[:priced_on]
+  end
+
   should "read a frozen copy only until the plan is restored, and take a fresh one when it is archived again" do
     as_tenant(&changes.fetch("a band's figures"))
     assert_equal 100_000, e5_midpoint

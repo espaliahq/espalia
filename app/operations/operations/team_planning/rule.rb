@@ -10,7 +10,8 @@ class Operations::TeamPlanning::Rule < Operations::Base
               "tenants_planning_rules, as the scenario resolves it: for the whole plan or, with unit_id, at that " \
               "unit, where the unit and each unit above it beat the plan-wide value, which beats the tenant's " \
               "default, which beats the rule's own. A unit gone from the scenario takes its rules with it, so it " \
-              "reads the plan-wide value; an id the scenario never held is refused. team_planning_overrides lists which scenario set it. Refused, as an unknown plan, unless the caller is a member."
+              "reads the plan-wide value; an id the scenario never held is refused. team_planning_overrides lists which scenario set it. " \
+              "An archived plan reads the tenant's defaults as its archive copied them. #{PRICED_AS_ARCHIVED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -19,7 +20,7 @@ class Operations::TeamPlanning::Rule < Operations::Base
   parameter :unit_id, String, allow_blank: false, schema: { description: "Omit for the plan-wide value." }
   parameter :rule, String, required: true, allow_blank: false
 
-  # @return [Hash] `{ plan_id, scenario_id, unit_id, rule, value }`
+  # @return [Hash] `{ plan_id, scenario_id, unit_id, rule, value }`, with `archived_on`, `priced_on` and `note` for an archived plan
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
@@ -32,6 +33,6 @@ class Operations::TeamPlanning::Rule < Operations::Base
       raise Operations::Base::ParameterError, "There is no such unit in this scenario"
     end
 
-    { plan_id: plan.id, scenario_id:, unit_id:, rule:, value: map.rule(rule, unit_id: live ? unit_id : nil) }
+    { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, unit_id:, rule:, value: map.rule(rule, unit_id: live ? unit_id : nil) }
   end
 end
