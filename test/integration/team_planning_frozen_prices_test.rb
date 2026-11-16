@@ -55,6 +55,7 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
       rule("capacity_model", { families: {}, roles: { @engineer.role_id => { model: "per_fte" } } })
       rule("attrition", { yearly_rate: "0.2" })
       rule("time_to_hire", { days: "30" })
+      rule("cost_centre", { entries: [ { cost_centre: "Platform" } ] })
 
       @planner = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
       @plan_id = SecureRandom.uuid_v7
@@ -65,6 +66,8 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
       operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: level.level_id, unit_id: @engineering, fte: 1,
                                                        basis: "new", cost_centre: "Platform")
     end
+    operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @engineering, fte: 1, basis: "new")
+    @open = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, parent_id: @year, relation: "then", name: "After")[:scenario_id]
     operation(Operations::TeamPlanning::ArchivePlan, scenario_id: nil)
   end
 
@@ -79,10 +82,8 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
   def rule(name, value) = PlanningRuleDefault.find_or_initialize_by(rule: name).update!(value: value.deep_stringify_keys)
 
   def reads
-    READS.to_h do |name|
-      scenario_id = name == "ScenarioCosts" ? nil : @year
-      [ name, operation(Operations::TeamPlanning.const_get(name), scenario_id:).except(:archived_on, :note, :priced_on) ]
-    end
+    read = ->(name, scenario_id) { operation(Operations::TeamPlanning.const_get(name), scenario_id:).except(:archived_on, :note, :priced_on) }
+    READS.to_h { [ it, read.(it, it == "ScenarioCosts" ? nil : @year) ] }.merge("Forecast with no end date" => read.("Forecast", @open))
   end
 
   def plan = as_tenant { TeamPlanningPlan.find(@plan_id) }
@@ -103,6 +104,8 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
       "the attrition rule" => -> { rule("attrition", { yearly_rate: "0.9" }) },
       "the time to hire rule" => -> { rule("time_to_hire", { days: "200" }) },
       "the budget basis rule" => -> { rule("budget_basis", { basis: "base_only" }) },
+      "the cost-centre entries" => -> { rule("cost_centre", { entries: [ { cost_centre: "Elsewhere" } ] }) },
+      "the open step horizon rule" => -> { rule("open_step_horizon", { months: "6" }) },
       "the budget strictness rule" => -> { rule("budget_strictness", TeamPlanning::RuleKinds::BudgetStrictness::PRESETS.fetch("envelope")) },
       "a removed band" => -> { PayBand.find_by(level_id: @e6.level_id).destroy! },
       "the band order" => -> { PayBand.reorder!(PayBand.order(:position).pluck(:id).reverse) } }
