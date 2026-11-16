@@ -15,18 +15,20 @@ module Views::Plans::ScenarioTab
 
   private
 
-  # A pill per scenario on a wide screen; a phone picks from a list.
-  #
-  # @param path [Symbol] the tab's route helper, such as `:changes_plan_path`
-  # @param select_id [String] the phone list's id, unique on the page
   # An archived plan's checks come back empty and unchecked, so the tab says
   # so rather than read as nothing wrong.
+  #
+  # @param report [Hash] the drift or attention read, with its `note`
   def unchecked(report)
     render Components::Kit::EmptyState.new(title: "Not checked while this plan is archived", size: :panel) do
       p(class: "text-sm text-muted") { report[:note] }
     end
   end
 
+  # A pill per scenario on a wide screen; a phone picks from a list.
+  #
+  # @param path [Symbol] the tab's route helper, such as `:changes_plan_path`
+  # @param select_id [String] the phone list's id, unique on the page
   def scenario_picker(path:, select_id:)
     div(class: "mt-3 flex flex-wrap items-center gap-2") do
       nav(aria: { label: "Scenario" }, class: "hidden sm:flex flex-wrap items-center gap-2 text-sm") do
