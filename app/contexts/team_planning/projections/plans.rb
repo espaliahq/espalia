@@ -44,7 +44,7 @@ class TeamPlanning::Projections::Plans
         TeamPlanningPlan.where(id: data[:plan_id]).update_all(scope_unit_ids: data[:unit_ids].presence, updated_at: event.timestamp)
       when TeamPlanning::Events::PlanArchived
         TeamPlanningPlan.where(id: data[:plan_id])
-          .update_all(archived_on: event.timestamp.utc.to_date, archived_by_id: data[:archived_by_id], updated_at: event.timestamp)
+          .update_all(archived_on: archived_on(event), archived_by_id: data[:archived_by_id], updated_at: event.timestamp)
       when TeamPlanning::Events::PlanRestored
         TeamPlanningPlan.where(id: data[:plan_id]).update_all(archived_on: nil, archived_by_id: nil, updated_at: event.timestamp)
       when TeamPlanning::Events::PlanDeleted
@@ -52,4 +52,9 @@ class TeamPlanning::Projections::Plans
       end
     end
   end
+
+  private
+
+  # Read from the event, never the clock, so a replay gives the same day.
+  def archived_on(event) = event.data[:archived_on]&.then { Date.iso8601(it) } || event.timestamp.utc.to_date
 end

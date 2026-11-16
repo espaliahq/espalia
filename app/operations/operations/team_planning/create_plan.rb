@@ -34,5 +34,5 @@ class Operations::TeamPlanning::CreatePlan < Operations::Base
 
   private
 
-  def base_on = (parse_date(:base_on) || Date.current).iso8601
+  def base_on = (parse_date(:base_on) || Tenant.today).iso8601
 end

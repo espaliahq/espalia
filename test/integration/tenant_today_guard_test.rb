@@ -19,10 +19,8 @@ class TenantTodayGuardTest < ActiveSupport::TestCase
     app/contexts/org_graph/forgetting.rb
     app/contexts/org_graph/people_cutover.rb
     app/contexts/org_graph/person_aggregate.rb
-    app/contexts/team_planning/command_handler.rb
     app/controllers/concerns/org_graph_drawer.rb
     app/controllers/concerns/org_unit_drawer.rb
-    app/controllers/plans_controller.rb
     app/controllers/tenant/org_people_controller.rb
     app/controllers/tenant/org_units_controller.rb
     app/integrations/hris/hibob/adapter.rb
@@ -35,18 +33,10 @@ class TenantTodayGuardTest < ActiveSupport::TestCase
     app/operations/operations/org_graph/set_fact_provider.rb
     app/operations/operations/org_graph/set_level_provider.rb
     app/operations/operations/org_graph/unit_write.rb
-    app/operations/operations/team_planning/create_plan.rb
-    app/operations/operations/team_planning/rebase_plan.rb
     app/queries/org_graph/date_comparison.rb
     app/queries/org_graph/person_profile.rb
-    app/queries/team_planning/drift.rb
-    app/queries/team_planning/rebase_preview.rb
-    app/queries/team_planning/resolution.rb
-    app/queries/team_planning/status.rb
     app/read_models/org_leaver.rb
     app/views/evidence/conversation_chrome.rb
-    app/views/plans/changes_tab.rb
-    app/views/plans/index_view.rb
     app/views/tenant/org_graph/activity_sidebar.rb
     app/views/tenant/org_graph/comparison_bar.rb
     app/views/tenant/org_graph/unit_step.rb

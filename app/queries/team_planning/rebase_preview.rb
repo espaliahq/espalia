@@ -26,9 +26,9 @@ class TeamPlanning::RebasePreview
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
-  # @param today [Date] as a UTC date
+  # @param today [Date] the tenant's today
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, today: Time.now.utc.to_date, repository: TeamPlanning::Repository.new)
+  def initialize(context:, plan:, today: Tenant.today, repository: TeamPlanning::Repository.new)
     @context = context
     @plan = plan
     @today = today

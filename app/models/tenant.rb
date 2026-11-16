@@ -212,6 +212,12 @@ class Tenant < ApplicationRecord
   # @return [Date]
   def today(at: Time.current) = at.in_time_zone(time_zone).to_date
 
+  # The current tenant's today, for code that runs inside a tenant.
+  #
+  # @return [Date]
+  # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
+  def self.today = (ActsAsTenant.current_tenant || raise(ActsAsTenant::Errors::NoTenantSet)).today
+
   # The feedback exchange's signing secrets, wrapped so no accessor can print a value.
   #
   # @return [FeedbackExchangeSecrets]

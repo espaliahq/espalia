@@ -334,7 +334,7 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
 
     should "be archived and restored by an editor, and by nobody else" do
       event = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).of_type(TeamPlanning::Events::PlanArchived).last
-      assert_equal({ plan_id: @plan_id, archived_by_id: @editor.id }, event.data)
+      assert_equal({ plan_id: @plan_id, archived_by_id: @editor.id, archived_on: @tenant.today.iso8601 }, event.data)
 
       assert_equal "No such plan", assert_raises(TeamPlanning::Error) { handler(@colleague_context).restore_plan(@plan_id) }.message
       assert_not handler(@owner).restore_plan(@plan_id).archived?

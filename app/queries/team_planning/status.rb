@@ -68,9 +68,9 @@ class TeamPlanning::Status
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] the plan's id for the root
-  # @param today [Date] as a UTC date
+  # @param today [Date] the tenant's today
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, scenario_id:, today: Time.now.utc.to_date, repository: TeamPlanning::Repository.new)
+  def initialize(context:, plan:, scenario_id:, today: Tenant.today, repository: TeamPlanning::Repository.new)
     @baseline = TeamPlanning::Baseline.new(context:, plan:)
     @context = context
     @plan = plan

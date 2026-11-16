@@ -259,22 +259,22 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
                           ends_on: "2027-03-31", forked_by_id: @creator_id)
       @plan.set_change(TeamPlanning::Events::LevelSet, scenario_id: @scenario_id, subject_id: @other_id,
                        set_by_id: @creator_id, end_state: { level: "E5" })
-      @plan.archive(archived_by_id: @creator_id)
+      @plan.archive(archived_by_id: @creator_id, archived_on: Date.new(2026, 11, 16))
     end
 
     should "record who archived it, and refuse a second archive" do
-      assert_equal({ plan_id: @plan_id, archived_by_id: @creator_id }, @plan.unpublished_events.to_a.last.data)
+      assert_equal({ plan_id: @plan_id, archived_by_id: @creator_id, archived_on: "2026-11-16" }, @plan.unpublished_events.to_a.last.data)
       assert @plan.archived?
-      assert_equal "This plan is already archived", assert_raises(TeamPlanning::Error) { @plan.archive(archived_by_id: @creator_id) }.message
+      assert_equal "This plan is already archived", assert_raises(TeamPlanning::Error) { @plan.archive(archived_by_id: @creator_id, archived_on: Date.new(2026, 11, 16)) }.message
     end
 
     should "copy the prices only for an archive it records" do
       asked = 0
-      assert_raises(TeamPlanning::Error) { @plan.archive(archived_by_id: @creator_id, prices: -> { asked += 1 }) }
+      assert_raises(TeamPlanning::Error) { @plan.archive(archived_by_id: @creator_id, archived_on: Date.new(2026, 11, 16), prices: -> { asked += 1 }) }
       assert_equal 0, asked
 
       @plan.restore(restored_by_id: @creator_id)
-      @plan.archive(archived_by_id: @creator_id, prices: -> { { "pay_bands" => [] } })
+      @plan.archive(archived_by_id: @creator_id, archived_on: Date.new(2026, 11, 16), prices: -> { { "pay_bands" => [] } })
       assert_equal [ TeamPlanning::Events::PlanArchived, TeamPlanning::Events::PlanPricesFrozen ], @plan.unpublished_events.to_a.last(2).map(&:class)
     end
 
@@ -308,7 +308,7 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
       viewer = SecureRandom.uuid_v7
       @plan.restore(restored_by_id: @creator_id)
       @plan.add_member(viewer, role: "viewer", added_by_id: @creator_id)
-      @plan.archive(archived_by_id: @creator_id)
+      @plan.archive(archived_by_id: @creator_id, archived_on: Date.new(2026, 11, 16))
       @plan.remove_member(viewer, removed_by_id: @creator_id, departed: true)
       @plan.delete(deleted_by_id: @creator_id)
 

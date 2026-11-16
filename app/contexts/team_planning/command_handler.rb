@@ -103,7 +103,7 @@ class TeamPlanning::CommandHandler
   def archive_plan(plan_id)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.archive(archived_by_id: actor_id!, prices: method(:frozen_prices))
+      plan.archive(archived_by_id: actor_id!, archived_on: Tenant.today, prices: method(:frozen_prices))
     end
   end
 
@@ -426,11 +426,11 @@ class TeamPlanning::CommandHandler
   # @param facet [String]
   # @param choice [String] "plan" or "reality"
   # @param note [String, nil] why; for keeping the plan, blank keeps the change's own
-  # @param today [Date] as a UTC date
+  # @param today [Date] the tenant's today
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to settle
   # @see TeamPlanning::PlanAggregate#settle_conflict
-  def settle_conflict(plan_id, scenario_id:, subject_id:, facet:, choice:, note: nil, today: Time.now.utc.to_date)
+  def settle_conflict(plan_id, scenario_id:, subject_id:, facet:, choice:, note: nil, today: Tenant.today)
     key = [ subject_id, facet.to_s ]
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)

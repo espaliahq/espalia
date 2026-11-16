@@ -518,7 +518,7 @@ It also checks each person (4.6):
   only in a gone unit or a closed position already has that item, so they are not also placed
   nowhere.
 - **Since left.** Someone the scenario still has, with no planned departure, whom the Org Graph
-  has had leave by today, a UTC day. They are placed but left, or, with no place, left. Either
+  has had leave by the tenant's today. They are placed but left, or, with no place, left. Either
   way that is their only allocation item. `Attention.for` reads them from
   `org_leavers`, since the base map can't know.
 - **Manager.** A contributor with no manager, though not the head of the tree, who owns a unit
@@ -1270,7 +1270,7 @@ day before its base date has passed. Until then its base moves as edits land.
 
 ### Updating to today
 
-`team_planning_rebase_plan` moves a plan's base to today, a UTC day, and nothing else.
+`team_planning_rebase_plan` moves a plan's base to the tenant's today and nothing else.
 Every scenario keeps its changes and resolves them over the Org Graph as of the new base,
 so someone who joined since the old base comes onto the map, and someone who left drops
 off it, with "has left" against any change that still places them. The first step after

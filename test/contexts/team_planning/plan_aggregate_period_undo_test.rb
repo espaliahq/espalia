@@ -272,7 +272,7 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
   context "an archived plan" do
     should "refuse an undo and a redo of a date edit" do
       edit = set(@q1, ends_on: "2027-02-28")
-      @plan.archive(archived_by_id: @editor_id)
+      @plan.archive(archived_by_id: @editor_id, archived_on: Date.new(2026, 11, 16))
 
       assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal { undo_edit(@q1, edit) }
       assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal { redo_edit(@q1, edit) }
