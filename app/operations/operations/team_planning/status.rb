@@ -73,9 +73,10 @@ class Operations::TeamPlanning::Status < Operations::Base
   def clearable(plan, scenario_id, see_pay)
     return ->(_) { false } if scenario_id == plan.id || PlanPolicy.frozen?(plan) || !PlanPolicy.new(context, plan).update?
 
-    outside = outside_scope(plan, scenario_id)
+    outside = nil
     lambda do |entry|
-      entry.scenario_id == scenario_id && ::Operations::TeamPlanning::ChangeNote.visible?(entry.facet, see_pay:) && !outside.include?(entry.subject_id)
+      entry.scenario_id == scenario_id && ::Operations::TeamPlanning::ChangeNote.visible?(entry.facet, see_pay:) &&
+        !(outside ||= outside_scope(plan, scenario_id)).include?(entry.subject_id)
     end
   end
 
