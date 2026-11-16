@@ -190,6 +190,15 @@ class Operations::Base
     end
   end
 
+  # One `excludes` declaration: `name` must not arrive alongside any of `others`.
+  Exclusion = Struct.new(:name, :others, :message, keyword_init: true) do
+    # @param other [Symbol] the excluded parameter that arrived too
+    # @return [String] the ParameterError message
+    def message_for(other)
+      message || "Give #{name} or #{other}, not both"
+    end
+  end
+
   # Self-register every concrete subclass into Operations::Registry so the
   # MCP server can list them without an explicit manifest. Anonymous test
   # subclasses are filtered inside the registry.
@@ -455,6 +464,34 @@ class Operations::Base
     # @return [Array<DependentRequirement>] one entry per `dependent_required`
     def dependent_requirements
       @dependent_requirements ||= []
+    end
+
+    # Declares that `name` must not arrive alongside any of `others`:
+    #
+    #   excludes :level_id, :role_id, :role_family_id, :level_ordinal
+    #
+    # Each pair becomes `not: { required: [name, other] }`. "Supplied" means
+    # the key arrived non-nil, on both sides, so a blank alongside counts.
+    #
+    # @param name [Symbol]
+    # @param others [Array<Symbol>] the parameters `name` rules out
+    # @param message [String, nil] the refusal in the tool's own words
+    # @raise [ArgumentError] at load time for undeclared or repeated parameters
+    def excludes(name, *others, message: nil)
+      name = name.to_sym
+      others = others.map(&:to_sym)
+      raise ArgumentError, "excludes needs another parameter" if others.empty?
+      raise ArgumentError, "excludes cannot exclude a parameter from itself" if others.include?(name)
+
+      unknown = [ name, *others ] - parameters.keys
+      raise ArgumentError, "excludes names undeclared parameter(s): #{unknown.join(', ')}" if unknown.any?
+
+      exclusions << Exclusion.new(name:, others:, message:).freeze
+    end
+
+    # @return [Array<Exclusion>] one entry per `excludes`
+    def exclusions
+      @exclusions ||= []
     end
 
     # Convenience entry point. Forwards to a new instance's `#call`.
@@ -738,7 +775,19 @@ class Operations::Base
     validate_conditional_requirements!(validated)
     validate_conditional_prohibitions!(validated)
     validate_dependent_requirements!(validated)
+    validate_exclusions!(validated)
     validated
+  end
+
+  # @param validated [Hash{Symbol=>Object}]
+  # @raise [ParameterError] when an excluded pair both arrived
+  def validate_exclusions!(validated)
+    self.class.exclusions.each do |rule|
+      next unless supplied_at_all?(validated[rule.name])
+
+      other = rule.others.find { supplied_at_all?(validated[it]) }
+      raise ParameterError, rule.message_for(other) if other
+    end
   end
 
   # Enforce each `dependent_required` declaration: supplying one parameter
