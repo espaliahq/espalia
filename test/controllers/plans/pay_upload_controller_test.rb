@@ -75,6 +75,19 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       assert_select "turbo-frame#pay-upload-preview"
     end
 
+    should "offer no upload on an archived plan, and send the page and the post back to the plan" do
+      ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id) }
+
+      get map_plan_path(@plan_id)
+      assert_select "a", text: "Upload pay…", count: 0
+      get pay_upload_plan_path(@plan_id)
+      assert_redirected_to plan_path(@plan_id)
+      assert_equal TeamPlanning::PlanAggregate::ARCHIVED, flash[:alert]
+      upload
+      assert_redirected_to plan_path(@plan_id)
+      assert_not held_pay?
+    end
+
     should "preview the counts and names, never the amount, then hold the pay and return to the map" do
       upload
       assert_response :success

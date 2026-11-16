@@ -79,7 +79,7 @@ class PlansController < ApplicationController
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
     render plan_page(plan, scenarios:, open_tab: :map,
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
-                                                               can_upload_pay: policy_for(@plan_record).upload_pay?,
+                                                               can_upload_pay: policy_for(@plan_record).upload_pay? && !@plan_record.archived?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
 
@@ -166,6 +166,8 @@ class PlansController < ApplicationController
   # Anyone but an editor with the see-pay right gets the same 404 as someone outside the plan.
   def pay_upload
     plan = pay_uploader_plan
+    return redirect_to(plan_path(plan[:plan_id]), alert: TeamPlanning::PlanAggregate::ARCHIVED) if @plan_record.archived?
+
     render pay_upload_page(plan, scenario_id: params[:scenario].presence || plan[:plan_id])
   end
 
@@ -176,6 +178,8 @@ class PlansController < ApplicationController
   # and never kept: its tempfile goes at the end of the request.
   def upload_pay
     plan = pay_uploader_plan
+    return redirect_to(plan_path(plan[:plan_id]), alert: TeamPlanning::PlanAggregate::ARCHIVED) if @plan_record.archived?
+
     upload = params.permit(:scenario_id, :basis, :signature, :intent)
     scenario_id = upload[:scenario_id].presence || plan[:plan_id]
     return render(pay_upload_page(plan, scenario_id:, basis: upload[:basis], error: "Choose a file to upload."), status: :unprocessable_content) unless params[:file].respond_to?(:read)

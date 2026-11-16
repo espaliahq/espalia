@@ -57,6 +57,12 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
     assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal(Operations::TeamPlanning::RebasePreview, plan_id: @plan_id)
   end
 
+  should "refuse to read or hold actual pay from a file" do
+    assert_equal TeamPlanning::PlanAggregate::ARCHIVED,
+                 refusal(Operations::TeamPlanning::UploadActualPay, plan_id: @plan_id, scenario_id: @plan_id, basis: "full_time",
+                                                                    csv: "person,amount,currency,period\n")
+  end
+
   should "still refuse a scenario the plan doesn't have" do
     stranger = SecureRandom.uuid_v7
     assert_equal "This plan has no such scenario", refusal(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: stranger)
