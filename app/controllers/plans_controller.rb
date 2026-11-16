@@ -422,7 +422,7 @@ class PlansController < ApplicationController
   end
 
   def cost_columns
-    return [] unless PayBand.exists?
+    return [] unless TeamPlanning::PricingInputs.for(@plan_record).bands.any?
 
     costs = read(Operations::TeamPlanning::ScenarioCosts)
     rows = costs[:scenarios].index_by { it[:scenario_id] }
@@ -490,6 +490,10 @@ class PlansController < ApplicationController
       can_restore: editor? && plan[:archived].present?,
       can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
+      panel_open: Views::Plans::ShowView.panel_open?(
+        url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView.panel_cookie(current_user)],
+        open_tab:, scenarios:
+      ),
       **layout
     )
   end

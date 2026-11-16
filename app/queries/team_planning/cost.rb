@@ -33,8 +33,9 @@
 #
 # Figures stay exact Rationals in their band's currency, totalled per
 # currency. Each total converts once, to the reference currency at the
-# period's start; a missing rate leaves it unconverted and says so. Plans
-# reprice live: the report states when the bands last changed.
+# period's start; a missing rate leaves it unconverted and says so. A live
+# plan reprices as the bands change, and an archived one reads the copy its
+# archive took: the report states when the bands it read last changed.
 #
 # Today has no period of its own, so it gets a run rate instead: every seat
 # it holds priced for the year from the base date to the day before the
@@ -67,7 +68,8 @@ class TeamPlanning::Cost
     "fte_unknown" => "The plan's FTE for the person was lost with their key",
     "no_level" => "No level resolves for the seat",
     "no_band" => "No pay band covers the seat's level and country",
-    "level_left" => "The seat's level is no longer in the framework, and no band made from it covers the seat's country",
+    "level_left" => "The seat's level is no longer in the framework. Only a pay band made from that level, or one for every role and level, " \
+                    "can price it, and none covers the seat's country",
     "on_cost_refused" => "The on-cost rule at the seat's unit can't price it, such as a fixed amount in another currency"
   }.freeze
 
@@ -204,7 +206,7 @@ class TeamPlanning::Cost
   # @!attribute horizon_months [Integer, nil] the months shown, for an open step
   # @!attribute pay_view [String] a {PAY_VIEWS} entry
   # @!attribute reference_currency [String, nil]
-  # @!attribute bands_changed_at [Time, nil] when a pay band last changed; plans reprice live
+  # @!attribute bands_changed_at [Time, nil] when a pay band the plan reads last changed
   # @!attribute scenario [Priced]
   # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
   # @!attribute forecast [Forecasted]
@@ -296,7 +298,7 @@ class TeamPlanning::Cost
     baseline = priced(at_end ? at_end.baseline.map : resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, open_ended: @figured&.open_ended || false,
                horizon_months: @figured&.horizon_months, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
-               reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *band_list.map(&:updated_at) ].compact.max,
+               reference_currency: @reference, bands_changed_at: @inputs.bands_changed_at,
                scenario:, baseline:, forecast:, at_end:)
   end
 
@@ -348,7 +350,8 @@ class TeamPlanning::Cost
 
     @period = TeamPlanning::Cost.year_from(aggregate.base_on) if run_rate
     @year_days = run_rate ? @period.count : YEAR_DAYS
-    @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
+    @inputs = TeamPlanning::PricingInputs.for(@plan, repository: @repository)
+    @reference = @inputs.reference_currency
     @factors = {}
     @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
@@ -596,12 +599,12 @@ class TeamPlanning::Cost
   end
 
   def factor(currency)
-    @factors[[ currency, @period.begin ]] ||= ExchangeRate.factor(from: currency, to: @reference, on: @period.begin)
+    @factors[[ currency, @period.begin ]] ||= @inputs.factor(from: currency, to: @reference, on: @period.begin)
   rescue ExchangeRate::MissingRate => e
     @factors[[ currency, @period.begin ]] = e.message
   end
 
-  def band_list = @band_list ||= PayBand.where(tenant_id: @plan.tenant_id).order(:position).to_a
+  def band_list = @band_list ||= @inputs.bands
 
   def unbanded_reason(level_id) = bands.left?(level_id) ? "level_left" : "no_band"
 

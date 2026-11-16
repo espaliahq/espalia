@@ -18,8 +18,10 @@ module Operations::TeamPlanning::PlanRead
               "checked is true."
 
   # What a read that prices a plan says once the plan is archived, in its description.
-  PRICED_TODAY = "An archived plan carries archived_on and a note: its figures still use today's pay bands, " \
-                 "exchange rates, budget lines and rules, not those of the day it was archived."
+  PRICED_AS_ARCHIVED = "An archived plan carries archived_on, priced_on and a note: its figures use the pay bands, exchange " \
+                       "rates, budget lines and rules as they stood on priced_on, its archive day, while framework roles and " \
+                       "levels are read as they are now. A plan archived before that copy was kept, or read where its copy " \
+                       "can't be opened, has no priced_on, and its figures use today's. Restoring a plan prices it with today's again."
 
   # How a read that runs over a scenario's period treats a step with no end date, in its description.
   OPEN_ENDED = "A step with no end date runs, for its figures, over the plan's open_step_horizon rule in whole months " \
@@ -51,13 +53,21 @@ module Operations::TeamPlanning::PlanRead
   end
 
   # @param plan [TeamPlanningPlan]
-  # @return [Hash] `{ archived_on, note }` for an archived plan, else empty
-  def priced_today(plan)
+  # @return [Hash] `{ archived_on, priced_on, note }` for an archived plan, else empty
+  def priced_as_archived(plan)
     return {} unless plan.archived?
 
+    day = plan.archived_on.strftime("%-d %B %Y")
+    on = ::TeamPlanning::PricingInputs.for(plan).priced_on
+    return { archived_on: plan.archived_on.iso8601, priced_on: on.iso8601, note: priced_as_on(day) } if on
+
     { archived_on: plan.archived_on.iso8601,
-      note: "This plan was archived on #{plan.archived_on.strftime("%-d %B %Y")}. Its figures still use today's pay bands, " \
-            "exchange rates, budget lines and rules." }
+      note: "This plan was archived on #{day}. Its figures still use today's pay bands, exchange rates, budget lines and rules." }
+  end
+
+  def priced_as_on(day)
+    "Priced as on #{day}, when this plan was archived: pay bands, exchange rates, budget lines and rules as they stood then. " \
+      "Framework roles and levels are read as they are now."
   end
 
   # @param may [Symbol] the {PlanPolicy} question, `:update?` for a write that checks before its handler does

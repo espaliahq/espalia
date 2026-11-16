@@ -508,6 +508,72 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         end
       end
     end
+
+    # Archived on 1 February 2026, then the band, the line and the rules all
+    # move. The frozen copy prices midpoints at 100,000; held pay is never in it.
+    context "once archived" do
+      setup do
+        @line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 80_000, currency: "AUD",
+                                   period: "year", cost_centre: "Platform").id
+        position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
+                                                                           level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
+                                                                           cost_centre: "Platform")[:position_id]
+        call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
+                                                               placements: [ { position_id:, allocation: 1 } ])
+        call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @plan_id, rule: "attrition", value: { "yearly_rate" => "0.1" })
+        call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @plan_id, rule: "time_to_hire", value: { "days" => "73" })
+        call(Operations::TeamPlanning::ArchivePlan, @holder, plan_id: @plan_id)
+
+        PayBand.find_by!(level_id: @e5.level_id).update!(midpoint: 130_000, maximum: 260_000)
+        BudgetLine.find(@line).update!(amount: 10_000)
+        PlanningRuleDefault.create!(rule: "on_cost", value: { "model" => "flat", "params" => { "percent" => "40" } })
+        @share = Rational(121, 365)
+        @held = BigDecimal(Integer(SCOPED[:in]) * @share, Operations::TeamPlanning::CostFigures::SIGNIFICANT_DIGITS).to_s("F")
+      end
+
+      should "price a holder from held pay and everyone else from the archive day's midpoints, in cost, scenario costs, budget, funding and forecast" do
+        holder = frozen_reads(@holder)
+        assert_equal "2026-02-01", holder[:cost][:priced_on]
+        assert_equal @held, holder[:budget][:budget_lines].find { it[:budget_line_id] == @line }[:funded][:native]["AUD"]
+        assert_equal [ "2026-02-01", 1 ], holder[:funding].values_at(:priced_on, :funded).then { [ it[0], it[1][:positions] ] }
+
+        [ @editor, @viewer ].each do |account|
+          reads = frozen_reads(account)
+          assert_in_delta 100_000 * @share, funded(reads), 1e-9, "a non-holder is priced at the copied midpoint"
+          assert_not_equal holder[:forecast][:rows], reads[:forecast][:rows], "attrition is priced as each caller sees the seat"
+          reads.each do |name, payload|
+            [ *SCOPED.values, @held[0, 5] ].each { assert_not_includes payload.to_json, it, "#{name} as a non-holder" }
+          end
+        end
+      end
+
+      should "show a viewer and an editor without the see-pay right no pay from any read" do
+        [ @q1, @plan_id ].each { assert_no_pay_read(it, amounts: SCOPED.values) }
+      end
+
+      should "keep held pay and band figures out of the copy as stored" do
+        stored = ActiveRecord::Base.connection.select_values(
+          "SELECT encode(data, 'escape') FROM event_store_events WHERE event_type = 'TeamPlanning::Events::PlanPricesFrozen'"
+        )
+
+        assert_equal 1, stored.size
+        [ *SCOPED.values, "pay_bands", "midpoint", "Platform" ].each { assert_not_includes stored.first, it }
+      end
+
+      should "leave a forgotten person's pay unknown to a holder and their seat at the midpoint for a viewer" do
+        PlanKeyStore.new.destroy_person(@in.id)
+
+        holder = call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments)
+        assert_includes holder[:unpriced].map { [ it[:seat_id], it[:reason] ] }, [ @in.id, "pay_unknown" ]
+        viewer = call(Operations::TeamPlanning::Cost, @viewer, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments)
+        seat = viewer[:seats][:scenario].find { it[:seat_id] == @in.id }
+        assert_equal "band_midpoint", seat[:pay_source]
+        assert_in_delta 100_000 * @share, BigDecimal(seat[:base]), 1e-9
+        [ holder, viewer, *frozen_reads(@holder).values, *frozen_reads(@viewer).values ].each do |payload|
+          assert_not_includes payload.to_json, SCOPED[:in]
+        end
+      end
+    end
   end
 
   private
@@ -525,6 +591,16 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
   end
+
+  def frozen_reads(account)
+    { cost: call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: @q1),
+      scenario_costs: call(Operations::TeamPlanning::ScenarioCosts, account, plan_id: @plan_id),
+      budget: call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1),
+      funding: call(Operations::TeamPlanning::Funding, account, plan_id: @plan_id, scenario_id: @q1),
+      forecast: call(Operations::TeamPlanning::Forecast, account, plan_id: @plan_id, scenario_id: @q1) }
+  end
+
+  def funded(reads) = BigDecimal(reads[:budget][:budget_lines].find { it[:budget_line_id] == @line }[:funded][:native]["AUD"])
 
   def budget_tab(account)
     reads = { budget: Operations::TeamPlanning::Budget, funding: Operations::TeamPlanning::Funding, map: Operations::TeamPlanning::ScenarioMap,

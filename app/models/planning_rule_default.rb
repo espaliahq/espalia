@@ -11,10 +11,10 @@ class PlanningRuleDefault < ApplicationRecord
 
   validates :rule, presence: true, uniqueness: { scope: :tenant_id }
 
-  # @param tenant_id [String]
+  # @param rows [Enumerable<PlanningRuleDefault>] one tenant's, from the table or an archive's copy
   # @return [Hash{String => Hash}] each rule's value, the tenant's own over the built-in default
-  def self.values_for(tenant_id)
+  def self.values_over_defaults(rows)
     defaults = TeamPlanning::RuleKinds.defaults
-    defaults.merge(where(tenant_id:, rule: defaults.keys).pluck(:rule, :value).to_h)
+    defaults.merge(rows.select { defaults.key?(it.rule) }.to_h { [ it.rule, it.value ] })
   end
 end

@@ -8,7 +8,8 @@ class Operations::TeamPlanning::Plan < Operations::Base
               "in it (editor or viewer), the units it covers (scope: the whole organisation, or chosen units, each with " \
               "everything under it), and whether it is frozen, which means no editor can still reach it, " \
               "so its viewers read it and nobody changes it. archived is null for a live plan, else the day it was archived " \
-              "and who archived it (a forgotten person reads as \"#{Person::FORMER_MEMBER}\"): an archived plan takes no changes until an editor restores it, and its members can " \
+              "and who archived it (a forgotten person reads as \"#{Person::FORMER_MEMBER}\"), with priced_on the day its figures are priced as on, " \
+              "null when they use today's: an archived plan takes no changes until an editor restores it, and its members can " \
               "still leave. Refused, as an unknown plan, unless the caller " \
               "is a member."
   category :read
@@ -34,10 +35,11 @@ class Operations::TeamPlanning::Plan < Operations::Base
 
   private
 
-  # @return [Hash, nil] `{ on, by_id, by_name }`
+  # @return [Hash, nil] `{ on, by_id, by_name, priced_on }`
   def archived(plan)
     return unless plan.archived?
 
-    { on: plan.archived_on.iso8601, by_id: plan.archived_by_id, by_name: Person.find_by(id: plan.archived_by_id)&.name }
+    { on: plan.archived_on.iso8601, by_id: plan.archived_by_id, by_name: Person.find_by(id: plan.archived_by_id)&.name,
+      priced_on: ::TeamPlanning::PricingInputs.for(plan).priced_on&.iso8601 }
   end
 end
