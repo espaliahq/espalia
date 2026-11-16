@@ -980,12 +980,15 @@ scenario the tab shows. `team_planning_undo_step` says what each would act on: t
 pick as an undo or redo with no event named, named by subject and facet ("Undo: Ada Quill
 · Level"), or by step for a date edit ("Undo: Q1 · Dates"). It never names a value. It
 skips a pay change for a member without the see-pay right, offering their latest other
-change or nothing, and it offers nothing the operation would refuse on scope. Viewers,
-Today, frozen plans and archived plans get neither. A phone shows the arrow alone, with the
-full name kept for a screen reader.
+change or nothing. It offers nothing the operation would refuse, on scope or because a
+departure it brings back falls outside its step's dates. Viewers, Today, frozen plans and
+archived plans get neither. The name shows beside the arrow only when the tab strip has
+room for it, so the tabs never wrap; a screen reader always hears it in full. A button
+pressed on a page that has fallen out of date changes nothing and reloads the page.
 
 Each row of the Changes tab that `team_planning_status` marks `clearable` carries Clear,
-behind a dialog that says which step the scenario follows again. A row is clearable when
+behind a dialog that names the step the scenario follows again: its own parent, whatever
+its relation. A row is clearable when
 the scenario shown makes the change itself, the caller may edit, the facet isn't pay
 withheld from them, and the subject is still inside a scoped plan's units. Undo, Redo and
 Clear each return to the tab and scenario they were pressed on, and a refusal shows the

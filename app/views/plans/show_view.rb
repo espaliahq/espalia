@@ -207,7 +207,7 @@ class Views::Plans::ShowView < Views::Base
     end
   end
 
-  # Each names what it acts on, in full to a screen reader and as far as the
+  # Each names what it acts on, in full to a screen reader and as far as
   # the strip's width allows on screen, so the tabs never wrap for them.
   def undo_controls
     return unless @undo_step
