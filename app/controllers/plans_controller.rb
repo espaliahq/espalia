@@ -133,7 +133,7 @@ class PlansController < ApplicationController
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     scenario_id = params[:scenario].presence || Views::Plans::Timeline.first_leaf(scenarios, plan[:plan_id])
-    return redirect_to timeline_plan_path(plan[:plan_id], scenario: scenario_id) unless turbo_frame_request?
+    return redirect_to timeline_plan_path(plan[:plan_id], scenario: scenario_id, step: params[:step].presence) unless turbo_frame_request?
 
     render Views::Plans::TimelineFigures.new(figures: read(Operations::TeamPlanning::TimelineFigures, scenario_id:), scenarios:,
                                              phone: params[:layout] == "phone", step: params[:step].to_i)
