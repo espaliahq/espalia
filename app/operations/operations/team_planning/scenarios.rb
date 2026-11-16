@@ -12,19 +12,21 @@ class Operations::TeamPlanning::Scenarios < Operations::Base
               "the plan's, it stands on the base date and has no parent, relation or end. Each other scenario has " \
               "its parent_id, its relation ('then' follows the parent, 'instead' is an alternative to it, 'on' is " \
               "the rest of a split step, sitting on its agreed part), its " \
-              "period and what it is for, if an editor has said. Refused, as an unknown plan, unless the caller is a member."
+              "period, what it is for, if an editor has said, and changes: how many subjects and facets it still changes, " \
+              "the count its Removed scenarios entry keeps once it is removed. Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
   parameter :plan_id, String, required: true
 
-  # @return [Hash] `{ plan_id, scenarios: [{ scenario_id, parent_id, relation, name, description, starts_on, ends_on }] }`
+  # @return [Hash] `{ plan_id, scenarios: [{ scenario_id, parent_id, relation, name, description, starts_on, ends_on, changes }] }`
   def perform
     plan = plan!
     rows = TeamPlanningScenario.where(plan_id: plan.id).order(:created_at, :id).partition(&:baseline?).flatten
+    held = TeamPlanningHistoryEntry.changes_held(rows.map(&:id))
     scenarios = rows.map do |row|
       { scenario_id: row.id, parent_id: row.parent_id, relation: row.relation, name: row.name&.reveal, description: row.description&.reveal,
-        starts_on: row.starts_on.iso8601, ends_on: row.ends_on&.iso8601 }
+        starts_on: row.starts_on.iso8601, ends_on: row.ends_on&.iso8601, changes: held.fetch(row.id, 0) }
     end
     { plan_id: plan.id, scenarios: }
   end

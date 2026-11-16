@@ -31,4 +31,19 @@ class TeamPlanningHistoryEntry < ApplicationRecord
 
   # @return [Boolean]
   def undone? = !undone_at.nil?
+
+  # The subjects and facets each scenario still changes, as the plan's log
+  # works them out: a standing change or pin holds its key and a clear lets
+  # it go; undone entries, undos, redos, notes, moves and dates hold nothing.
+  # The Removed scenarios tally keeps this count, so a scenario's count
+  # before it is removed matches its entry afterwards.
+  #
+  # @param scenario_ids [Array<String>]
+  # @return [Hash{String => Integer}] keyed by scenario id; absent means none
+  def self.changes_held(scenario_ids)
+    last_word = where(scenario_id: scenario_ids, undone_at: nil, action: %w[set pin clear])
+                .select("DISTINCT ON (scenario_id, subject_id, facet) scenario_id, action")
+                .order(:scenario_id, :subject_id, :facet, position: :desc)
+    unscoped.from(last_word, :last_word).where("last_word.action <> 'clear'").group("last_word.scenario_id").count
+  end
 end
