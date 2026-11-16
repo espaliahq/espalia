@@ -76,14 +76,17 @@ class PlansController < ApplicationController
     redirect_to plan_path(plan[:plan_id]), status: :see_other, alert: "Couldn't delete this plan: #{e.message}"
   end
 
-  # GET /planning/:id
+  # GET /planning/:id?removed_page=:page
   def show
     plan = read(Operations::TeamPlanning::Plan)
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?,
                                             extra_columns: cost_columns + capacity_columns(plan, scenarios))
-    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table)
+    removed_page = params[:removed_page].to_i.clamp(1..)
+    removed = Views::Plans::RemovedScenarios.new(plan_id: plan[:plan_id], open: params.key?(:removed_page),
+                                                 read: read(Operations::TeamPlanning::RemovedScenarios, page: removed_page))
+    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:)
   end
 
   # GET /planning/:id/map?scenario=:scenario_id
@@ -472,7 +475,7 @@ class PlansController < ApplicationController
   end
 
   # @param undo_in [String, nil] the scenario the open tab shows, whose Undo and Redo the tab strip offers
-  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil, undo_in: nil)
+  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil, undo_in: nil, removed: nil)
     members = read(Operations::TeamPlanning::PlanMembers)[:members]
     Views::Plans::ShowView.new(
       plan:,
@@ -492,6 +495,7 @@ class PlansController < ApplicationController
       can_restore: editor? && plan[:archived].present?,
       can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
+      removed:,
       undo_step: (read(Operations::TeamPlanning::UndoStep, scenario_id: undo_in.downcase) if can_edit? && undo_in),
       panel_open: Views::Plans::ShowView.panel_open?(
         url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView.panel_cookie(current_user)],
