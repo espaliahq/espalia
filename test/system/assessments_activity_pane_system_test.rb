@@ -627,15 +627,17 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
 
     should "close the overlay on Back when the page opens with it up from the cookie" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      visit assessments_path
-      assert_text "My Assessments"
-      page.driver.browser.manage.add_cookie(name: "assessment_activity_pane_open", value: "open")
-      visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
-      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      in_a_fresh_tab do
+        visit assessments_path
+        assert_text "My Assessments"
+        page.driver.browser.manage.add_cookie(name: "assessment_activity_pane_open", value: "open")
+        visit assessment_path(@assignment)
+        wait_for_stimulus "activity-pane"
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
 
-      back_until_pane_closes
-      assert_back_on_opening_entry
+        back_until_pane_closes
+        assert_back_on_opening_entry
+      end
     end
 
     should "take the overlay's history entry back when its close button shuts it" do
