@@ -634,6 +634,7 @@ class TeamPlanning::PlanAggregate
     if entry.is_a?(TeamPlanning::Events::ChangeMoved)
       apply(TeamPlanning::Events::ChangeUndone.new(data: { **data, **moving_back(entry), in_effect_event_id: nil }))
     else
+      ensure_leaves_in_period!(scenario_id, restored_by_undo(scenario_id, event_id))
       in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone | [ event_id ])
       apply(TeamPlanning::Events::ChangeUndone.new(data: { **data, in_effect_event_id: }))
     end
@@ -669,6 +670,7 @@ class TeamPlanning::PlanAggregate
     if entry.is_a?(TeamPlanning::Events::ChangeMoved)
       apply(TeamPlanning::Events::ChangeRedone.new(data: { **data, **moving_again(entry), in_effect_event_id: nil }))
     else
+      ensure_leaves_in_period!(scenario_id, entry)
       in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone - [ event_id ])
       apply(TeamPlanning::Events::ChangeRedone.new(data: { **data, in_effect_event_id: }))
     end
@@ -1621,6 +1623,17 @@ class TeamPlanning::PlanAggregate
             "Someone leaves on #{leaves_on}, outside the dates this gives the scenario they leave in " \
             "(#{period.begin.iso8601} to #{period.end.iso8601}): change their date first"
     end
+  end
+
+  # A date edit checks only the departures in effect, so one an undo or redo
+  # brings back is checked as it returns.
+  def ensure_leaves_in_period!(scenario_id, change)
+    leaves_on = change&.data&.dig(:leaves_on) or return
+    period = period_of(scenario_id) or return
+    return if period.cover?(Date.iso8601(leaves_on))
+
+    raise TeamPlanning::Error, "They leave on #{leaves_on}, outside the dates of the step they leave in " \
+                               "(#{period.begin.iso8601} to #{period.end.iso8601}): change the step's dates first"
   end
 
   def parent_of(scenario_id) = scenario_id == @plan_id ? "the baseline" : "its parent"

@@ -173,6 +173,29 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       assert_equal %w[2027-02-01 2027-03-31], period(@q1)
     end
 
+    should "refuse an undo or redo that brings back a last day outside the step's dates" do
+      person_id = SecureRandom.uuid_v7
+      leave = ->(leaves_on) do
+        @plan.set_change(TeamPlanning::Events::DepartureSet, scenario_id: @lean, subject_id: person_id, set_by_id: @editor_id,
+                                                             end_state: { leaves_in_id: @lean, leaves_on: })
+        last_event.event_id
+      end
+      earlier = leave.("2027-01-20")
+      later = leave.("2027-02-15")
+      @plan.set_scenario_period(@q1, starts_on: "2027-02-01", ends_on: "2027-03-31", set_by_id: @editor_id)
+      outside = "They leave on 2027-01-20, outside the dates of the step they leave in (2027-02-01 to 2027-03-31): " \
+                "change the step's dates first"
+
+      assert_equal outside, refusal { @plan.undo_change(scenario_id: @lean, event_id: later, undone_by_id: @editor_id) }
+
+      @plan.set_scenario_period(@q1, starts_on: "2027-01-14", ends_on: "2027-03-31", set_by_id: @editor_id)
+      @plan.undo_change(scenario_id: @lean, event_id: later, undone_by_id: @editor_id)
+      @plan.undo_change(scenario_id: @lean, event_id: earlier, undone_by_id: @editor_id)
+      @plan.set_scenario_period(@q1, starts_on: "2027-02-01", ends_on: "2027-03-31", set_by_id: @editor_id)
+
+      assert_equal outside, refusal { @plan.redo_change(scenario_id: @lean, event_id: earlier, redone_by_id: @editor_id) }
+    end
+
     should "keep its start when only the end moves, and write nothing for the same period" do
       @plan.set_scenario_period(@q1, ends_on: "2027-02-28", set_by_id: @editor_id)
       assert_equal %w[2027-01-14 2027-02-28], period(@q1)
