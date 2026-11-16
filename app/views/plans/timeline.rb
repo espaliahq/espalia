@@ -121,7 +121,7 @@ class Views::Plans::Timeline < Views::Base
   def header_row
     div(class: "border-b border-default px-3 py-2 text-xs font-semibold uppercase text-muted", style: cell(1, 1)) { "Step" }
     columns.each_index do |index|
-      div(class: "border-b border-l border-default px-3 py-2", style: cell(1, index + 2), data: { timeline_step: index }) do
+      div(class: "relative z-1 border-b border-l border-default px-3 py-2", style: cell(1, index + 2), data: { timeline_step: index }) do
         p(class: "font-semibold text-default") { step_name(index) }
         p(class: "text-muted") { period(index) }
         today_continues(index)

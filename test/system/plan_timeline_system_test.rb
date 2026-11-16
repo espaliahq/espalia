@@ -220,6 +220,17 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         hold(leaver_end_grip, over: "[data-timeline-step='2']")
         assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
         assert_no_selector "[data-timeline-shift-hint='0']", visible: true
+        assert page.evaluate_script(<<~JS), "the lit column paints over its own hint"
+          (() => {
+            // The overlay ignores the pointer, so it takes hits only while this reads what paints on top.
+            const column = document.querySelector("[data-timeline-shift-column='2']")
+            column.style.pointerEvents = "auto"
+            const hint = document.querySelector("[data-timeline-shift-hint='2']").getBoundingClientRect()
+            const top = document.elementFromPoint(hint.left + hint.width / 2, hint.top + hint.height / 2)
+            column.style.pointerEvents = ""
+            return top.dataset.timelineShiftHint === "2"
+          })()
+        JS
         release
 
         assert_text "Moved to Q2 settle."
