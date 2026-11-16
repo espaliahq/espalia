@@ -90,6 +90,7 @@ class TeamPlanning::Cost
   # @!attribute cost_centre_source [String] a {TeamPlanning::PositionCostCentres::SOURCES} entry
   # @!attribute cost_centre_rule [Integer, nil] the deciding cost centre entry's place in the list, for "rule"
   # @!attribute cost_centre_matcher [Hash, nil] that entry's matcher, for "rule"
+  # @!attribute rule_cost_centre [String, nil] for a person keeping their real cost centre, the other one the entries give
   # @!attribute level_id [String, nil]
   # @!attribute level_source [String, nil] a {LEVEL_SOURCES} key
   # @!attribute band [PayBand, nil] nil when priced from actual pay
@@ -105,7 +106,7 @@ class TeamPlanning::Cost
   # @!attribute base [Rational, nil]
   # @!attribute on_cost [TeamPlanning::OnCostModel::Figure, nil]
   # @!attribute reason [String, nil] a {REASONS} key when unpriced
-  Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :cost_centre_source, :cost_centre_rule, :cost_centre_matcher, :level_id, :level_source, :band,
+  Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :cost_centre_source, :cost_centre_rule, :cost_centre_matcher, :rule_cost_centre, :level_id, :level_source, :band,
                      :currency, :pay_source, :basis, :fte, :fraction, :held, :year_days, :hours_per_year, :yearly, :base, :on_cost, :reason) do
     # @return [Boolean]
     def unpriced? = reason.present?
@@ -451,7 +452,7 @@ class TeamPlanning::Cost
 
   def cost_centre_working(resolved)
     { cost_centre: resolved.cost_centre, cost_centre_source: resolved.source, cost_centre_rule: resolved.rule_index,
-      cost_centre_matcher: resolved.rule_matcher }
+      cost_centre_matcher: resolved.rule_matcher, rule_cost_centre: resolved.rule_cost_centre }
   end
 
   def role_at(member, position) = @cost_centres.role_at(member, position)
