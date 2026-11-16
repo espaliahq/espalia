@@ -276,6 +276,26 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, @ada.id), "never blank because the rules were silent"
     end
 
+    should "take a location entry only once the plan changes them some other way, as a plan cannot relocate a person yet" do
+      cost_centre_rules({ unit_id: @payments, cost_centre: "Payments" }, { location: " mu ", cost_centre: "Mu" })
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, @ada.id), "untouched, so the location entry waits"
+
+      move(@ada, @payments)
+      assert_equal [ [ "Mu", "rule", 1 ] ], person_cost_centre(cost.scenario, @ada.id)
+      assert_equal({ "location" => "mu" }, lines(cost.scenario, @ada.id).sole.cost_centre_matcher)
+    end
+
+    should "count someone a scoped plan brings in from outside it as changed, as Today holds them outside" do
+      operation(Operations::TeamPlanning::SetPlanScope, unit_ids: [ @payments ])
+      [ cost(@plan_id).scenario, cost.scenario, cost.baseline ].each do |priced|
+        assert_empty lines(priced, @ada.id), "the cost read names nobody outside the scope"
+      end
+      move(@ada, @payments)
+
+      assert_equal [ [ "Payments", "rule", 2 ] ], person_cost_centre(cost.scenario, @ada.id)
+      assert_equal [ [ "CC-2", "person", nil ] ], person_cost_centre(cost.scenario, @dee.id), "Dee was inside all along"
+    end
+
     should "be read again when the plan changes their level, and take a changed person's position label first" do
       cost_centre_rules({ level_ordinal: 6, cost_centre: "Staff" })
       operation(Operations::TeamPlanning::SetPlannedLevel, person_id: @dee.id, level: "6")

@@ -327,7 +327,7 @@ class TeamPlanning::Cost
     @rules = {}
     @positions = map.positions.index_by(&:id)
     @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id)
-    @today = @base.people.index_by(&:id)
+    @today = (@base.people + @base.outside).index_by(&:id)
     people = map.people.flat_map { person_lines(it) }
     lines = people + open_lines(map)
     units = by(lines, &:unit_id)
@@ -371,7 +371,7 @@ class TeamPlanning::Cost
   # changed FTE alone does not count.
   def changed?(member)
     today = @today[member.id]
-    return false if member.placeholder? || today.nil?
+    return false if member.placeholder? || today.nil? # no path builds a scenario person missing from Today yet
 
     situation(member, @map) != situation(today, @base) || member.country != today.country
   end
