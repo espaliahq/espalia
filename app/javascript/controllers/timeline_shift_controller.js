@@ -1,8 +1,8 @@
 // Drag a timeline bar's edge one step earlier or later to move the change it
-// starts or ends with (#393). Each grip lists the steps it can reach and, for
-// each, the URL its bar's "When…" item posts. While a grip is held, those
-// columns are lit and say "Move here"; letting go over one posts its URL, as
-// the menu item would. Anywhere else, or Escape, saves nothing.
+// starts or ends with (#393). Each grip lists the steps it can reach. While a
+// grip is held, those columns are lit and say "Move here"; letting go over one
+// clicks the bar's "When…" item for that edge and step, so Turbo posts it as
+// the menu would. Anywhere else, or Escape, saves nothing.
 //
 // The columns are found by the pointer's x against each step's header, so
 // steps of any width behave alike.
@@ -12,7 +12,8 @@
 //     <div data-timeline-step="1">… <p data-timeline-shift-hint="1" hidden>Move here</p></div>
 //     <div data-timeline-shift-column="1"></div>
 //     <div data-shifting?>
-//       <span data-timeline-shift-edge="start" data-timeline-shift-targets='{"2":"/planning/…/change-moves?…"}'
+//       <a data-turbo-method="post" data-timeline-shift="start:2" href="/planning/…/change-moves?…">…</a>
+//       <span data-timeline-shift-edge="start" data-timeline-shift-targets="[2]"
 //             data-action="pointerdown->timeline-shift#start"></span>
 //     </div>
 //   </div>
@@ -30,11 +31,12 @@ export default class extends BaseController {
 
     event.preventDefault()
     this.grip = event.currentTarget
-    this.reach = JSON.parse(this.grip.dataset.timelineShiftTargets)
+    this.reach = JSON.parse(this.grip.dataset.timelineShiftTargets).map(String)
+    this.headers = [ ...this.element.querySelectorAll("[data-timeline-step]") ]
     this.over = null
     this.grip.setPointerCapture(event.pointerId)
     this.grip.parentElement.dataset.shifting = ""
-    Object.keys(this.reach).forEach(step => {
+    this.reach.forEach(step => {
       this.#column(step).dataset.lit = ""
       this.#hint(step).hidden = false
     })
@@ -54,7 +56,7 @@ export default class extends BaseController {
 
   #move(event) {
     const step = this.#stepAt(event.clientX)
-    const over = step in this.reach ? step : null
+    const over = this.reach.includes(step) ? step : null
     if (over === this.over) return
 
     if (this.over !== null) delete this.#column(this.over).dataset.over
@@ -64,9 +66,10 @@ export default class extends BaseController {
 
   #drop(event) {
     this.#move(event)
-    const url = this.over === null ? null : this.reach[this.over]
+    const edge = this.grip.dataset.timelineShiftEdge
+    const item = this.over === null ? null : this.grip.parentElement.querySelector(`[data-timeline-shift="${edge}:${this.over}"]`)
     this.#finish()
-    if (url) this.#post(url)
+    item?.click()
   }
 
   #finish() {
@@ -75,7 +78,7 @@ export default class extends BaseController {
     Object.entries(this.listeners).forEach(([type, fn]) => this.grip.removeEventListener(type, fn))
     window.removeEventListener("keydown", this.escape)
     delete this.grip.parentElement.dataset.shifting
-    Object.keys(this.reach).forEach(step => {
+    this.reach.forEach(step => {
       const column = this.#column(step)
       delete column.dataset.lit
       delete column.dataset.over
@@ -84,19 +87,8 @@ export default class extends BaseController {
     this.grip = null
   }
 
-  // Posted the way Turbo posts a `data-turbo-method="post"` link, so the
-  // redirect and its notice or alert land as the "When…" item's do.
-  #post(url) {
-    const form = document.createElement("form")
-    form.method = "post"
-    form.action = url
-    form.hidden = true
-    document.body.appendChild(form)
-    form.requestSubmit()
-  }
-
   #stepAt(x) {
-    const header = [ ...this.element.querySelectorAll("[data-timeline-step]") ].find(cell => {
+    const header = this.headers.find(cell => {
       const { left, right } = cell.getBoundingClientRect()
       return x >= left && x < right
     })

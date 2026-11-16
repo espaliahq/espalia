@@ -40,7 +40,7 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
   def grip_targets(html, edge)
     grips = html.css("[data-timeline-shift-edge='#{edge}']")
-    grips.map { JSON.parse(it["data-timeline-shift-targets"]).keys.map(&:to_i) }
+    grips.map { JSON.parse(it["data-timeline-shift-targets"]) }
   end
 
   def bar(from, to, unit_id: PAYMENTS, role: "ENG")
@@ -93,8 +93,9 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
       assert_equal [ [ 1, 3 ] ], grip_targets(html, "start")
       assert_empty grip_targets(html, "end")
-      url = JSON.parse(html.at_css("[data-timeline-shift-edge='start']")["data-timeline-shift-targets"])["3"]
-      assert_equal html.css("a[data-turbo-method='post']").map { it["href"] }.find { it.include?("direction%5D=later") }, url, "the drop posts the When… item's own URL"
+      later = html.at_css("a[data-turbo-method='post'][data-timeline-shift='start:3']")
+      assert_includes later["href"], "direction%5D=later", "the drop clicks the When… item that moves it later"
+      assert html.at_css("a[data-timeline-shift='start:1']"), "and the one that moves it earlier"
     end
 
     should "give a bar whose last step is a departure an end grip" do
@@ -102,6 +103,7 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
       assert_equal [ [ 1, 3 ] ], grip_targets(html, "end")
       assert_empty grip_targets(html, "start")
+      assert_equal %w[end:1 end:3], html.css("a[data-timeline-shift]").map { it["data-timeline-shift"] }
     end
 
     should "never offer Today, and offer only later from the first step after it" do
@@ -120,7 +122,7 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
       position = { kind: "position", subject_id: ADA, from: 1, to: 3, unit_id: PAYMENTS, position_id: ADA, role: "ENG", level: "L3" }
       html = render_timeline(bars: [ position ], scenarios: FOUR_STEPS, movable: { 2 => [ { subject_id: ADA, facet: "position" } ] }, can_edit: true)
 
-      assert_empty html.css("[data-timeline-shift-edge]")
+      assert_empty html.css("[data-timeline-shift-edge], a[data-timeline-shift]")
       assert html.css("button").any? { it.text.include?("When…") }
     end
 

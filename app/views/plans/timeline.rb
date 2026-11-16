@@ -15,8 +15,8 @@
 # position or a departure also has "When…", which moves that change a step
 # earlier or later. Today, the first column, takes no moves. On a wide screen
 # the bar's edge also drags that change one step either way
-# ([#393](https://github.com/espaliahq/espalia/issues/393)): the drop posts the
-# matching "When…" item's own URL, and the menu stays the keyboard and phone path.
+# ([#393](https://github.com/espaliahq/espalia/issues/393)): the drop clicks the
+# matching "When…" item, and the menu stays the keyboard and phone path.
 class Views::Plans::Timeline < Views::Base
   UNASSIGNED = "Unassigned"
   UNNAMED = "Unnamed step"
@@ -203,8 +203,7 @@ class Views::Plans::Timeline < Views::Base
         span(class: "sr-only") { "#{span_of(bar)}: " }
         bar_text(lane, bar, starts: bar[:from], ends: bar[:to])
       end
-      edge_grip(bar, "start", shifts.select { |column, facet| column == bar[:from] && facet != "departure" })
-      edge_grip(bar, "end", shifts.select { |column, facet| column == bar[:to] && facet == "departure" })
+      GRIP_SIDE.each_key { |edge| edge_grip(edge, shifts.filter_map { |column, facet, _, to| to if grip_edge(bar, column, facet) == edge }) }
     end
   end
 
@@ -381,7 +380,8 @@ class Views::Plans::Timeline < Views::Base
       menu.trigger(label:, button: { variant: :ghost, size: :sm, compact: true }) { "When…" }
       menu.menu(label:, width: "w-64") do
         shifts.each do |column, facet, direction, to, words|
-          menu.item(href: shift_path(bar, column, facet, direction, to), data: { turbo_method: :post }) do
+          edge = grip_edge(bar, column, facet)
+          menu.item(href: shift_path(bar, column, facet, direction, to), data: { turbo_method: :post, timeline_shift: ("#{edge}:#{to}" if edge) }) do
             shift_words(words, column, to)
           end
         end
@@ -409,13 +409,20 @@ class Views::Plans::Timeline < Views::Base
   # Sits in the bar's outer padding, outside the draggable box, so it neither
   # widens the bar nor starts #309's drag to another unit. It is pointer-only:
   # the "When…" menu beside it is the same move for keyboards and screen readers.
-  def edge_grip(bar, edge, shifts)
-    return if shifts.empty?
+  def edge_grip(edge, steps)
+    return if steps.empty?
 
-    targets = shifts.to_h { |column, facet, direction, to| [ to, shift_path(bar, column, facet, direction, to) ] }
     span(class: "absolute inset-y-1 #{GRIP_SIDE.fetch(edge)} w-2 cursor-col-resize touch-none rounded-sm hover:bg-brand-muted",
          aria: { hidden: "true" }, title: "Drag to move this a step earlier or later",
-         data: { timeline_shift_edge: edge, timeline_shift_targets: targets.to_json, action: "pointerdown->timeline-shift#start" })
+         data: { timeline_shift_edge: edge, timeline_shift_targets: steps.to_json, action: "pointerdown->timeline-shift#start" })
+  end
+
+  # The edge a bar's change sits on: a place or position at its start, a
+  # departure at its end. A position's later changes sit on neither.
+  def grip_edge(bar, column, facet)
+    return "end" if facet == "departure" && column == bar[:to]
+
+    "start" if facet != "departure" && column == bar[:from]
   end
 
   # A tint down each column, lit while an edge is dragged over a step it can move to.
