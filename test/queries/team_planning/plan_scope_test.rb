@@ -716,6 +716,19 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_includes resolve(@plan_id, @h1).people.map(&:id), @dee.id
   end
 
+  # No write puts a seat with no unit on the map, as PositionSet needs a unit;
+  # this guards the check should one ever reach it.
+  should "bring someone in only through a seat in a unit the plan covers" do
+    map = resolve(@plan_id, @h1)
+    seat = TeamPlanning::Baseline::Position.new(id: SecureRandom.uuid_v7, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: nil,
+                                                fte: 1, basis: "new", role_name: nil, level_name: nil)
+    covered = map.positions.first || TeamPlanning::Baseline::Position.new(**seat.to_h, id: SecureRandom.uuid_v7, unit_id: @payments)
+    map = map.with(positions: map.positions + [ seat, covered ].uniq(&:id))
+    scope = Object.new.extend(Operations::TeamPlanning::WithinScope)
+
+    assert_equal [ false, true ], [ seat, covered ].map { scope.send(:brings_in?, map, { placements: [ { position_id: it.id, allocation: 1 } ] }) }
+  end
+
   should "refuse to redo a change about someone a narrower plan no longer covers, unless it places them in" do
     set_scope(@plan_id, [ @engineering, @sales ])
     call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")

@@ -80,12 +80,14 @@ module Operations::TeamPlanning::WithinScope
     kind.refers_to(end_state.to_h.symbolize_keys).any? { map.known_unit_ids.include?(it) }
   end
 
+  # A seat brings someone in only through a unit the plan covers: the map keeps
+  # a seat with no unit, and that places no one inside.
   def brings_in?(map, end_state)
-    positions = map.positions.to_set(&:id)
+    unit_of = map.position_units
     units = map.known_unit_ids
     Array(end_state[:placements]).any? do |placement|
       placement = placement.to_h.symbolize_keys
-      units.include?(placement[:unit_id]) || positions.include?(placement[:position_id])
+      units.include?(placement[:unit_id]) || units.include?(unit_of[placement[:position_id]])
     end
   end
 end
