@@ -20,7 +20,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
   description "Get what a scenario of a Team Planning plan the caller is in costs over its period, beside the baseline " \
               "priced over the same days, with the difference. Each seat (a person, or the FTE a position's occupants " \
               "leave open) is priced at the midpoint of its pay band: of the tenant's pay bands that match the seat's " \
-              "role family, role, level number and location each band sets, the last in tenants_pay_bands order. The midpoint is made yearly (a month is 1/12, an hour takes the working_hours rule), scaled by FTE and by " \
+              "role family, role, level number and location each band sets, or a framework level's level_id and location, the last in tenants_pay_bands order. The midpoint is made yearly (a month is 1/12, an hour takes the working_hours rule), scaled by FTE and by " \
               "the days it is held out of the year (365, or the run rate's own year: 366 across a 29 February), plus the on_cost rule of its unit. A person is priced at their own " \
               "level, a planned one winning, and at their position's level only when theirs resolves to none; " \
               "level_source says which. A leaver costs up to their leaving date and their backfill from the day after. " \
@@ -38,7 +38,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "assumptions add, zero until a forecast rule is set; team_planning_forecast lists its rows. A run rate is all actual. A seat that can't be priced is in `unpriced` with its reason, " \
               "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
               "bands_changed_at says when a band last changed. Bands are an ordered list (tenants_pay_bands); each matches on the " \
-              "role family, role, level number and location it sets, and of the bands that match a seat the last in the list " \
+              "role family, role, level number and location it sets, or on a framework level's level_id and location, and of the bands that match a seat the last in the list " \
               "has the last word. Each seat's band names its position in the list and its matcher. Pass the plan's id as scenario_id for Today's run rate: " \
               "basis is run_rate, period is the year from the base date to the day before the same date a year later, " \
               "each seat is priced for that whole year, and totals carry only `scenario`, with no baseline or difference, " \
