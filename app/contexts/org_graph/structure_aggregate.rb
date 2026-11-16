@@ -36,6 +36,7 @@ class OrgGraph::StructureAggregate
 
   def initialize
     @levels = []
+    @level_rules = {}
     @units = {}
     @level_providers = {}
     @level_fields = {}
@@ -315,7 +316,8 @@ class OrgGraph::StructureAggregate
   # @param unit_id [String] UUID for the unit
   # @param name [String]
   # @param level_id [String] a level in the current taxonomy
-  # @param parent_id [String, nil] a live unit at a higher level; nil at the top
+  # @param parent_id [String, nil] a live unit of a kind the unit's kind may sit
+  #   beneath; nil at the top, where its kind must be allowed to sit
   # @param provider [String] the level's provider: "espalia", or the HRIS that supplies the unit
   # @param external_ref [String, nil] the provider's own reference; required for
   #   a mirrored unit, absent for one Espalia holds
@@ -385,8 +387,8 @@ class OrgGraph::StructureAggregate
   # Moves a unit beneath another parent. An unchanged parent writes nothing.
   #
   # @param unit_id [String]
-  # @param parent_id [String, nil] a live unit at a higher level; nil to move it
-  #   to the top. The level rule also keeps a unit from moving beneath itself.
+  # @param parent_id [String, nil] a live unit of a kind the unit's kind may sit
+  #   beneath, and not the unit or one below it; nil to move it to the top
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param moved_by_id [String, nil]
@@ -399,6 +401,7 @@ class OrgGraph::StructureAggregate
 
     effective_on = dated_after_creation(unit, effective_on)
     ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on)
+    raise "A unit can't move beneath itself or a unit below it" if parent_id && [ parent_id, *ancestor_ids(parent_id) ].include?(unit_id)
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit_id,
@@ -461,7 +464,7 @@ class OrgGraph::StructureAggregate
     end
 
     retiring = retire_predecessors ? predecessor_ids.map { |id| @units[id] }.reject(&:retired) : []
-    retiring = retiring.sort_by { |unit| -level_index(unit.level_id) }
+    retiring = retiring.sort_by { |unit| [ -ancestor_ids(unit.unit_id).size, -level_index(unit.level_id) ] }
     if (!restated || retiring.any?) && successor_ids.any? { |id| @units[id].retired }
       raise "A successor must be live"
     end
@@ -523,7 +526,10 @@ class OrgGraph::StructureAggregate
   end
 
   on OrgGraph::Events::TaxonomyDefined do |event|
-    @levels = event.data[:levels].map { |level| level.to_h.symbolize_keys.slice(:level_id, :name) }
+    levels = event.data[:levels].map { |level| level.to_h.symbolize_keys }
+    @levels = levels.map { |level| level.slice(:level_id, :name) }
+    @level_rules = levels.select { |level| level.key?(:parent_level_ids) }
+                         .to_h { |level| [ level[:level_id], level.slice(:parent_level_ids, :top) ] }
     @level_providers = @level_providers.slice(*level_ids(@levels))
     @level_fields = @level_fields.slice(*level_ids(@levels))
   end
@@ -586,6 +592,25 @@ class OrgGraph::StructureAggregate
     @successions[event.data[:succession_id]] = event.data.slice(:predecessor_ids, :successor_ids, :effective_on).symbolize_keys
   end
 
+
+  # The kinds of unit and where each may sit, as the taxonomy now stands.
+  #
+  # @return [OrgGraph::Taxonomy]
+  def taxonomy
+    OrgGraph::Taxonomy.new(@levels.map { |level| level.merge(@level_rules.fetch(level[:level_id], {})) },
+                           providers: @level_providers)
+  end
+
+  # The live units sitting where their kind's rules no longer allow.
+  #
+  # @return [Array<Unit>] by name
+  def misplaced_units
+    rules = taxonomy
+    live_units.reject do |unit|
+      parent = unit.parent_id && @units[unit.parent_id]
+      parent ? rules.allows?(unit.level_id, beneath: parent.level_id) : rules.may_be_top?(unit.level_id)
+    end.sort_by(&:name)
+  end
 
   # The date of a unit's last change, the one it can't retire before: its
   # own edits, its owners, and sub-units arriving beneath it or leaving.
@@ -710,21 +735,35 @@ class OrgGraph::StructureAggregate
     effective_on
   end
 
-  # A parent must be live and at a higher level, and a mirrored unit never
-  # hangs beneath one Espalia holds.
+  # A parent must be live and of a kind the unit's kind may sit beneath, and a
+  # mirrored unit never hangs beneath one Espalia holds.
   def ensure_placeable!(provider, level_id, parent_id, on:)
-    return if parent_id.nil?
+    rules = taxonomy
+    if parent_id.nil?
+      raise "#{rules.kind(level_id).name} can't sit at the top" unless rules.may_be_top?(level_id)
+
+      return
+    end
 
     parent = @units[parent_id]
     raise "Parent unit not found" unless parent
     raise "Parent unit is retired" if parent.retired
     raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
-    raise "A parent must sit at a higher level" unless level_index(parent.level_id) < level_index(level_id)
+    raise "A parent must sit at a higher level" unless rules.allows?(level_id, beneath: parent.level_id)
     raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
   end
 
   def live_units
     @units.values.reject(&:retired)
+  end
+
+  # The ids above a unit, its parent first. Stops at a loop, so it always ends.
+  def ancestor_ids(unit_id)
+    ids = []
+    while (unit_id = @units[unit_id]&.parent_id) && !ids.include?(unit_id)
+      ids << unit_id
+    end
+    ids
   end
 
   def level_index(level_id)
