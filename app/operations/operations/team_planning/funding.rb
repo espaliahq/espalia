@@ -16,6 +16,11 @@ class Operations::TeamPlanning::Funding < Operations::Base
               "each of role, level and location the line states is the position's (location is an occupant's " \
               "country, else that of the person it replaces). A line with no cost centre matches any position and is " \
               "the least specific; past that, the more of role, level and location a line states, the more specific. " \
+              "The budget_strictness rule, given as strictness, names the dimensions that must match (match): one outside it " \
+              "no longer blocks a line, a line whose stated dimensions agree outranks one where they differ, and its default, " \
+              "position_control, holds all four. Each draw lists differs_on, the dimensions its line states that the position " \
+              "doesn't share, and variance, those the rule holds, which someone must approve; a difference outside it is a " \
+              "record of the trade. " \
               "source is 'derived', or 'set' by team_planning_set_position_funding, which wins. A position is " \
               "unfunded with a reason: no_line, ambiguous (matching_ids lists the lines that tie; none is picked) or " \
               "line_gone (its funding names a line the scenario no longer holds). Each line lists its positions in " \
@@ -31,13 +36,13 @@ class Operations::TeamPlanning::Funding < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "A scenario of the plan; not the plan's id, as the baseline has no period." }
 
-  # @return [Hash] `{ plan_id, scenario_id, period, total, funded, unfunded, positions, budget_lines }`
+  # @return [Hash] `{ plan_id, scenario_id, period, strictness, total, funded, unfunded, positions, budget_lines }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Funding.new(context:, plan:, scenario_id:).call }
     { plan_id: plan.id, scenario_id:, period: { starts_on: report.period.begin.iso8601, ends_on: report.period.end.iso8601 },
-      total: count(report.total), funded: count(report.funded), unfunded: count(report.unfunded),
+      strictness: ::TeamPlanning::RuleKinds::BudgetStrictness.describe(report.strictness), total: count(report.total), funded: count(report.funded), unfunded: count(report.unfunded),
       positions: report.positions.map { position(it) },
       budget_lines: report.by_line.sort.map { |budget_line_id, draws| { budget_line_id:, positions: draws.map { drawn(*it) } } } }
   end
@@ -52,7 +57,7 @@ class Operations::TeamPlanning::Funding < Operations::Base
       draw_reason: funded.draw_reason, starts_on: funded.starts_on.iso8601, source: funded.source,
       state: funded.funded? ? "funded" : "unfunded", reason: funded.reason,
       reason_text: funded.reason && ::TeamPlanning::Funding::REASONS.fetch(funded.reason),
-      draws: funded.draws.map { { budget_line_id: it.budget_line_id, share: decimal(it.share), held: it.held } },
+      draws: funded.draws.map { { budget_line_id: it.budget_line_id, share: decimal(it.share), held: it.held, differs_on: it.differs_on, variance: it.variance } },
       matching_ids: funded.matching_ids }
   end
 
