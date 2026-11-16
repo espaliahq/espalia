@@ -31,8 +31,9 @@
 #
 # Figures stay exact Rationals in their band's currency, totalled per
 # currency. Each total converts once, to the reference currency at the
-# period's start; a missing rate leaves it unconverted and says so. Plans
-# reprice live: the report states when the bands last changed.
+# period's start; a missing rate leaves it unconverted and says so. A live
+# plan reprices as the bands change, and an archived one reads the copy its
+# archive took: the report states when the bands it read last changed.
 #
 # Today has no period of its own, so it gets a run rate instead: every seat
 # it holds priced for the year from the base date to the day before the
@@ -172,7 +173,7 @@ class TeamPlanning::Cost
   # @!attribute period [Range<Date>] the scenario's period, or Today's year
   # @!attribute pay_view [String] a {PAY_VIEWS} entry
   # @!attribute reference_currency [String, nil]
-  # @!attribute bands_changed_at [Time, nil] when a pay band last changed; plans reprice live
+  # @!attribute bands_changed_at [Time, nil] when a pay band the plan reads last changed
   # @!attribute scenario [Priced]
   # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
   # @!attribute forecast [Forecasted]

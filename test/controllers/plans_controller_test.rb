@@ -311,7 +311,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
 
       get plan_path(@plan_id)
       assert_includes response.body, "Archived on 20 November 2026 by Erin Editor"
-      assert_includes response.body, "still use today&#39;s pay bands, exchange rates and rules"
+      assert_includes response.body, "use the pay bands, exchange rates, budget lines and rules of 20 November 2026"
       assert_select "form[action='#{restore_plan_path(@plan_id)}']", count: 1
       assert_select "button", text: "New scenario", count: 0
       assert_select "button", text: "Archive plan", count: 0

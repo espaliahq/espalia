@@ -35,7 +35,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "(null when the limit is heads or no line approves an amount); over.heads says whether it holds more FTE " \
               "than its lines count (null when the limit is money or no line states a head count). A cost centre or the " \
               "total spends its unfunded money and heads too. Nothing is converted to judge it: a currency no line " \
-              "approves goes in over.mismatched_currencies, never counted. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
+              "approves goes in over.mismatched_currencies, never counted. #{PRICED_AS_ARCHIVED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -48,7 +48,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Budget.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, **priced_today(plan), scenario_id:, basis: report.basis, strictness: ::TeamPlanning::RuleKinds::BudgetStrictness.describe(report.strictness), period: period(report), pay_view: report.pay_view,
+    { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, basis: report.basis, strictness: ::TeamPlanning::RuleKinds::BudgetStrictness.describe(report.strictness), period: period(report), pay_view: report.pay_view,
       reference_currency: report.reference_currency, total: totals(report.totals), forecast: sum(report.forecast),
       budget_lines: report.lines.map { line(it) },
       cost_centres: report.cost_centres.map { |cost_centre, totals| { cost_centre:, **totals(totals, money: method(:native)) } },

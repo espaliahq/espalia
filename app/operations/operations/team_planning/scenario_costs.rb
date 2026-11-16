@@ -19,7 +19,7 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
               "in `native`, and `converted` is the same in the reference currency at each period's start, null with " \
               "`missing` saying why. `unpriced` counts the seats that can't be priced and so are left out, never " \
               "counted as zero; team_planning_cost names them. A scenario that can't be priced has `error` instead " \
-              "of figures. Figures are decimal strings. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
+              "of figures. Figures are decimal strings. #{PRICED_AS_ARCHIVED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -31,7 +31,7 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
     plan = plan!
     reports = ::TeamPlanning::Cost.every_scenario(context:, plan:)
     priced = reports.values.grep(::TeamPlanning::Cost::Report)
-    { plan_id: plan.id, **priced_today(plan), reference_currency: ::TeamPlanning::PricingInputs.for(plan).reference_currency,
+    { plan_id: plan.id, **priced_as_archived(plan), reference_currency: ::TeamPlanning::PricingInputs.for(plan).reference_currency,
       bands_changed_at: priced.filter_map(&:bands_changed_at).max&.iso8601,
       scenarios: reports.map { |scenario_id, report| scenario(scenario_id, report) } }
   end

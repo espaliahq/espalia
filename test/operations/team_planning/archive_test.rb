@@ -31,7 +31,7 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
   end
 
   should "say who archived the plan and when" do
-    assert_equal({ on: "2026-03-12", by_id: @editor.person_id, by_name: "Edie Marsh" },
+    assert_equal({ on: "2026-03-12", by_id: @editor.person_id, by_name: "Edie Marsh", priced_on: "2026-03-12" },
                  call(Operations::TeamPlanning::Plan, as: @viewer, plan_id: @plan_id)[:archived])
   end
 
@@ -70,16 +70,32 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
     assert_equal [], call(Operations::TeamPlanning::Attention, plan_id: @plan_id)[:items]
   end
 
-  should "say its figures still use today's bands, rates and rules" do
+  PRICING_READS = [ [ Operations::TeamPlanning::Cost, :q1 ], [ Operations::TeamPlanning::Capacity, :q1 ], [ Operations::TeamPlanning::Forecast, :q1 ],
+                    [ Operations::TeamPlanning::Budget, :q1 ], [ Operations::TeamPlanning::Funding, :q1 ], [ Operations::TeamPlanning::BudgetLines, :q1 ],
+                    [ Operations::TeamPlanning::ScenarioCosts, nil ] ].freeze
+
+  def pricing_notes(plan_id, scenario_id)
+    PRICING_READS.map do |operation, scenario_read|
+      result = call(operation, plan_id:, **({ scenario_id: } if scenario_read).to_h)
+      [ operation.name, result.values_at(:archived_on, :frozen_on, :note) ]
+    end
+  end
+
+  should "say its figures are priced as on its archive day, with framework roles and levels read live" do
+    note = "Priced as on 12 March 2026, when this plan was archived: pay bands, exchange rates, budget lines and rules as they " \
+           "stood then. Framework roles and levels are read as they are now."
+
+    pricing_notes(@plan_id, @q1).each { |name, values| assert_equal [ "2026-03-12", "2026-03-12", note ], values, name }
+    assert_not call(Operations::TeamPlanning::Cost, plan_id: @live_id, scenario_id: @live_id).key?(:archived_on)
+  end
+
+  should "say a plan archived without a copy of its prices still uses today's" do
+    call(Operations::TeamPlanning::RestorePlan, plan_id: @plan_id)
+    PlanKeyStore.stub(:available?, false) { call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id) }
     note = "This plan was archived on 12 March 2026. Its figures still use today's pay bands, exchange rates, budget lines and rules."
 
-    [ [ Operations::TeamPlanning::Cost, @q1 ], [ Operations::TeamPlanning::Capacity, @q1 ], [ Operations::TeamPlanning::Forecast, @q1 ],
-      [ Operations::TeamPlanning::Budget, @q1 ], [ Operations::TeamPlanning::Funding, @q1 ], [ Operations::TeamPlanning::BudgetLines, @q1 ],
-      [ Operations::TeamPlanning::ScenarioCosts, nil ] ].each do |operation, scenario_id|
-      result = call(operation, plan_id: @plan_id, **({ scenario_id: } if scenario_id).to_h)
-      assert_equal [ "2026-03-12", note ], result.values_at(:archived_on, :note), operation.name
-    end
-    assert_not call(Operations::TeamPlanning::Cost, plan_id: @live_id, scenario_id: @live_id).key?(:archived_on)
+    pricing_notes(@plan_id, @q1).each { |name, values| assert_equal [ "2026-03-12", nil, note ], values, name }
+    assert_nil call(Operations::TeamPlanning::Plan, plan_id: @plan_id)[:archived][:priced_on]
   end
 
   should "refuse changes until an editor restores it, and check it again after" do
