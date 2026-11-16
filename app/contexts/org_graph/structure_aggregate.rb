@@ -852,17 +852,19 @@ class OrgGraph::StructureAggregate
 
   # A parent must be live and of a kind the unit's kind may sit beneath, and a
   # mirrored unit never hangs beneath one Espalia holds. A back-dated placement
-  # must also fit the kinds' rules on each day it holds, as the history shows them.
+  # must also fit the kinds' rules on each day it holds, as the history shows
+  # them; one that a later move ends before today answers only to those days.
   def ensure_placeable!(provider, level_id, parent_id, on:, until_on: nil)
     rules = taxonomy
+    held_today = until_on.nil? || until_on > iso_date(Date.current)
     parent = parent_id && @units[parent_id]
     if parent_id.nil?
-      raise "#{rules.kind(level_id).name} can't sit at the top" unless rules.may_be_top?(level_id)
+      raise "#{rules.kind(level_id).name} can't sit at the top" if held_today && !rules.may_be_top?(level_id)
     else
       raise "Parent unit not found" unless parent
       raise "Parent unit is retired" if parent.retired
       raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
-      unless rules.allows?(level_id, beneath: parent.level_id)
+      if held_today && !rules.allows?(level_id, beneath: parent.level_id)
         raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent.level_id).name}"
       end
       raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA

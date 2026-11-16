@@ -280,6 +280,36 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     end
   end
 
+  context "on a tenant whose Squads could nest until two days ago" do
+    setup do
+      @tenant = create(:tenant)
+      @tribe, @squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      publish_taxonomy([ { level_id: @tribe, name: "Tribe" },
+                         { level_id: @squad, name: "Squad", parent_level_ids: [ @tribe, @squad ], top: false } ],
+                       on: (@today - 10).iso8601)
+      @payments = create_unit("Payments", @tribe, on: @today - 10)
+      @orders = create_unit("Orders", @tribe, on: @today - 10)
+      @checkout = create_unit("Checkout", @squad, parent_id: @payments, on: @today - 10)
+      @basket = create_unit("Basket", @squad, parent_id: @payments, on: @today - 10)
+      as_tenant do
+        @handler.move_unit(@basket, @orders, effective_on: @today - 4)
+        @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 2)
+      end
+    end
+
+    should "accept a move under a Squad that ends before Squads stopped nesting" do
+      as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 6) }
+
+      moved = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data
+      assert_equal [ @basket, @checkout, (@today - 6).iso8601 ], moved.values_at(:unit_id, :parent_id, :effective_on)
+    end
+
+    should "still refuse a move under a Squad that holds into today" do
+      error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 1) } }
+      assert_equal "Squad can't sit under Squad", error.message
+    end
+  end
+
   context "on a tenant whose retired Ledger sat under a Division until three days ago" do
     setup do
       @tenant = create(:tenant)
