@@ -88,6 +88,16 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_equal "Platform Engineer, E2 Engineer II", call(:PayBands)[:pay_bands].sole[:level]
   end
 
+  should "report a band made from a level by that level, with the number the framework gives it now" do
+    added = add
+    ActsAsTenant.with_tenant(@tenant) { @level.update_columns(ordinal: 5) }
+    band = call(:PayBands)[:pay_bands].sole
+
+    assert_equal({ level_id: @level.level_id, location: "Fixtureland" }, added[:matcher])
+    assert_equal({ level_id: @level.level_id, location: "Fixtureland" }, band[:matcher])
+    assert_equal [ 5, @role.role_id ], band.values_at(:level_ordinal, :role_id)
+  end
+
   should "list the any-location band first, then the countries" do
     add(location: "Testonia")
     add(location: "")

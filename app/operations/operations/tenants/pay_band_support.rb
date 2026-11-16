@@ -15,8 +15,8 @@ module Operations::Tenants::PayBandSupport
   MATCHER_PARAMS = %i[role_family_id role_id level_ordinal level_id].freeze
   MATCHER_HELP = "A band matches on whichever of role_family_id, role_id (both from frameworks_get), level_ordinal " \
                  "(the level number, 1 for a role's first level) and location it is given; one left out matches " \
-                 "anything. Give a role or a role family, not both. level_id is shorthand for a framework level's " \
-                 "role and level number, and keeps pricing seats at that level once it leaves the framework. " \
+                 "anything. Give a role or a role family, not both. level_id instead matches one framework level, " \
+                 "follows it when the framework renumbers it, and keeps pricing its seats once it leaves. " \
                  "The bands form an ordered list: of the bands that match a seat, the last has the last word. A " \
                  "new band lands after the last band no narrower than it; tenants_reorder_pay_bands moves it."
   FIGURE = /\A\d{1,12}(\.\d{1,2})?\z/
@@ -99,6 +99,7 @@ module Operations::Tenants::PayBandSupport
   # @param band [PayBand]
   # @return [Hash]
   def band_payload(band, framework: framework_for([ band ]), names: editor_names([ band ]), shadowed: shadowed_ids)
+    in_framework = take_current_names(band, framework)
     {
       pay_band_id: band.id,
       position: band.position,
@@ -107,7 +108,7 @@ module Operations::Tenants::PayBandSupport
       role_id: band.role_id,
       role_family_id: band.role_family_id,
       level_ordinal: band.level_ordinal,
-      in_framework: take_current_names(band, framework),
+      in_framework:,
       role: band.role_name,
       level_name: band.level_name,
       level: band.level_label,
