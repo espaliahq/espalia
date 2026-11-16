@@ -105,7 +105,7 @@ class TeamPlanning::PlanAggregate
     @sequence = {}
     @pinned_from = {}
     @dates = {}
-    @date_steps = {}
+    @date_edits = Set.new
     @dates_redo = {}
     @undone_at = {}
     @undo_clock = 0
@@ -1026,7 +1026,7 @@ class TeamPlanning::PlanAggregate
     if data[:closes_scenario_id]
       @scenarios[data[:closes_scenario_id]] = @scenarios.fetch(data[:closes_scenario_id]).with(ends_on: Date.iso8601(data[:closes_on]))
       (@dates[data[:closes_scenario_id]] ||= []) << event
-      @date_steps[event.event_id] = data[:closes_scenario_id]
+      @date_edits << event.event_id
     end
     ends_on = Date.iso8601(data[:ends_on]) if data[:relation] == "then" && data[:ends_on]
     starts_on = Date.iso8601(data[:starts_on]) if data[:parent_id] == @plan_id
@@ -1062,7 +1062,6 @@ class TeamPlanning::PlanAggregate
       stack.reject! { moved.include?(it) }
     end
     @dates[agreed_id] = @dates.delete(original.id) if @dates.key?(original.id)
-    @dates.fetch(agreed_id, []).each { @date_steps[it.event_id] = agreed_id }
     @dates_redo[agreed_id] = @dates_redo.delete(original.id) if @dates_redo.key?(original.id)
     carried = @carried.fetch(original.id, {}).slice(*data[:keys].map(&:to_a))
     @carried[agreed_id] = carried if carried.any?
@@ -1112,7 +1111,7 @@ class TeamPlanning::PlanAggregate
     @scenarios.delete(event.data[:scenario_id])
     @logs.delete(event.data[:scenario_id])
     @redo_stacks.delete(event.data[:scenario_id])
-    @dates.delete(event.data[:scenario_id])&.each { @date_steps.delete(it.event_id) }
+    @dates.delete(event.data[:scenario_id])&.each { @date_edits.delete(it.event_id) }
     @dates_redo.delete(event.data[:scenario_id])
     @carried.delete(event.data[:scenario_id])
     @removed_scenario_ids << event.data[:scenario_id]
@@ -1171,13 +1170,13 @@ class TeamPlanning::PlanAggregate
       @dates_redo.fetch(step_id, {}).each_value { it.delete(redone_id) }
     else
       (@dates[step_id] ||= []) << event
-      @date_steps[event.event_id] = step_id
+      @date_edits << event.event_id
       @sequence[event.event_id] = @sequence.size
       [ step_id, *resting_on(step_id) ].each { end_redo(it, data[:set_by_id]) }
     end
   end
 
-  def dates_edit?(event_id) = @date_steps.key?(event_id)
+  def dates_edit?(event_id) = @date_edits.include?(event_id)
 
   def undo_dates(scenario_id, event_id, undone_by_id)
     step_id = step_with_period!(scenario_id)
@@ -1229,8 +1228,11 @@ class TeamPlanning::PlanAggregate
 
   # The step whose dates a scenario edits, as {#step_with_period!} finds it,
   # or nil for the baseline and an alternative.
-  def dates_step(scenario_id)
-    scenario = period_scenario(scenario_id) or return
+  def dates_step(scenario_id) = period_step(period_scenario(scenario_id))
+
+  def period_step(scenario)
+    return unless scenario
+
     case scenario.relation
     in "then" then scenario.id
     in "instead" | "on" then nil
@@ -1763,7 +1765,7 @@ class TeamPlanning::PlanAggregate
     scenario = period_scenario(live_scenario!(scenario_id))
     raise TeamPlanning::Error, "The baseline stands on the base date and has no period" unless scenario
 
-    dates_step(scenario.id) or
+    period_step(scenario) or
       raise TeamPlanning::Error, "This scenario is an alternative: it takes its period from #{parent_of(scenario.parent_id)}"
   end
 
