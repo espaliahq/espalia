@@ -65,7 +65,7 @@ class PlanPolicyTest < ActiveSupport::TestCase
         context_for(outsider, team_planner: true), context_for(outsider, global_admin: true),
         context_for(outsider) ].each do |context|
         policy = PlanPolicy.new(context, @plan)
-        %i[show? update? destroy? manage_members? leave? destroy_frozen? see_pay? manage_see_pay? restore_see_pay?].each do |predicate|
+        %i[show? update? destroy? manage_members? leave? destroy_frozen? see_pay? manage_see_pay? restore_see_pay? upload_pay?].each do |predicate|
           assert_not policy.public_send(predicate), predicate
         end
       end
@@ -147,6 +147,17 @@ class PlanPolicyTest < ActiveSupport::TestCase
       assert PlanPolicy.new(context_for(@editor), row).see_pay?
       assert_not PlanPolicy.new(context_for(@viewer), row).see_pay?
       assert_equal [ @editor.id ], row.pay_holder_ids
+    end
+
+    should "let only an editor who holds it upload pay" do
+      assert PlanPolicy.new(context_for(@editor), @plan).upload_pay?
+      @plan.grant_see_pay(@viewer.id, granted_by_id: @editor.id)
+      assert_not PlanPolicy.new(context_for(@viewer), @plan).upload_pay?
+
+      other = create(:person, tenant: @tenant)
+      create(:tenant_user, tenant: @tenant, person: other)
+      @plan.add_member(other.id, role: "editor", added_by_id: @editor.id)
+      assert_not PlanPolicy.new(context_for(other), @plan).upload_pay?
     end
 
     should "leave a holder who has left with nothing" do

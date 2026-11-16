@@ -14,8 +14,9 @@ class Operations::TeamPlanning::SplitScenario < Operations::Base
               "The changes event_ids names, and every earlier change to the same thing, move into a new scenario " \
               "named name, which takes the scenario's place; the scenario keeps the rest, its id and what forks " \
               "from it, and sits 'on' the new one over the same period. Every scenario resolves as before. Take " \
-              "event_ids as team_planning_history lists them. Refused for the baseline, when nothing or everything would " \
-              "move, when a moving change needs something only a staying change creates (the refusal names those " \
+              "event_ids as team_planning_split_needs lists them, the latest change to each subject and facet. Refused " \
+              "for an earlier change, which means the scenario changed since it was read, for the baseline, when nothing " \
+              "or everything would move, when a moving change needs something only a staying change creates (the refusal names those " \
               "changes' event ids), or unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client

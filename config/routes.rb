@@ -415,6 +415,12 @@ Rails.application.routes.draw do
     # Update the plan to today, from a preview an editor confirms ([#337](https://github.com/espaliahq/espalia/issues/337)).
     get :rebase, on: :member, path: "update-to-today"
     post :rebase, on: :member, path: "update-to-today", action: :rebase_plan
+    # Split the agreed part off a scenario, from a page an editor confirms ([#360](https://github.com/espaliahq/espalia/issues/360)).
+    get :split, on: :member, path: "scenarios/:scenario_id/split"
+    post :split, on: :member, path: "scenarios/:scenario_id/split", action: :split_scenario
+    # Hold actual pay from a file, previewed then confirmed ([#323](https://github.com/espaliahq/espalia/issues/323)).
+    get :pay_upload, on: :member, path: "pay-upload"
+    post :pay_upload, on: :member, path: "pay-upload", action: :upload_pay
     # Change which units the plan covers ([#338](https://github.com/espaliahq/espalia/issues/338)).
     patch :scope, on: :member
     # Fork and rename a scenario (#271).
