@@ -1088,12 +1088,26 @@ class TeamPlanning::PlanAggregate
   # @param base_on [Date]
   # @raise [TeamPlanning::FirstStepEndsTooSoon]
   def ensure_first_steps_reach!(base_on)
-    step = children_of(@plan_id).find { it.relation == "then" && it.ends_on < base_on } or return
+    step = first_steps.find { it.ends_on < base_on } or return
 
     raise TeamPlanning::FirstStepEndsTooSoon.new(scenario_id: step.id, ends_on: step.ends_on, base_on:)
   end
 
+  # The first step whose start a new base would move: one that starts before
+  # it moves to it, and one that starts on or after it stays.
+  #
+  # @param base_on [Date]
+  # @return [Array<Array(String, Date, Date)>] scenario id, its start now, its start on the new base
+  def first_step_starts(base_on)
+    first_steps.filter_map do |step|
+      before = period_of(step.id).begin
+      [ step.id, before, base_on ] if before < base_on
+    end
+  end
+
   private
+
+  def first_steps = children_of(@plan_id).select { it.relation == "then" }
 
   def in_effect(scenario_id, undone)
     @logs.fetch(scenario_id, []).reject { undone.include?(it.event_id) }.each_with_object([]) do |entry, in_effect|
