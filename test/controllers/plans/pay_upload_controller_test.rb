@@ -88,6 +88,16 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       assert_not held_pay?
     end
 
+    should "refuse a confirm that follows the plan being archived, and hold nothing" do
+      signature = signature_from_preview
+      ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id) }
+
+      upload(intent: "confirm", signature:)
+      assert_redirected_to plan_path(@plan_id)
+      assert_equal TeamPlanning::PlanAggregate::ARCHIVED, flash[:alert]
+      assert_not held_pay?
+    end
+
     should "preview the counts and names, never the amount, then hold the pay and return to the map" do
       upload
       assert_response :success
