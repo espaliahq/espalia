@@ -6,7 +6,7 @@
 class PlansController < ApplicationController
   around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map]
 
-  # GET /planning
+  # GET /planning?state=archived
   def index
     authorize TeamPlanningPlan, :index?, policy_class: PlanPolicy
     render index_view
@@ -34,6 +34,26 @@ class PlansController < ApplicationController
     redirect_to plan_path(plan[:plan_id]), notice: "This plan now covers #{Views::Plans::ScopeDialog.covers(result[:scope])}."
   rescue Operations::Base::ParameterError => e
     redirect_to plan_path(plan[:plan_id]), alert: "Couldn't change what this plan covers: #{e.message}"
+  end
+
+  # POST /planning/:id/archive
+  def archive
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    Operations::TeamPlanning::ArchivePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
+    redirect_to plan_path(plan[:plan_id]), notice: "Plan archived. Restore it whenever you want to work on it again."
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), alert: "Couldn't archive this plan: #{e.message}"
+  end
+
+  # POST /planning/:id/restore
+  def restore
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    Operations::TeamPlanning::RestorePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
+    redirect_to plan_path(plan[:plan_id]), notice: "Plan restored. It takes changes again, and checks against the organisation from today."
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), alert: "Couldn't restore this plan: #{e.message}"
   end
 
   # GET /planning/:id
@@ -241,6 +261,8 @@ class PlansController < ApplicationController
       open_tab:,
       body:,
       can_edit: can_edit?,
+      can_archive: editor? && !plan[:archived],
+      can_restore: editor? && plan[:archived].present?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
       **layout
     )
@@ -248,8 +270,10 @@ class PlansController < ApplicationController
 
   def index_view(error: nil, draft: {})
     can_create = policy_for(TeamPlanningPlan).create?
+    archived = params[:state] == "archived"
     Views::Plans::IndexView.new(
-      plans: Operations::TeamPlanning::Plans.call(context: pundit_user)[:plans],
+      plans: Operations::TeamPlanning::Plans.call(context: pundit_user, params: { state: archived ? "archived" : "live" })[:plans],
+      archived:,
       can_create:,
       units: can_create ? Operations::TeamPlanning::CoverableUnits.call(context: pundit_user)[:units] : [],
       error:,
@@ -269,15 +293,22 @@ class PlansController < ApplicationController
   def policy_for(record) = PlanPolicy.new(pundit_user, record)
 
   def see_pay(members)
-    { can_manage_see_pay: policy_for(@plan_record).manage_see_pay?,
+    { can_manage_see_pay: policy_for(@plan_record).manage_see_pay? && !@plan_record.archived?,
       reachable_ids: PlanPolicy.reachable_ids(members.pluck(:person_id)),
       locked_out: PlanPolicy.locked_out?(@plan_record) && !PlanPolicy.frozen?(@plan_record) }
   end
 
+  # An archived plan takes no changes, so its editors see it as its viewers do.
   def can_edit?
     return @can_edit if defined?(@can_edit)
 
-    @can_edit = policy_for(@plan_record).update?
+    @can_edit = editor? && !@plan_record.archived?
+  end
+
+  def editor?
+    return @editor if defined?(@editor)
+
+    @editor = policy_for(@plan_record).update?
   end
 
   def layout

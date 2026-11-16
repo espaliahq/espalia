@@ -37,6 +37,8 @@ class Views::Plans::ChangesTab < Views::Base
   end
 
   def view_template
+    return unchecked(@drift) if @drift[:checked] == false
+
     div(class: "space-y-8") do
       drift_section
       planned_section
