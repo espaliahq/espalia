@@ -37,8 +37,10 @@ export default class extends BaseController {
     this.reach = JSON.parse(this.grip.dataset.timelineShiftTargets).map(String)
     this.headers = [ ...this.element.querySelectorAll("[data-timeline-step]") ]
     this.over = null
+    this.pointerId = event.pointerId
     this.grip.setPointerCapture(event.pointerId)
-    this.grip.parentElement.dataset.shifting = ""
+    this.bar = this.grip.parentElement
+    this.bar.dataset.shifting = ""
     this.reach.forEach(step => {
       this.#column(step).dataset.lit = ""
       this.#hint(step).classList.remove("invisible")
@@ -47,12 +49,14 @@ export default class extends BaseController {
     this.listeners = {
       pointermove: e => this.#move(e),
       pointerup: e => this.#drop(e),
-      pointercancel: () => this.#finish(),
-      lostpointercapture: () => this.#finish()
+      pointercancel: () => this.#finish()
     }
     Object.entries(this.listeners).forEach(([type, fn]) => this.grip.addEventListener(type, fn))
     this.escape = e => { if (e.key === "Escape") this.#finish() }
     window.addEventListener("keydown", this.escape)
+    // On document, since a removed grip loses its capture there rather than on itself.
+    this.lost = e => { if (e.pointerId === this.pointerId) this.#finish() }
+    document.addEventListener("lostpointercapture", this.lost)
   }
 
   // private
@@ -70,7 +74,7 @@ export default class extends BaseController {
   #drop(event) {
     this.#move(event)
     const edge = this.grip.dataset.timelineShiftEdge
-    const item = this.over === null ? null : this.grip.parentElement.querySelector(`[data-timeline-shift="${edge}:${this.over}"]`)
+    const item = this.over === null ? null : this.bar.querySelector(`[data-timeline-shift="${edge}:${this.over}"]`)
     this.#finish()
     if (!item) return
 
@@ -93,7 +97,8 @@ export default class extends BaseController {
 
     Object.entries(this.listeners).forEach(([type, fn]) => this.grip.removeEventListener(type, fn))
     window.removeEventListener("keydown", this.escape)
-    if (this.grip.parentElement) delete this.grip.parentElement.dataset.shifting
+    document.removeEventListener("lostpointercapture", this.lost)
+    delete this.bar.dataset.shifting
     this.reach.forEach(step => {
       const column = this.#column(step)
       delete column.dataset.lit

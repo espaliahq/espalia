@@ -333,9 +333,9 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         assert_selector "[data-timeline-shift-hint='2']", visible: true
         page.execute_script("document.querySelectorAll('[data-shifting] > [data-timeline-shift-edge]').forEach(grip => grip.remove())")
         release
-        press_escape
 
         assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert_no_selector "[data-shifting]"
         assert_no_text "Moved to"
       end
     end
