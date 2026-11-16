@@ -172,7 +172,14 @@ class PayBandTest < ActiveSupport::TestCase
       assert_not both.valid?
       assert_equal [ "Engineering", "Level 3" ], entry(role_family: @family, level_ordinal: 3).values_at(:role_name, :level_name)
       assert_equal [ "Every role", "Every level" ], entry(location: "Testonia").values_at(:role_name, :level_name)
-      assert_equal({ role_id: @role.role_id, level_ordinal: 2 }, entry(role: @role, level_ordinal: 2, location: "Mu").matcher_fields.except(:location))
+      assert_equal({ role_id: @role.role_id, level_ordinal: 7 }, entry(role: @role, level_ordinal: 7, location: "Mu").matcher_fields.except(:location))
+    end
+
+    should "report a band made from a framework level by that level, not the role and number it was made with" do
+      made = band(location: "Mu").tap(&:save!)
+      made.update_columns(level_ordinal: 99)
+
+      assert_equal({ level_id: @level.level_id, location: "Mu" }, made.matcher_fields)
     end
 
     should "still price a seat at a level that has left the framework from the band made from it" do

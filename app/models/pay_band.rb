@@ -145,10 +145,16 @@ class PayBand < ApplicationRecord
     { role_family_id:, role_id:, level_ordinal:, level_id: nil, location_key: location_key.presence }
   end
 
-  # The fields an admin sets, for the tools and the working.
+  # The fields an admin sets, for the tools and the working. A band made
+  # from a framework level reports the level, not the role and number it
+  # was made with, which can go stale.
   #
   # @return [Hash{Symbol => Object}] only the fields set
-  def matcher_fields = { role_family_id:, role_id:, level_ordinal:, location: location.presence }.compact
+  def matcher_fields
+    return { level_id:, location: location.presence }.compact if level_id
+
+    { role_family_id:, role_id:, level_ordinal:, location: location.presence }.compact
+  end
 
   # How narrow the band is, for where a new band lands: a role counts above
   # its family, a level number and a country one each.
