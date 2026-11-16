@@ -6,7 +6,7 @@
 class PlansController < ApplicationController
   include Plans::BudgetEditing
 
-  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map budget]
+  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map budget new_budget_line create_budget_line edit_budget_line update_budget_line cut_budget_line]
 
   # GET /planning?state=archived
   def index
