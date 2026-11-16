@@ -90,7 +90,7 @@ class PayBand < ApplicationRecord
       return false unless ids.sort == bands.map(&:id).sort
       return :stale if from && from != bands.map(&:id)
 
-      ids.each_with_index { |id, index| where(id:).update_all(position: index + 1, updated_at: Time.current) }
+      ids.each_with_index { |id, index| where(id:).update_all(position: index + 1) }
       bands.first&.tenant&.update_column(:pay_bands_changed_at, Time.current)
       true
     end

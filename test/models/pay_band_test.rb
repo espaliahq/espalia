@@ -142,6 +142,19 @@ class PayBandTest < ActiveSupport::TestCase
       assert_not PayBand.reorder!([ role.id ])
     end
 
+    should "leave each band's own change stamp alone when only the order changes, and stamp the tenant's" do
+      family = entry(role_family: @family, level_ordinal: 2)
+      role = band.tap(&:save!)
+      stamps = PayBand.order(:id).pluck(:updated_at)
+
+      travel 1.day do
+        assert PayBand.reorder!([ role.id, family.id ])
+        assert_equal stamps, PayBand.order(:id).pluck(:updated_at)
+        assert_equal [ role, family ], PayBand.order(:position).to_a
+        assert_in_delta Time.current, @tenant.reload.pay_bands_changed_at, 1.second
+      end
+    end
+
     should "land a new band after the last band no more specific than it, and close the gap a removed one leaves" do
       role_x = band(location: "Fixtureland").tap(&:save!)
       role = band.tap(&:save!)
