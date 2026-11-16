@@ -38,7 +38,7 @@ class Views::Plans::CapacityMarks
 
       actual, planned, forecast = total.parts.values_at(:actual, :planned, :forecast)
       forecast = change(forecast, total.unit)
-      [ [ "Actual", amount(actual, total.unit) ], [ "Planned", change(planned, total.unit) || amount(planned, total.unit) ],
+      [ [ "Actual", amount(actual, total.unit) ], [ "Planned", change(planned, total.unit) || amount(0, total.unit) ],
         ([ "Forecast", forecast ] if forecast) ].compact
     end
 

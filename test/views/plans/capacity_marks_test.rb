@@ -101,4 +101,11 @@ class Views::Plans::CapacityMarksTest < ActiveSupport::TestCase
     assert_equal [ "Actual 1.5u", "Planned −1.0u" ], unit.css("[data-figure-parts] [data-part]").map(&:text)
     assert_nil today.at_css("[data-figure-parts]")
   end
+
+  should "read a planned part a hair under nothing as nothing, never as a negative zero" do
+    total = Views::Plans::CapacityMarks::Total.new(model: "m", unit: "u", amount: BigDecimal("1"), change: BigDecimal("0"),
+                                                   parts: { actual: BigDecimal("1"), planned: BigDecimal("-1e-20"), forecast: BigDecimal("0") })
+
+    assert_equal [ [ "Actual", "1.0u" ], [ "Planned", "0.0u" ] ], Views::Plans::CapacityMarks::Format.parts(total)
+  end
 end
