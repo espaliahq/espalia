@@ -333,7 +333,7 @@ class PlansController < ApplicationController
   end
 
   def cost_columns
-    return [] unless PayBand.exists?
+    return [] unless TeamPlanning::PricingInputs.for(@plan_record).bands.any?
 
     costs = read(Operations::TeamPlanning::ScenarioCosts)
     rows = costs[:scenarios].index_by { it[:scenario_id] }
