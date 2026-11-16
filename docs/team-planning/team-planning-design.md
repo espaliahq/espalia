@@ -933,7 +933,8 @@ still reads the Org Graph as of its old base, so keeping the plan would change n
 reads. `team_planning_settle_conflict` takes one of two choices, in one scenario:
 
 - **Keep the plan** writes the planned change again in the scenario. A scenario that made
-  the change sets it again. One that inherits it pins it, naming where it came from, unless
+  the change sets it again, and one that pinned it pins it again, naming what the first pin
+  kept. One that inherits it pins it, naming where it came from, unless
   its kind seals its value (a level, plan data): a pin holds its end state in clear, so a
   sealed change is set again in the child instead. The change keeps its own note unless
   the editor gives another.
@@ -941,8 +942,11 @@ reads. `team_planning_settle_conflict` takes one of two choices, in one scenario
   would hand the facet back to the parent's change, which still conflicts, so the
   scenario that made the change and its other children keep it as it was. Settled in the
   scenario that made the change, it reaches the children that inherit it, as any change
-  there does. A unit succession can't follow reality yet: the retirements written with it
-  wouldn't follow, so the editor changes it on the map.
+  there does. A level the Org Graph cleared is followed as no level, and a membership it
+  holds with no allocation as an unknown allocation; no editor can set either, so each
+  comes only from following. Cost shows that person's seat unpriced with no level, and
+  capacity shows the place unresolved. A unit succession can't follow reality yet: the
+  retirements written with it wouldn't follow, so the editor changes it on the map.
 
 Settling is refused once status no longer reads the row as conflicting: the Org Graph
 has caught up with the plan, or the person was forgotten.

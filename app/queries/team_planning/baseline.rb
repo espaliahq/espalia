@@ -307,18 +307,21 @@ class TeamPlanning::Baseline
     # The plan's value for a field where it holds one, else the Org Graph's.
     # A planned promotion wins over a corrected level. A value whose key is
     # gone reads as {UNKNOWN}, never as the Org Graph's: the plan said
-    # something here, and nobody can now say what.
+    # something here, and nobody can now say what. A level the plan cleared
+    # reads as none.
     #
     # @param field [Symbol] :level or :fte
     # @return [Object, Symbol] the value, nil when nobody holds one, or {UNKNOWN}
     def planned_or_own(field)
+      return nil if field == :level && TeamPlanning::Events::LevelSet.cleared?(planned_level)
+
       value = (planned_level if field == :level) || plan_data[field]
       return public_send(field) unless value
 
       value.removed? ? UNKNOWN : value.reveal
     end
 
-    # @return [Boolean] whether the plan holds a level for them
+    # @return [Boolean] whether the plan holds a level for them, or holds that they have none
     def planned_level? = !(planned_level || plan_data[:level]).nil?
 
     # Their role and level through the tenant's title mapping. A level the
