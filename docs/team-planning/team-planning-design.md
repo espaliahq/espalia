@@ -94,7 +94,14 @@ the new base, and the confirm names the step and both dates. A step whose start 
 come keeps it.
 
 Each date edit appears in the step's history as a `dates` entry with the new and previous
-dates. Undoing a date edit is [#407](https://github.com/espaliahq/espalia/issues/407).
+dates. Undo and redo take a date edit back and bring it again
+([#407](https://github.com/espaliahq/espalia/issues/407)). Both are a `ScenarioPeriodSet`
+naming the edit in `undoes_event_id` or `redoes_event_id`, and both go through the checks a
+fresh edit does, so a refusal names the later step that would end before it starts. A step
+takes back only its latest standing date edit. Forking the step after one with no end date
+closes it, and that closing stands: undo never reopens it, and an edit made before it can't
+be undone afterwards. Set the dates directly instead. The on-screen controls are
+[#424](https://github.com/espaliahq/espalia/issues/424).
 
 ### Steps with no end date
 
