@@ -1265,7 +1265,8 @@ gives the four numbers for a scenario, never the baseline.
   it. Only the grand totals convert, once, to the reference currency.
 - **Where it adds up.** Lines and cost centres carry all four; units carry funded and unfunded
   only, as a budget line is approved for a cost centre, not a unit. A position with a seat no
-  band prices still counts in head count and is listed as unpriced, with no money.
+  band prices still counts in head count and is listed as unpriced, with no money. So is a
+  seat whose on-cost rule is refused, except on base_only, which funds its base.
 
 The projection records how each position's cost centre was reached (set here, from the Org
 Graph, by which rule) and reports three conditions as checks:

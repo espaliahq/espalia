@@ -196,6 +196,20 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal [ [ staff, [ "no_band" ], [ platform ] ] ], report.unpriced.map { [ it.position_id, it.reasons, it.budget_line_ids ] }
   end
 
+  should "fund a seat whose on-cost is refused on its base under base_only, and list it as unpriced when inclusive" do
+    as_tenant { PayBand.create!(level: @e6, currency: "USD", period: "year", minimum: 0, midpoint: 150_000, maximum: 200_000) }
+    platform = line(amount: 200_000, currency: "USD", period: "year", cost_centre: "Platform")
+    staff = open_position(level: @e6)
+    laptop = { model: "itemised", params: { items: [ { name: "Laptop", amount: "2000", currency: "EUR" } ] } }
+    operation(Operations::TeamPlanning::SetRule, unit_id: @payments, rule: "on_cost", value: laptop)
+
+    assert_equal [ {}, [ [ staff, [ "on_cost_refused" ] ] ] ], budget.then { [ of(it, platform).funded, it.unpriced.map { |seat| [ seat.position_id, seat.reasons ] } ] }
+
+    operation(Operations::TeamPlanning::SetRule, rule: "budget_basis", value: { basis: "base_only" })
+
+    assert_equal [ { "USD" => 150_000r }, [] ], budget.then { [ of(it, platform).funded, it.unpriced ] }
+  end
+
   should "refuse the baseline, which has no period" do
     error = assert_raises(TeamPlanning::Error) do
       as_tenant { TeamPlanning::Budget.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id).call }

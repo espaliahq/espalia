@@ -131,7 +131,7 @@ class TeamPlanning::Budget
     @drawn_by_unit = Hash.new { |hash, key| hash[key] = Hash.new(0r) }
     @unfunded_by_unit = Hash.new { |hash, key| hash[key] = Hash.new(0r) }
     @unfunded_by_cost_centre = Hash.new { |hash, key| hash[key] = Hash.new(0r) }
-    seats.reject(&:unpriced?).each do |seat|
+    seats.select { priced?(it) }.each do |seat|
       money = @inclusive ? seat.amount : seat.base
       funded = @funded[seat.position_id] if seat.position_id
       draws = funded ? funded.draws.select(&:held) : []
@@ -233,11 +233,14 @@ class TeamPlanning::Budget
   end
 
   def unpriced(seats)
-    seats.select { it.unpriced? && it.position_id }.group_by(&:position_id).sort.map do |position_id, group|
+    seats.select { it.position_id && !priced?(it) }.group_by(&:position_id).sort.map do |position_id, group|
       draws = @funded[position_id]&.draws.to_a.select(&:held)
       Unpriced.new(position_id:, unit_id: group.first.unit_id, reasons: group.map(&:reason).uniq.sort, budget_line_ids: draws.map(&:budget_line_id))
     end
   end
+
+  # A refused on-cost leaves the base priced, so base_only still counts it.
+  def priced?(seat) = !seat.unpriced? || (!@inclusive && !seat.base.nil?)
 
   def add(one, other) = one.merge(other) { |_, a, b| a + b }
 

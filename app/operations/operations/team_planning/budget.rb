@@ -27,7 +27,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "four; units carry funded and unfunded only. Head counts are positions and FTE: a line or cost centre counts " \
               "each position drawing on it once, at the FTE it draws, while units and the total count the positions " \
               "funded whole, as team_planning_funding does, so funded and unfunded add up to every position. A position with a seat no pay band prices still counts in head count and is listed under " \
-              "unpriced with no money. Figures are decimal strings. The baseline has no period, so it can't be the " \
+              "unpriced with no money; so is one whose on-cost is refused, unless the basis is base_only, which funds its base. Figures are decimal strings. The baseline has no period, so it can't be the " \
               "scenario. Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
