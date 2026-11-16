@@ -528,6 +528,29 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_back_on_opening_entry
     end
 
+    should "keep the pane open and leave the page on Back when the overlay was opened and the window then widened" do
+      visit assessments_path
+      assert_text "My Assessments"
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay == null") },
+        "widening left the overlay's entry in history"
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      2.times do
+        break unless page.current_path == assessment_path(@assignment)
+
+        go_back_and_wait_until_landed
+      end
+      assert_current_path assessments_path
+      assert_text "My Assessments"
+    end
+
     should "take the overlay's history entry back when its close button shuts it" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       mark_history_entry

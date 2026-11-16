@@ -95,7 +95,7 @@ export default class extends BaseController {
     document.addEventListener("turbo:before-visit", this.onBeforeVisit)
 
     this.narrowQuery = window.matchMedia(`(width < ${MOBILE_BREAKPOINT}px)`)
-    this.onNarrowChange = () => this.#recordOverlayWhenNarrowed()
+    this.onNarrowChange = () => this.#followBreakpoint()
     this.narrowQuery.addEventListener("change", this.onNarrowChange)
 
     if (this.fitViewportValue) this.#observeViewport()
@@ -211,11 +211,18 @@ export default class extends BaseController {
     }
   }
 
-  // A pane opened beside the page turns into the overlay when the window
-  // narrows past lg, so it needs the entry Back closes it with.
-  #recordOverlayWhenNarrowed() {
-    if (!this.#actsAsScreen() || this.#visualState() !== "open") return
-    this.#recordInHistory("open", true)
+  // An open pane changes shape when the window crosses lg. Narrowing turns it
+  // into the overlay, which needs the entry Back closes it with. Widening sets
+  // it beside the page, where that entry would make Back close it instead of
+  // leaving, so step off the entry and keep the pane open on the one below.
+  #followBreakpoint() {
+    if (this.#visualState() !== "open") return
+    if (this.#actsAsScreen()) {
+      this.#recordInHistory("open", true)
+    } else if (this.screenValue && this.#onOwnEntry() && !this.#leaving) {
+      this.#leaving = true
+      window.history.back()
+    }
   }
 
   #onOwnEntry() {
