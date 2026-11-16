@@ -33,6 +33,16 @@ class PayBandLockingTest < ActiveSupport::TestCase
     end
   end
 
+  should "stamp the tenant only once a reorder has committed, so it never holds the tenant row" do
+    statements = []
+    record = ->(*, payload) { statements << payload[:sql] }
+    ActiveSupport::Notifications.subscribed(record, "sql.active_record") { PayBand.reorder!(@bands.reverse.map(&:id)) }
+
+    committed = statements.index { it.start_with?("COMMIT") }
+    stamped = statements.index { it.start_with?('UPDATE "tenants"') }
+    assert_operator stamped, :>, committed
+  end
+
   should "make a second reorder wait for the first and find the order it read has moved" do
     read = @bands.map(&:id)
     second = nil
