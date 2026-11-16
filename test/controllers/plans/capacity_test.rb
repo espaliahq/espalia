@@ -90,6 +90,28 @@ class Plans::CapacityTest < ActionDispatch::IntegrationTest
     assert_equal "3.8 FTE", row.at_css("span").text
   end
 
+  should "split the strip, each unit and the table from the read, each adding up to the total it sits under" do
+    choose_per_fte
+    hire_into_growth
+    read = call(Operations::TeamPlanning::Capacity, @planner, plan_id: @plan_id, scenario_id: @q1)
+    [ read, *read[:units] ].each do |figures|
+      assert_equal BigDecimal(figures[:totals]["per_fte"]), figures[:parts].values.sum { BigDecimal(it["per_fte"] || 0) }
+    end
+    html = page_for(map_plan_path(@plan_id, scenario: @q1))
+    parts = ->(node) { node.css("[data-figure-parts] [data-part]").map(&:text) }
+    card = ->(name) { html.css("[data-map-unit]").find { it.at_css("h3").text == name }.at_css("[data-capacity-unit]") }
+
+    assert_equal [ "Actual 2.8 FTE", "Planned +1.0 FTE" ], parts.(html.at_css("[data-capacity-strip]"))
+    assert_equal [ "Actual 0.4 FTE", "Planned +1.0 FTE" ], parts.(card.("Growth"))
+    assert_equal [ "Actual 1.4 FTE", "Planned 0.0 FTE" ], parts.(card.("Payments"))
+    assert_nil page_for(map_plan_path(@plan_id)).at_css("[data-figure-parts]")
+
+    table = page_for(plan_path(@plan_id))
+    assert_equal parts.(html.at_css("[data-capacity-strip]")),
+                 parts.(table.at_css("tr[data-scenario-id='#{@q1}'] td.sm\\:table-cell [data-capacity-unit]"))
+    assert_nil table.at_css("tr[data-scenario-id='#{@plan_id}'] [data-figure-parts]")
+  end
+
   should "say a scenario counts nothing in the table, beside one that counts" do
     call(Operations::TeamPlanning::SetRule, @planner, plan_id: @plan_id, scenario_id: @q1, rule: "capacity_model",
                                                       value: { roles: { @engineer.role_id => { model: "per_fte" } } })

@@ -1458,7 +1458,8 @@ The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
   has no period, so it has no forecast and is all actual.
 - **`TeamPlanning::Forecast` reads the rows** for a scenario. It hands each forecast kind
   a frame holding the resolved map, the step, who is covered (the subject of every change
-  in effect along the scenario's chain) and the filled seats with their average figures. A
+  in effect along the scenario's chain), the filled seats with their average figures, and
+  a frame for each earlier step on the timeline that can still reach this one. A
   kind chooses which changes take someone out: attrition drops a planned leaver, never
   someone whose pay, level or place changed.
   A row (`kind`, `unit_id`, `cost_centre`, the step, `headcount`, `cost` per currency,
@@ -1473,9 +1474,14 @@ The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
   existing difference from Today.
 - **The reads carry it.** `team_planning_cost` and `team_planning_scenario_costs` give
   every total a `parts` of actual, planned and forecast. `team_planning_capacity` does the
-  same per model for the plan and each unit. `team_planning_forecast` lists the rows. No
-  screen shows the split yet: [#352](https://github.com/espaliahq/espalia/issues/352)
-  does.
+  same per model for the plan and each unit. `team_planning_forecast` lists the rows.
+- **The screens show it.** [#352](https://github.com/espaliahq/espalia/issues/352) puts a
+  quiet line under each total: the cost and capacity strips, each unit's figures on the
+  map, and the Scenarios table's Cost and Capacity cells. It reads "Actual · Planned ·
+  Forecast". Planned carries its sign, and forecast is left out while it is zero. Today's
+  run rate and capacity have no split, as Today is all actual. The line wraps part by part,
+  so a narrow card or cell never widens. Without the see-pay right, actual is priced at
+  band midpoints like every other figure, and the strip still says so.
 
 Two of these forecasts add a dependency this module did not have before.
 
@@ -1514,10 +1520,42 @@ of the bracket once T reaches L. A row per unit and cost centre takes away:
 - **Capacity:** the unit's average capacity of a filled FTE, times the empty FTE-days over L.
 - **Headcount:** r × F × min(T, L) / 365, the FTE still empty at the end of the step.
 
-Each step counts only the empty days inside it. A seat a forecast leaver empties late in
-one step can stay empty into the next, and the next step does not count those days yet: with
-two 90-day steps and a 180-day time to hire, the second step misses every seat the first
-emptied. Carrying them over is [#381](https://github.com/espaliahq/espalia/issues/381).
+A seat a forecast leaver empties late in one step can stay empty into the next, and
+[#381](https://github.com/espaliahq/espalia/issues/381) carries it there. A step takes away
+its own leavers' empty days as above, plus the days that seats emptied in each earlier step on
+its timeline are still empty inside it. Take two 90-day steps, 1 January to 31 March and
+1 April to 29 June, with a 180-day time to hire and ρ = r × F / 365 leaving a day:
+
+- **Step 1** counts 90² / 2 = 4,050 × ρ empty FTE-days, all its own.
+- **Step 2** counts its own 4,050 × ρ, plus 8,100 × ρ from step 1: every seat step 1 emptied
+  is still empty for all of step 2's 90 days. Without the carry it counted the 4,050 alone.
+- **Headcount** at the end of step 2 is 180 × ρ: its own 90 days of leavers and step 1's,
+  none yet backfilled.
+
+The rules for the carry:
+
+- **Dates, not order.** A step counts an earlier step's empty days only on its own dates,
+  and only from the day after the latest earlier step ends. Every empty day lands in at most
+  one step, even where two steps overlap. Days between two steps that leave a gap, and days
+  past the last step's end, count in no step.
+- **Priced as it emptied.** Each earlier step's leavers use that step's own map: its filled
+  FTE, its rate and time to hire at the unit, and its average filled FTE priced under the
+  caller's pay view. A rate set only in step 1 still reaches step 2, and a carried day costs
+  what the seat cost in the step it emptied. Capacity divides by the later step's days, as a
+  step's own capacity does.
+- **One row per unit.** The carried days join the step's own row for the unit and cost
+  centre, so the row's shape is the same. A unit missing from the later step's map keeps its
+  id, and cost counts it under no unit, as it would any place outside a live unit.
+- **Reach.** A step reads an earlier step only if some attrition rate it could hold is above
+  0 and it ends within its longest time to hire of the step's start. Its values are the
+  tenant default plus every value its chain sets, on any unit. A plan with no attrition reads
+  no earlier step. Each one read is
+  resolved and priced once per read: a cost read of the fifth of five steps resolves at
+  most four earlier steps, and pricing every scenario of a plan at once shares them.
+- **A known overcount.** A later step's own rate falls on all its filled FTE, including seats
+  an earlier step's leavers left empty and nobody has backfilled yet. The figure is second
+  order, r² in the rates, and stays.
+
 Planned leavers are unaffected, as a later step's map already leaves them out.
 
 Every figure is an exact fraction, never rounded to people, and a row names nobody. The

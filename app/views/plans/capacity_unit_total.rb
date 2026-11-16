@@ -21,10 +21,11 @@ class Views::Plans::CapacityUnitTotal < Views::Base
     span(data: { capacity_unit: "" }, class: "flex flex-wrap items-baseline gap-x-2 text-sm tabular-nums") do
       span(class: "sr-only") { "Capacity:" }
       @totals.each do |total|
-        span(data: { capacity_total: total.model }) do
+        span(data: { capacity_total: total.model }, class: "flex flex-wrap items-baseline") do
           span(class: "font-medium text-default") { Format.amount(total.amount, total.unit) }
           change = Format.change(total.change, total.unit) unless @baseline
           span(class: "ml-1 text-muted") { "(#{change} vs Today)" } if change
+          render Views::Plans::FigureParts.new(parts: Format.parts(total)) unless @baseline
         end
       end
     end
