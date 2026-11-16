@@ -152,7 +152,7 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
-      should "show each scenario's capacity in the plan's table" do
+      should "show each scenario's capacity in the plan's table and its strip, split into actual and planned" do
         sign_in_as(@planner.user)
         visit plan_path(@plan_id)
 
@@ -160,7 +160,13 @@ class PlanCapacitySystemTest < ApplicationSystemTestCase
           assert_text "1.8 FTE"
           assert_text "(+1.0 FTE vs Today)"
           assert_selector "span", text: "Capacity:", visible: true if label == "phone"
+          assert_selector "[data-figure-parts] [data-part='planned']", text: "Planned +1.0 FTE", minimum: 1
         end
+        assert_no_selector "tr[data-scenario-id='#{@plan_id}'] [data-figure-parts]"
+        assert_no_sideways_overflow
+
+        visit map_plan_path(@plan_id, scenario: @q1)
+        assert_selector "[data-capacity-strip] [data-part='planned']", text: "Planned +1.0 FTE"
         assert_no_sideways_overflow
       end
     end
