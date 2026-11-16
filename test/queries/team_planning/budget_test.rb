@@ -346,6 +346,51 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal [ { "USD" => 150_000r }, [] ], budget.then { [ of(it, platform).funded, it.unpriced ] }
   end
 
+  def shared(scenario_id = @year, as: @planner)
+    as_tenant do
+      context = context_for(as)
+      plan = TeamPlanningPlan.find(@plan_id)
+      TeamPlanning::Resolution.new(context:, plan:, scenario_id:).shared(TeamPlanning::Repository.new.load_plan(@plan_id)).first
+    end
+  end
+
+  should "read the same funding, cost and budget from a scenario its caller already resolved" do
+    euros(250_000, cost_centre: "Platform", head_count: 3)
+    line(head_count: 1, cost_centre: "CC-1")
+    fill(open_position, @ada)
+    open_position(fte: 0.5, cost_centre: nil)
+    resolved = shared
+    as_tenant do
+      context = context_for(@planner)
+      plan = TeamPlanningPlan.find(@plan_id)
+      aggregate = TeamPlanning::Repository.new.load_plan(@plan_id)
+      read = ->(query, **given) { query.new(context:, plan:, scenario_id: @year, aggregate:, **given) }
+
+      assert_equal read.(TeamPlanning::Funding).call, read.(TeamPlanning::Funding, shared: resolved).call
+      alone = read.(TeamPlanning::Cost).call(at_end: false)
+      assert_equal alone, read.(TeamPlanning::Cost, shared: resolved).call(at_end: false)
+      unpriced = read.(TeamPlanning::Cost, shared: resolved).call(at_end: false, baseline: false)
+      assert_equal alone.with(baseline: nil), unpriced
+      assert_raises(ArgumentError) { unpriced.parts }
+      assert_equal read.(TeamPlanning::Budget).call, read.(TeamPlanning::Budget, shared: resolved).call
+      assert_equal budget, read.(TeamPlanning::Budget).call
+    end
+  end
+
+  should "refuse a scenario resolved for another viewer or scenario" do
+    colleague = as_tenant { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant)) }
+    operation(Operations::TeamPlanning::AddPlanMember, scenario_id: nil, person_id: colleague.person_id, role: "viewer")
+    other_viewer = shared(as: colleague)
+    other_scenario = shared(@plan_id)
+    as_tenant do
+      plan = TeamPlanningPlan.find(@plan_id)
+      [ TeamPlanning::Funding, TeamPlanning::Cost, TeamPlanning::Budget ].product([ other_viewer, other_scenario ]).each do |query, resolved|
+        error = assert_raises(ArgumentError, query.name) { query.new(context: context_for(@planner), plan:, scenario_id: @year, shared: resolved) }
+        assert_match "another viewer, plan or scenario", error.message
+      end
+    end
+  end
+
   should "refuse the baseline, which has no period" do
     error = assert_raises(TeamPlanning::Error) do
       as_tenant { TeamPlanning::Budget.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id).call }
