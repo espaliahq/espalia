@@ -188,6 +188,39 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       within("[data-timeline-phone]") { assert_selector "[data-timeline-lane]", text: "Bo Reyes" }
       assert_no_sideways_overflow
     end
+    should "move a departure a step later from the bar's When…, and stay on the timeline" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit timeline_plan_path(@plan_id)
+      assert_text "Showing the path to Q2 settle."
+      within("[data-timeline-grid]") { assert_selector "[data-timeline-lane]", text: "leaves in Q1 hires" }
+
+      within("[data-timeline-grid]") do
+        click_selector_with_js_fallback("button[aria-label='Change when, for Ada Quill']", expect_text: "Leave in Q2 settle instead")
+      end
+      click_link_with_js_fallback("Leave in Q2 settle instead", expect_text: "Moved to Q2 settle.")
+
+      assert_text "Showing the path to Q2 settle."
+      within("[data-timeline-grid]") do
+        assert_selector "[data-timeline-lane]", text: "leaves in Q2 settle"
+        assert_no_text "leaves in Q1 hires"
+      end
+      assert_no_sideways_overflow
+    end
+
+    should "move a change of place a step later on a phone, from the step that makes it" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit timeline_plan_path(@plan_id, step: 1)
+      assert_text "Step 2 of 3"
+
+      within("[data-timeline-phone]") do
+        click_selector_with_js_fallback("button[aria-label='Change when, for Bo Reyes']", expect_text: "Change place in Q2 settle instead")
+      end
+      click_link_with_js_fallback("Change place in Q2 settle instead", expect_text: "Moved to Q2 settle.")
+
+      assert_text "Step 2 of 3"
+      within("[data-timeline-phone]") { assert_selector "[data-timeline-lane]", text: /Bo\s+Reyes\s+to\s+Growth/ }
+      assert_no_sideways_overflow
+    end
   end
 
   [ [ "desktop", DESKTOP_SIZE ], [ "phone", MOBILE_SIZE ] ].each do |label, size|
@@ -198,6 +231,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       assert_text "Showing the path to Q2 settle."
       assert_no_selector "[draggable]"
       assert_no_button "Move…"
+      assert_no_button "When…"
       assert_no_selector "[id^='move-person-modal']", visible: :all
     end
   end

@@ -3,14 +3,14 @@
 # What a scenario costs over its period, beside the baseline priced over the
 # same days ([#288](https://github.com/espaliahq/espalia/issues/288)).
 #
-# Each seat is priced at the midpoint of the pay band for its level and
-# country (the band naming the country, else the any-location band), made
-# yearly, scaled by FTE and by the part of a 365-day year it is held, plus
+# Each seat is priced at the midpoint of the pay band with the last word for
+# its level and country ({PayBand::Lookup}), made yearly, scaled by FTE and by the part of a
+# 365-day year it is held, plus
 # the on-cost its unit's rule adds. A person is priced at their own level,
 # a planned one winning, and at their position's level only when theirs
 # resolves to none; the working names which. An open seat is the FTE a
-# position's occupants leave, priced at the position's level and the
-# any-location band, under its position's cost centre
+# position's occupants leave, priced at the position's level with no
+# country, under its position's cost centre
 # ({TeamPlanning::PositionCostCentres}). A person's seat keeps the person's
 # own cost centre, as the cost centre rules never move it; a placeholder
 # hire takes their position's. A seat no band prices is unpriced, with its reason,
@@ -57,6 +57,7 @@ class TeamPlanning::Cost
     "fte_unknown" => "The plan's FTE for the person was lost with their key",
     "no_level" => "No level resolves for the seat",
     "no_band" => "No pay band covers the seat's level and country",
+    "level_left" => "The seat's level is no longer in the framework, and no band made from it covers the seat's country",
     "on_cost_refused" => "The on-cost rule at the seat's unit can't price it, such as a fixed amount in another currency"
   }.freeze
 
@@ -207,13 +208,16 @@ class TeamPlanning::Cost
   # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already
   #   read by a caller pricing several scenarios over the same one
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil)
+  # @param steps [Hash{String => TeamPlanning::Forecast::Step}] earlier steps
+  #   already priced, which this fills as it prices more
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil, steps: {})
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
     @base = base
     @aggregate = aggregate
+    @steps = steps
   end
 
   # Every scenario of the plan priced, reading the Org Graph and the plan once.
@@ -224,8 +228,9 @@ class TeamPlanning::Cost
   def self.every_scenario(context:, plan:, repository: TeamPlanning::Repository.new)
     aggregate = repository.load_plan(plan.id)
     base = TeamPlanning::Baseline.new(context:, plan:).structure
+    steps = {}
     [ plan.id, *(aggregate.scenarios.keys - [ plan.id ]) ].index_with do |scenario_id|
-      new(context:, plan:, scenario_id:, repository:, base:, aggregate:).call
+      new(context:, plan:, scenario_id:, repository:, base:, aggregate:, steps:).call
     rescue TeamPlanning::Error => e
       e
     end
@@ -235,21 +240,15 @@ class TeamPlanning::Cost
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
-    aggregate = @aggregate ||= @repository.load_plan(@plan.id)
+    aggregate = prepare
     run_rate = @scenario_id == @plan.id
-    raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
-
-    @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
-    @year_days = run_rate ? @period.count : YEAR_DAYS
-    @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
-    @factors = {}
-    @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
-    @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
     scenario = priced(resolved(@scenario_id))
-    forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing).rows)
+    @steps[@scenario_id] ||= TeamPlanning::Forecast::Step.new(map: scenario.map, pricing: scenario.pricing) unless run_rate
+    forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows)
     baseline = priced(resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
-               reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
+               reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *band_list.map(&:updated_at) ].compact.max,
                scenario:, baseline:, forecast:)
   end
 
@@ -284,11 +283,39 @@ class TeamPlanning::Cost
             converted: one.converted && other.converted && (one.converted + other.converted), missing: one.missing | other.missing)
   end
 
+  # This scenario's map and pricing, for a later step that carries what its
+  # leavers left empty.
+  #
+  # @return [TeamPlanning::Forecast::Step]
+  def step
+    @steps[@scenario_id] ||= prepare.then { priced(resolved(@scenario_id)) }.then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+  end
+
   private
+
+  def prepare
+    aggregate = @aggregate ||= @repository.load_plan(@plan.id)
+    run_rate = @scenario_id == @plan.id
+    raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
+
+    @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
+    @year_days = run_rate ? @period.count : YEAR_DAYS
+    @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
+    @factors = {}
+    @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
+    @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    aggregate
+  end
 
   def resolved(scenario_id)
     resolution = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository, base: @base)
     resolution.call(@aggregate)
+  end
+
+  # Priced over its own period, so a seat it empties costs what that step priced it at.
+  def earlier_step(scenario_id)
+    @steps[scenario_id] || self.class.new(context: @context, plan: @plan, scenario_id:, repository: @repository, base: @base,
+                                          aggregate: @aggregate, steps: @steps).step
   end
 
   def priced(map)
@@ -365,8 +392,8 @@ class TeamPlanning::Cost
 
   def line(country:, reason:, pay: nil, **seat)
     seat[:year_days] = @year_days
-    band = PayBand.covering(bands.fetch(seat[:level_id], []), country) if seat[:level_id] && !pay
-    reason ||= seat[:level_id] ? ("no_band" unless band) : "no_level" unless pay
+    band = bands.covering(seat[:level_id], country) if seat[:level_id] && !pay
+    reason ||= seat[:level_id] ? (unbanded_reason(seat[:level_id]) unless band) : "no_level" unless pay
     return Line.new(**seat, **UNPRICED, reason:) if reason
 
     line = pay ? paid(pay, seat) : banded(band, seat)
@@ -491,7 +518,11 @@ class TeamPlanning::Cost
     @factors[currency] = e.message
   end
 
-  def bands = @bands ||= PayBand.where(tenant_id: @plan.tenant_id).to_a.group_by(&:level_id)
+  def band_list = @band_list ||= PayBand.where(tenant_id: @plan.tenant_id).order(:position).to_a
+
+  def unbanded_reason(level_id) = bands.left?(level_id) ? "level_left" : "no_band"
+
+  def bands = @bands ||= PayBand::Lookup.new(band_list, tenant_id: @plan.tenant_id)
 
   def titles = @titles ||= Integrations::HrisTitleResolution.new(@plan.tenant)
 

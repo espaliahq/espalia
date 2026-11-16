@@ -9,9 +9,10 @@
 # keeps them all. An undo or redo puts back the change or pin its event names
 # as then in effect for its subject and facet, with the note it last had, or
 # removes the row, in the scenario the undo or redo names, which a split may
-# have moved it to. A note rewrites the note of the row its change made. A split
-# moves the rows of its subjects and facets to the agreed part. It reads
-# each event through {TeamPlanning::ChangeEntry} and hears every kind
+# have moved it to. A note rewrites the note of the row its change made. A
+# split moves the rows of its subjects and facets to the agreed part, and a
+# move, or an undo or redo of one, moves its row to the step it now stands in.
+# It reads each event through {TeamPlanning::ChangeEntry} and hears every kind
 # in {TeamPlanning::ChangeKinds}.
 #
 class TeamPlanning::Projections::Overrides
@@ -27,7 +28,8 @@ class TeamPlanning::Projections::Overrides
     TeamPlanning::ChangeKinds.all + [ TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangePinned,
                                       TeamPlanning::Events::ChangeUndone, TeamPlanning::Events::ChangeRedone,
                                       TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::ScenarioSplit,
-                                      TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanDeleted ]
+                                      TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanDeleted,
+                                      TeamPlanning::Events::ChangeMoved ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -49,7 +51,10 @@ class TeamPlanning::Projections::Overrides
       when TeamPlanning::Events::ScenarioRemoved then TeamPlanningOverride.where(scenario_id: event.data[:scenario_id]).delete_all
       when TeamPlanning::Events::PlanDeleted then TeamPlanningOverride.where(plan_id: event.data[:plan_id]).delete_all
       when TeamPlanning::Events::ScenarioSplit then split(event.data)
-      else apply(TeamPlanning::ChangeEntry.from(event), event)
+      when TeamPlanning::Events::ChangeMoved then rehome(event.data, from: event.data[:scenario_id], to: event.data[:to_scenario_id])
+      else
+        from, to = TeamPlanning::ChangeEntry.moving(event)
+        to ? rehome(event.data, from:, to:) : apply(TeamPlanning::ChangeEntry.from(event), event)
       end
     end
   end
@@ -66,6 +71,14 @@ class TeamPlanning::Projections::Overrides
       row.destroy!
       moved.save!
     end
+  end
+
+  def rehome(data, from:, to:)
+    row = TeamPlanningOverride.find_by(scenario_id: from, subject_id: data[:subject_id], facet: data[:facet]) or return
+    moved = row.dup
+    moved.assign_attributes(scenario_id: to, end_state: TeamPlanning::ChangeEntry.moved_end_state(row.kind, row.end_state, from:, to:))
+    row.destroy!
+    moved.save!
   end
 
   def apply(entry, event)

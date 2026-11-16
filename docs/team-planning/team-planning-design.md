@@ -93,6 +93,7 @@ Every change event has the same shape:
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
 | Undo | `ChangeUndone`, `ChangeRedone`, each naming the event it reverses |
+| Moving | `ChangeMoved`: a place, position or departure moved to the step before or after |
 | Notes | `ChangeNoted`: a change's or pin's note written, rewritten or cleared |
 | The Org Graph | `PlanRebased` (the date the plan now stands on, the one before, and the conflicts it carries) |
 | Reality | `StepClosed`, `PlanApproved`, `ChangeRaised`, `ChangeApplied` |
@@ -233,7 +234,34 @@ a drop outside the bar's own steps is refused. Each bar also has a "Move…" but
 its steps when it spans several, so the keyboard and a phone reach the same form. On a phone
 it moves the person in the step shown. The form is the map's, one per step, and saves
 through `MovePlace`, then returns to the same step of the timeline. Today has no handles,
-and a viewer sees none. Moving a change a step earlier or later is the next part of 9.3.
+and a viewer sees none.
+
+An editor also moves a change a step earlier or later. `ChangeMoved` carries a person's
+place, a position or a departure, one subject and facet at a time, from its step to the
+step before or after on the path. Every entry of that key's log goes across, undone ones
+included, so undo and redo behave as before, and a departure leaves in the step it reached.
+The move is refused into the baseline, past the last step, into a step that already changes
+the same thing (naming that change), past a step in between that does, as the step an
+alternative stands in for may, into or out of a split step, and for a departure whose date
+falls outside the step it would reach. It is refused, too, when it would leave a change
+without the position it fills, or bring a change ahead of the position it needs. It is
+refused while the last update to today carried a conflict with the change that isn't
+settled, since the move would drop the warning unseen; the editor settles it on the Changes
+tab first. When more than one step follows, the editor
+names the one. Moving touches only the place, position or departure, so a `data:pay` change
+on the same person stays where it was and the move needs no see-pay right.
+Undo takes the whole move back as one step, and redo puts it back, each leaving every step
+resolving as it did. Undo is refused once the step it left, or a later change in the step it
+reached, changes the same thing, and the refusal names that change. An undo is checked as
+a move the other way, so it is refused for the same reasons, and redo as the move again.
+Both are refused once another move, undo or redo has taken the change elsewhere. An undo
+puts the change back where it stood among the step's entries, so the next undo picks what
+it did before.
+The timeline offers the move through a "When…" menu on the bar where the change shows, with
+"earlier" missing next to Today, and it saves through `MoveChange`, which MCP shares as
+`team_planning_move_change`. Each timeline column lists the keys it can move. The menu
+stands in for dragging a bar's end, which is not built yet; it gives the keyboard and a
+phone the same path.
 
 ### Unit changes as built
 
@@ -629,8 +657,10 @@ it once, for the scenario and the baseline together.
 - **Its level** is the person's own, a planned one winning. When theirs resolves to none,
   the position's level prices it, and the working says so (`level_source`). An open seat
   takes its position's level.
-- **Its band** is the one for that level and the person's country, else the band for any
-  location. An open seat has no country, so it takes the band for any location.
+- **Its band** is the last band in the tenant's list that matches the seat's role, role
+  family, level number and country, as [Pay bands as built](#pay-bands-as-built) describes.
+  An open seat has no country, so only a band for any location matches it. The working
+  names the band and its place in the list.
 - **Its figure** is the band's midpoint for a full-time year (`working_hours` for an hourly
   band), times FTE, times its place's share of the seat, times the days held out of 365.
   The `on_cost` rule at its unit adds on-cost. A person's places always share their whole
@@ -655,6 +685,34 @@ rounds. Plans reprice live: a changed band changes every plan's cost, and the re
 when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
 time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
 to a rate, reprices plans too but does not move the stamp.
+
+#### Pay bands as built
+
+Pay bands are one ordered list per tenant ([#368](https://github.com/espaliahq/espalia/issues/368)).
+Each band is a matcher and a range. The matcher sets any of a role family, a role, a level
+number and a country, and leaves the rest open; a band that sets none matches every seat.
+
+- **The last match wins.** A seat takes the last band in the list that matches it
+  (`LastMatch`, used through `PayBand::Lookup`), so the order is the precedence. Put wide
+  bands first and narrow ones after.
+- **A new band lands after the last band no more specific than it.** Specificity counts
+  the fields set, with a role above a family, so a role's band added after a family's
+  lands below it and wins, with no one moving anything.
+- **No two bands share a matcher.** The second is refused, since one could never be used.
+- **A band that can never win is flagged.** When a later band matches every seat an
+  earlier one does, the earlier one is shadowed: the page marks it "Never used" and
+  `tenants_pay_bands` returns `shadowed: true`. A role's band reaches its family, so a
+  family's band below it shadows it.
+- **Moving a band** is one write, `tenants_reorder_pay_bands`, which takes every band's id
+  in the new order. The page sends it from the up and down buttons on each row, or from a
+  drag on a desktop. Moving a band reprices plans and moves `bands_changed_at`.
+- **A band made from a framework level matches on its `level_id` alone**, which an admin
+  never sets. The level holds its role and number, so the band follows a renumbering.
+- **A seat at a level that has left the framework** has no role or number any more. It
+  matches only the bands made from that level and those that set no role, family or
+  number, so removing an unrelated band never changes its price. With none for its
+  country it is unpriced with the reason `level_left`, and an admin adds a band or moves
+  the seat to a current level.
 
 #### Cost on screen
 
@@ -825,7 +883,7 @@ make ends what they can redo, as in an editor. Undo and redo are for editors, li
 other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
-undo, redo and note, in order, with who made it and, while it stands undone, who undid it.
+undo, redo, move and note, in order, with who made it and, while it stands undone, who undid it.
 The baseline's history also lists each update to today, with the base it left and the
 conflicts it carried.
 `team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
@@ -1464,7 +1522,8 @@ The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
   has no period, so it has no forecast and is all actual.
 - **`TeamPlanning::Forecast` reads the rows** for a scenario. It hands each forecast kind
   a frame holding the resolved map, the step, who is covered (the subject of every change
-  in effect along the scenario's chain) and the filled seats with their average figures. A
+  in effect along the scenario's chain), the filled seats with their average figures, and
+  a frame for each earlier step on the timeline that can still reach this one. A
   kind chooses which changes take someone out: attrition drops a planned leaver, never
   someone whose pay, level or place changed.
   A row (`kind`, `unit_id`, `cost_centre`, the step, `headcount`, `cost` per currency,
@@ -1479,9 +1538,14 @@ The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
   existing difference from Today.
 - **The reads carry it.** `team_planning_cost` and `team_planning_scenario_costs` give
   every total a `parts` of actual, planned and forecast. `team_planning_capacity` does the
-  same per model for the plan and each unit. `team_planning_forecast` lists the rows. No
-  screen shows the split yet: [#352](https://github.com/espaliahq/espalia/issues/352)
-  does.
+  same per model for the plan and each unit. `team_planning_forecast` lists the rows.
+- **The screens show it.** [#352](https://github.com/espaliahq/espalia/issues/352) puts a
+  quiet line under each total: the cost and capacity strips, each unit's figures on the
+  map, and the Scenarios table's Cost and Capacity cells. It reads "Actual · Planned ·
+  Forecast". Planned carries its sign, and forecast is left out while it is zero. Today's
+  run rate and capacity have no split, as Today is all actual. The line wraps part by part,
+  so a narrow card or cell never widens. Without the see-pay right, actual is priced at
+  band midpoints like every other figure, and the strip still says so.
 
 Two of these forecasts add a dependency this module did not have before.
 
@@ -1520,10 +1584,42 @@ of the bracket once T reaches L. A row per unit and cost centre takes away:
 - **Capacity:** the unit's average capacity of a filled FTE, times the empty FTE-days over L.
 - **Headcount:** r × F × min(T, L) / 365, the FTE still empty at the end of the step.
 
-Each step counts only the empty days inside it. A seat a forecast leaver empties late in
-one step can stay empty into the next, and the next step does not count those days yet: with
-two 90-day steps and a 180-day time to hire, the second step misses every seat the first
-emptied. Carrying them over is [#381](https://github.com/espaliahq/espalia/issues/381).
+A seat a forecast leaver empties late in one step can stay empty into the next, and
+[#381](https://github.com/espaliahq/espalia/issues/381) carries it there. A step takes away
+its own leavers' empty days as above, plus the days that seats emptied in each earlier step on
+its timeline are still empty inside it. Take two 90-day steps, 1 January to 31 March and
+1 April to 29 June, with a 180-day time to hire and ρ = r × F / 365 leaving a day:
+
+- **Step 1** counts 90² / 2 = 4,050 × ρ empty FTE-days, all its own.
+- **Step 2** counts its own 4,050 × ρ, plus 8,100 × ρ from step 1: every seat step 1 emptied
+  is still empty for all of step 2's 90 days. Without the carry it counted the 4,050 alone.
+- **Headcount** at the end of step 2 is 180 × ρ: its own 90 days of leavers and step 1's,
+  none yet backfilled.
+
+The rules for the carry:
+
+- **Dates, not order.** A step counts an earlier step's empty days only on its own dates,
+  and only from the day after the latest earlier step ends. Every empty day lands in at most
+  one step, even where two steps overlap. Days between two steps that leave a gap, and days
+  past the last step's end, count in no step.
+- **Priced as it emptied.** Each earlier step's leavers use that step's own map: its filled
+  FTE, its rate and time to hire at the unit, and its average filled FTE priced under the
+  caller's pay view. A rate set only in step 1 still reaches step 2, and a carried day costs
+  what the seat cost in the step it emptied. Capacity divides by the later step's days, as a
+  step's own capacity does.
+- **One row per unit.** The carried days join the step's own row for the unit and cost
+  centre, so the row's shape is the same. A unit missing from the later step's map keeps its
+  id, and cost counts it under no unit, as it would any place outside a live unit.
+- **Reach.** A step reads an earlier step only if some attrition rate it could hold is above
+  0 and it ends within its longest time to hire of the step's start. Its values are the
+  tenant default plus every value its chain sets, on any unit. A plan with no attrition reads
+  no earlier step. Each one read is
+  resolved and priced once per read: a cost read of the fifth of five steps resolves at
+  most four earlier steps, and pricing every scenario of a plan at once shares them.
+- **A known overcount.** A later step's own rate falls on all its filled FTE, including seats
+  an earlier step's leavers left empty and nobody has backfilled yet. The figure is second
+  order, r² in the rates, and stays.
+
 Planned leavers are unaffected, as a later step's map already leaves them out.
 
 Every figure is an exact fraction, never rounded to people, and a row names nobody. The

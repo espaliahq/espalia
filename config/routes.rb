@@ -96,7 +96,9 @@ Rails.application.routes.draw do
       get :preview
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
-    resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ]
+    resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ] do
+      patch :reorder, on: :collection
+    end
     resources :budget_lines, only: [ :index, :create, :edit, :update, :destroy ]
     resources :exchange_rates, only: [ :create, :edit, :update, :destroy ]
     resource :reference_currency, only: [ :update ]
@@ -442,6 +444,8 @@ Rails.application.routes.draw do
     resources :positions, only: [ :update ], controller: "plans/positions"
     # Which budget lines a position draws on, from the Budget tab ([#411](https://github.com/espaliahq/espalia/issues/411)); the id is the position's.
     resources :fundings, only: [ :update, :destroy ], controller: "plans/fundings"
+    # Move a place, position or departure a step earlier or later on the timeline ([#309](https://github.com/espaliahq/espalia/issues/309)).
+    resources :change_moves, only: [ :create ], controller: "plans/change_moves", path: "change-moves"
     # Grant and withdraw the see-pay right ([#300](https://github.com/espaliahq/espalia/issues/300)); the id is the member's.
     resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
     # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.

@@ -187,9 +187,11 @@ The team map is where a plan is edited, not only where it is read.
 
 ### Cost a scenario
 
-Positions are priced from pay bands per role, level and location, with on-costs, in the
-band's own currency. A band belongs to a framework level, which names its role, and to
-one country or to any country; it holds a minimum, midpoint and maximum for a year, a
+Positions are priced from pay bands, with on-costs, in the band's own currency. The bands
+form one ordered list. Each matches any mix of role family, role, level number and country,
+and a seat takes the last band in the list that matches it. A band for every role in
+Engineering prices the family, and a band below it for Staff Engineers in Spain prices
+those seats instead. A band holds a minimum, midpoint and maximum for a year, a
 month or an hour, exactly as entered. Conversion to a reference currency happens once, at report time.
 The tenant names that reference currency and declares its rates, each for a pair of currencies
 from a date, since a plan spans periods. A report uses the latest rate in force on the date it
