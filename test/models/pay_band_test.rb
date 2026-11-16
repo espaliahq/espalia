@@ -202,5 +202,17 @@ class PayBandTest < ActiveSupport::TestCase
       assert_equal role, lookup.covering(left, nil)
       assert_empty lookup.shadowed
     end
+
+    should "not flag a role's band that still prices a level gone from the framework when its family band follows" do
+      band(location: "New Zealand").save!
+      role_wide = entry(role: @role)
+      family = entry(role_family: @family)
+      PayBand.reorder!(PayBand.order(:position).ids - [ family.id ] + [ family.id ])
+      left = @level.level_id
+      @level.destroy!
+
+      assert_equal role_wide, lookup.covering(left, "Australia")
+      assert_not_includes lookup.shadowed, role_wide
+    end
   end
 end

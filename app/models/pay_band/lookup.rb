@@ -59,7 +59,10 @@ class PayBand::Lookup
   def reach(band)
     return { **(@levels[band.level_id] || @left[band.level_id]), **band.matcher.compact } if band.level_id
 
-    band.matcher.merge(band.role_id ? { role_family_id: families[band.role_id] } : {})
+    # A seat at a level of the role that has left the framework has no family.
+    return band.matcher unless band.role_id && @left.values.none? { it[:role_id] == band.role_id }
+
+    band.matcher.merge(role_family_id: families[band.role_id])
   end
 
   def families = @families ||= FrameworkState::Role.where(tenant_id: @tenant_id, role_id: @bands.filter_map(&:role_id)).pluck(:role_id, :role_family_id).to_h
