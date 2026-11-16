@@ -56,6 +56,24 @@ class PlansController < ApplicationController
     redirect_to plan_path(plan[:plan_id]), alert: "Couldn't restore this plan: #{e.message}"
   end
 
+  # DELETE /planning/:id
+  #
+  # The editor types the plan's name to confirm, so a slip of the mouse can't
+  # delete it ([#382](https://github.com/espaliahq/espalia/issues/382)).
+  def destroy
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize TeamPlanningPlan.find(plan[:plan_id]), :destroy?, policy_class: PlanPolicy
+    unless params[:confirm_name].to_s.squish == plan[:name]
+      return redirect_to(plan_path(plan[:plan_id]), status: :see_other, alert: "The name you typed doesn't match, so the plan is still here.")
+    end
+
+    Operations::TeamPlanning::DeletePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
+    # The name stays out of the flash, which would carry it in the session cookie after its key is shredded.
+    redirect_to plans_path(state: ("archived" if plan[:archived])), status: :see_other, notice: "Plan deleted."
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), status: :see_other, alert: "Couldn't delete this plan: #{e.message}"
+  end
+
   # GET /planning/:id
   def show
     plan = read(Operations::TeamPlanning::Plan)
@@ -380,6 +398,7 @@ class PlansController < ApplicationController
       can_edit: can_edit?,
       can_archive: editor? && !plan[:archived],
       can_restore: editor? && plan[:archived].present?,
+      can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
       **layout
     )
