@@ -381,6 +381,29 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
     end
 
+    should "stay open under a click inside a modal laid over it, and close once the modal has gone" do
+      open_loaded_activity_pane
+      click_outside = <<~JS
+        document.querySelector(arguments[0]).dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+        )
+      JS
+      page.execute_script(<<~JS)
+        const overlay = document.createElement("div")
+        overlay.id = "probe-modal"
+        overlay.dataset.modalTarget = "overlay"
+        document.body.append(overlay)
+      JS
+
+      page.execute_script(click_outside, "#probe-modal")
+      assert page.evaluate_script("document.querySelector('#assessment-activity-pane').dataset.paneState === 'open'"),
+        "a click inside the modal closed the pane under it"
+
+      page.execute_script("document.getElementById('probe-modal').remove()")
+      page.execute_script(click_outside, "main")
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+    end
+
     should "name the author on an evidence-recorded feed entry" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.record_evidence(

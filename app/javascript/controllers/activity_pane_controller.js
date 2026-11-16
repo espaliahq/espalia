@@ -139,6 +139,7 @@ export default class extends BaseController {
     if (!this.dismissOutsideValue) return
     if (window.innerWidth >= MOBILE_BREAKPOINT) return
     if (this.#visualState() !== "open") return
+    if (somethingElseIsOpen()) return
     if (event.target.closest("[data-action*='activity-pane#toggle']")) return
     this.#commit("closed")
   }
