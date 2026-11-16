@@ -211,8 +211,7 @@ class Views::Plans::ChangesTab < Views::Base
                                          aria_label: "Clear #{subject} · #{facet}") { "Clear" }
       modal.body do
         p(class: "text-sm text-default") do
-          "#{scenario_name(scenario_id)} will follow #{scenario_name(parent_of(scenario_id))} again here. " \
-            "The change stays in the history, and Undo brings it back."
+          "#{scenario_name(scenario_id)} will follow #{scenario_name(parent_of(scenario_id))} again here. #{clear_keeps(entry)}"
         end
         form(action: plan_clears_path(plan_id), method: "post", class: "mt-6 flex flex-wrap items-center gap-3") do
           input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
@@ -255,6 +254,13 @@ class Views::Plans::ChangesTab < Views::Base
   end
 
   def no_longer_covered?(entry) = entry[:status].to_s == "outside"
+
+  # Undo restores a change about someone outside the plan only if it places them back in its units.
+  def clear_keeps(entry)
+    return "The change stays in the history, and Undo brings it back." unless no_longer_covered?(entry)
+
+    "The change stays in the history. Since the plan no longer covers them, Undo brings it back only if the change places them in its units."
+  end
 
   def subject_label(entry) = no_longer_covered?(entry) ? NO_LONGER_COVERED : planned_subject(entry[:subject_id])
 

@@ -200,6 +200,8 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_not_includes html.to_html, "Bo Reyes"
       assert_equal [ "Clear #{label}" ], row.css("[data-clear-change]").map { it["aria-label"] }
       assert_equal "Clear this level change?", row.at_css("[id^='clear-'][role='dialog'] h2").text.squish
+      assert_includes row.at_css("[id^='clear-'][role='dialog']").text.squish,
+                      "Since the plan no longer covers them, Undo brings it back only if the change places them in its units."
       assert_equal [ "Undo #{label}" ], row.css("[data-undo-change='level'] button").map { it["aria-label"] }
       assert_equal({ "scenario_id" => Q1, "event_id" => "o1", "tab" => "changes" },
                    row.css("form[action$='/change-undos'] input[type=hidden]").to_h { [ it["name"], it["value"] ] }.except("authenticity_token"))
