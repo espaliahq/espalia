@@ -88,13 +88,20 @@ class Views::Plans::StepClosureDialog < Views::Base
     @not_taken ||= begin
       chain = []
       current = @scenario
-      while current && current[:relation] == "instead"
+      while current && instead?(current)
         current = @scenarios.find { it[:scenario_id] == current[:parent_id] }
         chain << current if current
       end
       ids = (chain + [ @scenario ]).to_set { it[:scenario_id] }
-      rivals = @scenarios.select { it[:relation] == "instead" && ids.include?(it[:parent_id]) }
+      rivals = @scenarios.select { instead?(it) && ids.include?(it[:parent_id]) }
       (chain + rivals).reject { it[:scenario_id] == @scenario[:scenario_id] || SETTLED.include?(it[:state]) }.map { it[:name] }
+    end
+  end
+
+  def instead?(row)
+    case row[:relation]
+    in "instead" then true
+    in "then" | "on" | nil then false
     end
   end
 end
