@@ -111,7 +111,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
     yield
   ensure
     finish << true
-    writer&.join
+    writer&.join(10) or writer&.kill
   end
 
   # Polls until the worker's backend waits on an advisory lock, so the test
@@ -150,7 +150,11 @@ class PayBandLockingTest < ActiveSupport::TestCase
   def on_another_connection
     ActiveRecord::Base.connection_pool.with_connection do |connection|
       ActsAsTenant.with_tenant(@tenant) do
-        connection.transaction { yield connection }
+        connection.transaction do
+          # No worker waits on a lock for ever, so a stuck test fails rather than hangs.
+          connection.execute("SET LOCAL lock_timeout = '10s'")
+          yield connection
+        end
       end
     end
   end
