@@ -195,21 +195,29 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
   end
 
   def position_cost_centre(priced, position_id)
-    TeamPlanning::PositionCostCentres.new(priced.map, tenant_id: @tenant.id).of(priced.map.positions.find { it.id == position_id })
+    as_tenant do
+      base = TeamPlanning::Baseline.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)).structure
+      TeamPlanning::PositionCostCentres.new(priced.map, tenant_id: @tenant.id, base:, titles: Integrations::HrisTitleResolution.new(@tenant))
+                                       .of(priced.map.positions.find { it.id == position_id })
+    end
   end
 
   def open_cost_centre(priced, position_id) = lines(priced, position_id).sole.then { [ it.cost_centre, it.cost_centre_source, it.cost_centre_rule ] }
 
-  should "put an open seat under its position's own cost centre first, then an occupant's" do
-    labelled = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+  should "put an open seat under its position's own cost centre first, then an untouched occupant's" do
+    labelled = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @engineering,
                                                                 fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
-    shared = open_position(unit_id: @payments)
+    shared = open_position
     operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: labelled, allocation: 0.5 },
                                                                                         { position_id: shared, allocation: 0.5 } ])
     cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" })
 
     assert_equal [ "Platform", "position", nil ], open_cost_centre(cost.scenario, labelled), "its own label beats Ada's CC-1"
-    assert_equal [ "CC-1", "person", nil ], open_cost_centre(cost.scenario, shared), "Ada fills half of it and brings CC-1"
+    assert_equal [ "CC-1", "person", nil ], open_cost_centre(cost.scenario, shared), "Ada still sits in Engineering at E5 and brings CC-1"
+
+    operation(Operations::TeamPlanning::SetPosition, position_id: shared, role_id: @engineer.role_id, level_id: @e5.level_id,
+                                                     unit_id: @payments, fte: 1, basis: "new")
+    assert_equal [ "Engineering", "rule", 0 ], open_cost_centre(cost.scenario, shared), "moved to Payments, Ada no longer brings hers"
   end
 
   should "put an unfilled position under the last cost centre entry that matches at its unit, and none without one" do
@@ -258,16 +266,15 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal [ [ "Payments", "rule", 2 ] ], person_cost_centre(cost.scenario, @cy.id), "the department entry has the last word"
     end
 
-    should "give a placeholder hire what the open half of its position reads, an occupant's real one before the entries" do
-      seat = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
-                                                              fte: 1, basis: "new")[:position_id]
+    should "give a placeholder hire what the open half of its position reads, an untouched occupant's real one before the entries" do
+      seat = open_position
       operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: seat, allocation: 0.5 } ])
       assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, seat), "the open half takes Ada's"
 
       hire = operation(Operations::TeamPlanning::SetPlaceholderHire, label: "Payments engineer", fte: 0.5)[:placeholder_id]
       operation(Operations::TeamPlanning::SetAssignment, person_id: hire, placements: [ { position_id: seat, allocation: 1 } ])
 
-      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, hire), "not the Payments entry"
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, hire), "not the Engineering entry"
     end
 
     should "count a seat at a new level as a change for someone priced at their position's level" do

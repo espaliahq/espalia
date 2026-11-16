@@ -5,8 +5,8 @@
 # these that gives one wins:
 #
 # 1. the position's own label;
-# 2. for a filled position, an occupant's cost centre in the Org Graph, the
-#    largest allocation first;
+# 2. for a filled position, the cost centre in the Org Graph of an occupant
+#    the plan leaves untouched ({#changed?}), the largest allocation first;
 # 3. the cost centre rules read at the position's unit, the last entry that
 #    matches its unit, role, family or level having the last word
 #    ([#387](https://github.com/espaliahq/espalia/issues/387)). An open
@@ -18,7 +18,7 @@
 # centre of their own, so they never give one in step 2.
 #
 # @example
-#   TeamPlanning::PositionCostCentres.new(map, tenant_id:).of(position)
+#   TeamPlanning::PositionCostCentres.new(map, tenant_id:, base:, titles:).of(position)
 #   # => Resolved(cost_centre: "Platform", source: "rule", rule_index: 0, rule_matcher: { "unit_id" => "…" })
 class TeamPlanning::PositionCostCentres
   SOURCES = %w[position person rule none].freeze
@@ -35,9 +35,13 @@ class TeamPlanning::PositionCostCentres
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param tenant_id [String]
-  def initialize(map, tenant_id:)
+  # @param base [TeamPlanning::Baseline::Map] Today, which {#changed?} compares the map with
+  # @param titles [Integrations::HrisTitleResolution] each person's own role and level
+  def initialize(map, tenant_id:, base:, titles:)
     @map = map
     @tenant_id = tenant_id
+    @base = base
+    @titles = titles
     @resolved = {}
     @chains = {}
   end
@@ -72,16 +76,50 @@ class TeamPlanning::PositionCostCentres
       by_rules(unit_id:, role_id:, level_id:, location:) || real || NONE
   end
 
+  # Whether the plan changes what a cost centre entry can see of them: their
+  # units, the role they hold in each, the level they are priced at there or
+  # their location. A changed FTE alone does not count, and neither does a
+  # placeholder hire, which Today never holds.
+  #
+  # @param member [TeamPlanning::Baseline::Person]
+  # @return [Boolean]
+  def changed?(member)
+    @changed ||= {}
+    return @changed[member.id] if @changed.key?(member.id)
+
+    today = today_people[member.id]
+    # no path builds a scenario person missing from Today yet
+    @changed[member.id] = !member.placeholder? && !today.nil? &&
+                          (situation(member, @map) != situation(today, @base) || member.country != today.country)
+  end
+
+  # @param member [TeamPlanning::Baseline::Person]
+  # @param position [TeamPlanning::Baseline::Position, nil]
+  # @return [String, nil] the role they hold in the position, else their own
+  def role_at(member, position) = position&.role_id || member.own_target(@titles).role&.role_id
+
   private
 
   def occupants = @occupants ||= @map.occupants
+
+  def today_people = @today_people ||= (@base.people + @base.outside).index_by(&:id)
+
+  def situation(member, map)
+    positions, live = (@layouts ||= {})[map.object_id] ||= [ map.positions.index_by(&:id), map.units.to_set(&:id) ]
+    own_level_id = member.own_target(@titles).level&.level_id
+    places = member.memberships.to_set do
+      position = positions[it.position_id]
+      [ (it.unit_id if live.include?(it.unit_id)), role_at(member, position), own_level_id || position&.level_id ]
+    end
+    [ places, own_level_id ]
+  end
 
   def live = @live ||= @map.units.to_set(&:id)
 
   def own(position) = position.cost_centre && Resolved.new(cost_centre: position.cost_centre, source: "position")
 
   def occupied(held)
-    person, = held.sort_by { |person, place| [ -place.allocation.to_f, person.id ] }.find { |person, _| person.cost_centre.present? }
+    person, = held.sort_by { |person, place| [ -place.allocation.to_f, person.id ] }.find { |person, _| person.cost_centre.present? && !changed?(person) }
     person && Resolved.new(cost_centre: person.cost_centre, source: "person")
   end
 

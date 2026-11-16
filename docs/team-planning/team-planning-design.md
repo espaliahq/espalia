@@ -1346,9 +1346,15 @@ real person with no cost centre of their own, take the first of these that gives
 3. Their real cost centre.
 4. None.
 
-An open seat takes the position's label, then an occupant's real cost centre, then the
-rules, then none, so the open half of a half-filled position follows the person in the
-other half. A placeholder hire in a position fills that open seat, so it reads as the open
+An open seat takes the position's label, then the real cost centre of an occupant the plan
+leaves untouched, then the rules, then none, so the open half of a half-filled position
+follows the person in the other half. An occupant the plan moves brings their real cost
+centre to their own cost line only when nothing else decides it, never to the position, so
+the position's cost centre in funding and the budget line it draws on agree with the moved
+person's cost line. When one occupant is moved and another untouched, the untouched one
+decides the position. A position has one cost centre and each person has their own, so a
+mixed position must disagree with someone, and it should not be the person the plan left
+alone. A placeholder hire in a position fills that open seat, so it reads as the open
 seat does. A placeholder with no position takes the rules at its unit, then none.
 
 An untouched person seated in a labelled position keeps their real cost centre, so the
@@ -1467,7 +1473,10 @@ Graph, by which rule) and reports three conditions as checks:
 - **Mismatch.** A filled position whose occupant's cost centre differs from what the rules
   give the position. The known value is used and the mismatch is always flagged. It is
   resolved by planning the cost centre change, which joins the change list to be raised
-  upstream. The rules never move a person's cost on their own.
+  upstream. The rules never move a person's cost on their own. Two cases reach it from the
+  cost centre resolution above: a labelled position whose untouched occupant keeps a
+  different real cost centre, and a position the plan moves one occupant into while
+  another stays, whose cost centre follows the one who stays.
 - **Unplaced.** An open position with no cost centre: it has no label of its own and no rule
   matches it. It can draw only on a budget line that states
   no cost centre, which matches any position, and is unfunded when none matches. This is a

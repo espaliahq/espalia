@@ -326,8 +326,7 @@ class TeamPlanning::Cost
     @live = map.units.to_set(&:id)
     @rules = {}
     @positions = map.positions.index_by(&:id)
-    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id)
-    @today = (@base.people + @base.outside).index_by(&:id)
+    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id, base: @base, titles:)
     people = map.people.flat_map { person_lines(it) }
     lines = people + open_lines(map)
     units = by(lines, &:unit_id)
@@ -343,7 +342,7 @@ class TeamPlanning::Cost
                ("level_unknown" if !pay && member.planned_or_own(:level) == TeamPlanning::Baseline::UNKNOWN)
     own_level_id, own_source = person_level(member)
     away = @map.outside_places(member)
-    changed = changed?(member)
+    changed = @cost_centres.changed?(member)
     fractions(places).reject { |placement, _| away.include?(placement) }.map do |placement, fraction|
       position = @positions[placement.position_id]
       level_id, source = own_level_id || !position ? [ own_level_id, own_source ] : [ position.level_id, "position" ]
@@ -369,27 +368,7 @@ class TeamPlanning::Cost
       cost_centre_matcher: resolved.rule_matcher }
   end
 
-  # Whether the plan changes what a cost centre entry can see of them: their
-  # units, the role they hold in each, their level or their location. A
-  # changed FTE alone does not count.
-  def changed?(member)
-    today = @today[member.id]
-    return false if member.placeholder? || today.nil? # no path builds a scenario person missing from Today yet
-
-    situation(member, @map) != situation(today, @base) || member.country != today.country
-  end
-
-  def situation(member, map)
-    positions, live = (@layouts ||= {})[map.object_id] ||= [ map.positions.index_by(&:id), map.units.to_set(&:id) ]
-    own_level_id = member.own_target(titles).level&.level_id
-    places = member.memberships.to_set do
-      position = positions[it.position_id]
-      [ (it.unit_id if live.include?(it.unit_id)), role_at(member, position), own_level_id || position&.level_id ]
-    end
-    [ places, own_level_id ]
-  end
-
-  def role_at(member, position) = position&.role_id || member.own_target(titles).role&.role_id
+  def role_at(member, position) = @cost_centres.role_at(member, position)
 
   # Each place's part of the seat, so the places of a person always add up
   # to the whole seat. A person in no place carries it under no unit.

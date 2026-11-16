@@ -70,6 +70,81 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
 
   def drawn_on(report, position_id) = of(report, position_id).then { [ it.draws.map(&:budget_line_id), it.reason ] }
 
+  def cost
+    as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).call.scenario }
+  end
+
+  def cost_centre_of(priced, person) = priced.lines.select { it.seat_id == person.id }.map(&:cost_centre).uniq
+
+  def cost_centre_entries(*entries)
+    as_tenant { Operations::Tenants::SetPlanningRule.call(context: context_for(@planner), params: { rule: "cost_centre", value: { entries: } }) }
+  end
+
+  def assert_cost_centres_add_up(priced)
+    assert_equal priced.total.converted, priced.cost_centres.values.sum(&:converted), "the cost centres add up to the total"
+  end
+
+  context "a position's cost centre and the cost lines in it" do
+    setup do
+      cost_centre_entries({ unit_id: @engineering, cost_centre: "Engineering" }, { unit_id: @payments, cost_centre: "Payments" })
+      @lines = { "CC-1" => line(cost_centre: "CC-1"), "Engineering" => line(cost_centre: "Engineering"), "Payments" => line(cost_centre: "Payments") }
+    end
+
+    should "agree on the entry's cost centre for someone the plan moves into an unlabelled position" do
+      seat = open_position
+      fill(seat, @ada)
+      priced, report = cost, funding
+
+      assert_equal [ "Payments" ], cost_centre_of(priced, @ada), "Ada moves from Engineering to Payments"
+      assert_equal "Payments", of(report, seat).cost_centre.cost_centre
+      assert_equal [ [ @lines["Payments"] ], nil ], drawn_on(report, seat)
+      assert_cost_centres_add_up(priced)
+    end
+
+    should "keep an untouched occupant's real cost centre for the position" do
+      seat = open_position(unit_id: @engineering)
+      fill(seat, @ada)
+      priced, report = cost, funding
+
+      assert_equal [ "CC-1" ], cost_centre_of(priced, @ada), "Ada stays in Engineering at E5"
+      assert_equal [ "CC-1", "person" ], of(report, seat).cost_centre.then { [ it.cost_centre, it.source ] }
+      assert_equal [ [ @lines["CC-1"] ], nil ], drawn_on(report, seat)
+      assert_cost_centres_add_up(priced)
+    end
+
+    should "name nobody outside a scoped plan, and fund someone it brings in from outside by the entries" do
+      operation(Operations::TeamPlanning::SetPlanScope, unit_ids: [ @payments ])
+      seat = open_position
+      report = funding
+      assert_not_includes report.map.people.map(&:id), @ada.id, "Ada sits in Engineering, outside the scope"
+      assert_equal [ "Payments", "rule" ], of(report, seat).cost_centre.then { [ it.cost_centre, it.source ] }
+
+      fill(seat, @ada)
+      assert_equal [ "Payments" ], cost_centre_of(cost, @ada), "Today holds Ada outside, so the plan moved her"
+      assert_equal "Payments", of(funding, seat).cost_centre.cost_centre
+      assert_equal [ [ @lines["Payments"] ], nil ], drawn_on(funding, seat)
+    end
+
+    should "fund a half-filled position from its untouched occupant, while a moved one's cost line follows the entries" do
+      eve = create(:person, tenant: @tenant, name: "Eve Quill")
+      as_tenant do
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0, cost_centre: "CC-2")
+        people.set_membership(eve.id, @payments, **ESPALIA, allocation: 1.0)
+      end
+      seat = open_position(unit_id: @engineering)
+      operation(Operations::TeamPlanning::SetAssignment, person_id: eve.id, placements: [ { position_id: seat, allocation: 0.6 } ])
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: seat, allocation: 0.4 } ])
+      priced, report = cost, funding
+
+      assert_equal [ "Engineering" ], cost_centre_of(priced, eve), "Eve moves from Payments to Engineering"
+      assert_equal [ "CC-1" ], cost_centre_of(priced, @ada), "Ada stays, at a smaller share than Eve"
+      assert_equal "CC-1", of(report, seat).cost_centre.cost_centre, "the position is funded as it is today"
+      assert_equal [ [ @lines["CC-1"] ], nil ], drawn_on(report, seat)
+      assert_cost_centres_add_up(priced)
+    end
+  end
+
   should "draw on a line with the position's cost centre before any line with none, however much more that one states" do
     platform = line(cost_centre: "Platform")
     line(role_id: @engineer.role_id, level_id: @e5.level_id, location: "Atlantis")
