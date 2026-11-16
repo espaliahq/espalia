@@ -109,7 +109,7 @@ class PlanMapSystemTest < ApplicationSystemTestCase
 
         visit map_plan_path(plan_id, scenario: scenario_id)
         within(unit("Platform")) do
-          assert_selector "button", text: "Move…", count: 12
+          assert_selector "[data-map-person] button", text: "Move…", count: 12
           widths = all("[data-map-person-details]").map { it.evaluate_script("this.getBoundingClientRect().width") }
           assert widths.all? { it >= 96 }, "a name keeps 6rem beside Move…: #{widths.inspect}"
           card = current_scope.evaluate_script("this.getBoundingClientRect().right")
@@ -146,7 +146,7 @@ class PlanMapSystemTest < ApplicationSystemTestCase
 
   LONG_ROLE = "Infrastructure reliability"
   LONG_NAME = "Maximiliana Wolkenstein-Abernathy-Okonkwo"
-  LONG_POSITION_ROLE = "Observabilityplatformengineering"
+  LONG_POSITION_ROLE = "Observabilityplatformengineeringandreliabilityoperations"
 
   # Twelve seats, one person with a long name, all under a role too long for its column, and a one-word position in the scenario.
   def plan_with_a_full_unit
