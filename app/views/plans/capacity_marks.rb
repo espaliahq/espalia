@@ -77,7 +77,7 @@ class Views::Plans::CapacityMarks
   def baseline? = @scenario[:scenario_id] == @scenario[:plan_id]
 
   # @return [Array<Total>] the scenario's, one per model
-  def totals = compare(@scenario[:totals], @baseline[:totals], @scenario[:parts])
+  def totals = @totals ||= compare(@scenario[:totals], @baseline[:totals], @scenario[:parts])
 
   # Figures arrive to 20 significant digits, so three thirds can sum a hair
   # under one; a remainder that rounds to nothing on screen is that, not a place.
