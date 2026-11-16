@@ -102,16 +102,18 @@ class TeamPlanning::Budget
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for the root, or a scenario the plan doesn't have
   def call
-    funding = TeamPlanning::Funding.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).call
-    cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).call
+    aggregate = @repository.load_plan(@plan.id)
+    funding = TeamPlanning::Funding.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
+    cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}
     @inclusive = TeamPlanning::RuleKinds::BudgetBasis.inclusive?(funding.map.rule(TeamPlanning::RuleKinds::BudgetBasis.rule_name))
     @funded = funding.positions.index_by { it.position.id }
     @budget_lines = funding.map.budget_lines.index_by(&:id)
+    @by_line = funding.by_line
     split(cost.scenario.lines)
-    lines = funding.map.budget_lines.sort_by(&:id).map { line(it, funding.by_line.fetch(it.id, [])) }
+    lines = funding.map.budget_lines.sort_by(&:id).map { line(it, @by_line.fetch(it.id, [])) }
     forecast = cost.forecast.total
     Report.new(basis: @inclusive ? "inclusive" : "base_only", period: @period, pay_view: cost.pay_view, reference_currency: @reference,
                lines:, cost_centres: cost_centres(lines, funding, cost.forecast), units: units(funding, cost.forecast),
@@ -183,7 +185,7 @@ class TeamPlanning::Budget
     keys = (by_line.keys | unfunded.keys | unfunded_heads.keys).sort_by { [ it.nil? ? 1 : 0, it.to_s ] }
     keys.index_with do |cost_centre|
       lines = by_line.fetch(cost_centre, [])
-      drawn = lines.flat_map { funding.by_line.fetch(it.line.id, []) }
+      drawn = lines.flat_map { @by_line.fetch(it.line.id, []) }
       summed(lines, heads_of(drawn), unfunded.fetch(cost_centre, {}), unfunded_heads.fetch(cost_centre, NO_HEADS))
     end
   end
