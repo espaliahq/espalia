@@ -25,7 +25,7 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
       handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0, role: "ENG")
       handler.record_person(@cy.id, **ESPALIA, effective_on: since, employment_status: "employed")
       @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer")
-      @e2 = create(:framework_level, tenant: @tenant, role_id: @engineer.role_id, ordinal: 2, title: "Engineer II")
+      @e2 = create(:framework_level, tenant: @tenant, role_id: @engineer.role_id, ordinal: 2, title: "Engineer II", code: "E2")
     end
 
     @plan_id = call(Operations::TeamPlanning::CreatePlan, @planner, name: "Pay review 2027", base_on: (Date.current + 1).iso8601)[:plan_id]
@@ -106,13 +106,13 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
         wait_for_stimulus "position-form"
         click_selector_with_js_fallback("button[aria-label='Open a position in Growth']", expect_text: "Opening a position in Growth")
         within("#open-position-modal") do
-          select "Software Engineer, Engineer II", from: "Role and level"
+          select "Software Engineer, E2 Engineer II", from: "Role and level"
           js_fill_in "FTE", with: "0.5"
           choose "New: planned budget"
         end
         click_button_with_js_fallback("Open position", expect_text: "Position opened.")
 
-        within(unit("Growth")) { assert_text "New: Software Engineer" }
+        within(unit("Growth")) { assert_text "New position: Software Engineer" }
         assert_no_sideways_overflow
       end
 
