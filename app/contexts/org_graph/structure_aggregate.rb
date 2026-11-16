@@ -65,8 +65,8 @@ class OrgGraph::StructureAggregate
   #   units, or a level in use is reordered
   def define_taxonomy(levels, effective_on:, defined_by_id: nil)
     new_providers = new_level_providers(levels)
-    levels = normalise_levels(levels)
-    return if levels == @levels
+    levels = with_stated_rules(normalise_levels(levels))
+    return if levels == with_stated_rules(@levels)
 
     @levels.reject { |level| level_ids(levels).include?(level[:level_id]) }.each { ensure_never_held!(it) }
 
@@ -78,7 +78,7 @@ class OrgGraph::StructureAggregate
 
     apply(OrgGraph::Events::TaxonomyDefined.new(data: {
       levels: levels,
-      previous_levels: @levels,
+      previous_levels: with_stated_rules(@levels),
       effective_on: iso_date(effective_on),
       defined_by_id: defined_by_id
     }))
@@ -599,8 +599,7 @@ class OrgGraph::StructureAggregate
   #
   # @return [OrgGraph::Taxonomy]
   def taxonomy
-    @taxonomy ||= OrgGraph::Taxonomy.new(@levels.map { |level| level.merge(@level_rules.fetch(level[:level_id], {})) },
-                                         providers: @level_providers)
+    @taxonomy ||= OrgGraph::Taxonomy.new(with_stated_rules(@levels), providers: @level_providers)
   end
 
   # The live units sitting where their kind's rules no longer allow.
@@ -794,6 +793,11 @@ class OrgGraph::StructureAggregate
         providers[level_id] = provider
       end
     end
+  end
+
+  # A level keeps the rules it stated when the taxonomy is redefined around it.
+  def with_stated_rules(levels)
+    levels.map { |level| level.merge(@level_rules.fetch(level[:level_id], {})) }
   end
 
   def normalise_levels(levels)

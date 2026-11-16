@@ -64,6 +64,18 @@ class OrgGraph::StatedKindRulesTest < ActiveSupport::TestCase
     assert_equal %w[Basket Payments], as_tenant { OrgGraph::Repository.new.load_structure.misplaced_units.map(&:name) }
   end
 
+  should "keep each kind's stated rules when a kind is added or removed around it" do
+    stated = ->(level_id) { as_tenant { OrgGraph::Repository.new.load_structure.taxonomy.kind(level_id) }.then { [ it.parent_ids, it.top ] } }
+    guild = SecureRandom.uuid_v7
+
+    as_tenant { @handler.add_level(guild, "Guild", effective_on: @today) }
+    assert_equal [ [ @tribe, @squad ], false ], stated.(@squad)
+    assert_equal [ [], true ], stated.(@tribe)
+
+    as_tenant { @handler.remove_level(guild, effective_on: @today) }
+    assert_equal [ [ @tribe, @squad ], false ], stated.(@squad)
+  end
+
   private
 
   def define_rules(tribe:, squad:)
