@@ -18,6 +18,12 @@
 # FTE still empty when the step ends, r × F × min(T, L) / 365. Every figure is
 # an exact fraction, never rounded to people, and names nobody.
 #
+# A seat still empty when its step ends stays empty into the steps after it
+# ([#381](https://github.com/espaliahq/espalia/issues/381)). A later step
+# takes away those days too, each priced and timed as the step the leaver
+# left in. Each step counts only the days on its own dates, from the day after
+# the latest earlier step ends, so no empty day counts twice.
+#
 # @example
 #   { "yearly_rate" => "0.12" }
 class TeamPlanning::RuleKinds::Attrition < TeamPlanning::ForecastKind
@@ -59,22 +65,62 @@ class TeamPlanning::RuleKinds::Attrition < TeamPlanning::ForecastKind
   def self.yearly_rate(value) = value.fetch("yearly_rate").to_r
 
   # @param frame [TeamPlanning::Forecast::Frame]
-  # @return [Array<TeamPlanning::Forecast::Row>] one per unit and cost centre with filled FTE, a rate and a time to hire above 0
+  # @return [Array<TeamPlanning::Forecast::Row>] one per unit and cost centre with seats empty in the step
   def self.forecast(frame)
     days = frame.step.count
-    frame.filled.group_by { [ it.unit_id, it.cost_centre ] }.sort_by { |key, _| key.map(&:to_s) }.filter_map do |(unit_id, cost_centre), places|
-      rate = yearly_rate(frame.rule_at(unit_id))
-      next unless rate.positive?
-
-      hire = TeamPlanning::RuleKinds::TimeToHire.days(frame.map.rule(TeamPlanning::RuleKinds::TimeToHire.rule_name, unit_id:))
-      fte = places.sum(0r, &:fte)
-      empty_days = rate * fte / YEAR_DAYS * (hire < days ? (hire * days) - Rational(hire * hire, 2) : Rational(days * days, 2))
-      next if empty_days.zero?
-
-      average = frame.average(unit_id)
-      frame.row(unit_id:, cost_centre:, headcount: -(rate * fte * [ hire, days ].min / YEAR_DAYS),
-                cost: average.cost.transform_values { -(it * empty_days / YEAR_DAYS) },
-                capacity: average.capacity.transform_values { -(it * empty_days / days) })
+    carried_from = frame.earlier.map { it.step.end + 1 }.max
+    vacancies = vacancies(frame, frame.step.begin, frame.step.end) +
+                (carried_from ? frame.earlier.flat_map { vacancies(it, [ carried_from, frame.step.begin ].max, frame.step.end) } : [])
+    vacancies.group_by(&:first).sort_by { |key, _| key.map(&:to_s) }.map do |(unit_id, cost_centre), parts|
+      frame.row(unit_id:, cost_centre:, headcount: -parts.sum(0r) { it[2] },
+                cost: add(parts.map { |_, empty_days, _, average| average.cost.transform_values { -(it * empty_days / YEAR_DAYS) } }),
+                capacity: add(parts.map { |_, empty_days, _, average| average.capacity.transform_values { -(it * empty_days / days) } }))
     end
   end
+
+  # The seats a step's leavers leave empty between two dates, by unit and
+  # cost centre: the empty FTE-days, the FTE still empty on the last date, and
+  # the step's average filled FTE.
+  #
+  # @param source [TeamPlanning::Forecast::Frame] the step the leavers leave in
+  # @param from [Date]
+  # @param to [Date]
+  # @return [Array<Array(Array(String, String), Rational, Rational, TeamPlanning::Forecast::Average)>]
+  def self.vacancies(source, from, to)
+    return [] if from > to
+
+    length = source.step.count
+    starts = (from - source.step.begin).to_i
+    ends = (to + 1 - source.step.begin).to_i
+    source.filled.group_by { [ it.unit_id, it.cost_centre ] }.filter_map do |(unit_id, cost_centre), places|
+      rate = yearly_rate(source.rule_at(unit_id))
+      next unless rate.positive?
+
+      hire = TeamPlanning::RuleKinds::TimeToHire.days(source.map.rule(TeamPlanning::RuleKinds::TimeToHire.rule_name, unit_id:))
+      leaving = rate * places.sum(0r, &:fte) / YEAR_DAYS
+      empty_days = leaving * (emptied(ends, length, hire) - emptied(starts, length, hire))
+      next if empty_days.zero?
+
+      [ [ unit_id, cost_centre ], empty_days, leaving * ([ ends, length ].min - [ ends - hire, 0 ].max).clamp(0..), source.average(unit_id) ]
+    end
+  end
+
+  # The empty FTE-days, per FTE leaving a day, from the step's start to a day
+  # counted from it: every seat emptied by then, each empty for up to {TimeToHire}.
+  #
+  # @param day [Integer] days from the step's start
+  # @param length [Integer] the step's days
+  # @param hire [Integer] the time to hire
+  # @return [Rational]
+  def self.emptied(day, length, hire) = backlog(day, hire) - backlog(day - length, hire)
+
+  def self.backlog(day, hire)
+    return 0r unless day.positive?
+
+    day <= hire ? Rational(day * day, 2) : Rational(hire * hire, 2) + (hire * (day - hire))
+  end
+  private_class_method :backlog
+
+  def self.add(amounts) = amounts.flat_map(&:to_a).group_by(&:first).transform_values { |pairs| pairs.sum(0r, &:last) }.sort.to_h
+  private_class_method :add
 end

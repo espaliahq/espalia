@@ -14,6 +14,7 @@ class Operations::TeamPlanning::Forecast < Operations::Base
               "kind (the rule that made it), its unit (null for none) and cost centre, the step it covers " \
               "(the scenario's period), the headcount it adds or takes away, its cost per currency and its capacity " \
               "per model. Attrition takes away the seats its leavers leave empty until their time to hire has passed, " \
+              "including seats an earlier step's leavers left empty that are still empty in this step, " \
               "counting filled seats only, never an open position, a placeholder or a planned leaver, and priced at " \
               "the unit's average filled seat as the caller sees pay. These rows are the forecast part of team_planning_cost and team_planning_capacity, beside " \
               "their actual part, which means the baseline's figure, not actual pay. " \
@@ -34,13 +35,16 @@ class Operations::TeamPlanning::Forecast < Operations::Base
       cost = ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call
       capacity = ::TeamPlanning::Capacity.split(context:, plan:, scenario_id:)
       names = cost.scenario.map.units.to_h { [ it.id, it.name ] }
-      ::TeamPlanning::Forecast.new(aggregate: ::TeamPlanning::Repository.new.load_plan(plan.id), scenario_id:, map: cost.scenario.map,
-                                   pricing: cost.scenario.pricing.with_capacity_of(capacity.report.pricing)).rows.map { row(it, names) }
+      measured = capacity.forecast.index_by { key(it) }
+      cost.forecast.rows.map { row(it.with(capacity: measured[key(it)]&.capacity || {}), names) }
     end
     { plan_id: plan.id, scenario_id:, rows: }
   end
 
   private
+
+  # Cost and capacity forecast the same rows, each pricing only its own figure.
+  def key(row) = [ row.kind, row.unit_id, row.cost_centre, row.starts_on ]
 
   def row(row, names)
     { kind: row.kind, unit_id: row.unit_id, unit_name: names[row.unit_id], cost_centre: row.cost_centre,

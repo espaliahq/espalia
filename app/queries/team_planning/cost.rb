@@ -207,13 +207,16 @@ class TeamPlanning::Cost
   # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already
   #   read by a caller pricing several scenarios over the same one
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil)
+  # @param steps [Hash{String => TeamPlanning::Forecast::Step}] earlier steps
+  #   already priced, which this fills as it prices more
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil, steps: {})
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
     @base = base
     @aggregate = aggregate
+    @steps = steps
   end
 
   # Every scenario of the plan priced, reading the Org Graph and the plan once.
@@ -224,8 +227,9 @@ class TeamPlanning::Cost
   def self.every_scenario(context:, plan:, repository: TeamPlanning::Repository.new)
     aggregate = repository.load_plan(plan.id)
     base = TeamPlanning::Baseline.new(context:, plan:).structure
+    steps = {}
     [ plan.id, *(aggregate.scenarios.keys - [ plan.id ]) ].index_with do |scenario_id|
-      new(context:, plan:, scenario_id:, repository:, base:, aggregate:).call
+      new(context:, plan:, scenario_id:, repository:, base:, aggregate:, steps:).call
     rescue TeamPlanning::Error => e
       e
     end
@@ -245,8 +249,9 @@ class TeamPlanning::Cost
     @factors = {}
     @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id).index_with { earlier_step(it) }
     scenario = priced(resolved(@scenario_id))
-    forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing).rows)
+    forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows)
     baseline = priced(resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
@@ -289,6 +294,19 @@ class TeamPlanning::Cost
   def resolved(scenario_id)
     resolution = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository, base: @base)
     resolution.call(@aggregate)
+  end
+
+  # Prices an earlier step over its own period, so a seat it empties costs
+  # what the step priced it at, then puts back this scenario's period.
+  def earlier_step(scenario_id) = @steps[scenario_id] ||= price_step(scenario_id)
+
+  def price_step(scenario_id)
+    period, factors = @period, @factors
+    @period, @factors = @aggregate.period_of(scenario_id), {}
+    step = priced(resolved(scenario_id))
+    TeamPlanning::Forecast::Step.new(map: step.map, pricing: step.pricing)
+  ensure
+    @period, @factors = period, factors
   end
 
   def priced(map)

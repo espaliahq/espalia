@@ -148,6 +148,32 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         end
       end
     end
+
+    # Q2 sets no rate of its own, so its attrition is Q1's leavers alone: each
+    # seat emptied in Q1's last 73 days stays empty into Q2, 0.1 / 365 × 73² / 2
+    # = 266.45 / 365 FTE-days, priced as Q1 priced the seat for the caller.
+    should "price a step's carried attrition as the caller sees the pay, never as the holder does for anyone else" do
+      q2 = call(Operations::TeamPlanning::ForkScenario, @holder, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2", ends_on: "2026-09-30")[:scenario_id]
+      call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @q1, rule: "attrition", value: { "yearly_rate" => "0.1" })
+      call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @q1, rule: "time_to_hire", value: { "days" => "73" })
+      call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: q2, rule: "attrition", value: { "yearly_rate" => "0" })
+      empty = Rational(26_645, 100 * 365) / 365
+      derived = BigDecimal(Integer(AMOUNT) * empty, 20).to_s("F")[0, 5]
+
+      carried = { @holder => Integer(AMOUNT), @editor => 100_000, @viewer => 100_000 }.to_h do |account, yearly|
+        forecast = call(Operations::TeamPlanning::Forecast, account, plan_id: @plan_id, scenario_id: q2)
+        attrition = forecast[:rows].sum { BigDecimal(it[:cost].fetch("AUD", "0")) } - 1000
+        assert_in_delta(-yearly * empty, attrition, 1e-6, account == @holder ? "holder" : "non-holder")
+        [ account, [ attrition, forecast ] ]
+      end
+
+      assert_includes carried[@holder].last.to_json, derived
+      [ @editor, @viewer ].each do |account|
+        assert_not_equal carried[@holder].first, carried[account].first
+        cost = call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: q2)
+        [ cost, carried[account].last ].each { assert_not_includes it.to_json, derived }
+      end
+    end
   end
 
   should "move a pay change across a split with its value still sealed and read by holders alone" do

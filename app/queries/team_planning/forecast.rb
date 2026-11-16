@@ -13,6 +13,13 @@
 # capacity under each seat's model. A caller that measures only one of the two
 # leaves the other empty, and the rows then carry none of it.
 #
+# A step also reads the earlier steps on its timeline that can still reach it
+# ([#381](https://github.com/espaliahq/espalia/issues/381)): a seat a leaver
+# empties late in one step can stay empty into the next. The caller resolves
+# and prices each of {.reaching} once and passes it in as a {Step}, so an
+# earlier step's seats price as that step's map and the caller's pay view
+# price them.
+#
 # @example
 #   TeamPlanning::Forecast.new(aggregate:, scenario_id:, map:).rows # => [Row, ...]
 class TeamPlanning::Forecast
@@ -51,11 +58,13 @@ class TeamPlanning::Forecast
   # @!attribute capacity [Hash{Array(String, String) => Hash{String => Rational}}] model => what the place delivers
   Pricing = Data.define(:cost, :capacity) do
     def initialize(cost: {}, capacity: {}) = super
-
-    # @param other [Pricing]
-    # @return [Pricing] this one's cost with the other's capacity
-    def with_capacity_of(other) = with(capacity: other.capacity)
   end
+
+  # An earlier step on the timeline, resolved and priced as the caller sees it.
+  #
+  # @!attribute map [TeamPlanning::Baseline::Map] the step's resolved map
+  # @!attribute pricing [Pricing] its filled places, priced as the caller sees them
+  Step = Data.define(:map, :pricing)
 
   # What a kind reads to forecast one step.
   #
@@ -65,8 +74,9 @@ class TeamPlanning::Forecast
   # @!attribute covered [Set<String>] subjects a planned change in the scenario's chain sets
   # @!attribute filled [Array<Filled>] places in filled seats: not a planned leaver's or a placeholder's
   # @!attribute averages [Hash{String, nil => Average}] by unit
-  Frame = Data.define(:kind, :map, :step, :covered, :filled, :averages) do
-    def initialize(filled: [], averages: {}, **) = super
+  # @!attribute earlier [Array<Frame>] the earlier steps that reach this one, in timeline order
+  Frame = Data.define(:kind, :map, :step, :covered, :filled, :averages, :earlier) do
+    def initialize(filled: [], averages: {}, earlier: [], **) = super
 
     # @param unit_id [String, nil]
     # @return [Average] what a filled FTE of the unit costs and delivers
@@ -90,11 +100,29 @@ class TeamPlanning::Forecast
   # @param scenario_id [String] a scenario, or the plan's id for Today
   # @param map [TeamPlanning::Baseline::Map] the scenario's resolved map
   # @param pricing [Pricing] the scenario's filled places, priced as the caller sees them
-  def initialize(aggregate:, scenario_id:, map:, pricing: Pricing.new)
+  # @param earlier [Hash{String => Step}] each of {.reaching}, by scenario id
+  def initialize(aggregate:, scenario_id:, map:, pricing: Pricing.new, earlier: {})
     @aggregate = aggregate
     @scenario_id = scenario_id
     @map = map
     @pricing = pricing
+    @earlier = earlier
+  end
+
+  # The steps before this one on its timeline that end within a longest time
+  # to hire of its start, so a seat they empty could still be empty in it.
+  #
+  # @param aggregate [TeamPlanning::PlanAggregate]
+  # @param scenario_id [String]
+  # @return [Array<String>] scenario ids, in timeline order
+  def self.reaching(aggregate, scenario_id)
+    step = aggregate.period_of(scenario_id) or return []
+
+    reach = TeamPlanning::RuleKinds::TimeToHire::MAX_DAYS
+    aggregate.timeline_path(scenario_id).select do |id|
+      period = aggregate.period_of(id)
+      period && period.begin < step.begin && period.end + reach >= step.begin
+    end
   end
 
   # Today has no period, so no rows; nor has an id the plan doesn't hold, so a
@@ -104,11 +132,13 @@ class TeamPlanning::Forecast
   def rows
     step = @aggregate.period_of(@scenario_id) or return []
 
-    covered = @aggregate.resolution_chain(@scenario_id).flat_map { @aggregate.changes_in(it) }.to_set { it.data[:subject_id] }
-    filled = filled_places
-    averages = averages(filled)
+    earlier = self.class.reaching(@aggregate, @scenario_id).map do |id|
+      reached = @earlier.fetch(id) { raise ArgumentError, "No earlier step #{id} to carry from" }
+      frame(id, @aggregate.period_of(id), reached.map, reached.pricing)
+    end
+    own = frame(@scenario_id, step, @map, @pricing)
     TeamPlanning::RuleKinds.forecasts.flat_map do |kind|
-      kind.forecast(Frame.new(kind:, map: @map, step:, covered:, filled:, averages:)).each do |row|
+      kind.forecast(own.with(kind:, earlier: earlier.map { it.with(kind:) })).each do |row|
         raise ArgumentError, "#{kind} forecast something other than a row" unless row.is_a?(Row)
       end
     end
@@ -116,21 +146,27 @@ class TeamPlanning::Forecast
 
   private
 
+  def frame(scenario_id, step, map, pricing)
+    covered = @aggregate.resolution_chain(scenario_id).flat_map { @aggregate.changes_in(it) }.to_set { it.data[:subject_id] }
+    filled = filled_places(map)
+    Frame.new(kind: nil, map:, step:, covered:, filled:, averages: averages(filled, pricing))
+  end
+
   # A filled seat is a person's: an open position fills none. A planned leaver
   # and a placeholder hire are left out, as the plan already says what happens
   # to them; a change to pay, level or place keeps the seat filled. A person's
   # places share their FTE as cost shares it, and a place outside a scoped
   # plan drops out as it does from cost.
-  def filled_places
-    live = @map.units.to_set(&:id)
-    @map.people.reject { it.leaving? || it.placeholder? }.flat_map do |person|
+  def filled_places(map)
+    live = map.units.to_set(&:id)
+    map.people.reject { it.leaving? || it.placeholder? }.flat_map do |person|
       fte = Rational(person.fte_or_one.to_s)
       places = TeamPlanning::Baseline::Membership.shares(person.memberships)
       weight = places.sum(0r) { Rational(it[1].to_s) }
       cost_centre = person.cost_centre.presence
       next [ Filled.new(person_id: person.id, unit_id: nil, cost_centre:, fte:) ] unless weight.positive?
 
-      away = @map.outside_places(person)
+      away = map.outside_places(person)
       places.reject { |placement, _| away.include?(placement) }.map do |placement, share, _|
         Filled.new(person_id: person.id, unit_id: live.include?(placement.unit_id) ? placement.unit_id : nil, cost_centre:,
                    fte: fte * Rational(share.to_s) / weight)
@@ -141,11 +177,11 @@ class TeamPlanning::Forecast
   # Each unit's figures over all its filled FTE. An unpriced place adds to the
   # FTE and nothing to the figure, so attrition never takes away more than the
   # actual figure holds.
-  def averages(filled)
+  def averages(filled, pricing)
     filled.group_by(&:unit_id).transform_values do |places|
       fte = places.sum(0r, &:fte)
-      cost = places.map { |place| @pricing.cost.fetch([ place.person_id, place.unit_id ], {}).transform_values { it * place.fte } }
-      capacity = places.uniq { [ it.person_id, it.unit_id ] }.map { |place| @pricing.capacity.fetch([ place.person_id, place.unit_id ], {}) }
+      cost = places.map { |place| pricing.cost.fetch([ place.person_id, place.unit_id ], {}).transform_values { it * place.fte } }
+      capacity = places.uniq { [ it.person_id, it.unit_id ] }.map { |place| pricing.capacity.fetch([ place.person_id, place.unit_id ], {}) }
       Average.new(cost: average(cost, fte), capacity: average(capacity, fte))
     end
   end

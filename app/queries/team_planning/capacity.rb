@@ -103,9 +103,12 @@ class TeamPlanning::Capacity
       resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id: id, repository:, base:)
       new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(resolution.call(aggregate))
     end
+    earlier = TeamPlanning::Forecast.reaching(aggregate, scenario_id).index_with do |id|
+      price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+    end
     report = price.(scenario_id)
     baseline = price.(plan.id) unless scenario_id == plan.id
-    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing: report.pricing).rows)
+    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing: report.pricing, earlier:).rows)
   end
 
   # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named
