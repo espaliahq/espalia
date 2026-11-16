@@ -47,8 +47,8 @@ class CurrentPlanReads < ActiveSupport::CurrentAttributes
     frozen_inputs.fetch(copy) { frozen_inputs[copy] = yield }
   end
 
-  # A write can destroy the key a copy was sealed under, so nothing it
-  # revealed outlives the write.
+  # Called wherever a plan key is destroyed, so nothing a copy revealed
+  # outlives the key it was sealed under.
   def self.forget_copies
     copies&.clear
     frozen_inputs&.clear
