@@ -3,7 +3,8 @@
 # A scenario's cost in the Scenarios table, from `team_planning_scenario_costs`:
 # its total over its own period and the difference from Today over the same days.
 # Today's row is its yearly run rate, with no difference
-# ([#318](https://github.com/espaliahq/espalia/issues/318)).
+# ([#318](https://github.com/espaliahq/espalia/issues/318)), and each other
+# row adds its run rate at its end ([#334](https://github.com/espaliahq/espalia/issues/334)).
 class Views::Plans::CostCell < Views::Base
   Format = Views::Plans::CostMarks::Format
 
@@ -30,6 +31,7 @@ class Views::Plans::CostCell < Views::Base
       end
       span(class: "text-muted") { "#{@row[:unpriced]} left out" } if @row[:unpriced].positive?
       render Views::Plans::FigureParts.new(parts: Format.parts(total[:parts], @reference)) unless @row[:basis] == "run_rate"
+      render Views::Plans::RunRateAtEnd.new(run_rate: @row[:run_rate_at_end], reference: @reference)
     end
   end
 end

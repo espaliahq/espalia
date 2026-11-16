@@ -53,8 +53,13 @@ Story 3.1 ([#208](https://github.com/espaliahq/espalia/issues/208)) built the tr
 
 - The baseline is implicit. Its id is the plan's, it stands on the base date, and it has
   no period, no alternative and can't be removed.
-- A `then` scenario starts the day after its parent ends, or on the base date after the
-  baseline. It holds its own end, and `ScenarioPeriodSet` moves only that end.
+- A `then` scenario starts the day after its parent ends. It holds its own end, and
+  `ScenarioPeriodSet` moves it. The last step on a line may have no end date; *Steps with
+  no end date* below has the rules.
+- The first step after the baseline starts on the base date, or on a later day of its own
+  ([#404](https://github.com/espaliahq/espalia/issues/404)). The days between belong to no
+  step, so Today's state carries on through them. `ScenarioPeriodSet` can move that start
+  too, and records both previous dates.
 - An `instead` scenario covers its parent's period exactly, so an alternative of an
   alternative covers the original's.
 - A parent has at most one `then` step. A second next step is an alternative to the first.
@@ -65,6 +70,60 @@ Story 3.1 ([#208](https://github.com/espaliahq/espalia/issues/208)) built the tr
   [#209](https://github.com/espaliahq/espalia/issues/209) shreds them, the name parameter
   asks callers to leave people's names out.
 - `team_planning_scenarios` holds one row per scenario, with the period the tree gives it.
+
+### Scenario dates
+
+Changing a step's dates moves other steps: each later step starts the day after the one
+before it ends, and an alternative shares its parent's period.
+`team_planning_period_preview` reads that rule from the aggregate and lists every scenario
+whose period would change, with its dates before and after. The web and agents read the
+same list, so neither works it out again.
+
+On the web, an editor opens the Dates page from a step's "Dates…" in the Scenarios table or
+on the map, at `/planning/:id/scenarios/:scenario_id/dates`. A step that follows another
+shows its start as text, linked to the step whose end sets it. A first step's start is a
+field. Preview lists what moves, or says nothing else does, and Save posts the same dates.
+Save and Cancel go back where the editor came from: the map with that step open, or the
+Scenarios table. A refused date re-renders the page with the reason.
+
+Forking a first step from Today offers a start date. It defaults to the base date and is
+refused before it. When the first step starts later, the timeline and the Scenarios table
+say "Today continues to" the day before. Cost prices a first step over its own period, so
+the gap costs nothing. An update to today that passes the first step's start moves it to
+the new base, and the confirm names the step and both dates. A step whose start is still to
+come keeps it.
+
+Each date edit appears in the step's history as a `dates` entry with the new and previous
+dates. Undoing a date edit is [#407](https://github.com/espaliahq/espalia/issues/407).
+
+### Steps with no end date
+
+The last step on a line may run with no end date
+([#404](https://github.com/espaliahq/espalia/issues/404)). The aggregate keeps its period
+endless (`starts_on..nil`); only the figures give it an end.
+
+- **Only the last step may be open.** A step with a `then` after it needs an end, and
+  `ScenarioPeriodSet` refuses to take one off. An alternative shares its parent's period,
+  open or not.
+- **A step after an open one names its own start.** Forking `then` from an open step needs
+  `starts_on`, and the open step ends the day before. One `ScenarioForked` records both:
+  `closes_scenario_id` and `closes_on` name the step it closed, and its history shows a
+  `dates` entry for it. Removing the new step leaves the earlier one closed.
+- **Figures run over a horizon.** Cost, budget, funding, forecast and the run rate at the
+  end read the period through `TeamPlanning::FiguredPeriod`, which ends an open step after
+  the `open_step_horizon` rule: whole months from its start, 12 by default, 1 to 36. It is
+  plan-wide, from the plan or the tenant default. An open step prices the same as that step
+  ending on the horizon's last day. `Forecast.reaching` reads only the closed steps before
+  a step, so a horizon never carries into another step's figures.
+- **Reads say so.** Every period in a cost, budget, funding or forecast read carries
+  `open_ended` and `horizon_months`. `team_planning_fork_scenario`,
+  `team_planning_set_scenario_period` and `team_planning_period_preview` take an empty
+  `ends_on` for no end date and return a null end.
+- **On the web**, the fork dialog and the Dates page offer "No end date" on the last step,
+  and say why a step with one after it needs an end. Tables read "From 1 Apr 2027 · no end
+  date". The Cost strip and Budget tab say "For 1 Apr 2027 to 31 Mar 2028, the first 12
+  months of a step with no end date", and the run rate at the end says "Run rate on 31 Mar
+  2028, the end of the 12 months shown".
 
 ### Events
 
@@ -451,7 +510,8 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2) and `working_hours` (5.4), all below; 8.1 brings more.
+object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2), `working_hours` (5.4)
+and `open_step_horizon` (*Steps with no end date* above); 8.1 brings more.
 
 A forecast assumption is a kind too, a subclass of `TeamPlanning::ForecastKind`
 (`RuleKinds.forecasts` lists them). It sets and resolves like any rule, and adds
@@ -715,6 +775,36 @@ number and a country, and leaves the rest open; a band that sets none matches ev
   country it is unpriced with the reason `level_left`, and an admin adds a band or moves
   the seat to a current level.
 
+#### Run rate at the end
+
+A period total says what a step spends; it can't say what the plan costs a year once the
+step lands. So each scenario also has a run rate at its end
+([#334](https://github.com/espaliahq/espalia/issues/334)): every seat it holds on its last
+day, each priced for a full year, as if the period were that one day in a one-day year. A
+leaver whose last day is the day before is out; one who leaves on it is in, and their
+backfill starts the day after. Planned vacancies and placeholder hires count as held seats.
+
+- **It stands against Today's seats priced on that same day**, at that day's exchange
+  rates, so a move in a rate never reads as the plan's change. Its difference is "on
+  Today's run rate".
+- **Its parts** split as a period total's do: actual is Today's seats on that day, planned
+  what the plan's changes add or take away, and forecast a year of each forecast row's
+  headcount still changed on the step's last day, at the row's own average cost.
+- **For attrition, the forecast is a steady vacancy rate.** Once a step runs longer than
+  the time to hire T, a seat leaving at rate r a year sits empty r × T / 365 of the time.
+  With 10 filled FTE at EUR 100k, a 10% rate and 73 days to hire, 0.1 × 10 × 73 / 365 =
+  0.2 FTE is empty on any given day, so the run rate is EUR 20k a year lower. A step shorter
+  than T counts only the seats emptied so far, and the empty days carried from earlier
+  steps count too, as the attrition row's headcount already holds them.
+- **Pay** is the caller's own view: a holder of the see-pay right sees it priced from
+  actual pay where the plan holds it, and everyone else at midpoints.
+- **Where it shows.** `team_planning_cost` sends `run_rate_at_end` with its total, units and
+  cost centres; `team_planning_scenario_costs` sends its total per scenario. The Cost strip
+  and each Scenarios cell add one muted line that wraps, such as "Run rate on 31 Dec 2026:
+  EUR 1.2m a year, +EUR 80k on Today's". Unit totals on the map stay period totals. Today
+  has none, being a run rate already. A step with no end date takes it on the last day of
+  the months shown, and says so.
+
 #### Cost on screen
 
 A scenario's map opens with a Cost strip: its total, the difference from Today over the
@@ -884,15 +974,15 @@ make ends what they can redo, as in an editor. Undo and redo are for editors, li
 other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
-undo, redo, move and note, in order, with who made it and, while it stands undone, who undid it.
+undo, redo, move, note and date edit, in order, with who made it and, while it stands undone, who undid it.
 The baseline's history also lists each update to today, with the base it left and the
 conflicts it carried.
 `team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
 a former member.
 Production already holds changes, pins and clears, so the deploy that ships the history
 needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeploy's
-`verify` stops the deploy. The
-history and overrides projections read events through one mapping,
+`verify` stops the deploy. Version 2 adds date edits, so the deploy that ships it needs the
+same rebuild. The history and overrides projections read events through one mapping,
 `TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
 never reaches either table: the history names the field in `sealed_fields` and leaves
 the value out. The note is the one exception, held in a sealed column (see below).
@@ -1015,7 +1105,7 @@ day before its base date has passed. Until then its base moves as edits land.
 Every scenario keeps its changes and resolves them over the Org Graph as of the new base,
 so someone who joined since the old base comes onto the map, and someone who left drops
 off it, with "has left" against any change that still places them. The first step after
-the baseline starts on the new base.
+the baseline starts on the new base, unless its own start is still to come.
 
 A base only moves forward. The update is refused when the plan already stands on today,
 or on a day still to come, which already reads the Org Graph as known now. It is refused
@@ -1314,13 +1404,19 @@ values, under the plan's key and deleted with it
   is, so only a scenario changes it. Removing a tenant line a plan has changed or cut
   leaves the plan's change orphaned: `team_planning_budget_lines` lists it under `orphaned`,
   and Attention flags it rather than dropping it.
-- **The Budget tab shows the reads, read-only.** On Today it lists the lines as approved,
-  since Today has no period to fund against, and links each scenario's budget. On a scenario
-  it shows `team_planning_budget`'s four totals, each line's approved, funded and remaining
-  figures, the positions `team_planning_funding` draws on each line (open when the line is
-  over or a position is short), and the unfunded positions. Every figure is the read's,
-  under the viewer's pay view, so the tab and an agent never disagree. Editing lines on the
-  tab comes later.
+- **The Budget tab shows the reads, and an editor changes a scenario's from it.** On Today
+  it lists the lines as approved, since Today has no period to fund against, and links each
+  scenario's budget. On a scenario it shows `team_planning_budget`'s four totals, each line's
+  approved, funded and remaining figures, the positions `team_planning_funding` draws on each
+  line (open when the line is over or a position is short), and the unfunded positions. Every
+  figure is the read's, under the viewer's pay view, so the tab and an agent never disagree.
+  An editor adds, changes or cuts a scenario's line on a page of its own, with the tenant
+  budget page's fields, through `team_planning_set_budget_line` and
+  `team_planning_cut_budget_line` ([#411](https://github.com/espaliahq/espalia/issues/411)).
+  Each position's Funding… opens one dialog that lists the scenario's lines by name and
+  terms and takes each line's part as a percentage, for `team_planning_set_position_funding`;
+  Clear hands a set funding back to `team_planning_clear_change`. The dialog shows no
+  amount, so the tab stays the one place that shows money. Today stays read-only.
 - **Money keeps its currency.** An amount keeps its own currency and period, a year or a
   month, as a pay band's does, and is never converted. A line with a head count and no amount
   has no amount, never zero.

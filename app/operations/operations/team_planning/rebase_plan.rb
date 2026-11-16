@@ -8,8 +8,8 @@ class Operations::TeamPlanning::RebasePlan < Operations::Base
   include Operations::OrgGraph::DateParameter
 
   description "Update a Team Planning plan to today (a UTC day): its base moves to today and every scenario " \
-              "reads the Org Graph as of it, with nothing else rewritten. The first step after the baseline " \
-              "starts on the new base. Read team_planning_rebase_preview first and pass the base_on it gave, so " \
+              "reads the Org Graph as of it, with nothing else rewritten. A first step after the baseline that " \
+              "starts before the new base starts on it; one that starts later keeps its start. Read team_planning_rebase_preview first and pass the base_on it gave, so " \
               "an update made since is refused rather than taken in unseen. A change that conflicts with the Org " \
               "Graph at that moment stays conflicting in team_planning_status while the scenario still " \
               "resolves to that change: a set, pin, clear or undo ends it. Undo does not reverse an update: a base only moves forward. " \

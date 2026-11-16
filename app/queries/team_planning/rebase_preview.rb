@@ -17,7 +17,9 @@ class TeamPlanning::RebasePreview
   # @!attribute conflicts [Array<Hash>] `{ scenario_id, subject_id, facet, change_id }`: the scenario it reads conflicting in, and the change that scenario resolves to
   # @!attribute drift [TeamPlanning::Drift::Report] what the Org Graph learned in the window
   # @!attribute names [Hash{String => String}] subject id => name for each conflict's subject, as status names it
-  Report = Data.define(:base_on, :to, :scenarios, :conflicts, :drift, :names)
+  # @!attribute starts [Array<Hash>] `{ scenario_id, starts_on, will_start_on }`: the first step whose start the
+  #   update moves to today, if any. One that starts after today keeps its start.
+  Report = Data.define(:base_on, :to, :scenarios, :conflicts, :drift, :names, :starts)
 
   # @!attribute scenario_id [String] the plan's id for the baseline
   Counts = Data.define(:scenario_id, :done, :pending, :conflicting)
@@ -46,14 +48,16 @@ class TeamPlanning::RebasePreview
     end
 
     base_on = @plan.base_on
-    @repository.load_plan(@plan.id).ensure_first_steps_reach!(@today)
+    aggregate = @repository.load_plan(@plan.id)
+    aggregate.ensure_first_steps_reach!(@today)
+    starts = aggregate.first_step_starts(@today).map { |id, before, after| { scenario_id: id, starts_on: before, will_start_on: after } }
     drift = TeamPlanning::Drift.new(context: @context, plan: @plan, today: @today, repository: @repository).call
     reports = scenario_ids.map { [ it, status_of(it) ] }
     raise TeamPlanning::Error, "This plan was updated while you looked: preview it again" unless @plan.base_on == base_on
 
     conflicts = reports.flat_map { |id, report| conflicts(id, report) }
     names = reports.map { it.last.names }.reduce({}, :merge).slice(*conflicts.map { it[:subject_id] })
-    Report.new(base_on:, to: @today, scenarios: reports.map { |id, report| counts(id, report) }, conflicts:, drift:, names:)
+    Report.new(base_on:, to: @today, scenarios: reports.map { |id, report| counts(id, report) }, conflicts:, drift:, names:, starts:)
   end
 
   private

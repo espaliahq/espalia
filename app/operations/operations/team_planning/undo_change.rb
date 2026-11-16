@@ -12,7 +12,8 @@ class Operations::TeamPlanning::UndoChange < Operations::Base
               "the same subject and facet replaced it (the refusal names that change: undo it first), when it is " \
               "already undone, or unless the caller is an editor. In a plan scoped to chosen units, an undo is " \
               "refused when the change it brings back is about someone, a unit or a position the plan no longer " \
-              "covers, unless it places them in. Nothing is deleted: the history keeps it, marked undone."
+              "covers, unless it places them in. Refused, too, when it brings back a last day outside the dates of " \
+              "the step they leave in. Nothing is deleted: the history keeps it, marked undone."
   category :write
   approval :mcp_client
 

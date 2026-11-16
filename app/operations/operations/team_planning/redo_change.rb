@@ -11,7 +11,8 @@ class Operations::TeamPlanning::RedoChange < Operations::Base
               "undo in the scenario took back. In a plan scoped to chosen units, a change about someone, a unit or a " \
               "position it no longer covers is refused unless it places them in one of its units. Refused when a " \
               "change to the same subject and facet was made since (the refusal names it), when it isn't undone, " \
-              "or unless the caller is an editor."
+              "when it brings back a last day outside the dates of the step they leave in, or unless the caller " \
+              "is an editor."
   category :write
   approval :mcp_client
 

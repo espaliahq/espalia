@@ -97,7 +97,8 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
                    scenarios: [ { scenario_id: @plan_id, done: 0, pending: 0, conflicting: 0 },
                                 { scenario_id: @q1, done: 1, pending: 0, conflicting: 1 },
                                 { scenario_id: @lean, done: 1, pending: 0, conflicting: 1 } ],
-                   conflicts: brook_conflicts, names: { @brook.id => "Brook Tamsin" } }, result.except(:drift))
+                   conflicts: brook_conflicts, names: { @brook.id => "Brook Tamsin" },
+                   starts: [ { scenario_id: @q1, starts_on: "2026-03-02", will_start_on: "2026-03-25" } ] }, result.except(:drift))
     assert_equal call(:Drift, plan_id: @plan_id).except(:plan_id, :checked), result[:drift]
     assert_equal [ [ @brook.id, "Staff Engineer" ], [ @ada.id, "Senior Engineer" ] ],
                  result[:drift][:changes].map { [ it[:person_id], it[:after]["title"] ] }
@@ -125,6 +126,16 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
     assert_equal [ "conflicting", "2026-03-25" ], statuses[@brook.id].values_at(:status, :since).map(&:to_s)
     assert_equal "pending", statuses[@ada.id][:status].to_s
     assert_equal "rebase", call(:History, plan_id: @plan_id, scenario_id: @plan_id)[:entries].last[:action]
+  end
+
+  should "leave a first step that starts after today where it is, and the days before it to today" do
+    call(:SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, starts_on: "2026-04-01", ends_on: "2026-06-30")
+    drift_brook
+
+    assert_empty preview[:starts]
+    rebase
+    assert_equal %w[2026-04-01 2026-06-30],
+                 call(:Scenarios, plan_id: @plan_id)[:scenarios].find { it[:scenario_id] == @lean }.values_at(:starts_on, :ends_on)
   end
 
   should "refuse a base already today or still to come, and an update since the preview was read" do

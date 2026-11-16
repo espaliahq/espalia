@@ -34,7 +34,14 @@ class Views::Plans::ScenarioTableTest < ActiveSupport::TestCase
     end
 
     should "say when an open-ended scenario starts" do
-      assert_equal "From 1 Apr 2027", periods(step("2027-04-01", nil)).last
+      assert_equal "From 1 Apr 2027 · no end date", periods(step("2027-04-01", nil)).last
+    end
+
+    should "name the months a step with no end date is figured over" do
+      assert_equal "1 Apr 2027 to 31 Mar 2028, the first 12 months of a step with no end date",
+                   Views::Plans::ScenarioTable.figured({ starts_on: "2027-04-01", ends_on: "2028-03-31", open_ended: true, horizon_months: 12 })
+      assert_equal "1 Apr 2027 to 30 Jun 2027",
+                   Views::Plans::ScenarioTable.figured({ starts_on: "2027-04-01", ends_on: "2027-06-30", open_ended: false, horizon_months: nil })
     end
   end
 
@@ -47,6 +54,31 @@ class Views::Plans::ScenarioTableTest < ActiveSupport::TestCase
     assert_equal "Hire two seniors", prose.text.strip
     assert prose.at_css("strong")
     assert_nil html.css("tbody tr")[0].at_css(".md-prose")
+  end
+
+  should "offer the rest of a split the Dates… of its agreed step, and an alternative none" do
+    baseline = { scenario_id: "plan", parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-14", ends_on: nil }
+    agreed = step("2026-11-14", "2027-03-31").merge(name: "Agreed Q1")
+    rest = agreed.merge(scenario_id: SecureRandom.uuid, parent_id: agreed[:scenario_id], relation: "on", name: "Q1 hires")
+    other = agreed.merge(scenario_id: SecureRandom.uuid, parent_id: agreed[:scenario_id], relation: "instead", name: "Q1 freeze")
+    html = Nokogiri::HTML5.fragment(render_view(Views::Plans::ScenarioTable.new(plan_id: "plan", scenarios: [ baseline, agreed, rest, other ],
+                                                                                can_edit: true)))
+    dates = ->(scenario) { html.at_css("tr[data-scenario-id='#{scenario[:scenario_id]}']").css("a").find { it.text == "Dates…" }&.[]("href") }
+
+    assert_equal "/planning/plan/scenarios/#{agreed[:scenario_id]}/dates", dates.(rest)
+    assert_nil dates.(other)
+  end
+
+  should "find the step a scenario takes its dates from, through splits and alternatives" do
+    agreed = step("2026-11-14", "2027-03-31")
+    rest = agreed.merge(scenario_id: SecureRandom.uuid, parent_id: agreed[:scenario_id], relation: "on")
+    other = agreed.merge(scenario_id: SecureRandom.uuid, parent_id: rest[:scenario_id], relation: "instead")
+    scenarios = [ agreed, rest, other ]
+
+    assert_equal agreed, Views::Plans::ScenarioTable.period_owner(other, scenarios)
+    assert_equal agreed, Views::Plans::ScenarioTable.dated_step(rest, scenarios)
+    assert_nil Views::Plans::ScenarioTable.dated_step(other, scenarios)
+    assert_nil Views::Plans::ScenarioTable.period_owner({ scenario_id: "plan", parent_id: nil, relation: nil }, scenarios)
   end
 
   should "draw a visible kebab on each row's menu, sized to stay inside the table" do

@@ -1,6 +1,6 @@
 {
   "name": "team_planning_set_scenario_period",
-  "description": "Move the end of a 'then' scenario in a Team Planning plan. Its start follows from the tree, every step after it starts the day after the new end, and its alternatives take the new period. Refused if a later step would end before it starts, naming that step, or unless the caller is an editor.",
+  "description": "Move the end of a 'then' scenario in a Team Planning plan. Every step after it starts the day after the new end, and its alternatives take the new period. The last step on a line may have no end date. The first step after the baseline may also move its start with starts_on, on or after the plan's base date; the days before it read as today. A later step's start follows the step before it, so starts_on is refused for one unless it repeats that start. Refused if a later step would end before it starts, naming that step, if someone's last day would fall outside the scenario they leave in, or unless the caller is an editor.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -11,6 +11,11 @@
         "type": "string"
       },
       "ends_on": {
+        "type": "string",
+        "pattern": "^(?:[0-9]{4}-[0-9]{2}-[0-9]{2})?$",
+        "description": "The step's last day, YYYY-MM-DD, or an empty string for no end date, which only the last step on a line may have."
+      },
+      "starts_on": {
         "type": "string",
         "minLength": 1,
         "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"

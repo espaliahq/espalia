@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# The roster, the structure and the memberships in effect on one day, read
-# from {OrgFactPeriod}. By default it reads what the Org Graph knows now, so
+# The roster, the structure, its kinds of unit and the memberships in effect
+# on one day, read from {OrgFactPeriod}. By default it reads what the Org Graph knows now, so
 # a later day includes the changes already recorded for it: a hire who
 # starts then, a move or a leaving scheduled for it. With `known_on` it reads
 # what the Org Graph knew at the end of that day (UTC), so a correction
@@ -36,7 +36,9 @@ class OrgGraph::AsOf
   # @!attribute retired_units [Array<Unit>] the units retired by that day, as they last stood, by name
   # @!attribute successions [Array<Succession>] the successions recorded by that day, by id
   # @!attribute left_ids [Array<String>] the people who had left by that day, by id
-  Snapshot = Data.define(:date, :known_on, :people, :units, :memberships, :retired_units, :successions, :left_ids)
+  # @!attribute kinds [Array<OrgGraph::Taxonomy::Kind>] the kinds of unit and
+  #   where each could sit, top first
+  Snapshot = Data.define(:date, :known_on, :people, :units, :memberships, :retired_units, :successions, :left_ids, :kinds)
 
   # One person's facts that day, and who supplied each, keyed by fact
   # ("title", "site", "employment", …).
@@ -73,7 +75,8 @@ class OrgGraph::AsOf
     memberships = memberships_from(rows.fetch(OrgGraph::Projections::History::PERSON, []), person_ids, live.to_set(&:id))
     Snapshot.new(date: @date, known_on: @known_on, people:, units: live, memberships:, retired_units: units.fetch("retired", []),
                  successions: successions_from(rows.fetch(OrgGraph::Projections::History::SUCCESSION, [])),
-                 left_ids: left_from(rows.fetch(OrgGraph::Projections::History::PERSON, [])))
+                 left_ids: left_from(rows.fetch(OrgGraph::Projections::History::PERSON, [])),
+                 kinds: kinds_from(rows.fetch(OrgGraph::Projections::History::LEVEL, [])))
   end
 
   Row = Data.define(:subject_type, :subject_id, :fact, :key, :value, :provider)
@@ -86,6 +89,7 @@ class OrgGraph::AsOf
     day.where(subject_type: OrgGraph::Projections::History::PERSON, fact: PERSON_FACTS + %w[membership])
       .or(day.where(subject_type: OrgGraph::Projections::History::UNIT, fact: UNIT_FACTS))
       .or(day.where(subject_type: OrgGraph::Projections::History::SUCCESSION, fact: "succession"))
+      .or(day.where(subject_type: OrgGraph::Projections::History::LEVEL, fact: "kind"))
       .pluck(:subject_type, :subject_id, :fact, :key, :value, :provider)
       .map { Row.new(*it) }
   end
@@ -127,6 +131,12 @@ class OrgGraph::AsOf
 
       Succession.new(id: row.subject_id, predecessor_ids: row.value["predecessor_ids"].sort, successor_ids: row.value["successor_ids"].sort)
     end.sort_by(&:id)
+  end
+
+  def kinds_from(rows)
+    rows = rows.select(&:value).sort_by { it.value["position"] }
+    levels = rows.map { { level_id: it.subject_id, **it.value.symbolize_keys.slice(:name, :parent_level_ids, :top) } }
+    OrgGraph::Taxonomy.new(levels, providers: rows.to_h { [ it.subject_id, it.value["provider"] ] }).kinds
   end
 
   def memberships_from(rows, person_ids, unit_ids)

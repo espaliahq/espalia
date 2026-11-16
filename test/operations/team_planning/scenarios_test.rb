@@ -45,8 +45,25 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
       assert_equal [ q1[:scenario_id], "2027-01-01", "2027-03-31" ], lean.values_at(:parent_id, :starts_on, :ends_on)
     end
 
+    should "start a first step on a later day, and refuse one before the base date" do
+      assert_equal "A first step starts on or after the plan's base date, 2027-01-01",
+                   refusal(Operations::TeamPlanning::ForkScenario, relation: "then", name: "Q1", starts_on: "2026-12-31", ends_on: "2027-03-31")
+      assert_equal %w[2027-01-14 2027-03-31],
+                   fork(relation: "then", name: "Q1", starts_on: "2027-01-14", ends_on: "2027-03-31").values_at(:starts_on, :ends_on)
+    end
+
+    should "fork a step with no end date, and ask when the step after it starts" do
+      q1 = fork(relation: "then", name: "Q1")
+      assert_equal [ "2027-01-01", nil ], q1.values_at(:starts_on, :ends_on)
+
+      assert_equal "Its parent has no end date: say when the new step starts",
+                   refusal(Operations::TeamPlanning::ForkScenario, parent_id: q1[:scenario_id], relation: "then", name: "Q2")
+      q2 = fork(parent_id: q1[:scenario_id], relation: "then", name: "Q2", starts_on: "2027-04-01")
+      assert_equal [ "2027-04-01", nil ], q2.values_at(:starts_on, :ends_on)
+      assert_equal [ nil, "2027-03-31", nil ], call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].pluck(:ends_on)
+    end
+
     should "pass on the plan's refusals and refuse bad ids and dates" do
-      assert_equal "Say when this step ends", refusal(Operations::TeamPlanning::ForkScenario, relation: "then", name: "Q1")
       assert_equal "parent_id must be a UUID, got \"q1\"",
                    refusal(Operations::TeamPlanning::ForkScenario, parent_id: "q1", relation: "instead", name: "Q1")
       assert_equal "ends_on must be a date, YYYY-MM-DD",
@@ -75,6 +92,50 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
                    call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-04-30"))
       assert_equal "This scenario is an alternative: it takes its period from its parent",
                    refusal(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: @lean, ends_on: "2027-04-30")
+    end
+
+    should "take an empty end as no end date, only on the last step on a line" do
+      preview = call(Operations::TeamPlanning::PeriodPreview, plan_id: @plan_id, scenario_id: @q1, ends_on: "")
+      assert_equal [ nil, "2027-03-31", [ [ @lean, nil, "2027-03-31" ] ] ],
+                   [ preview[:ends_on], preview[:previous_ends_on], preview[:moves].map { it.values_at(:scenario_id, :ends_on, :previous_ends_on) } ]
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: nil },
+                   call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: ""))
+
+      fork(parent_id: @q1, relation: "then", name: "Q2", starts_on: "2027-04-01")
+      assert_equal "Only the last step on a line can have no end date: a step comes after this one",
+                   refusal(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: @q1, ends_on: "")
+      assert_equal "ends_on must be a date, YYYY-MM-DD", refusal(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: @q1, ends_on: "soon")
+    end
+
+    should "start a first step after the base date, preview and move that start, and refuse one for a later step" do
+      q2 = fork(parent_id: @q1, relation: "then", name: "Q2", ends_on: "2027-06-30")[:scenario_id]
+
+      preview = call(Operations::TeamPlanning::PeriodPreview, plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-14", ends_on: "2027-03-31")
+      assert_equal [ "2027-01-14", "2027-01-01", [ @lean ] ], [ preview[:starts_on], preview[:previous_starts_on], preview[:moves].pluck(:scenario_id) ]
+
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-14", ends_on: "2027-03-31" },
+                   call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-14", ends_on: "2027-03-31"))
+      assert_equal "Its start follows the step before it: change that step's end",
+                   refusal(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: q2, starts_on: "2027-04-02", ends_on: "2027-06-30")
+      assert_equal "A first step starts on or after the plan's base date, 2027-01-01",
+                   refusal(Operations::TeamPlanning::PeriodPreview, scenario_id: @q1, starts_on: "2026-12-31", ends_on: "2027-03-31")
+    end
+
+    should "preview what moving a step's end would move, and move nothing" do
+      q2 = fork(parent_id: @q1, relation: "then", name: "Q2", ends_on: "2027-06-30")[:scenario_id]
+
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-02-28",
+                     previous_starts_on: "2027-01-01", previous_ends_on: "2027-03-31",
+                     moves: [
+                       { scenario_id: @lean, starts_on: "2027-01-01", ends_on: "2027-02-28", previous_starts_on: "2027-01-01", previous_ends_on: "2027-03-31" },
+                       { scenario_id: q2, starts_on: "2027-03-01", ends_on: "2027-06-30", previous_starts_on: "2027-04-01", previous_ends_on: "2027-06-30" }
+                     ] },
+                   call(Operations::TeamPlanning::PeriodPreview, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28"))
+      assert_equal "2027-03-31", call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].second[:ends_on]
+      assert_equal "A scenario after it would end on 2027-06-30, before it starts on 2027-07-01",
+                   refusal(Operations::TeamPlanning::PeriodPreview, scenario_id: @q1, ends_on: "2027-06-30")
+      assert_equal "This scenario is an alternative: it takes its period from its parent",
+                   refusal(Operations::TeamPlanning::PeriodPreview, scenario_id: @lean, ends_on: "2027-04-30")
     end
 
     should "rename a scenario, and refuse the baseline" do
@@ -148,6 +209,7 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
         [ Operations::TeamPlanning::RenameScenario, { scenario_id: @q1, name: "Mine" } ],
         [ Operations::TeamPlanning::DescribeScenario, { scenario_id: @q1, description: "Mine" } ],
         [ Operations::TeamPlanning::SetScenarioPeriod, { scenario_id: @q1, ends_on: "2027-04-30" } ],
+        [ Operations::TeamPlanning::PeriodPreview, { scenario_id: @q1, ends_on: "2027-04-30" } ],
         [ Operations::TeamPlanning::RemoveScenario, { scenario_id: @lean } ] ].each do |operation, params|
         assert_equal "No such plan", refusal(operation, as: @other_admin, **params), operation.name
       end

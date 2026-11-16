@@ -44,7 +44,7 @@ class Operations::TeamPlanning::FundingTest < ActiveSupport::TestCase
   should "give each position its derived line, each line its draws, and the totals, to a member" do
     read = funding(as: @viewer)
 
-    assert_equal [ @plan_id, @q2, { starts_on: "2027-04-01", ends_on: "2027-06-30" } ], read.values_at(:plan_id, :scenario_id, :period)
+    assert_equal [ @plan_id, @q2, { starts_on: "2027-04-01", ends_on: "2027-06-30", open_ended: false, horizon_months: nil } ], read.values_at(:plan_id, :scenario_id, :period)
     assert_equal({ position_id: @seat, unit_id: @unit_id, fte: "0.5", cost_centre: nil, cost_centre_source: "none", location: nil,
                    draw_reason: "open", starts_on: "2027-04-01", source: "derived", state: "funded", reason: nil, reason_text: nil,
                    draws: [ { budget_line_id: @engineers.id, share: "1", held: true, differs_on: [], variance: [] } ], matching_ids: [ @engineers.id ] },

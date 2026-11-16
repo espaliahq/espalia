@@ -21,6 +21,11 @@ module Operations::TeamPlanning::PlanRead
   PRICED_TODAY = "An archived plan carries archived_on and a note: its figures still use today's pay bands, " \
                  "exchange rates, budget lines and rules, not those of the day it was archived."
 
+  # How a read that runs over a scenario's period treats a step with no end date, in its description.
+  OPEN_ENDED = "A step with no end date runs, for its figures, over the plan's open_step_horizon rule in whole months " \
+               "from its start: its period's ends_on is that horizon's last day, with open_ended true and horizon_months " \
+               "the months shown. Otherwise open_ended is false and horizon_months null."
+
   private
 
   # @param plan [TeamPlanningPlan]

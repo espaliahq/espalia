@@ -318,6 +318,26 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     assert_equal [ [], "no_line" ], drawn_on(report, from_july)
   end
 
+  should "leave out a backfill whose leaver goes after the months an open step shows, as it costs nothing in them" do
+    seat = open_position(basis: "backfill")
+    open_step = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, parent_id: @year, relation: "then", name: "2027 on")[:scenario_id]
+    operation(Operations::TeamPlanning::SetDeparture, scenario_id: open_step, person_id: @cy.id, position_id: seat, leaves_on: "2028-03-31")
+    budget_line = line(starts_on: "2027-01-01", ends_on: "2027-12-31")
+
+    report = funding(open_step)
+    assert_equal Date.new(2027, 12, 31), report.period.end
+    assert_nil of(report, seat)
+    assert_equal [ 0, 0 ], [ report.total.positions, report.total.fte ]
+
+    budget = as_tenant { TeamPlanning::Budget.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: open_step).call }
+    cost = as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: open_step).call }
+    assert_equal [ [ nil, 0 ] ], cost.scenario.lines.select { it.position_id == seat }.map { [ it.held, it.amount ] },
+                 "the cost read holds it no day and prices it at nothing"
+    assert_equal({}, budget.lines.find { it.line.id == budget_line }.funded)
+    assert_equal [ 0, 0 ], [ budget.totals.funded_heads.positions, budget.totals.unfunded_heads.positions ]
+    assert_equal [ 0, 0 ], [ budget.totals.funded_heads.fte, budget.totals.unfunded_heads.fte ]
+  end
+
   should "hold a backfill from the period's start when a leaver has no date or leaves part of it open, as the cost read does" do
     undated, part_open = Array.new(2) { open_position(basis: "backfill") }
     operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, position_id: undated, leaves_on: "2026-06-30")

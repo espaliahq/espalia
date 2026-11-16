@@ -58,6 +58,7 @@ class Operations::TeamPlanning::SetDeparture < Operations::Base
     raise Operations::Base::ParameterError, "The baseline has no period, so a departure in it takes no leaving date" unless period
     return if period.cover?(leaves_on)
 
+    raise Operations::Base::ParameterError, "The leaving date must fall on or after the scenario's start, #{period.begin}" unless period.end
     raise Operations::Base::ParameterError, "The leaving date must fall within the scenario's period, #{period.begin} to #{period.end}"
   end
 end

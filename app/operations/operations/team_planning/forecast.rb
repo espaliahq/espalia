@@ -19,7 +19,9 @@ class Operations::TeamPlanning::Forecast < Operations::Base
               "the unit's average filled seat as the caller sees pay. These rows are the forecast part of team_planning_cost and team_planning_capacity, beside " \
               "their actual part, which means the baseline's figure, not actual pay. " \
               "A row has no id and is not a change: it can't be pinned, cleared, noted or listed among the changes; " \
-              "change the rule to change it. The plan's own id, Today, has no period and so no rows. Figures are " \
+              "change the rule to change it. The plan's own id, Today, has no period and so no rows. A step with no " \
+              "end date forecasts over the plan's open_step_horizon rule in whole months from its start, with open_ended " \
+              "true and horizon_months the months shown; otherwise open_ended is false and horizon_months null. Figures are " \
               "decimal strings. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
@@ -27,18 +29,19 @@ class Operations::TeamPlanning::Forecast < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "A scenario of the plan; the plan's id gives no rows." }
 
-  # @return [Hash] `{ plan_id, scenario_id, rows }`
+  # @return [Hash] `{ plan_id, scenario_id, open_ended, horizon_months, rows }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
+    cost = nil
     rows = refusing_bad_plans do
-      cost = ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call
+      cost = ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call(at_end: false)
       capacity = ::TeamPlanning::Capacity.split(context:, plan:, scenario_id:)
       names = cost.scenario.map.units.to_h { [ it.id, it.name ] }
       measured = capacity.forecast.index_by { key(it) }
       cost.forecast.rows.map { row(it.with(capacity: measured[key(it)]&.capacity || {}), names) }
     end
-    { plan_id: plan.id, **priced_today(plan), scenario_id:, rows: }
+    { plan_id: plan.id, **priced_today(plan), scenario_id:, open_ended: cost.open_ended, horizon_months: cost.horizon_months, rows: }
   end
 
   private
