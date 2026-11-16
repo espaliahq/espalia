@@ -10,7 +10,8 @@ class Operations::TeamPlanning::SetScenarioPeriod < Operations::Base
               "the new end, and its alternatives take the new period. The first step after the baseline may also " \
               "move its start with starts_on, on or after the plan's base date; the days before it read as today. " \
               "A later step's start follows the step before it, so starts_on is refused for one. Refused if a " \
-              "later step would end before it starts, naming that step, or unless the caller is an editor."
+              "later step would end before it starts, naming that step, if someone's last day would fall outside " \
+              "the scenario they leave in, or unless the caller is an editor."
   category :write
   approval :mcp_client
 

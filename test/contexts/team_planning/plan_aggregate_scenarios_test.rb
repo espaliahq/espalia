@@ -142,6 +142,26 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
                    refusal { @plan.set_scenario_period(@q1, ends_on: "2027-01-31", set_by_id: @editor_id) }
     end
 
+    should "refuse dates that leave someone's last day outside the scenario they leave in, in the edit and its preview" do
+      leave = ->(scenario_id, leaves_on) do
+        @plan.set_change(TeamPlanning::Events::DepartureSet, scenario_id:, subject_id: SecureRandom.uuid_v7, set_by_id: @editor_id,
+                                                             end_state: { leaves_in_id: scenario_id, leaves_on: })
+      end
+      leave.(@lean, "2027-01-20")
+      leave.(@q2, "2027-04-10")
+      count = @plan.unpublished_events.count
+
+      later_start = "Someone leaves on 2027-01-20, outside the dates this gives the scenario they leave in (2027-02-01 to 2027-03-31): change their date first"
+      assert_equal later_start, refusal { @plan.set_scenario_period(@q1, starts_on: "2027-02-01", ends_on: "2027-03-31", set_by_id: @editor_id) }
+      assert_equal later_start, refusal { @plan.period_moves(@q1, starts_on: "2027-02-01", ends_on: "2027-03-31") }
+      assert_equal "Someone leaves on 2027-04-10, outside the dates this gives the scenario they leave in (2027-04-16 to 2027-06-30): change their date first",
+                   refusal { @plan.set_scenario_period(@q1, ends_on: "2027-04-15", set_by_id: @editor_id) }
+      assert_equal count, @plan.unpublished_events.count
+
+      @plan.set_scenario_period(@q1, ends_on: "2027-04-05", set_by_id: @editor_id)
+      assert_equal %w[2027-04-06 2027-06-30], period(@q2)
+    end
+
     should "keep its start when only the end moves, and write nothing for the same period" do
       @plan.set_scenario_period(@q1, ends_on: "2027-02-28", set_by_id: @editor_id)
       assert_equal %w[2027-01-14 2027-02-28], period(@q1)

@@ -405,6 +405,7 @@ class TeamPlanning::PlanAggregate
     return if after == before
 
     ensure_periods_fit!(moved)
+    ensure_departures_within!(moved)
     apply(TeamPlanning::Events::ScenarioPeriodSet.new(data: {
       plan_id: @plan_id, scenario_id: scenario_id, starts_on: after.begin.iso8601, ends_on: after.end.iso8601,
       previous_starts_on: before.begin.iso8601, previous_ends_on: before.end.iso8601, set_by_id: set_by_id
@@ -426,6 +427,7 @@ class TeamPlanning::PlanAggregate
     scenario_id = step_with_period!(scenario_id)
     moved = moved_period(scenario_id, starts_on, ends_on)
     ensure_periods_fit!(moved)
+    ensure_departures_within!(moved)
     moves = @scenarios.keys.excluding(scenario_id).filter_map do |id|
       before = period_of(id)
       after = period_of(id, moved)
@@ -1602,6 +1604,20 @@ class TeamPlanning::PlanAggregate
 
       raise TeamPlanning::Error,
             "#{moved.key?(id) ? "This scenario" : "A scenario after it"} would end on #{period.end.iso8601}, before it starts on #{period.begin.iso8601}"
+    end
+  end
+
+  # Refuses periods that would leave someone's last day outside the scenario
+  # that has them leave, as a move into a step refuses it.
+  def ensure_departures_within!(moved)
+    @scenarios.each_key do |id|
+      period = period_of(id, moved)
+      next if period == period_of(id)
+
+      leaves_on = changes_in(id).filter_map { it.data[:leaves_on] }.find { !period.cover?(Date.iso8601(it)) } or next
+      raise TeamPlanning::Error,
+            "Someone leaves on #{leaves_on}, outside the dates this gives the scenario they leave in " \
+            "(#{period.begin.iso8601} to #{period.end.iso8601}): change their date first"
     end
   end
 
