@@ -176,6 +176,8 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       sign_in_as(@viewer.user)
       visit timeline_plan_path(@plan_id, step: 1)
       assert_text "Step 2 of 3"
+      # The frame is lazy, and a short window leaves the step card below the fold.
+      page.execute_script("document.querySelector('turbo-frame#timeline-figures-phone').scrollIntoView({ block: 'center' })")
       assert_selector "turbo-frame#timeline-figures-phone[complete]", visible: :all
 
       within("[data-timeline-phone] turbo-frame#timeline-figures-phone") do
