@@ -1246,6 +1246,27 @@ draw funds, so funded and unfunded always add up to the scenario's positions and
 holds whether or not a pay band prices a position: one with no band is still funded or
 unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
 
+As built in 6.5 ([#384](https://github.com/espaliahq/espalia/issues/384)): the
+`budget_strictness` rule says how strictly positions follow budget lines. It is plan-wide, like
+`budget_basis`. Its value names the dimensions that must match (`match`, any of role, level,
+cost_centre and location), whether money, heads or both are limited (`limit`), and where the
+limit is checked (`scope`: line, cost_centre or organisation). Three presets name the common
+settings:
+
+- **position_control**, the default: all four dimensions, each line, money and heads. This is
+  how 6.3 matched, so a plan that never sets the rule funds as it did.
+- **cost_centre**: the cost centre must match and the rest is free, checked per cost centre.
+  Trades happen inside a cost centre, never across. A cost-centre scope without cost_centre in
+  `match` is refused, since a draw could then cross the boundary its limit is checked at.
+- **envelope**: nothing must match, and only the organisation's money total is checked.
+
+A dimension outside `match` no longer stops a line matching. Ranking keeps its order, with one
+change: a stated dimension counts for a line only when it agrees, and fewer differences break a
+tie. Under the default every stated dimension agrees, so nothing moves. Each draw, derived or
+set, lists `differs_on`, the dimensions its line states that the position doesn't share, and
+`variance`, those of them the rule holds. A variance is an exception someone must approve; any
+other difference is the record of a trade. 6.6 turns both into checks.
+
 As built in 6.4 ([#369](https://github.com/espaliahq/espalia/issues/369)): `team_planning_budget`
 gives the four numbers for a scenario, never the baseline.
 

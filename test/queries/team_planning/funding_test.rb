@@ -64,6 +64,8 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     as_tenant { TeamPlanning::Funding.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id:).call }
   end
 
+  def strictness(**value) = operation(Operations::TeamPlanning::SetRule, rule: "budget_strictness", value:)
+
   def of(report, position_id) = report.positions.find { it.position.id == position_id }
 
   def drawn_on(report, position_id) = of(report, position_id).then { [ it.draws.map(&:budget_line_id), it.reason ] }
@@ -119,6 +121,54 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     fill(seat, @brook)
 
     assert_equal [ [], "no_line" ], drawn_on(funding, seat), "Brook is in Atlantis, not Mu"
+  end
+
+  should "let a dimension the strictness rule frees stop blocking a line, and record where the line differs" do
+    elsewhere = line(cost_centre: "Elsewhere")
+    seat = open_position(cost_centre: "Platform")
+    assert_equal [ [], "no_line" ], drawn_on(funding, seat), "position control holds the cost centre"
+
+    strictness(match: %w[role level location], limit: "money", scope: "organisation")
+    draw = of(funding, seat).draws.sole
+    assert_equal [ elsewhere, %w[cost_centre], [] ], [ draw.budget_line_id, draw.differs_on, draw.variance ]
+  end
+
+  should "under an envelope, prefer the line whose stated dimensions agree" do
+    staff_line = line(role_id: SecureRandom.uuid_v7, level_id: @e6.level_id)
+    line(role_id: SecureRandom.uuid_v7)
+    level = line(level_id: @e5.level_id, location: "Mu")
+    seat = open_position
+    staff = open_position(level: @e6)
+    strictness(preset: "envelope")
+
+    report = funding
+    assert_equal [ [ level ], nil ], drawn_on(report, seat), "it agrees on level, though Mu is not where the seat is"
+    assert_equal %w[location], of(report, seat).draws.sole.differs_on
+    assert_equal [ [ staff_line ], nil ], drawn_on(report, staff), "it agrees on level, though its role differs"
+    assert_equal [ %w[role], [] ], of(report, staff).draws.sole.then { [ it.differs_on, it.variance ] }
+  end
+
+  should "under an envelope, prefer the line that differs on fewer dimensions when none agrees" do
+    line(role_id: SecureRandom.uuid_v7, level_id: @e6.level_id)
+    other_role = line(role_id: SecureRandom.uuid_v7)
+    seat = open_position
+    strictness(preset: "envelope")
+
+    assert_equal [ [ other_role ], nil ], drawn_on(funding, seat)
+  end
+
+  should "match and rank exactly as before under the default" do
+    platform = line(cost_centre: "Platform")
+    role_and_level = line(role_id: @engineer.role_id, level_id: @e5.level_id)
+    seat = open_position(cost_centre: "Platform")
+    loose = open_position(level: @e6, cost_centre: "Elsewhere")
+
+    report = funding
+    assert_equal "position_control", TeamPlanning::RuleKinds::BudgetStrictness.preset_of(report.strictness)
+    assert_equal [ [ platform ], nil ], drawn_on(report, seat)
+    assert_equal [ [], "no_line" ], drawn_on(report, loose)
+    assert_not_includes report.positions.flat_map(&:matching_ids), role_and_level
+    assert report.positions.flat_map(&:draws).all? { it.differs_on.empty? }
   end
 
   should "match a location on the country of an occupant, else of the leaver a backfill replaces, ignoring case and spacing" do
