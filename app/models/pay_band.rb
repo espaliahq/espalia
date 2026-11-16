@@ -128,8 +128,11 @@ class PayBand < ApplicationRecord
   # @return [String] such as "Software Engineer, E4 Staff Engineer" or "Engineering, Level 4"
   def level_label = "#{role_name}, #{level_name}"
 
+  # A band made from a framework level matches on the level, not its number,
+  # since the framework can renumber a level and keep it.
+  #
   # @return [Hash{Symbol => Object}] the fields the band matches on, nil where it matches anything
-  def matcher = { role_family_id:, role_id:, level_ordinal:, level_id:, location_key: location_key.presence }
+  def matcher = { role_family_id:, role_id:, level_ordinal: (level_ordinal unless level_id), level_id:, location_key: location_key.presence }
 
   # The fields an admin sets, for the tools and the working.
   #
@@ -190,7 +193,8 @@ class PayBand < ApplicationRecord
   end
 
   def one_band_per_matcher
-    taken = PayBand.where(role_family_id:, role_id:, level_ordinal:, level_id:, location_key:).where.not(id:).exists?
+    same = level_id ? { level_id: } : { role_family_id:, role_id:, level_ordinal:, level_id: nil }
+    taken = PayBand.where(**same, location_key:).where.not(id:).exists?
     errors.add(:base, duplicate_message) if taken
   end
 

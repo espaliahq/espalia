@@ -24,6 +24,11 @@ class PayBandTest < ActiveSupport::TestCase
            .tap { it.match_on(role:, role_family:, level_ordinal:) }.tap(&:save!)
   end
 
+  def entry_for_level(level)
+    PayBand.new(currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2)
+           .tap { it.match_on(role: @role, level_ordinal: level.ordinal) }
+  end
+
   def site(country, from: Date.current, to: nil, person_id: SecureRandom.uuid_v7)
     OrgFactPeriod.create!(subject_type: "person", subject_id: person_id, fact: "site", value: { country: },
                           effective_from: from, effective_to: to, learned_at: Time.current,
@@ -177,6 +182,25 @@ class PayBandTest < ActiveSupport::TestCase
       @level.destroy!
 
       assert_equal role, lookup.covering(left, "Fixtureland")
+    end
+
+    should "keep pricing a level's seats from its band when the framework renumbers the level" do
+      role = band.tap(&:save!)
+      @level.update!(ordinal: 5)
+
+      assert_equal role, lookup.covering(@level.level_id, "Mu")
+      assert_not entry_for_level(@level).valid?
+    end
+
+    should "not flag a band for a level that has left the framework when only its role's family band follows" do
+      role = band.tap(&:save!)
+      family = entry(role_family: @family, level_ordinal: 2)
+      PayBand.reorder!([ role.id, family.id ])
+      left = @level.level_id
+      @level.destroy!
+
+      assert_equal role, lookup.covering(left, nil)
+      assert_empty lookup.shadowed
     end
   end
 end

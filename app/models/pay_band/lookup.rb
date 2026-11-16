@@ -34,7 +34,7 @@ class PayBand::Lookup
 
   # @return [Array<PayBand>] the bands that can never have the last word, as a later band matches every seat they do
   def shadowed
-    reaches = @bands.map { it.matcher.merge(it.role_id ? { role_family_id: families[it.role_id] } : {}) }
+    reaches = @bands.map { reach(it) }
     LastMatch.shadowed(@bands.map(&:matcher), PayBand::MATCHER, reaches:).map { @bands[it] }
   end
 
@@ -50,6 +50,13 @@ class PayBand::Lookup
   def subject(level_id, country)
     level = @levels[level_id] || @left[level_id] || {}
     { **level, level_id:, location_key: PayBand.location_key(country) }
+  end
+
+  # What every seat a band matches has, built as #subject builds a seat.
+  def reach(band)
+    return { **(@levels[band.level_id] || @left[band.level_id]), **band.matcher.compact } if band.level_id
+
+    band.matcher.merge(band.role_id ? { role_family_id: families[band.role_id] } : {})
   end
 
   def families = @families ||= FrameworkState::Role.where(tenant_id: @tenant_id, role_id: @bands.filter_map(&:role_id)).pluck(:role_id, :role_family_id).to_h
