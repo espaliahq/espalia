@@ -4,8 +4,9 @@
 # ([#411](https://github.com/espaliahq/espalia/issues/411)), through the same
 # Operations as `team_planning_set_budget_line` and `team_planning_cut_budget_line`.
 # Editors only, on a scenario: Today holds the organisation's budget as it is.
-# A refused form is shown again with what was typed. No message names an
-# amount, so hiding amounts later gates the tab alone.
+# A refused form is shown again with what was typed. Amounts appear only in
+# the tab and the line's form, never in a flash, so hiding amounts later
+# gates those two views alone.
 module Plans::BudgetEditing
   extend ActiveSupport::Concern
   include BudgetLineForm
