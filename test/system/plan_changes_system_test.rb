@@ -313,8 +313,8 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
     end
   end
 
-  LONG_NOTE = ("Bo moves to Growth once the second hire lands and the on-call rota has a replacement for the weekend. " * 5) +
-              "https://example.test/notes/#{'a' * 90}".freeze
+  LONG_NOTE = (("Bo moves to Growth once the second hire lands and the on-call rota has a replacement for the weekend. " * 5) +
+              "https://example.test/notes/#{'a' * 90}").freeze
   MEDIUM_NOTE = "Bo moves to Growth once the second hire lands, and the on-call rota has a replacement for every weekend in the quarter.".freeze
 
   def medium_note_on_bo
