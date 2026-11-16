@@ -679,6 +679,9 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         [ @editor, @viewer ].each do |account|
           reads = frozen_reads(account)
           assert_nil reads[:budget][:budget_lines].find { it[:budget_line_id] == @line }[:funded][:native], "a budget amount is pay"
+          seat = call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments)[:seats][:scenario].find { it[:seat_id] == @in.id }
+          assert_equal "band_midpoint", seat[:pay_source]
+          assert_in_delta 100_000 * @share, BigDecimal(seat[:base]), 1e-9, "the archive day's midpoint, not today's 130,000"
           assert_not_equal holder[:forecast][:rows], reads[:forecast][:rows], "attrition is priced as each caller sees the seat"
           reads.each do |name, payload|
             [ *SCOPED.values, @held[0, 5] ].each { assert_not_includes payload.to_json, it, "#{name} as a non-holder" }
