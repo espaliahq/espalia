@@ -3,7 +3,7 @@
 require "test_helper"
 
 # A past cycle's assessment page: that cycle's ratings, read-only, reached
-# by `?cycle_id=` (https://github.com/mr-yum/growth-os/issues/669).
+# by `?cycle_id=`.
 class AssessmentsPastCycleTest < ActionDispatch::IntegrationTest
   setup do
     @tenant = create(:tenant)

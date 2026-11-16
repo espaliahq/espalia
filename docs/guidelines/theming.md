@@ -1,6 +1,6 @@
 # Theming and Lookbook
 
-How colour, type and elevation reach the screen, and how to build, extend and check anything that uses them. The decision is [ADR-23](../architecture/adrs.md); the plan and its steps are [#539](https://github.com/mr-yum/growth-os/issues/539).
+How colour, type and elevation reach the screen, and how to build, extend and check anything that uses them. The decision is [ADR-23](../architecture/adrs.md).
 
 The short version: **colour with a role, never a palette step.** Write `text-muted`, not `text-gray-600 dark:text-gray-300`. A role carries both schemes and every theme, so it needs no `dark:` partner, and a theme can restyle it.
 
@@ -171,11 +171,11 @@ The preview, test and table row a new component needs are in [phlex-views.md →
 | `test/lib/kit_component_table_test.rb` | a Kit component has no row in [phlex-views.md → Which Kit component](phlex-views.md#which-kit-component), or a row names one that doesn't exist |
 | `test/lib/view_colour_roles_test.rb` | a view uses a palette colour, other than a site its `PENDING` list holds while it waits for a domain token |
 
-Every view directory except `pwa/` (the service worker) is in `view_colour_roles_test.rb` ([#544](https://github.com/mr-yum/growth-os/issues/544)–[#547](https://github.com/mr-yum/growth-os/issues/547)), so a new view starts on roles. A new directory under `app/views/` joins its `SOURCES`.
+Every view directory except `pwa/` (the service worker) is in `view_colour_roles_test.rb`, so a new view starts on roles. A new directory under `app/views/` joins its `SOURCES`.
 
 ## Reuse before you build
 
-Check Kit and Lookbook before writing markup. If something close exists, extend it with a variant, tone, size or slot ([phlex-views.md → Extending Kit](phlex-views.md#extending-kit)). A tinted note with a title is already `Kit::Alert` with `emphasis: :subtle`, and its `role:` decides whether it is announced. A hand-rolled copy looks right on the day and drifts afterwards. The comment and evidence kebab menus hand-rolled `Kit::Dropdown`'s widget, so every fix, and the theming migration, had to land three times ([#555](https://github.com/mr-yum/growth-os/issues/555)).
+Check Kit and Lookbook before writing markup. If something close exists, extend it with a variant, tone, size or slot ([phlex-views.md → Extending Kit](phlex-views.md#extending-kit)). A tinted note with a title is already `Kit::Alert` with `emphasis: :subtle`, and its `role:` decides whether it is announced. A hand-rolled copy looks right on the day and drifts afterwards. The comment and evidence kebab menus hand-rolled `Kit::Dropdown`'s widget, so every fix, and the theming migration, had to land three times.
 
 The same goes for previews: render the real component, never a copy of its markup.
 
@@ -194,7 +194,7 @@ Colour rules are the same in all three. Only Shell paints the nav roles, and onl
 Each component owns one radius step and one elevation role, so changing the look means changing one file, and elevation reads in order: cards below overlays below modals. Views never set radius or shadow on a Kit surface.
 
 - **Radius is Tailwind's scale**, not themed.
-- **Shadows are roles** ([#597](https://github.com/mr-yum/growth-os/issues/597)), one per job, so the ladder changes in one place. Every theme shares it: a preset never sets one, and `theme_roles_test.rb` fails if it does. Anything that draws a shadow uses one of these; `radius_shadow_steps_test.rb` fails on a raw step (`shadow-sm`) anywhere in components, views or JavaScript.
+- **Shadows are roles**, one per job, so the ladder changes in one place. Every theme shares it: a preset never sets one, and `theme_roles_test.rb` fails if it does. Anything that draws a shadow uses one of these; `radius_shadow_steps_test.rb` fails on a raw step (`shadow-sm`) anywhere in components, views or JavaScript.
 
 | Level | Utility | For | Value |
 |---|---|---|---|
@@ -282,9 +282,9 @@ A Custom theme can set a role only if `roles.css` reads a tenant hook for it, wi
 }
 ```
 
-`Themeable::CUSTOM_ROLES` reads that list from `roles.css`, so adding a hook is all it takes to make a role settable. Today that is `brand` and `nav-surface`, plus the font family. A tenant's values are stored as `{ role => { "light" => hex, "dark" => hex } }` and injected on `:root` as `--tenant-<role>` and `--tenant-<role>-dark` by the layout's `#tenant-theme` block ([#550](https://github.com/mr-yum/growth-os/issues/550)). Text on those fills comes from the contrast helper, so a tenant never picks a text colour.
+`Themeable::CUSTOM_ROLES` reads that list from `roles.css`, so adding a hook is all it takes to make a role settable. Today that is `brand` and `nav-surface`, plus the font family. A tenant's values are stored as `{ role => { "light" => hex, "dark" => hex } }` and injected on `:root` as `--tenant-<role>` and `--tenant-<role>-dark` by the layout's `#tenant-theme` block. Text on those fills comes from the contrast helper, so a tenant never picks a text colour.
 
-**Tenant admin → Theme** (`app/views/tenant/theme/edit_view.rb`) is where an admin chooses Default, Bento or Custom ([#551](https://github.com/mr-yum/growth-os/issues/551)). Each choice shows a small page (the navbar, a card, a badge and the main button) in light and dark. Each one is an iframe of `/tenant/theme/preview`, because role values switch scheme only on `:root` (see [Light and dark](#light-and-dark)). Custom sets brand and navbar, each with its own light and dark colour, plus the font. Beside each colour, the page shows the text the contrast helper picked, read from Custom's preview. `theme_live_preview_controller.js` previews the choice on the whole page as the admin picks: `data-theme` for a preset, the `--tenant-*` variables for Custom.
+**Tenant admin → Theme** (`app/views/tenant/theme/edit_view.rb`) is where an admin chooses Default, Bento or Custom. Each choice shows a small page (the navbar, a card, a badge and the main button) in light and dark. Each one is an iframe of `/tenant/theme/preview`, because role values switch scheme only on `:root` (see [Light and dark](#light-and-dark)). Custom sets brand and navbar, each with its own light and dark colour, plus the font. Beside each colour, the page shows the text the contrast helper picked, read from Custom's preview. `theme_live_preview_controller.js` previews the choice on the whole page as the admin picks: `data-theme` for a preset, the `--tenant-*` variables for Custom.
 
 ## Lookbook
 

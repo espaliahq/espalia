@@ -126,8 +126,7 @@ class AssessmentPolicy < ApplicationPolicy
   # until they choose to start alignment.
   #
   # A past cycle answers the same question from its own participation and
-  # rows: closing a cycle discloses nothing new
-  # (https://github.com/mr-yum/growth-os/issues/669).
+  # rows: closing a cycle discloses nothing new.
   #
   # @param role_id [String, nil] the role read against; nil = the home role
   # @param cycle [AssessmentCycle, nil] a past cycle; nil reads the open one

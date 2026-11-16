@@ -9,8 +9,7 @@
 # `parameter :as_level_ordinal, Integer` and `cycle_id` with
 # {CYCLE_ID_SCHEMA}, and read `assignment`. A `cycle_id` reads a past cycle
 # the person joined: its ratings and score at its own role and level, as the
-# web's read-only past-cycle page shows them
-# (https://github.com/mr-yum/growth-os/issues/669).
+# web's read-only past-cycle page shows them.
 module Operations::Assessments::ReadLens
   # @return [Hash] the `cycle_id` parameter's schema
   CYCLE_ID_SCHEMA = {

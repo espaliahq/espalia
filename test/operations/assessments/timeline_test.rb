@@ -132,8 +132,7 @@ class Operations::Assessments::TimelineTest < ActiveSupport::TestCase
     assert_equal [ @cycle_id ], cycle_ids
   end
 
-  # Home follows a transfer until alignment starts, then stays
-  # (https://github.com/mr-yum/growth-os/issues/687).
+  # Home follows a transfer until alignment starts, then stays.
   context "after a mid-cycle transfer" do
     setup do
       @pm = with_tenant { create(:framework_role, role_family_id: @role.role_family_id, name: "PM", code: "P") }
