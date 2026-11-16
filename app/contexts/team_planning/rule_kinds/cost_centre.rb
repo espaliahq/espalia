@@ -92,6 +92,19 @@ class TeamPlanning::RuleKinds::CostCentre < TeamPlanning::RuleKind
     LastMatch.find(entries(value), subject, FIELDS) { matcher(it) }
   end
 
+  # @param value [Hash] as stored
+  # @param families [Hash{String => String}] each role's family
+  # @param chains [#call] a unit id to it and every unit above it
+  # @return [Array<Integer>] the places of the entries that never have the last word, as a later one matches every seat they do
+  def self.shadowed(value, families:, chains:)
+    matchers = entries(value).map { matcher(it) }
+    reaches = matchers.map do |matcher|
+      matcher.merge(unit_id: matcher[:unit_id] && chains.call(matcher[:unit_id]),
+                    role_family_id: matcher[:role_family_id] || families[matcher[:role_id]])
+    end
+    LastMatch.shadowed(matchers, FIELDS, reaches:)
+  end
+
   def self.entry!(entry)
     raise TeamPlanning::Error, "Each cost centre entry must be an object" unless entry.is_a?(Hash)
 

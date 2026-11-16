@@ -79,6 +79,18 @@ class TeamPlanning::RuleKinds::CostCentreTest < ActiveSupport::TestCase
     end
   end
 
+  should "flag the entries a later one always overrides, reading a role as its family and a unit as the units above it" do
+    entries = { "entries" => [ { "unit_id" => "squad", "role_id" => "se", "cost_centre" => "Squad engineers" },
+                               { "unit_id" => "squad", "cost_centre" => "Squad" },
+                               { "role_family_id" => "eng", "cost_centre" => "Engineering" },
+                               { "unit_id" => "tribe", "cost_centre" => "Tribe" },
+                               { "level_ordinal" => 3, "cost_centre" => "Seniors" } ] }
+    chains = { "squad" => %w[squad tribe], "tribe" => %w[tribe] }
+
+    assert_equal [ 0, 1 ], Kind.shadowed(entries, families: { "se" => "eng" }, chains: chains.method(:fetch))
+    assert_equal [], Kind.shadowed({ "entries" => [] }, families: {}, chains: chains.method(:fetch))
+  end
+
   should "refuse another key, an entry without a matcher or label, a role with a family, a bad level and a long label" do
     [ { "teams" => [] }, { "entries" => {} }, { "entries" => [ "x" ] },
       { "entries" => [ { "cost_centre" => "Ops" } ] },
