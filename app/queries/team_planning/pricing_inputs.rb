@@ -17,7 +17,8 @@
 #   inputs = TeamPlanning::PricingInputs.for(plan)
 #   inputs.priced_on # => nil while the plan is live
 class TeamPlanning::PricingInputs
-  # The models a copy holds, by the key each is held under.
+  # The models a copy holds, by the key each is held under. A migration that
+  # renames or drops a column of one must read old copies in {#rows}.
   MODELS = { pay_bands: PayBand, exchange_rates: ExchangeRate, budget_lines: BudgetLine,
              reference_currencies: ReferenceCurrency, planning_rule_defaults: PlanningRuleDefault }.freeze
   # What no copy keeps of a row: whose it is and who last edited it.

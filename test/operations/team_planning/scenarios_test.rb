@@ -132,7 +132,7 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
                      ] },
                    call(Operations::TeamPlanning::PeriodPreview, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28"))
       assert_equal "2027-03-31", call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].second[:ends_on]
-      assert_equal "A scenario after it would end on 2027-06-30, before it starts on 2027-07-01",
+      assert_equal "Q2 would end on 2027-06-30, before it starts on 2027-07-01",
                    refusal(Operations::TeamPlanning::PeriodPreview, scenario_id: @q1, ends_on: "2027-06-30")
       assert_equal "This scenario is an alternative: it takes its period from its parent",
                    refusal(Operations::TeamPlanning::PeriodPreview, scenario_id: @lean, ends_on: "2027-04-30")
