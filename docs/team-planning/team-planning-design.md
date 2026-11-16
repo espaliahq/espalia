@@ -1300,6 +1300,40 @@ draw funds, so funded and unfunded always add up to the scenario's positions and
 holds whether or not a pay band prices a position: one with no band is still funded or
 unfunded here, while `team_planning_cost` lists it as unpriced. Ambiguous and unmatched positions are named in the read now; 6.6 surfaces them.
 
+As built in 6.5 ([#384](https://github.com/espaliahq/espalia/issues/384)): the
+`budget_strictness` rule says how strictly positions follow budget lines. It is plan-wide, like
+`budget_basis`. Its value names the dimensions that must match (`match`, any of role, level,
+cost_centre and location), whether money, heads or both are limited (`limit`), and where the
+limit is checked (`scope`: line, cost_centre or organisation). Three presets name the common
+settings:
+
+- **position_control**, the default: all four dimensions, each line, money and heads. This is
+  how 6.3 matched, so a plan that never sets the rule funds as it did.
+- **cost_centre**: the cost centre must match and the rest is free, checked per cost centre.
+  Trades happen inside a cost centre, never across. A cost-centre scope without cost_centre in
+  `match` is refused, since a draw could then cross the boundary its limit is checked at.
+- **envelope**: nothing must match, and only the organisation's money total is checked.
+
+A dimension outside `match` no longer stops a line matching. Ranking keeps its order, with one
+change: a stated dimension counts for a line only when it agrees, and fewer differences break a
+tie. Under the default every stated dimension agrees, so nothing moves. Each draw, derived or
+set, lists `differs_on`, the dimensions its line states that the position doesn't share, and
+`variance`, those of them the rule holds. A variance is an exception someone must approve; any
+other difference is the record of a trade. 6.6 turns both into checks.
+
+`team_planning_budget` returns the rule and marks where it holds the budget. Each line, each
+cost centre or the organisation's total, as `scope` says, carries `over`; the others carry
+null. `over.money` lists the currencies a figure spends more of than its lines approve, and
+`over.heads` says whether it holds more FTE than they count. A cost centre or the organisation
+spends its unfunded money and heads too, a forecast's headcount among them, since nothing
+inside it is outside its budget. A line outside the scenario's period counts no heads, as it
+approves no money, and what it draws still spends. A line silent on money or heads is outside
+that limit: what it draws counts for neither, and a figure whose lines approve no amount, or
+count no heads, isn't held on it. Nothing is converted to
+judge it: dollars left over never cover euros spent, and a currency no line approves goes in
+`over.mismatched_currencies`, never counted for or against. Under the default only lines carry
+`over`, and every other number is as it was.
+
 As built in 6.4 ([#369](https://github.com/espaliahq/espalia/issues/369)): `team_planning_budget`
 gives the four numbers for a scenario, never the baseline.
 
@@ -1522,6 +1556,9 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - A change moves with every earlier change it overwrites. If the scenario set a level to
   3 and later to 4, moving only the 4 would leave the 3 behind to win. The earlier
   changes for the same subject and facet go across with it.
+- Only the latest change to a subject and facet can be named. Naming an earlier one would
+  take a newer change across that nobody chose, so the split refuses it as stale: the
+  scenario changed since the split was opened, and the editor opens it again.
 - The two parts cover the same period. This is a third relation beside `then` and
   `instead`, named `on`: the rest sits on the agreed part. The timeline shows them as one
   column with the agreed part marked.
@@ -1532,9 +1569,21 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
   rest, which keeps the original's id, its alternatives and its next step.
 - A split step is one step. Cost, capacity and the headcount walk count the pair once over
   the one period, and the timeline gives it one column. A split part can be split again.
+- An editor splits from the plan page: "Split off the agreed part…" in a scenario's menu
+  opens a page headed with the scenario's name. It lists each change in effect by subject
+  and facet, with a box to choose it, and says beside a change which others it can't go
+  across without, following each need to what it needs in turn. A unit or position only
+  the plan creates goes by the name the scenario gives it. A refused split comes back to
+  the same page with the choice kept and the left-behind changes in names. When no part
+  could go across without taking every change or leaving a need behind, the page says so
+  and offers no form. A split lands on the agreed part's timeline. The baseline and a
+  frozen plan refuse with the operation's own message.
+- `team_planning_split_needs` gives an MCP client the same list: each change's event id,
+  subject and facet, and the changes it needs. A pay change shows its facet, never its
+  value, so an editor without see-pay can still move it; its sealed value travels intact.
 - `team_planning_split_scenario` splits from an MCP client. It takes the moving changes'
-  event ids as `team_planning_history` lists them, and its refusal names the event ids
-  that block the split.
+  event ids as `team_planning_history` or `team_planning_split_needs` lists them, and its
+  refusal names the event ids that block the split.
 - The agreed part can then be approved and carried out. As its changes are done they leave
   the difference, and the rest is what remains to be argued.
 
