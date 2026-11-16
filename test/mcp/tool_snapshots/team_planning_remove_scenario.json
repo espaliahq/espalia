@@ -1,6 +1,6 @@
 {
   "name": "team_planning_remove_scenario",
-  "description": "Remove a scenario from a Team Planning plan. It cannot be restored. Refused for the baseline, for a scenario others fork from (remove those first), or unless the caller is one of its editors.",
+  "description": "Remove a scenario from a Team Planning plan. It cannot be restored. Refused for the baseline, for a scenario others fork from (remove those first), or unless the caller is one of its editors. An editor without the see-pay right is told, as a count, how many of its changes are to pay or budget amounts.",
   "inputSchema": {
     "type": "object",
     "properties": {
