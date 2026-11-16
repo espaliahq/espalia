@@ -114,6 +114,11 @@ class Plans::PositionsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Nothing changed.", flash[:notice]
     end
 
+    should "read an FTE written another way as unchanged" do
+      edit_position(fte: "1", basis: "new", cost_centre: "Platform")
+      assert_equal "Nothing changed.", flash[:notice]
+    end
+
     should "keep what was typed in the dialog when a save is refused" do
       edit_position(as: :turbo_stream, fte: "1.5", cost_centre: "Ledger")
 

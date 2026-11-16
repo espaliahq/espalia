@@ -82,9 +82,16 @@ class Plans::PositionsController < ApplicationController
 
   def original = params.fetch(:original, {}).permit(*Views::Plans::PositionForm::FIELDS).to_h.symbolize_keys
 
-  # A field the dialog had no original for is sent as typed, which is how
-  # the Hiring dialog sends its own fields.
-  def changed = typed.reject { |field, value| field == :scenario_id || (original.key?(field) && original[field] == value) }
+  def changed = typed.reject { |field, value| field == :scenario_id || (original.key?(field) && same?(field, original[field], value)) }
+
+  # "1" and "1.0" are one FTE: a spinner nudged and put back is no edit.
+  def same?(field, was, now)
+    return was == now unless field == :fte
+
+    Float(was) == Float(now)
+  rescue ArgumentError, TypeError
+    was == now
+  end
 
   # The form names a level, which belongs to one role, so the role comes
   # with it. A blank or non-numeric FTE is refused rather than read as 0.
