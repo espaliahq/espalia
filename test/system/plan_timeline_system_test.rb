@@ -234,6 +234,18 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
             return top.dataset.timelineShiftHint === "2"
           })()
         JS
+        assert page.evaluate_script(<<~JS), "the lit column paints under a block's heading"
+          (() => {
+            const column = document.querySelector("[data-timeline-shift-column='2']")
+            column.style.pointerEvents = "auto"
+            const band = document.querySelector("[data-timeline-grid] h3").parentElement
+            const step = document.querySelector("[data-timeline-step='2']").getBoundingClientRect()
+            const { top, height } = band.getBoundingClientRect()
+            const hit = document.elementFromPoint(step.left + step.width / 2, top + height / 2)
+            column.style.pointerEvents = ""
+            return hit === band
+          })()
+        JS
         release
 
         assert_text "Moved to Q2 settle."

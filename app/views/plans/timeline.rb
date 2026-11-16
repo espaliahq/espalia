@@ -121,7 +121,7 @@ class Views::Plans::Timeline < Views::Base
   def header_row
     div(class: "border-b border-default px-3 py-2 text-xs font-semibold uppercase text-muted", style: cell(1, 1)) { "Step" }
     columns.each_index do |index|
-      div(class: "relative z-1 border-b border-l border-default px-3 py-2", style: cell(1, index + 2), data: { timeline_step: index }) do
+      div(class: "border-b border-l border-default px-3 py-2", style: cell(1, index + 2), data: { timeline_step: index }) do
         p(class: "font-semibold text-default") { step_name(index) }
         p(class: "text-muted") { period(index) }
         today_continues(index)
@@ -427,9 +427,11 @@ class Views::Plans::Timeline < Views::Base
   end
 
   # A tint down each column, lit while an edge is dragged over a step it can move to.
+  # Grid items paint in `order` before source order, so `order-first` lays it
+  # under every heading and hint without moving it from its column.
   def shift_targets
     columns.each_index do |index|
-      div(class: "pointer-events-none z-0 hidden data-[lit]:block data-[lit]:bg-brand-subtle data-[over]:bg-brand-muted",
+      div(class: "pointer-events-none order-first hidden data-[lit]:block data-[lit]:bg-brand-subtle data-[over]:bg-brand-muted",
           style: "grid-row: 1 / #{@row}; grid-column: #{index + 2}", data: { timeline_shift_column: index })
     end
   end
