@@ -105,6 +105,17 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     assert_back_on_opening_entry
   end
 
+  # Both entries carry the same path, so the URL alone can't show a Back has
+  # landed; a second Back sent too soon leaves the page behind as well.
+  def go_back_and_wait_for_popstate
+    page.execute_script(<<~JS)
+      window.backPopped = false
+      window.addEventListener("popstate", () => { window.backPopped = true }, { once: true })
+    JS
+    page.go_back
+    assert wait_until_js { page.evaluate_script("window.backPopped") }, "Back never reached the page"
+  end
+
   # A slow runner reloads the restored matrix frame, and its load pushes an
   # entry over the overlay's (#433). Holding that load keeps the test on the
   # pane's own entry; drop this once #433 is fixed.
@@ -475,7 +486,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       2.times do
         break unless page.current_path == assessment_path(@assignment)
 
-        page.go_back
+        go_back_and_wait_for_popstate
       end
       assert_current_path assessments_path
       assert_text "My Assessments"
