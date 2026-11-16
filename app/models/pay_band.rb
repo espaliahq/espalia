@@ -85,17 +85,16 @@ class PayBand < ApplicationRecord
   # @return [true, false, :stale] false when ids aren't exactly the tenant's bands, :stale when from no longer stands
   def self.reorder!(ids, from: nil)
     tenant = ActsAsTenant.current_tenant
-    outcome = with_list_lock(tenant&.id) do
+    with_list_lock(tenant&.id) do
       bands = lock.order(:position).to_a
       next false unless ids.sort == bands.map(&:id).sort
       next :stale if from && from != bands.map(&:id)
 
       ids.each_with_index { |id, index| where(id:).update_all(position: index + 1) }
+      # The only sign the order changed, so it commits with the order or not at all.
+      tenant&.update_column(:pay_bands_changed_at, Time.current)
       true
     end
-    # Stamped once committed, so the reorder never holds the tenant row.
-    tenant&.update_column(:pay_bands_changed_at, Time.current) if outcome == true
-    outcome
   end
 
   # Runs the block in a transaction that holds the tenant's band list.
