@@ -62,13 +62,15 @@ class TeamPlanning::DriftScope
     @shown = based | @pinned | base.known_unit_ids | @roots
     @unseen = Set.new
     @known = Set.new
+    @settled = nil
   end
 
   # @param changes [Array<OrgGraph::ChangesBetween::Change>] in date order
   # @param known [Array<OrgGraph::ChangesBetween::Change>] changes known before the window that take effect after
   #   the base: each moves the window on, or is noted, on its own day, and is never reported. A move counts ahead of
   #   that day's changes; a fact or name is noted after its moves, as the window's own are judged
-  # @param through [Date, nil] the window's end: known moves up to it still count once the changes run out
+  # @param through [Date, nil] the window's end: {#covers_unit?} reads the units as they stand that day, known moves
+  #   up to it included, however far past it the changes run
   # @return [Array<Cut>] the changes the plan covers when they happen, in the order given
   def call(changes, known: [], through: nil)
     withdrawn = changes.select(&:withdrawn).to_set { identity(it) }
@@ -76,6 +78,7 @@ class TeamPlanning::DriftScope
                    .sort_by { [ it.effective_on, RANK.fetch(it.kind, 3) ] }
     cuts = Array.new(changes.size)
     changes.each_with_index.group_by { |change, _| change.effective_on }.each_value do |day|
+      settle(pending, through) if through && day.first.first.effective_on > through
       known_until(pending, day.first.first.effective_on)
       units, joiners, moves, facts = day.group_by { |change, _| RANK.fetch(change.kind, 3) }.values_at(0, 1, 2, 3).map(&:to_a)
       units.each { |change, index| cuts[index] = judge(change) }
@@ -85,13 +88,13 @@ class TeamPlanning::DriftScope
       joiners.each { |change, index| cuts[index] = cut(change) }
       facts.each { |change, index| cuts[index] = judge(change) }
     end
-    known_until(pending, through, facts: true) if through
+    settle(pending, through) if through
     cuts.compact.map { backdated(it) }
   end
 
   # @param unit_id [String]
-  # @return [Boolean] whether the plan covers the unit once {#call} has walked the window
-  def covers_unit?(unit_id) = covered_unit?(unit_id)
+  # @return [Boolean] whether the plan covers the unit at the window's end, once {#call} has walked it
+  def covers_unit?(unit_id) = covered_unit?(unit_id, @settled || @parents)
 
   private
 
@@ -124,6 +127,14 @@ class TeamPlanning::DriftScope
     end
   end
 
+  # Holds the units as they stand at the window's end, once, before any change after it.
+  def settle(pending, through)
+    return if @settled
+
+    known_until(pending, through, facts: true)
+    @settled = @parents.dup
+  end
+
   # A known fact or name about a subject outside the plan that day stays unseen;
   # one about a subject it covers is known.
   def note(change)
@@ -143,12 +154,12 @@ class TeamPlanning::DriftScope
   # anyone else a plan's map names stays nameable.
   def nameable?(person_id) = @named.include?(person_id) || covered?(person_id)
 
-  def covered_unit?(unit_id)
+  def covered_unit?(unit_id, parents = @parents)
     seen = Set.new
     while unit_id && seen.add?(unit_id)
       return true if @roots.include?(unit_id)
 
-      unit_id = @parents[unit_id]
+      unit_id = parents[unit_id]
     end
     false
   end

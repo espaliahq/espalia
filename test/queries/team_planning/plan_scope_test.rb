@@ -457,6 +457,22 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_not_includes drift.to_json, "Revenue Ops"
   end
 
+  should "not name a unit that enters the plan only after today, by a name set while it was outside" do
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    field = SecureRandom.uuid_v7
+    as_tenant { structure.create_unit(field, "Field", level_id: @teams, parent_id: @sales, effective_on: "2025-01-01") }
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      structure.rename_unit(field, "Revenue Ops", **on(12))
+      structure.move_unit(field, @engineering, provider: "espalia", effective_on: "2026-02-20")
+    end
+    drift = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)
+
+    assert_includes drift[:changes].map { [ it[:kind], it[:unit_id] ] }, [ "unit_moved", field ]
+    assert_not_includes drift[:names].keys, field
+    assert_not_includes drift.to_json, "Revenue Ops"
+  end
+
   should "not name a unit a move known before the base takes out after the window's last change" do
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
     as_tenant do
