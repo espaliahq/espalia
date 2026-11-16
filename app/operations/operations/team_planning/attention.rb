@@ -9,7 +9,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
   description "List what needs attention in a scenario of a Team Planning plan the caller is in: changes that " \
               "still resolve but no longer fit, often because a scenario it follows changed later. Each item has " \
               "the subject_id and facet that no longer fit (a person's assignment, a position, a unit, a " \
-              "succession, a reporting line, a budget line, a position's funding, or a place's capacity as capacity:<unit or position id>, or " \
+              "succession, a reporting line, a budget line, a position's funding, a cost centre with its name as subject_id, the whole " \
+              "budget with the plan's id as subject_id, or a place's capacity as capacity:<unit or position id>, or " \
               "capacity:#{::TeamPlanning::Attention::UNASSIGNED} for someone in no unit), a reason, and the change it belongs to: its " \
               "kind, the scenario that made it and its event_id. That is the later to land of the subject's own change and the change " \
               "that broke it, such as a parent unit's retirement; change is null when nothing in the plan explains it. " \
@@ -21,6 +22,10 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "Once a capacity model is chosen for any role or family, even one no place takes, each place no model covers is listed too, except a leaver's, " \
               "a forgotten person's override and a closed position's. A seat whose reports cost more to manage than it delivers, " \
               "a person or an open position, is listed once under the facet capacity, overridden or not. " \
+              "In a scenario with budget lines it also checks the budget: a held position no line matches, or two lines tie for, " \
+              "with no funding set; a seat held in the period with no cost centre, once a line or seat in the plan has one; a line, " \
+              "cost centre or the whole budget over its approved amount or head count, judged at the budget strictness rule's scope; " \
+              "and a line in the period nothing draws on or ties for. No budget item names an amount. " \
               "`sources` names where to fix each item: the provider of employment status for someone who joined " \
               "after the base or has left, the provider of the manager fact for a manager item, else the providers " \
               "of the units the item touches (\"espalia\" for a unit only the plan holds). " \
