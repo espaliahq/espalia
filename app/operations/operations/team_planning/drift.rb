@@ -21,7 +21,7 @@ class Operations::TeamPlanning::Drift < Operations::Base
               "scenario, or placed in one of them since, including by a move known before the base that takes effect after it. " \
               "Such a move decides coverage from its own day but is not listed. A change that takes one of them out, or a covered person now reporting " \
               "to someone the plan can't show, keeps the fact and nulls what lies outside; a joiner keeps only the units and manager " \
-              "the plan covers. `outside` lists the fields nulled or trimmed. " \
+              "the plan covers. A change that took effect before the base nulls `before`. `outside` lists the fields nulled or trimmed. " \
               "People are named by id, and `names` maps every person and unit id the changes name to a name; a forgotten " \
               "person reads as \"#{Person::FORMER_MEMBER}\". #{UNCHECKED} Refused, as an unknown plan, unless the caller is a member."
   category :read

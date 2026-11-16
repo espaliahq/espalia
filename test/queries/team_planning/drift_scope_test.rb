@@ -7,6 +7,7 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
   Someone = Data.define(:id, :memberships)
   Unit = Data.define(:id, :parent_id)
   Map = Data.define(:people, :outside, :units, :scope_ids) do
+    def base_on = Date.new(2026, 1, 1)
     def departed = []
     def retired_units = []
     def person_ids = people.to_set(&:id)
@@ -160,5 +161,14 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
     cuts = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ leaves, arrives, back, *titles ], known:)
 
     assert_equal [ [ "ada", [ "before" ] ], [ "dee", [] ] ], cuts.select { it.change.kind == :fact_changed }.map { [ it.change.person_id, it.outside ] }
+  end
+
+  should "drop the earlier value of a change that took effect before the base, though the plan covers its subject now" do
+    @base = @base.with(people: [ Someone.new("ada", [ Place.new(@engineering) ]) ])
+    title = change(:fact_changed, 10, person_id: "ada", fact: "title", before: { "title" => "Engineer" }, after: { "title" => "Sales Engineer" })
+
+    cut = cuts(title.with(effective_on: Date.new(2025, 12, 10))).sole
+
+    assert_equal [ nil, { "title" => "Sales Engineer" }, [ "before" ] ], [ cut.change.before, cut.change.after, cut.outside ]
   end
 end

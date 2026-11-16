@@ -25,6 +25,10 @@
 # manager are judged with everyone in place. A move the Org Graph knew before
 # the window that takes effect after the base moves them too, on its own day,
 # though the window never reports it, unless the window withdraws it.
+#
+# A change that took effect before the base, learned since, drops `before`:
+# coverage is judged from the base on, so the earlier value may have been set
+# while its subject was outside.
 class TeamPlanning::DriftScope
   PERSON_KINDS = %i[joined left fact_changed].freeze
   MEMBERSHIP_KINDS = %i[membership_started membership_ended membership_changed moved].freeze
@@ -44,6 +48,7 @@ class TeamPlanning::DriftScope
   # @param maps [Array<TeamPlanning::Baseline::Map>] each scenario's, the root's included
   # @param parents [Hash{String => String, nil}] every unit's parent on the base day, outside ones included
   def initialize(base, maps, parents: {})
+    @base_on = base.base_on
     based = held_people(base)
     @pinned = maps.flat_map { held_people(it).to_a }.to_set - based
     @unplaced = base.people.select { it.memberships.none?(&:unit_id) }.to_set(&:id)
@@ -76,10 +81,16 @@ class TeamPlanning::DriftScope
       joiners.each { |change, index| cuts[index] = cut(change) }
       facts.each { |change, index| cuts[index] = judge(change) }
     end
-    cuts.compact
+    cuts.compact.map { backdated(it) }
   end
 
   private
+
+  def backdated(cut)
+    return cut unless cut.change.effective_on < @base_on && !cut.change.before.nil?
+
+    Cut.new(change: cut.change.with(before: nil), outside: cut.outside | [ "before" ])
+  end
 
   def held_people(map) = map.people.to_set(&:id) | map.departed.to_set(&:person_id)
 

@@ -1381,7 +1381,9 @@ destination: the reader learns they left the plan's units, not where they went. 
 change that brings them in nulls where they came from. A covered person now reporting
 to someone the plan can't name reads the same way, and so does the earlier value of a
 fact or name last set while its subject was outside, before the window or in it.
-A joiner's first-day facts keep only the units, owned units and manager the plan
+A change that took effect before the base, learned since, always drops its earlier
+value, since coverage is judged only from the base on; a plan covering the whole
+organisation keeps it. A joiner's first-day facts keep only the units, owned units and manager the plan
 covers. `outside` lists the fields nulled or trimmed,
 and the Changes tab words each one.
 
