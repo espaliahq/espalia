@@ -96,6 +96,9 @@ class PlanDatesSystemTest < ApplicationSystemTestCase
 
       visit dates_plan_path(@plan_id, scenario_id: @q2)
       assert_selector "[data-dates-current='#{@q2}']", text: "Now from 1 Apr 2027 · no end date."
+      assert_selector "input[name='ends_on'][disabled]:not([required])"
+      js_set_checkbox "No end date", checked: false
+      assert_selector "input[name='ends_on'][required]:not([disabled])"
 
       visit dates_plan_path(@plan_id, scenario_id: @q1)
       assert_text "A step comes after this one, so it needs an end."
