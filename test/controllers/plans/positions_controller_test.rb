@@ -126,7 +126,7 @@ class Plans::PositionsControllerTest < ActionDispatch::IntegrationTest
       assert_select "turbo-stream[action=replace][target=edit-position-form] template" do
         assert_select "[role=alert]", text: /FTE/
         assert_select "input[name='position[cost_centre]'][value=Ledger]"
-        assert_select "input[name='position[fte]'][value='1.5']"
+        assert_select "input[name='position[fte]'][value='1.5'][step=any]", true, "an FTE the operations take, such as 0.33, must pass the browser too"
         assert_select "input[name='original[cost_centre]'][value=Platform]"
       end
       assert_equal "Platform", position[:cost_centre]

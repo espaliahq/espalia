@@ -106,7 +106,7 @@ class Views::Plans::PositionForm < Views::Base
 
   def fte_field
     field(:fte, "FTE", hint: "Above 0 and at most 1, such as 0.5 for half time.") do
-      input(id: id(:fte), name: "position[fte]", type: "number", min: "0.05", max: "1", step: "0.05", required: true,
+      input(id: id(:fte), name: "position[fte]", type: "number", min: "0", max: "1", step: "any", required: true,
             value: @values[:fte] || "1", inputmode: "decimal", class: Components::Kit::Field::INPUT,
             aria: { describedby: "#{id(:fte)}-hint" }, data: { position_form_target: "fte" })
     end
