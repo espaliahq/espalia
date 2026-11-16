@@ -96,6 +96,7 @@ class AssessmentsController < ApplicationController
         can_comment: !past_cycle? && viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
+        activity_open: activity_pane_open?,
         exploration: lens_exploration,
         can_explore: !past_cycle? && policy.start_exploration?,
         can_manage_delegates: !past_cycle? && policy.delegate_manager_rating?,
@@ -126,6 +127,7 @@ class AssessmentsController < ApplicationController
         can_comment: !past_cycle? && viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
+        activity_open: activity_pane_open?,
         exploration: lens_exploration,
         can_explore: !past_cycle? && policy.start_exploration?,
         unplaced_feedback_count: past_cycle? ? 0 : unplaced_feedback_count,
@@ -214,6 +216,11 @@ class AssessmentsController < ApplicationController
   end
 
   private
+
+  def activity_pane_open?
+    toggle = Views::Assessments::Activity::PaneToggle
+    toggle.open?(url: params[toggle::URL_KEY], cookie: cookies[toggle::COOKIE])
+  end
 
   # The perspective the hero renders, so a root-mounted dialog reloaded on
   # its own reads the hero's number.
