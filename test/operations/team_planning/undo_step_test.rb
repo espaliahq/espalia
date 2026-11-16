@@ -183,6 +183,21 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
   end
 
+  should "offer no undo or redo of a change to a budget line outside a scoped plan's cost centres, nor name the line" do
+    context = AuthorizationContext.new(user: @holder.user, tenant_user: @holder, person: @holder.person)
+    rule = { entries: [ { unit_id: @engineering, cost_centre: "Core" }, { unit_id: @sales, cost_centre: "Revenue" } ] }
+    as_tenant { Operations::Tenants::SetPlanningRule.call(context:, params: { rule: "cost_centre", value: rule }) }
+    call(:SetPlanScope, plan_id: @plan_id, unit_ids: [ @engineering ])
+    line = as_tenant { BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 50_000, currency: "EUR", period: "year", cost_centre: "Revenue") }
+    editor = AuthorizationContext.new(user: @editor.user, tenant_user: @editor, person: @editor.person)
+    as_tenant { TeamPlanning::CommandHandler.new(actor: editor).set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @q1, subject_id: line.id, end_state: { tenant_line: true }) }
+
+    assert_nil step[:undo]
+    call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
+    assert_nil step[:redo]
+    assert_not_includes step.to_json, line.id
+  end
+
   should "offer no undo that would bring back a departure outside the step's dates, as the operation refuses it" do
     leave("2026-05-15")
     leave("2026-04-01")

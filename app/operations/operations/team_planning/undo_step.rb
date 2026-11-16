@@ -56,15 +56,16 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
   end
 
   # @yieldparam entry [RubyEventStore::Event] the entry to undo or redo
-  # @yieldreturn [TeamPlanning::Events::Change, nil] the change it would put in effect, held against the plan's scope
+  # @yieldreturn [TeamPlanning::Events::Change, nil] the change it would put in effect, held against the plan's
+  #   scope; with none, the entry itself is, so a change to a line the plan hides is never named
   def step(aggregate, scenario_id, event_id)
     return nil unless event_id
 
     entry = aggregate.log_of(scenario_id).find { it.event_id == event_id }
     return dates(event_id) unless entry
 
-    restored = yield(entry)
-    within_scope!(aggregate, restored.class, restored.data[:subject_id], restored.data) if restored
+    held = yield(entry) || entry
+    within_scope!(aggregate, held.class, held.data[:subject_id], held.data)
 
     subject_id = entry.data[:subject_id]
     { event_id:, action: action_of(entry), subject_id:, subject: name_of(subject_id), facet: aggregate.facet_of(scenario_id, event_id), scenario_id: }
