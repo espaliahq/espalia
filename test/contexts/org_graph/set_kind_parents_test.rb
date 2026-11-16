@@ -227,6 +227,45 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     end
   end
 
+  context "on a tenant whose Basket sat under another Squad until three days ago" do
+    setup do
+      @tenant = create(:tenant)
+      @tribe, @squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      publish_taxonomy([ { level_id: @tribe, name: "Tribe" },
+                         { level_id: @squad, name: "Squad", parent_level_ids: [ @tribe, @squad ], top: false } ],
+                       on: (@today - 10).iso8601)
+      @payments = create_unit("Payments", @tribe, on: @today - 10)
+      @checkout = create_unit("Checkout", @squad, parent_id: @payments, on: @today - 10)
+      @basket = create_unit("Basket", @squad, parent_id: @checkout, on: @today - 10)
+    end
+
+    should "refuse to stop Squads nesting from before the Basket moved, naming when it did" do
+      as_tenant { @handler.move_unit(@basket, @payments, effective_on: @today - 3) }
+
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 5) }
+      end
+      assert_equal "These units sat where this structure wouldn't allow after #{(@today - 5).iso8601}, " \
+                   "so date it #{(@today - 3).iso8601} or later: Basket (Squad under Squad until #{(@today - 3).iso8601})",
+                   error.message
+    end
+
+    should "refuse the same change while a retired Basket still sat under Checkout" do
+      as_tenant { @handler.retire_unit(@basket, effective_on: @today - 3) }
+
+      assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 5) }
+      end
+    end
+
+    should "accept the change dated from the day the Basket moved" do
+      as_tenant { @handler.move_unit(@basket, @payments, effective_on: @today - 3) }
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 3) }
+
+      assert_equal [ [ @tribe ], false ], rules(@squad)
+    end
+  end
+
   context "on a tenant whose kinds changed out of date order" do
     setup do
       @tenant = create(:tenant)

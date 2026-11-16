@@ -32,7 +32,8 @@ class OrgGraph::StructureAggregate
   MAPPABLE_FIELDS = { "cost_centre" => %w[cost_centre], "site" => %w[country] }.freeze
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :owner_ids,
-                    :created_on, :changed_on, keyword_init: true)
+                    :created_on, :changed_on, :retired_on, keyword_init: true)
+  Placement = Struct.new(:unit, :parent_id, :until_on, keyword_init: true)
 
   def initialize
     @levels = []
@@ -247,7 +248,7 @@ class OrgGraph::StructureAggregate
     ensure_not_before_last_change!(effective_on)
     ensure_no_stated_rules!(level_id, provider)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
-    ensure_units_still_fit!({ level_id => provider })
+    ensure_units_still_fit!({ level_id => provider }, from: effective_on)
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id:, provider:, previous_provider: ESPALIA, field:, effective_on:, set_by_id:
     }))
@@ -618,6 +619,7 @@ class OrgGraph::StructureAggregate
   on OrgGraph::Events::UnitRetired do |event|
     unit = @units.fetch(event.data[:unit_id])
     unit.retired = true
+    unit.retired_on = event.data[:effective_on]
     touch(unit.parent_id, event.data[:effective_on])
   end
 
@@ -680,7 +682,7 @@ class OrgGraph::StructureAggregate
     ensure_levels_in_use_keep_order!(levels, in_use)
 
     ensure_hris_levels_on_top!(level_ids(levels), new_providers)
-    ensure_units_still_fit!(new_providers, levels:)
+    ensure_units_still_fit!(new_providers, levels:, from: iso_date(effective_on))
 
     apply(OrgGraph::Events::TaxonomyDefined.new(data: {
       levels: levels,
@@ -799,13 +801,36 @@ class OrgGraph::StructureAggregate
 
   # A level an HRIS provides may sit only beneath the HRIS level directly above
   # it, so handing a level over, or inserting an HRIS level above one, can
-  # leave a unit where its kind may no longer sit.
-  def ensure_units_still_fit!(provider_changes, levels: with_stated_rules(@levels))
+  # leave a unit where its kind may no longer sit. A change dated in the past
+  # also covers the placements units held since, retired units' included.
+  def ensure_units_still_fit!(provider_changes, from:, levels: with_stated_rules(@levels))
     prospective = OrgGraph::Taxonomy.new(levels, providers: @level_providers.merge(provider_changes))
     stranded = misplaced_units(prospective) - misplaced_units
-    return if stranded.empty?
+    if stranded.any?
+      raise "These units wouldn't fit this structure, so move them first: #{stranded.map { describe_fit(it, prospective) }.join(', ')}"
+    end
 
-    raise "These units wouldn't fit this structure, so move them first: #{stranded.map { describe_fit(it, prospective) }.join(', ')}"
+    held = placements_ended_after(from).select { fits?(it, taxonomy) && !fits?(it, prospective) }
+    return if held.empty?
+
+    raise "These units sat where this structure wouldn't allow after #{from}, so date it #{held.map(&:until_on).max} or later: " \
+          "#{held.map { describe_held(it, prospective) }.join(', ')}"
+  end
+
+  # The placements that ended, by a move or a retirement, after a day.
+  def placements_ended_after(day)
+    @units.values.flat_map do |unit|
+      points = @parents.fetch(unit.unit_id, {}).sort
+      ends = points.drop(1).map(&:first) + [ unit.retired_on ]
+      points.zip(ends).filter_map do |(from, parent_id), until_on|
+        Placement.new(unit:, parent_id:, until_on:) if until_on && until_on > day && until_on > from
+      end
+    end
+  end
+
+  def fits?(placement, rules)
+    parent = placement.parent_id && @units[placement.parent_id]
+    parent ? rules.allows?(placement.unit.level_id, beneath: parent.level_id) : rules.may_be_top?(placement.unit.level_id)
   end
 
   # A unit's latest change includes a sub-unit arriving beneath it or leaving,
@@ -988,6 +1013,13 @@ class OrgGraph::StructureAggregate
     parent = unit.parent_id && @units[unit.parent_id]
     kind = rules.kind(unit.level_id).name
     "#{unit.name} (#{parent ? "#{kind} under #{rules.kind(parent.level_id).name}" : "#{kind} at the top"})"
+  end
+
+  def describe_held(placement, rules)
+    parent = placement.parent_id && @units[placement.parent_id]
+    kind = rules.kind(placement.unit.level_id).name
+    where = parent ? "under #{rules.kind(parent.level_id).name}" : "at the top"
+    "#{placement.unit.name} (#{kind} #{where} until #{placement.until_on})"
   end
 
   def level_name(level_id) = @levels.find { |level| level[:level_id] == level_id }&.dig(:name)
