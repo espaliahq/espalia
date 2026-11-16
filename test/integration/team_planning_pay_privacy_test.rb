@@ -404,6 +404,34 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  # A budget line can't be pinned, so its override never reads parent_moved,
+  # and inherits reads it without its money for a member without see-pay.
+  should "show a member without see-pay nothing in what a budget line inherits when only its parent's amount moves" do
+    line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 80_000, currency: "AUD",
+                              period: "year", head_count: 1).id
+    figures = { budget_line_id: line, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", currency: "AUD", period: "year", head_count: "2" }
+    call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id: @q1, amount: "80000", **figures)
+    q2 = call(Operations::TeamPlanning::ForkScenario, @holder, plan_id: @plan_id, parent_id: @q1, relation: "instead", name: "Q1 lean")[:scenario_id]
+    pin = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::PinChange, @holder, plan_id: @plan_id, scenario_id: q2, subject_id: line, facet: "budget_line")
+    end
+    assert_match "can't be pinned", pin.message
+    call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id: q2, amount: "80000", **figures, head_count: "3")
+    pinned = lambda do |account|
+      row = call(Operations::TeamPlanning::Overrides, account, plan_id: @plan_id, scenario_id: q2)[:overrides].find { it[:subject_id] == line }
+      { pinned: row[:pinned], parent_moved: row[:parent_moved], end_state: row[:end_state], inherits: row[:inherits][:end_state] }
+    end
+    members = { "editor" => @editor, "viewer" => @viewer }
+    before = members.transform_values { pinned.call(it) }
+    assert_equal [ false, nil ], before["editor"].values_at(:pinned, :parent_moved)
+    assert_equal 2, BigDecimal(before["editor"][:inherits]["head_count"].to_s), "Q2 inherits Q1's line"
+    members.each_key { |who| assert_empty before[who].values_at(:end_state, :inherits).flat_map(&:keys) & %w[amount currency period], who }
+
+    call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id: @q1, amount: "85000", **figures)
+
+    members.each { |who, account| assert_equal before[who], pinned.call(account), who }
+  end
+
   should "capture the log the leak check reads" do
     Rails.logger.info("probe #{AMOUNT}")
 
