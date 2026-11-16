@@ -146,7 +146,7 @@ class TeamPlanning::Timeline
       lane_of = lane_owners
       lanes = lanes(lane_of)
       Result.new(columns:, next_ids:, maps: @maps, blocks: blocks(lanes), unassigned_lane_ids: lane_ids_in(lanes, nil),
-                 lanes: lanes.sort_by { lane_order(it, it.bars) }, walk: walk(@maps.map { it.people.to_set(&:id) }),
+                 lanes: lanes.sort_by { lane_order(it, it.bars) }, walk: walk(@maps.map { |map| map.people.select { map.started?(it) }.to_set(&:id) }),
                  unassigned_walk: block_walk(nil))
     end
 
@@ -180,9 +180,11 @@ class TeamPlanning::Timeline
 
     def block_walk(block_id) = walk(heads_by_block.map { it.fetch(block_id, Set[]) })
 
+    # A placeholder hire counts as a head, and a hire, from the step its
+    # seat starts in ({TeamPlanning::Baseline::Map#started?}).
     def heads_by_block
       @heads_by_block ||= @maps.map do |map|
-        map.people.each_with_object({}) do |person, heads|
+        map.people.select { map.started?(it) }.each_with_object({}) do |person, heads|
           units_of(map, person).each { (heads[block_for(it)] ||= Set[]) << person.id }
         end
       end
@@ -205,7 +207,7 @@ class TeamPlanning::Timeline
     # A leaver the same step takes outside a scoped plan is in `outside`, and still leaves.
     def leaving_ids = @leaving_ids ||= @maps.map { |map| (map.people + map.outside).select(&:leaving?).to_set(&:id) }
 
-    def held_ids = @held_ids ||= @maps.map { |map| map.people.to_set(&:id) | map.outside_ids }
+    def held_ids = @held_ids ||= @maps.map { |map| map.people.select { map.started?(it) }.to_set(&:id) | map.outside_ids }
 
     def continues_from(block_id)
       successions.select { |succession| succession.successor_ids.any? { @block_of[it] == block_id } }

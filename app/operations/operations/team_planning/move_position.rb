@@ -11,7 +11,7 @@ class Operations::TeamPlanning::MovePosition < Operations::Base
   include Operations::TeamPlanning::PlanWrite
 
   description "Move a position to another unit in a scenario of a Team Planning plan, keeping its role, level, " \
-              "FTE, basis and cost centre. The people in the position move with it. Written as one PositionSet. Refused on " \
+              "FTE, basis, cost centre, hiring status and target start. The people in the position move with it. Written as one PositionSet. Refused on " \
               "the baseline, and unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client

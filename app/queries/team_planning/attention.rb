@@ -8,7 +8,8 @@
 #
 # It also checks each person: allocation, someone still placed after the
 # Org Graph has them leave, and their manager (4.6), and each seat whose
-# reports cost more to manage than it delivers (7.5), and a scenario's budget
+# reports cost more to manage than it delivers (7.5), each open seat whose
+# target start has passed (10.3), and a scenario's budget
 # (6.6, [#421](https://github.com/espaliahq/espalia/issues/421)) as the
 # budget read gives it to the viewer: positions unfunded or tied, seats with
 # no cost centre, figures over budget and lines nothing draws on. Those read
@@ -44,7 +45,7 @@ class TeamPlanning::Attention
   # @!attribute names [Hash{String => String}] subject id => name
   Report = Data.define(:items, :names)
 
-  CHECKS = %i[placements positions units unresolved uncovered successions capacity_overrides allocations leavers managers overloaded
+  CHECKS = %i[placements positions late_hires units unresolved uncovered successions capacity_overrides allocations leavers managers overloaded
               unclassified budget_lines fundings unfunded ambiguous_funding unplaced cost_centre_mismatches budget_variance unused_budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
@@ -138,8 +139,9 @@ class TeamPlanning::Attention
   # @param priced [Array<TeamPlanning::Capacity::Seat>] from {TeamPlanning::Capacity::Report#seats}
   # @param budget [TeamPlanning::Budget::Report, nil] the scenario's budget, read as the viewer; nil for the
   #   root, which has no period, and for a scenario with no budget lines, which has no budget to check
-  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [], budget: nil)
+  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [], budget: nil, today: Date.current)
     @map = map
+    @today = today
     @budget = budget
     @position_units = closed_units.merge(map.positions.to_h { [ it.id, it.unit_id ] })
     @unclassified = unclassified
@@ -181,6 +183,18 @@ class TeamPlanning::Attention
       open_fte = @map.open_fte(position, held)
       [ (item(position.id, POSITION, "In #{gone(position.unit_id)}", broken_by: [ [ position.unit_id, UNIT ] ]) unless @live.include?(position.unit_id)),
         (item(position.id, POSITION, "Overfilled by #{fte(-open_fte)} FTE", broken_by: held.map { [ it.first.id, ASSIGNMENT ] }) if open_fte.negative?) ].compact
+    end
+  end
+
+  # A target start the calendar has passed while part of the seat is still
+  # open, so the plan's figures count someone who hasn't started
+  # ([#458](https://github.com/espaliahq/espalia/issues/458)).
+  def late_hires
+    TeamPlanning::SeatStart.openings(@map).group_by(&:first).filter_map do |position, parts|
+      late = parts.sum(0r) { |_, open, start| start.basis == "target" && start.planned < @today ? open : 0r }
+      next unless late.positive?
+
+      item(position.id, POSITION, "Its target start, #{position.target_start.strftime('%-d %b %Y')}, has passed with #{fte(late)} FTE still open")
     end
   end
 

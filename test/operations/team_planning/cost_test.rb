@@ -35,6 +35,8 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     end
     @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-01-01")[:plan_id]
     @year = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+    # These price open seats from the day they open; the hiring lag has its own tests.
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "time_to_hire", value: { days: "0" })
   end
 
   def call(operation, as: @admin, **params)
