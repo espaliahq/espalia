@@ -236,6 +236,14 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
       assert_equal "You have nothing here to redo", refusal { call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1) }
     end
 
+    # A pin would copy a priced line's amount, so it needs a rule of its own before it may land.
+    should "refuse a pin on a priced line in the same words as one on a line with no amount" do
+      pin = ->(id) { call(Operations::TeamPlanning::PinChange, as: @planner, plan_id: @plan_id, scenario_id: @q2, subject_id: id, facet: FACET) }
+      priced = set(amount: "9000", currency: "AUD", period: "month", head_count: "3")[:budget_line_id]
+
+      assert_equal 1, [ @engineers.id, priced, @support.id ].map { |id| refusal { pin.(id) } }.uniq.size
+    end
+
     should "read a priced line's history and override exactly as a line with a head count alone" do
       priced = set(amount: "9000", currency: "AUD", period: "month", head_count: "3")[:budget_line_id]
       plain = set(head_count: "3")[:budget_line_id]
