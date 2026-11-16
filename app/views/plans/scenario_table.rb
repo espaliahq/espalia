@@ -105,6 +105,7 @@ class Views::Plans::ScenarioTable < Views::Base
             menu.item(href: dates_plan_path(@plan_id, scenario_id: step[:scenario_id])) { "Dates…" }
           end
           menu.item(href: split_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Split off the agreed part…" }
+          menu.item(tone: :danger, data: Views::Plans::RemoveScenarioDialog.trigger(scenario[:scenario_id])) { "Remove…" }
         end
       end
     end

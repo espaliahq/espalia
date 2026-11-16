@@ -116,6 +116,8 @@ class Views::Plans::ScenarioMap < Views::Base
       variant: :ghost, size: :sm,
       data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@map[:plan_id], current[:scenario_id]), current)
     ) { "Edit…" }
+    render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, compact: true,
+                                       data: Views::Plans::RemoveScenarioDialog.trigger(current[:scenario_id])) { "Remove…" }
     step = Views::Plans::ScenarioTable.dated_step(current, @scenarios)
     return unless step
 
