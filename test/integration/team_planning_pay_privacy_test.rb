@@ -488,15 +488,20 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       # A prefix, so a leak shows however it is rounded.
       derived = held[0, 5]
 
-      { @holder => Integer(SCOPED[:in]) * share, @editor => 100_000 * share, @viewer => 100_000 * share }.each do |account, funded|
-        who = account == @holder ? "holder" : "non-holder"
+      funded = Integer(SCOPED[:in]) * share
+      budget = call(Operations::TeamPlanning::Budget, @holder, plan_id: @plan_id, scenario_id: @q1)
+      drawn = budget[:budget_lines].find { it[:budget_line_id] == line }
+      assert_in_delta funded, BigDecimal(drawn[:funded][:native]["AUD"]), 1e-9
+      assert_in_delta 80_000 * share - funded, BigDecimal(drawn[:remaining][:amount]), 1e-9
+      assert_equal({ money: [], heads: nil, mismatched_currencies: [] }, drawn[:over])
+      assert_equal held, drawn[:funded][:native]["AUD"]
+
+      # A budget amount is pay too ([#367](https://github.com/espaliahq/espalia/issues/367)).
+      [ @editor, @viewer ].each do |account|
         budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
         drawn = budget[:budget_lines].find { it[:budget_line_id] == line }
-
-        assert_in_delta funded, BigDecimal(drawn[:funded][:native]["AUD"]), 1e-9, who
-        assert_in_delta 80_000 * share - funded, BigDecimal(drawn[:remaining][:amount]), 1e-9, who
-        assert_equal({ money: account == @holder ? [] : [ "AUD" ], heads: nil, mismatched_currencies: [] }, drawn[:over], who)
-        account == @holder ? assert_equal(held, drawn[:funded][:native]["AUD"], who) : assert_not_includes(budget.to_json, derived, who)
+        assert_equal [ nil, nil, nil ], [ drawn[:funded][:native], drawn[:remaining][:amount], drawn[:over][:money] ]
+        [ derived, "80000", (80_000 * share).to_i.to_s[0, 4] ].each { assert_not_includes budget.to_json, it }
       end
     end
 
@@ -507,20 +512,20 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
                                                                          cost_centre: "Platform")[:position_id]
       call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
                                                              placements: [ { position_id:, allocation: 1 } ])
-      funded = call(Operations::TeamPlanning::Budget, @holder, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
-      held = Views::Plans::CostMarks::Format.amount(funded, "AUD")
-      assert_not_equal funded, call(Operations::TeamPlanning::Budget, @editor, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
+      budget = call(Operations::TeamPlanning::Budget, @holder, plan_id: @plan_id, scenario_id: @q1)
+      held = Views::Plans::CostMarks::Format.amount(budget[:total][:funded][:native]["AUD"], "AUD")
+      html = budget_tab(@holder)
+      tiles = html.css("[data-budget-total]").to_h { [ it["data-budget-total"].to_sym, it.at_css("dd").text ] }
+      assert_equal(budget[:total].slice(:approved, :funded, :remaining, :unfunded).transform_values { Views::Plans::CostMarks::Format.sum(it, "AUD") }, tiles)
+      assert_includes html.text, held
 
-      [ @holder, @editor, @viewer ].each do |account|
-        who = account == @holder ? "holder" : "non-holder"
-        budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
+      [ @editor, @viewer ].each do |account|
         html = budget_tab(account)
         tiles = html.css("[data-budget-total]").to_h { [ it["data-budget-total"].to_sym, it.at_css("dd").text ] }
 
-        assert_equal(budget[:total].slice(:approved, :funded, :remaining, :unfunded).transform_values { Views::Plans::CostMarks::Format.sum(it, "AUD") },
-                     tiles, who)
-        account == @holder ? assert_includes(html.text, held, who) : assert_not_includes(html.text, held, who)
-        SCOPED.each_value { assert_not_includes html.to_html, it, who }
+        assert_equal({ approved: "No head count", funded: "1 position, 1 FTE", remaining: "No head count", unfunded: "0 positions, 0 FTE" }, tiles)
+        assert_includes html.text, "Budget amounts show only to members who may see pay."
+        [ held, "500,000", "AUD", "No amount", *SCOPED.values ].each { assert_not_includes html.to_html, it }
       end
     end
 
@@ -535,7 +540,11 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
         assert_equal [ held.id ], budget[:budget_lines].map { it[:budget_line_id] }, who
         assert_equal [ "Platform" ], budget[:cost_centres].filter_map { it[:cost_centre] }, who
-        assert_in_delta held.amount * Rational(121, 365), BigDecimal(budget[:total][:approved][:native]["AUD"]), 1e-9, who
+        if account == @holder
+          assert_in_delta held.amount * Rational(121, 365), BigDecimal(budget[:total][:approved][:native]["AUD"]), 1e-9, who
+        else
+          assert_nil budget[:total][:approved][:native], who
+        end
         reads = [ budget, call(Operations::TeamPlanning::BudgetLines, account, plan_id: @plan_id, scenario_id: @q1),
                   call(Operations::TeamPlanning::Funding, account, plan_id: @plan_id, scenario_id: @q1), budget_tab(account).to_html ].to_json
         assert_not_includes reads, away.id, who
@@ -630,7 +639,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
         [ @editor, @viewer ].each do |account|
           reads = frozen_reads(account)
-          assert_in_delta 100_000 * @share, funded(reads), 1e-9, "a non-holder is priced at the copied midpoint"
+          assert_nil reads[:budget][:budget_lines].find { it[:budget_line_id] == @line }[:funded][:native], "a budget amount is pay"
           assert_not_equal holder[:forecast][:rows], reads[:forecast][:rows], "attrition is priced as each caller sees the seat"
           reads.each do |name, payload|
             [ *SCOPED.values, @held[0, 5] ].each { assert_not_includes payload.to_json, it, "#{name} as a non-holder" }
@@ -732,7 +741,6 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       forecast: call(Operations::TeamPlanning::Forecast, account, plan_id: @plan_id, scenario_id: @q1) }
   end
 
-  def funded(reads) = BigDecimal(reads[:budget][:budget_lines].find { it[:budget_line_id] == @line }[:funded][:native]["AUD"])
 
   def budget_tab(account)
     reads = { budget: Operations::TeamPlanning::Budget, funding: Operations::TeamPlanning::Funding, map: Operations::TeamPlanning::ScenarioMap,

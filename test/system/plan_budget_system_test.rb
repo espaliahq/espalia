@@ -55,6 +55,10 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       cut_line(growth_line_id)
     end
 
+    should "show a viewer without the see-pay right head counts and no money" do
+      read_without_money
+    end
+
     should "tell a scoped plan's reader the totals cover only its lines, and show no other" do
       payments = SecureRandom.uuid_v7
       field_sales = nil
@@ -104,6 +108,10 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    should "show a viewer without the see-pay right head counts and no money" do
+      read_without_money
+    end
+
     should "add and change a line, split a position's funding, send it back to the derived line, then cut the line" do
       sign_in_as(@planner.user)
       visit budget_plan_path(@plan_id, scenario: @q1)
@@ -118,6 +126,24 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)).
+  def read_without_money
+    viewer = ActsAsTenant.with_tenant(@tenant) { account(name: "Vic Viewer") }
+    call(Operations::TeamPlanning::AddPlanMember, @planner, plan_id: @plan_id, person_id: viewer.person_id, role: "viewer")
+
+    sign_in_as(viewer.user)
+    visit budget_plan_path(@plan_id)
+    assert_text "Budget on Today"
+    assert_text "Budget amounts show only to members who may see pay."
+    within("[data-budget-line='#{@line.id}']") { assert_text "Head count 1" }
+
+    visit budget_plan_path(@plan_id, scenario: @q1)
+    assert_text "Budget on Q1 hires"
+    assert_equal [ "Head count 1", "2 positions, 2 FTE", "Head count -1", "0 positions, 0 FTE" ], all("[data-budget-total] dd").map(&:text)
+    [ "EUR", "73,000", "No amount" ].each { assert_no_text it }
+    assert_no_sideways_overflow
+  end
 
   def add_and_change_lines
     click_link_with_js_fallback("Add a line", expect_text: "Add a budget line to Q1 hires")

@@ -52,6 +52,20 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_empty lines[:orphaned]
   end
 
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)), and a period
+  # or currency is only there beside one, so all three hide alike.
+  should "give a member without the see-pay right every line and head count, and no amount, currency or period" do
+    held, seen = [ @editor, @viewer ].map { lines(@plan_id, as: it) }
+    fields = ->(read) { read[:budget_lines].map { it.values_at(:budget_line_id, :amount, :currency, :period, :head_count) } }
+
+    assert_equal [ true, false ], [ held[:money], seen[:money] ]
+    assert_equal [ [ @engineers.id, nil, nil, nil, "4.00" ], [ @support.id, nil, nil, nil, "2.00" ] ], fields.(seen)
+    assert_equal held[:budget_lines].map(&:keys), seen[:budget_lines].map(&:keys)
+    assert_equal seen[:budget_lines].first.except(:budget_line_id, :head_count, :origin), seen[:budget_lines].second.except(:budget_line_id, :head_count, :origin),
+                 "a line with a hidden amount reads exactly as one with none"
+    [ "480000", "AUD" ].each { assert_not_includes seen.to_json, it }
+  end
+
   should "change a tenant line by its id and add a plan line, each reaching the steps after and not before" do
     assert_equal({ plan_id: @plan_id, scenario_id: @q1, budget_line_id: @engineers.id, source: "changed" },
                  set(budget_line_id: @engineers.id, amount: "520000", currency: "AUD", period: "year", head_count: "5"))

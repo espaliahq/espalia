@@ -42,6 +42,11 @@
 # to judge it: a currency no line approves is listed as mismatched, not
 # counted for or against.
 #
+# A budget line's amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)),
+# so a reader without the plan's see-pay right gets every head count and no
+# money: each money figure is nil, `over` judges heads alone and nothing is
+# mismatched, so a line with a hidden amount reads exactly as one with none.
+#
 # @example
 #   TeamPlanning::Budget.new(context:, plan:, scenario_id:).call.totals
 class TeamPlanning::Budget
@@ -120,8 +125,14 @@ class TeamPlanning::Budget
   # @!attribute unpriced [Array<Unpriced>]
   # @!attribute funding [TeamPlanning::Funding::Report] the funding read these figures rest on
   # @!attribute seats [Array<TeamPlanning::Cost::Line>] the scenario's seat lines, priced as the viewer
+  # @!attribute money [Boolean] whether the reader may see budget money; when false every money figure is nil
   Report = Data.define(:basis, :strictness, :period, :open_ended, :horizon_months, :pay_view, :reference_currency, :lines, :cost_centres, :units, :totals, :forecast, :unpriced,
-                       :funding, :seats)
+                       :funding, :seats, :money)
+
+  # @param context [AuthorizationContext]
+  # @param plan [TeamPlanningPlan]
+  # @return [Boolean] whether the reader may see what budget lines approve, as they may see pay
+  def self.money_shown?(context:, plan:) = PlanPolicy.new(context, plan).see_pay?
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -155,14 +166,29 @@ class TeamPlanning::Budget
     split(cost.scenario.lines)
     lines = funding.map.budget_lines.sort_by(&:id).map { line(it, @by_line.fetch(it.id, [])) }
     forecast = cost.forecast.total
-    Report.new(basis: @inclusive ? "inclusive" : "base_only", strictness: @strictness, period: @period, open_ended: funding.open_ended,
-               horizon_months: funding.horizon_months, pay_view: cost.pay_view, reference_currency: @reference,
-               lines:, cost_centres: cost_centres(lines, funding, cost.forecast), units: units(funding, cost.forecast),
-               totals: totals(lines, funding, cost.forecast),
-               forecast:, unpriced: unpriced(cost.scenario.lines), funding:, seats: cost.scenario.lines)
+    report = Report.new(basis: @inclusive ? "inclusive" : "base_only", strictness: @strictness, period: @period, open_ended: funding.open_ended,
+                        horizon_months: funding.horizon_months, pay_view: cost.pay_view, reference_currency: @reference,
+                        lines:, cost_centres: cost_centres(lines, funding, cost.forecast), units: units(funding, cost.forecast),
+                        totals: totals(lines, funding, cost.forecast),
+                        forecast:, unpriced: unpriced(cost.scenario.lines), funding:, seats: cost.scenario.lines, money: true)
+    self.class.money_shown?(context: @context, plan: @plan) ? report : withheld(report)
   end
 
   private
+
+  def withheld(report)
+    report.with(money: false, forecast: nil,
+                lines: report.lines.map { it.with(approved: nil, funded: nil, remaining: nil, mismatched: [], over: heads_only(it.over)) },
+                cost_centres: report.cost_centres.transform_values { totals_without_money(it) },
+                units: report.units.transform_values { it.with(funded: nil, unfunded: nil) },
+                totals: totals_without_money(report.totals))
+  end
+
+  def totals_without_money(totals)
+    totals.with(approved: nil, funded: nil, remaining: nil, remaining_left_out: [], unfunded: nil, over: heads_only(totals.over))
+  end
+
+  def heads_only(over) = over&.with(money: nil, mismatched: [])
 
   # Each priced seat's money, split into what each held draw funds and what
   # is left unfunded, by line, unit and the seat's cost centre.
