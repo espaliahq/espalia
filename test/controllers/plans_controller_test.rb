@@ -37,6 +37,16 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "your organisation&#39;s defaults"
     end
 
+    should "keep the side panel's choice to the person who made it" do
+      cookies[Views::Plans::ShowView.panel_cookie(@editor.user)] = "closed"
+      get plan_path(@plan_id)
+      assert_select "aside#plan-side-panel[data-pane-state='open']"
+
+      cookies[Views::Plans::ShowView.panel_cookie(@viewer.user)] = "closed"
+      get plan_path(@plan_id)
+      assert_select "aside#plan-side-panel[data-pane-state='closed']"
+    end
+
     should "open the map on today, and on a scenario" do
       get map_plan_path(@plan_id)
       assert_response :success
@@ -341,7 +351,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
 
       get plan_path(@plan_id)
       assert_includes response.body, "Archived on 20 November 2026 by Erin Editor"
-      assert_includes response.body, "still use today&#39;s pay bands, exchange rates and rules"
+      assert_includes response.body, "use the pay bands, exchange rates, budget lines and rules of 20 November 2026"
       assert_select "form[action='#{restore_plan_path(@plan_id)}']", count: 1
       assert_select "button", text: "New scenario", count: 0
       assert_select "button", text: "Archive plan", count: 0

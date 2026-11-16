@@ -50,11 +50,13 @@ class ExchangeRate < ApplicationRecord
   # @param from [String]
   # @param to [String]
   # @param on [Date]
+  # @param rates [Array<ExchangeRate>, nil] the rates to choose from, such as an
+  #   archived plan's copy; nil for the tenant's own
   # @return [Rational]
   # @raise [MissingRate] as {.convert} does
   # @raise [ArgumentError] as {.convert} does
-  def self.factor(from:, to:, on:)
-    rate, from = rate_between(from, to, on)
+  def self.factor(from:, to:, on:, rates: nil)
+    rate, from = rate_between(from, to, on, rates)
     return 1r unless rate
 
     rate.from_currency == from ? rate.rate.to_r : 1 / rate.rate.to_r
@@ -64,7 +66,7 @@ class ExchangeRate < ApplicationRecord
   #   from currency, or no rate when the currencies are one
   # @raise [MissingRate]
   # @raise [ArgumentError] without a tenant or a Date
-  def self.rate_between(from, to, on)
+  def self.rate_between(from, to, on, rates = nil)
     raise ArgumentError, "Converting a currency needs a current tenant" unless ActsAsTenant.current_tenant
     raise ArgumentError, "Converting a currency needs the Date the amount is for" unless on.is_a?(Date)
 
@@ -72,7 +74,7 @@ class ExchangeRate < ApplicationRecord
     to = Currency::NORMALIZE.call(to)
     return [ nil, from ] if from == to
 
-    rate = in_force(from, to, on)
+    rate = rates ? in_force_among(rates, from, to, on) : in_force(from, to, on)
     raise MissingRate, "There is no exchange rate from #{from} to #{to} in force on #{on.iso8601}" unless rate
 
     [ rate, from ]
@@ -87,6 +89,13 @@ class ExchangeRate < ApplicationRecord
       .first
   end
   private_class_method :in_force
+
+  # @return [ExchangeRate, nil] as {.in_force}, from the rates given
+  def self.in_force_among(rates, from, to, on)
+    pair = [ from, to ].sort
+    rates.select { [ it.from_currency, it.to_currency ].sort == pair && it.applies_from <= on }.max_by(&:applies_from)
+  end
+  private_class_method :in_force_among
 
   # @return [String] the rate without trailing zeros, such as "0.92"
   def figure = rate.to_s("F").delete_suffix(".0")

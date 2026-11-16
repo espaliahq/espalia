@@ -69,6 +69,12 @@ it wrote, so `Operations::TeamPlanning::DescribeScenario` reads what the scenari
 from that row, by id, under the plan's lock, and the aggregate writes nothing for the same
 text. While a rebuild holds the read model the operation writes rather than guess.
 
+**An archived plan's pricing inputs are sealed in `TeamPlanning::Events::PlanPricesFrozen`**
+under the plan's key, so deleting the plan erases the copy with everything else. The copy
+is tenant configuration and names nobody; a restore sets it aside rather than erasing it
+([team-planning-design.md → Archiving as built](team-planning-design.md#archiving-as-built)).
+Without key material, archiving records no copy and the plan prices live.
+
 `PlanKeyStore` holds the keys in the `plan_encryption_keys` table, one row per key, and
 answers RailsEventStore's key repository interface: `key_of`, `create` and `forget`.
 Identifiers carry the tenant:

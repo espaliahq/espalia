@@ -3,7 +3,7 @@
 // Owns the open/closed state of the activity pane (lg+ inline,
 // below-lg fixed overlay), the persistence cookie
 // (`assessment_activity_pane_open`), the `?activity=open|closed`
-// URL param, and the data-pane-state attribute the CSS keys off.
+// URL param (the key is a value; `Kit::SidePanel` sets its own), and the data-pane-state attribute the CSS keys off.
 // Uses stimulus-use's `useTransition` for slide+fade animations and
 // `useClickOutside` (mobile only) so tapping the matrix dismisses the
 // pane like the scoring sidebar does.
@@ -40,6 +40,12 @@ export default class extends BaseController {
   static values = {
     cookie: { type: String, default: "assessment_activity_pane_open" },
     defaultState: { type: String, default: "closed" },
+    // The query parameter that carries the state, so two surfaces' links
+    // don't open each other's pane.
+    urlKey: { type: String, default: "activity" },
+    // Below lg, a tap outside closes the pane. Off for a pane that stacks
+    // under the page instead of overlaying it, where the tap is on the page.
+    dismissOutside: { type: Boolean, default: true },
     // lg+ only: cap the pane's height at what is left below its own top.
     // The pane is sticky under a header that grows, shrinks and scrolls
     // away, and until it sticks it sits lower than its sticky offset, so
@@ -103,6 +109,7 @@ export default class extends BaseController {
   // are also "outside" the pane element; ignore them so tapping the
   // toggle to open doesn't immediately re-close.
   clickOutside(event) {
+    if (!this.dismissOutsideValue) return
     if (window.innerWidth >= MOBILE_BREAKPOINT) return
     if (this.#visualState() !== "open") return
     if (event.target.closest("[data-action*='activity-pane#toggle']")) return
@@ -114,7 +121,7 @@ export default class extends BaseController {
   // Reads URL → cookie → default. Used on connect AND on popstate.
   #computeInitialState() {
     const url = new URL(window.location.href)
-    const fromUrl = url.searchParams.get("activity")
+    const fromUrl = url.searchParams.get(this.urlKeyValue)
     if (fromUrl === "open" || fromUrl === "closed") return fromUrl
 
     const cookie = this.#readCookie()
@@ -136,6 +143,14 @@ export default class extends BaseController {
     this.#applyMetadata(state)
     this.#writeCookie(state)
     this.#pushBrowserUrl(state)
+    if (state === "open") this.#revealStackedPane()
+  }
+
+  // A pane that stacks under the page opens below the fold on a phone, where
+  // the tap that opened it would otherwise seem to do nothing.
+  #revealStackedPane() {
+    if (this.dismissOutsideValue || window.innerWidth >= MOBILE_BREAKPOINT) return
+    requestAnimationFrame(() => this.paneTarget.scrollIntoView({ block: "start" }))
   }
 
   // Browser back/forward changes the URL without remounting Stimulus
@@ -201,14 +216,14 @@ export default class extends BaseController {
 
   #applyMetadata(state) {
     if (this.hasPaneTarget) this.paneTarget.dataset.paneState = state
-    if (this.hasToggleTarget) {
-      this.toggleTarget.setAttribute("aria-expanded", state === "open" ? "true" : "false")
-    }
+    this.toggleTargets.forEach((toggle) => {
+      toggle.setAttribute("aria-expanded", state === "open" ? "true" : "false")
+    })
   }
 
   #pushBrowserUrl(state) {
     const url = new URL(window.location.href)
-    url.searchParams.set("activity", state)
+    url.searchParams.set(this.urlKeyValue, state)
     if (url.toString() !== window.location.href) {
       window.history.pushState({}, "", url)
     }

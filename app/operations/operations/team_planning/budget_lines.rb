@@ -16,7 +16,7 @@ class Operations::TeamPlanning::BudgetLines < Operations::Base
               "added. An amount keeps its own currency and period, a year or a month, and is never converted; a line " \
               "with only a head count has a null amount, never zero. Figures are decimal strings. orphaned lists each " \
               "change that sets or cuts a line the organisation has since removed, with `kind` set or cut; " \
-              "team_planning_attention flags each. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
+              "team_planning_attention flags each. #{PRICED_AS_ARCHIVED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -28,7 +28,7 @@ class Operations::TeamPlanning::BudgetLines < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure }
-    { plan_id: plan.id, **priced_today(plan), scenario_id:, budget_lines: map.budget_lines.map { line_payload(it) },
+    { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, budget_lines: map.budget_lines.map { line_payload(it) },
       orphaned: map.orphaned_lines.map { |budget_line_id, kind| { budget_line_id:, kind: } } }
   end
 

@@ -481,7 +481,13 @@ class TeamPlanning::Baseline
 
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on ]) { map_on(@plan.base_on, known_on: @plan.base_on - 1) }
+  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, known_on ]) { map_on(@plan.base_on, known_on:) }
+
+  # The Org Graph as known the day before the base, or on the archive day if
+  # that came first, so a fact recorded after archiving moves no figure.
+  #
+  # @return [Date]
+  def known_on = [ @plan.base_on - 1, @plan.archived_on ].compact.min
 
   # The organisation on another day, in the shape {#structure} gives, so a
   # reader can hold the plan up against it.
@@ -507,7 +513,7 @@ class TeamPlanning::Baseline
     scope_ids = (@plan.scope_unit_ids.presence if scoped)
     map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people: scope_ids ? [] : people, outside: scope_ids ? people : [],
                   scope_ids:, unassigned_ids: [], positions: [], names: {}, step_ids: [ @plan.id ], budget_lines: approved_budget,
-                  rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
+                  rules: Rules.new(plan_id: @plan.id, defaults: inputs.rule_defaults, by_subject: {})).settled
     return map unless history
 
     map.with(retired_units: snapshot.retired_units.map { Unit.new(**it.to_h.slice(*Unit.members)) },
@@ -528,8 +534,10 @@ class TeamPlanning::Baseline
 
   private
 
-  # Configuration, so every day a reader asks for reads the lines as they are now.
-  def approved_budget = @approved_budget ||= ::BudgetLine.where(tenant_id: @plan.tenant_id).order(:starts_on, :id).map { BudgetLine.approved(it) }
+  # Configuration, so every day a reader asks for reads the lines as the plan is priced with them.
+  def approved_budget = @approved_budget ||= inputs.budget_lines.map { BudgetLine.approved(it) }
+
+  def inputs = @inputs ||= TeamPlanning::PricingInputs.for(@plan)
 
   def named_positions(positions)
     return positions if positions.empty?

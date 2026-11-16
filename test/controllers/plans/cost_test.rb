@@ -149,6 +149,14 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     assert_operator headings.index("Cost"), :<, headings.index("Capacity")
   end
 
+  should "keep an archived plan's Cost column after every band is removed, as its figures still use them" do
+    call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+    ActsAsTenant.with_tenant(@tenant) { PayBand.destroy_all }
+
+    get plan_path(@plan_id)
+    assert_includes Nokogiri::HTML(response.body).at_css("[data-cost-cell='#{@year}']").text, "EUR 250k"
+  end
+
   context "the actual, planned and forecast split" do
     should "draw each surface's split from its read, adding up to the total the strip, the unit card and the table show" do
       cost = call(Operations::TeamPlanning::Cost, plan_id: @plan_id, scenario_id: @year)
