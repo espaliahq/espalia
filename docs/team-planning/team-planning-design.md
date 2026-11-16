@@ -620,8 +620,10 @@ it once, for the scenario and the baseline together.
 - **Its level** is the person's own, a planned one winning. When theirs resolves to none,
   the position's level prices it, and the working says so (`level_source`). An open seat
   takes its position's level.
-- **Its band** is the one for that level and the person's country, else the band for any
-  location. An open seat has no country, so it takes the band for any location.
+- **Its band** is the last band in the tenant's list that matches the seat's role, role
+  family, level number and country, as [Pay bands as built](#pay-bands-as-built) describes.
+  An open seat has no country, so only a band for any location matches it. The working
+  names the band and its place in the list.
 - **Its figure** is the band's midpoint for a full-time year (`working_hours` for an hourly
   band), times FTE, times its place's share of the seat, times the days held out of 365.
   The `on_cost` rule at its unit adds on-cost. A person's places always share their whole
@@ -646,6 +648,29 @@ rounds. Plans reprice live: a changed band changes every plan's cost, and the re
 when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
 time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
 to a rate, reprices plans too but does not move the stamp.
+
+#### Pay bands as built
+
+Pay bands are one ordered list per tenant ([#368](https://github.com/espaliahq/espalia/issues/368)).
+Each band is a matcher and a range. The matcher sets any of a role family, a role, a level
+number and a country, and leaves the rest open; a band that sets none matches every seat.
+
+- **The last match wins.** A seat takes the last band in the list that matches it
+  (`LastMatch`, used through `PayBand::Lookup`), so the order is the precedence. Put wide
+  bands first and narrow ones after.
+- **A new band lands after the last band no more specific than it.** Specificity counts
+  the fields set, with a role above a family, so a role's band added after a family's
+  lands below it and wins, with no one moving anything.
+- **No two bands share a matcher.** The second is refused, since one could never be used.
+- **A band that can never win is flagged.** When a later band matches every seat an
+  earlier one does, the earlier one is shadowed: the page marks it "Never used" and
+  `tenants_pay_bands` returns `shadowed: true`. A role's band reaches its family, so a
+  family's band below it shadows it.
+- **Moving a band** is one write, `tenants_reorder_pay_bands`, which takes every band's id
+  in the new order. The page sends it from the up and down buttons on each row, or from a
+  drag on a desktop. Moving a band reprices plans and moves `bands_changed_at`.
+- **A band made from a framework level keeps its `level_id`**, which an admin never sets.
+  A seat at a level that has left the framework still finds its band through it.
 
 #### Cost on screen
 
