@@ -16,8 +16,9 @@ module Operations::TeamPlanning::WithinScope
     record = TeamPlanningPlan.find(plan.plan_id)
     return if record.scope_unit_ids.blank?
 
-    map = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id: scenario_id!(:scenario_id)).structure(plan)
-    place_within_scope!(map, kind, subject_id, end_state)
+    resolution = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id: scenario_id!(:scenario_id))
+    map, winning = resolution.resolved(plan)
+    place_within_scope!(map, kind, subject_id, end_state, closed_units: resolution.closed_position_units(plan, winning))
     return unless map.outside_ids.include?(subject_id)
     return if kind == ::TeamPlanning::Events::AssignmentSet && brings_in?(map, end_state)
 
@@ -26,11 +27,14 @@ module Operations::TeamPlanning::WithinScope
 
   # A unit or position the plan doesn't cover takes a change only from the one
   # that places it under a covered unit, and no change may place one outside.
-  def place_within_scope!(map, kind, subject_id, end_state)
+  # A closed position is off the map, so its unit comes from `closed_units`.
+  def place_within_scope!(map, kind, subject_id, end_state, closed_units: {})
     if (noun = PLACING[kind])
       return if lands_inside?(map, kind, subject_id, end_state)
     elsif map.cut_ids.include?(subject_id)
       noun = map.cut_unit_ids.include?(subject_id) ? "unit" : "position"
+    elsif closed_units.key?(subject_id) && !map.known_unit_ids.include?(closed_units[subject_id])
+      noun = "position"
     elsif kind == ::TeamPlanning::Events::UnitSuccessionSet && !kind.refers_to(end_state.to_h.symbolize_keys).all? { map.known_unit_ids.include?(it) }
       noun = "unit"
     else

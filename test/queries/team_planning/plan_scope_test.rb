@@ -272,6 +272,23 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_includes resolve(@plan_id, @h1).units.map(&:id), platform
   end
 
+  should "refuse to undo a funding clear on a closed position a narrower plan no longer covers" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    line_id = SecureRandom.uuid_v7
+    seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                       level_id: @e5.level_id, unit_id: @sales, fte: 1, basis: "new")[:position_id]
+    as_tenant do
+      handler.set_change(@plan_id, TeamPlanning::Events::PositionFundingSet, scenario_id: @h1, subject_id: seat,
+                                                                             end_state: { draws: [ { budget_line_id: line_id, share: "1" } ] })
+    end
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: seat, facet: "funding")
+    call(Operations::TeamPlanning::ClosePosition, plan_id: @plan_id, scenario_id: @h1, position_id: seat)
+    set_scope(@plan_id, [ @engineering ])
+    cleared = call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id: @h1)[:entries].find { it[:facet] == "funding" && it[:action] == "clear" }
+
+    assert_equal POSITION_OUTSIDE, refusal { call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1, event_id: cleared[:event_id]) }
+  end
+
   should "refuse to redo a succession that names a unit a narrower plan no longer covers" do
     set_scope(@plan_id, [ @engineering, @sales ])
     call(Operations::TeamPlanning::SetUnitSuccession, plan_id: @plan_id, scenario_id: @h1, predecessor_ids: [ @payments ], successor_ids: [ @sales ])
