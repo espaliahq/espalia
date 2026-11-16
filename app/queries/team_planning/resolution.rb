@@ -30,7 +30,7 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call(aggregate = nil)
-    CurrentPlanReads.fetch([ :scenario, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @scenario_id ]) do
+    CurrentPlanReads.fetch([ :scenario, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @plan.archived_on, @scenario_id ]) do
       @baseline.named(structure(aggregate || @repository.load_plan(@plan.id)))
     end
   end

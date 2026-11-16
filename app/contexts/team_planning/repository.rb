@@ -56,6 +56,23 @@ class TeamPlanning::Repository
     @repository.load(TeamPlanning::PlanAggregate.new, EventStreamNaming.plan_stream(plan_id))
   end
 
+  # @param plan_id [String]
+  # @return [Hash, nil] the pricing inputs the plan's archive copied, or nil
+  #   when it was restored since, never copied any, its key is gone, or no
+  #   key can be read here, as on a copy of the database without its credentials
+  def prices_frozen(plan_id)
+    return unless PlanKeyStore.available?
+
+    last = @event_store.read.stream(EventStreamNaming.plan_stream(plan_id)).backward
+                       .of_type([ TeamPlanning::Events::PlanPricesFrozen, TeamPlanning::Events::PlanRestored ]).first
+    return unless last.is_a?(TeamPlanning::Events::PlanPricesFrozen)
+
+    CurrentPlanReads.copy(last.event_id) do
+      inputs = last.data[:inputs]
+      inputs.reveal unless inputs.nil? || inputs.removed?
+    end
+  end
+
   # The aggregate never holds a shreddable value, so its changes come
   # without one. A reader that shows the value swaps each change whose end
   # state is sealed for the event as stored, still sealed. A note alone

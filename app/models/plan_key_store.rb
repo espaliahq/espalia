@@ -122,6 +122,7 @@ class PlanKeyStore
             destroyed_at: Time.current, destroyed_reason: "plan_deleted" } ],
         unique_by: :index_plan_keys_one_per_plan, update_only: %i[destroyed_reason]
       )
+      CurrentPlanReads.forget_copies
       destroyed
     end
   end

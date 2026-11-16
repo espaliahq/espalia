@@ -142,7 +142,7 @@ Every change event has the same shape:
 
 | Group | Events |
 |---|---|
-| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanArchived`, `PlanRestored`, `PlanDeleted` |
+| Lifecycle | `PlanCreated`, `PlanRenamed`, `PlanScopeSet` (the units it covers), `PlanMemberAdded`, `PlanMemberRemoved`, `PlanArchived`, `PlanPricesFrozen` (the pricing inputs an archive holds to), `PlanRestored`, `PlanDeleted` |
 | Scenarios | `ScenarioForked` (parent, `then` or `instead`, period), `ScenarioRenamed`, `ScenarioDescribed`, `ScenarioPeriodSet`, `ScenarioSplit`, `ScenarioRemoved` |
 | Structure | `UnitSet` (name, parent), `UnitRetired`, `UnitSuccessionSet` (which units carry on from which), `PositionSet`, `PositionClosed` |
 | People | `AssignmentSet` (person, position or unit, allocation), `ReportingLineSet` (person, a person or a position), `DepartureSet` (person, linked position, optional leaving date), `DepartureWithdrawn`, `LevelSet` (person, level: a planned promotion) |
@@ -742,7 +742,7 @@ it once, for the scenario and the baseline together.
 Every figure stays in its band's currency, exact, and the totals hold one sum per currency.
 Each converts once, at the read, at the rate in force on the period's first day. A missing
 rate leaves the converted total empty and names the pair and the date. Only the display
-rounds. Plans reprice live: a changed band changes every plan's cost, and the report says
+rounds. A live plan reprices: a changed band changes its cost, and the report says
 when a band was last added, changed or removed (`bands_changed_at`). The tenant keeps that
 time, since a removed band leaves no row. A change to the working-hours or on-cost rules, or
 to a rate, reprices plans too but does not move the stamp.
@@ -772,8 +772,9 @@ number and a country, and leaves the rest open; a band that sets none matches ev
 - **A seat at a level that has left the framework** has no role or number any more. It
   matches only the bands made from that level and those that set no role, family or
   number, so removing an unrelated band never changes its price. With none for its
-  country it is unpriced with the reason `level_left`, and an admin adds a band or moves
-  the seat to a current level.
+  country it is unpriced with the reason `level_left`. An admin prices it with a band for
+  every role and level in that country, or moves the seat to a current level. An open seat
+  has no country, so only such a band for any location prices it.
 
 #### Run rate at the end
 
@@ -1065,10 +1066,33 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
   with `checked: false` and a note beside `archived_on`, so an empty list is never read
   as "nothing wrong". Restoring checks the plan again against everything since its base
   date, the time it sat archived included.
-- The figures don't stand still. Cost, scenario costs, capacity, forecast, budget,
-  funding and budget lines still price with today's bands, rates and rules, and say so
-  in a note. Freezing them is a pay-path change, left to
-  [#394](https://github.com/espaliahq/espalia/issues/394).
+- The figures stand still too
+  ([#394](https://github.com/espaliahq/espalia/issues/394)). Archiving records
+  `PlanPricesFrozen` beside `PlanArchived`: a copy of the tenant's pay bands, reference
+  currency, exchange rates, budget lines and planning rule defaults, sealed under the
+  plan's key. Every pricing read takes its inputs from `TeamPlanning::PricingInputs`,
+  which serves the copy for an archived plan and the tables for a live one. Cost,
+  scenario costs, capacity, forecast, budget, funding and budget lines then return
+  `priced_on` and a note: priced as on the archive day.
+- What stays live is structure. Framework roles and levels, and HRIS title mappings, say
+  who is at which level, not what a level costs. A plan reads the Org Graph as known the
+  day before its base date, or on the archive day if that comes first, so someone
+  recorded as leaving after the archive moves no archived figure. Actual pay is never in
+  the copy: it stays sealed per person, and the reader's see-pay view applies at read
+  time, so forgetting a person still removes it.
+- The copy carries tenant configuration text as it stood: location, cost centre, a
+  cost-centre rule's label, on-cost item names and country keys. Forgetting a person
+  doesn't scrub it, the same as the live tables; the wider free-text question is
+  [#110](https://github.com/espaliahq/espalia/issues/110). Who last edited a row is
+  left out.
+- A restore sets the copy aside, and the plan prices with today's inputs again.
+  Archiving again takes a fresh copy. The old event is never read after a restore,
+  though it stays readable under the plan's key until the plan is deleted.
+- A plan archived before the copy existed, or where the plan keys were unavailable, has
+  none. It reads live and keeps the note saying its figures use today's.
+- `TeamPlanningFrozenPricesTest` changes every input in turn and checks no read moves,
+  and fails if a frozen read queries a table outside the plan and the organisation's
+  structure, so a new input can't bypass the copy.
 - The plans list shows live plans by default; `state` asks for archived ones, or all.
   On the web a Live and Archived switch does the same, and the plan page carries a banner
   with the day, the editor and, for editors, a Restore button.
