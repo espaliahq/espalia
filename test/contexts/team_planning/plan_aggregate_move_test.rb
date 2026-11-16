@@ -55,9 +55,9 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
 
   def undo(scenario_id, event_id) = @plan.undo_change(scenario_id:, event_id:, undone_by_id: @ada_id)
 
-  def resolved(scenario_id) = @plan.winning_changes(scenario_id).transform_values { [ it.event_id, it.data ] }
+  def resolved(scenario_id, plan = @plan) = plan.winning_changes(scenario_id).transform_values { [ it.event_id, it.data ] }
 
-  def everything = [ @plan_id, *@plan.scenarios.keys ].to_h { [ it, [ resolved(it), @plan.log_of(it).map(&:event_id) ] ] }
+  def everything(plan = @plan) = [ @plan_id, *plan.scenarios.keys ].to_h { [ it, [ resolved(it, plan), plan.log_of(it).map(&:event_id) ] ] }
 
   def replayed = TeamPlanning::PlanAggregate.new.tap { |plan| @plan.unpublished_events.each { plan.apply(it) } }
 
@@ -179,7 +179,7 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
 
     @plan.redo_change(scenario_id: @q2, event_id: moved, redone_by_id: @ada_id)
     assert_equal after, everything
-    assert_equal everything, replayed.then { |plan| [ @plan_id, *plan.scenarios.keys ].to_h { [ it, [ plan.winning_changes(it).transform_values { |c| [ c.event_id, c.data ] }, plan.log_of(it).map(&:event_id) ] ] } }
+    assert_equal everything, everything(replayed)
   end
 
   test "the Undo button takes back the move, and Redo puts it back" do
@@ -240,7 +240,7 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     undo(@q3, onward)
 
     assert_equal arrived, @plan.winning_changes(@q2)[key].event_id
-    assert_equal everything, replayed.then { |plan| [ @plan_id, *plan.scenarios.keys ].to_h { [ it, [ plan.winning_changes(it).transform_values { |c| [ c.event_id, c.data ] }, plan.log_of(it).map(&:event_id) ] ] } }
+    assert_equal everything, everything(replayed)
   end
 
   test "refuse to move a position later while a change left behind places someone in it" do
@@ -310,7 +310,7 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     assert_equal [ first, second ], @plan.log_of(@q3).map(&:event_id)
     assert_equal placed, @plan.winning_changes(@q3)[key].event_id
     assert_match "moved again since", refusal { undo(@q3, second) }
-    assert_equal everything, replayed.then { |plan| [ @plan_id, *plan.scenarios.keys ].to_h { [ it, [ plan.winning_changes(it).transform_values { [ it.event_id, it.data ] }, plan.log_of(it).map(&:event_id) ] ] } }
+    assert_equal everything, everything(replayed)
   end
 
   test "leave a change someone else moved as the latest thing its author can undo" do

@@ -4,7 +4,7 @@
 # the Team Planning Operations, as the MCP tools do, so a plan someone isn't
 # in is a 404 here and "No such plan" there.
 class PlansController < ApplicationController
-  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map]
+  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map budget]
 
   # GET /planning?state=archived
   def index
@@ -144,6 +144,27 @@ class PlansController < ApplicationController
     linked_ids = read(Operations::TeamPlanning::Status, scenario_id:)[:statuses].to_set { it[:change_id] }
     tab = Views::Plans::ChecksTab.new(plan:, scenarios:, attention: read(Operations::TeamPlanning::Attention, scenario_id:), linked_ids:)
     render plan_page(plan, scenarios:, open_tab: :checks, body: tab)
+  end
+
+  # GET /planning/:id/budget?scenario=:scenario_id
+  #
+  # A scenario's budget lines and what draws on them
+  # ([#395](https://github.com/espaliahq/espalia/issues/395)). Today, the
+  # default, has no period, so it shows the lines as approved.
+  def budget
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = (params[:scenario].presence || plan[:plan_id]).downcase
+    lines = read(Operations::TeamPlanning::BudgetLines, scenario_id:)
+    tab = if scenario_id == plan[:plan_id]
+            Views::Plans::BudgetTab.new(plan:, scenarios:, lines:)
+    else
+            Views::Plans::BudgetTab.new(plan:, scenarios:, lines:, budget: read(Operations::TeamPlanning::Budget, scenario_id:),
+                                        funding: read(Operations::TeamPlanning::Funding, scenario_id:),
+                                        map: read(Operations::TeamPlanning::ScenarioMap, scenario_id:))
+    end
+    render plan_page(plan, scenarios:, open_tab: :budget, body: tab)
   end
 
   # GET /planning/:id/update-to-today
@@ -443,7 +464,8 @@ class PlansController < ApplicationController
               Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :timeline, label: "Timeline", href: timeline_plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :changes, label: "Changes", href: changes_plan_path(plan[:plan_id])),
-              Views::Plans::ShowView::Tab.new(key: :checks, label: "Checks", href: checks_plan_path(plan[:plan_id])) ],
+              Views::Plans::ShowView::Tab.new(key: :checks, label: "Checks", href: checks_plan_path(plan[:plan_id])),
+              Views::Plans::ShowView::Tab.new(key: :budget, label: "Budget", href: budget_plan_path(plan[:plan_id])) ],
       open_tab:,
       body:,
       can_edit: can_edit?,

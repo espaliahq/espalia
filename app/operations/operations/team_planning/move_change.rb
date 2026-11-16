@@ -22,8 +22,8 @@ class Operations::TeamPlanning::MoveChange < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true
   parameter :subject_id, String, required: true, allow_blank: false
-  parameter :facet, String, required: true, allow_blank: false
-  parameter :direction, String, required: true, allow_blank: false
+  parameter :facet, String, required: true, allow_blank: false, allowed: ::TeamPlanning::PlanAggregate::MOVABLE_FACETS
+  parameter :direction, String, required: true, allow_blank: false, allowed: ::TeamPlanning::PlanAggregate::DIRECTIONS
   parameter :to_scenario_id, String
 
   # @return [Hash] `{ plan_id, scenario_id, to_scenario_id, subject_id, facet, moved }`

@@ -78,7 +78,7 @@ class Plans::ChangeMovesControllerTest < ActionDispatch::IntegrationTest
       get timeline_plan_path(@plan_id, scenario: @q2)
 
       assert_select "a[data-turbo-method='post']", text: "Open it in Q2 settle instead"
-      assert_select "a[data-turbo-method='post']", text: "Change it in Q1 hires instead"
+      assert_select "a[data-turbo-method='post']", text: "Move the Q2 settle change to Q1 hires"
     end
   end
 

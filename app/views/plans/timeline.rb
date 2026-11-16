@@ -336,7 +336,7 @@ class Views::Plans::Timeline < Views::Base
   # -- Moving a change a step earlier or later --------------------------------
 
   SHIFT_WORDS = { "assignment" => "Change place in %s instead", "departure" => "Leave in %s instead",
-                  "position" => "Open it in %s instead", "position_change" => "Change it in %s instead" }.freeze
+                  "position" => "Open it in %s instead", "position_change" => "Move the %s change to %s" }.freeze
 
   # The changes a bar shows, in `range`, that a step makes itself: the place
   # it starts with, the departure it shows, or for a position each step that
@@ -373,11 +373,18 @@ class Views::Plans::Timeline < Views::Base
       menu.menu(label:, width: "w-64") do
         shifts.each do |column, facet, direction, to, words|
           menu.item(href: shift_path(bar, column, facet, direction, to), data: { turbo_method: :post }) do
-            SHIFT_WORDS.fetch(words) % step_name(to)
+            shift_words(words, column, to)
           end
         end
       end
     end
+  end
+
+  # A position can change in several steps along one bar, so its later
+  # changes name the step each comes from.
+  def shift_words(words, column, to)
+    steps = words == "position_change" ? [ column, to ] : [ to ]
+    sprintf(SHIFT_WORDS.fetch(words), *steps.map { step_name(it) })
   end
 
   def shift_path(bar, column, facet, direction, to)

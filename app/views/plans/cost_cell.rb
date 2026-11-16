@@ -29,6 +29,7 @@ class Views::Plans::CostCell < Views::Base
         span(class: "text-muted") { change ? "(#{change} vs Today)" : "(same as Today)" }
       end
       span(class: "text-muted") { "#{@row[:unpriced]} left out" } if @row[:unpriced].positive?
+      render Views::Plans::FigureParts.new(parts: Format.parts(total[:parts], @reference)) unless @row[:basis] == "run_rate"
     end
   end
 end

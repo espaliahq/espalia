@@ -83,6 +83,33 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_select "#checks-heading", text: "Checks on Q1 hires"
     end
 
+    should "open the budget on today, with the scenarios as links, and on a scenario, with its four numbers" do
+      get budget_plan_path(@plan_id)
+      assert_response :success
+      assert_select "[aria-current='page']", text: "Budget"
+      assert_select "#budget-heading", text: "Budget on Today"
+      assert_select "[data-budget-today] a[href=?]", budget_plan_path(@plan_id, scenario: @q1), text: "Q1 hires"
+      assert_includes response.body, "No budget lines yet."
+
+      get budget_plan_path(@plan_id, scenario: @q1)
+      assert_response :success
+      assert_select "#budget-heading", text: "Budget on Q1 hires"
+      assert_select "[data-budget-total]", 4
+      assert_includes response.body, "This scenario holds no budget lines."
+    end
+
+    should "open Today's budget for the plan's own id in capitals" do
+      get budget_plan_path(@plan_id, scenario: @plan_id.upcase)
+
+      assert_response :success
+      assert_select "#budget-heading", text: "Budget on Today"
+    end
+
+    should "get a 404 for the budget of a scenario that isn't in the plan" do
+      get budget_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
+      assert_response :not_found
+    end
+
     should "get a 404 for checks in a scenario that isn't in the plan" do
       get checks_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
       assert_response :not_found
@@ -103,7 +130,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "someone outside the plan" do
-    should "not see it in the index, and get a 404 for its page, map, timeline, changes and checks, even as a tenant admin" do
+    should "not see it in the index, and get a 404 for its page, map, timeline, changes, checks and budget, even as a tenant admin" do
       [ @outsider, @admin ].each do |account|
         sign_in account.user
         get plans_path
@@ -119,6 +146,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
         get changes_plan_path(@plan_id)
         assert_response :not_found
         get checks_plan_path(@plan_id)
+        assert_response :not_found
+        get budget_plan_path(@plan_id)
         assert_response :not_found
         sign_out account.user
       end

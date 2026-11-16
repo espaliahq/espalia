@@ -85,6 +85,15 @@ class Operations::TeamPlanning::MoveChangeTest < ActiveSupport::TestCase
     assert_match "to_scenario_id must be a UUID", refusal { move(to_scenario_id: "q3") }
   end
 
+  should "refuse a facet or direction the plan can't move, and publish the ones it can" do
+    leave(@q1)
+
+    assert_match "facet must be one of", refusal { call(Operations::TeamPlanning::MoveChange, as: @editor, plan_id: @plan_id, scenario_id: @q1, subject_id: @ada.id, facet: "level", direction: "later") }
+    assert_match "direction must be one of", refusal { move(direction: "sideways") }
+    properties = Mcp::OperationToTool.call(Operations::TeamPlanning::MoveChange)[:inputSchema][:properties]
+    assert_equal({ "facet" => %w[assignment position departure], "direction" => %w[earlier later] }, properties.slice("facet", "direction").transform_values { it[:enum] })
+  end
+
   should "be a write an MCP client asks before making" do
     assert_equal [ :write, :mcp_client ], [ Operations::TeamPlanning::MoveChange.category, Operations::TeamPlanning::MoveChange.approval ]
   end
