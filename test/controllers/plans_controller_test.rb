@@ -303,7 +303,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       sign_in @editor.user
       get plan_path(@plan_id)
       assert_select "button", text: "Archive plan"
-      assert_select "form[action='#{archive_plan_path(@plan_id)}']", count: 1
+      assert_select "##{Views::Plans::ArchiveDialog::ID} form[action='#{archive_plan_path(@plan_id)}']", count: 1
 
       post archive_plan_path(@plan_id)
       assert_redirected_to plan_path(@plan_id)
@@ -375,7 +375,68 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "deleting a plan" do
+    should "let an editor delete the plan once they type its name, and land on the list" do
+      sign_in @editor.user
+      get plan_path(@plan_id)
+      assert_select "button", text: "Delete plan"
+      assert_select "form[action='#{plan_path(@plan_id)}'] input[name='_method'][value='delete']", count: 1
+      assert_select "##{Views::Plans::DeleteDialog::ID} form[action='#{archive_plan_path(@plan_id)}']", text: "Archive instead", count: 1
+
+      delete plan_path(@plan_id), params: { confirm_name: " Pay  review 2027 " }
+      assert_response :see_other
+      assert_redirected_to plans_path
+      assert_equal "Plan deleted.", flash[:notice]
+      assert_not plan_exists?
+    end
+
+    should "keep the plan when the typed name doesn't match" do
+      sign_in @editor.user
+      delete plan_path(@plan_id), params: { confirm_name: "pay review 2027" }
+      assert_response :see_other
+      assert_redirected_to plan_path(@plan_id)
+      assert_equal "The name you typed doesn't match, so the plan is still here.", flash[:alert]
+      assert plan_exists?
+    end
+
+    should "let an editor delete an archived plan, without offering to archive it again" do
+      archive!
+      sign_in @editor.user
+      get plan_path(@plan_id)
+      assert_select "button", text: "Delete plan"
+      assert_select "form[action='#{archive_plan_path(@plan_id)}']", count: 0
+
+      delete plan_path(@plan_id), params: { confirm_name: "Pay review 2027" }
+      assert_redirected_to plans_path(state: "archived")
+      assert_not plan_exists?
+    end
+
+    should "offer a viewer no delete and refuse one, and give someone outside the plan a 404" do
+      sign_in @viewer.user
+      get plan_path(@plan_id)
+      assert_select "button", text: "Delete plan", count: 0
+      assert_select "##{Views::Plans::DeleteDialog::ID}", count: 0
+      delete plan_path(@plan_id), params: { confirm_name: "Pay review 2027" }
+      assert_redirected_to root_path
+      assert plan_exists?
+
+      sign_out @viewer.user
+      sign_in @outsider.user
+      delete plan_path(@plan_id), params: { confirm_name: "Pay review 2027" }
+      assert_response :not_found
+      assert plan_exists?
+
+      sign_out @outsider.user
+      sign_in @admin.user
+      delete plan_path(@plan_id), params: { confirm_name: "Pay review 2027" }
+      assert_response :not_found
+      assert plan_exists?
+    end
+  end
+
   private
+
+  def plan_exists? = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.exists?(@plan_id) }
 
   def archive! = ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id) }
 
