@@ -207,7 +207,7 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
           end
         end
       end
-      line(cost_centre: "Platform")
+      @platform = line(cost_centre: "Platform")
     end
 
     should "be named when they keep their real one and the entries that match them give another, and still costed there" do
@@ -241,6 +241,18 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
 
       operation(Operations::TeamPlanning::SetPositionFunding, position_id: position, draws: [ { budget_line_id: growth } ])
       assert_equal [ [ @bo.id, "Costed in Platform, while their position draws on a budget line for Growth" ] ], reasons(:cost_centre_mismatches)
+    end
+
+    should "name the cost centre of the seat that disagrees when a person is costed in two" do
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" })
+      labelled = open_position(cost_centre: "Platform")
+      ruled = open_position(cost_centre: nil)
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @cy.id,
+                                                         placements: [ { position_id: labelled, allocation: 0.5 }, { position_id: ruled, allocation: 0.5 } ])
+      operation(Operations::TeamPlanning::SetPositionFunding, position_id: ruled, draws: [ { budget_line_id: @platform } ])
+
+      assert_equal [ [ @cy.id, "Costed in Payments, while their position draws on a budget line for Platform" ] ],
+                   reasons(:cost_centre_mismatches).select { it.first == @cy.id }
     end
 
     should "give the entries' cost centre only to a person who keeps a real one the entries disagree with" do

@@ -505,8 +505,8 @@ class TeamPlanning::Attention
     positions = funded_positions.index_by { it.position.id }
     lines = @budget.lines.to_h { [ it.line.id, it.line ] }
     @budget.seats.select { it.kind == "person" && it.cost_centre.present? && it.days.positive? }.group_by(&:seat_id).flat_map do |person_id, seats|
-      seats.flat_map { mismatches_of(it, positions[it.position_id], lines) }.uniq.map do |other|
-        item(person_id, ASSIGNMENT, "Costed in #{seats.first.cost_centre}, while #{other}", units: seats.map(&:unit_id))
+      seats.flat_map { |seat| mismatches_of(seat, positions[seat.position_id], lines).map { [ seat.cost_centre, it ] } }.uniq.map do |costed, other|
+        item(person_id, ASSIGNMENT, "Costed in #{costed}, while #{other}", units: seats.select { it.cost_centre == costed }.map(&:unit_id))
       end
     end
   end
