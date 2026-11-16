@@ -91,6 +91,36 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    should "load each step's figures under its header once the path is drawn, without widening a column" do
+      price_the_backfill
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id)
+      assert_text "Showing the path to Q2 settle."
+      assert_selector "turbo-frame#timeline-figures[complete]", visible: :all
+
+      within("turbo-frame#timeline-figures") do
+        assert_selector "[data-timeline-figures]", count: 3
+        assert_selector "[data-timeline-figures='0'] [data-timeline-figure='cost']", text: "seats unpriced"
+        assert_no_selector "[data-timeline-figures='0'] [data-timeline-figure='budget']"
+        assert_selector "[data-timeline-figures='1'] [data-timeline-figure='cost']", text: /over the step/
+        assert_selector "[data-timeline-figures='1'] [data-timeline-figure='budget']", text: /position/
+        assert_no_text "Loading figures"
+      end
+      assert_selector "turbo-frame#timeline-figures-phone", visible: :all
+      assert_no_selector "turbo-frame#timeline-figures-phone[complete]", visible: :all
+      widths = page.evaluate_script("[...document.querySelectorAll('[data-timeline-step]')].map(el => el.offsetWidth)")
+      assert_equal 1, widths.uniq.size
+      assert_no_sideways_overflow
+    end
+
+    should "say quietly when the figures fail to load, keep focus where it was, and load them on Retry" do
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id)
+      assert_selector "turbo-frame#timeline-figures[complete]", visible: :all
+
+      assert_figures_fail_quietly("timeline-figures", focused: "main a[href]")
+    end
+
     should "follow an alternative to redraw the path" do
       sign_in_as(@viewer.user)
       visit timeline_plan_path(@plan_id)
@@ -147,6 +177,33 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         assert_selector "[data-walk]", text: /0\s*→\s*to\s*1 head · 1 moved in/
       end
       assert_no_sideways_overflow
+    end
+
+    should "load the step's figures into its card" do
+      price_the_backfill
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id, step: 1)
+      assert_text "Step 2 of 3"
+      # The frame is lazy, and a short window leaves the step card below the fold.
+      page.execute_script("document.querySelector('turbo-frame#timeline-figures-phone').scrollIntoView({ block: 'center' })")
+      assert_selector "turbo-frame#timeline-figures-phone[complete]", visible: :all
+
+      within("[data-timeline-phone] turbo-frame#timeline-figures-phone") do
+        assert_selector "[data-timeline-figures='1'] [data-timeline-figure='cost']", text: /over the step/
+        assert_selector "[data-timeline-figures='1'] [data-timeline-figure='budget']", text: /position/
+      end
+      assert_no_selector "turbo-frame#timeline-figures[complete]", visible: :all
+      assert_no_sideways_overflow
+    end
+
+    should "say quietly when the figures fail to load, keep focus where it was, and load them on Retry" do
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id, step: 1)
+      assert_text "Step 2 of 3"
+      page.execute_script("document.querySelector('turbo-frame#timeline-figures-phone').scrollIntoView({ block: 'center' })")
+      assert_selector "turbo-frame#timeline-figures-phone[complete]", visible: :all
+
+      assert_figures_fail_quietly("timeline-figures-phone", focused: "[data-timeline-phone] a[aria-current='step']")
     end
 
     should "show an outsider no timeline" do
@@ -458,6 +515,37 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
   def leaver_end_grip
     find(:xpath, "//*[@data-timeline-grid]//div[.//*[@data-timeline-lane][contains(normalize-space(.), 'leaves in Q1 hires')]]" \
                  "/span[@data-timeline-shift-edge='end']")
+  end
+
+  # The backfill's level gets a band and the plan a budget line, so a viewer without see-pay reads midpoints and head counts.
+  # Reloading the loaded frame makes its next fetch the one that fails, so no lazy load races the stub.
+  def assert_figures_fail_quietly(frame_id, focused:)
+    page.execute_script("document.querySelector(arguments[0]).focus()", focused)
+    patch_fetch("/timeline/figures", once: true)
+    page.execute_script("document.getElementById(arguments[0]).reload()", frame_id)
+
+    assert_selector "##{frame_id}-error", text: "Couldn't load the figures."
+    assert page.evaluate_script("document.activeElement.matches(arguments[0])", focused), "a quiet figures failure moved focus"
+
+    within("##{frame_id}-error") { click_button_with_js_fallback "Retry", expect_no_text: "Couldn't load the figures." }
+    assert_selector "turbo-frame##{frame_id}[complete] [data-timeline-figures]", visible: :all
+    assert_no_selector "##{frame_id}-error", visible: true
+
+    page.execute_script("document.querySelector(arguments[0]).focus()", focused)
+    patch_fetch("/timeline/figures", once: true)
+    page.execute_script("document.getElementById(arguments[0]).reload()", frame_id)
+    assert_selector "##{frame_id}-error", text: "Couldn't load the figures."
+    assert page.evaluate_script("document.activeElement.matches(arguments[0])", focused), "a failure after a good Retry moved focus"
+  end
+
+  def price_the_backfill
+    ActsAsTenant.with_tenant(@tenant) do
+      ReferenceCurrency.create!(currency: "EUR")
+      level = FrameworkState::Level.find_by!(level_id: @level_id)
+      PayBand.create!(level:, currency: "EUR", period: "year", minimum: 80_000, midpoint: 100_000, maximum: 120_000)
+      BudgetLine.create!(starts_on: Date.current, ends_on: Date.current + 365, origin: "new", amount: 150_000, currency: "EUR",
+                         period: "year", head_count: 2)
+    end
   end
 
   def fork(**params) = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, **params)[:scenario_id]

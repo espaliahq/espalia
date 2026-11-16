@@ -1,0 +1,27 @@
+{
+  "name": "team_planning_timeline_figures",
+  "description": "Get the figures for each column of one path of a Team Planning plan the caller is in, the path team_planning_timeline lays out, root first. Each figure is the one the step's own tool gives. cost is team_planning_cost's: for Today (basis run_rate) the yearly run rate of its seats, for a step (basis period) its seats and forecast over its period. unpriced counts the seats left out of cost, for any reason; team_planning_cost lists each with its reason. budget is team_planning_budget's total: approved, funded and unfunded, each with its money and head count. Its over is set when any figure the plan's budget strictness judges is over, a line, a cost centre or the total as the rule's scope says, with the currencies and heads any is over in, and null otherwise. Today has no budget, as it has no period. capacity is team_planning_capacity's total per capacity model, the step's own and its forecast. Figures are decimal strings. A budget line's amount is pay: money is false for a caller without the plan's see-pay right, who gets band midpoints in cost, every head count, and null for every budget amount, native, converted and missing. An archived plan carries archived_on, priced_on and a note: its figures use the pay bands, exchange rates, budget lines and rules as they stood on priced_on, its archive day, while framework roles and levels are read as they are now. A plan archived before that copy was kept, or read where its copy can't be opened, has no priced_on, and its figures use today's. Restoring a plan prices it with today's again. A step with no end date runs, for its figures, over the plan's open_step_horizon rule in whole months from its start: its period's ends_on is that horizon's last day, with open_ended true and horizon_months the months shown. Otherwise open_ended is false and horizon_months null. Refused, as an unknown plan, unless the caller is a member.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string",
+        "description": "The last step, or the plan's id for the baseline alone."
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}
