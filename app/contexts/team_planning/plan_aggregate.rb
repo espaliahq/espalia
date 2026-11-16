@@ -107,6 +107,7 @@ class TeamPlanning::PlanAggregate
     @dates = {}
     @dates_redo = {}
     @undone_at = {}
+    @undo_clock = 0
   end
 
   # Opens the plan.
@@ -1089,7 +1090,7 @@ class TeamPlanning::PlanAggregate
       relocate(event.data[:moved_event_ids], from: event.data[:scenario_id], to:, before: event.data[:moves_before_id])
     end
     @undone << event.data[:undone_event_id]
-    @undone_at[event.data[:undone_event_id]] = @undone_at.size
+    @undone_at[event.data[:undone_event_id]] = @undo_clock += 1
     redo_stack(event.data[:scenario_id], event.data[:undone_by_id]) << event.data[:undone_event_id]
   end
 
@@ -1160,7 +1161,7 @@ class TeamPlanning::PlanAggregate
     data = event.data
     if (undone_id = data[:undoes_event_id])
       @undone << undone_id
-      @undone_at[undone_id] = @undone_at.size
+      @undone_at[undone_id] = @undo_clock += 1
       ((@dates_redo[step_id] ||= {})[data[:set_by_id]] ||= []) << undone_id
     elsif (redone_id = data[:redoes_event_id])
       @undone.delete(redone_id)
