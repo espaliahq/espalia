@@ -25,6 +25,8 @@
 
 import BaseController from "controllers/base_controller"
 
+const SCROLL_INTENT_EVENTS = ["wheel", "touchmove", "keydown", "pointerdown"]
+
 export default class extends BaseController {
   connect() {
     super.connect()
@@ -44,7 +46,10 @@ export default class extends BaseController {
     window.addEventListener("scroll", this._onScroll, { passive: true })
 
     const params = new URL(window.location).searchParams
-    const linked = { capability: params.get("capability"), category: params.get("category") }
+    const linked = {
+      capability: params.get("capability"),
+      category: this.#chipFor(params.get("category")) ? params.get("category") : null
+    }
     if (linked.capability || linked.category) {
       this.#holdLinkedCategory(linked)
     } else {
@@ -96,17 +101,12 @@ export default class extends BaseController {
     // header (`top: var(--sticky-header-h)`) lands flush against the
     // bottom of the chrome on desktop. On mobile the value is 0 and
     // the section header simply lands at the top of the viewport.
-    const chromeH = () => this.#headerIsSticky() ? Math.ceil(this.element.getBoundingClientRect().height) : 0
-    const target = () => Math.max(
-      0,
-      section.getBoundingClientRect().top + window.scrollY - chromeH() - 8
-    )
-    window.scrollTo({ top: target(), behavior: "smooth" })
+    window.scrollTo({ top: this.#sectionScrollTop(section), behavior: "smooth" })
     setTimeout(() => {
       const sectionTop = section.getBoundingClientRect().top
-      const desired = chromeH() + 8
+      const desired = this.#chromeHeight() + 8
       if (Math.abs(sectionTop - desired) > 3) {
-        window.scrollTo({ top: target(), behavior: "instant" })
+        window.scrollTo({ top: this.#sectionScrollTop(section), behavior: "instant" })
       }
     }, 600)
 
@@ -180,6 +180,14 @@ export default class extends BaseController {
     document.documentElement.style.setProperty("--sticky-header-h", `${h}px`)
   }
 
+  #chromeHeight() {
+    return this.#headerIsSticky() ? Math.ceil(this.element.getBoundingClientRect().height) : 0
+  }
+
+  #sectionScrollTop(section) {
+    return Math.max(0, section.getBoundingClientRect().top + window.scrollY - this.#chromeHeight() - 8)
+  }
+
   #headerIsSticky() {
     return window.getComputedStyle(this.element).position === "sticky"
   }
@@ -204,20 +212,23 @@ export default class extends BaseController {
 
   // A link (shared, or reached by Back and Forward) opens on the card or
   // category it names. A short page may never scroll a later section up to
-  // the threshold, so the link's chip holds until the person scrolls or
-  // picks another chip themselves.
+  // the threshold, so the link's chip holds until the person scrolls,
+  // clicks or types.
   #holdLinkedCategory(linked) {
     this._linkedCategory = linked
     if (linked.category) this.#setActiveCategory(linked.category)
     this._onUserScrollIntent = () => this.#releaseLinkedCategory()
-    for (const type of ["wheel", "touchmove", "keydown"]) {
+    for (const type of SCROLL_INTENT_EVENTS) {
       window.addEventListener(type, this._onUserScrollIntent, { passive: true })
     }
     if (!this.#revealLinked(linked)) {
       this._onLinkedFrameLoad = (event) => {
         if (!this._linkedCategory) return
         if (this.#revealLinked(this._linkedCategory)) this.#stopAwaitingFrame()
-        else if (event.target.id === "assessment-matrix") this.#releaseLinkedCategory()
+        else if (event.target.id === "assessment-matrix") {
+          this.#releaseLinkedCategory()
+          this.#scheduleActiveCategoryUpdate()
+        }
       }
       document.addEventListener("turbo:frame-load", this._onLinkedFrameLoad)
     }
@@ -227,7 +238,7 @@ export default class extends BaseController {
     this._linkedCategory = null
     this.#stopAwaitingFrame()
     if (!this._onUserScrollIntent) return
-    for (const type of ["wheel", "touchmove", "keydown"]) {
+    for (const type of SCROLL_INTENT_EVENTS) {
       window.removeEventListener(type, this._onUserScrollIntent)
     }
     this._onUserScrollIntent = null
@@ -252,12 +263,16 @@ export default class extends BaseController {
     return category ? this.#revealSection(category) : false
   }
 
+  // Broadcasts the category as a chip click does, after the matrix has sent
+  // its own first focus: the activity feed narrows to it, and the matrix
+  // treats it as chosen, so its scroll picker can't swap in a card from the
+  // section above.
   #revealSection(categoryId) {
     const section = document.getElementById(`category-${categoryId}`)
     if (!section) return false
     requestAnimationFrame(() => {
-      const chrome = this.#headerIsSticky() ? Math.ceil(this.element.getBoundingClientRect().height) : 0
-      window.scrollTo({ top: Math.max(0, section.getBoundingClientRect().top + window.scrollY - chrome - 8), behavior: "instant" })
+      window.scrollTo({ top: this.#sectionScrollTop(section), behavior: "instant" })
+      this.#syncFocusState({ level: "category", categoryId })
     })
     return true
   }
@@ -279,6 +294,10 @@ export default class extends BaseController {
     })
 
     this.#setActiveCategory(active.dataset.categoryId)
+  }
+
+  #chipFor(categoryId) {
+    return categoryId && this.element.querySelector(`nav#category-tabs a[data-category-id="${CSS.escape(categoryId)}"]`)
   }
 
   #setActiveCategory(categoryId) {

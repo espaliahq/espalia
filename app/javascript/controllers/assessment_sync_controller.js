@@ -352,7 +352,7 @@ export default class extends BaseController {
 
   // Merges focus-related params (capability, level_ordinal) from the
   // browser URL into the given matrix frame src. The matrix controller
-  // pushes these params via history.pushState on focus changes, but
+  // writes these params with history.replaceState on focus changes, but
   // does not (and cannot, without triggering a fetch) mutate the
   // frame's src attribute — so on reload we re-merge them here.
   #mergeFocusParams(src) {

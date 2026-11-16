@@ -894,7 +894,7 @@ export default class extends BaseController {
         if (!(await this.#fetchCard(stableId, target))) {
           // Whatever failed — network, a session bounce, a card no longer in
           // scope — the whole-frame reload has the recovery paths already.
-          // The click already pushed its history entry.
+          // The click already wrote the URL.
           this.#reloadMatrixWithFocus(stableId, load.next ?? target)
           return
         }
