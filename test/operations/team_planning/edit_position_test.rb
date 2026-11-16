@@ -80,7 +80,24 @@ class Operations::TeamPlanning::EditPositionTest < ActiveSupport::TestCase
     result = edit(unit_id: @growth)
 
     assert_equal({ plan_id: @plan_id, scenario_id: @q1, position_id: @position, role_id: @engineer.role_id, level_id: @e2.level_id,
-                   unit_id: @growth, fte: 0.5, basis: "backfill", cost_centre: "Platform", budget: "committed" }, result)
+                   unit_id: @growth, fte: 0.5, basis: "backfill", cost_centre: "Platform", hiring_status: "not_started", target_start: nil,
+                   budget: "committed" }, result)
+  end
+
+  should "keep a hiring status and target start an edit leaves out" do
+    edit(hiring_status: "offer_accepted", target_start: "2026-05-04")
+    edit(fte: 0.8)
+    edit(unit_id: @growth)
+
+    assert_equal [ "offer_accepted", "2026-05-04", 0.8, @growth ], position.values_at(:hiring_status, :target_start, :fte, :unit_id)
+  end
+
+  should "refuse an accepted offer with no target start, given or kept" do
+    assert_equal "An accepted offer needs a target start", refusal(hiring_status: "offer_accepted")
+
+    edit(hiring_status: "offer_accepted", target_start: "2026-05-04")
+    assert_equal "An accepted offer needs a target start", refusal(target_start: nil)
+    assert_equal [ "offer_accepted", "2026-05-04" ], position.values_at(:hiring_status, :target_start)
   end
 
   should "check what it writes as SetPosition does" do
