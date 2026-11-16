@@ -18,6 +18,18 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { TeamPlanning::CommandHandler.new(actor: create(:person, tenant: @tenant)) }
   end
 
+  should "follow an unknown allocation and a cleared level, and refuse any other value the Org Graph holds that no change can" do
+    followable = ->(kind, end_state) { handler(@admin).send(:followable, kind, end_state) }
+    unit_id = SecureRandom.uuid_v7
+
+    assert followable.call(TeamPlanning::Events::AssignmentSet, { placements: [ { unit_id:, allocation: nil } ] })
+    assert followable.call(TeamPlanning::Events::LevelSet, { level: nil })
+    refusal = assert_raises(TeamPlanning::Error) do
+      followable.call(TeamPlanning::Events::AssignmentSet, { placements: [ { unit_id:, allocation: 2 } ] })
+    end
+    assert_equal "The Org Graph holds a value this plan can't hold yet, so this can't follow reality. You can still keep the plan", refusal.message
+  end
+
   context "#create_plan" do
     should "write the plan to its own stream, with the tenant and its creator" do
       handler(@admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")

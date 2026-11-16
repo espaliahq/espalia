@@ -4,10 +4,13 @@
 # plan's statement about that person, so it seals under their key in the
 # plan, and forgetting them makes it unreadable.
 #
+# A level the Org Graph cleared is followed as no level, stored as {CLEARED}
+# so it seals like any other and reads as removed once they are forgotten.
+#
 # @!attribute [r] data
 #   @return [Hash] event data
 #   @option data [String] :subject_id the person's id
-#   @option data [Shreddable::Value] :level
+#   @option data [Shreddable::Value] :level {CLEARED} for no level
 #   Plus {TeamPlanning::Events::Change::FIELDS}.
 #
 class TeamPlanning::Events::LevelSet < TeamPlanning::Events::Change
@@ -16,6 +19,8 @@ class TeamPlanning::Events::LevelSet < TeamPlanning::Events::Change
 
   shreddable :level, by: :person, person: :subject_id
   about_a_person
+
+  CLEARED = ""
 
   # @return [String]
   def self.facet = "level"
@@ -28,6 +33,32 @@ class TeamPlanning::Events::LevelSet < TeamPlanning::Events::Change
 
     { level: }
   end
+
+  # @param end_state [Hash] `{ level: }`, nil or blank where the Org Graph cleared it
+  # @return [Hash] `{ level: }`, no level as {CLEARED}
+  def self.followed_end_state(end_state) = end_state[:level].to_s.strip.empty? ? { level: CLEARED } : end_state(end_state)
+
+  # Whether a planned level says no level. One whose key is gone says nothing anyone can read.
+  #
+  # @param level [Shreddable::Value, String, nil]
+  # @return [Boolean]
+  def self.cleared?(level)
+    return false if level.nil? || (level.is_a?(Shreddable::Value) && level.removed?)
+
+    (level.is_a?(Shreddable::Value) ? level.reveal : level) == CLEARED
+  end
+
+  # A cleared level compares as no level, as the Org Graph reads one.
+  #
+  # @param left [Hash, nil]
+  # @param right [Hash, nil]
+  # @return [Boolean]
+  def self.same_end_state?(left, right) = super(as_read(left), as_read(right))
+
+  def self.as_read(end_state)
+    end_state && cleared?(end_state.to_h.transform_keys(&:to_sym)[:level]) ? { level: nil } : end_state
+  end
+  private_class_method :as_read
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param data [Hash]
@@ -42,6 +73,7 @@ class TeamPlanning::Events::LevelSet < TeamPlanning::Events::Change
   # @return [Hash, nil]
   def self.read_from(map, subject_id:, facet: self.facet)
     person = map.people.find { it.id == subject_id } or return nil
+    return { level: nil } if cleared?(person.planned_level)
 
     { level: person.planned_level || person.level }
   end

@@ -554,9 +554,9 @@ class TeamPlanning::CommandHandler
   # What the Org Graph holds today for a change's key, read by the first kind
   # sharing its facet that finds it, as a person staying reads as a departure
   # withdrawn.
-  # The Org Graph can hold what a plan can't yet, such as a cleared level or an unknown allocation.
+  # The Org Graph can hold what no change kind can, so that is refused.
   def followable(kind, end_state)
-    kind.end_state(end_state.to_h.symbolize_keys)
+    kind.followed_end_state(end_state.to_h.symbolize_keys)
     [ kind, end_state ]
   rescue TeamPlanning::Error
     raise TeamPlanning::Error, "The Org Graph holds a value this plan can't hold yet, so this can't follow reality. You can still keep the plan"

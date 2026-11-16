@@ -79,6 +79,7 @@ class PlansController < ApplicationController
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
     render plan_page(plan, scenarios:, open_tab: :map,
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
+                                                               can_upload_pay: policy_for(@plan_record).upload_pay?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
 
@@ -159,7 +160,60 @@ class PlansController < ApplicationController
     redirect_to changes_plan_path(plan[:plan_id]), alert: "Couldn't update to today: #{e.message}"
   end
 
+  # GET /planning/:id/pay-upload?scenario=:scenario_id
+  #
+  # A file of actual pay to preview, then hold ([#323](https://github.com/espaliahq/espalia/issues/323)).
+  # Anyone but an editor with the see-pay right gets the same 404 as someone outside the plan.
+  def pay_upload
+    plan = pay_uploader_plan
+    render pay_upload_page(plan, scenario_id: params[:scenario].presence || plan[:plan_id])
+  end
+
+  # POST /planning/:id/pay-upload
+  #
+  # Previews into the page's frame, or, with the preview's signature and the
+  # same file, holds the pay and returns to the map. The file is read here
+  # and never kept: its tempfile goes at the end of the request.
+  def upload_pay
+    plan = pay_uploader_plan
+    upload = params.permit(:scenario_id, :basis, :signature, :intent)
+    scenario_id = upload[:scenario_id].presence || plan[:plan_id]
+    return render(pay_upload_page(plan, scenario_id:, basis: upload[:basis], error: "Choose a file to upload."), status: :unprocessable_content) unless params[:file].respond_to?(:read)
+    return render(pay_upload_page(plan, scenario_id:, error: "Say what the amounts are, actual or full-time pay."), status: :unprocessable_content) if upload[:basis].blank?
+
+    csv = params[:file].read(TeamPlanning::PayUpload::MAX_BYTES + 1).to_s
+    signature = upload[:signature].presence if upload[:intent] == "confirm"
+    result = Operations::TeamPlanning::UploadActualPay.call(context: pundit_user, params: { plan_id: plan[:plan_id], scenario_id:, basis: upload[:basis], csv:, signature: }.compact)
+    return render(pay_upload_page(plan, scenario_id:, basis: upload[:basis], preview: result)) unless signature
+
+    redirect_to map_plan_path(plan[:plan_id], scenario: (scenario_id unless scenario_id == plan[:plan_id])), notice: pay_held(result)
+  rescue Operations::Base::ParameterError => e
+    render pay_upload_page(plan, scenario_id:, basis: upload[:basis], error: "Couldn't hold the pay: #{e.message}."), status: :unprocessable_content
+  end
+
   private
+
+  def pay_uploader_plan
+    plan = read(Operations::TeamPlanning::Plan)
+    @plan_record = TeamPlanningPlan.find(plan[:plan_id])
+    raise ActiveRecord::RecordNotFound, "No such plan" unless policy_for(@plan_record).upload_pay?
+
+    authorize @plan_record, :upload_pay?, policy_class: PlanPolicy
+    plan
+  end
+
+  def pay_upload_page(plan, scenario_id:, basis: nil, preview: nil, error: nil)
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    plan_page(plan, scenarios:, open_tab: :map,
+                    body: Views::Plans::PayUpload.new(plan:, scenarios:, scenario_id:, basis:, preview:, error:))
+  end
+
+  def pay_held(result)
+    written = result[:written]
+    return "Nothing to change: the plan already holds this pay." if written.zero?
+
+    "Held actual pay for #{written} #{written == 1 ? 'person' : 'people'}."
+  end
 
   # "Chosen units" with none ticked is a slip, not the whole organisation.
   def chosen_units(draft)

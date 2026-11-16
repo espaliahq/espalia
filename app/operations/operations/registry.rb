@@ -31,6 +31,9 @@ class Operations::Registry
       raw_list
     end
 
+    # @return [Array<Class<Operations::Base>>] the operations the MCP server lists and calls
+    def tools = all.select(&:mcp)
+
     # Stable, snake_case identifier used as the MCP tool name.
     # e.g. `Operations::System::Whoami` → `"system_whoami"`.
     #
@@ -48,7 +51,7 @@ class Operations::Registry
     # @param tool_name [String]
     # @return [Class<Operations::Base>, nil]
     def find_by_tool_name(tool_name)
-      all.find { |klass| tool_name_for(klass) == tool_name }
+      tools.find { |klass| tool_name_for(klass) == tool_name }
     end
 
     # Test seam — wipe between test runs that load throwaway subclasses.
