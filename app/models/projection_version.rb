@@ -81,7 +81,9 @@ class ProjectionVersion < ApplicationRecord
   # @yield while no rebuild can start
   # @return [Object] the block's value
   # @raise [Rebuilding] when a rebuild holds any of them
-  def self.unless_rebuilding(*names)
+  def self.unless_rebuilding(*names, &)
+    return unless_rebuilding_until_commit(names, &) if in_outer_transaction?
+
     held = []
     names.each do |name|
       key = lock_key(name)
@@ -94,8 +96,23 @@ class ProjectionVersion < ApplicationRecord
     release_when_transaction_ends(held) if held
   end
 
-  # With no transaction to join (none open, or a test's own, which never
-  # commits), the locks go when the block returns.
+  # Postgres frees a transaction's own locks when it ends, which no failing
+  # commit callback can skip.
+  def self.unless_rebuilding_until_commit(names)
+    names.each { |name| raise Rebuilding unless advisory("pg_try_advisory_xact_lock_shared", lock_key(name)) }
+    yield
+  end
+  private_class_method :unless_rebuilding_until_commit
+
+  # Only the outermost transaction takes its own locks: a test's transaction
+  # never commits, so its locks would outlive the write.
+  def self.in_outer_transaction?
+    connection.open_transactions == 1 && connection.current_transaction.joinable?
+  end
+  private_class_method :in_outer_transaction?
+
+  # A savepoint's locks go once its outermost transaction ends, or at once
+  # when nothing can join it (none open, or a test's own, which never commits).
   def self.release_when_transaction_ends(keys)
     transaction = connection.current_transaction
     return release_shared(keys) unless transaction.joinable?

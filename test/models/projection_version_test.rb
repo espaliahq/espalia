@@ -215,4 +215,22 @@ class ProjectionVersionCommitTest < ActiveSupport::TestCase
   ensure
     other&.close
   end
+
+  should "let go of the rebuild guard even when an earlier commit callback raises" do
+    config = ActiveRecord::Base.connection_db_config.configuration_hash
+    other = PG.connect({ dbname: config[:database], user: config[:username], password: config[:password],
+                         host: config[:host], port: config[:port] }.compact)
+    key = ProjectionVersion.lock_key("some/projection")
+
+    assert_raises(RuntimeError) do
+      ActiveRecord::Base.transaction do
+        ActiveRecord::Base.current_transaction.after_commit { raise "an earlier callback fails" }
+        ProjectionVersion.unless_rebuilding("some/projection") { }
+      end
+    end
+
+    assert_equal "t", other.exec("SELECT pg_try_advisory_lock(#{key})").getvalue(0, 0)
+  ensure
+    other&.close
+  end
 end
