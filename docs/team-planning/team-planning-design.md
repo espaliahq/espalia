@@ -1338,14 +1338,18 @@ Funding is derived by default, in two steps. Neither writes an event.
 
 **Position to cost centre.** A real cost centre, the one the HRIS or Espalia holds for a
 person, is the source of truth. A person keeps it unless the plan changes their unit,
-role, level or location; a change of FTE alone doesn't count. An open seat, a placeholder,
-a changed person and a person with no cost centre of their own take the first of these
-that gives one:
+role, level or location; a change of FTE alone doesn't count. A changed person, and a
+real person with no cost centre of their own, take the first of these that gives one:
 
 1. A cost centre set on the position. `PositionSet` carries an optional label.
 2. The cost centre rules, matched at the seat's planned place.
-3. For a person, their real cost centre.
+3. Their real cost centre.
 4. None.
+
+An open seat takes the position's label, then an occupant's real cost centre, then the
+rules, then none, so the open half of a half-filled position follows the person in the
+other half. A placeholder hire in a position fills that open seat, so it reads as the open
+seat does. A placeholder with no position takes the rules at its unit, then none.
 
 An untouched person seated in a labelled position keeps their real cost centre, so the
 label decides only the open seat and the changed occupant. A label that disagrees with an

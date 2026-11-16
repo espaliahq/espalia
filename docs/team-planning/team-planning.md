@@ -277,9 +277,11 @@ Nobody wires each position to a budget line by hand. The plan works out a defaul
 shows its reason beside the position.
 
 - **Which cost centre a position belongs to.** A person keeps the cost centre on their record
-  until the plan moves them to another unit, role, level or country. An open position, and
-  a person the plan moves, takes the position's own cost centre if a planner set one, then
-  the **cost centre rules**: by unit ("every position in this unit draws on the unit's own
+  until the plan moves them to another unit, role, level or country. A person the plan
+  moves takes the position's own cost centre if a planner set one, then the **cost centre
+  rules**, then their own. An open position takes the position's own, then the cost centre
+  of a person already in it, then the rules; a placeholder hire in it reads the same. The
+  rules go by unit ("every position in this unit draws on the unit's own
   centre"), by role ("product managers and designers draw on Product"), by level, by
   country, or by any of them together. The rules are an ordered list, and the last entry
   that matches has the last word, as with pay bands. They start from the tenant default,
