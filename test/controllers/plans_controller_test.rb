@@ -98,6 +98,13 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "This scenario holds no budget lines."
     end
 
+    should "open Today's budget for the plan's own id in capitals" do
+      get budget_plan_path(@plan_id, scenario: @plan_id.upcase)
+
+      assert_response :success
+      assert_select "#budget-heading", text: "Budget on Today"
+    end
+
     should "get a 404 for the budget of a scenario that isn't in the plan" do
       get budget_plan_path(@plan_id, scenario: SecureRandom.uuid_v7)
       assert_response :not_found

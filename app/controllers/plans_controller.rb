@@ -117,7 +117,7 @@ class PlansController < ApplicationController
     plan = read(Operations::TeamPlanning::Plan)
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
-    scenario_id = params[:scenario].presence || plan[:plan_id]
+    scenario_id = (params[:scenario].presence || plan[:plan_id]).downcase
     lines = read(Operations::TeamPlanning::BudgetLines, scenario_id:)
     tab = if scenario_id == plan[:plan_id]
             Views::Plans::BudgetTab.new(plan:, scenarios:, lines:)
