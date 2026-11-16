@@ -262,7 +262,8 @@ export default class extends BaseController {
   // overlay's own entry means open; any other entry says what it holds in
   // the URL, and one that says nothing leaves the pane as it is.
   // Turbo's popstate listener runs first and stamps its own state over an
-  // entry it finds without one, so the marker survives only in the event.
+  // entry it finds without one, so the marker survives only in the event and
+  // goes back on the entry for the close that will take it back.
   #applyFromHistory(poppedState) {
     if (this.#leaving) {
       this.#leaving = false
@@ -272,6 +273,9 @@ export default class extends BaseController {
     }
     const fromUrl = new URL(window.location.href).searchParams.get(this.urlKeyValue)
     const ownEntry = poppedState?.[HISTORY_KEY] === this.urlKeyValue
+    if (ownEntry && this.#actsAsScreen() && !this.#onOwnEntry()) {
+      window.history.replaceState({ ...window.history.state, [HISTORY_KEY]: this.urlKeyValue }, "")
+    }
     const state = ownEntry ? "open" : fromUrl
     if ((state === "open" || state === "closed") && state !== this.#visualState()) {
       this.#animate(state)

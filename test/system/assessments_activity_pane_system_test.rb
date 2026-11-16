@@ -626,6 +626,23 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       close_overlay_by_its_button
     end
 
+    should "take the overlay's history entry back when its close button shuts it after Back and Forward" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      hold_matrix_frame_loads
+
+      go_back_and_wait_until_landed
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      page.go_forward
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay === 'activity'") },
+        "Forward left the overlay's entry without its marker"
+
+      close_overlay_by_its_button
+    end
+
     # Turbo restores a page only from an entry that carries its own state; the
     # overlay's entry didn't, so Back left the other page on screen under this URL.
     should "bring the assessment back when Back returns from another page to the open overlay" do
