@@ -41,13 +41,9 @@ class TeamPlanningHistoryEntry < ApplicationRecord
   # @param scenario_ids [Array<String>]
   # @return [Hash{String => Integer}] keyed by scenario id; absent means none
   def self.changes_held(scenario_ids)
-    where(scenario_id: scenario_ids, undone_at: nil).order(:position)
-      .pluck(:scenario_id, :subject_id, :facet, :action)
-      .each_with_object(Hash.new { |hash, id| hash[id] = Set.new }) do |(scenario_id, subject_id, facet, action), keys|
-        case action
-        when "set", "pin" then keys[scenario_id] << [ subject_id, facet ]
-        when "clear" then keys[scenario_id].delete([ subject_id, facet ])
-        end
-      end.transform_values(&:size)
+    last_word = where(scenario_id: scenario_ids, undone_at: nil, action: %w[set pin clear])
+                .select("DISTINCT ON (scenario_id, subject_id, facet) scenario_id, action")
+                .order(:scenario_id, :subject_id, :facet, position: :desc)
+    unscoped.from(last_word, :last_word).where("last_word.action <> 'clear'").group("last_word.scenario_id").count
   end
 end
