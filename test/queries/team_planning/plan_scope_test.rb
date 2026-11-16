@@ -89,6 +89,8 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
   UNIT_OUTSIDE = "This unit is outside the units this plan covers. Place it in one of its units first."
   POSITION_OUTSIDE = "This position is outside the units this plan covers. Place it in one of its units first."
 
+  LINE_OUTSIDE = "This budget line is outside the cost centres this plan covers. Widen the plan's units first."
+
   def refusal(&) = assert_raises(Operations::Base::ParameterError, &).message
 
   def set_scope(plan_id, unit_ids) = call(Operations::TeamPlanning::SetPlanScope, plan_id:, unit_ids:)
@@ -240,6 +242,40 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       record = %w[History Overrides Status SplitNeeds].map { "Operations::TeamPlanning::#{it}" }
       scoped = JSON.parse(every_read(@plan_id, @h1)).except(*record).to_json
       [ *@lines.values_at("Field Sales", "Revenue"), "Field Sales" ].each { assert_not_includes scoped, it }
+    end
+
+    should "refuse to change, cut, add or draw on a line outside the plan's cost centres, without naming it" do
+      line = { plan_id: @plan_id, scenario_id: @h1, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]
+      writes = [
+        -> { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Field Sales"], cost_centre: "Field Sales") },
+        -> { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Field Sales"], cost_centre: "Platform") },
+        -> { call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Revenue"]) },
+        -> { call(Operations::TeamPlanning::SetBudgetLine, **line, cost_centre: "Revenue") },
+        -> { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Field Sales") },
+        -> { call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: @h1, position_id: seat, draws: [ { budget_line_id: @lines["Revenue"] } ]) }
+      ]
+      writes.each { assert_equal LINE_OUTSIDE, refusal(&it) }
+      assert_empty TeamPlanning::Repository.new.then { |repository| as_tenant { repository.load_plan(@plan_id) } }.changes_in(@h1).select { it.data[:subject_id].in?(@lines.values) }
+
+      call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Core")
+      call(Operations::TeamPlanning::SetBudgetLine, **line, cost_centre: nil)
+      call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: @h1, position_id: seat, draws: [ { budget_line_id: @lines["Engineers"] } ])
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @whole_id, scenario_id: @whole_h1, budget_line_id: @lines["Revenue"])
+    end
+
+    should "refuse to narrow the scope while a change touches a line the narrower plan would drop, without naming it" do
+      set_scope(@plan_id, [ @engineering, @sales ])
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Revenue"])
+
+      message = refusal { set_scope(@plan_id, [ @engineering ]) }
+      assert_includes message, "1 other change"
+      [ @lines["Revenue"], "Revenue" ].each { assert_not_includes message, it }
+
+      call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1)
+      set_scope(@plan_id, [ @engineering ])
+      assert_includes resolve(@plan_id, @h1).outside_lines.map(&:id), @lines["Revenue"]
     end
   end
 

@@ -19,6 +19,7 @@ module Operations::TeamPlanning::WithinScope
     resolution = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id:)
     map, winning = resolution.resolved(plan)
     place_within_scope!(map, kind, subject_id, end_state, closed_units: resolution.closed_position_units(plan, winning))
+    lines_within_scope!(map, kind, subject_id, end_state)
     return unless map.outside_ids.include?(subject_id)
     return if kind == ::TeamPlanning::Events::AssignmentSet && brings_in?(map, end_state)
 
@@ -41,6 +42,23 @@ module Operations::TeamPlanning::WithinScope
       return
     end
     raise Operations::Base::ParameterError, "This #{noun} is outside the units this plan covers. Place it in one of its units first."
+  end
+
+  # A scoped plan holds only the budget lines its seats can draw on
+  # ([#378](https://github.com/espaliahq/espalia/issues/378)), so no change
+  # may name, add or draw on one outside them. The refusal names no line.
+  def lines_within_scope!(map, kind, subject_id, end_state)
+    end_state = end_state.to_h.symbolize_keys
+    outside = if kind == ::TeamPlanning::Events::BudgetLineSet
+                map.outside_line?(subject_id) || !map.holds_cost_centre?(end_state[:cost_centre])
+    elsif kind == ::TeamPlanning::Events::BudgetLineCut
+                map.outside_line?(subject_id)
+    elsif kind == ::TeamPlanning::Events::PositionFundingSet
+                Array(end_state[:draws]).any? { map.outside_line?(it.to_h.symbolize_keys[:budget_line_id]) }
+    end
+    return unless outside
+
+    raise Operations::Base::ParameterError, "This budget line is outside the cost centres this plan covers. Widen the plan's units first."
   end
 
   def lands_inside?(map, kind, subject_id, end_state)

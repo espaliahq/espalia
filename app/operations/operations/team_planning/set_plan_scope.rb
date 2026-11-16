@@ -18,7 +18,7 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
 
   description "Set which units a Team Planning plan covers: unit_ids, each with everything under it, or none for the " \
               "whole organisation. Widening is always allowed. Narrowing is refused while the plan holds a change about a " \
-              "person, unit or position the narrower plan would leave out; the refusal names those changes and counts any " \
+              "person, unit, position or budget line the narrower plan would leave out; the refusal names those changes and counts any " \
               "it can't name. Refused unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
@@ -54,10 +54,12 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
     narrower = TeamPlanningPlan.find(aggregate.plan_id).tap { it.scope_unit_ids = unit_ids }
     now = maps(current, aggregate, scenario_ids)
     held_now = now.transform_values { held_ids(it) }
-    held = maps(narrower, aggregate, scenario_ids).transform_values { held_ids(it) }
+    later = maps(narrower, aggregate, scenario_ids)
+    held = later.transform_values { held_ids(it) }
     dropped = changes.select do |scenario_id, change|
       subject_id = change.data[:subject_id]
-      held_now[scenario_id].include?(subject_id) && !held[scenario_id].include?(subject_id)
+      (held_now[scenario_id].include?(subject_id) && !held[scenario_id].include?(subject_id)) ||
+        drops_line?(change, now[scenario_id], later[scenario_id])
     end
     return if dropped.empty?
 
@@ -74,6 +76,22 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
   def held_ids(map)
     ((map.people + map.units + map.retired_units + map.positions + map.budget_lines + map.successions).map(&:id) +
       map.departed.map(&:person_id)).to_set
+  end
+
+  # A cut line has left both maps, so a change about a line is judged by its
+  # cost centre: held now, and not by the narrower plan
+  # ([#378](https://github.com/espaliahq/espalia/issues/378)).
+  def drops_line?(change, now, later)
+    line_ids = case change
+    when ::TeamPlanning::Events::BudgetLineSet, ::TeamPlanning::Events::BudgetLineCut then [ change.data[:subject_id] ]
+    when ::TeamPlanning::Events::PositionFundingSet then Array(change.data[:draws]).map { it.to_h.symbolize_keys[:budget_line_id] }
+    else return false
+    end
+    lines = (now.budget_lines + now.outside_lines).index_by(&:id)
+    line_ids.any? do |id|
+      cost_centre = lines[id]&.cost_centre || ::BudgetLine.find_by(id:)&.cost_centre
+      now.holds_cost_centre?(cost_centre) && !later.holds_cost_centre?(cost_centre)
+    end
   end
 
   # Names each subject once and counts every change it couldn't show.
