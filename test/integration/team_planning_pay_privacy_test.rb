@@ -540,7 +540,8 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
         drawn = budget[:budget_lines].find { it[:budget_line_id] == line }
         assert_equal [ nil, nil, nil ], [ drawn[:funded][:native], drawn[:remaining][:amount], drawn[:over][:money] ]
-        [ derived, "80000", (80_000 * share).to_i.to_s[0, 4] ].each { assert_not_includes budget.to_json, it }
+        figures = budget.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+        [ derived, "80000", (80_000 * share).to_i.to_s[0, 4] ].each { assert_not_includes figures, it }
       end
     end
 
