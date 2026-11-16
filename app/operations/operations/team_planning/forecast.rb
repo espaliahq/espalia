@@ -13,8 +13,9 @@ class Operations::TeamPlanning::Forecast < Operations::Base
               "forecast rules assume about the scenario's period, beyond the changes it plans. Each row names its " \
               "kind (the rule that made it), its unit (null for none) and cost centre, the step it covers " \
               "(the scenario's period), the headcount it adds or takes away, its cost per currency and its capacity " \
-              "per model. A forecast leaves out anyone a planned change already covers, along the scenario and every " \
-              "scenario it follows. These rows are the forecast part of team_planning_cost and team_planning_capacity, beside " \
+              "per model. Attrition takes away the seats its leavers leave empty until their time to hire has passed, " \
+              "counting filled seats only, never an open position, a placeholder or a planned leaver, and priced at " \
+              "the unit's average filled seat as the caller sees pay. These rows are the forecast part of team_planning_cost and team_planning_capacity, beside " \
               "their actual part, which means the baseline's figure, not actual pay. " \
               "A row has no id and is not a change: it can't be pinned, cleared, noted or listed among the changes; " \
               "change the rule to change it. The plan's own id, Today, has no period and so no rows. Figures are " \
