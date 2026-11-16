@@ -391,6 +391,62 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  # Status holds no budget line against today ([#446](https://github.com/espaliahq/espalia/issues/446)),
+  # so a line whose amount alone changes upstream leaves what a member without
+  # see-pay reads as it was.
+  should "show a member without see-pay nothing that tells a budget line's amount changed upstream" do
+    line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 80_000, currency: "AUD",
+                              period: "year", head_count: 1).id
+    call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id: @q1, budget_line_id: line, starts_on: "2026-01-01",
+                                                           ends_on: "2026-12-31", origin: "new", amount: "80000", currency: "AUD", period: "year",
+                                                           head_count: "2")
+    # After the base date, so the update-to-today preview reads rather than refuses.
+    travel_to Time.utc(2026, 4, 1, 9)
+    members = { "editor" => @editor, "viewer" => @viewer }
+    before = members.transform_values { line_reads(it) }
+
+    BudgetLine.find(line).update!(amount: 90_000)
+
+    upstream = call(Operations::Tenants::BudgetLines, @holder, budget_line_id: line).to_json
+    assert_includes upstream, "90000", "the line moved upstream, so the walk below has a change to miss"
+    statuses = [ @holder, @editor, @viewer ].map do |account|
+      call(Operations::TeamPlanning::Status, account, plan_id: @plan_id, scenario_id: @q1)[:statuses].select { it[:subject_id] == line }.pluck(:status)
+    end
+    assert_equal [ %w[plan_only] ] * 3, statuses, "a budget line is the plan's alone, for every member"
+    assert_includes before["editor"]["team_planning_rebase_preview in Q1"], "\"scenarios\"", "the preview reads, so its conflicts are compared"
+    members.each do |who, account|
+      line_reads(account).each { |read, output| assert_equal before[who][read], output, "#{read} as #{who}" }
+    end
+  end
+
+  # A budget line can't be pinned, so its override never reads parent_moved,
+  # and inherits reads it without its money for a member without see-pay.
+  should "show a member without see-pay nothing in what a budget line inherits when only its parent's amount moves" do
+    line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 80_000, currency: "AUD",
+                              period: "year", head_count: 1).id
+    figures = { budget_line_id: line, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", currency: "AUD", period: "year", head_count: "2" }
+    call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id: @q1, amount: "80000", **figures)
+    q2 = call(Operations::TeamPlanning::ForkScenario, @holder, plan_id: @plan_id, parent_id: @q1, relation: "instead", name: "Q1 lean")[:scenario_id]
+    pin = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::PinChange, @holder, plan_id: @plan_id, scenario_id: q2, subject_id: line, facet: "budget_line")
+    end
+    assert_match "can't be pinned", pin.message
+    call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id: q2, amount: "80000", **figures, head_count: "3")
+    pinned = lambda do |account|
+      row = call(Operations::TeamPlanning::Overrides, account, plan_id: @plan_id, scenario_id: q2)[:overrides].find { it[:subject_id] == line }
+      { pinned: row[:pinned], parent_moved: row[:parent_moved], end_state: row[:end_state], inherits: row[:inherits][:end_state] }
+    end
+    members = { "editor" => @editor, "viewer" => @viewer }
+    before = members.transform_values { pinned.call(it) }
+    assert_equal [ false, nil ], before["editor"].values_at(:pinned, :parent_moved)
+    assert_equal 2, BigDecimal(before["editor"][:inherits]["head_count"].to_s), "Q2 inherits Q1's line"
+    members.each_key { |who| assert_empty before[who].values_at(:end_state, :inherits).flat_map(&:keys) & %w[amount currency period], who }
+
+    call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id: @q1, amount: "85000", **figures)
+
+    members.each { |who, account| assert_equal before[who], pinned.call(account), who }
+  end
+
   should "capture the log the leak check reads" do
     Rails.logger.info("probe #{AMOUNT}")
 
@@ -830,6 +886,20 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
   end
 
   def changes_tab(account) = changes_tab_html(account).to_html
+
+  def line_reads(account)
+    reads = { "Q1" => @q1, "Today" => @plan_id }.flat_map do |name, scenario_id|
+      READS.call.map do |operation|
+        output = begin
+          call(operation, account, **params_for(operation, scenario_id:)).to_json
+        rescue Operations::Base::ParameterError => e
+          e.message
+        end
+        [ "#{Operations::Registry.tool_name_for(operation)} in #{name}", output ]
+      end
+    end
+    reads.to_h.merge("Changes tab" => changes_tab(account))
+  end
 
   def frozen_reads(account)
     { cost: call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: @q1),
