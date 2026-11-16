@@ -224,11 +224,13 @@ class TeamPlanning::Cost
     # @param scope [Symbol] :total, :units, :units_with_below or :cost_centres
     # @param key [String, nil] the unit or cost centre, nil for none
     # @return [Parts]
+    # @raise [ArgumentError] for a period priced with baseline: false
     def parts(scope = :total, key = nil)
       nothing = TeamPlanning::Cost.nothing(reference_currency)
       pick = ->(figures) { (scope == :total ? figures&.total : figures&.public_send(scope)&.[](key)) || nothing }
       priced = pick.(scenario)
       return Parts.new(actual: priced, planned: nothing, forecast: nothing, total: priced) if run_rate?
+      raise ArgumentError, "This cost was priced without its baseline, so it can't split its total" unless baseline
 
       Parts.of(priced, pick.(baseline), pick.(forecast))
     end
@@ -254,14 +256,18 @@ class TeamPlanning::Cost
   # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already
   #   read by a caller pricing several scenarios over the same one
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
+  # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
+  #   resolved over that aggregate for this viewer, which also gives the base
   # @param steps [Hash{String => TeamPlanning::Forecast::Step}] earlier steps
   #   already priced, which this fills as it prices more
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil, steps: {})
+  # @raise [ArgumentError] when shared was resolved for another viewer, plan or scenario
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil, shared: nil, steps: {})
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
-    @base = base
+    @shared = shared&.for!(context, plan, scenario_id)
+    @base = @shared&.base || base
     @aggregate = aggregate
     @steps = steps
   end
@@ -283,10 +289,11 @@ class TeamPlanning::Cost
   end
 
   # @param at_end [Boolean] false skips the run rate at the scenario's end, for a caller that never reads it
+  # @param baseline [Boolean] false skips pricing the root, leaving the report's baseline nil, for a caller that never reads it
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call(at_end: true)
+  def call(at_end: true, baseline: true)
     aggregate = prepare
     run_rate = @scenario_id == @plan.id
     earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
@@ -295,7 +302,7 @@ class TeamPlanning::Cost
     rows = TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows
     forecast = forecasted(rows)
     at_end = (run_rate_at_end(scenario.map, rows) if at_end && !run_rate)
-    baseline = priced(at_end ? at_end.baseline.map : resolved(@plan.id)) unless run_rate
+    baseline = (priced(at_end ? at_end.baseline.map : resolved(@plan.id)) if baseline && !run_rate)
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, open_ended: @figured&.open_ended || false,
                horizon_months: @figured&.horizon_months, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: @inputs.bands_changed_at,
@@ -360,7 +367,7 @@ class TeamPlanning::Cost
 
   # The scenario's own map, which holds the horizon an open step's period runs to.
   def own_map
-    resolved(@scenario_id).tap do |map|
+    (@shared ? @shared.named(TeamPlanning::Baseline.new(context: @context, plan: @plan)) : resolved(@scenario_id)).tap do |map|
       @figured = TeamPlanning::FiguredPeriod.for(@aggregate, @scenario_id, map)
       @period = @figured.period if @figured
     end
