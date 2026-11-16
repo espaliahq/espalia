@@ -205,6 +205,34 @@ class TeamPlanning::ClosedStepTest < ActiveSupport::TestCase
     end
   end
 
+  should "give a half-open seat's hiring lag the cost centre of someone the Org Graph moved there before the close" do
+    seat = as_tenant do
+      Operations::TeamPlanning::SetRule.call(context:, params: { plan_id: @plan_id, scenario_id: @plan_id, unit_id: @platform, rule: "cost_centre",
+                                                                 value: { entries: [ { unit_id: @platform, cost_centre: "Platform rule" } ] } })
+      Operations::TeamPlanning::SetPosition.call(context:, params: { plan_id: @plan_id, scenario_id: @h2, role_id: @e5.role_id, level_id: @e5.level_id,
+                                                                     unit_id: @platform, fte: 1, basis: "new" })[:position_id]
+    end
+    as_tenant do
+      handler.set_change(@plan_id, TeamPlanning::Events::AssignmentSet, scenario_id: @h2, subject_id: @ada.id,
+                                                                        end_state: { placements: [ { position_id: seat, allocation: 0.5 } ] })
+    end
+    on(Time.utc(2026, 6, 20, 9)) do
+      @org.end_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-06-15")
+      @org.set_membership(@ada.id, @platform, **ESPALIA, effective_on: "2026-06-15", allocation: 1.0)
+    end
+    close
+
+    as_tenant do
+      plan = TeamPlanningPlan.find(@plan_id)
+      lags = TeamPlanning::Capacity.split(context:, plan:, scenario_id: @h2).forecast.select { it.kind == "time_to_hire" && it.unit_id == @platform }
+      funded = TeamPlanning::Funding.new(context:, plan:, scenario_id: @h2).call.positions.find { it.position.id == seat }
+
+      assert_equal "Platform", funded.cost_centre.cost_centre
+      assert_not_empty lags
+      assert_equal [ "Platform" ], lags.map(&:cost_centre).uniq, "the lag row joins the seat's cost twin, not the plan base's rule"
+    end
+  end
+
   should "drop a change the Org Graph made happen, and carry over one it didn't" do
     close
 

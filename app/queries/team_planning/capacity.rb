@@ -123,7 +123,10 @@ class TeamPlanning::Capacity
       new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(map)
     end
     titles = Integrations::HrisTitleResolution.new(plan.tenant)
-    priced = ->(report) { report.pricing(TeamPlanning::PositionCostCentres.new(report.map, tenant_id: plan.tenant_id, base:, titles:)) }
+    standing = TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:, base:)
+    priced = lambda do |report|
+      report.pricing(TeamPlanning::PositionCostCentres.new(report.map, tenant_id: plan.tenant_id, base: standing.standing_base(report.map), titles:))
+    end
     earlier = TeamPlanning::Forecast.reaching(aggregate, scenario_id, defaults: base.rules.defaults).index_with do |id|
       steps[id] ||= price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: priced.(it)) }
     end
