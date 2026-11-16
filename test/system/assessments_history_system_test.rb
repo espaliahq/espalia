@@ -55,7 +55,9 @@ class AssessmentsHistorySystemTest < ApplicationSystemTestCase
       should "leave the assessment in one Back after clicks inside it, and return to the same place on Forward" do
         visit assessments_path
         assert_text "My Assessments"
-        visit assessment_path(@assignment)
+        # A Turbo visit, not `visit`: Back then relies on Turbo restoring the
+        # page from the history entry's state, which a full load would hide.
+        execute_script("document.querySelector('a[href=\"#{assessment_path(@assignment)}\"]').click()")
         await_matrix
 
         click_inside_assessment
@@ -79,6 +81,13 @@ class AssessmentsHistorySystemTest < ApplicationSystemTestCase
         assert_current_category @categories.last
         assert_operator evaluate_script("document.getElementById('category-#{@categories.last}').getBoundingClientRect().top"), :<, size.last
         assert_includes current_url, "category=#{@categories.last}"
+        assert_no_match(/capability=/, current_url)
+      end
+
+      should "open a link naming a category that no longer exists on the first category" do
+        visit assessment_path(@assignment, category: SecureRandom.uuid_v7)
+        await_matrix
+        assert_current_category @categories.first
       end
 
       should "mark the chip of the card a link opens on, when the link also names another category" do
