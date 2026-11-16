@@ -444,7 +444,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     set_pay(@q1)
     notice = Operations::TeamPlanning::RemoveScenario.approval_notice(context: context_for(@editor), params: { plan_id: @plan_id, scenario_id: @q1 })
 
-    assert_equal "This scenario holds 1 change to pay you can't see. Removing it removes that too.", notice
+    assert_equal "This scenario holds 1 change to pay or budget amounts you can't see. Removing it removes that too.", notice
     assert_nil Operations::TeamPlanning::RemoveScenario.approval_notice(context: context_for(@holder), params: { plan_id: @plan_id, scenario_id: @q1 })
   end
 

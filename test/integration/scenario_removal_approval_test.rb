@@ -38,7 +38,7 @@ class ScenarioRemovalApprovalTest < ActionDispatch::IntegrationTest
     get mcp_approval_path(approval)
 
     assert_response :success
-    assert_includes response.body, "This scenario holds 1 change to pay you can&#39;t see."
+    assert_includes response.body, "This scenario holds 1 change to pay or budget amounts you can&#39;t see."
     assert_no_pay_figure response.body, AMOUNT
 
     post approve_mcp_approval_path(approval)
