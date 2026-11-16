@@ -1373,6 +1373,12 @@ of the bracket once T reaches L. A row per unit and cost centre takes away:
 - **Capacity:** the unit's average capacity of a filled FTE, times the empty FTE-days over L.
 - **Headcount:** r × F × min(T, L) / 365, the FTE still empty at the end of the step.
 
+Each step counts only the empty days inside it. A seat a forecast leaver empties late in
+one step can stay empty into the next, and the next step does not count those days yet: with
+two 90-day steps and a 180-day time to hire, the second step misses every seat the first
+emptied. Carrying them over is [#381](https://github.com/espaliahq/espalia/issues/381).
+Planned leavers are unaffected, as a later step's map already leaves them out.
+
 Every figure is an exact fraction, never rounded to people, and a row names nobody. The
 average follows the caller's pay view: band midpoints without the see-pay right, actual
 pay with it. `TeamPlanning::Forecast::Pricing` carries it, built by the cost and capacity
