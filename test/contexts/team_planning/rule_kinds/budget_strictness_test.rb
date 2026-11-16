@@ -52,7 +52,8 @@ class TeamPlanning::RuleKinds::BudgetStrictnessTest < ActiveSupport::TestCase
   end
 
   should "tell a client it takes a preset alone, or match, limit and scope together" do
-    assert_equal [ { required: %w[preset] }, { required: %w[match limit scope] } ], kind.json_schema[:oneOf]
+    assert_equal [ { required: %w[preset], not: { anyOf: [ { required: %w[match] }, { required: %w[limit] }, { required: %w[scope] } ] } },
+                   { required: %w[match limit scope] } ], kind.json_schema[:oneOf], "a preset takes nothing beside it, as check refuses"
   end
 
   should "be plan-wide" do
