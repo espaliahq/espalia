@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_15_032809) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_15_235606) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -959,7 +959,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_032809) do
 
   create_table "pay_bands", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
-    t.uuid "level_id", null: false
+    t.uuid "level_id"
     t.string "role_name", null: false
     t.string "level_name", null: false
     t.string "location", default: "", null: false
@@ -972,10 +972,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_032809) do
     t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["tenant_id", "level_id", "location_key"], name: "index_pay_bands_on_tenant_id_and_level_id_and_location_key", unique: true
+    t.uuid "role_family_id"
+    t.uuid "role_id"
+    t.integer "level_ordinal"
+    t.integer "position", null: false
+    t.index ["tenant_id", "position"], name: "index_pay_bands_on_tenant_id_and_position"
+    t.index ["tenant_id", "role_family_id", "role_id", "level_ordinal", "level_id", "location_key"], name: "index_pay_bands_one_per_matcher", unique: true, nulls_not_distinct: true
     t.index ["updated_by_id"], name: "index_pay_bands_on_updated_by_id"
+    t.check_constraint "level_ordinal > 0", name: "pay_bands_level_number_positive"
     t.check_constraint "minimum <= midpoint AND midpoint <= maximum", name: "pay_bands_ordered"
     t.check_constraint "minimum >= 0::numeric", name: "pay_bands_not_negative"
+    t.check_constraint "role_id IS NULL OR role_family_id IS NULL", name: "pay_bands_role_or_family"
   end
 
   create_table "people", id: :uuid, default: nil, force: :cascade do |t|

@@ -125,7 +125,7 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     add
     error = assert_raises(Operations::Base::ParameterError) { add(location: " fixtureland") }
 
-    assert_match(/already a band for this level in/, error.message)
+    assert_match(/already a band for Software Engineer, E2 Engineer II in/, error.message)
   end
 
   should "refuse the second of two adds that race past the check" do
@@ -134,12 +134,12 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
       PayBand.new(tenant: @tenant, level: @level, location: "Fixtureland",
                   currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3)
     end
-    racing.define_singleton_method(:one_band_per_level_and_location) { nil }
+    racing.define_singleton_method(:one_band_per_matcher) { nil }
 
     PayBand.stub(:new, racing) do
       error = assert_raises(Operations::Base::ParameterError) { add }
 
-      assert_equal "There is already a band for this level in Fixtureland", error.message
+      assert_equal "There is already a band for Software Engineer, E2 Engineer II in Fixtureland", error.message
     end
   end
 

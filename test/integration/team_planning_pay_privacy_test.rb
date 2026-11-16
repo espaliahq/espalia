@@ -83,10 +83,13 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     setup do
       @tenant.update!(hris_config: build(:tenant, :with_hibob_config).hris_config)
       engineer = create(:framework_role, code: "E", name: "Software Engineer")
-      level = create(:framework_level, role_id: engineer.role_id, ordinal: 3, title: "Engineer")
+      create(:framework_level, role_id: engineer.role_id, ordinal: 3, title: "Engineer")
       OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
                               .apply_facts(@ada.id, provider: "espalia", effective_on: "2026-02-01", title: "Software Engineer")
-      PayBand.create!(level:, currency: "AUD", period: "year", minimum: 50_000, midpoint: 100_000, maximum: 150_000)
+      # A family's band, so the walk covers a band wider than one role.
+      family = create(:framework_role_family, role_family_id: engineer.role_family_id, name: "Engineering")
+      PayBand.new(currency: "AUD", period: "year", minimum: 50_000, midpoint: 100_000, maximum: 150_000)
+             .tap { it.match_on(role_family: family, level_ordinal: 3) }.save!
       ReferenceCurrency.create!(currency: "AUD")
       TeamPlanning::RuleKinds.register(Hiring)
     end

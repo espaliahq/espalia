@@ -18,11 +18,11 @@ class Operations::Tenants::PayBands < Operations::Base
   # @return [Hash] `{ pay_bands: [...] }`
   # @raise [Operations::Base::ParameterError] for a pay_band_id the tenant doesn't hold
   def perform
-    bands = params[:pay_band_id].present? ? [ find_band(params[:pay_band_id]) ] : PayBand.all.to_a
+    bands = params[:pay_band_id].present? ? [ find_band(params[:pay_band_id]) ] : PayBand.order(:position).to_a
     levels = FrameworkState::Level.where(level_id: bands.map(&:level_id)).index_by(&:level_id)
     roles = FrameworkState::Role.where(role_id: levels.values.map(&:role_id)).index_by(&:role_id)
     names = editor_names(bands)
     payloads = bands.to_h { [ it, band_payload(it, levels[it.level_id], roles[levels[it.level_id]&.role_id], names:) ] }
-    { pay_bands: bands.sort_by { PayBand.page_order(it, levels[it.level_id]) }.map { payloads[it] } }
+    { pay_bands: bands.map { payloads[it] } }
   end
 end

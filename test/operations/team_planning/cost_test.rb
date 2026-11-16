@@ -93,6 +93,52 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
                  no_unit.values_at(:scenario, :baseline, :difference).map { it.values_at(:converted, :missing) }
   end
 
+  should "price a seat whose role has no band of its own from its family's band, and name that band and its place in the list" do
+    ActsAsTenant.with_tenant(@tenant) do
+      PayBand.destroy_all
+      family = create(:framework_role_family, role_family_id: @engineer.role_family_id, name: "Engineering")
+      band_entry!(role_family: family, level_ordinal: 5, midpoint: 90_000)
+    end
+    result = cost(unit_id: @payments)
+
+    assert_equal [ 1, { role_family_id: @engineer.role_family_id, level_ordinal: 5 }, "Engineering, Level 5", "90000.00" ],
+                 band_of(result).values_at(:position, :matcher, :level, :midpoint)
+  end
+
+  should "give the last word to the band last in the list" do
+    family = ActsAsTenant.with_tenant(@tenant) do
+      band_entry!(role_family: create(:framework_role_family, role_family_id: @engineer.role_family_id, name: "Engineering"),
+                  level_ordinal: 5, midpoint: 90_000)
+    end
+    role_band = band_of(cost(unit_id: @payments))
+    assert_not_equal family.id, role_band[:pay_band_id]
+
+    ActsAsTenant.with_tenant(@tenant) { PayBand.reorder!(PayBand.order(:position).ids - [ family.id ] + [ family.id ]) }
+    assert_equal [ family.id, PayBand.count ], band_of(cost(unit_id: @payments)).values_at(:pay_band_id, :position)
+  end
+
+  should "price every seat with a level number from a company-wide band, but no seat without one" do
+    ActsAsTenant.with_tenant(@tenant) do
+      PayBand.destroy_all
+      band_entry!(level_ordinal: 5, midpoint: 80_000)
+    end
+    result = cost(unit_id: @payments)
+
+    assert_equal [ { level_ordinal: 5 }, "Every role, Level 5" ], band_of(result).values_at(:matcher, :level)
+    assert_equal [ [ @cy.id, "no_level" ] ], result[:unpriced].map { it.values_at(:seat_id, :reason) }
+  end
+
+  should "leave a tenant with only role bands priced as it was when a wider band reaches no seat's level number" do
+    before = cost(unit_id: @payments)
+    travel 1.minute
+    ActsAsTenant.with_tenant(@tenant) { band_entry!(level_ordinal: 9, midpoint: 1) }
+    after = cost(unit_id: @payments)
+
+    assert_not_equal before[:bands_changed_at], after[:bands_changed_at]
+    assert_equal [ 1, 2 ], [ before, after ].map { band_of(it)[:position] }
+    assert_equal without_positions(before.except(:bands_changed_at)), without_positions(after.except(:bands_changed_at))
+  end
+
   context "the see-pay right" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
@@ -110,6 +156,20 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal [ :midpoint ], band_of(viewer).keys & PayBand::FIGURES
       assert_equal holder[:total], viewer[:total]
       assert_not_includes without_ids(viewer), "200419"
+    end
+
+    should "show everyone else only the midpoint of a family's band, with its matcher" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PayBand.destroy_all
+        family = create(:framework_role_family, role_family_id: @engineer.role_family_id, name: "Engineering")
+        band_entry!(role_family: family, level_ordinal: 5, minimum: 1_234, midpoint: 100_000)
+      end
+      viewer = cost(as: @viewer, unit_id: @payments)
+
+      assert_equal [ { role_family_id: @engineer.role_family_id, level_ordinal: 5 }, "100000.00" ], band_of(viewer).values_at(:matcher, :midpoint)
+      assert_equal [ :midpoint ], band_of(viewer).keys & PayBand::FIGURES
+      assert_not_includes without_ids(viewer), "200419"
+      assert_not_includes without_ids(viewer), "1234"
     end
 
     should "give an agent acting for a person exactly that person's view" do
@@ -198,6 +258,20 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
   end
 
   def ada(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }
+
+  # The wider band lands ahead, so only each band's place in the list moves.
+  def without_positions(value)
+    case value
+    when Hash then value.except(:position).transform_values { without_positions(it) }
+    when Array then value.map { without_positions(it) }
+    else value
+    end
+  end
+
+  def band_entry!(midpoint:, minimum: 0, role: nil, role_family: nil, level_ordinal: nil, location: nil)
+    PayBand.new(location:, currency: "EUR", period: "year", minimum:, midpoint:, maximum: 200_419)
+           .tap { it.match_on(role:, role_family:, level_ordinal:) }.tap(&:save!)
+  end
 
   def band_of(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }[:band]
 
