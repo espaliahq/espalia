@@ -23,7 +23,12 @@ class TeamPlanning::Events::BudgetLineCut < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map]
   def self.apply_to(map, data)
     id = data[:subject_id]
-    return map.with(budget_lines: map.budget_lines.reject { it.id == id }) if map.budget_lines.any? { it.id == id }
+    # A cut line the plan doesn't hold stays outside, so no read names it and
+    # nothing can draw on it ([#378](https://github.com/espaliahq/espalia/issues/378)).
+    return map.with(fundings: map.fundings.reject { |_, draws| draws.any? { it[:budget_line_id] == id } }) if map.outside_line?(id)
+    if map.line?(id)
+      return map.with(budget_lines: map.budget_lines.reject { it.id == id })
+    end
 
     data[:tenant_line] ? map.with(orphaned_lines: map.orphaned_lines.merge(id => "cut")) : map
   end

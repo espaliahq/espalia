@@ -89,6 +89,9 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
   UNIT_OUTSIDE = "This unit is outside the units this plan covers. Place it in one of its units first."
   POSITION_OUTSIDE = "This position is outside the units this plan covers. Place it in one of its units first."
 
+  LINE_OUTSIDE = "This budget line is outside the cost centres this plan covers. Widen the plan's units first."
+  NO_SUCH_LINE = "This scenario has no such budget line"
+
   def refusal(&) = assert_raises(Operations::Base::ParameterError, &).message
 
   def set_scope(plan_id, unit_ids) = call(Operations::TeamPlanning::SetPlanScope, plan_id:, unit_ids:)
@@ -183,6 +186,222 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     whole = every_read(@whole_id, @whole_h1)
     leaked.each { assert_includes whole, it, "the control proves the reads would carry it" }
     assert person(scenario_map(@plan_id, @h1), @ada)[:manager_outside]
+  end
+
+  # Platform is Ada's own; Core and Engineers come from entries a seat in
+  # Engineering can match; Field Sales and Revenue belong to Sales alone.
+  def budget_by_cost_centre
+    as_tenant do
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@ada.id, "Platform", **ESPALIA)
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@cy.id, "Field Sales", **ESPALIA)
+      call(Operations::Tenants::SetPlanningRule, rule: "cost_centre",
+                                                 value: { entries: [ { unit_id: @engineering, cost_centre: "Core" }, { unit_id: @sales, cost_centre: "Revenue" },
+                                                                     { role_id: @engineer.role_id, cost_centre: "Engineers" } ] })
+      [ "Platform", "Core", "Engineers", nil, "Field Sales", "Revenue" ].to_h do |cost_centre|
+        [ cost_centre, BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 777_123, currency: "EUR", period: "year",
+                                          cost_centre:).id ]
+      end
+    end
+  end
+
+  context "budget lines" do
+    setup { @lines = budget_by_cost_centre }
+
+    should "hold only the lines naming a cost centre its seats can draw on, or none, and hide the rest" do
+      map = resolve(@plan_id, @h1)
+      assert_equal @lines.values_at("Platform", "Core", "Engineers", nil).sort, map.budget_lines.map(&:id).sort
+      assert_equal @lines.values_at("Field Sales", "Revenue").sort, map.outside_lines.map(&:id).sort
+      assert_equal @lines.values.sort, resolve(@whole_id, @whole_h1).budget_lines.map(&:id).sort
+    end
+
+    should "keep an entry on a unit above the scope, since a seat inside it matches" do
+      set_scope(@plan_id, [ @payments ])
+      assert_includes resolve(@plan_id, @h1).budget_lines.map(&:id), @lines["Core"]
+    end
+
+    should "never let a line outside the plan's cost centres reach a plan read, nor count it, though a whole-organisation plan does" do
+      leaked = [ *@lines.values_at("Field Sales", "Revenue"), "Field Sales", "Revenue" ]
+      scoped = every_read(@plan_id, @h1)
+      leaked.each { assert_not_includes scoped, it }
+      assert_equal 4, call(Operations::TeamPlanning::BudgetLines, plan_id: @plan_id, scenario_id: @h1)[:budget_lines].size
+
+      whole = every_read(@whole_id, @whole_h1)
+      leaked.each { assert_includes whole, it, "the control proves the reads would carry it" }
+    end
+
+    should "keep a change or cut a plan made to a hidden line hidden, never reading it as orphaned" do
+      as_tenant do
+        handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineSet, scenario_id: @h1, subject_id: @lines["Field Sales"],
+                                                                          end_state: { starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 9,
+                                                                                       currency: "EUR", period: "year", cost_centre: "Field Sales", tenant_line: true })
+        handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @h1, subject_id: @lines["Revenue"], end_state: { tenant_line: true })
+      end
+      map = resolve(@plan_id, @h1)
+      assert_equal @lines.values_at("Field Sales", "Revenue").sort, map.outside_lines.map(&:id).sort, "a cut outside line stays outside"
+      assert_empty map.orphaned_lines
+      # The plan's own record of a change keeps it, as it keeps one about someone the Org Graph moved out.
+      record = %w[History Overrides Status SplitNeeds].map { "Operations::TeamPlanning::#{it}" }
+      scoped = JSON.parse(every_read(@plan_id, @h1)).except(*record).to_json
+      [ *@lines.values_at("Field Sales", "Revenue"), "Field Sales" ].each { assert_not_includes scoped, it }
+
+      as_tenant { BudgetLine.find(@lines["Field Sales"]).destroy! }
+      assert_empty resolve(@plan_id, @h1).orphaned_lines, "a removed line the plan never held stays unnamed"
+    end
+
+    should "refuse to set again a hidden line a scenario cut, whatever cost centre it names" do
+      as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @h1, subject_id: @lines["Revenue"], end_state: { tenant_line: true }) }
+      line = { plan_id: @plan_id, scenario_id: @h1, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      assert_equal NO_SUCH_LINE, refusal { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Revenue"], cost_centre: "Platform") }
+    end
+
+    should "leave a line outside the plan's cost centres out of the budget checks, which judge only the lines the plan holds" do
+      checks = %w[unused_budget_lines budget_variance]
+      items = ->(plan_id, scenario_id) { call(Operations::TeamPlanning::Attention, plan_id:, scenario_id:)[:items].select { it[:check].in?(checks) } }
+      held_names = [ "Platform", "Core", "Engineers", TeamPlanning::Attention::NO_COST_CENTRE ]
+
+      scoped = items.(@plan_id, @h1)
+      assert_equal @lines.values_at("Platform", "Core", "Engineers", nil).sort, scoped.select { it[:facet] == TeamPlanning::Attention::BUDGET_LINE }.map { it[:subject_id] }.sort,
+                   "every held line is unused, and no other"
+      assert_empty scoped.reject { it[:facet] == TeamPlanning::Attention::BUDGET_LINE || it[:subject_id].in?([ @plan_id, *held_names ]) }
+      cost_centres = call(Operations::TeamPlanning::Budget, plan_id: @plan_id, scenario_id: @h1)[:cost_centres].map { it[:cost_centre] }
+      assert_empty cost_centres - [ "Platform", "Core", "Engineers", nil ], "the no-cost-centre group sits beside held cost centres only"
+
+      whole = items.(@whole_id, @whole_h1).map { it[:subject_id] }
+      @lines.values_at("Field Sales", "Revenue").each { assert_includes whole, it, "the control proves the check would name it" }
+    end
+
+    should "read an archived scoped plan from its frozen lines, cut to its cost centres, though it was archived before its base date" do
+      as_tenant { handler.archive_plan(@plan_id) }
+      plan = TeamPlanningPlan.find(@plan_id)
+      assert_operator plan.archived_on, :<, plan.base_on - 1, "known_on is the archive day, not the day before the base"
+
+      leaked = [ *@lines.values_at("Field Sales", "Revenue"), "Field Sales", "Revenue" ]
+      reads = [ Operations::TeamPlanning::Budget, Operations::TeamPlanning::BudgetLines, Operations::TeamPlanning::Funding, Operations::TeamPlanning::Attention ]
+                .map { call(it, plan_id: @plan_id, scenario_id: @h1) }
+      assert_equal @lines.values_at("Platform", "Core", "Engineers", nil).sort, reads.first[:budget_lines].map { it[:budget_line_id] }.sort
+      leaked.each { assert_not_includes reads.to_json, it }
+    end
+
+    should "judge the lines by the baseline's cost centres on any day, not that day's" do
+      travel_to Time.utc(2026, 2, 1, 9)
+      as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@ada.id, "Field Sales", provider: "espalia", effective_on: Date.current.iso8601) }
+      baseline = TeamPlanning::Baseline.new(context:, plan: TeamPlanningPlan.find(@plan_id))
+      today = as_tenant { baseline.map_on(Date.current) }
+      assert_equal as_tenant { baseline.structure.held_cost_centres }, today.held_cost_centres
+      assert_includes today.budget_lines.map(&:id), @lines["Platform"]
+      assert_includes today.outside_lines.map(&:id), @lines["Field Sales"]
+    end
+
+    should "refuse to change, cut, add or draw on a line outside the plan's cost centres, without naming it" do
+      line = { plan_id: @plan_id, scenario_id: @h1, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]
+      unknown = [
+        -> { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Field Sales"], cost_centre: "Field Sales") },
+        -> { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Field Sales"], cost_centre: "Platform") },
+        -> { call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Revenue"]) },
+        -> { call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: @h1, position_id: seat, draws: [ { budget_line_id: @lines["Revenue"] } ]) }
+      ]
+      unknown.each { assert_equal NO_SUCH_LINE, refusal(&it) }
+      named = [
+        -> { call(Operations::TeamPlanning::SetBudgetLine, **line, cost_centre: "Revenue") },
+        -> { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Field Sales") }
+      ]
+      named.each { assert_equal LINE_OUTSIDE, refusal(&it), "a cost centre the caller gave says nothing about which lines exist" }
+      assert_empty TeamPlanning::Repository.new.then { |repository| as_tenant { repository.load_plan(@plan_id) } }.changes_in(@h1).select { it.data[:subject_id].in?(@lines.values) }
+
+      call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Core")
+      call(Operations::TeamPlanning::SetBudgetLine, **line, cost_centre: nil)
+      call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: @h1, position_id: seat, draws: [ { budget_line_id: @lines["Engineers"] } ])
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @whole_id, scenario_id: @whole_h1, budget_line_id: @lines["Revenue"])
+    end
+
+    should "refuse a write on a line outside the plan exactly as on an id no line has, so a write can't confirm it exists" do
+      line = { plan_id: @plan_id, scenario_id: @h1, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]
+      as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @h1, subject_id: @lines["Revenue"], end_state: { tenant_line: true }) }
+      gone_level = SecureRandom.uuid_v7
+      as_tenant { BudgetLine.where(id: @lines.values_at("Field Sales", "Revenue")).update_all(level_id: gone_level) }
+      writes = {
+        set: ->(id) { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: id, cost_centre: "Platform") },
+        set_kept_level: ->(id) { call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: id, level_id: gone_level) },
+        cut: ->(id) { call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: id) },
+        fund: ->(id) { call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: @h1, position_id: seat, draws: [ { budget_line_id: id } ]) }
+      }
+      unknown = SecureRandom.uuid_v7
+      writes.each do |name, write|
+        expected = refusal { write.(unknown) }
+        @lines.values_at("Field Sales", "Revenue").each { |id| assert_equal expected, refusal { write.(id) }, "#{name} told an outside line from an unknown id" }
+      end
+    end
+
+    should "judge a line the scenario holds as the scenario holds it, though the organisation since moved it outside" do
+      line = { plan_id: @plan_id, scenario_id: @h1, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Platform")
+      as_tenant { BudgetLine.where(id: @lines.values_at("Platform", "Core")).update_all(cost_centre: "Revenue") }
+      assert_includes resolve(@plan_id, @h1).budget_lines.map(&:id), @lines["Platform"]
+
+      seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]
+      call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: @h1, position_id: seat, draws: [ { budget_line_id: @lines["Platform"] } ])
+      call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Platform", amount: "6")
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Platform"])
+      call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Platform")
+      assert_includes resolve(@plan_id, @h1).budget_lines.map(&:id), @lines["Platform"], "a cut line comes back at the cost centre the scenario gave it"
+
+      assert_includes resolve(@plan_id, @h1).outside_lines.map(&:id), @lines["Core"]
+      assert_equal NO_SUCH_LINE, refusal { call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Core"]) }
+    end
+
+    should "refuse to narrow the scope while a change touches a line the narrower plan would drop, without naming it" do
+      set_scope(@plan_id, [ @engineering, @sales ])
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Revenue"])
+
+      message = refusal { set_scope(@plan_id, [ @engineering ]) }
+      assert_includes message, "1 other change"
+      [ @lines["Revenue"], "Revenue" ].each { assert_not_includes message, it }
+
+      call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1)
+      set_scope(@plan_id, [ @engineering ])
+      assert_includes resolve(@plan_id, @h1).outside_lines.map(&:id), @lines["Revenue"]
+    end
+
+    should "judge a dropped line by each scenario's own cost centre, so another scenario's relabel never excuses a cut" do
+      set_scope(@plan_id, [ @engineering, @sales ])
+      sibling = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @h1, relation: "instead", name: "B")[:scenario_id]
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Revenue"])
+      call(Operations::TeamPlanning::SetBudgetLine, plan_id: @plan_id, scenario_id: sibling, budget_line_id: @lines["Revenue"], cost_centre: "Platform",
+                                                   starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year")
+
+      assert_includes refusal { set_scope(@plan_id, [ @engineering ]) }, "1 other change"
+    end
+
+    should "judge a line the plan added by each scenario's own cost centre, so a later step's relabel never excuses a cut" do
+      set_scope(@plan_id, [ @engineering, @sales ])
+      line = { plan_id: @plan_id, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      added = call(Operations::TeamPlanning::SetBudgetLine, **line, scenario_id: @h1, cost_centre: "Revenue")[:budget_line_id]
+      call(Operations::TeamPlanning::SetBudgetLine, **line, scenario_id: @h2, budget_line_id: added, cost_centre: "Platform")
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: added)
+
+      assert_includes refusal { set_scope(@plan_id, [ @engineering ]) }, "change"
+    end
+
+    should "leave no funding naming a line outside the plan, though an older change funded a seat from it or cut it" do
+      seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]
+      fund = -> { handler.set_change(@plan_id, TeamPlanning::Events::PositionFundingSet, scenario_id: @h1, subject_id: seat,
+                                                                                          end_state: { draws: [ { budget_line_id: @lines["Revenue"] } ] }) }
+      reads = lambda do
+        [ resolve(@plan_id, @h1).fundings, %w[Funding Attention].map { call("Operations::TeamPlanning::#{it}".constantize, plan_id: @plan_id, scenario_id: @h1) } ].to_json
+      end
+
+      as_tenant { fund.() }
+      assert_not_includes reads.(), @lines["Revenue"], "a funding on an outside line"
+      as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @h1, subject_id: @lines["Revenue"], end_state: { tenant_line: true }) }
+      assert_not_includes reads.(), @lines["Revenue"], "a funding on an outside line the scenario then cut"
+      assert_empty resolve(@plan_id, @h1).orphaned_lines
+    end
   end
 
   should "bring a person in with the change that places them in scope, and let them go when it's undone" do

@@ -48,10 +48,17 @@ class TeamPlanning::Events::BudgetLineSet < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map]
   def self.apply_to(map, data)
     id = data[:subject_id]
-    held = map.budget_lines.any? { it.id == id }
-    return map.with(orphaned_lines: map.orphaned_lines.merge(id => "set")) if data[:tenant_line] && !held
+    held = map.line?(id)
+    if data[:tenant_line] && !held
+      # A removed line the plan never held stays unnamed ([#378](https://github.com/espaliahq/espalia/issues/378)).
+      return map unless map.holds_cost_centre?(data[:cost_centre])
+
+      return map.with(orphaned_lines: map.orphaned_lines.merge(id => "set"))
+    end
 
     line = TeamPlanning::Baseline::BudgetLine.planned(id, data, source: data[:tenant_line] ? "changed" : "plan")
+    return map.with(outside_lines: map.outside_lines.map { it.id == id ? line : it }) if map.outside_line?(id)
+
     map.with(budget_lines: held ? map.budget_lines.map { it.id == id ? line : it } : map.budget_lines + [ line ])
   end
 
