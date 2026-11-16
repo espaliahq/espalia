@@ -60,9 +60,7 @@ class Views::Plans::BudgetLineForm < Views::Base
   def line_form
     action = @budget_line_id ? update_budget_line_plan_path(plan_id, budget_line_id: @budget_line_id) : create_budget_line_plan_path(plan_id)
     form(action:, method: "post", class: "space-y-4", id: "budget-line-form") do
-      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      input(type: "hidden", name: "_method", value: "patch") if @budget_line_id
-      input(type: "hidden", name: "scenario_id", value: @scenario_id)
+      hidden_fields(@budget_line_id && "patch")
       line_fields(@values, roles: @roles, countries: @countries)
       div(class: "flex flex-wrap justify-end gap-2") do
         render Components::Kit::Button.new(variant: :outline, href: back_path) { "Cancel" }
@@ -74,11 +72,15 @@ class Views::Plans::BudgetLineForm < Views::Base
   def cut_form
     form(action: cut_budget_line_plan_path(plan_id, budget_line_id: @budget_line_id), method: "post",
          class: "flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4", id: "budget-line-cut") do
-      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      input(type: "hidden", name: "_method", value: "delete")
-      input(type: "hidden", name: "scenario_id", value: @scenario_id)
+      hidden_fields("delete")
       p(class: "text-sm text-muted") { "Cutting the line takes it out of this scenario and those that follow." }
       render Components::Kit::Button.new(variant: :outline, tone: :danger, type: :submit) { "Cut the line" }
     end
+  end
+
+  def hidden_fields(method)
+    input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+    input(type: "hidden", name: "_method", value: method) if method
+    input(type: "hidden", name: "scenario_id", value: @scenario_id)
   end
 end
