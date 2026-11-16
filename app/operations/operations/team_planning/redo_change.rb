@@ -8,9 +8,10 @@ class Operations::TeamPlanning::RedoChange < Operations::Base
 
   description "Redo a change, pin or clear that was undone in a scenario of a Team Planning plan, in its place. " \
               "Give event_id, as team_planning_history lists it, or leave it out to redo what your own latest " \
-              "undo in the scenario took back. In a plan scoped to chosen units, a change about someone it no longer " \
-              "covers is refused unless it places them in one of its units. Refused when a change to the same subject and facet was made " \
-              "since (the refusal names it), when it isn't undone, or unless the caller is an editor."
+              "undo in the scenario took back. In a plan scoped to chosen units, a change about someone, a unit or a " \
+              "position it no longer covers is refused unless it places them in one of its units. Refused when a " \
+              "change to the same subject and facet was made since (the refusal names it), when it isn't undone, " \
+              "or unless the caller is an editor."
   category :write
   approval :mcp_client
 
