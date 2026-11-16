@@ -1167,14 +1167,16 @@ class TeamPlanning::PlanAggregate
       raise TeamPlanning::Error, "The step it would move to already changes this (#{there.event_id}): clear it there first"
     end
 
-    ensure_leaves_within!(changes_in(from_id).reverse_each.find { it.key == key }, to_id)
+    ensure_leaves_within!(from_id, key, to_id)
   end
 
   # A departure keeps its date: one outside the target's period is refused, never shifted.
-  def ensure_leaves_within!(change, to_id)
-    leaves_on = change&.data&.dig(:leaves_on) or return
+  # Every entry goes across, so an undone or overridden departure is checked
+  # too: an undo or redo could bring it back into effect there.
+  def ensure_leaves_within!(holder_id, key, to_id)
     period = period_of(to_id) or return
-    return if period.cover?(Date.iso8601(leaves_on))
+    leaves_on = @logs.fetch(holder_id, []).filter_map { it.data[:leaves_on] if key_of(it) == key }
+                     .find { !period.cover?(Date.iso8601(it)) } or return
 
     raise TeamPlanning::Error, "They leave on #{leaves_on}, outside the step it would move to (#{period.begin.iso8601} to #{period.end.iso8601}): change the date first"
   end
@@ -1261,7 +1263,7 @@ class TeamPlanning::PlanAggregate
     ensure_in_place!(marker.data[:to_scenario_id], marker.data[:moved_event_ids], "undone")
     ensure_not_split!(from_id, marker.data[:to_scenario_id])
     ensure_nothing_between!(from_id, marker.data[:to_scenario_id], key)
-    ensure_leaves_within!(in_effect(marker.data[:to_scenario_id], @undone).reverse_each.find { it.key == key }, from_id)
+    ensure_leaves_within!(marker.data[:to_scenario_id], key, from_id)
     ensure_references_kept!(marker.data[:to_scenario_id], from_id, marker.data[:moved_event_ids])
     ensure_no_conflict_left!(marker.data[:to_scenario_id], from_id, key)
 

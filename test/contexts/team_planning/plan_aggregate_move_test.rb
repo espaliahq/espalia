@@ -304,6 +304,12 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     assert_match "Changes tab", refusal { move(@q2, "earlier") }
   end
 
+  test "refuse to move a departure when an earlier one it carries has a date outside the step it would reach" do
+    leave(@q1, leaves_on: "2027-02-14")
+    leave(@q1)
+
+    assert_match "2027-02-14", refusal { move(@q1, "later", facet: "departure") }
+  end
 
   test "undo a second move back to the place the first one left the change in" do
     placed = place(@q1, @eng_id)
