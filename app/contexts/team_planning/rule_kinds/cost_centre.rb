@@ -126,7 +126,7 @@ class TeamPlanning::RuleKinds::CostCentre < TeamPlanning::RuleKind
   def self.ordinal!(ordinal)
     return if ordinal.nil? || ordinal.to_s.strip.empty?
 
-    number = Integer(ordinal.to_s.strip, exception: false)
+    number = Integer(ordinal.to_s.strip, 10, exception: false)
     raise TeamPlanning::Error, "A cost centre entry's level is a whole number from 1" unless number && number >= 1
 
     number

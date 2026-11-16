@@ -29,6 +29,10 @@ class TeamPlanning::RuleKinds::CostCentreTest < ActiveSupport::TestCase
                                     "cost_centre" => "Platform Eng" } ] }, value)
   end
 
+  should "read a level with a leading zero as the decimal number it shows" do
+    assert_equal [ 10, 8 ], %w[010 08].map { Kind.check({ entries: [ { level_ordinal: it, cost_centre: "Ops" } ] }.deep_stringify_keys)["entries"][0]["level_ordinal"] }
+  end
+
   should "let the last entry that matches have the last word, as in the worked example" do
     entries = { "entries" => [ { "role_family_id" => "eng", "cost_centre" => "Engineering" },
                                { "role_family_id" => "product", "cost_centre" => "Product" },
