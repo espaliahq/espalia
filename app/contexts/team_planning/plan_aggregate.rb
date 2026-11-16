@@ -685,7 +685,8 @@ class TeamPlanning::PlanAggregate
     ensure_references_kept!(scenario_id, target_id, moved_event_ids)
     ensure_no_conflict_left!(scenario_id, target_id, key)
     apply(TeamPlanning::Events::ChangeMoved.new(data: {
-      plan_id: @plan_id, scenario_id:, to_scenario_id: target_id, subject_id:, facet:, direction:, moved_event_ids:, moved_by_id:
+      plan_id: @plan_id, scenario_id:, to_scenario_id: target_id, subject_id:, facet:, direction:, moved_event_ids:,
+      left_before_id: left_before(scenario_id, moved_event_ids), moved_by_id:
     }))
     target_id
   end
@@ -1127,9 +1128,9 @@ class TeamPlanning::PlanAggregate
   # stands in for is, would come to override the change or stop doing so.
   def ensure_movable!(from_id, to_id, key)
     ensure_not_split!(from_id, to_id)
-    [ *steps_between(from_id, to_id), to_id ].each do |step_id|
-      there = changes_in(step_id).reverse_each.find { it.key == key } or next
-      raise TeamPlanning::Error, "#{step_id == to_id ? "The step it would move to" : "A step in between"} already changes this (#{there.event_id}): clear it there first"
+    ensure_nothing_between!(from_id, to_id, key)
+    if (there = changes_in(to_id).reverse_each.find { it.key == key })
+      raise TeamPlanning::Error, "The step it would move to already changes this (#{there.event_id}): clear it there first"
     end
 
     ensure_leaves_within!(changes_in(from_id).reverse_each.find { it.key == key }, to_id)
@@ -1142,6 +1143,22 @@ class TeamPlanning::PlanAggregate
     return if period.cover?(Date.iso8601(leaves_on))
 
     raise TeamPlanning::Error, "They leave on #{leaves_on}, outside the step it would move to (#{period.begin.iso8601} to #{period.end.iso8601}): change the date first"
+  end
+
+  def ensure_nothing_between!(from_id, to_id, key)
+    steps_between(from_id, to_id).each do |step_id|
+      there = changes_in(step_id).reverse_each.find { it.key == key } or next
+      raise TeamPlanning::Error, "A step in between already changes this (#{there.event_id}): clear it there first"
+    end
+  end
+
+  # An undo or redo moves the entries from where its move left them, so once
+  # another move, undo or redo has taken them elsewhere it has nothing to move.
+  def ensure_in_place!(holder_id, moved_event_ids, action)
+    held = @logs.fetch(holder_id, []).to_set(&:event_id)
+    return if moved_event_ids.all? { held.include?(it) }
+
+    raise TeamPlanning::Error, "This change has moved again since, so the move can't be #{action}: bring it back with the move that took it first"
   end
 
   # A conflict the last update to today carried stands while a step resolves
@@ -1209,7 +1226,9 @@ class TeamPlanning::PlanAggregate
     if (there = @logs.fetch(from_id, []).find { key_of(it) == key && !undone?(it.event_id) })
       raise TeamPlanning::Error, "The step it moved from changes this again (#{there.event_id}): undo or clear that first, then undo the move"
     end
+    ensure_in_place!(marker.data[:to_scenario_id], marker.data[:moved_event_ids], "undone")
     ensure_not_split!(from_id, marker.data[:to_scenario_id])
+    ensure_nothing_between!(from_id, marker.data[:to_scenario_id], key)
     ensure_leaves_within!(in_effect(marker.data[:to_scenario_id], @undone).reverse_each.find { it.key == key }, from_id)
     ensure_references_kept!(marker.data[:to_scenario_id], from_id, marker.data[:moved_event_ids])
     ensure_no_conflict_left!(marker.data[:to_scenario_id], from_id, key)
@@ -1227,8 +1246,8 @@ class TeamPlanning::PlanAggregate
     if (there = @logs.fetch(from_id, []).find { key_of(it) == key && !moved.include?(it.event_id) && !undone?(it.event_id) })
       raise TeamPlanning::Error, "The step it moved from changes this again (#{there.event_id}): undo or clear that first, then redo the move"
     end
-    ensure_not_split!(from_id, to_id)
-    ensure_leaves_within!(in_effect(from_id, @undone).reverse_each.find { it.key == key }, to_id)
+    ensure_in_place!(from_id, marker.data[:moved_event_ids], "redone")
+    ensure_movable!(from_id, to_id, key)
     ensure_references_kept!(from_id, to_id, marker.data[:moved_event_ids])
     ensure_no_conflict_left!(from_id, to_id, key)
 
@@ -1241,11 +1260,19 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "This step is split, and the split decides what is agreed: a change can't move into or out of either part"
   end
 
-  # The entry an undone move's entries go back in front of: the first one made
-  # after them, so they keep their order and their place among the rest.
+  # The entry an undone move's entries go back in front of: the one that
+  # followed them when they left, or else the first made since.
   def back_before(marker)
-    first = @sequence.fetch(marker.data[:moved_event_ids].first)
-    @logs.fetch(marker.data[:scenario_id], []).find { @sequence.fetch(it.event_id) > first }&.event_id
+    follower = marker.data[:left_before_id]
+    moved_at = @sequence.fetch(marker.event_id)
+    @logs.fetch(marker.data[:scenario_id], []).find { it.event_id == follower || @sequence.fetch(it.event_id) > moved_at }&.event_id
+  end
+
+  # The entry just after a move's first entry that stays, so an undo can put
+  # them back where they stood.
+  def left_before(scenario_id, moved_event_ids)
+    log = @logs.fetch(scenario_id)
+    log.drop(log.index { it.event_id == moved_event_ids.first }).find { !moved_event_ids.include?(it.event_id) }&.event_id
   end
 
   # Moves log entries between scenarios as one block, in their order, in front

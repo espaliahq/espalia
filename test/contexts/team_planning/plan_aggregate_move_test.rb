@@ -285,6 +285,8 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     assert_match "name no step", refusal { move(@q2, "earlier", to_scenario_id: @q3) }
   end
 
+  def redo_move(scenario_id, event_id) = @plan.redo_change(scenario_id:, event_id:, redone_by_id: @ada_id)
+
   test "refuse to move a change with an unsettled conflict from the last update to today, pointing at the Changes tab" do
     placed = place(@q1, @eng_id)
     @plan.rebase(base_on: "2027-02-10", expected_base_on: "2027-01-01", rebased_by_id: @ada_id,
@@ -292,5 +294,54 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
 
     assert_match "Changes tab", refusal { move(@q1, "later") }
     assert_equal placed, @plan.winning_changes(@q1)[key].event_id
+  end
+
+  test "undo a second move back to the place the first one left the change in" do
+    placed = place(@q1, @eng_id)
+    there = place(@q2, @sales_id, person_id: @ada_id)
+    first = move(@q1, "later")
+    second = move(@q2, "later")
+
+    undo(@q3, second)
+
+    assert_equal [ there, placed, first ], @plan.log_of(@q2).map(&:event_id)
+  end
+
+  test "refuse to undo a move when a step in between has since changed it" do
+    alternative = fork(@q2, "instead")
+    place(alternative, @eng_id)
+    moved = move(alternative, "earlier")
+    there = place(@q2, @sales_id)
+
+    assert_match there, refusal { undo(@q1, moved) }
+  end
+
+  test "refuse to redo a move when a step in between has since changed it" do
+    alternative = fork(@q2, "instead")
+    place(alternative, @eng_id)
+    moved = move(alternative, "earlier")
+    undo(@q1, moved)
+    there = place(@q2, @sales_id)
+
+    assert_match there, refusal { redo_move(@q1, moved) }
+  end
+
+  test "refuse to redo a move once its change has moved somewhere else" do
+    placed = place(@q2, @eng_id)
+    moved = move(@q2, "later")
+    undo(@q3, moved)
+    move(@q2, "earlier")
+
+    assert_match "moved again", refusal { redo_move(@q3, moved) }
+    assert_equal placed, @plan.winning_changes(@q1)[key].event_id
+  end
+
+  test "refuse to undo a move once an earlier move's undo has taken its change back" do
+    place(@q1, @eng_id)
+    first = move(@q1, "later")
+    second = move(@q2, "later")
+    undo(@q3, first)
+
+    assert_match "moved again", refusal { undo(@q3, second) }
   end
 end

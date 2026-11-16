@@ -14,6 +14,7 @@
 #   @option data [String] :facet "assignment", "position" or "departure"
 #   @option data [String] :direction "earlier" or "later"
 #   @option data [Array<String>] :moved_event_ids every log entry that moved, in log order
+#   @option data [String, nil] :left_before_id the entry that followed them in the step they left, nil for none
 #   @option data [String] :moved_by_id person_id of the actor
 #
 class TeamPlanning::Events::ChangeMoved < RubyEventStore::Event
