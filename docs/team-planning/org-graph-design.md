@@ -690,7 +690,8 @@ screen (6.9, below) hosts them.
   sub-units, or a change dated later) blocks the switch until someone deals with it.
 - **Every unit must still fit.** A level an HRIS provides sits only beneath the HRIS
   level directly above it, so the switch is refused, naming the units, while one sits
-  further up. Move those units first.
+  further up. Move those units first. Adding an HRIS level between two others is refused
+  the same way.
 - **One cause, one transaction.** The switch records the field as the level's source,
   gives each matched unit its value (`UnitHandedOver`), writes each succession and
   retirement, hands the HRIS the memberships of the people it reads, and mirrors the

@@ -58,11 +58,23 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
     error = assert_raises(RuntimeError) do
       as_tenant { @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches:, effective_on: @today) }
     end
-    assert_equal "Move these units beneath a unit the handover allows first: Platform", error.message
+    assert_equal "Move these units first, as the change leaves them where their kind may not sit: Platform", error.message
     assert_equal "espalia", as_tenant { OrgTaxonomyLevel.find(id("Team")).provider }
 
     as_tenant { @handler.move_unit(@platform, @engineering, effective_on: @today) }
     assert_nothing_raised { as_tenant { @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches:, effective_on: @today) } }
+  end
+
+  should "refuse an HRIS level inserted above one whose units would no longer fit" do
+    as_tenant { @handler.hand_over_level(id("Department"), "hibob", field: "work.department", matches: { @engineering => "eng", @marketing => "mkt" }, effective_on: @today) }
+    region = { level_id: id("Region"), name: "Region", provider: "hibob" }
+    current = %w[Division Department Team Squad].map { { level_id: id(it), name: it } }
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @handler.define_taxonomy([ current[0], region, *current.drop(1) ], effective_on: @today) }
+    end
+    assert_equal "Move these units first, as the change leaves them where their kind may not sit: Engineering, Marketing", error.message
+    assert_nothing_raised { as_tenant { @handler.define_taxonomy([ region, *current ], effective_on: @today) } }
   end
 
   should "refuse to change a level's provider while the history is rebuilt" do

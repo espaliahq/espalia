@@ -63,7 +63,8 @@ class OrgGraph::StructureAggregate
   # @param defined_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the levels are empty, blank or duplicated
   # @raise [RuntimeError] if a level any unit has held is dropped, naming the
-  #   units, or a level in use is reordered
+  #   units, a level in use is reordered, or a live unit would be left where
+  #   its kind may not sit
   def define_taxonomy(levels, effective_on:, defined_by_id: nil)
     new_providers = new_level_providers(levels)
     levels = with_stated_rules(normalise_levels(levels))
@@ -76,6 +77,7 @@ class OrgGraph::StructureAggregate
     ensure_levels_in_use_keep_order!(levels, in_use)
 
     ensure_hris_levels_on_top!(level_ids(levels), new_providers)
+    ensure_units_still_fit!(new_providers, levels:)
 
     apply(OrgGraph::Events::TaxonomyDefined.new(data: {
       levels: levels,
@@ -224,7 +226,7 @@ class OrgGraph::StructureAggregate
 
     effective_on = iso_date(effective_on)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
-    ensure_units_still_fit!(level_id => provider)
+    ensure_units_still_fit!({ level_id => provider })
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id:, provider:, previous_provider: ESPALIA, field:, effective_on:, set_by_id:
     }))
@@ -729,14 +731,15 @@ class OrgGraph::StructureAggregate
     raise "Levels an HRIS provides must sit above every level Espalia holds"
   end
 
-  # A level an HRIS takes over may sit only beneath the HRIS level directly
-  # above it, so a unit Espalia placed further up would be left where it can't sit.
-  def ensure_units_still_fit!(provider_changes)
-    prospective = OrgGraph::Taxonomy.new(with_stated_rules(@levels), providers: @level_providers.merge(provider_changes))
+  # A level an HRIS provides may sit only beneath the HRIS level directly above
+  # it, so handing a level over, or inserting an HRIS level above one, can
+  # leave a unit where its kind may no longer sit.
+  def ensure_units_still_fit!(provider_changes, levels: with_stated_rules(@levels))
+    prospective = OrgGraph::Taxonomy.new(levels, providers: @level_providers.merge(provider_changes))
     stranded = misplaced_units(prospective) - misplaced_units
     return if stranded.empty?
 
-    raise "Move these units beneath a unit the handover allows first: #{stranded.map(&:name).join(', ')}"
+    raise "Move these units first, as the change leaves them where their kind may not sit: #{stranded.map(&:name).join(', ')}"
   end
 
   # A unit's latest change includes a sub-unit arriving beneath it or leaving,
