@@ -6,6 +6,7 @@
 # a misfit marks it.
 module Operations::TeamPlanning::UnitChange
   include Operations::TeamPlanning::PlanRead
+  include Operations::TeamPlanning::WithinScope
 
   private
 
@@ -23,7 +24,10 @@ module Operations::TeamPlanning::UnitChange
   def set_unit_changes!(scenario_id)
     refusing_bad_plans do
       handler.set_changes(plan_id!) do
-        yield(::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id:).structure).map { { note: params[:note], **it } }
+        map = ::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id:).structure
+        changes = yield(map)
+        changes.each { place_within_scope!(map, it[:kind], it[:subject_id], it[:end_state]) } if map.scope_ids
+        changes.map { { note: params[:note], **it } }
       end
     end
   end

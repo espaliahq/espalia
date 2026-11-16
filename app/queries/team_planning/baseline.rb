@@ -38,12 +38,13 @@ class TeamPlanning::Baseline
   # @!attribute scope_ids [Array<String>, nil] the units the plan covers, each with everything under it; nil for the whole organisation
   # @!attribute outside [Array<Member>] the people outside the plan's scope, kept so a change can bring one in. Never shown
   # @!attribute cut_positions [Array<Position>] the positions in units outside the plan's scope. Never shown
+  # @!attribute cut_unit_ids [Set<String>] the units, live or retired, outside the plan's scope. Never shown
   # @!attribute fundings [Hash{String => Array<Hash>}] position id => the draws a {TeamPlanning::Events::PositionFundingSet} sets
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
                     :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings, :scope_ids, :outside,
-                    :cut_positions) do
+                    :cut_positions, :cut_unit_ids) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
-                   orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], **) = super
+                   orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], cut_unit_ids: Set.new, **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -70,7 +71,8 @@ class TeamPlanning::Baseline
     # @return [Map] only the covered units, and the people placed in them
     def cut
       covered = covered_ids
-      map = with(units: units.select { covered.include?(it.id) }, retired_units: retired_units.select { covered.include?(it.id) })
+      map = with(units: units.select { covered.include?(it.id) }, retired_units: retired_units.select { covered.include?(it.id) },
+                 cut_unit_ids: (cut_unit_ids | (units + retired_units).map(&:id)) - covered)
       known = map.known_unit_ids
       inside = ->(person, was_on) { person.memberships.any? { known.include?(it.unit_id) } || (was_on && person.memberships.none?(&:unit_id)) }
       people, leaving = map.people.partition { inside.(it, true) }
@@ -104,6 +106,9 @@ class TeamPlanning::Baseline
 
     # @return [Set<String>] the people outside the plan's scope, for a check run once per person
     def outside_ids = outside.to_set(&:id)
+
+    # @return [Set<String>] the units and positions outside the plan's scope
+    def cut_ids = cut_unit_ids | cut_positions.to_set(&:id)
 
     # @param member [Member]
     # @return [Array<Membership>] the places in units outside the plan's scope
