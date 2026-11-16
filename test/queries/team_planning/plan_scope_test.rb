@@ -237,7 +237,7 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
         handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @h1, subject_id: @lines["Revenue"], end_state: { tenant_line: true })
       end
       map = resolve(@plan_id, @h1)
-      assert_equal [ @lines["Field Sales"] ], map.outside_lines.map(&:id)
+      assert_equal @lines.values_at("Field Sales", "Revenue").sort, map.outside_lines.map(&:id).sort, "a cut outside line stays outside"
       assert_empty map.orphaned_lines
       # The plan's own record of a change keeps it, as it keeps one about someone the Org Graph moved out.
       record = %w[History Overrides Status SplitNeeds].map { "Operations::TeamPlanning::#{it}" }
@@ -357,6 +357,22 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
                                                    starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year")
 
       assert_includes refusal { set_scope(@plan_id, [ @engineering ]) }, "1 other change"
+    end
+
+    should "leave no funding naming a line outside the plan, though an older change funded a seat from it or cut it" do
+      seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]
+      fund = -> { handler.set_change(@plan_id, TeamPlanning::Events::PositionFundingSet, scenario_id: @h1, subject_id: seat,
+                                                                                          end_state: { draws: [ { budget_line_id: @lines["Revenue"] } ] }) }
+      reads = lambda do
+        [ resolve(@plan_id, @h1).fundings, %w[Funding Attention].map { call("Operations::TeamPlanning::#{it}".constantize, plan_id: @plan_id, scenario_id: @h1) } ].to_json
+      end
+
+      as_tenant { fund.() }
+      assert_not_includes reads.(), @lines["Revenue"], "a funding on an outside line"
+      as_tenant { handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @h1, subject_id: @lines["Revenue"], end_state: { tenant_line: true }) }
+      assert_not_includes reads.(), @lines["Revenue"], "a funding on an outside line the scenario then cut"
+      assert_empty resolve(@plan_id, @h1).orphaned_lines
     end
   end
 
