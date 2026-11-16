@@ -9,8 +9,10 @@
 #    the plan leaves untouched ({#changed?}), the largest allocation first;
 # 3. the cost centre rules read at the position's unit, the last entry that
 #    matches its unit, role, family or level having the last word
-#    ([#387](https://github.com/espaliahq/espalia/issues/387)). An open
-#    position has no location, so an entry that names one never decides it.
+#    ([#387](https://github.com/espaliahq/espalia/issues/387)). A filled
+#    position reads them at the country of its largest occupant that has
+#    one, as {TeamPlanning::Funding} places it; an open position has no
+#    location, so an entry that names one never decides it.
 #
 # Otherwise it has none. The rule index is a place in the list the position's
 # unit reads, wherever up the units that list was set, and the matcher is
@@ -121,13 +123,16 @@ class TeamPlanning::PositionCostCentres
   def own(position) = position.cost_centre && Resolved.new(cost_centre: position.cost_centre, source: "position")
 
   def occupied(held)
-    person, = held.sort_by { |person, place| [ -place.allocation.to_f, person.id ] }.find { |person, _| person.cost_centre.present? && !changed?(person) }
+    person = by_allocation(held).find { it.cost_centre.present? && !changed?(it) }
     person && Resolved.new(cost_centre: person.cost_centre, source: "person")
   end
 
   def ruled(position)
-    by_rules(unit_id: (position.unit_id if live.include?(position.unit_id)), role_id: position.role_id, level_id: position.level_id, location: nil)
+    by_rules(unit_id: (position.unit_id if live.include?(position.unit_id)), role_id: position.role_id, level_id: position.level_id,
+             location: by_allocation(occupants.fetch(position.id, [])).map(&:country).find(&:present?))
   end
+
+  def by_allocation(held) = held.sort_by { |person, place| [ -place.allocation.to_f, person.id ] }.map(&:first)
 
   def by_rules(unit_id:, role_id:, level_id:, location:)
     return if TeamPlanning::RuleKinds::CostCentre.entries(rules_at(unit_id)).empty?

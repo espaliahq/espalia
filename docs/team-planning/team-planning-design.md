@@ -1352,7 +1352,10 @@ leaves untouched, then the rules, then none, so the open half of a half-filled p
 follows the person in the other half. An occupant the plan moves brings their real cost
 centre to their own cost line only when nothing else decides it, never to the position, so
 the position's cost centre in funding and the budget line it draws on agree with the moved
-person's cost line. When one occupant is moved and another untouched, the untouched one
+person's cost line. The rules read a filled position at the country of its largest
+occupant that has one, where funding places it, so an entry for a country decides the
+position as it decides that occupant's cost line. An empty position has no country, so such
+an entry never decides it. When one occupant is moved and another untouched, the untouched one
 decides the position. A position has one cost centre and each person has their own, so a
 mixed position must disagree with someone, and it should not be the person the plan left
 alone. A placeholder hire in a position fills that open seat, so it reads as the open

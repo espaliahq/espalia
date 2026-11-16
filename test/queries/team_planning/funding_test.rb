@@ -101,6 +101,19 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
       assert_cost_centres_add_up(priced)
     end
 
+    should "read the entries at a filled position's occupant's country, as their cost line does, and an open one at none" do
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" }, { location: "Mu", cost_centre: "Mu" })
+      mu = line(cost_centre: "Mu")
+      seat, empty = open_position, open_position
+      fill(seat, @ada)
+      priced, report = cost, funding
+
+      assert_equal [ "Mu" ], cost_centre_of(priced, @ada), "Ada works in Mu"
+      assert_equal "Mu", of(report, seat).cost_centre.cost_centre
+      assert_equal [ [ mu ], nil ], drawn_on(report, seat)
+      assert_equal "Payments", of(report, empty).cost_centre.cost_centre
+    end
+
     should "keep an untouched occupant's real cost centre for the position" do
       seat = open_position(unit_id: @engineering)
       fill(seat, @ada)
