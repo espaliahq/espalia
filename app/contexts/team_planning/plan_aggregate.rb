@@ -1576,15 +1576,16 @@ class TeamPlanning::PlanAggregate
   end
 
   # The period a date edit asks for: the end, and a first step's start. A
-  # later step's start follows the step before it, so it can't be asked for.
+  # later step's start follows the step before it, so it can only be repeated.
   def moved_period(scenario_id, starts_on, ends_on)
     ends_on = require_date(ends_on)
-    if starts_on.nil? then return { scenario_id => (period_of(scenario_id).begin..ends_on) }
+    starts_on = require_date(starts_on) unless starts_on.nil?
+    held = period_of(scenario_id).begin
+    if starts_on.nil? || starts_on == held then return { scenario_id => (held..ends_on) }
     elsif @scenarios[scenario_id].parent_id != @plan_id
       raise TeamPlanning::Error, "Its start follows the step before it: change that step's end"
     end
 
-    starts_on = require_date(starts_on)
     first_step_start!(starts_on)
     { scenario_id => (starts_on..ends_on) }
   end

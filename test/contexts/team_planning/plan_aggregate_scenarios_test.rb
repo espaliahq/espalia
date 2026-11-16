@@ -171,6 +171,14 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       assert_equal count, @plan.unpublished_events.count
     end
 
+    should "take a later step's start when it only repeats the start it has" do
+      @plan.set_scenario_period(@q2, starts_on: "2027-04-01", ends_on: "2027-07-31", set_by_id: @editor_id)
+
+      assert_equal %w[2027-04-01 2027-07-31], period(@q2)
+      assert_equal "Its start follows the step before it: change that step's end",
+                   refusal { @plan.set_scenario_period(@q2, starts_on: "2027-04-02", ends_on: "2027-07-31", set_by_id: @editor_id) }
+    end
+
     should "preview a moved start without writing it" do
       count = @plan.unpublished_events.count
       step, period, moved = @plan.period_moves(@q1, starts_on: "2027-01-01", ends_on: "2027-03-31")
