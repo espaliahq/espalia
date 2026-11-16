@@ -161,11 +161,11 @@ class TeamPlanning::Baseline
       Membership.shares(member.memberships).reject { |place, _, _| away.include?(place) }
     end
 
-    # A leaver never fills the position that backfills them.
-    #
     # @return [Hash{String => Position}] by id
     def positions_by_id = positions.index_by(&:id)
 
+    # A leaver never fills the position that backfills them.
+    #
     # @return [Hash{String => Array<Array(Member, Membership)>}] position id => each person placed there, with the placement
     def occupants
       people.flat_map { |person| person.memberships.select { it.position_id && it.position_id != person.backfill_id }.map { [ person, it ] } }

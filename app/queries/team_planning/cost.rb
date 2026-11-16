@@ -154,7 +154,7 @@ class TeamPlanning::Cost
     def pricing
       held = lines.select { it.kind == "person" && it.share.positive? }.group_by { [ it.seat_id, it.unit_id ] }
       open = lines.select { it.kind == "position" && it.share.positive? }.group_by(&:seat_id)
-      TeamPlanning::Forecast::Pricing.new(cost: held.filter_map { |key, group| [ key, yearly(group) ] if yearly(group) }.to_h,
+      TeamPlanning::Forecast::Pricing.new(cost: held.filter_map { |key, group| (cost = yearly(group)) && [ key, cost ] }.to_h,
                                           open: open.transform_values { TeamPlanning::Forecast::Open.new(cost_centre: it.first.cost_centre, cost: yearly(it) || {}) })
     end
 
@@ -527,12 +527,6 @@ class TeamPlanning::Cost
     position ? TeamPlanning::SeatStart.new(position).held_in(@period) : @period
   end
 
-  # A backfill opens a leaver's FTE the day after they leave, or for the
-  # whole step when they have no date, as they then cost none of it. The
-  # earliest leaver is replaced first, and FTE no leaver opens opens when the
-  # position does. Each opening is its own line, so no seat is ever held by a
-  # leaver and their backfill at once. Each starts by {TeamPlanning::SeatStart}:
-  # no earlier than it opens, from its target start, and never while on hold.
   def fte_of(member)
     fte = member.planned_or_own(:fte)
     return nil if fte == TeamPlanning::Baseline::UNKNOWN
