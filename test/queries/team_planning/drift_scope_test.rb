@@ -146,4 +146,19 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
 
     assert_equal [ { "title" => "Staff Engineer" }, [] ], [ cut.change.before, cut.outside ]
   end
+
+  should "note a known fact after the day's moves, so one set as someone leaves or arrives goes with the move" do
+    @base = @base.with(people: [ Someone.new("ada", [ Place.new(@engineering) ]) ])
+    leaves = change(:moved, 10, person_id: "ada", unit_id: @sales, from_unit_id: @engineering)
+    back = change(:moved, 20, person_id: "ada", unit_id: @engineering, from_unit_id: @sales)
+    arrives = change(:moved, 10, unit_id: @engineering, from_unit_id: @sales)
+    known = [ change(:fact_changed, 10, person_id: "ada", fact: "title", after: { "title" => "Sales Engineer" }),
+              change(:fact_changed, 10, fact: "title", after: { "title" => "Engineer" }) ]
+    titles = [ change(:fact_changed, 25, person_id: "ada", fact: "title", before: { "title" => "Sales Engineer" }, after: { "title" => "Engineer" }),
+               change(:fact_changed, 25, fact: "title", before: { "title" => "Engineer" }, after: { "title" => "Staff Engineer" }) ]
+
+    cuts = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ leaves, arrives, back, *titles ], known:)
+
+    assert_equal [ [ "ada", [ "before" ] ], [ "dee", [] ] ], cuts.select { it.change.kind == :fact_changed }.map { [ it.change.person_id, it.outside ] }
+  end
 end

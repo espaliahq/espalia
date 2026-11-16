@@ -32,6 +32,7 @@ class TeamPlanning::DriftScope
   ENTERING = %i[membership_started moved].freeze
   ADVANCING = %i[joined membership_started membership_ended moved unit_created unit_moved].freeze
   NOTED = %i[fact_changed unit_renamed].freeze
+  PENDING = (ADVANCING + NOTED).to_set.freeze
   RANK = { unit_created: 0, unit_moved: 0, unit_succeeded: 0, joined: 1,
            membership_started: 2, membership_ended: 2, membership_changed: 2, moved: 2 }.freeze
 
@@ -57,11 +58,12 @@ class TeamPlanning::DriftScope
 
   # @param changes [Array<OrgGraph::ChangesBetween::Change>] in date order
   # @param known [Array<OrgGraph::ChangesBetween::Change>] changes known before the window that take effect after
-  #   the base: each moves the window on, or is noted, on its own day and ahead of that day's changes, and is never reported
+  #   the base: each moves the window on, or is noted, on its own day, and is never reported. A move counts ahead of
+  #   that day's changes; a fact or name is noted after its moves, as the window's own are judged
   # @return [Array<Cut>] the changes the plan covers when they happen, in the order given
   def call(changes, known: [])
     withdrawn = changes.select(&:withdrawn).to_set { identity(it) }
-    pending = known.select { (ADVANCING + NOTED).include?(it.kind) && !withdrawn.include?(identity(it)) }
+    pending = known.select { PENDING.include?(it.kind) && !withdrawn.include?(identity(it)) }
                    .sort_by { [ it.effective_on, RANK.fetch(it.kind, 3) ] }
     cuts = Array.new(changes.size)
     changes.each_with_index.group_by { |change, _| change.effective_on }.each_value do |day|
@@ -70,6 +72,7 @@ class TeamPlanning::DriftScope
       units.each { |change, index| cuts[index] = judge(change) }
       joiners.each { |change, _| advance(change) unless change.withdrawn }
       moves.each { |change, index| cuts[index] = judge(change) }
+      known_until(pending, day.first.first.effective_on, facts: true)
       joiners.each { |change, index| cuts[index] = cut(change) }
       facts.each { |change, index| cuts[index] = judge(change) }
     end
@@ -88,10 +91,11 @@ class TeamPlanning::DriftScope
 
   # A move known before the window counts from its own day, unreported. A
   # joiner or unit it creates inside the plan is shown from then on; someone it
-  # moves in keeps what was set while they were outside unseen.
-  def known_until(pending, day)
-    while pending.first && pending.first.effective_on <= day
-      change = pending.shift
+  # moves in keeps what was set while they were outside unseen. A known fact or
+  # name on a day the window has changes waits for that day's moves.
+  def known_until(pending, day, facts: false)
+    while (change = pending.first) && (change.effective_on < day || (change.effective_on == day && (facts || !NOTED.include?(change.kind))))
+      pending.shift
       next note(change) if NOTED.include?(change.kind)
 
       advance(change)
