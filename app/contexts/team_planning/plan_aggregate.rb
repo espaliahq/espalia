@@ -1668,8 +1668,7 @@ class TeamPlanning::PlanAggregate
       period = period_of(id, moved)
       next unless period.end && period.end < period.begin
 
-      raise TeamPlanning::Error,
-            "#{moved.key?(id) ? "This scenario" : "A scenario after it"} would end on #{period.end.iso8601}, before it starts on #{period.begin.iso8601}"
+      raise TeamPlanning::PeriodInverted.new(scenario_id: id, period:, moved: moved.key?(id))
     end
   end
 
