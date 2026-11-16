@@ -12,9 +12,35 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
       admin = FactoryBot.create(:person, tenant: @tenant, name: "Ada Admin")
       FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, person: admin, role: :admin)
       FactoryBot.create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
-      role = FactoryBot.create(:framework_role, tenant: @tenant)
-      @level = FactoryBot.create(:framework_level, tenant: @tenant, role_id: role.role_id, code: "E2", title: "Engineer II")
+      @family = FactoryBot.create(:framework_role_family, tenant: @tenant, name: "Engineering")
+      @role = FactoryBot.create(:framework_role, tenant: @tenant, role_family_id: @family.role_family_id)
+      @level = FactoryBot.create(:framework_level, tenant: @tenant, role_id: @role.role_id, ordinal: 2,
+                                                   code: "E2", title: "Engineer II")
     end
+  end
+
+  def store_band(location, **match)
+    ActsAsTenant.with_tenant(@tenant) do
+      PayBand.new(location:, currency: "AUD", period: "year", minimum: 100_000, midpoint: 120_000, maximum: 140_000)
+             .tap { it.match_on(**match) }.tap(&:save!)
+    end
+  end
+
+  def locations_in_order = ActsAsTenant.with_tenant(@tenant) { PayBand.order(:position).pluck(:location) }
+
+  # Selenium can't drive an HTML drag, so this sends the events a drag sends.
+  def drag_below(source, target)
+    page.execute_script(<<~JS, source, target)
+      const [source, target] = arguments
+      const dataTransfer = new DataTransfer()
+      const fire = (element, type, clientY) =>
+        element.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer, clientY }))
+      const { bottom } = target.getBoundingClientRect()
+      fire(source, "dragstart", 0)
+      fire(target, "dragover", bottom - 1)
+      fire(target, "drop", bottom - 1)
+      fire(source, "dragend", 0)
+    JS
   end
 
   { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |viewport, size|
@@ -28,13 +54,14 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
         visit tenant_pay_bands_path
         assert_text "No pay bands yet"
 
-        select "E2 Engineer II", from: "Level"
+        select "Software Engineer", from: "Who"
+        select "Level 2", from: "Level"
         js_fill_in "#pay-band-location", with: "Fixtureland"
         js_fill_in "#pay-band-currency", with: "AUD"
         js_fill_in "#pay-band-minimum", with: "100,000"
         js_fill_in "#pay-band-midpoint", with: "120,000"
         js_fill_in "#pay-band-maximum", with: "140,000"
-        click_button_with_js_fallback("pay-band-add", expect_text: "Band added for Software Engineer, E2 Engineer II, Fixtureland.")
+        click_button_with_js_fallback("pay-band-add", expect_text: "Band added for Software Engineer, E2 Engineer II, Fixtureland at 1 in the list.")
 
         band = ActsAsTenant.with_tenant(@tenant) { PayBand.sole }
         within("#pay-band-#{band.id}") do
@@ -65,7 +92,7 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
         visit tenant_pay_bands_path
         assert_text "No pay bands yet"
 
-        select "E2 Engineer II", from: "Level"
+        select "Every role in Engineering", from: "Who"
         js_fill_in "#pay-band-currency", with: "AUD"
         js_fill_in "#pay-band-minimum", with: "130000"
         js_fill_in "#pay-band-midpoint", with: "120000"
@@ -73,11 +100,51 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
         click_button_with_js_fallback("pay-band-add", expect_text: "The band could not be added")
 
         assert_field "Minimum", with: "130000"
-        assert_select "Level", selected: "E2 Engineer II"
+        assert_select "Who", selected: "Every role in Engineering"
+        assert_select "Level", selected: "Every level"
         assert_no_sideways_overflow
         screenshot("refused_#{viewport}")
       end
+
+      should "move a band with its buttons, and flag one that never has the last word" do
+        narrow = store_band("Fixtureland", role: @role, level_ordinal: 2)
+        wide = store_band("Fixtureland", role_family: @family)
+        visit tenant_pay_bands_path
+        assert_text "The order"
+        assert_no_selector "[id^='pay-band-shadowed-']"
+
+        click_button_with_js_fallback("pay-band-down-#{wide.id}", expect_text: "to 2 in the list")
+        assert_equal [ narrow.id, wide.id ], ActsAsTenant.with_tenant(@tenant) { PayBand.order(:position).ids }
+        within("#pay-band-#{narrow.id}") do
+          assert_text "1."
+          assert_selector "#pay-band-shadowed-#{narrow.id}", text: "Never used"
+          assert_text "A band below it matches every seat this one does"
+        end
+        assert_no_sideways_overflow
+        assert_no_stolen_taps
+        screenshot("shadowed_#{viewport}")
+
+        click_button_with_js_fallback("pay-band-up-#{wide.id}", expect_text: "to 1 in the list")
+        assert_no_selector "[id^='pay-band-shadowed-']"
+      end
     end
+  end
+
+  should "drag a band into a new place on a desktop" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    sign_in_as(@admin_user)
+    first = store_band("Alpha")
+    store_band("Beta")
+    store_band("Gamma")
+    visit tenant_pay_bands_path
+    assert_text "The order"
+    wait_for_stimulus "pay-band-order"
+
+    drag_below(find("#pay-band-#{first.id}"), find("#pay-bands-order li:last-child"))
+
+    assert_text "Saved the new order."
+    assert_equal %w[Beta Gamma Alpha], locations_in_order
+    assert_selector "#pay-bands-order li:last-child", text: "3."
   end
 
   should "keep the screen and its menu link from members" do
