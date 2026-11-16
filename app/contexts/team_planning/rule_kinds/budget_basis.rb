@@ -3,8 +3,7 @@
 # Whether a scenario's budget includes on-costs or is base pay only
 # ([#369](https://github.com/espaliahq/espalia/issues/369)). Funded is measured
 # on the same basis, so the budget's four numbers compare like with like. A
-# budget line has no unit, so the budget read takes the rule set for the whole
-# plan or scenario and ignores one set on a unit.
+# budget line has no unit, so the rule is plan-wide.
 #
 # @example
 #   { "basis" => "base_only" }
@@ -15,7 +14,10 @@ class TeamPlanning::RuleKinds::BudgetBasis < TeamPlanning::RuleKind
   def self.rule_name = "budget_basis"
 
   # @return [String]
-  def self.description = "Whether the budget includes on-costs (inclusive) or is base pay only (base_only). Set it for the whole plan or scenario: the budget read ignores one set on a unit"
+  def self.description = "Whether the budget includes on-costs (inclusive) or is base pay only (base_only). Set for the whole plan, never a unit"
+
+  # @return [Boolean]
+  def self.plan_wide? = true
 
   # @return [Hash]
   def self.default = { "basis" => "inclusive" }

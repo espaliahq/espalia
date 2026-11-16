@@ -56,6 +56,8 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
     call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, rule: "budget_basis", value: { basis: "base_only" })
 
     assert_equal "base_only", budget[:basis]
+    assert_match "budget_basis is set for the whole plan, not a unit",
+                 refusal { call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, unit_id: @unit_id, rule: "budget_basis", value: { basis: "inclusive" }) }
     assert_match "basis must be inclusive or base_only",
                  refusal { call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, rule: "budget_basis", value: { basis: "net" }) }
   end
