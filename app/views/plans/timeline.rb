@@ -478,6 +478,7 @@ class Views::Plans::Timeline < Views::Base
     arrival = arrival(lane, bar) if bar[:from] == starts
     span(class: "font-medium") { arrival } if arrival
     span { subject(bar) }
+    render Views::Plans::HiringNote.new(@timeline[:positions].fetch(bar[:subject_id], {})) if bar[:kind] == "position"
     departure = departure(lane, bar, starts..ends)
     span(class: "text-muted") { departure } if departure
     onward = onward(lane, bar) if bar[:to] == ends

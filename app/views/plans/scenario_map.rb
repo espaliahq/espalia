@@ -311,6 +311,7 @@ class Views::Plans::ScenarioMap < Views::Base
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-dashed border-default px-2 py-1 text-sm #{DROP_OVER}") do
         span(class: "min-w-0 break-words font-medium text-default") { position_name(position) }
         open_fte_note(position[:open_fte])
+        render Views::Plans::HiringNote.new(position) if position[:open_fte].positive?
         @position_marks.call(position).each { render it }
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
         position.fetch(:occupants, []).sort_by { name(it[:person_id]) }.each do |occupant|
