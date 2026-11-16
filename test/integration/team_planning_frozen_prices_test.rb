@@ -10,6 +10,14 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
   READS = %w[Cost ScenarioCosts Capacity Budget Funding Forecast BudgetLines].freeze
   # What a frozen read may still take live: the plan itself, who may see it,
   # and who is at which level where. Prices come from the archive's copy.
+  # What each archive's copy holds, frozen into every PlanPricesFrozen already stored.
+  COPIED = { pay_bands: %w[id level_id role_name level_name location location_key currency period minimum midpoint maximum
+                           role_family_id role_id level_ordinal position created_at updated_at],
+             exchange_rates: %w[id from_currency to_currency rate applies_from created_at updated_at],
+             budget_lines: %w[id starts_on ends_on amount currency period head_count role_id level_id role_name level_name location
+                              cost_centre origin approved_on created_at updated_at],
+             reference_currencies: %w[id currency created_at updated_at],
+             planning_rule_defaults: %w[id rule value created_at updated_at] }.freeze
   STRUCTURE = %w[event_store_events event_store_events_in_streams plan_encryption_keys team_planning_plans team_planning_plan_members
                  tenants people org_fact_periods org_leavers framework_roles framework_levels hris_role_mappings person_framework_assignments].to_set.freeze
 
@@ -184,6 +192,13 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
 
     assert_equal({ "yearly_rate" => "0.2" }, read[:value])
     assert_equal "2025-12-15", read[:priced_on]
+  end
+
+  should "copy the columns every stored copy holds, so a change to them meets the copies already stored" do
+    TeamPlanning::PricingInputs::MODELS.each do |name, model|
+      assert_equal COPIED.fetch(name).sort, (model.column_names - TeamPlanning::PricingInputs::LEFT_OUT).sort,
+                   "#{model.table_name} changed: read the copies stored before it in TeamPlanning::PricingInputs#rows, then update COPIED"
+    end
   end
 
   should "read a frozen copy only until the plan is restored, and take a fresh one when it is archived again" do

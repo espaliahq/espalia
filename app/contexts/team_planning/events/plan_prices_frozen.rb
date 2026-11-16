@@ -10,6 +10,10 @@
 # the plan erases it. It names nobody: who last edited a row is left out, and
 # nothing derived from a person's actual pay is in it.
 #
+# The copy holds each table's rows as they were, and it is sealed, so no
+# upcaster can reach inside it. A migration that renames or drops a column
+# it holds must read the old copies in {TeamPlanning::PricingInputs#rows}.
+#
 # @!attribute [r] data
 #   @return [Hash] event data
 #   @option data [String] :plan_id
