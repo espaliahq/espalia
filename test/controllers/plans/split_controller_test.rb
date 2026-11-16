@@ -121,6 +121,20 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_select "input[name='name'][value='Agreed moves']"
     end
 
+    should "refuse a change that is no longer in the scenario, keep the choice and split nothing" do
+      stale = SecureRandom.uuid_v7
+      scenarios = -> { ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).count } }
+
+      assert_no_difference(scenarios) do
+        post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @to_payments, stale ], name: "Agreed moves" }
+      end
+
+      assert_response :unprocessable_content
+      assert_select "[role='alert']", text: /This scenario has no change #{stale} in effect to move/
+      assert_select "input[value='#{@to_payments}'][checked]"
+      assert_select "input[name='name'][value='Agreed moves']"
+    end
+
     should "refuse the baseline with the operation's words" do
       refusal = assert_raises(Operations::Base::ParameterError) do
         call(Operations::TeamPlanning::SplitScenario, @editor, plan_id: @plan_id, scenario_id: @plan_id, event_ids: [ @to_payments ], name: "X")
