@@ -93,10 +93,17 @@ class Views::Plans::TimelineFigures < Views::Base
   end
 
   def money_line(approved, unfunded)
-    funded = zero?(unfunded) ? "all funded" : "#{Views::Plans::CostMarks::Format.sum(unfunded, reference)} unfunded"
+    funded = unfunded_line(unfunded) || "all funded"
     return "Budget #{Views::Plans::CostMarks::Format.sum(approved, reference)} · #{funded}" if approved[:native].any?
 
-    zero?(unfunded) ? "No budget" : "No budget · #{funded}"
+    unfunded_line(unfunded) ? "No budget · #{funded}" : "No budget"
+  end
+
+  # An open position no band prices is unfunded with no money, so the count speaks for it.
+  def unfunded_line(unfunded)
+    return "#{Views::Plans::CostMarks::Format.sum(unfunded, reference)} unfunded" unless zero?(unfunded)
+
+    "#{positions(unfunded[:positions])} unfunded" if unfunded[:positions].positive?
   end
 
   def capacity(capacity)

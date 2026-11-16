@@ -42,6 +42,7 @@ class Views::Plans::TimelineFiguresTest < ActiveSupport::TestCase
     assert_equal "Budget EUR 150k · all funded", lines(step(budget: budget))["budget"]
     assert_equal "Budget EUR 150k · EUR 50k unfunded", lines(step(budget: budget(unfunded: eur("50000"), positions: 1)))["budget"]
     assert_equal "No budget · EUR 50k unfunded", lines(step(budget: budget(approved: NONE, unfunded: eur("50000"))))["budget"]
+    assert_equal "Budget EUR 150k · 1 position unfunded", lines(step(budget: budget(positions: 1)))["budget"]
     assert_equal "All positions funded", lines(step(budget: budget), money: false)["budget"]
     assert_equal "1 position unfunded", lines(step(budget: budget(positions: 1)), money: false)["budget"]
   end
