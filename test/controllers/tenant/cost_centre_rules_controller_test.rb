@@ -169,6 +169,16 @@ class Tenant::CostCentreRulesControllerTest < ActionDispatch::IntegrationTest
       patch reorder_tenant_cost_centre_rules_path, params: { version:, entry_ids: [] }
       assert_redirected_to root_path
       assert_nil stored
+
+      saved = { "entries" => [ { "location" => "Alpha", "cost_centre" => "Alpha" } ] }
+      ActsAsTenant.with_tenant(@tenant) { PlanningRuleDefault.create!(rule: "cost_centre", value: saved) }
+      get edit_tenant_cost_centre_rule_path(1, version:)
+      assert_redirected_to root_path
+      patch tenant_cost_centre_rule_path(1), params: { version:, entry: { location: "Beta", cost_centre: "Beta" } }
+      assert_redirected_to root_path
+      delete tenant_cost_centre_rule_path(1), params: { version: }
+      assert_redirected_to root_path
+      assert_equal saved, stored
     end
   end
 end
