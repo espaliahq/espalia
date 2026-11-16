@@ -96,4 +96,10 @@ class Views::Plans::ChecksTabTest < ActiveSupport::TestCase
     assert_equal "/planning/#{PLAN}/checks", html.css("nav[aria-label='Scenario'] a").first["href"]
     assert_equal Q1, html.at_css("#checks-scenario option[selected]")["value"]
   end
+
+  should "name each facet as the Changes tab does, a plan value included" do
+    html = render_tab(items: [ item(:allocations, facet: "data:fte"), item(:capacity_overrides, facet: "capacity:#{RISK}") ])
+
+    assert_equal [ "Ada Quill · Capacity", "Ada Quill · FTE (plan value)" ], html.css("[data-check-item] p:first-child").map { it.text.squish }
+  end
 end
