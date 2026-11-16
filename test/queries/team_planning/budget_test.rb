@@ -248,6 +248,18 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal TeamPlanning::Budget::Over.new(money: nil, heads: false, mismatched: []), report.cost_centres["Elsewhere"].over
   end
 
+  should "hold a cost centre only on the lines that state each limit" do
+    money = euros(150_000, cost_centre: "Data")
+    heads = line(head_count: 2, cost_centre: "Data")
+    fund = ->(budget_line_id) { operation(Operations::TeamPlanning::SetPositionFunding, position_id: open_position(cost_centre: "Data"), draws: [ { budget_line_id: } ]) }
+    fund.(money)
+    2.times { fund.(heads) }
+    strictness(preset: "cost_centre")
+
+    assert_equal TeamPlanning::Budget::Over.new(money: [], heads: false, mismatched: []), budget.cost_centres["Data"].over,
+                 "the head count line's seats spend no approved money, and the money line's seat takes no counted head"
+  end
+
   should "flag a line drawn on in another currency, never judging it on that money" do
     dollars = line(amount: 50_000, currency: "USD", period: "year", cost_centre: "Platform")
     open_position

@@ -195,14 +195,15 @@ class TeamPlanning::Budget
                                  head_count:, fte: heads.fte))
   end
 
-  # Spent is everything the figure pays for, unfunded included, as nothing
-  # inside a cost centre or the organisation is outside its budget. A
-  # currency no line approves is mismatched, never judged, and a figure with
-  # no amount or head count approved isn't held on it.
+  # Spent is what the lines stating the limit draw, plus the unfunded part,
+  # as nothing inside a cost centre or the organisation is outside its
+  # budget. A line silent on money or heads is outside that limit. A
+  # currency no line approves is mismatched, never judged.
   def over(scope, approved:, spent:, head_count:, fte:)
     return unless @strictness.fetch("scope") == scope
 
     strictness = TeamPlanning::RuleKinds::BudgetStrictness
+    spent = spent.reject { |_, amount| amount.zero? }
     money = approved.select { |currency, amount| amount < spent.fetch(currency, 0r) }.keys.sort if strictness.money?(@strictness) && approved.any?
     Over.new(money:, heads: (head_count < fte if strictness.heads?(@strictness) && head_count),
              mismatched: approved.any? ? (spent.keys - approved.keys).sort : [])
@@ -263,12 +264,12 @@ class TeamPlanning::Budget
     counted = lines.select { it.line.head_count }
     head_count = counted.sum(0r) { Rational(it.line.head_count.to_s) } if counted.any?
     approved = priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:approved) }
-    funded = lines.map(&:funded).reduce({}) { |sum, money| add(sum, money) }
-    Totals.new(approved: converted(approved), head_count:, funded: converted(funded), funded_heads:,
+    Totals.new(approved: converted(approved), head_count:, funded: converted(lines.map(&:funded).reduce({}) { |sum, money| add(sum, money) }), funded_heads:,
                remaining: converted(priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:remaining) }),
                remaining_head_count: head_count && counted.sum(0r, &:remaining_head_count),
                unfunded: converted(unfunded), unfunded_heads:,
-               over: over(scope, approved:, spent: add(funded, unfunded), head_count:, fte: funded_heads.fte + unfunded_heads.fte))
+               over: over(scope, approved:, spent: add(priced.map(&:funded).reduce({}) { |sum, money| add(sum, money) }, unfunded),
+                                 head_count:, fte: counted.sum(0r) { it.funded_heads.fte } + unfunded_heads.fte))
   end
 
   def unpriced(seats)
