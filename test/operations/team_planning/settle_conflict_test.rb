@@ -154,7 +154,7 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
 
       assert_equal "Only a member with the see-pay right can change pay", forced
       assert_equal unforced, forced
-      assert_not_includes forced, "91234"
+      assert_no_pay_figure forced, "91234"
 
       with_pay_conflict_carried { settle_pay(as: @editor) }
       entry = call(:History, plan_id: @plan_id, scenario_id: @q1)[:entries].last

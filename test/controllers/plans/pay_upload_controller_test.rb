@@ -114,7 +114,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-pay-upload-preview='ok']"
       assert_includes response.body, "Ada Quill"
       assert_includes response.body, "Hold pay for 1 person"
-      assert_not_includes response.body, "91234.56"
+      assert_no_pay_figure response.body, "91234.56"
       assert_not held_pay?
 
       signature = signature_from_preview
@@ -134,7 +134,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-pay-upload-line='2']", text: /Line 2 names no one in the organisation and has an amount/
       assert_select "input[name='signature']", count: 0
       assert_not_includes response.body, "nobody@example.com"
-      assert_not_includes response.body, "619.37"
+      assert_no_pay_figure response.body, "619.37"
     end
 
     should "refuse a confirm for a file changed since the preview, and hold nothing" do
@@ -143,7 +143,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :unprocessable_content
       assert_select "turbo-frame#pay-upload-preview [role='alert']", text: /The file, basis, scenario or the people it names changed since the preview/
-      assert_not_includes response.body, "91235.56"
+      assert_no_pay_figure response.body, "91235.56"
       assert_not held_pay?
     end
 
@@ -166,7 +166,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
     ensure
       ActionController::Base.logger = Rails.logger = original
       assert_includes log.string, "[FILTERED]"
-      assert_not_includes log.string, "91234.56"
+      assert_no_pay_figure log.string, "91234.56"
       assert_not_includes log.string, "ada.quill@example.com"
     end
   end

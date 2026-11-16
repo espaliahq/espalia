@@ -107,7 +107,7 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     set_pay
 
     assert_equal [ "set", "data:pay" ], step[:undo].values_at(:action, :facet)
-    assert_not_includes step.to_json, PAY[:amount]
+    assert_no_pay_figure step, PAY[:amount]
   end
 
   should "offer the latest other change as undo once the see-pay right is withdrawn" do

@@ -228,7 +228,7 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
 
     get split_plan_path(@plan_id, scenario_id: @q1)
     assert_select "[data-split-change='#{pay}'] label", text: "Ada Quill: Pay"
-    assert_not_includes response.body, amount
+    assert_no_pay_figure response.body, amount
 
     post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ pay ], name: "Agreed pay" }
     assert_equal "Split 1 change off into Agreed pay.", flash[:notice]

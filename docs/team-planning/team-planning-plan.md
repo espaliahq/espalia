@@ -377,7 +377,7 @@ edits the change, then approves again.
 | 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built). Built in [#298](https://github.com/espaliahq/espalia/issues/298) | 9.1 |
 | 9.3 | Edit in time: drag a person between blocks, move a change a step earlier or later, from a "When…" menu or by dragging a bar's end. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built). Built in [#309](https://github.com/espaliahq/espalia/issues/309) and [#393](https://github.com/espaliahq/espalia/issues/393) | 9.2, 3.12 |
 | 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built). Built in [#451](https://github.com/espaliahq/espalia/issues/451) | 9.1 |
-| 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |
+| 9.5 | Cost against budget, unfunded and capacity under each column. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built). Built in [#452](https://github.com/espaliahq/espalia/issues/452) | 9.2, 5.8, 6.4, 7.4 |
 
 ### P10 Forecasts
 

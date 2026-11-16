@@ -10,6 +10,7 @@ require_relative "support/role_lens_fixture"
 require_relative "support/org_graph_fixture"
 require_relative "support/feedback_exchange_producer_helpers"
 require_relative "support/offline_hibob"
+require_relative "support/pay_figure_assertions"
 
 OmniAuth.config.test_mode = true
 OmniAuth.config.logger = Rails.logger

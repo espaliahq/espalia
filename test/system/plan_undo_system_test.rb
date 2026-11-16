@@ -73,7 +73,7 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
         sign_in_as(@editor.user)
         visit changes_plan_path(@plan_id, scenario: @year)
         assert_equal "Undo: Ada Quill · Pay", find(UNDO)["aria-label"]
-        assert_no_text PAY[:amount]
+        assert_no_pay_figure page.text, PAY[:amount]
 
         call(Operations::TeamPlanning::WithdrawSeePay, @planner, plan_id: @plan_id, person_id: @editor.person.id)
         visit changes_plan_path(@plan_id, scenario: @year)
@@ -82,7 +82,7 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
         assert_no_selector "[data-clear-change='data:pay']", visible: :all
         assert_no_selector "[data-undo-control]", text: "Pay", visible: :all
         assert_not_includes page.html, "Ada Quill · Pay"
-        assert_not_includes page.html, PAY[:amount]
+        assert_no_pay_figure page.html, PAY[:amount]
       end
 
       should "clear a change after saying what the scenario follows again, and offer Undo to bring it back" do
