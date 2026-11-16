@@ -706,7 +706,7 @@ class TeamPlanning::CommandHandler
   # today's prices, as one archived before the copy existed does.
   def frozen_prices = (TeamPlanning::PricingInputs.capture(ActsAsTenant.current_tenant) if PlanKeyStore.available?)
 
-  def tenant_zone = Tenant.current!.time_zone
+  def tenant_zone = Tenant.current!.working_zone
 
   def actor_id!
     @actor.person&.id or raise TeamPlanning::Error, "Link your account to a person to work on plans"

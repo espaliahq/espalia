@@ -47,6 +47,16 @@ class Tenant::TimeZonesControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "isn&#39;t a time zone we know"
       assert_equal "UTC", @tenant.reload.time_zone
     end
+
+    should "open on UTC to replace a stored zone no longer known" do
+      @tenant.update_column(:time_zone, "Middle Earth")
+
+      get tenant_time_zone_path
+
+      assert_response :success
+      assert_select "select#tenant_time_zone option[selected][value='UTC']"
+      assert_select "select#tenant_time_zone option[value='Middle Earth']", count: 0
+    end
   end
 
   context "as a tenant member" do

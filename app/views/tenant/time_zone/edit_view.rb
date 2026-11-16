@@ -15,7 +15,7 @@ class Views::Tenant::TimeZone::EditView < Views::Base
   # @param tenants [Array<Tenant>]
   def initialize(tenant:, user:, current_tenant:, tenants: [], chosen: nil)
     @tenant = tenant
-    @zone = chosen.presence_in(zone_options.map(&:last)) || tenant.time_zone
+    @zone = chosen.presence_in(zone_options.map(&:last)) || tenant.working_zone
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -72,7 +72,8 @@ class Views::Tenant::TimeZone::EditView < Views::Base
     @zone_options ||= begin
       zones = ActiveSupport::TimeZone.all.group_by { it.tzinfo.name }
       named = zones.except("Etc/UTC").map { |identifier, names| [ "(GMT#{names.first.formatted_offset}) #{names.map(&:name).join(', ')}", identifier ] }
-      stored = ([ [ @tenant.time_zone, @tenant.time_zone ] ] unless zones.key?(@tenant.time_zone) || @tenant.time_zone == "UTC")
+      zone = @tenant.working_zone
+      stored = ([ [ zone, zone ] ] unless zones.key?(zone) || zone == "UTC")
       [ [ "UTC", "UTC" ], *stored, *named ]
     end
   end

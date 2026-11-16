@@ -440,5 +440,15 @@ class TenantTest < ActiveSupport::TestCase
 
       assert tenant.reload.update(name: "Renamed")
     end
+
+    should "read today in UTC while it keeps a zone no longer known" do
+      tenant = create(:tenant)
+      tenant.update_column(:time_zone, "Middle Earth")
+      travel_to Time.utc(2026, 11, 16, 23)
+
+      assert_equal "UTC", tenant.reload.working_zone
+      assert_equal Date.new(2026, 11, 16), tenant.today
+      assert_equal Time.utc(2026, 11, 16).end_of_day, tenant.end_of(Date.new(2026, 11, 16))
+    end
   end
 end

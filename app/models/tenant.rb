@@ -214,14 +214,20 @@ class Tenant < ApplicationRecord
   #
   # @param at [Time] the moment to read the date at
   # @return [Date]
-  def today(at: Time.current) = at.in_time_zone(time_zone).to_date
+  def today(at: Time.current) = at.in_time_zone(working_zone).to_date
 
   # The last moment of a day where the tenant works, for reading what was
   # known by the end of it.
   #
   # @param date [Date]
   # @return [ActiveSupport::TimeWithZone]
-  def end_of(date) = date.in_time_zone(time_zone).end_of_day
+  def end_of(date) = date.in_time_zone(working_zone).end_of_day
+
+  # The stored zone, or UTC when TZInfo has since dropped it, so today still
+  # reads and the settings page still opens to replace it.
+  #
+  # @return [String]
+  def working_zone = self.class.time_zone_known?(time_zone) ? time_zone : "UTC"
 
   # The current tenant's today, for code that runs inside a tenant.
   #
