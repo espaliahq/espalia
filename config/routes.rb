@@ -413,6 +413,8 @@ Rails.application.routes.draw do
     get :map, on: :member
     # One path along the calendar ([#298](https://github.com/espaliahq/espalia/issues/298)).
     get :timeline, on: :member
+    # The quiet figures under each step of that path, loaded once the path is drawn ([#452](https://github.com/espaliahq/espalia/issues/452)).
+    get :timeline_figures, on: :member, path: "timeline/figures"
     # The Org Graph's changes since the base, and where the plan's stand ([#287](https://github.com/espaliahq/espalia/issues/287)).
     get :changes, on: :member
     # What no longer fits in one scenario, by check ([#350](https://github.com/espaliahq/espalia/issues/350)).

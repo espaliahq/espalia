@@ -91,6 +91,28 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    should "load each step's figures under its header once the path is drawn, without widening a column" do
+      price_the_backfill
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id)
+      assert_text "Showing the path to Q2 settle."
+      assert_selector "turbo-frame#timeline-figures[complete]", visible: :all
+
+      within("turbo-frame#timeline-figures") do
+        assert_selector "[data-timeline-figures]", count: 3
+        assert_selector "[data-timeline-figures='0'] [data-timeline-figure='cost']", text: "seats unpriced"
+        assert_no_selector "[data-timeline-figures='0'] [data-timeline-figure='budget']"
+        assert_selector "[data-timeline-figures='1'] [data-timeline-figure='cost']", text: /over the step/
+        assert_selector "[data-timeline-figures='1'] [data-timeline-figure='budget']", text: /position/
+        assert_no_text "Loading figures"
+      end
+      assert_selector "turbo-frame#timeline-figures-phone", visible: :all
+      assert_no_selector "turbo-frame#timeline-figures-phone[complete]", visible: :all
+      widths = page.evaluate_script("[...document.querySelectorAll('[data-timeline-step]')].map(el => el.offsetWidth)")
+      assert_equal 1, widths.uniq.size
+      assert_no_sideways_overflow
+    end
+
     should "follow an alternative to redraw the path" do
       sign_in_as(@viewer.user)
       visit timeline_plan_path(@plan_id)
@@ -146,6 +168,21 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         assert_selector "[data-walk]", text: /2\s*→\s*to\s*0 heads · 1 left, 1 moved out/
         assert_selector "[data-walk]", text: /0\s*→\s*to\s*1 head · 1 moved in/
       end
+      assert_no_sideways_overflow
+    end
+
+    should "load the step's figures into its card" do
+      price_the_backfill
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id, step: 1)
+      assert_text "Step 2 of 3"
+      assert_selector "turbo-frame#timeline-figures-phone[complete]", visible: :all
+
+      within("[data-timeline-phone] turbo-frame#timeline-figures-phone") do
+        assert_selector "[data-timeline-figures='1'] [data-timeline-figure='cost']", text: /over the step/
+        assert_selector "[data-timeline-figures='1'] [data-timeline-figure='budget']", text: /position/
+      end
+      assert_no_selector "turbo-frame#timeline-figures[complete]", visible: :all
       assert_no_sideways_overflow
     end
 
@@ -458,6 +495,17 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
   def leaver_end_grip
     find(:xpath, "//*[@data-timeline-grid]//div[.//*[@data-timeline-lane][contains(normalize-space(.), 'leaves in Q1 hires')]]" \
                  "/span[@data-timeline-shift-edge='end']")
+  end
+
+  # The backfill's level gets a band and the plan a budget line, so a viewer without see-pay reads midpoints and head counts.
+  def price_the_backfill
+    ActsAsTenant.with_tenant(@tenant) do
+      ReferenceCurrency.create!(currency: "EUR")
+      level = FrameworkState::Level.find_by!(level_id: @level_id)
+      PayBand.create!(level:, currency: "EUR", period: "year", minimum: 80_000, midpoint: 100_000, maximum: 120_000)
+      BudgetLine.create!(starts_on: Date.current, ends_on: Date.current + 365, origin: "new", amount: 150_000, currency: "EUR",
+                         period: "year", head_count: 2)
+    end
   end
 
   def fork(**params) = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, **params)[:scenario_id]

@@ -6,7 +6,7 @@
 class PlansController < ApplicationController
   include Plans::BudgetEditing
 
-  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map budget new_budget_line create_budget_line edit_budget_line update_budget_line cut_budget_line]
+  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map timeline_figures budget new_budget_line create_budget_line edit_budget_line update_budget_line cut_budget_line]
 
   # GET /planning?state=archived
   def index
@@ -121,6 +121,22 @@ class PlansController < ApplicationController
     timeline = read(Operations::TeamPlanning::Timeline, scenario_id:)
     render plan_page(plan, scenarios:, open_tab: :timeline,
                            body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i, can_edit: can_edit?))
+  end
+
+  # GET /planning/:id/timeline/figures?scenario=:scenario_id&layout=phone&step=:index
+  #
+  # What each step on that path costs, leaves unfunded and can deliver
+  # ([#452](https://github.com/espaliahq/espalia/issues/452)), as a lazy frame
+  # the timeline loads after it is drawn. A phone's frame shows `step` alone.
+  def timeline_figures
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = params[:scenario].presence || Views::Plans::Timeline.first_leaf(scenarios, plan[:plan_id])
+    return redirect_to timeline_plan_path(plan[:plan_id], scenario: scenario_id) unless turbo_frame_request?
+
+    render Views::Plans::TimelineFigures.new(figures: read(Operations::TeamPlanning::TimelineFigures, scenario_id:), scenarios:,
+                                             phone: params[:layout] == "phone", step: params[:step].to_i)
   end
 
   # GET /planning/:id/changes?scenario=:scenario_id
