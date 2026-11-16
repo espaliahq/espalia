@@ -196,9 +196,8 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
 
       within("[data-timeline-grid]") do
         click_selector_with_js_fallback("button[aria-label='Change when, for Ada Quill']", expect_text: "Leave in Q2 settle instead")
-        click_link "Leave in Q2 settle instead"
       end
-      assert_text "Moved to Q2 settle."
+      click_link_with_js_fallback("Leave in Q2 settle instead", expect_text: "Moved to Q2 settle.")
 
       assert_text "Showing the path to Q2 settle."
       within("[data-timeline-grid]") do
@@ -215,9 +214,8 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
 
       within("[data-timeline-phone]") do
         click_selector_with_js_fallback("button[aria-label='Change when, for Bo Reyes']", expect_text: "Change place in Q2 settle instead")
-        click_link "Change place in Q2 settle instead"
       end
-      assert_text "Moved to Q2 settle."
+      click_link_with_js_fallback("Change place in Q2 settle instead", expect_text: "Moved to Q2 settle.")
 
       assert_text "Step 2 of 3"
       within("[data-timeline-phone]") { assert_selector "[data-timeline-lane]", text: /Bo\s+Reyes\s+to\s+Growth/ }
