@@ -63,6 +63,22 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_includes rows[4], "Ada Quill joined #{TeamPlanning::Attention::REMOVED_UNIT}"
     end
 
+    should "say a covered person or unit left the plan's units without naming where they went" do
+      html = render_tab(changes: [
+        drift_change("moved", person_id: BO, unit_id: nil, from_unit_id: PAYMENTS, outside: [ "unit_id" ]),
+        drift_change("moved", person_id: ADA, unit_id: GROWTH, from_unit_id: nil, outside: [ "from_unit_id" ]),
+        drift_change("fact_changed", person_id: ADA, fact: "manager", before: { "manager_id" => BO }, after: { "manager_id" => nil },
+                                     outside: [ "after" ]),
+        drift_change("unit_moved", unit_id: PAYMENTS, before: { "parent_id" => GROWTH }, after: { "parent_id" => nil }, outside: [ "after" ]),
+        drift_change("owner_added", person_id: nil, unit_id: PAYMENTS, outside: [ "person_id" ])
+      ])
+
+      assert_equal [ "Bo Reyes left the units this plan covers", "Ada Quill joined Growth from outside the units this plan covers",
+                     "Ada Quill's manager changed from Bo Reyes to someone outside this plan", "Payments left the units this plan covers",
+                     "Someone outside this plan became an owner of Payments" ],
+                   html.css("[data-drift-change] .break-words").map { it.text.squish }
+    end
+
     should "mark a change from this plan, and link each scenario whose plan it meets" do
       html = render_tab(changes: [ drift_change("joined", person_id: ADA, from_plan: true,
                                                           meets: [ { scenario_id: PLAN }, { scenario_id: Q1 }, { scenario_id: Q1 } ]) ])

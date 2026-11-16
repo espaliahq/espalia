@@ -27,7 +27,8 @@ class TeamPlanning::Drift
   # @!attribute from_plan [Boolean] whether it was applied from this plan
   # @!attribute meets [Array<Met>] the plan's changes to the facet it moves
   # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
-  Drifted = Data.define(:change, :from_plan, :meets, :sources)
+  # @!attribute outside [Array<String>] the fields {TeamPlanning::DriftScope} cut as outside the plan
+  Drifted = Data.define(:change, :from_plan, :meets, :sources, :outside)
 
   # @!attribute scenario_id [String] the plan's id for the root
   # @!attribute change_id [String] the planned change's event id
@@ -59,21 +60,36 @@ class TeamPlanning::Drift
     changes = OrgGraph::ChangesBetween.new(context: @context, from:, to: @today, by: :learned).call.changes
     return Report.new(from:, to: @today, changes: [], names: {}) if changes.empty?
 
-    planned = planned_changes
+    aggregate = @repository.load_plan(@plan.id)
+    cuts = within_scope(aggregate, changes)
+    changes = cuts.map(&:change)
+    return Report.new(from:, to: @today, changes: [], names: {}) if changes.empty?
+
+    planned = planned_changes(aggregate)
     from_plan = plan_ids(changes.map(&:event_id))
     sources = TeamPlanning::SourceOfTruth.new(tenant_id: @plan.tenant_id)
                                          .preload(unit_ids: changes.flat_map { [ it.unit_id, it.from_unit_id ] },
                                                   succession_ids: changes.map(&:succession_id))
-    drifted = changes.map do
-      Drifted.new(change: it, from_plan: from_plan[it.event_id] == @plan.id, meets: meeting(planned, it), sources: sources.of_drift(it))
+    drifted = cuts.map do |cut|
+      change = cut.change
+      Drifted.new(change:, from_plan: from_plan[change.event_id] == @plan.id, meets: meeting(planned, change),
+                  sources: sources.of_drift(change), outside: cut.outside)
     end
     Report.new(from:, to: @today, changes: drifted, names: names_for(changes, sources))
   end
 
   private
 
-  def planned_changes
-    plan = @repository.load_plan(@plan.id)
+  # A plan covering the whole organisation keeps every change.
+  def within_scope(aggregate, changes)
+    return changes.map { TeamPlanning::DriftScope::Cut.new(change: it, outside: []) } if @plan.scope_unit_ids.blank?
+
+    base = TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    maps = aggregate.scenarios.keys.map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
+    TeamPlanning::DriftScope.new([ base, TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @plan.id, base:).structure(aggregate), *maps ]).call(changes)
+  end
+
+  def planned_changes(plan)
     [ @plan.id, *plan.scenarios.keys ].flat_map do |scenario_id|
       plan.changes_in(scenario_id).index_by(&:key).values.map { [ scenario_id, it ] }
     end

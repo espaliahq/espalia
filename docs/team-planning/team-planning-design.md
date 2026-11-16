@@ -1280,6 +1280,15 @@ A change applied from this plan comes back `from_plan`, matched through the `pla
 its event; nothing sets one until approval exists. Whether a planned change is done,
 pending or conflicting is 4.3's status, below.
 
+A plan covering some units sees only drift about the people and units it covers
+([#435](https://github.com/espaliahq/espalia/issues/435)). `TeamPlanning::DriftScope`
+counts as covered whoever and whatever the baseline or any scenario holds, plus anyone
+or any unit placed in a covered unit since. A change about anything else is dropped,
+names and all. A covered person or unit moving out keeps its change, with the
+destination nulled: the reader learns they left the plan's units, not where they went.
+A covered person now reporting to someone the plan can't name reads the same way.
+`outside` lists the fields nulled, and the Changes tab words each one.
+
 `team_planning_drift` gives the same report to MCP, with people by id and a `names` map
 beside them.
 

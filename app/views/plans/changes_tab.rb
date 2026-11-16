@@ -18,6 +18,8 @@ class Views::Plans::ChangesTab < Views::Base
     "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ], "plan_only" => [ "Plan only", :info ]
   }.freeze
   STAYING = "Staying"
+  OUTSIDE = "Someone outside this plan"
+  OUTSIDE_MANAGER = "someone outside this plan"
   PLAN_ONLY = "Only in this plan"
   WHOLE_PLAN = "The whole plan"
   NARROW_NOTE = 100
@@ -325,17 +327,26 @@ class Views::Plans::ChangesTab < Views::Base
     when "membership_started" then "#{person} joined #{unit}"
     when "membership_ended" then "#{person} left #{unit}"
     when "membership_changed" then "#{person}'s place in #{unit} changed"
-    when "moved" then "#{person} moved from #{unit_name(change[:from_unit_id])} to #{unit}"
+    when "moved" then moved_line(person, change)
     when "unit_created" then "#{unit} was created"
     when "unit_renamed" then "#{change.dig(:before, 'name') || unit} was renamed #{change.dig(:after, 'name') || unit}"
-    when "unit_moved" then "#{unit} moved"
+    when "unit_moved" then outside?(change, "after") ? "#{unit} left the units this plan covers" : "#{unit} moved"
     when "unit_retired" then "#{unit} was retired"
     when "unit_succeeded" then "A succession was recorded"
-    when "owner_added" then "#{person} became an owner of #{unit}"
-    when "owner_removed" then "#{person} stopped owning #{unit}"
+    when "owner_added" then "#{outside?(change, 'person_id') ? OUTSIDE : person} became an owner of #{unit}"
+    when "owner_removed" then "#{outside?(change, 'person_id') ? OUTSIDE : person} stopped owning #{unit}"
     else change[:kind].humanize
     end
   end
+
+  def moved_line(person, change)
+    return "#{person} left the units this plan covers" if outside?(change, "unit_id")
+    return "#{person} joined #{unit_name(change[:unit_id])} from outside the units this plan covers" if outside?(change, "from_unit_id")
+
+    "#{person} moved from #{unit_name(change[:from_unit_id])} to #{unit_name(change[:unit_id])}"
+  end
+
+  def outside?(change, field) = Array(change[:outside]).include?(field)
 
   def fact_line(person, change)
     fact = FACTS.fetch(change[:fact], change[:fact].to_s.humanize(capitalize: false))
@@ -349,6 +360,7 @@ class Views::Plans::ChangesTab < Views::Base
   def fact_value(fact, fields)
     return unless fields.is_a?(Hash)
     return name_of(fields["manager_id"]) if fact == "manager" && fields["manager_id"]
+    return OUTSIDE_MANAGER if fact == "manager" && fields.key?("manager_id")
 
     fields.values.select { it.is_a?(String) || it.is_a?(Numeric) }.join(", ").presence
   end

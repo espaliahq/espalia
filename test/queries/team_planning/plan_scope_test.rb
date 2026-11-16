@@ -179,13 +179,44 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
 
   should "never let a unit or person outside the scope reach a plan read, though a whole-organisation plan shows them" do
     as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).set_membership(@brook.id, @payments, **ESPALIA, allocation: 0.7) }
-    leaked = [ @sales, @cy.id, @dee.id ]
+    # After the base, so Drift and the rebase preview have news about Sales
+    # to leak. Before #435 this ran before the base, with no drift at all.
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      at = { provider: "espalia", effective_on: "2026-01-15" }
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_title(@dee.id, "Principal Engineer", **at)
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_level(@cy.id, "8", **at)
+    end
+    leaked = [ @sales, @cy.id, @dee.id, "Cy Quill", "Dee Quill", "Principal Engineer" ]
     scoped = every_read(@plan_id, @h1)
     leaked.each { assert_not_includes scoped, it }
 
     whole = every_read(@whole_id, @whole_h1)
     leaked.each { assert_includes whole, it, "the control proves the reads would carry it" }
     assert person(scenario_map(@plan_id, @h1), @ada)[:manager_outside]
+  end
+
+  should "keep drift to what the plan covers, saying a covered person left without saying where to" do
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      at = { provider: "espalia", effective_on: "2026-01-15" }
+      people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+      people.move_membership(@ada.id, @payments, @sales, effective_on: at[:effective_on])
+      people.change_manager(@brook.id, @dee.id, **at)
+      people.change_title(@dee.id, "Principal Engineer", **at)
+    end
+
+    drift = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)
+    moved = drift[:changes].find { it[:kind] == "moved" }
+    assert_equal [ @ada.id, nil, @payments, [ "unit_id" ] ], moved.values_at(:person_id, :unit_id, :from_unit_id, :outside)
+    manager = drift[:changes].find { it[:fact] == "manager" }
+    assert_equal [ @brook.id, nil, [ "after" ] ], [ manager[:person_id], manager.dig(:after, "manager_id"), manager[:outside] ]
+    assert_empty drift[:changes].select { it[:person_id] == @dee.id }
+    [ @sales, @dee.id, "Sales", "Dee Quill", "Principal Engineer" ].each { assert_not_includes drift.to_json, it }
+
+    whole = call(Operations::TeamPlanning::Drift, plan_id: @whole_id)
+    [ @sales, @dee.id, "Dee Quill", "Principal Engineer" ].each { assert_includes whole.to_json, it, "the control proves drift would carry it" }
+    assert(whole[:changes].all? { it[:outside].empty? })
   end
 
   # Platform is Ada's own; Core and Engineers come from entries a seat in
