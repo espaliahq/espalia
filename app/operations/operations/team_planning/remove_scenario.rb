@@ -42,6 +42,8 @@ class Operations::TeamPlanning::RemoveScenario < Operations::Base
     scenario_ids.map { it.to_s.downcase }.uniq.filter_map do |scenario_id|
       hidden = hidden_pay(aggregate, scenario_id)
       [ scenario_id, notice(hidden) ] if hidden.positive?
+    rescue ::TeamPlanning::Error
+      nil
     end.to_h
   rescue ::TeamPlanning::Error
     {}

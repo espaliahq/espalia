@@ -59,6 +59,18 @@ class Operations::TeamPlanning::RemoveScenarioNoticesTest < ActiveSupport::TestC
     end
   end
 
+  should "keep every other scenario's notice when one can't be counted" do
+    ActsAsTenant.with_tenant(@tenant) do
+      count = Operations::TeamPlanning::RemoveScenario.method(:hidden_pay)
+      failing = ->(aggregate, scenario_id) { scenario_id == @one ? raise(TeamPlanning::Error, "no such scenario") : count.(aggregate, scenario_id) }
+      batch = Operations::TeamPlanning::RemoveScenario.stub(:hidden_pay, failing) { notices(@editor) }
+
+      assert_not batch.key?(@one)
+      assert batch.key?(@two)
+      assert batch.key?(@priced)
+    end
+  end
+
   should "give someone who sees pay no notices" do
     ActsAsTenant.with_tenant(@tenant) { assert_equal({}, notices(@holder)) }
   end
