@@ -1251,9 +1251,11 @@ gives the four numbers for a scenario, never the baseline.
   scenario's out of 365, beside its head count. A line with no amount approves nothing, never
   zero.
 - **Funded** is what each seat costs for the caller, at the share its position draws on a
-  line, so it follows the caller's pay view: midpoints alone without the see-pay right.
-- **Unfunded** is the rest: the share no held draw funds, seats in no position, and forecast
-  rows. Funded plus unfunded is the cost read's total, per currency.
+  line, for the days of the seat the line's period covers. It follows the caller's pay view:
+  midpoints alone without the see-pay right.
+- **Unfunded** is the rest: the share and days no held draw funds, seats in no position, and
+  forecast rows, which count as their kind prices them on either basis. On an inclusive basis,
+  funded plus unfunded is the cost read's total, per currency.
 - **Remaining** is approved less funded, in the line's own currency, and head count less the
   FTE drawn. A line drawn on in another currency lists it as mismatched and never converts
   it. Only the grand totals convert, once, to the reference currency.

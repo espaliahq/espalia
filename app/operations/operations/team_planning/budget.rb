@@ -16,8 +16,9 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "yearly, over the days its period overlaps the scenario's out of 365, in its own currency, beside its " \
               "head_count; a line with no amount approves null, never zero. Funded is what the seats team_planning_cost " \
               "prices for this caller cost, each at the share its position draws on a line (as team_planning_funding " \
-              "derives or sets it), so it follows pay_view. Unfunded is the rest: the share no held draw funds, seats " \
-              "in no position, and forecast rows. Funded plus unfunded is team_planning_cost's scenario total, per " \
+              "derives or sets it), for the days of the seat the line's period covers, so it follows pay_view. Unfunded is " \
+              "the rest: the share and days no held draw funds, seats in no position, and forecast rows, which count as " \
+              "their kind prices them on either basis. Funded plus unfunded is team_planning_cost's scenario total, per " \
               "currency, on an inclusive basis. Remaining is approved less funded in the line's own currency, and " \
               "head_count less the FTE drawn. Money stays per currency: a line drawn on in another currency lists it in " \
               "mismatched_currencies, never converted, and only totals carry `converted`, in the reference currency " \

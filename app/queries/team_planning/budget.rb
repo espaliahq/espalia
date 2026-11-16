@@ -7,10 +7,11 @@
 # Money comes from the seat lines {TeamPlanning::Cost} prices, so it follows
 # the caller's pay view, and draws come from {TeamPlanning::Funding}. Each
 # priced seat in a position goes to the lines its position draws on, at each
-# draw's share; the rest of it is unfunded, as is a seat in no position and
-# any forecast row, which names none. So funded plus unfunded is the cost
-# read's total, per currency, on an inclusive basis, and its base pay plus
-# the forecast on a base-only one. A seat no band prices counts in head count
+# draw's share and for the days of the seat each line's period covers; the
+# rest of it is unfunded, as is a seat in no position and any forecast row,
+# which names none and counts as its kind prices it on either basis. So
+# funded plus unfunded is the cost read's total, per currency, on an
+# inclusive basis, and its base pay plus the forecast on a base-only one. A seat no band prices counts in head count
 # and is listed under `unpriced`, with no money.
 #
 # Approved is a line's amount, made yearly, over the days its period overlaps
