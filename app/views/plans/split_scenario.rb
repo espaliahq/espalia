@@ -7,6 +7,8 @@
 # `team_planning_split_scenario`, which decides every rule; a change names its
 # subject and facet only, so pay reads as "Pay" and never as a value.
 class Views::Plans::SplitScenario < Views::Base
+  SUFFIX = ", agreed part"
+
   # @param plan [Hash] from `team_planning_plan`
   # @param scenario [Hash] from `team_planning_scenarios`, the one being split
   # @param needs [Hash] from `team_planning_split_needs`
@@ -17,7 +19,7 @@ class Views::Plans::SplitScenario < Views::Base
     @scenario = scenario
     @needs = needs
     @chosen = draft.fetch(:event_ids, []).to_set
-    @name = draft[:name].presence || "#{scenario[:name]}, agreed part"
+    @name = draft[:name].presence || suggested_name
     @error = error
     @by_event = needs[:changes].index_by { it[:event_id] }
   end
@@ -37,6 +39,8 @@ class Views::Plans::SplitScenario < Views::Base
   end
 
   private
+
+  def suggested_name = "#{@scenario[:name].truncate(TeamPlanning::PlanAggregate::NAME_LIMIT - SUFFIX.length)}#{SUFFIX}"
 
   def plan_id = @plan[:plan_id]
 
