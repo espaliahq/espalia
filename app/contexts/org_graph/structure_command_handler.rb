@@ -51,6 +51,15 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
+  # @see OrgGraph::StructureAggregate#set_kind_parents
+  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  def set_kind_parents(level_id, **options)
+    authorize_taxonomy!
+    unless_history_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.set_kind_parents(level_id, **attributed(options, :defined_by_id)) }
+    end
+  end
+
   # @see OrgGraph::StructureAggregate#reorder_levels
   # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
   def reorder_levels(level_ids, **options)

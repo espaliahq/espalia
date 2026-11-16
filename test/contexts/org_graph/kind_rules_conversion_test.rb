@@ -47,7 +47,7 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
     error = assert_raises(RuntimeError) do
       as_tenant { @handler.move_unit(@lending, @ops, effective_on: @today, provider: "hibob") }
     end
-    assert_equal "A parent must sit at a higher level", error.message
+    assert_equal "Team can't sit under Division", error.message
     assert_nothing_raised { as_tenant { @handler.move_unit(@lending, region, effective_on: @today, provider: "hibob") } }
   end
 
@@ -58,7 +58,7 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
     error = assert_raises(RuntimeError) do
       as_tenant { @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches:, effective_on: @today) }
     end
-    assert_equal "Move these units first, as the change leaves them where their kind may not sit: Platform", error.message
+    assert_equal "These units wouldn't fit this structure, so move them first: Platform (Team under Division)", error.message
     assert_equal "espalia", as_tenant { OrgTaxonomyLevel.find(id("Team")).provider }
 
     as_tenant { @handler.move_unit(@platform, @engineering, effective_on: @today) }
@@ -73,7 +73,7 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
     error = assert_raises(RuntimeError) do
       as_tenant { @handler.define_taxonomy([ current[0], region, *current.drop(1) ], effective_on: @today) }
     end
-    assert_equal "Move these units first, as the change leaves them where their kind may not sit: Engineering, Marketing", error.message
+    assert_equal "These units wouldn't fit this structure, so move them first: Engineering (Department under Division), Marketing (Department under Division)", error.message
     assert_nothing_raised { as_tenant { @handler.define_taxonomy([ region, *current ], effective_on: @today) } }
   end
 

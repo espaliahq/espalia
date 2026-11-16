@@ -2,8 +2,8 @@
 
 require "test_helper"
 
-# No command writes a kind's rules yet, so each test publishes the
-# TaxonomyDefined a later command will write.
+# Each test publishes the rules directly, so it reads them apart from
+# the commands that write them (see SetKindParentsTest).
 class OrgGraph::StatedKindRulesTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
@@ -24,7 +24,7 @@ class OrgGraph::StatedKindRulesTest < ActiveSupport::TestCase
     other = create_unit("Lending", @tribe)
 
     error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(other, @payments, effective_on: @today) } }
-    assert_equal "A parent must sit at a higher level", error.message
+    assert_equal "Tribe can't sit under Tribe", error.message
   end
 
   should "refuse the top to a kind that may not sit there" do

@@ -44,6 +44,7 @@ class OrgGraph::StructureAggregate
     @fact_providers = {}
     @fact_fields = {}
     @successions = {}
+    @kinds_changed_on = nil
   end
 
   # Defines or redefines the tenant's taxonomy, top level first.
@@ -66,48 +67,53 @@ class OrgGraph::StructureAggregate
   #   units, a level in use is reordered, or a live unit would be left where
   #   its kind may not sit
   def define_taxonomy(levels, effective_on:, defined_by_id: nil)
-    new_providers = new_level_providers(levels)
-    levels = with_stated_rules(normalise_levels(levels))
-    return if levels == with_stated_rules(@levels)
+    write_taxonomy(levels, effective_on:, defined_by_id:)
+  end
 
-    @levels.reject { |level| level_ids(levels).include?(level[:level_id]) }.each { ensure_never_held!(it) }
-
-    in_use = live_units.map(&:level_id).uniq
-
-    ensure_levels_in_use_keep_order!(levels, in_use)
-
-    ensure_hris_levels_on_top!(level_ids(levels), new_providers)
-    ensure_units_still_fit!(new_providers, levels:)
-
-    apply(OrgGraph::Events::TaxonomyDefined.new(data: {
-      levels: levels,
-      previous_levels: with_stated_rules(@levels),
-      effective_on: iso_date(effective_on),
-      defined_by_id: defined_by_id
-    }))
-    new_providers.each do |level_id, provider|
-      apply(OrgGraph::Events::LevelProviderSet.new(data: {
-        level_id: level_id,
-        provider: provider,
-        previous_provider: ESPALIA,
-        effective_on: iso_date(effective_on),
-        set_by_id: defined_by_id
-      }))
+  # Says which kinds a kind's units may sit under, and whether they may sit at
+  # the top. A kind may list itself, so its units can nest. Refused while a
+  # live unit would be left where the new rule doesn't let it sit.
+  #
+  # @param level_id [String] a kind Espalia holds
+  # @param parent_ids [Array<String>] kinds in the taxonomy
+  # @param top [Boolean]
+  # @param effective_on [Date, String] no earlier than the kinds' last change
+  # @param defined_by_id [String, nil] person_id of the actor
+  # @raise [ArgumentError] if a kind is unknown, or the kind could sit nowhere
+  # @raise [RuntimeError] if an HRIS provides the kind, the date is too early,
+  #   or a live unit would no longer fit
+  def set_kind_parents(level_id, parent_ids:, top:, effective_on:, defined_by_id: nil)
+    level_id = require_id(level_id, "Level id")
+    raise ArgumentError, "Level is not in the taxonomy" unless level_index(level_id)
+    unless level_provider(level_id) == ESPALIA
+      raise "#{level_name(level_id)} comes from #{level_provider(level_id)}, so its rules follow #{level_provider(level_id)}"
     end
+
+    write_taxonomy(@levels, rules: { level_id => kind_rules(level_id, parent_ids, top) }, effective_on:, defined_by_id:)
   end
 
   # Adds a level Espalia holds below every other level. Works from the levels
   # this stream holds, so a level added or moved meanwhile is kept.
   #
+  # Without `parent_ids:` the new kind keeps the rule every level was first
+  # written under: it may sit under any kind above it, or at the top.
+  #
   # @param level_id [String] a new level's id
   # @param name [String]
+  # @param parent_ids [Array<String>, nil] the kinds it may sit under; its
+  #   own id lets its units nest
+  # @param top [Boolean] whether it may sit at the top, with `parent_ids:`
   # @param effective_on [Date, String]
   # @param defined_by_id [String, nil] person_id of the actor
-  # @raise [ArgumentError] if the id is taken or the name blank or taken
-  def add_level(level_id, name, effective_on:, defined_by_id: nil)
-    raise ArgumentError, "Level id is taken" if level_index(require_id(level_id, "Level id"))
+  # @raise [ArgumentError] if the id is taken, the name blank or taken, or a
+  #   parent kind unknown
+  def add_level(level_id, name, effective_on:, parent_ids: nil, top: true, defined_by_id: nil)
+    level_id = require_id(level_id, "Level id")
+    raise ArgumentError, "Level id is taken" if level_index(level_id)
 
-    define_taxonomy([ *@levels, { level_id:, name: } ], effective_on:, defined_by_id:)
+    levels = [ *@levels, { level_id:, name: } ]
+    rules = parent_ids.nil? ? {} : { level_id => kind_rules(level_id, parent_ids, top) }
+    write_taxonomy(levels, rules:, effective_on:, defined_by_id:)
   end
 
   # Puts the levels this stream holds in a new order, keeping their names.
@@ -532,6 +538,7 @@ class OrgGraph::StructureAggregate
   on OrgGraph::Events::TaxonomyDefined do |event|
     levels = event.data[:levels].map { |level| level.to_h.symbolize_keys }
     @taxonomy = nil
+    @kinds_changed_on = [ @kinds_changed_on, event.data[:effective_on] ].compact.max
     @levels = levels.map { |level| level.slice(:level_id, :name) }
     @level_rules = levels.select { |level| level.key?(:parent_level_ids) }
                          .to_h { |level| [ level[:level_id], level.slice(:parent_level_ids, :top) ] }
@@ -541,6 +548,7 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::LevelProviderSet do |event|
     @taxonomy = nil
+    @kinds_changed_on = [ @kinds_changed_on, event.data[:effective_on] ].compact.max
     @level_providers[event.data[:level_id]] = event.data[:provider]
     @level_fields[event.data[:level_id]] = event.data[:field]
   end
@@ -632,6 +640,38 @@ class OrgGraph::StructureAggregate
     changed_on && Date.iso8601(changed_on.to_s)
   end
   private
+
+  def write_taxonomy(levels, effective_on:, defined_by_id:, rules: {})
+    new_providers = new_level_providers(levels)
+    levels = without_dropped_parents(with_stated_rules(normalise_levels(levels), rules))
+    return if levels == with_stated_rules(@levels)
+
+    ensure_not_before_last_change!(effective_on)
+    @levels.reject { |level| level_ids(levels).include?(level[:level_id]) }.each { ensure_never_held!(it) }
+
+    in_use = live_units.map(&:level_id).uniq
+
+    ensure_levels_in_use_keep_order!(levels, in_use)
+
+    ensure_hris_levels_on_top!(level_ids(levels), new_providers)
+    ensure_units_still_fit!(new_providers, levels:)
+
+    apply(OrgGraph::Events::TaxonomyDefined.new(data: {
+      levels: levels,
+      previous_levels: with_stated_rules(@levels),
+      effective_on: iso_date(effective_on),
+      defined_by_id: defined_by_id
+    }))
+    new_providers.each do |level_id, provider|
+      apply(OrgGraph::Events::LevelProviderSet.new(data: {
+        level_id: level_id,
+        provider: provider,
+        previous_provider: ESPALIA,
+        effective_on: iso_date(effective_on),
+        set_by_id: defined_by_id
+      }))
+    end
+  end
 
   def live_unit!(unit_id)
     unit = @units[unit_id.to_s.downcase]
@@ -739,7 +779,7 @@ class OrgGraph::StructureAggregate
     stranded = misplaced_units(prospective) - misplaced_units
     return if stranded.empty?
 
-    raise "Move these units first, as the change leaves them where their kind may not sit: #{stranded.map(&:name).join(', ')}"
+    raise "These units wouldn't fit this structure, so move them first: #{stranded.map { describe_fit(it, prospective) }.join(', ')}"
   end
 
   # A unit's latest change includes a sub-unit arriving beneath it or leaving,
@@ -770,7 +810,9 @@ class OrgGraph::StructureAggregate
     raise "Parent unit not found" unless parent
     raise "Parent unit is retired" if parent.retired
     raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
-    raise "A parent must sit at a higher level" unless rules.allows?(level_id, beneath: parent.level_id)
+    unless rules.allows?(level_id, beneath: parent.level_id)
+      raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent.level_id).name}"
+    end
     raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
   end
 
@@ -836,8 +878,46 @@ class OrgGraph::StructureAggregate
   end
 
   # A level keeps the rules it stated when the taxonomy is redefined around it.
-  def with_stated_rules(levels)
-    levels.map { |level| level.merge(@level_rules.fetch(level[:level_id], {})) }
+  def with_stated_rules(levels, rules = {})
+    stated = @level_rules.merge(rules)
+    levels.map { |level| level.slice(:level_id, :name).merge(stated.fetch(level[:level_id], {})) }
+  end
+
+  # A removed kind leaves the lists that named it.
+  def without_dropped_parents(levels)
+    ids = level_ids(levels)
+    levels.map { |level| level.key?(:parent_level_ids) ? level.merge(parent_level_ids: level[:parent_level_ids] & ids) : level }
+  end
+
+  # A kind's rules as an event states them: its parent kinds, in taxonomy
+  # order, and whether it may sit at the top.
+  # A unit of a kind that lists only itself needs a parent of its own kind
+  # first, so it could sit nowhere unless it may also sit at the top.
+  def kind_rules(kind_id, parent_ids, top)
+    ids = level_ids(@levels) | [ kind_id ]
+    parent_ids = Array(parent_ids).map { |id| require_id(id, "Parent level id") }.uniq
+    unknown = parent_ids - ids
+    raise ArgumentError, "Not in the taxonomy: #{unknown.join(', ')}" if unknown.any?
+    raise ArgumentError, "Top must be true or false" unless [ true, false ].include?(top)
+    raise ArgumentError, "A unit type needs somewhere to sit: under another type, or at the top" if !top && (parent_ids - [ kind_id ]).empty?
+
+    { parent_level_ids: parent_ids.sort_by { |id| ids.index(id) }, top: }
+  end
+
+  def describe_fit(unit, rules)
+    parent = unit.parent_id && @units[unit.parent_id]
+    kind = rules.kind(unit.level_id).name
+    "#{unit.name} (#{parent ? "#{kind} under #{rules.kind(parent.level_id).name}" : "#{kind} at the top"})"
+  end
+
+  def level_name(level_id) = @levels.find { |level| level[:level_id] == level_id }&.dig(:name)
+
+  # The kinds' history dates each change no earlier than the last, so a
+  # change dated before it would be recorded on a day it wasn't made.
+  def ensure_not_before_last_change!(effective_on)
+    return unless @kinds_changed_on && iso_date(effective_on) < @kinds_changed_on
+
+    raise "The unit types last changed on #{@kinds_changed_on}, so a change can't be dated before it"
   end
 
   def normalise_levels(levels)

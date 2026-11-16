@@ -110,10 +110,10 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     end
 
     should "remove a level no unit has held, with the caller as actor" do
-      result = call(Operations::OrgGraph::RemoveLevel, level_id: @guild, effective_on: "2026-11-01")
+      result = call(Operations::OrgGraph::RemoveLevel, level_id: @guild, effective_on: Date.current.iso8601)
 
       assert_equal %w[Department Team Squad], level_names
-      assert_equal({ level_id: @guild, name: "Guild", effective_on: "2026-11-01" }, result.except(:levels))
+      assert_equal({ level_id: @guild, name: "Guild", effective_on: Date.current.iso8601 }, result.except(:levels))
       assert_equal %w[Department Team Squad], result[:levels].pluck(:name)
       event = Rails.configuration.event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).last
       assert_equal @admin.person.id, event.data[:defined_by_id]
