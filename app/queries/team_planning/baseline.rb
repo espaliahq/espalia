@@ -430,9 +430,11 @@ class TeamPlanning::Baseline
 
   # An open position. Its role and level names are nil until joined, and stay
   # nil for a role or level the framework no longer has. Its cost centre is
-  # its own label, nil when it has none.
-  Position = Data.define(:id, :role_id, :level_id, :unit_id, :fte, :basis, :cost_centre, :role_name, :level_name) do
-    def initialize(cost_centre: nil, **) = super
+  # its own label, nil when it has none. `opened_on` is the first day of the
+  # earliest step in the chain that sets it, which resolution fills in.
+  Position = Data.define(:id, :role_id, :level_id, :unit_id, :fte, :basis, :cost_centre, :role_name, :level_name,
+                         :hiring_status, :target_start, :opened_on) do
+    def initialize(cost_centre: nil, hiring_status: "not_started", target_start: nil, opened_on: nil, **) = super
 
     # @param basis [String]
     # @return [String] "committed" for a backfill, "planned" for a new position

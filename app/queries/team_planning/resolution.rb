@@ -108,7 +108,37 @@ class TeamPlanning::Resolution
     base = (@base || @baseline.structure).with(step_ids: step_of(aggregate))
     hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
     map = (hires + others).reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
-    [ explained(map.settled), winning ]
+    [ explained(opened(map.settled, aggregate)), winning ]
+  end
+
+  # Each position's open date: the first day of the earliest step in the
+  # chain that sets it since it last closed, or the base date when the plan's
+  # Today sets it. A seat open since before the plan began is never taken as
+  # already filled ([#458](https://github.com/espaliahq/espalia/issues/458)).
+  # A backfill opens no earlier than the day after its leaver goes, or the
+  # first day of the step they leave in when the plan gives no date.
+  #
+  # @param aggregate [TeamPlanning::PlanAggregate]
+  # @param scenario_id [String] a scenario, or the plan's id for Today
+  # @return [Hash{String => Date}] by position id
+  def self.opened_on(aggregate, scenario_id)
+    opened = aggregate.resolution_chain(scenario_id).each_with_object({}) do |id, dates|
+      aggregate.changes_in(id).each do |change|
+        case change
+        when TeamPlanning::Events::PositionSet then dates[change.data[:subject_id]] ||= aggregate.period_of(id)&.begin || aggregate.base_on
+        when TeamPlanning::Events::PositionClosed then dates.delete(change.data[:subject_id])
+        end
+      end
+    end
+    aggregate.winning_changes(scenario_id).values.grep(TeamPlanning::Events::DepartureSet).each do |departure|
+      position_id = departure.data[:position_id]
+      next unless opened.key?(position_id)
+
+      last = TeamPlanning::Events::DepartureSet.leaving_date(departure.data[:leaves_on])
+      vacated = last ? last + 1 : aggregate.period_of(departure.data[:leaves_in_id])&.begin
+      opened[position_id] = [ opened[position_id], vacated ].compact.max
+    end
+    opened
   end
 
   # @param map [TeamPlanning::Baseline::Map]
@@ -142,6 +172,13 @@ class TeamPlanning::Resolution
     before = aggregate.timeline_path(@scenario_id)[-2]
     step = before ? chain.drop(chain.index(before) + 1) : chain
     (step + aggregate.resting_on(@scenario_id)).uniq
+  end
+
+  def opened(map, aggregate)
+    return map if map.positions.empty?
+
+    dates = self.class.opened_on(aggregate, @scenario_id)
+    map.with(positions: map.positions.map { it.with(opened_on: dates.fetch(it.id, aggregate.base_on)) })
   end
 
   # A person off the map either left by the base date, or was forgotten, or
