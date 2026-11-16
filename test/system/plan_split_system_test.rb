@@ -49,14 +49,20 @@ class PlanSplitSystemTest < ApplicationSystemTestCase
 
         assert_text "Can't go across alone. It needs Platform: Unit"
         assert_no_sideways_overflow
+        assert_button "Split off the chosen changes"
+        wait_for_stimulus "split-count"
         js_set_checkbox "Brook Tamsin: Placement", checked: true
-        click_button_with_js_fallback("Split off the chosen changes", expect_text: "Couldn't split it")
+        assert_button "Split off 1 change"
+        click_button_with_js_fallback("Split off 1 change", expect_text: "Couldn't split it")
         assert_text "Brook Tamsin: Placement needs Platform: Unit, which you left behind."
         assert_field "Brook Tamsin: Placement", checked: true
 
+        assert_button "Split off 1 change"
+        wait_for_stimulus "split-count"
         js_set_checkbox "Platform: Unit", checked: true
+        assert_button "Split off 2 changes"
         js_fill_in "Name the agreed part", with: "Platform agreed"
-        click_button_with_js_fallback("Split off the chosen changes", expect_text: "Split 2 changes off into Platform agreed.")
+        click_button_with_js_fallback("Split off 2 changes", expect_text: "Split 2 changes off into Platform agreed.")
         assert_text "Platform agreed"
       end
     end

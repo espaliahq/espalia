@@ -57,7 +57,8 @@ class Views::Plans::SplitScenario < Views::Base
   end
 
   def choose
-    form(action: split_plan_path(plan_id, scenario_id: @scenario[:scenario_id]), method: "post", class: "space-y-6") do
+    form(action: split_plan_path(plan_id, scenario_id: @scenario[:scenario_id]), method: "post", class: "space-y-6",
+         data: { controller: "split-count", action: "change->split-count#count" }) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       fieldset do
         legend(class: "text-sm font-semibold text-default") { "Choose what is agreed" }
@@ -74,7 +75,7 @@ class Views::Plans::SplitScenario < Views::Base
           "the same period, so every scenario reads exactly as before."
       end
       div(class: "flex flex-wrap items-center gap-2") do
-        render(Components::Kit::Button.new(type: :submit, tone: :brand)) { "Split off the chosen changes" }
+        render(Components::Kit::Button.new(type: :submit, tone: :brand, data: { split_count_target: "label" })) { submit_label }
         render(Components::Kit::Button.new(variant: :ghost, href: plan_path(plan_id))) { "Cancel" }
       end
     end
@@ -86,7 +87,7 @@ class Views::Plans::SplitScenario < Views::Base
     stuck = stuck?(change)
     li(class: "flex gap-3 p-3", data: { split_change: change[:event_id] }) do
       input(type: "checkbox", id:, name: "event_ids[]", value: change[:event_id], checked: @chosen.include?(change[:event_id]),
-            disabled: stuck, aria: { describedby: ("#{id}-needs" if wanted.any?) },
+            disabled: stuck, data: { split_count_target: "box" }, aria: { describedby: ("#{id}-needs" if wanted.any?) },
             class: "#{Components::Kit::Field::CHECKBOX} mt-0.5 shrink-0")
       div(class: "min-w-0 text-sm") do
         label(for: id, class: "block text-default break-words") { describe(change) }
@@ -138,6 +139,11 @@ class Views::Plans::SplitScenario < Views::Base
 
     left_behind.uniq.map { |moving, needed| "#{moving} needs #{needed}, which you left behind." }.join(" ") +
       " Choose #{left_behind.one? ? 'it' : 'them'} too, or leave out what needs #{left_behind.one? ? 'it' : 'them'}."
+  end
+
+  def submit_label
+    chosen = changes.count { @chosen.include?(it[:event_id]) }
+    chosen.zero? ? "Split off the chosen changes" : "Split off #{chosen} #{'change'.pluralize(chosen)}"
   end
 
   def name_field

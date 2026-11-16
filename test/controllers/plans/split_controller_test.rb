@@ -58,6 +58,7 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-split-change='#{@to_platform}'] [data-split-needs]", text: /needs Platform: Unit/
       assert_select "[data-split-change='#{@to_payments}'] [data-split-needs]", count: 0
       assert_select "input[name='name'][value='Q1 hires, agreed part']"
+      assert_select "button[type='submit']", text: "Split off the chosen changes"
     end
 
     should "say a scenario with one change has nothing to split off, and offer no form" do
@@ -134,6 +135,7 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_select "input[value='#{@to_platform}'][checked]"
       assert_select "input[value='#{@creates}']:not([checked])"
       assert_select "input[name='name'][value='Agreed moves']"
+      assert_select "button[type='submit']", text: "Split off 1 change"
     end
 
     should "refuse a change that is no longer in the scenario, keep the choice and split nothing" do
