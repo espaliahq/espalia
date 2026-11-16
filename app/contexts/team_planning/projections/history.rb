@@ -24,7 +24,7 @@
 # Version 3 moves a split step's dates entries to the agreed part
 # ([#426](https://github.com/espaliahq/espalia/issues/426)), which changes
 # what replay writes, so it needs the same rebuild, which also counts each
-# past removal.
+# past removal. Closing and reopening a step are new, so they need no rebuild.
 #
 class TeamPlanning::Projections::History
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -41,7 +41,7 @@ class TeamPlanning::Projections::History
       TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::PlanRebased,
       TeamPlanning::Events::ChangeMoved, TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioForked,
       TeamPlanning::Events::PlanArchived, TeamPlanning::Events::PlanRestored, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::ScenarioSplit,
-      TeamPlanning::Events::PlanDeleted
+      TeamPlanning::Events::PlanDeleted, TeamPlanning::Events::StepClosed, TeamPlanning::Events::StepReopened
     ]
   end
 

@@ -185,6 +185,23 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
     assert_equal [ %w[2027-02-01 2027-04-30] ] * 2, [ period(q1), period(lean) ]
   end
 
+  should "hold the day a step closed and who closed it, until it reopens, and read the same after a rebuild" do
+    q1 = fork(ends_on: "2027-03-31")
+    q2 = fork(q1, name: "Q2", ends_on: "2027-06-30")
+    travel_to(Time.utc(2027, 7, 2, 23, 30)) do
+      @handler.close_step(@plan_id, q1, today: Date.new(2027, 7, 2))
+      @handler.close_step(@plan_id, q2, today: Date.new(2027, 7, 2))
+    end
+    @handler.reopen_step(@plan_id, q2)
+
+    assert_equal [ Date.new(2027, 7, 2), @person.id ], TeamPlanningScenario.find(q1).then { [ it.closed_on, it.closed_by_id ] }
+    assert_equal [ nil, nil ], TeamPlanningScenario.find(q2).then { [ it.closed_on, it.closed_by_id ] }
+    before = snapshot_read_models(TeamPlanning::Projections::Scenarios, @tenant)
+    TeamPlanning::Projections::Scenarios.reset!(tenant: @tenant)
+    Projections::Replayer.replay(projection_class: TeamPlanning::Projections::Scenarios, tenant: @tenant)
+    assert_equal before, snapshot_read_models(TeamPlanning::Projections::Scenarios, @tenant)
+  end
+
   should "keep a removed scenario's sealed name, its period, who removed it and when, until the plan goes" do
     q1 = fork(ends_on: "2027-03-31")
     lean = fork(q1, relation: "instead", name: "Lean Q1")

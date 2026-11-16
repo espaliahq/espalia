@@ -33,9 +33,13 @@ class Views::Plans::ShowView < Views::Base
   # @param undo_step [Hash, nil] from `team_planning_undo_step`, for the scenario the open tab shows
   # @param removed [Views::Plans::RemovedScenarios, nil] the removed scenarios, under the open tab's body
   # @param removals [Array<Views::Plans::RemoveScenarioDialog>] the Remove dialogs the open tab's triggers open
+  # @param closures [Array<Views::Plans::StepClosureDialog>] the Close and Reopen dialogs the open tab's triggers open
+  # @param outcomes [Array<Views::Plans::StepOutcomeDialog>] the closed steps' outcome dialogs, for any member
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
                  body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, can_archive: false, can_restore: false, can_delete: false,
-                 see_pay: {}, coverable_units: nil, panel_open: true, undo_step: nil, removed: nil, removals: [])
+                 see_pay: {}, coverable_units: nil, panel_open: true, undo_step: nil, removed: nil, removals: [], closures: [], outcomes: [])
+    @closures = closures
+    @outcomes = outcomes
     @removed = removed
     @removals = removals
     @panel_open = panel_open
@@ -62,7 +66,7 @@ class Views::Plans::ShowView < Views::Base
 
   def view_template
     render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal", action: "keydown.esc@window->modal#escape" } if @can_edit || @can_archive || @can_delete)) do
+      div(class: "w-full px-4 sm:px-6 py-8", data: ({ controller: "modal", action: "keydown.esc@window->modal#escape" } if @can_edit || @can_archive || @can_delete || @outcomes.any?)) do
         header
         frozen_notice if @plan[:frozen]
         archived_notice if @plan[:archived]
@@ -81,6 +85,8 @@ class Views::Plans::ShowView < Views::Base
         end
         render Views::Plans::ScenarioDialogs.new(plan_id: @plan[:plan_id], scenarios: @scenarios) if @can_edit
         @removals.each { render it } if @can_edit
+        @closures.each { render it } if @can_edit
+        @outcomes.each { render it }
         render Views::Plans::ScopeDialog.new(plan: @plan, units: @coverable_units) if changes_scope?
         render Views::Plans::ArchiveDialog.new(plan_id: @plan[:plan_id]) if @can_archive
         render Views::Plans::DeleteDialog.new(plan: @plan) if @can_delete
