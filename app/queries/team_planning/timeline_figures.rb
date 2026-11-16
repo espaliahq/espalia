@@ -50,6 +50,7 @@ class TeamPlanning::TimelineFigures
     TeamPlanning::Resolution.reusing do
       aggregate = @repository.load_plan(@plan.id)
       base = TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+      # Each read prices a step its own way, so a step one memo holds must never stand in for the other's.
       reads = { cost: {}, capacity: {} }
       steps = aggregate.timeline_path(@scenario_id).map { step(aggregate, base, it, reads) }
       Result.new(pay_view: @pay_view, money: TeamPlanning::Budget.money_shown?(context: @context, plan: @plan),
