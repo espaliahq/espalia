@@ -28,9 +28,11 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "period's start, null with `missing` saying why when a rate is missing. Units count their own places, " \
               "with null for no unit; `with_below` adds the units below. Cost centres use null for no cost centre. " \
               "A person keeps their own cost centre unless the plan changes their unit, role, level or location (an FTE change " \
-              "alone doesn't). A changed person, one with none, a placeholder hire and an open seat take their position's own " \
-              "cost centre, else the last entry of the cost_centre rule at their unit that matches their planned unit, role or " \
-              "role family, level number and location (an open seat has no location), else a person's own, else none. A seat's " \
+              "alone doesn't). A changed person, or a real person with none, takes their position's own cost centre, else the " \
+              "last entry of the cost_centre rule at their unit that matches their planned unit, role or role family, level " \
+              "number and location, else their own, else none. An open seat takes its position's own cost centre, else an " \
+              "occupant's, else the last matching entry (it has no location), else none; a placeholder hire in a position " \
+              "reads as that open seat. A seat's " \
               "cost_centre_source says which (position, person, rule or none); for a rule, cost_centre_rule is the " \
               "entry's index in the list that unit reads and cost_centre_matcher is what it matches on. " \
               "Unit, cost-centre and plan totals always agree. Every total carries `parts`, which add up to its " \
