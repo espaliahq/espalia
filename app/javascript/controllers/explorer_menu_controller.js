@@ -1,59 +1,24 @@
-// ONE kebab-menu controller for the whole Framework Explorer grid.
+// The framework explorer's kebab menus, on the shared `delegated-menu`
+// controller (#380). Mounted once on the explorer root. The grid ships a bare
+// trigger carrying only its entity's ids, and this builds the items on open
+// from the trigger's dataset plus the coordinates the grid already publishes
+// (`tr[data-capability-id]`, `tr[data-capability-name]`, `tr[data-category-id]`).
 //
-// Every ⋮ in the matrix used to be a full `Kit::Dropdown`: a wrapper div with
-// its own `dropdown` mount (a window click-capture listener, a `modal:open`
-// listener and a useTransition each), a hidden `role="menu"` panel, and every
-// item pre-rendered with its ~200-byte class string — for a menu the user opens
-// maybe once a session. Now the grid ships a bare trigger button carrying only
-// the entity's ids, and this controller — mounted ONCE on the explorer root —
-// builds the menu on open. Event delegation via Stimulus actions means triggers
-// inserted late (the on-demand expanded row, a frame re-render) work with no
-// extra wiring.
-//
-// A menu is a pure function of the trigger's dataset plus the coordinates
-// already on the grid (`tr[data-capability-id]`, `tr[data-capability-name]`,
-// `tr[data-category-id]`), so the server emits ids, never markup or labels.
 // Trigger contract:
 //
 //   data-menu            capability | expectation | illustration | category |
 //                        expectation-create | illustration-create
-//   data-menu-*          the ids/flags that menu kind needs (see BUILDERS)
+//   data-menu-*          the ids and flags that kind needs (see BUILDERS)
 //
-// Built items keep the `data-*` the real behaviour needs, so they still drive
-// the SAME controllers they always did — `modal#open`, `field-editor#open`,
+// Built items keep the `data-*` the real behaviour needs, so they drive the
+// same controllers as ever: `modal#open`, `field-editor#open`,
 // `reorder-move#move`, `reorder-list#moveUp`, `suggestion-action#approve`.
-// Those mount on the one open menu instead of on hundreds of closed ones.
 //
-// Resolved-suggestion memory: this controller outlives every menu, so it
-// remembers which suggestions have resolved (from the window
-// `suggestion:resolved` event) and renders their approve/reject items terminal
-// when a menu is built later — the guarantee the per-kebab `suggestion-action`
-// mount used to give a menu that was already in the DOM (Hard-Won Lesson 23).
+// This controller outlives every menu, so it remembers which suggestions have
+// resolved (the window `suggestion:resolved` event) and builds their
+// approve and reject items already terminal (Hard-Won Lesson 23).
 
-import BaseController from "controllers/base_controller"
-
-const MENU_CLASSES =
-  "explorer-menu fixed z-50 max-h-[70vh] w-56 overflow-y-auto rounded-md shadow-overlay " +
-  "border border-default bg-overlay py-1"
-
-const VIEWPORT_MARGIN = 8
-
-// Only used to mint an id for a trigger that has none, so a menu item can name
-// it as the dialog's focus-return target.
-let idSeed = 0
-
-// `position: fixed` escapes overflow clipping but NOT paint order: a fixed
-// element still composites inside the nearest ancestor that creates a stacking
-// context. The matrix's sticky capability column is `z-[2]`, so a menu opened
-// in one row was painted over by the equally-ranked sticky cell of the row
-// BELOW it (reported from #380's visual pass — the row menu's last two items
-// were covered). Lifting that ancestor while the menu is open fixes it without
-// portalling the menu away from the entity its items resolve against.
-//
-// The value sits above the grid's body cells (z-2) and category headers (z-5)
-// and below the sticky column headers (z-10) and corner (z-20), so an open menu
-// never paints over the chrome that has to stay legible.
-const LIFTED_Z = 9
+import DelegatedMenuController from "controllers/delegated_menu_controller"
 
 // Reject-modal copy per suggestion kind: [what the verb acts on, what the modal
 // calls the entity].
@@ -66,7 +31,9 @@ const SUGGESTION_LABELS = {
   "illustration-create": ["new example", "new example"]
 }
 
-export default class extends BaseController {
+export default class extends DelegatedMenuController {
+  static menuClasses = `explorer-menu ${DelegatedMenuController.menuClasses}`
+
   static values = {
     // { approve: "/frameworks/F/suggestions/:id/approve?inline=1", … } — path
     // templates so no Rails route is hand-written in JS.
@@ -75,97 +42,12 @@ export default class extends BaseController {
 
   connect() {
     super.connect()
-    this.openTrigger = null
-    this.menu = null
-    this.lifted = null
     this.resolved = new Map()
-    this._onScroll = this.#onScroll.bind(this)
-    // A menu item that opens a modal leaves the menu on screen behind it — and
-    // the menu (z-50) outranks the overlay (z-40), so it would render over the
-    // dialog it just launched. Clicking the item isn't an "outside" click.
-    this._onModalOpen = () => this.close()
-    window.addEventListener("modal:open", this._onModalOpen)
-  }
-
-  disconnect() {
-    this.#teardownMenu()
-    window.removeEventListener("modal:open", this._onModalOpen)
-    super.disconnect()
-  }
-
-  // ── Opening / closing ──
-
-  toggle(event) {
-    event.preventDefault()
-    // Never let opening the menu also toggle the row / focus the cell beneath.
-    event.stopPropagation()
-
-    const trigger = event.currentTarget
-    const reopening = trigger === this.openTrigger
-    this.close()
-    if (reopening) return
-
-    // detail === 0 means the click came from the keyboard (Enter/Space), where
-    // the APG menu-button pattern moves focus into the menu.
-    this.#open(trigger, { focusFirst: event.detail === 0 })
-  }
-
-  close() {
-    const trigger = this.openTrigger
-    this.#teardownMenu()
-    if (trigger) trigger.setAttribute("aria-expanded", "false")
-  }
-
-  // Esc closes and hands focus back to the trigger — the APG menu-button
-  // contract.
-  escape(event) {
-    if (!this.openTrigger) return
-
-    event.stopPropagation()
-    const trigger = this.openTrigger
-    this.close()
-    trigger.focus()
-  }
-
-  clickOutside(event) {
-    if (!this.menu) return
-    if (this.menu.contains(event.target) || this.openTrigger?.contains(event.target)) return
-
-    this.close()
-  }
-
-  // Roving focus within the open menu (ArrowUp/Down/Home/End), plus Tab-out and
-  // Esc closing it.
-  keydown(event) {
-    if (!this.menu) return
-
-    if (event.key === "Escape") {
-      event.preventDefault()
-      this.escape(event)
-      return
-    }
-    if (event.key === "Tab") {
-      // close() returns focus to the trigger, so the browser's own Tab then
-      // moves to whatever follows the kebab rather than to a detached item.
-      this.close()
-      return
-    }
-    const items = this.#focusableItems()
-    const index = items.indexOf(document.activeElement)
-    let next = null
-    if (event.key === "ArrowDown") next = items[index + 1] || items[0]
-    else if (event.key === "ArrowUp") next = index <= 0 ? items[items.length - 1] : items[index - 1]
-    else if (event.key === "Home") next = items[0]
-    else if (event.key === "End") next = items[items.length - 1]
-    if (!next) return
-
-    event.preventDefault()
-    next.focus()
   }
 
   // A suggestion resolved somewhere (this menu, another surface, the reject
-  // modal). Remember it so a menu built later for the same suggestion opens
-  // already terminal, and update an open menu in place.
+  // modal). Remember it so a menu built later opens already terminal, and
+  // update an open menu in place.
   onResolved(event) {
     const { suggestionId, outcome } = event.detail || {}
     if (!suggestionId) return
@@ -174,113 +56,23 @@ export default class extends BaseController {
     if (this.menu) this.#markResolved(this.menu)
   }
 
-  // private
-
-  #open(trigger, { focusFirst }) {
+  items(trigger) {
     const build = BUILDERS[trigger.dataset.menu]
-    const items = build ? build(trigger, this.pathsValue) : []
-    if (!items.length) return
+    return (build ? build(trigger, this.pathsValue) : []).map((item) => this.#build(item))
+  }
 
-    const menu = document.createElement("div")
-    menu.className = MENU_CLASSES
-    menu.setAttribute("role", "menu")
-    menu.setAttribute("aria-orientation", "vertical")
-    const label = trigger.getAttribute("aria-label")
-    if (label) menu.setAttribute("aria-label", label)
+  opened(menu, trigger) {
     menu.dataset.explorerMenu = trigger.dataset.menu
-    // A menu item that opens a modal is torn down with the menu, so the dialog
-    // has no surviving invoker to hand focus back to on close (its own
-    // re-resolution paths all assume a `Kit::Dropdown`). Name the trigger as
-    // the durable return target — `modal_controller` reads this.
-    const returnId = this.#ensureId(trigger)
-    items.forEach((item) => {
-      const node = this.#build(item)
-      node.querySelectorAll?.("[role='menuitem']").forEach((el) => {
-        el.dataset.modalFocusReturn = returnId
-      })
-      if (node.matches?.("[role='menuitem']")) node.dataset.modalFocusReturn = returnId
-      menu.appendChild(node)
-    })
     this.#markResolved(menu)
-
-    // Inserted next to its trigger — NOT at the root — so a menu item can still
-    // reach the entity it belongs to (`field-editor#open` resolves its host by
-    // `closest("[data-editor-action]")`, `reorder-list#moveUp` by
-    // `closest("[data-reorder-item-id]")`). `position: fixed` keeps it out of
-    // the matrix's scroll clipping regardless.
-    this.#liftStackingContext(trigger)
-    trigger.insertAdjacentElement("afterend", menu)
-    // Acting on a menu item closes it — every item is a one-shot action.
-    // Approve is the exception: it swaps itself to "✓ Approved" in place, which
-    // is the actor's only immediate feedback. Capture phase because
-    // `reorder-move#move` stops propagation, deferred by a task so the item's
-    // own Stimulus action runs before the menu is torn down.
-    menu.addEventListener("click", (event) => {
-      if (event.target.closest("[data-action~='suggestion-action#approve']")) return
-
-      setTimeout(() => this.close(), 0)
-    }, true)
-
-    this.menu = menu
-    this.openTrigger = trigger
-    trigger.setAttribute("aria-expanded", "true")
-
-    this.#position()
-    window.addEventListener("scroll", this._onScroll, true)
-    window.addEventListener("resize", this._onScroll)
-    if (focusFirst) this.#focusableItems()[0]?.focus()
   }
 
-  // Focus never dies with the menu: if it is still inside when we tear down —
-  // a Tab out, an item that opened no dialog — it goes back to the trigger, the
-  // APG menu-button contract. A menu item that moved focus somewhere deliberate
-  // (the shared editor's textarea, an open dialog) keeps it.
-  #returnFocus() {
-    if (!this.menu?.contains(document.activeElement)) return
-
-    this.openTrigger?.focus()
+  // Approve swaps itself to "✓ Approved" in place, the actor's only immediate
+  // feedback, so it leaves the menu open.
+  keepsOpen(target) {
+    return Boolean(target.closest("[data-action~='suggestion-action#approve']"))
   }
 
-  #ensureId(element) {
-    if (!element.id) element.id = `explorer-menu-trigger-${(idSeed += 1)}`
-
-    return element.id
-  }
-
-  #teardownMenu() {
-    this.#returnFocus()
-    this.#restoreStackingContext()
-    this.menu?.remove()
-    this.menu = null
-    this.openTrigger = null
-    window.removeEventListener("scroll", this._onScroll, true)
-    window.removeEventListener("resize", this._onScroll)
-  }
-
-  // See LIFTED_Z. Walks to the nearest ancestor that creates a stacking context
-  // (positioned + an explicit z-index) and raises it, remembering the inline
-  // value so close() can put it back exactly as it was.
-  #liftStackingContext(trigger) {
-    let node = trigger.parentElement
-    while (node && node !== document.body) {
-      const style = window.getComputedStyle(node)
-      if (style.position !== "static" && style.zIndex !== "auto") {
-        if (Number(style.zIndex) < LIFTED_Z) {
-          this.lifted = { node, zIndex: node.style.zIndex }
-          node.style.zIndex = String(LIFTED_Z)
-        }
-        return
-      }
-      node = node.parentElement
-    }
-  }
-
-  #restoreStackingContext() {
-    if (!this.lifted) return
-
-    this.lifted.node.style.zIndex = this.lifted.zIndex
-    this.lifted = null
-  }
+  // private
 
   #build(item) {
     if (item.group) return this.#buildGroup(item)
@@ -320,51 +112,6 @@ export default class extends BaseController {
       if (approve) approve.textContent = label
       group.querySelectorAll("button").forEach((button) => { button.disabled = true })
     })
-  }
-
-  #focusableItems() {
-    if (!this.menu) return []
-
-    return Array.from(this.menu.querySelectorAll("[role='menuitem']")).filter((el) => !el.disabled)
-  }
-
-  // A fixed menu doesn't move with its trigger, so follow the trigger on any
-  // scroll (window or a nested pane) rather than dismissing — a menu that
-  // vanishes because the page shifted a pixel is the worse failure.
-  #onScroll() {
-    // A surgical Turbo Stream can replace the frame the menu was built into —
-    // drop the stale reference (and its listeners) rather than reposition it.
-    if (!this.menu?.isConnected || !this.openTrigger?.isConnected) {
-      this.close()
-      return
-    }
-    this.#position()
-  }
-
-  // Anchored to the trigger, clamped into the viewport, flipped above when
-  // there is more room there.
-  #position() {
-    const menu = this.menu
-    menu.style.maxHeight = ""
-    const rect = this.openTrigger.getBoundingClientRect()
-    const left = Math.max(
-      VIEWPORT_MARGIN,
-      Math.min(rect.left, window.innerWidth - menu.offsetWidth - VIEWPORT_MARGIN)
-    )
-    menu.style.left = `${left}px`
-    menu.style.top = `${rect.bottom + 4}px`
-
-    const height = menu.offsetHeight
-    if (rect.bottom + 4 + height <= window.innerHeight - VIEWPORT_MARGIN) return
-
-    const roomAbove = rect.top - VIEWPORT_MARGIN
-    const roomBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN
-    if (roomAbove > roomBelow) {
-      menu.style.top = `${Math.max(VIEWPORT_MARGIN, rect.top - height - 4)}px`
-      menu.style.maxHeight = `${roomAbove}px`
-    } else {
-      menu.style.maxHeight = `${roomBelow}px`
-    }
   }
 }
 
