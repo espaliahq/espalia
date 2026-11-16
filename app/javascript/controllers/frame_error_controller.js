@@ -146,6 +146,7 @@ export default class extends BaseController {
   loadSucceeded(event) {
     if (!this.#isFrameEvent(event)) return
     this.loading = false
+    this.retried = false
     this.#showFrame()
   }
 

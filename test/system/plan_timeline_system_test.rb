@@ -530,6 +530,12 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
     within("##{frame_id}-error") { click_button "Retry" }
     assert_selector "turbo-frame##{frame_id}[complete] [data-timeline-figures]", visible: :all
     assert_no_selector "##{frame_id}-error", visible: true
+
+    page.execute_script("document.querySelector(arguments[0]).focus()", focused)
+    patch_fetch("/timeline/figures", once: true)
+    page.execute_script("document.getElementById(arguments[0]).reload()", frame_id)
+    assert_selector "##{frame_id}-error", text: "Couldn't load the figures."
+    assert page.evaluate_script("document.activeElement.matches(arguments[0])", focused), "a failure after a good Retry moved focus"
   end
 
   def price_the_backfill
