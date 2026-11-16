@@ -120,6 +120,7 @@ class Views::Plans::Timeline < Views::Base
       div(class: "border-b border-l border-default px-3 py-2", style: cell(1, index + 2), data: { timeline_step: index }) do
         p(class: "font-semibold text-default") { step_name(index) }
         p(class: "text-muted") { period(index) }
+        today_continues(index)
         alternatives(index)
       end
     end
@@ -208,6 +209,7 @@ class Views::Plans::Timeline < Views::Base
       render Components::Kit::Card.new(title: step_name(@step), density: :compact) do |card|
         card.body do
           p(class: "text-sm text-muted") { period(@step) }
+          today_continues(@step)
           alternatives(@step)
         end
       end
@@ -502,6 +504,11 @@ class Views::Plans::Timeline < Views::Base
   def scenario_name(id) = @scenarios.dig(id, :name).presence || UNNAMED
 
   def period(index) = Views::Plans::ScenarioTable.period(@scenarios.fetch(columns[index][:scenario_id]))
+
+  def today_continues(index)
+    continues = Views::Plans::ScenarioTable.today_continues_to(@all_scenarios) if index.zero?
+    p(class: "text-sm text-muted", data: { today_continues: continues.iso8601 }) { "Today continues to #{continues.strftime('%-d %b %Y')}" } if continues
+  end
 
   def name(person_id) = @timeline[:names].fetch(person_id, Person::FORMER_MEMBER)
 

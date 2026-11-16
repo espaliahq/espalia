@@ -7,7 +7,7 @@ class Plans::ScenariosController < ApplicationController
   # POST /planning/:plan_id/scenarios
   def create
     authorize_editor
-    draft = params.expect(scenario: [ :parent_id, :relation, :name, :ends_on ]).to_h.symbolize_keys.compact_blank
+    draft = params.expect(scenario: [ :parent_id, :relation, :name, :starts_on, :ends_on ]).to_h.symbolize_keys.compact_blank
     scenario = Operations::TeamPlanning::ForkScenario.call(context: pundit_user, params: { plan_id:, **draft })
     redirect_to map_plan_path(plan_id, scenario: scenario[:scenario_id]), notice: "#{scenario[:name]} forked."
   rescue Operations::Base::ParameterError => e

@@ -34,6 +34,7 @@ class PlanScenariosSystemTest < ApplicationSystemTestCase
         within(FORK) do
           assert_equal @q2, find_field("Starts from").value
           assert find_field("After it", checked: true)
+          assert_no_field "Starts on"
           js_fill_in "Name", with: "Lean Q1"
           js_fill_in "Ends on", with: "2027-09-30"
         end
@@ -41,6 +42,28 @@ class PlanScenariosSystemTest < ApplicationSystemTestCase
 
         assert_text "with this scenario's changes"
         assert_no_sideways_overflow
+      end
+
+      should "let an editor start the first step after the base date, and show Today carrying on until then" do
+        fresh = ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::CreatePlan, @planner, name: "Hiring 2027", base_on: "2026-11-14")[:plan_id] }
+        sign_in_as(@planner.user)
+        visit plan_path(fresh)
+        assert_selector "h1", text: "Hiring 2027"
+        open_dialog("New scenario", FORK)
+
+        within(FORK) do
+          assert_equal "2026-11-14", find_field("Starts on").value
+          js_fill_in "Name", with: "Q1 hires"
+          js_fill_in "Starts on", with: "2026-12-01"
+          js_fill_in "Ends on", with: "2027-03-31"
+        end
+        click_button_with_js_fallback("Create scenario", expect_text: "Q1 hires forked.")
+
+        visit plan_path(fresh)
+        assert_selector "tr[data-scenario-id='#{fresh}'] [data-today-continues='2026-11-30']", text: "Today continues to 30 Nov 2026"
+        assert_no_sideways_overflow
+        visit timeline_plan_path(fresh)
+        assert_selector "[data-today-continues='2026-11-30']", text: "Today continues to 30 Nov 2026"
       end
 
       should "let an editor fork an alternative from a scenario's menu" do

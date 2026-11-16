@@ -71,7 +71,7 @@ class Views::Plans::ScenarioTable < Views::Base
           p(class: "text-muted") { "The Org Graph. Nothing set by this plan." } if baseline
           render Components::Kit::Prose.new(scenario[:description], class: "mt-0.5 text-muted") if scenario[:description]
           div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
-            span { period(scenario) }
+            period_cell(scenario)
             state(baseline)
           end
           @extra_columns.each do |column|
@@ -82,7 +82,7 @@ class Views::Plans::ScenarioTable < Views::Base
           end
         end
       end
-      td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period(scenario) }
+      td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period_cell(scenario) }
       @extra_columns.each { |column| td(class: "#{WIDE} px-4 py-3 align-top") { render column.cell.call(scenario) } }
       td(class: "#{WIDE} px-4 py-3 align-top") { state(baseline) }
       td(class: "px-2 py-2 align-top text-right") { row_menu(scenario, baseline) } if @can_edit
@@ -113,6 +113,25 @@ class Views::Plans::ScenarioTable < Views::Base
   end
 
   def period(scenario) = self.class.period(scenario)
+
+  def period_cell(scenario)
+    span { period(scenario) }
+    continues = self.class.today_continues_to(@scenarios) if scenario[:parent_id].nil?
+    span(class: "block", data: { today_continues: continues.iso8601 }) { "Today continues to #{continues.strftime('%-d %b %Y')}" } if continues
+  end
+
+  # The last day Today runs on its own, when the plan's first step starts
+  # after the base date ([#404](https://github.com/espaliahq/espalia/issues/404)).
+  #
+  # @param scenarios [Array<Hash>] from `team_planning_scenarios`
+  # @return [Date, nil]
+  def self.today_continues_to(scenarios)
+    baseline = scenarios.find { it[:parent_id].nil? }
+    first = scenarios.find { it[:relation] == "then" && it[:parent_id] == baseline&.dig(:scenario_id) }
+    return unless first && first[:starts_on] > baseline[:starts_on]
+
+    Date.iso8601(first[:starts_on]) - 1
+  end
 
   # A scenario's period as the plan's pages print it: "As of" for the baseline,
   # whole months by name.
