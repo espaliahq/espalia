@@ -12,6 +12,10 @@ class Views::Tenant::PayBands::IndexView < Views::Base
 
   GONE = "No longer in the framework"
   SHADOWED = "Never used"
+  # Holds the order the page shows once; each move button submits it with its
+  # own band and direction in the URL, so the page doesn't grow with the square
+  # of the list.
+  MOVE_FORM = "pay-bands-move-form"
 
   # @param bands [Array<Hash>] as Operations::Tenants::PayBands lists them, in order
   # @param rates [Hash] as Operations::Tenants::ExchangeRates reads them: the reference currency and the rates
@@ -71,6 +75,9 @@ class Views::Tenant::PayBands::IndexView < Views::Base
         div(data: { controller: "pay-band-order" }) do
           settings_form(reorder_tenant_pay_bands_path, method: :patch, id: "pay-bands-reorder-form", hidden: true,
                                                        data: { pay_band_order_target: "form" }) { }
+          settings_form(reorder_tenant_pay_bands_path, method: :patch, id: MOVE_FORM, hidden: true) do
+            @bands.each { input(type: "hidden", name: "from_pay_band_ids[]", value: it[:pay_band_id]) }
+          end
           ol(class: "mt-4 divide-y divide-default", data: { pay_band_order_target: "list" }) do
             @bands.each_with_index { |band, index| band_row(band, index) }
           end
@@ -130,15 +137,11 @@ class Views::Tenant::PayBands::IndexView < Views::Base
   def move_button(band, allowed, direction)
     return span(class: "size-8 shrink-0", aria: { hidden: "true" }) unless allowed
 
-    settings_form(reorder_tenant_pay_bands_path, method: :patch, class: "contents") do
-      input(type: "hidden", name: "pay_band_id", value: band[:pay_band_id])
-      input(type: "hidden", name: "direction", value: direction)
-      @bands.each { input(type: "hidden", name: "from_pay_band_ids[]", value: it[:pay_band_id]) }
-      render Components::Kit::Button.new(
-        variant: :ghost, tone: :neutral, size: :sm, icon: true, compact: true, type: :submit,
-        id: "pay-band-#{direction}-#{band[:pay_band_id]}", aria_label: "Move the band for #{band_name(band)} #{direction}"
-      ) { icon(:"chevron-#{direction}", class: "size-4") }
-    end
+    render Components::Kit::Button.new(
+      variant: :ghost, tone: :neutral, size: :sm, icon: true, compact: true, type: :submit, form: MOVE_FORM,
+      formaction: reorder_tenant_pay_bands_path(pay_band_id: band[:pay_band_id], direction:),
+      id: "pay-band-#{direction}-#{band[:pay_band_id]}", aria_label: "Move the band for #{band_name(band)} #{direction}"
+    ) { icon(:"chevron-#{direction}", class: "size-4") }
   end
 
   # Remove is destructive, so it sits in the row's kebab, which opens the dialog.

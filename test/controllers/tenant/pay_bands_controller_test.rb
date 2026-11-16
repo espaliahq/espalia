@@ -141,7 +141,8 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#pay-bands-order li:last-child", text: /2\.\s*Every role in Engineering, Every level/
       assert_select "[id^='pay-band-shadowed-']", count: 1
       assert_select "#pay-band-up-#{role_band.id}", count: 0
-      assert_select "#pay-band-down-#{role_band.id}", count: 1
+      assert_select "#pay-band-down-#{role_band.id}[form=pay-bands-move-form]", count: 1
+      assert_select "input[name='from_pay_band_ids[]']", count: 2, message: "the order the page shows, once, not once per button"
     end
 
     should "move a band up or down a place, and save a dragged order" do
