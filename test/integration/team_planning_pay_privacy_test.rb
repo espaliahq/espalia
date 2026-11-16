@@ -538,7 +538,9 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         assert_in_delta held.amount * Rational(121, 365), BigDecimal(budget[:total][:approved][:native]["AUD"]), 1e-9, who
         reads = [ budget, call(Operations::TeamPlanning::BudgetLines, account, plan_id: @plan_id, scenario_id: @q1),
                   call(Operations::TeamPlanning::Funding, account, plan_id: @plan_id, scenario_id: @q1), budget_tab(account).to_html ].to_json
-        [ away.id, "Field Sales", "654", "654,321" ].each { assert_not_includes reads, it, who }
+        assert_not_includes reads, away.id, who
+        figures = reads.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+        [ "Field Sales", "654", "654,321" ].each { assert_not_includes figures, it, who }
       end
     end
 
