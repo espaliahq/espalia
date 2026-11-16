@@ -678,8 +678,13 @@ number and a country, and leaves the rest open; a band that sets none matches ev
 - **Moving a band** is one write, `tenants_reorder_pay_bands`, which takes every band's id
   in the new order. The page sends it from the up and down buttons on each row, or from a
   drag on a desktop. Moving a band reprices plans and moves `bands_changed_at`.
-- **A band made from a framework level keeps its `level_id`**, which an admin never sets.
-  A seat at a level that has left the framework still finds its band through it.
+- **A band made from a framework level matches on its `level_id` alone**, which an admin
+  never sets. The level holds its role and number, so the band follows a renumbering.
+- **A seat at a level that has left the framework** has no role or number any more. It
+  matches only the bands made from that level and those that set no role, family or
+  number, so removing an unrelated band never changes its price. With none for its
+  country it is unpriced with the reason `level_left`, and an admin adds a band or moves
+  the seat to a current level.
 
 #### Cost on screen
 
