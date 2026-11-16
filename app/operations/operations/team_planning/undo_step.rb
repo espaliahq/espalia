@@ -39,14 +39,14 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
     known_scenario!(plan, scenario_id)
     return { plan_id: plan.id, scenario_id:, undo: nil, redo: nil } unless offered?(plan, scenario_id)
 
-    @named_in = [ plan, scenario_id ]
     aggregate = ::TeamPlanning::Repository.new.load_plan(plan.id)
     except_facets = ::Operations::TeamPlanning::ChangeNote.hidden_facets(see_pay: PlanPolicy.new(context, plan).see_pay?)
     actor_id = context.person.id
     undo_id = aggregate.last_undoable_by(scenario_id, actor_id, except_facets:)
     redo_id = aggregate.last_redoable_by(scenario_id, actor_id, except_facets:)
-    undo_offer = step(aggregate, scenario_id, undo_id) { aggregate.restored_by_undo(scenario_id, undo_id) }
-    redo_offer = step(aggregate, scenario_id, redo_id) { |entry| entry if entry.is_a?(::TeamPlanning::Events::Change) }
+    hidden = Hidden.new(context, plan, scenario_id)
+    undo_offer = step(aggregate, scenario_id, undo_id, hidden) { aggregate.restored_by_undo(scenario_id, undo_id) }
+    redo_offer = step(aggregate, scenario_id, redo_id, hidden) { |entry| entry if entry.is_a?(::TeamPlanning::Events::Change) }
     { plan_id: plan.id, scenario_id:,
       undo: accepted(plan, undo_offer) { it.undo_change(scenario_id:, event_id: undo_id, undone_by_id: actor_id) },
       redo: accepted(plan, redo_offer) { it.redo_change(scenario_id:, event_id: redo_id, redone_by_id: actor_id) } }
@@ -61,7 +61,7 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
   # @yieldparam entry [RubyEventStore::Event] the entry to undo or redo
   # @yieldreturn [TeamPlanning::Events::Change, nil] the change it would put in effect, held against the plan's
   #   scope; with none, the entry itself is, so a change to a line the plan hides is never named
-  def step(aggregate, scenario_id, event_id)
+  def step(aggregate, scenario_id, event_id, hidden)
     return nil unless event_id
 
     entry = aggregate.log_of(scenario_id).find { it.event_id == event_id }
@@ -71,7 +71,7 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
     within_scope!(aggregate, held.class, held.data[:subject_id], held.data)
 
     subject_id = entry.data[:subject_id]
-    { event_id:, action: action_of(entry), subject_id:, subject: name_of(subject_id), facet: aggregate.facet_of(scenario_id, event_id), scenario_id: }
+    { event_id:, action: action_of(entry), subject_id:, subject: name_of(subject_id, hidden), facet: aggregate.facet_of(scenario_id, event_id), scenario_id: }
   rescue Operations::Base::ParameterError
     nil
   end
@@ -104,23 +104,26 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
     end
   end
 
-  # The scope hides the name of anyone the scenario doesn't cover, even when
-  # the undo on offer would bring them back in ([#435](https://github.com/espaliahq/espalia/issues/435)).
-  def name_of(subject_id)
-    return nil if hidden_ids.include?(subject_id)
+  # The scope hides the name of anyone status reads as outside, even when the
+  # undo on offer would bring them back in ([#435](https://github.com/espaliahq/espalia/issues/435)).
+  def name_of(subject_id, hidden)
+    return nil if hidden.include?(subject_id)
 
     Person.find_by(id: subject_id)&.name || OrgUnit.find_by(id: subject_id)&.name
   end
 
-  def hidden_ids
-    @hidden_ids ||= begin
-      plan, scenario_id = @named_in
-      plan.scope_unit_ids.blank? ? Set.new : outside_of(plan, scenario_id)
-    end
-  end
+  # Outside both the scenario and the baseline, as {TeamPlanning::Status} reads it.
+  # Resolved only when a name is asked for, and never on an unscoped plan.
+  Hidden = Struct.new(:context, :plan, :scenario_id) do
+    def include?(subject_id) = ids.include?(subject_id)
 
-  def outside_of(plan, scenario_id)
-    map = ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure
-    map.outside_ids | map.cut_ids
+    private
+
+    def ids
+      @ids ||= plan.scope_unit_ids.blank? ? Set.new : outside(::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure) &
+                                                       outside(::TeamPlanning::Baseline.new(context:, plan:).structure)
+    end
+
+    def outside(map) = map.outside_ids | map.cut_ids
   end
 end
