@@ -258,6 +258,18 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal [ [ "Payments", "rule", 2 ] ], person_cost_centre(cost.scenario, @cy.id), "the department entry has the last word"
     end
 
+    should "give a placeholder hire what the open half of its position reads, an occupant's real one before the entries" do
+      seat = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                              fte: 1, basis: "new")[:position_id]
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: seat, allocation: 0.5 } ])
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, seat), "the open half takes Ada's"
+
+      hire = operation(Operations::TeamPlanning::SetPlaceholderHire, label: "Payments engineer", fte: 0.5)[:placeholder_id]
+      operation(Operations::TeamPlanning::SetAssignment, person_id: hire, placements: [ { position_id: seat, allocation: 1 } ])
+
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, hire), "not the Payments entry"
+    end
+
     should "stay a real one the plan leaves untouched, in Today and in a scenario, whatever the rules say" do
       operation(Operations::TeamPlanning::SetPlanValue, person_id: @dee.id, field: "fte", value: "0.5")
 

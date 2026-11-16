@@ -53,7 +53,8 @@ class TeamPlanning::PositionCostCentres
   # real cost centre keeps it unless the plan changes their unit, role, level
   # or location. Otherwise the first of these that gives one wins: their
   # position's own label; the entries read at their planned place; their real
-  # cost centre. A placeholder hire has none of their own.
+  # cost centre. A placeholder hire reads as its position's open seat, {#of},
+  # so its caller sends one here only when it holds no position.
   #
   # @param cost_centre [String, nil] their real cost centre
   # @param changed [Boolean] whether the plan changes their unit, role, level or location

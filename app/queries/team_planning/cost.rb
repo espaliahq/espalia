@@ -354,8 +354,11 @@ class TeamPlanning::Cost
     end
   end
 
-  # See {TeamPlanning::PositionCostCentres#person}.
+  # See {TeamPlanning::PositionCostCentres#person}. A placeholder hire fills
+  # its position's open seat, so it reads as that seat does.
   def person_cost_centre(member, position, changed:, unit_id:, level_id:)
+    return cost_centre_working(@cost_centres.of(position)) if member.placeholder? && position
+
     resolved = @cost_centres.person(cost_centre: (member.cost_centre unless member.placeholder?), changed:, position:, unit_id:,
                                     role_id: role_at(member, position), level_id:, location: member.country)
     cost_centre_working(resolved)
