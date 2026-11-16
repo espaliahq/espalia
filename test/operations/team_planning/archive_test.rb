@@ -107,7 +107,11 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
     assert_equal({ removed: true }, note.call)
   end
 
-  should "refuse a viewer's archive as an unknown plan" do
+  should "refuse a viewer's archive, as a member or not" do
     assert_equal "No such plan", refusal(Operations::TeamPlanning::ArchivePlan, as: @viewer, plan_id: @live_id)
+
+    call(Operations::TeamPlanning::AddPlanMember, plan_id: @live_id, person_id: @viewer.person_id, role: "viewer")
+    assert_equal "No such plan", refusal(Operations::TeamPlanning::ArchivePlan, as: @viewer, plan_id: @live_id)
+    assert_nil call(Operations::TeamPlanning::Plan, plan_id: @live_id)[:archived]
   end
 end
