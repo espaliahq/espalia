@@ -104,17 +104,18 @@ class OrgGraph::StructureAggregate
   # @param name [String]
   # @param parent_ids [Array<String>, nil] the kinds it may sit under; its
   #   own id lets its units nest
-  # @param top [Boolean] whether it may sit at the top, with `parent_ids:`
+  # @param top [Boolean, nil] whether it may sit at the top, with
+  #   `parent_ids:`; by default only when it lists no parents
   # @param effective_on [Date, String]
   # @param defined_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the id is taken, the name blank or taken, or a
   #   parent kind unknown
-  def add_level(level_id, name, effective_on:, parent_ids: nil, top: true, defined_by_id: nil)
+  def add_level(level_id, name, effective_on:, parent_ids: nil, top: nil, defined_by_id: nil)
     level_id = require_id(level_id, "Level id")
     raise ArgumentError, "Level id is taken" if level_index(level_id)
 
     levels = [ *@levels, { level_id:, name: } ]
-    rules = parent_ids.nil? ? {} : { level_id => kind_rules(level_id, parent_ids, top) }
+    rules = parent_ids.nil? ? {} : { level_id => kind_rules(level_id, parent_ids, top.nil? ? Array(parent_ids).empty? : top) }
     write_taxonomy(levels, rules:, effective_on:, defined_by_id:)
   end
 
@@ -187,7 +188,9 @@ class OrgGraph::StructureAggregate
     else
       raise "Level still holds units from #{previous}; hand it over instead" if live_units.any? { |unit| unit.level_id == level_id }
 
-      ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+      ensure_no_stated_rules!(level_id, provider) unless provider == ESPALIA
+      ensure_no_stated_rules!(level_id, provider)
+    ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
     end
 
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
@@ -645,8 +648,10 @@ class OrgGraph::StructureAggregate
 
   def write_taxonomy(levels, effective_on:, defined_by_id:, rules: {})
     new_providers = new_level_providers(levels)
-    levels = without_dropped_parents(with_stated_rules(normalise_levels(levels), rules))
-    return if levels == with_stated_rules(@levels)
+    levels = tidy_parents(with_stated_rules(normalise_levels(levels), rules))
+    return if levels == tidy_parents(with_stated_rules(@levels))
+
+    ensure_every_kind_can_sit!(levels)
 
     ensure_not_before_last_change!(effective_on)
     @levels.reject { |level| level_ids(levels).include?(level[:level_id]) }.each { ensure_never_held!(it) }
@@ -885,10 +890,23 @@ class OrgGraph::StructureAggregate
     levels.map { |level| level.slice(:level_id, :name).merge(stated.fetch(level[:level_id], {})) }
   end
 
-  # A removed kind leaves the lists that named it.
-  def without_dropped_parents(levels)
+  # Lists each kind's parents in taxonomy order, without the kinds that went.
+  def tidy_parents(levels)
     ids = level_ids(levels)
-    levels.map { |level| level.key?(:parent_level_ids) ? level.merge(parent_level_ids: level[:parent_level_ids] & ids) : level }
+    levels.map { |level| level.key?(:parent_level_ids) ? level.merge(parent_level_ids: ids & level[:parent_level_ids]) : level }
+  end
+
+  def ensure_every_kind_can_sit!(levels)
+    stuck = levels.find { |level| level[:top] == false && (Array(level[:parent_level_ids]) - [ level[:level_id] ]).empty? }
+    raise "#{stuck[:name]} would have nowhere to sit, so give it another place first" if stuck
+  end
+
+  # Stated rules outrank the HRIS rule, so a kind that states them stays
+  # Espalia's until the HRIS rule is a list too.
+  def ensure_no_stated_rules!(level_id, provider)
+    return unless @level_rules.key?(level_id)
+
+    raise "#{level_name(level_id)} has its own rules for where it can sit, so it can't come from #{provider} yet"
   end
 
   # A kind's rules as an event states them: its parent kinds, in taxonomy

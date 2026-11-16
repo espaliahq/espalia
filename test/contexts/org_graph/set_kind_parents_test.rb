@@ -87,6 +87,43 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     assert_equal [ [ @tribe ], false ], rules(@squad)
   end
 
+  should "refuse to remove the only kind another kind can sit under" do
+    pod = SecureRandom.uuid_v7
+    as_tenant do
+      @handler.add_level(pod, "Pod", effective_on: @today)
+      @handler.set_kind_parents(@squad, parent_ids: [ pod ], top: false, effective_on: @today)
+    end
+
+    error = assert_raises(RuntimeError) { as_tenant { @handler.remove_level(pod, effective_on: @today) } }
+    assert_equal "Squad would have nowhere to sit, so give it another place first", error.message
+  end
+
+  should "keep a kind that states its own rules from an HRIS until the HRIS rule is a list" do
+    @tenant = create(:tenant)
+    division = SecureRandom.uuid_v7
+    as_tenant { @handler.add_level(division, "Division", parent_ids: [ division ], top: true, effective_on: @today) }
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @handler.set_level_provider(division, "hibob", effective_on: @today, field: "department") }
+    end
+    assert_equal "Division has its own rules for where it can sit, so it can't come from hibob yet", error.message
+  end
+
+  should "write nothing when the same rules are restated in another order" do
+    as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @squad, @tribe ], top: false, effective_on: @today) }
+
+    assert_no_difference -> { structure_events.size } do
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad, @tribe ], top: false, effective_on: @today) }
+    end
+  end
+
+  should "keep a kind with listed parents off the top unless told otherwise" do
+    guild = SecureRandom.uuid_v7
+    as_tenant { @handler.add_level(guild, "Guild", parent_ids: [ @tribe ], effective_on: @today) }
+
+    assert_equal [ [ @tribe ], false ], rules(guild)
+  end
+
   context "on a tenant whose kinds changed out of date order" do
     setup do
       @tenant = create(:tenant)
@@ -131,5 +168,9 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
 
   def as_tenant(&block)
     ActsAsTenant.with_tenant(@tenant, &block)
+  end
+
+  def structure_events
+    Rails.configuration.event_store.read.stream(EventStreamNaming.org_structure_stream(tenant: @tenant)).to_a
   end
 end
