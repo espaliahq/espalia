@@ -29,6 +29,11 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
 
   def level_ids = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_first.pluck(:id) }
 
+  def kind_rules(level_id)
+    kind = ActsAsTenant.with_tenant(@tenant) { ::OrgGraph::Repository.new.load_structure.taxonomy.kind(level_id) }
+    [ kind.parent_ids, kind.top ]
+  end
+
   context "AddLevel" do
     should "add a level Espalia holds at the bottom, with the caller as actor" do
       result = call(Operations::OrgGraph::AddLevel, name: " Guild ", effective_on: "2026-11-01")
@@ -100,6 +105,73 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         call(Operations::OrgGraph::ReorderLevels, as: @editor, level_ids: [ @department, @team, @guild, @squad ])
       end
       assert_equal %w[Department Team Squad Guild], level_names
+    end
+  end
+
+  context "AddLevel with rules" do
+    setup { @department, @team, @squad = level_ids.first(3) }
+
+    should "state the parents it lists, off the top unless asked" do
+      guild = call(Operations::OrgGraph::AddLevel, name: "Guild", parent_ids: [ @team.upcase ])[:level_id]
+
+      assert_equal [ [ @team ], false ], kind_rules(guild)
+    end
+
+    should "take the top it is given" do
+      guild = call(Operations::OrgGraph::AddLevel, name: "Guild", parent_ids: [ @team ], top: true)[:level_id]
+
+      assert_equal [ [ @team ], true ], kind_rules(guild)
+    end
+
+    should "refuse a parent outside the taxonomy, adding nothing" do
+      stranger = SecureRandom.uuid_v7
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::AddLevel, name: "Guild", parent_ids: [ stranger ])
+      end
+
+      assert_equal "Not in the taxonomy: #{stranger}", error.message
+      assert_not_includes level_names, "Guild"
+    end
+  end
+
+  context "SetKindParents" do
+    setup do
+      @guild = call(Operations::OrgGraph::AddLevel, name: "Guild")[:level_id]
+      @department, @team, @squad = level_ids.first(3)
+    end
+
+    should "replace a type's parents and top, with the caller as actor" do
+      result = call(Operations::OrgGraph::SetKindParents, level_id: @guild, parent_ids: [ @team, @guild ], top: false)
+
+      assert_equal [ [ @team, @guild ], false ], kind_rules(@guild)
+      assert_equal({ level_id: @guild, name: "Guild", parent_ids: [ @team, @guild ], top: false, effective_on: Date.current.iso8601 },
+                   result.except(:levels))
+      event = Rails.configuration.event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).last
+      assert_equal @admin.person.id, event.data[:defined_by_id]
+    end
+
+    should "refuse a list that strands live units, naming them" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::SetKindParents, level_id: @squad, parent_ids: [ @guild ], top: true)
+      end
+
+      assert_equal "These units wouldn't fit this structure, so move them first: Payments (Squad under Team)", error.message
+    end
+
+    should "refuse a type an HRIS provides, naming the HRIS" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::SetKindParents, level_id: @department, parent_ids: [], top: true)
+      end
+
+      assert_equal "Department comes from HiBob, so its rules follow it", error.message
+    end
+
+    should "leave the rules to a tenant admin" do
+      [ @editor, @member ].each do |caller|
+        assert_raises(Pundit::NotAuthorizedError) do
+          call(Operations::OrgGraph::SetKindParents, as: caller, level_id: @guild, parent_ids: [], top: true)
+        end
+      end
     end
   end
 
