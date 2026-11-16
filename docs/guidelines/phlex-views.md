@@ -49,7 +49,7 @@ Look a job up here, then check its states in Lookbook (`/lookbook`) before writi
 | A message on the page, or one that comes and goes | `Kit::Alert`, `Kit::Toast` |
 | Nothing to show yet | `Kit::EmptyState` |
 | A dialog | `Kit::Modal` |
-| A side panel the viewer can close beside the main column | `Kit::SidePanel.new(id:, title:, open:, cookie:, url_key:, narrow:)`, then `main`, `body`, `toggle` |
+| A side panel the viewer can close beside the main column | `Kit::SidePanel.new(id:, title:, open:, cookie:, url_key:, narrow:)`, then `main`, `body`, `toggle`. A toggle outside the row: `wrap` the page, place the row with `columns`, render `SidePanel::Toggle`. A body with its own heading: `heading: false` and `SidePanel::Close`. `sticky:` and `fit_viewport:` keep it in view |
 | A section heading, with a subtitle or an action | `Kit::SectionHeading.new(title, subtitle:)`, then `heading.action { }` |
 | Term and detail pairs | `Kit::DescriptionList.new(items:, columns:)` |
 | A term whose definition shows on hover and focus | `Kit::DefinitionTip.new(term, definition:, id:)` |
