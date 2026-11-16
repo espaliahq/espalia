@@ -13,7 +13,10 @@
 # that step's {Views::Plans::MoveDialog}, so it is the map's move, written in
 # the column's scenario. A bar that starts with a change of place, a new
 # position or a departure also has "When…", which moves that change a step
-# earlier or later. Today, the first column, takes no moves.
+# earlier or later. Today, the first column, takes no moves. On a wide screen
+# the bar's edge also drags that change one step either way
+# ([#393](https://github.com/espaliahq/espalia/issues/393)): the drop posts the
+# matching "When…" item's own URL, and the menu stays the keyboard and phone path.
 class Views::Plans::Timeline < Views::Base
   UNASSIGNED = "Unassigned"
   UNNAMED = "Unnamed step"
@@ -102,7 +105,7 @@ class Views::Plans::Timeline < Views::Base
 
   def wide_grid
     div(class: "group/move hidden overflow-x-auto rounded-lg border border-default bg-default md:block",
-        data: ({ controller: "map-move" } if @moving)) do
+        data: ({ controller: "map-move timeline-shift" } if @moving)) do
       div(class: "grid text-sm", style: "grid-template-columns: minmax(6rem, 9rem) repeat(#{columns.size}, minmax(11rem, 1fr)); " \
                                         "min-width: #{9 + (11 * columns.size)}rem",
           data: { timeline_grid: "" }) do
@@ -110,6 +113,7 @@ class Views::Plans::Timeline < Views::Base
         header_row
         @timeline[:blocks].each { wide_block(it) }
         wide_unassigned if @moving || unassigned_lanes.any?
+        shift_targets if @moving
       end
     end
   end
@@ -122,6 +126,7 @@ class Views::Plans::Timeline < Views::Base
         p(class: "text-muted") { period(index) }
         today_continues(index)
         alternatives(index)
+        p(class: "font-medium text-brand", hidden: true, data: { timeline_shift_hint: index }) { "Move here" } if @moving
       end
     end
     @row += 1
@@ -191,11 +196,15 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def wide_bar(lane, bar)
-    div(class: "z-10 px-1 py-1 group-data-[dragging]/move:pointer-events-none has-[[aria-expanded=true]]:z-20", style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
-      bar_box(lane, bar, steps: movable_steps(bar), shifts: shifts(lane, bar, bar[:from]..bar[:to])) do
+    shifts = shifts(lane, bar, bar[:from]..bar[:to])
+    div(class: "relative z-10 px-1 py-1 group-data-[dragging]/move:pointer-events-none has-[[aria-expanded=true]]:z-20 data-[shifting]:opacity-60",
+        style: "grid-row: #{@row}; grid-column: #{bar[:from] + 2} / #{bar[:to] + 3}") do
+      bar_box(lane, bar, steps: movable_steps(bar), shifts:) do
         span(class: "sr-only") { "#{span_of(bar)}: " }
         bar_text(lane, bar, starts: bar[:from], ends: bar[:to])
       end
+      edge_grip(bar, "start", shifts.select { |column, facet| column == bar[:from] && facet != "departure" })
+      edge_grip(bar, "end", shifts.select { |column, facet| column == bar[:to] && facet == "departure" })
     end
   end
 
@@ -391,6 +400,30 @@ class Views::Plans::Timeline < Views::Base
     plan_change_moves_path(@timeline[:plan_id], return_to: timeline_plan_path(@timeline[:plan_id], scenario: @timeline[:scenario_id], step: @step),
                                                 move: { scenario_id: columns[column][:scenario_id], subject_id: bar[:subject_id], facet:, direction:,
                                                         to_scenario_id: (columns[to][:scenario_id] if direction == "later") })
+  end
+
+  # -- Dragging a bar's edge --------------------------------------------------
+
+  GRIP_SIDE = { "start" => "left-0", "end" => "right-0" }.freeze
+
+  # Sits in the bar's outer padding, outside the draggable box, so it neither
+  # widens the bar nor starts #309's drag to another unit. It is pointer-only:
+  # the "When…" menu beside it is the same move for keyboards and screen readers.
+  def edge_grip(bar, edge, shifts)
+    return if shifts.empty?
+
+    targets = shifts.to_h { |column, facet, direction, to| [ to, shift_path(bar, column, facet, direction, to) ] }
+    span(class: "absolute inset-y-1 #{GRIP_SIDE.fetch(edge)} w-2 cursor-col-resize touch-none rounded-sm hover:bg-brand-muted",
+         aria: { hidden: "true" }, title: "Drag to move this a step earlier or later",
+         data: { timeline_shift_edge: edge, timeline_shift_targets: targets.to_json, action: "pointerdown->timeline-shift#start" })
+  end
+
+  # A tint down each column, lit while an edge is dragged over a step it can move to.
+  def shift_targets
+    columns.each_index do |index|
+      div(class: "pointer-events-none z-0 hidden data-[lit]:block data-[lit]:bg-brand-subtle data-[over]:bg-brand-muted",
+          style: "grid-row: 1 / #{@row}; grid-column: #{index + 2}", data: { timeline_shift_column: index })
+    end
   end
 
   def subject_name(bar) = bar[:kind] == "person" ? name(bar[:subject_id]) : subject(bar)
