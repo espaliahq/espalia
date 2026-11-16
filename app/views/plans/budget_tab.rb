@@ -241,16 +241,14 @@ class Views::Plans::BudgetTab < Views::Base
   end
 
   def position_names
-    @position_names ||= @map[:positions].group_by { it[:unit_id] }.values.map { Views::Plans::ScenarioMap.position_names(it) }.reduce({}, :merge)
+    @position_names ||= Views::Plans::ScenarioMap.all_position_names(@map)
   end
 
   def positions_by_id = @positions_by_id ||= @map[:positions].index_by { it[:position_id] }
 
   def unit_names = @unit_names ||= @map[:units].to_h { [ it[:id], it[:name] ] }
 
-  def natives(native)
-    native.empty? ? "Nothing" : native.map { |currency, figure| money_text(figure, currency) }.join(" + ")
-  end
+  def natives(native) = Views::Plans::CostMarks::Format.sum({ native: }, nil).upcase_first
 
   def money_text(figure, currency) = Views::Plans::CostMarks::Format.amount(figure, currency)
 
