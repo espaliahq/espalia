@@ -20,6 +20,19 @@ class TeamPlanning::ChangeKindsTest < ActiveSupport::TestCase
     assert_empty TeamPlanning::ChangeKinds.all - TeamPlanning::Projections::Overrides.handled_events
   end
 
+  # Status compares whole end states and never knows who is reading, so a kind
+  # that holds pay stays untracked until Status strips money for a member
+  # without see-pay ([#446](https://github.com/espaliahq/espalia/issues/446)).
+  should "keep every change that holds pay out of Status" do
+    Operations::TeamPlanning::ChangeNote.hidden_facets(see_pay: false).each do |facet|
+      TeamPlanning::ChangeKinds.holding(facet).select { it.is_a?(TeamPlanning::Events::SealedChange) }.each do |kind|
+        field = facet.split(":", 2)[1]
+        change = kind.new(data: { subject_id: SecureRandom.uuid_v7, **({ field: } if field) })
+        assert_not kind.tracks?(change), "#{kind} holds #{facet}: strip its money in TeamPlanning::Status for a member without see-pay first"
+      end
+    end
+  end
+
   should "find every kind that holds a facet, and refuse one no kind holds" do
     assert_equal [ TeamPlanning::Events::RuleSet ], TeamPlanning::ChangeKinds.holding("rule:test_cap")
     assert_equal [ TeamPlanning::Events::PositionClosed, TeamPlanning::Events::PositionSet ], TeamPlanning::ChangeKinds.holding("position")
