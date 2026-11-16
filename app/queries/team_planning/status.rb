@@ -111,8 +111,8 @@ class TeamPlanning::Status
   def outside?(subject_id)
     return false if @plan.scope_unit_ids.blank?
 
-    @outside_maps ||= [ resolved(@scenario_id), @baseline.structure ]
-    @outside_maps.all? { |map| map.outside_ids.include?(subject_id) || map.cut_ids.include?(subject_id) }
+    @outside_ids ||= [ resolved(@scenario_id), @baseline.structure ].map { it.outside_ids | it.cut_ids }
+    @outside_ids.all? { it.include?(subject_id) }
   end
 
   def outside_entry((subject_id, facet), change)
