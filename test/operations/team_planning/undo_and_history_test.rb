@@ -68,6 +68,16 @@ class Operations::TeamPlanning::UndoAndHistoryTest < ActiveSupport::TestCase
 
   def refusal(&) = assert_raises(Operations::Base::ParameterError, &).message
 
+  def set_period(scenario_id, ends_on)
+    call(:SetScenarioPeriod, plan_id: @plan_id, scenario_id:, ends_on:)
+    history(scenario_id).last[:event_id]
+  end
+
+  def periods(*ids)
+    rows = call(:Scenarios, plan_id: @plan_id)[:scenarios].index_by { it[:scenario_id] }
+    ids.map { rows[it].values_at(:starts_on, :ends_on) }
+  end
+
   should "undo the caller's latest change and redo it, saying which change each took" do
     set_cap(@lean, 8)
     set_cap(@lean, 5)
@@ -160,6 +170,58 @@ class Operations::TeamPlanning::UndoAndHistoryTest < ActiveSupport::TestCase
 
     set, undone = history(@lean, as: @viewer)
     assert_equal [ Person::FORMER_MEMBER ] * 3, [ set.dig(:by, :name), set.dig(:undone, :by, :name), undone.dig(:by, :name) ]
+  end
+
+  context "a date edit" do
+    setup do
+      @q2 = as_tenant { fork(@q1, "then", "Q2", ends_on: "2026-09-30") }
+      @edit = set_period(@q1, "2026-05-31")
+    end
+
+    should "undo and redo the caller's latest date edit, moving the next step with it" do
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, event_id: @edit, undone: true }, undo_change(@q1))
+      assert_equal [ %w[2026-03-02 2026-06-30], %w[2026-07-01 2026-09-30] ], periods(@q1, @q2)
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, event_id: @edit, redone: true }, redo_change(@q1, event_id: @edit))
+      assert_equal [ %w[2026-03-02 2026-05-31], %w[2026-06-01 2026-09-30] ], periods(@q1, @q2)
+    end
+
+    should "list the edit marked undone, with its undo and redo beside it" do
+      undo_change(@q1)
+      redo_change(@q1)
+
+      edit, undone, redone = history(@q1).last(3)
+      assert_equal [ "dates", @edit, nil ], [ edit[:action], edit[:event_id], edit[:undone] ]
+      assert_equal [ "undo", @edit ], undone.values_at(:action, :reverses_event_id)
+      assert_equal [ "redo", @edit ], redone.values_at(:action, :reverses_event_id)
+    end
+
+    should "refuse an undo that would leave a later step ending before it starts, naming it" do
+      set_period(@q2, "2026-06-15")
+
+      assert_equal "Q2 would end on 2026-06-15, before it starts on 2026-07-01", refusal { undo_change(@q1, event_id: @edit) }
+    end
+
+    should "refuse a viewer, and say there is nothing to undo once it is undone" do
+      assert_equal "No such plan", refusal { undo_change(@q1, as: @viewer, event_id: @edit) }
+      undo_change(@q1)
+      assert_equal "You have nothing here to undo", refusal { undo_change(@q1) }
+    end
+
+    should "refuse an archived plan" do
+      call(:ArchivePlan, plan_id: @plan_id)
+
+      assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal { undo_change(@q1, event_id: @edit) }
+    end
+
+    should "refuse a frozen plan, to its last editor and to a tenant admin alike" do
+      admin = as_tenant { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant)) }
+      as_tenant do
+        @editor.person.update!(status: "inactive")
+        OrgLeaver.create!(tenant: @tenant, person_id: @editor.person_id, left_on: Date.new(2026, 2, 1))
+      end
+
+      [ @editor, admin ].each { |account| assert_equal "No such plan", refusal { undo_change(@q1, as: account, event_id: @edit) } }
+    end
   end
 
   should "refuse when the caller has nothing to undo or redo, and an unknown scenario" do
