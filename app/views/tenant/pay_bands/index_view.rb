@@ -84,8 +84,8 @@ class Views::Tenant::PayBands::IndexView < Views::Base
     li(id: "pay-band-#{id}", class: "py-3 first:pt-0 last:pb-0 pointer-fine:cursor-grab data-[drag-source]:opacity-50",
        draggable: "true",
        data: { pay_band_id: id,
-               action: "dragstart->pay-band-order#start dragover->pay-band-order#over drop->pay-band-order#drop " \
-                       "dragend->pay-band-order#end" }) do
+               action: "pointerdown->pay-band-order#press dragstart->pay-band-order#start dragover->pay-band-order#over " \
+                       "drop->pay-band-order#drop dragend->pay-band-order#end" }) do
       div(class: "flex items-start gap-3") do
         span(class: "mt-0.5 w-6 shrink-0 text-right text-sm font-medium tabular-nums text-muted") { "#{band[:position]}." }
         div(class: "flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4") do

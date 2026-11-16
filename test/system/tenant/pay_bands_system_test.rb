@@ -29,13 +29,15 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
   def locations_in_order = ActsAsTenant.with_tenant(@tenant) { PayBand.order(:position).pluck(:location) }
 
   # Selenium can't drive an HTML drag, so this sends the events a drag sends.
-  def drag_below(source, target, cancel: false)
-    page.execute_script(<<~JS, source, target, cancel)
-      const [source, target, cancel] = arguments
+  # A drag's events all target the row; `grab` is where the pointer went down.
+  def drag_below(source, target, cancel: false, grab: source)
+    page.execute_script(<<~JS, source, target, cancel, grab)
+      const [source, target, cancel, grab] = arguments
       const dataTransfer = new DataTransfer()
       const fire = (element, type, clientY) =>
         element.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer, clientY }))
       const { bottom } = target.getBoundingClientRect()
+      grab.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }))
       fire(source, "dragstart", 0)
       fire(target, "dragover", bottom - 1)
       if (!cancel) fire(target, "drop", bottom - 1)
@@ -157,6 +159,22 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
     wait_for_stimulus "pay-band-order"
 
     drag_below(find("#pay-band-#{first.id}"), find("#pay-bands-order li:last-child"), cancel: true)
+
+    assert_selector "#pay-bands-order li:first-child#pay-band-#{first.id}"
+    assert_no_text "Saved the new order."
+    assert_equal %w[Alpha Beta], locations_in_order
+  end
+
+  should "leave a row in place when the drag starts on one of its buttons" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    sign_in_as(@admin_user)
+    first = store_band("Alpha")
+    store_band("Beta")
+    visit tenant_pay_bands_path
+    assert_text "The order"
+    wait_for_stimulus "pay-band-order"
+
+    drag_below(find("#pay-band-#{first.id}"), find("#pay-bands-order li:last-child"), grab: find("#pay-band-down-#{first.id}"))
 
     assert_selector "#pay-bands-order li:first-child#pay-band-#{first.id}"
     assert_no_text "Saved the new order."

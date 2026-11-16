@@ -11,8 +11,8 @@
 //     <form data-pay-band-order-target="form" action="/tenant/pay_bands/reorder" hidden>…</form>
 //     <ol data-pay-band-order-target="list">
 //       <li draggable="true" data-pay-band-id="<id>"
-//           data-action="dragstart->pay-band-order#start dragover->pay-band-order#over
-//                        drop->pay-band-order#drop dragend->pay-band-order#end">…</li>
+//           data-action="pointerdown->pay-band-order#press dragstart->pay-band-order#start
+//                        dragover->pay-band-order#over drop->pay-band-order#drop dragend->pay-band-order#end">…</li>
 //     </ol>
 //   </div>
 
@@ -21,8 +21,14 @@ import BaseController from "controllers/base_controller"
 export default class extends BaseController {
   static targets = ["form", "list"]
 
+  // A drag's target is the row, wherever in it the pointer went down, so the
+  // control pressed is read here instead.
+  press(event) {
+    this.pressed = event.target
+  }
+
   start(event) {
-    if (event.target.closest("button, a, input, select, form")) return event.preventDefault()
+    if ((this.pressed ?? event.target).closest("button, a, input, select, form")) return event.preventDefault()
 
     this.dragged = event.currentTarget
     this.dropped = false
