@@ -16,7 +16,9 @@ class TeamPlanning::ForecastKind < TeamPlanning::RuleKind
   # planned changes already say what happens to someone:
   # {TeamPlanning::Forecast::Frame#covered?} names every subject a change sets,
   # and attrition drops only planned leavers, as a pay or level change keeps a
-  # seat filled.
+  # seat filled. A row's run_rate is what its headcount, still changed on the
+  # step's last day, costs a year, so the scenario's run rate at its end
+  # carries it.
   #
   # @param frame [TeamPlanning::Forecast::Frame]
   # @return [Array<TeamPlanning::Forecast::Row>]

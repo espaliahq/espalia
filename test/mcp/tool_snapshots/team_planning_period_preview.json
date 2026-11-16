@@ -1,6 +1,6 @@
 {
   "name": "team_planning_period_preview",
-  "description": "Preview moving the end of a 'then' scenario in a Team Planning plan the caller is in, and a first step's start, before team_planning_set_scenario_period does it. Dates are inclusive. Returns the step whose period moves (for the rest of a split, its agreed part), its new period and its previous one, and `moves`: every other scenario whose period would change, with its period before and after. Each step after it starts the day after the new end; its alternatives take the new period. Names come from team_planning_scenarios. Refused as team_planning_set_scenario_period would refuse it, and, as an unknown plan, unless the caller is a member.",
+  "description": "Preview moving the end of a 'then' scenario in a Team Planning plan the caller is in, and a first step's start, before team_planning_set_scenario_period does it. Dates are inclusive, and a null ends_on means no end date. Returns the step whose period moves (for the rest of a split, its agreed part), its new period and its previous one, and `moves`: every other scenario whose period would change, with its period before and after. Each step after it starts the day after the new end; its alternatives take the new period. Names come from team_planning_scenarios. Refused as team_planning_set_scenario_period would refuse it, and, as an unknown plan, unless the caller is a member.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -12,8 +12,8 @@
       },
       "ends_on": {
         "type": "string",
-        "minLength": 1,
-        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        "pattern": "^(?:[0-9]{4}-[0-9]{2}-[0-9]{2})?$",
+        "description": "The step's last day, YYYY-MM-DD, or an empty string for no end date, which only the last step on a line may have."
       },
       "starts_on": {
         "type": "string",

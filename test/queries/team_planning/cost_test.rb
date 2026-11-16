@@ -351,6 +351,70 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_not_equal first_step_figures(base_on: "2026-01-01", starts_on: "2026-01-01")[:scenario], gap[:scenario]
   end
 
+  context "a step with no end date" do
+    setup do
+      open_position(unit_id: @payments, fte: 0.5)
+      @open = SecureRandom.uuid_v7
+      as_tenant { handler.fork_scenario(@plan_id, @open, parent_id: @year, relation: "then", name: "2027") }
+    end
+
+    def figures(report) = [ report.period, report.scenario.total, report.baseline.total, report.forecast.total ]
+
+    should "price over the twelve months the horizon shows, as the same step ending there would" do
+      open = cost(@open)
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 12, 31), true, 12 ], [ open.period, open.open_ended, open.horizon_months ]
+
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-12-31") }
+      ended = cost(@open)
+
+      assert_equal figures(ended), figures(open)
+      assert_equal [ false, nil ], [ ended.open_ended, ended.horizon_months ]
+    end
+
+    should "run over the tenant's horizon, and the plan's own over it" do
+      as_tenant { PlanningRuleDefault.create!(rule: "open_step_horizon", value: { "months" => "6" }) }
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 6, 30), 6 ], cost(@open).then { [ it.period, it.horizon_months ] }
+
+      operation(Operations::TeamPlanning::SetRule, scenario_id: @plan_id, rule: "open_step_horizon", value: { months: "18" })
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2028, 6, 30), 18 ], cost(@open).then { [ it.period, it.horizon_months ] }
+      assert_equal BASE_ON..Date.new(2026, 12, 31), cost.period, "a step with an end keeps it"
+    end
+
+    should "run to an end once one is set, whatever the horizon" do
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-03-31") }
+      report = cost(@open)
+
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 3, 31), false, nil ], [ report.period, report.open_ended, report.horizon_months ]
+    end
+
+    should "take the run rate at its end on the last day of the months shown, as the same step ending there would" do
+      open = cost(@open).at_end
+      assert_equal Date.new(2027, 12, 31), open.on
+
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-12-31") }
+      ended = cost(@open).at_end
+
+      assert_equal [ ended.scenario.total, ended.baseline.total, ended.forecast.total ],
+                   [ open.scenario.total, open.baseline.total, open.forecast.total ]
+    end
+
+    should "price an alternative sharing the open period over the same horizon" do
+      lean = SecureRandom.uuid_v7
+      as_tenant { handler.fork_scenario(@plan_id, lean, parent_id: @open, relation: "instead", name: "Lean 2027") }
+
+      assert_equal figures(cost(@open)), figures(cost(lean))
+      assert cost(lean).open_ended
+    end
+
+    should "spread each amount over a finite count of days" do
+      report = cost(@open)
+
+      assert_equal 365, report.period.count
+      assert_not_empty report.scenario.total.native
+      assert report.scenario.total.native.values.all? { it.to_f.finite? && it.positive? }, "every currency's total is a finite amount"
+    end
+  end
+
   should "set the scenario beside the baseline over the same days, with the difference" do
     open_position(unit_id: @payments, fte: 0.5)
     report = cost
@@ -483,6 +547,79 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
         assert_equal [ {}, {} ], [ parts.planned.native, parts.forecast.native ]
         assert_empty cost(@plan_id).forecast.rows, "Today has no period, so no step to forecast"
       end
+    end
+  end
+
+  context "the run rate at the end" do
+    should "equal Today's seats priced on the last day when nothing changes and nothing is forecast" do
+      at_end = cost.at_end
+      parts = cost.at_end_parts
+
+      assert_equal Date.new(2026, 12, 31), at_end.on
+      assert_equal 243_200r, at_end.scenario.total.converted, "each seat held on the last day costs its full yearly figure"
+      assert_equal at_end.baseline.total, at_end.scenario.total
+      assert_equal [ {}, 0r ], [ parts.planned.native.reject { _2.zero? }, parts.planned.converted ]
+      assert_equal [ {}, 0r ], [ parts.forecast.native, parts.forecast.converted ]
+    end
+
+    should "count a leaver whose last day is the day before the end out, and one who leaves on it in" do
+      operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, leaves_on: "2026-12-30")
+      assert_equal(-100_000r, cost.at_end_parts.planned.native["EUR"])
+      assert_equal [ 0r ], amounts(cost.at_end.scenario, @ada.id).compact
+
+      operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, leaves_on: "2026-12-31")
+      assert_equal 0r, cost.at_end_parts.planned.native.fetch("EUR", 0r)
+      assert_equal [ 100_000r ], amounts(cost.at_end.scenario, @ada.id)
+    end
+
+    should "convert at the rate in force on the last day, so a move in the rate is no planned change" do
+      as_tenant { ExchangeRate.create!(from_currency: "NZD", to_currency: "EUR", rate: "0.6", applies_from: "2026-12-01") }
+      report = cost
+
+      assert_equal 243_200r, report.scenario.total.converted, "the period still converts at its start"
+      assert_equal 255_200r, report.at_end.scenario.total.converted
+      assert_equal 0r, report.at_end_parts.planned.converted
+    end
+
+    should "convert the forecast at the last day's rate too" do
+      as_tenant { ExchangeRate.create!(from_currency: "NZD", to_currency: "EUR", rate: "0.6", applies_from: "2026-12-01") }
+      operation(Operations::TeamPlanning::SetRule, rule: "attrition", value: { yearly_rate: "0.1" })
+      forecast = cost.at_end.forecast.total
+
+      assert forecast.native.fetch("NZD").negative?
+      assert_equal forecast.native.sum { |currency, amount| amount * { "EUR" => 1r, "NZD" => 0.6r }.fetch(currency) }, forecast.converted
+    end
+
+    should "skip the run rate at the end for a caller that never reads it" do
+      report = as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).call(at_end: false) }
+
+      assert_nil report.at_end
+      assert_equal 243_200r, report.scenario.total.converted
+    end
+
+    should "add up actual, planned and forecast to the total, and every unit and cost centre to it too" do
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { unit_id: @payments, allocation: 1 } ])
+      open_position(unit_id: @payments, fte: 0.5)
+      operation(Operations::TeamPlanning::SetDeparture, person_id: @dee.id, leaves_on: "2026-06-30")
+      operation(Operations::TeamPlanning::SetRule, rule: "attrition", value: { yearly_rate: "0.1" })
+      report = cost
+      total = report.at_end_parts
+
+      assert total.forecast.converted.negative?, "attrition leaves seats empty on the last day"
+      assert_adds_up total, "plan"
+      keys = ->(scope) { [ report.at_end.scenario, report.at_end.baseline, report.at_end.forecast ].flat_map { it.public_send(scope).keys }.uniq }
+      [ :units, :cost_centres ].each do |scope|
+        parts = keys.(scope).map { report.at_end_parts(scope, it) }
+        parts.each { assert_adds_up it, scope.to_s }
+        assert_equal total.total.converted, parts.sum { it.total.converted }, "#{scope} sum to the total"
+      end
+    end
+
+    should "have no run rate at the end for Today, which already is one" do
+      report = cost(@plan_id)
+
+      assert_nil report.at_end
+      assert_nil report.at_end_parts
     end
   end
 

@@ -23,6 +23,11 @@ module Operations::TeamPlanning::PlanRead
                        "levels are read as they are now. A plan archived before that copy was kept, or read where its copy " \
                        "can't be opened, has no priced_on, and its figures use today's. Restoring a plan prices it with today's again."
 
+  # How a read that runs over a scenario's period treats a step with no end date, in its description.
+  OPEN_ENDED = "A step with no end date runs, for its figures, over the plan's open_step_horizon rule in whole months " \
+               "from its start: its period's ends_on is that horizon's last day, with open_ended true and horizon_months " \
+               "the months shown. Otherwise open_ended is false and horizon_months null."
+
   private
 
   # @param plan [TeamPlanningPlan]

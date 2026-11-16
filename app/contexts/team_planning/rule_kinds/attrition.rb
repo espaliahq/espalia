@@ -15,7 +15,9 @@
 # step is still empty at its end. Cost takes away the unit's average yearly
 # cost of a filled FTE for those days over a 365-day year; capacity takes away
 # its average capacity of a filled FTE, over the step's days; headcount is the
-# FTE still empty when the step ends, r × F × min(T, L) / 365. Every figure is
+# FTE still empty when the step ends, r × F × min(T, L) / 365, and the run rate
+# takes away a year of that FTE's average cost
+# ([#334](https://github.com/espaliahq/espalia/issues/334)). Every figure is
 # an exact fraction, never rounded to people, and names nobody.
 #
 # A seat still empty when its step ends stays empty into the steps after it
@@ -72,7 +74,8 @@ class TeamPlanning::RuleKinds::Attrition < TeamPlanning::ForecastKind
     vacancies.group_by(&:first).sort_by { |key, _| key.map(&:to_s) }.map do |(unit_id, cost_centre), parts|
       frame.row(unit_id:, cost_centre:, headcount: -parts.sum(0r) { it[2] },
                 cost: add(parts.map { |_, empty_days, _, average| average.cost.transform_values { -(it * empty_days / YEAR_DAYS) } }),
-                capacity: add(parts.map { |_, empty_days, _, average| average.capacity.transform_values { -(it * empty_days / days) } }))
+                capacity: add(parts.map { |_, empty_days, _, average| average.capacity.transform_values { -(it * empty_days / days) } }),
+                run_rate: add(parts.map { |_, _, empty, average| average.cost.transform_values { -(it * empty) } }))
     end
   end
 

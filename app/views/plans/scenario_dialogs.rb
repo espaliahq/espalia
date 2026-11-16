@@ -92,7 +92,9 @@ class Views::Plans::ScenarioDialogs < Views::Base
         select(id: "fork-scenario-parent", name: "scenario[parent_id]", class: Components::Kit::Field::SELECT,
                data: { scenario_fork_form_target: "parent", action: "change->scenario-fork-form#sync" }) do
           Views::Plans::ScenarioTable.tree(@scenarios).each do |scenario, depth|
-            option(value: scenario[:scenario_id], data: { followed: followed?(scenario).to_s }) { "#{'· ' * depth}#{scenario_name(scenario)}" }
+            option(value: scenario[:scenario_id], data: { followed: followed?(scenario).to_s, **open_after(scenario) }) do
+              "#{'· ' * depth}#{scenario_name(scenario)}"
+            end
           end
         end
       end
@@ -103,30 +105,63 @@ class Views::Plans::ScenarioDialogs < Views::Base
               aria: { describedby: "fork-scenario-name-hint" }, class: Components::Kit::Field::INPUT)
       end
       starts_on_field
-      div(data: { scenario_fork_form_target: "endsOnField" }) do
-        field("fork-scenario-ends-on", "Ends on", hint: "Its last day. A step after another starts the day after that one ends.") do
-          input(id: "fork-scenario-ends-on", type: "date", name: "scenario[ends_on]", required: true,
-                aria: { describedby: "fork-scenario-ends-on-hint" }, class: Components::Kit::Field::INPUT,
-                data: { scenario_fork_form_target: "endsOn" })
-        end
-      end
+      ends_on_field
       actions("Create scenario", data: { scenario_fork_form_target: "submit" })
     end
   end
 
-  # Only a first step can start later than the day the one before it ends:
-  # Today then carries on until it starts.
+  # A first step can start later than the plan's base date: Today then
+  # carries on until it starts. A step after one with no end date says when it
+  # starts, and that step ends the day before.
   def starts_on_field
     base_on = @scenarios.find { it[:scenario_id] == @plan_id }&.dig(:starts_on)
     div(hidden: true, data: { scenario_fork_form_target: "startsOnField" }) do
-      field("fork-scenario-starts-on", "Starts on",
-            hint: "On or after the plan's base date#{", #{Date.iso8601(base_on).strftime('%-d %b %Y')}" if base_on}. Today continues until then.") do
-        input(id: "fork-scenario-starts-on", type: "date", name: "scenario[starts_on]", value: base_on, min: base_on, disabled: true,
-              aria: { describedby: "fork-scenario-starts-on-hint" }, class: Components::Kit::Field::INPUT,
-              data: { scenario_fork_form_target: "startsOn" })
+      label(for: "fork-scenario-starts-on", class: "block text-sm font-medium text-default mb-1") { "Starts on" }
+      input(id: "fork-scenario-starts-on", type: "date", name: "scenario[starts_on]", value: base_on, min: base_on, disabled: true,
+            aria: { describedby: "fork-scenario-starts-on-first" }, class: Components::Kit::Field::INPUT,
+            data: { scenario_fork_form_target: "startsOn" })
+      p(id: "fork-scenario-starts-on-first", class: "mt-1 text-xs text-muted", data: { scenario_fork_form_target: "firstHint" }) do
+        "On or after the plan's base date#{", #{day(base_on)}" if base_on}. Today continues until then."
+      end
+      p(id: "fork-scenario-starts-on-open", class: "mt-1 text-xs text-muted", hidden: true, data: { scenario_fork_form_target: "openHint" }) do
+        "The step before it has no end date, so say when this one starts. That step then ends the day before."
       end
     end
   end
+
+  def ends_on_field
+    div(data: { scenario_fork_form_target: "endsOnField" }) do
+      field("fork-scenario-ends-on", "Ends on", hint: "Its last day. A step after another starts the day after that one ends.") do
+        input(id: "fork-scenario-ends-on", type: "date", name: "scenario[ends_on]", required: true,
+              aria: { describedby: "fork-scenario-ends-on-hint" }, class: Components::Kit::Field::INPUT,
+              data: { scenario_fork_form_target: "endsOn" })
+      end
+      div(class: "mt-2 flex items-start gap-2") do
+        input(id: "fork-scenario-no-end", type: "checkbox", class: "mt-0.5 #{Components::Kit::Field::CHECKBOX}",
+              aria: { describedby: "fork-scenario-no-end-hint" },
+              data: { scenario_fork_form_target: "noEnd", action: "change->scenario-fork-form#sync" })
+        label(for: "fork-scenario-no-end", class: "text-sm") do
+          span(class: "font-medium text-default") { "No end date" }
+          span(id: "fork-scenario-no-end-hint", class: "block text-muted") do
+            "It runs until a step comes after it. Cost and budget show a set number of months from its start, and say how many."
+          end
+        end
+      end
+    end
+  end
+
+  # The start a step after this one needs when its period has no end: a day
+  # after that period starts.
+  def open_after(scenario)
+    return {} if scenario[:scenario_id] == @plan_id
+
+    owner = Views::Plans::ScenarioTable.period_owner(scenario, @scenarios)
+    return {} if owner.nil? || owner[:ends_on]
+
+    { open: "true", earliest_start: (Date.iso8601(owner[:starts_on]) + 1).iso8601 }
+  end
+
+  def day(iso) = Date.iso8601(iso).strftime("%-d %b %Y")
 
   def followed?(scenario) = @next_steps.key?(scenario[:scenario_id])
 

@@ -104,7 +104,9 @@ class TeamPlanning::Budget
 
   # @!attribute basis [String] a {TeamPlanning::RuleKinds::BudgetBasis::BASES} entry
   # @!attribute strictness [Hash] the {TeamPlanning::RuleKinds::BudgetStrictness} value
-  # @!attribute period [Range<Date>]
+  # @!attribute period [Range<Date>] as {TeamPlanning::FiguredPeriod} figures it
+  # @!attribute open_ended [Boolean] whether the step has no end date, so the period runs to the horizon
+  # @!attribute horizon_months [Integer, nil] the months shown, for an open step
   # @!attribute pay_view [String] the cost read's
   # @!attribute reference_currency [String, nil]
   # @!attribute lines [Array<Line>] by line id
@@ -113,7 +115,7 @@ class TeamPlanning::Budget
   # @!attribute totals [Totals]
   # @!attribute forecast [TeamPlanning::Cost::Sum] the unfunded part forecast rows add
   # @!attribute unpriced [Array<Unpriced>]
-  Report = Data.define(:basis, :strictness, :period, :pay_view, :reference_currency, :lines, :cost_centres, :units, :totals, :forecast, :unpriced)
+  Report = Data.define(:basis, :strictness, :period, :open_ended, :horizon_months, :pay_view, :reference_currency, :lines, :cost_centres, :units, :totals, :forecast, :unpriced)
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -132,7 +134,7 @@ class TeamPlanning::Budget
   def call
     aggregate = @repository.load_plan(@plan.id)
     funding = TeamPlanning::Funding.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
-    cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
+    cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call(at_end: false)
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}
@@ -145,7 +147,8 @@ class TeamPlanning::Budget
     split(cost.scenario.lines)
     lines = funding.map.budget_lines.sort_by(&:id).map { line(it, @by_line.fetch(it.id, [])) }
     forecast = cost.forecast.total
-    Report.new(basis: @inclusive ? "inclusive" : "base_only", strictness: @strictness, period: @period, pay_view: cost.pay_view, reference_currency: @reference,
+    Report.new(basis: @inclusive ? "inclusive" : "base_only", strictness: @strictness, period: @period, open_ended: funding.open_ended,
+               horizon_months: funding.horizon_months, pay_view: cost.pay_view, reference_currency: @reference,
                lines:, cost_centres: cost_centres(lines, funding, cost.forecast), units: units(funding, cost.forecast),
                totals: totals(lines, funding, cost.forecast),
                forecast:, unpriced: unpriced(cost.scenario.lines))

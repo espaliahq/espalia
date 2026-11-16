@@ -135,6 +135,23 @@ class Views::Plans::ScenarioTable < Views::Base
     Date.iso8601(first[:starts_on]) - 1
   end
 
+  # Whether a step comes after this scenario's period, through it or anything
+  # that shares the period, so it can't be left without an end.
+  #
+  # @param scenario [Hash] from `team_planning_scenarios`
+  # @param scenarios [Array<Hash>] the plan's scenarios
+  # @return [Boolean]
+  def self.continues?(scenario, scenarios)
+    scenarios.any? do |child|
+      next false unless child[:parent_id] == scenario[:scenario_id]
+
+      case child[:relation]
+      in "then" then true
+      in "on" | "instead" then continues?(child, scenarios)
+      end
+    end
+  end
+
   # Whether a scenario has dates of its own to change: a step that follows
   # another. A split's halves and an alternative take their parent's period.
   #
@@ -184,7 +201,7 @@ class Views::Plans::ScenarioTable < Views::Base
   def self.period(scenario)
     starts = Date.iso8601(scenario[:starts_on])
     return "As of #{starts.strftime('%-d %b %Y')}" if scenario[:parent_id].nil?
-    return "From #{starts.strftime('%-d %b %Y')}" unless scenario[:ends_on]
+    return "From #{starts.strftime('%-d %b %Y')} · no end date" unless scenario[:ends_on]
 
     ends = Date.iso8601(scenario[:ends_on])
     whole_months = starts.day == 1 && ends == ends.end_of_month
@@ -194,6 +211,20 @@ class Views::Plans::ScenarioTable < Views::Base
     first = starts.year == ends.year ? starts.strftime(unit) : starts.strftime("#{unit} %Y")
     "#{first} to #{ends.strftime("#{unit} %Y")}"
   end
+
+  # The days a cost or budget read figures, as its basis line prints them. A
+  # step with no end date is figured over its horizon, and says so.
+  #
+  # @param period [Hash] a figures read's `period`
+  # @return [String] such as "1 Apr 2027 to 31 Mar 2028, the first 12 months of a step with no end date"
+  def self.figured(period)
+    days = "#{day(period[:starts_on])} to #{day(period[:ends_on])}"
+    period[:open_ended] ? "#{days}, the first #{period[:horizon_months]} months of a step with no end date" : days
+  end
+
+  # @param iso [String] an ISO 8601 date
+  # @return [String] such as "1 Apr 2027"
+  def self.day(iso) = Date.iso8601(iso).strftime("%-d %b %Y")
 
   def ordered = self.class.tree(@scenarios)
 end

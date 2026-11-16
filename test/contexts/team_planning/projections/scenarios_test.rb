@@ -65,6 +65,23 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
                    [ "Q2", "2027-03-01", "2027-06-30" ], [ "Lean Q2", "2027-03-01", "2027-05-31" ] ], periods
   end
 
+  should "hold a step with no end date, close it when a step is forked after it, and read the same after a rebuild" do
+    q1 = fork(ends_on: "2027-03-31")
+    q2 = fork(q1, name: "Q2")
+    fork(q2, relation: "instead", name: "Lean Q2")
+    assert_equal [ [ "Baseline", "2027-01-01", nil ], [ "Q1", "2027-01-01", "2027-03-31" ], [ "Q2", "2027-04-01", nil ],
+                   [ "Lean Q2", "2027-04-01", nil ] ], periods
+
+    fork(q2, name: "Q3", starts_on: "2027-07-01")
+
+    assert_equal [ [ "Baseline", "2027-01-01", nil ], [ "Q1", "2027-01-01", "2027-03-31" ], [ "Q2", "2027-04-01", "2027-06-30" ],
+                   [ "Lean Q2", "2027-04-01", "2027-06-30" ], [ "Q3", "2027-07-01", nil ] ], periods
+    before = snapshot_read_models(TeamPlanning::Projections::Scenarios, @tenant)
+    TeamPlanning::Projections::Scenarios.reset!(tenant: @tenant)
+    Projections::Replayer.replay(projection_class: TeamPlanning::Projections::Scenarios, tenant: @tenant)
+    assert_equal before, snapshot_read_models(TeamPlanning::Projections::Scenarios, @tenant)
+  end
+
   should "follow a moved end in a plan that has no baseline row yet" do
     TeamPlanningScenario.find(@plan_id).delete
     q1 = fork(ends_on: "2027-03-31")

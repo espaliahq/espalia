@@ -220,6 +220,34 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
 
   def parts(html) = html.css("[data-figure-parts] [data-part]").map(&:text)
 
+  should "show the budget of an open step whose backfill is held only after its months, and set and clear that backfill's funding" do
+    open_step = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @year, relation: "then", name: "2027 on")[:scenario_id]
+    seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: open_step, role_id: @engineer.role_id,
+                                                       level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "backfill")[:position_id]
+    call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: open_step, person_id: @ada.id, position_id: seat, leaves_on: "2028-03-31")
+    line = ActsAsTenant.with_tenant(@tenant) do
+      BudgetLine.create!(starts_on: "2027-01-01", ends_on: "2027-12-31", origin: "new", head_count: 1).id
+    end
+
+    get budget_plan_path(@plan_id, scenario: open_step)
+    assert_response :success
+    assert_select "[data-budget-basis]", text: /the first 12 months of a step with no end date/
+    assert_select "[data-budget-draw='#{seat}']", 0
+    assert_select "[data-budget-unfunded='#{seat}']", 0
+    assert_select "[data-funding-action]"
+    assert_select "[data-funding-action='#{plan_funding_path(@plan_id, seat)}']", 0, "no Funding… button for a seat the tab doesn't list"
+
+    call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: open_step, position_id: seat, draws: [ { budget_line_id: line } ])
+    get budget_plan_path(@plan_id, scenario: open_step)
+    assert_response :success
+    assert_select "[data-budget-draw='#{seat}']", 0, "a set funding funds nothing in months the seat isn't held"
+    assert_select "[data-funding-action='#{plan_funding_path(@plan_id, seat)}']", 0
+
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: open_step, subject_id: seat, facet: "funding")
+    get budget_plan_path(@plan_id, scenario: open_step)
+    assert_response :success
+  end
+
   def account(role: :member, name: "Someone", **grants)
     user = create(:user)
     person = create(:person, tenant: @tenant, name:, email: user.email)

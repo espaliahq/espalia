@@ -40,6 +40,19 @@ class Plans::ScenarioDatesControllerTest < ActionDispatch::IntegrationTest
       assert_select "input[name='ends_on'][value='2027-06-30']"
     end
 
+    should "switch the end date off when No end date is ticked, so the form submits without script" do
+      get dates_plan_path(@plan_id, scenario_id: @q2, no_end: "1")
+
+      assert_select "input#scenario-no-end[checked]"
+      assert_select "input[name='ends_on'][disabled]:not([required])"
+    end
+
+    should "ask for an end date while No end date is unticked" do
+      get dates_plan_path(@plan_id, scenario_id: @q2)
+
+      assert_select "input[name='ends_on'][required]:not([disabled])"
+    end
+
     should "preview what a new end moves, without moving anything" do
       get dates_plan_path(@plan_id, scenario_id: @q1, ends_on: "2027-04-30")
 

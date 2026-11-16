@@ -65,6 +65,20 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     [ @q1, @plan_id ].each { assert_no_pay_read(it) }
   end
 
+  should "show no pay to anyone else from any read of a step with no end date, while a holder's cost, budget and funding run over it" do
+    open = SecureRandom.uuid_v7
+    TeamPlanning::CommandHandler.new(actor: context_for(@holder)).fork_scenario(@plan_id, open, parent_id: @q1, relation: "then", name: "Q2")
+
+    holder = call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: open)
+    assert_equal({ starts_on: "2026-07-01", ends_on: "2027-06-30", open_ended: true, horizon_months: 12 }, holder[:period])
+    assert_includes holder.to_json, AMOUNT, "a year of actual pay over the twelve months shown"
+    [ Operations::TeamPlanning::Budget, Operations::TeamPlanning::Funding ].each do |operation|
+      assert call(operation, @holder, plan_id: @plan_id, scenario_id: open)[:period][:open_ended]
+    end
+
+    assert_no_pay_read(open)
+  end
+
   should "price Today's yearly run rate from held pay for a holder, and never for anyone else" do
     holder = call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: @plan_id)
 
@@ -148,6 +162,35 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
           else
             [ cost, forecast ].each { assert_not_includes it.to_json, derived, who }
           end
+        end
+      end
+    end
+
+    # Q2 holds pay of its own, so a holder's run rate at its end is 2894 above
+    # Today's: a figure that is in no one else's read.
+    # Ids are stripped first, as a random one could hold any of these digits.
+    should "price the run rate at a step's end from held pay for a holder alone, in the reads, the strip and the table" do
+      q2 = call(Operations::TeamPlanning::ForkScenario, @holder, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2", ends_on: "2026-09-30")[:scenario_id]
+      hold_pay(q2, @ada, "95311", "full_time")
+
+      seen = { @holder => "95311", @editor => "100000", @viewer => "100000" }.to_h do |account, yearly|
+        who = account == @holder ? "holder" : "non-holder"
+        cost = call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: q2)
+        costs = call(Operations::TeamPlanning::ScenarioCosts, account, plan_id: @plan_id)
+        row = costs[:scenarios].find { it[:scenario_id] == q2 }
+        map = call(Operations::TeamPlanning::ScenarioMap, account, plan_id: @plan_id, scenario_id: q2)
+        strip = Views::Plans::CostStrip.new(marks: Views::Plans::CostMarks.new(cost:, map:)).call
+        cell = Views::Plans::CostCell.new(row:, reference: costs[:reference_currency]).call
+
+        assert_equal [ "2026-09-30", yearly ], cost[:run_rate_at_end].then { [ it[:on], it[:total][:scenario][:converted] ] }, who
+        assert_equal cost[:run_rate_at_end].slice(:on, :open_ended, :horizon_months, :total), row[:run_rate_at_end], who
+        [ account, [ cost.to_json, costs.to_json, strip, cell ].map { it.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "") } ]
+      end
+
+      assert_equal [ "2894" ] * 2 + [ "+AUD 2.89k" ] * 2, seen[@holder].map { it[/\+AUD 2\.89k|2894/] }, "the holder sees the change on Today's"
+      [ @editor, @viewer ].each do |account|
+        seen[account].each do |output|
+          %w[95311 95.3k 2894 2.89k 7583 7.58k].each { assert_not_includes output, it }
         end
       end
     end
