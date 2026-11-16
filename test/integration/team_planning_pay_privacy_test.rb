@@ -148,6 +148,32 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         end
       end
     end
+
+    # Q2 sets no rate of its own, so its attrition is Q1's leavers alone: each
+    # seat emptied in Q1's last 73 days stays empty into Q2, 0.1 / 365 × 73² / 2
+    # = 266.45 / 365 FTE-days, priced as Q1 priced the seat for the caller.
+    should "price a step's carried attrition as the caller sees the pay, never as the holder does for anyone else" do
+      q2 = call(Operations::TeamPlanning::ForkScenario, @holder, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2", ends_on: "2026-09-30")[:scenario_id]
+      call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @q1, rule: "attrition", value: { "yearly_rate" => "0.1" })
+      call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @q1, rule: "time_to_hire", value: { "days" => "73" })
+      call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: q2, rule: "attrition", value: { "yearly_rate" => "0" })
+      empty = Rational(26_645, 100 * 365) / 365
+      derived = BigDecimal(Integer(AMOUNT) * empty, 20).to_s("F")[0, 5]
+
+      carried = { @holder => Integer(AMOUNT), @editor => 100_000, @viewer => 100_000 }.to_h do |account, yearly|
+        forecast = call(Operations::TeamPlanning::Forecast, account, plan_id: @plan_id, scenario_id: q2)
+        attrition = forecast[:rows].sum { BigDecimal(it[:cost].fetch("AUD", "0")) } - 1000
+        assert_in_delta(-yearly * empty, attrition, 1e-6, account == @holder ? "holder" : "non-holder")
+        [ account, [ attrition, forecast ] ]
+      end
+
+      assert_includes carried[@holder].last.to_json, derived
+      [ @editor, @viewer ].each do |account|
+        assert_not_equal carried[@holder].first, carried[account].first
+        cost = call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: q2)
+        [ cost, carried[account].last ].each { assert_not_includes it.to_json, derived }
+      end
+    end
   end
 
   should "move a pay change across a split with its value still sealed and read by holders alone" do
@@ -357,6 +383,30 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
 
+    should "show each member the Budget tab's totals exactly as team_planning_budget gives them, with no figure from held pay without the right" do
+      BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD", period: "year", cost_centre: "Platform")
+      position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
+                                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
+                                                                         cost_centre: "Platform")[:position_id]
+      call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
+                                                             placements: [ { position_id:, allocation: 1 } ])
+      funded = call(Operations::TeamPlanning::Budget, @holder, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
+      held = Views::Plans::CostMarks::Format.amount(funded, "AUD")
+      assert_not_equal funded, call(Operations::TeamPlanning::Budget, @editor, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
+
+      [ @holder, @editor, @viewer ].each do |account|
+        who = account == @holder ? "holder" : "non-holder"
+        budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
+        html = budget_tab(account)
+        tiles = html.css("[data-budget-total]").to_h { [ it["data-budget-total"].to_sym, it.at_css("dd").text ] }
+
+        assert_equal(budget[:total].slice(:approved, :funded, :remaining, :unfunded).transform_values { Views::Plans::CostMarks::Format.sum(it, "AUD") },
+                     tiles, who)
+        account == @holder ? assert_includes(html.text, held, who) : assert_not_includes(html.text, held, who)
+        SCOPED.each_value { assert_not_includes html.to_html, it, who }
+      end
+    end
+
     should "refuse pay for someone outside the plan's units, in words that don't name them" do
       error = assert_raises(Operations::Base::ParameterError) { hold_pay(@q1, @out, SCOPED_OUT, "full_time") }
       [ @out.id, @out.name ].each { assert_not_includes error.message, it }
@@ -428,6 +478,16 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         amounts.each { assert_not_includes output, it, "#{tool} as #{who} in #{scenario_id == @plan_id ? 'Today' : scenario_id}" }
       end
     end
+  end
+
+  def budget_tab(account)
+    reads = { budget: Operations::TeamPlanning::Budget, funding: Operations::TeamPlanning::Funding, map: Operations::TeamPlanning::ScenarioMap,
+              lines: Operations::TeamPlanning::BudgetLines }.transform_values { call(it, account, plan_id: @plan_id, scenario_id: @q1) }
+    plan = call(Operations::TeamPlanning::Plan, account, plan_id: @plan_id)
+    scenarios = call(Operations::TeamPlanning::Scenarios, account, plan_id: @plan_id)[:scenarios]
+    controller = ApplicationController.new
+    controller.request = ActionDispatch::TestRequest.create
+    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::BudgetTab.new(plan:, scenarios:, **reads)))
   end
 
   def assert_split(total, expected, who)

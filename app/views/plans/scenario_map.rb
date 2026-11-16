@@ -27,6 +27,10 @@ class Views::Plans::ScenarioMap < Views::Base
   end
 
   # @param map [Hash] from `team_planning_scenario_map`
+  # @return [Hash{String => String}] every position's name, numbered within its unit
+  def self.all_position_names(map) = map[:positions].group_by { it[:unit_id] }.values.map { position_names(it) }.reduce({}, :merge)
+
+  # @param map [Hash] from `team_planning_scenario_map`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param unit_marks [#call] unit hash => components beside the unit's name
   # @param person_marks [#call] (person hash, place hash or nil) => components after the person's name, before the level
