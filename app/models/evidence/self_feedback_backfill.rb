@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-# Asks for placement suggestions on self feedback recorded before it got them
-# (https://github.com/mr-yum/growth-os/issues/622). Nothing runs this on its
-# own: new and edited self feedback gets suggestions as it is written, and
+# Asks for placement suggestions on self feedback recorded before it got them.
+# Nothing runs this on its own: new and edited self feedback gets suggestions as it is written, and
 # `bin/rails evidence:suggestions:backfill_self` covers the rest when an
 # admin chooses to.
 #

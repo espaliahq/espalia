@@ -27,8 +27,7 @@
 #
 # 4. **Silent no-op once any alignment has started** in the cycle: the
 #    conversation pins the home role and level, as the PersonDevelopment
-#    aggregate pins `@home_role_id`
-#    (https://github.com/mr-yum/growth-os/issues/687). `CurrentAssessment`
+#    aggregate pins `@home_role_id`. `CurrentAssessment`
 #    writes the alignment rows synchronously, so they are current here.
 #
 class AssessmentCycles::SyncHandlers::ParticipantRoleSync

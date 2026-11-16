@@ -66,8 +66,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   end
 
   # Where whoever is asked to place the item hears that suggestions exist.
-  # Deliberately empty here; the placement notifier hooks in
-  # (https://github.com/mr-yum/growth-os/issues/534).
+  # Deliberately empty here; the placement notifier will hook in here.
   #
   # @param item [EvidenceItem]
   def after_generate(item); end
