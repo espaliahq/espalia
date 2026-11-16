@@ -172,8 +172,22 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       end
 
       assert_response :unprocessable_content
-      assert_select "[role='alert']", text: /This scenario has no change #{stale} in effect to move/
+      assert_select "[role='alert']", text: /This scenario has no change #{stale} to move. It has changed since you opened the split, so open it again/
       assert_select "input[value='#{@to_payments}'][checked]"
+      assert_select "input[name='name'][value='Agreed moves']"
+    end
+
+    should "refuse a change made earlier than one since, keep the choice and split nothing" do
+      ActsAsTenant.with_tenant(@tenant) { place(@ada, @platform) }
+      scenarios = -> { ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).count } }
+
+      assert_no_difference(scenarios) do
+        post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @to_payments ], name: "Agreed moves" }
+      end
+
+      assert_response :unprocessable_content
+      assert_select "[role='alert']", text: /This scenario has no change #{@to_payments} to move. It has changed since you opened the split, so open it again/
+      assert_select "input[value='#{@to_payments}']", count: 0
       assert_select "input[name='name'][value='Agreed moves']"
     end
 

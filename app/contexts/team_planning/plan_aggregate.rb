@@ -413,14 +413,14 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "The baseline can't be split" unless @scenarios[live_scenario!(scenario_id)]
     raise TeamPlanning::Error, "This plan already has that scenario" if scenario_id_taken?(agreed_id)
 
-    in_effect = changes_in(scenario_id)
+    latest = latest_by_key(changes_in(scenario_id))
     named = Array(event_ids).uniq.map do |event_id|
-      in_effect.find { it.event_id == event_id } or raise TeamPlanning::Error, "This scenario has no change #{event_id} in effect to move"
+      latest.find { it.event_id == event_id } or raise TeamPlanning::Error, stale_split_id(event_id)
     end
     raise TeamPlanning::Error, "Name the changes that move into the agreed part" if named.empty?
 
     keys = named.map(&:key).uniq
-    staying = latest_by_key(in_effect).reject { keys.include?(it.key) }
+    staying = latest.reject { keys.include?(it.key) }
     raise TeamPlanning::Error, "Every change would move: approve the scenario whole instead" if staying.empty?
 
     moved, kept = @logs.fetch(scenario_id, []).partition { keys.include?(key_of(it)) }
@@ -983,6 +983,10 @@ class TeamPlanning::PlanAggregate
   def pinned_change(kind, fields, end_state, event_id: SecureRandom.uuid)
     kind.new(event_id:, data: { **fields, **end_state.to_h.symbolize_keys })
   end
+
+  # An earlier change to a subject and facet is no choice: naming it would take the newer one across unseen.
+  def stale_split_id(event_id) =
+    "This scenario has no change #{event_id} to move. It has changed since you opened the split, so open it again"
 
   def latest_by_key(changes) = changes.each_with_object({}) { |change, latest| latest.delete(change.key); latest[change.key] = change }.values
 
