@@ -25,9 +25,11 @@ class Views::Plans::TimelineFigures < Views::Base
     @names = scenarios.to_h { [ it[:scenario_id], it[:name] ] }
     @phone = phone
     @step = step
+    @step = step.clamp(0, figures[:steps].size - 1) if figures
     @src = src
   end
 
+  # @return [void]
   def view_template
     @phone ? phone : wide
   end
@@ -52,8 +54,7 @@ class Views::Plans::TimelineFigures < Views::Base
   def phone
     turbo_frame_tag(PHONE_ID, src: @src, loading: ("lazy" if @src), class: "mt-1 block",
                               data: { frame_error_target: "frame" }) do
-      step = @figures && @figures[:steps][@step.clamp(0, @figures[:steps].size - 1)]
-      step ? div(data: { timeline_figures: @step }) { lines(step) } : loading
+      @figures ? div(data: { timeline_figures: @step }) { lines(@figures[:steps][@step]) } : loading
     end
   end
 
