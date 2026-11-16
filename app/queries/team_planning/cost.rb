@@ -254,18 +254,19 @@ class TeamPlanning::Cost
   # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already
   #   read by a caller pricing several scenarios over the same one
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
-  # @param map [TeamPlanning::Baseline::Map, nil] the scenario, already resolved
-  #   over that base and aggregate, by id ({TeamPlanning::Resolution#structure})
+  # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
+  #   resolved over that aggregate for this viewer, which also gives the base
   # @param steps [Hash{String => TeamPlanning::Forecast::Step}] earlier steps
   #   already priced, which this fills as it prices more
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil, map: nil, steps: {})
+  # @raise [ArgumentError] when shared was resolved for another viewer, plan or scenario
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, base: nil, aggregate: nil, shared: nil, steps: {})
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
-    @base = base
+    @shared = shared&.for!(context, plan, scenario_id)
+    @base = base || @shared&.base
     @aggregate = aggregate
-    @scenario_map = map
     @steps = steps
   end
 
@@ -364,7 +365,7 @@ class TeamPlanning::Cost
 
   # The scenario's own map, which holds the horizon an open step's period runs to.
   def own_map
-    (@scenario_map ? TeamPlanning::Baseline.new(context: @context, plan: @plan).named(@scenario_map) : resolved(@scenario_id)).tap do |map|
+    (@shared ? TeamPlanning::Baseline.new(context: @context, plan: @plan).named(@shared.map) : resolved(@scenario_id)).tap do |map|
       @figured = TeamPlanning::FiguredPeriod.for(@aggregate, @scenario_id, map)
       @period = @figured.period if @figured
     end

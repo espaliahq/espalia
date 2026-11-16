@@ -128,17 +128,16 @@ class TeamPlanning::Budget
   # @param scenario_id [String] a scenario, never the root, which has no period
   # @param repository [TeamPlanning::Repository]
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
-  # @param base [TeamPlanning::Baseline::Map, nil] the plan's baseline, already read
-  # @param map [TeamPlanning::Baseline::Map, nil] the scenario, already resolved
-  #   over that base and aggregate, by id ({TeamPlanning::Resolution#structure})
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, base: nil, map: nil)
+  # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
+  #   resolved over that aggregate for this viewer
+  # @raise [ArgumentError] when shared was resolved for another viewer, plan or scenario
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, shared: nil)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
     @aggregate = aggregate
-    @base = base
-    @scenario_map = map
+    @shared = shared&.for!(context, plan, scenario_id)
   end
 
   # @return [Report]
@@ -148,12 +147,10 @@ class TeamPlanning::Budget
     aggregate = @aggregate || @repository.load_plan(@plan.id)
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
 
-    base = @base || TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
-    map = @scenario_map || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:)
-                                                   .structure(aggregate)
-    shared = { context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:, base: }
-    funding = TeamPlanning::Funding.new(**shared, map:).call
-    cost = TeamPlanning::Cost.new(**shared, map:).call(at_end: false, baseline: false)
+    shared = @shared || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).shared(aggregate).first
+    reads = { context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:, shared: }
+    funding = TeamPlanning::Funding.new(**reads).call
+    cost = TeamPlanning::Cost.new(**reads).call(at_end: false, baseline: false)
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}

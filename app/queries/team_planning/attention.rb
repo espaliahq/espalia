@@ -75,12 +75,12 @@ class TeamPlanning::Attention
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def self.for(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
-    base = TeamPlanning::Baseline.new(context:, plan:).structure
-    resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:, base:)
+    resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:)
     aggregate = repository.load_plan(plan.id)
-    map, changes = resolution.resolved(aggregate)
+    shared, changes = resolution.shared(aggregate)
+    map = shared.map
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
-    budget = TeamPlanning::Budget.new(context:, plan:, scenario_id:, repository:, aggregate:, base:, map:).call if scenario_id != plan.id && map.budget_lines.any?
+    budget = TeamPlanning::Budget.new(context:, plan:, scenario_id:, repository:, aggregate:, shared:).call if scenario_id != plan.id && map.budget_lines.any?
     items = new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
                               unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats, budget:).call
     Report.new(items:, names: items.empty? ? {} : names_of(resolution.named(map), items))
