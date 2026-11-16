@@ -442,8 +442,8 @@ Rails.application.routes.draw do
     # Set a plan aside, and bring it back ([#383](https://github.com/espaliahq/espalia/issues/383)).
     post :archive, on: :member
     post :restore, on: :member
-    # Fork and rename a scenario (#271).
-    resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
+    # Fork, rename and remove a scenario (#271, [#439](https://github.com/espaliahq/espalia/issues/439)).
+    resources :scenarios, only: [ :create, :update, :destroy ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"
     # Move a position to another unit on the scenario map; the id is the position's.

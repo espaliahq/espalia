@@ -1074,9 +1074,16 @@ history projection (version 3) counts what the scenario still held into
 standing change or pin held and no clear let go, as the plan's log counts them. Either
 projection rebuilt alone gives the same list. A deleted plan takes both.
 
-The plan page has no Remove control yet; that is
-[#439](https://github.com/espaliahq/espalia/issues/439). Until it lands, a scenario is removed
-through `team_planning_remove_scenario`.
+**Removing one, as built in [#439](https://github.com/espaliahq/espalia/issues/439):** an editor
+removes a scenario from its row's menu on the Scenarios tab, or with Remove… beside Edit… on the
+map. A dialog asks first. It says how many changes go with the scenario, counted by the rule the
+tally keeps, so the number matches the entry it leaves: `team_planning_scenarios` returns that
+count per scenario as `changes`. An editor who can't see pay also reads the operation's own
+`approval_notice`, which says, by count alone, what hidden pay, budget amounts included, goes too. A scenario others fork
+from, or the agreed part of a split, can't be removed yet, so its dialog names the scenarios to
+remove first and offers no Remove. The baseline, and an archived or frozen plan, offer none at all.
+Once removed, the page opens on Removed scenarios with the entry in view.
+`team_planning_remove_scenario` does the same through MCP.
 
 ### Notes
 
