@@ -477,7 +477,7 @@ class TeamPlanning::PlanAggregate
     ensure_step_open!(scenario_id)
     ensure_closable!(scenario_id, today)
     apply(TeamPlanning::Events::StepClosed.new(data: {
-      plan_id: @plan_id, scenario_id:, ends_on: period_of(scenario_id).end.iso8601, base_on: @base_on.iso8601, closed_by_id:
+      plan_id: @plan_id, scenario_id:, ends_on: period_of(scenario_id).end.iso8601, base_on: @base_on.iso8601, closed_on: today.iso8601, closed_by_id:
     }))
   end
 

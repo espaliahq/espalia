@@ -38,11 +38,11 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
   def replayed = TeamPlanning::PlanAggregate.new.tap { |plan| @plan.unpublished_events.each { plan.apply(it) } }
 
   context "#close_step" do
-    should "record the step's last day, the plan's base and who closed it" do
+    should "record the step's last day, the plan's base, the day it closed and who closed it" do
       close(@q1, today: AFTER_Q1)
 
       assert_kind_of TeamPlanning::Events::StepClosed, last_event
-      assert_equal({ plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-03-31", base_on: "2027-01-01", closed_by_id: @editor_id },
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-03-31", base_on: "2027-01-01", closed_on: AFTER_Q1.iso8601, closed_by_id: @editor_id },
                    last_event.data)
       assert_equal [ [ @q1, Date.new(2027, 3, 31) ] ], replayed.closed_steps
     end
