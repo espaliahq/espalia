@@ -74,9 +74,10 @@ class TeamPlanning::PlanAggregate
   CONFLICT_FIELDS = %i[scenario_id subject_id facet change_id].freeze
 
   # A scenario as the plan holds it. `ends_on` is held only for a `then`
-  # scenario; {#period_of} works out every period. Names are shreddable, so
+  # scenario, and `starts_on` only for a first step, which may start after the
+  # base date; {#period_of} works out every period. Names are shreddable, so
   # the plan holds none: a replay without keys must decide the same.
-  Scenario = Data.define(:id, :parent_id, :relation, :ends_on)
+  Scenario = Data.define(:id, :parent_id, :relation, :starts_on, :ends_on)
 
   # @return [String, nil]
   attr_reader :plan_id, :base_on, :created_by_id
@@ -383,27 +384,30 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
-  # Moves a `then` scenario's end. Its start stays where the tree puts it, and
-  # the steps after it start from the new end. The same end writes nothing.
+  # Moves a `then` scenario's end, and a first step's start. A later step's
+  # start stays where the tree puts it, and the steps after it start from the
+  # new end. The same period writes nothing.
   #
   # @param scenario_id [String]
   # @param ends_on [Date, String]
+  # @param starts_on [Date, String, nil] a first step's new start, on or after the base date
   # @param set_by_id [String]
   # @raise [TeamPlanning::Error] if the plan is gone, the scenario unknown, the
-  #   root or an alternative, or if the move leaves any scenario ending before
-  #   it starts
+  #   root or an alternative, if a start is given for a later step or before
+  #   the base date, or if the move leaves any scenario ending before it starts
   # @raise [Date::Error] for a date that isn't YYYY-MM-DD
-  def set_scenario_period(scenario_id, ends_on:, set_by_id:)
+  def set_scenario_period(scenario_id, ends_on:, set_by_id:, starts_on: nil)
     ensure_open!
     scenario_id = step_with_period!(scenario_id)
-    scenario = @scenarios[scenario_id]
-    ends_on = require_date(ends_on)
-    return if ends_on == scenario.ends_on
+    before = period_of(scenario_id)
+    moved = moved_period(scenario_id, starts_on, ends_on)
+    after = period_of(scenario_id, moved)
+    return if after == before
 
-    ensure_periods_fit!(scenario_id => ends_on)
+    ensure_periods_fit!(moved)
     apply(TeamPlanning::Events::ScenarioPeriodSet.new(data: {
-      plan_id: @plan_id, scenario_id: scenario_id, starts_on: period_of(scenario_id).begin.iso8601,
-      ends_on: ends_on.iso8601, previous_ends_on: scenario.ends_on.iso8601, set_by_id: set_by_id
+      plan_id: @plan_id, scenario_id: scenario_id, starts_on: after.begin.iso8601, ends_on: after.end.iso8601,
+      previous_starts_on: before.begin.iso8601, previous_ends_on: before.end.iso8601, set_by_id: set_by_id
     }))
   end
 
@@ -413,20 +417,21 @@ class TeamPlanning::PlanAggregate
   #
   # @param scenario_id [String] a `then` scenario, or the rest of a split, which moves its agreed part
   # @param ends_on [Date, String]
+  # @param starts_on [Date, String, nil] a first step's new start
   # @return [Array(String, Range<Date>, Array<Array(String, Range<Date>, Range<Date>)>)]
-  #   the step whose end moves, its new period, and each scenario that moves with it
+  #   the step whose period moves, its new period, and each scenario that moves with it
   # @raise [TeamPlanning::Error] as {#set_scenario_period}
-  def period_moves(scenario_id, ends_on:)
+  def period_moves(scenario_id, ends_on:, starts_on: nil)
     ensure_open!
     scenario_id = step_with_period!(scenario_id)
-    ends = { scenario_id => require_date(ends_on) }
-    ensure_periods_fit!(ends)
+    moved = moved_period(scenario_id, starts_on, ends_on)
+    ensure_periods_fit!(moved)
     moves = @scenarios.keys.excluding(scenario_id).filter_map do |id|
       before = period_of(id)
-      after = period_of(id, ends)
+      after = period_of(id, moved)
       [ id, before, after ] unless before == after
     end
-    [ scenario_id, period_of(scenario_id, ends), moves ]
+    [ scenario_id, period_of(scenario_id, moved), moves ]
   end
 
   # Removes a scenario nothing forks from.
@@ -884,18 +889,22 @@ class TeamPlanning::PlanAggregate
   # @return [Boolean] whether it is the root or a live scenario of this plan
   def scenario?(scenario_id) = scenario_id == @plan_id || @scenarios.key?(scenario_id)
 
-  # The days a scenario covers, from the tree.
+  # The days a scenario covers, from the tree. A first step starts on its own
+  # start, or the base date once the plan is updated past it; the days between
+  # the base date and that start belong to no step.
   #
   # @param scenario_id [String] a live scenario
-  # @param ends [Hash{String => Date}] `then` ends to use in place of those held
+  # @param moved [Hash{String => Range<Date>}] `then` periods to use in place of
+  #   those held; only a first step's start is read from one
   # @return [Range<Date>, nil] nil for the root
-  def period_of(scenario_id, ends = {})
+  def period_of(scenario_id, moved = {})
     scenario = @scenarios.fetch(scenario_id) { return nil }
     case scenario.relation
-    in "instead" | "on" then period_of(scenario.parent_id, ends)
+    in "instead" | "on" then period_of(scenario.parent_id, moved)
     in "then"
-      starts_on = scenario.parent_id == @plan_id ? @base_on : period_of(scenario.parent_id, ends).end + 1
-      starts_on..ends.fetch(scenario_id, scenario.ends_on)
+      held = moved.fetch(scenario_id) { (scenario.starts_on || @base_on)..scenario.ends_on }
+      starts_on = scenario.parent_id == @plan_id ? [ held.begin, @base_on ].max : period_of(scenario.parent_id, moved).end + 1
+      starts_on..held.end
     end
   end
 
@@ -991,8 +1000,9 @@ class TeamPlanning::PlanAggregate
   on TeamPlanning::Events::ScenarioForked do |event|
     data = event.data
     ends_on = Date.iso8601(data[:ends_on]) if data[:relation] == "then"
+    starts_on = Date.iso8601(data[:starts_on]) if ends_on && data[:parent_id] == @plan_id
     @scenarios[data[:scenario_id]] = Scenario.new(id: data[:scenario_id], parent_id: data[:parent_id],
-                                                  relation: data[:relation], ends_on:)
+                                                  relation: data[:relation], starts_on:, ends_on:)
   end
 
   on TeamPlanning::Events::ScenarioRenamed do |_event|
@@ -1003,7 +1013,9 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::ScenarioPeriodSet do |event|
     id = event.data[:scenario_id]
-    @scenarios[id] = @scenarios.fetch(id).with(ends_on: Date.iso8601(event.data[:ends_on]))
+    scenario = @scenarios.fetch(id)
+    starts_on = Date.iso8601(event.data[:starts_on]) if scenario.parent_id == @plan_id
+    @scenarios[id] = scenario.with(starts_on:, ends_on: Date.iso8601(event.data[:ends_on]))
   end
 
   on TeamPlanning::Events::ScenarioSplit do |event|
@@ -1012,7 +1024,7 @@ class TeamPlanning::PlanAggregate
     agreed_id = data[:agreed_id]
     moved = data[:moved_event_ids].to_set
     @scenarios[agreed_id] = original.with(id: agreed_id)
-    @scenarios[original.id] = original.with(parent_id: agreed_id, relation: "on", ends_on: nil)
+    @scenarios[original.id] = original.with(parent_id: agreed_id, relation: "on", starts_on: nil, ends_on: nil)
     moving, @logs[original.id] = @logs.fetch(original.id, []).partition { moved.include?(it.event_id) }
     @logs[agreed_id] = moving.map { moved_to(it, agreed_id) }
     @redo_stacks.fetch(original.id, {}).each do |person_id, stack|
@@ -1496,9 +1508,14 @@ class TeamPlanning::PlanAggregate
       raise TeamPlanning::Error, "This is the agreed part of a split step: fork the next step from the rest, which sits on it"
     end
 
-    start = parent_id == @plan_id ? @base_on : period_of(parent_id).end + 1
-    if starts_on && starts_on != start
-      raise TeamPlanning::Error, "A step after #{parent_of(parent_id)} starts on #{start.iso8601}, the day it begins"
+    if parent_id == @plan_id
+      start = starts_on || @base_on
+      first_step_start!(start)
+    else
+      start = period_of(parent_id).end + 1
+      if starts_on && starts_on != start
+        raise TeamPlanning::Error, "A step after #{parent_of(parent_id)} starts on #{start.iso8601}, the day it begins"
+      end
     end
     raise TeamPlanning::Error, "Say when this step ends" if ends_on.nil?
     raise TeamPlanning::Error, "This step would end on #{ends_on.iso8601}, before it starts on #{start.iso8601}" if ends_on < start
@@ -1542,15 +1559,35 @@ class TeamPlanning::PlanAggregate
     end
   end
 
-  # Refuses ends that would leave any live scenario ending before it starts,
+  # The period a date edit asks for: the end, and a first step's start. A
+  # later step's start follows the step before it, so it can't be asked for.
+  def moved_period(scenario_id, starts_on, ends_on)
+    ends_on = require_date(ends_on)
+    if starts_on.nil? then return { scenario_id => (period_of(scenario_id).begin..ends_on) }
+    elsif @scenarios[scenario_id].parent_id != @plan_id
+      raise TeamPlanning::Error, "Its start follows the step before it: change that step's end"
+    end
+
+    starts_on = require_date(starts_on)
+    first_step_start!(starts_on)
+    { scenario_id => (starts_on..ends_on) }
+  end
+
+  def first_step_start!(starts_on)
+    return if starts_on >= @base_on
+
+    raise TeamPlanning::Error, "A first step starts on or after the plan's base date, #{@base_on.iso8601}"
+  end
+
+  # Refuses periods that would leave any live scenario ending before it starts,
   # naming the first in the tree.
-  def ensure_periods_fit!(ends)
+  def ensure_periods_fit!(moved)
     @scenarios.each_key do |id|
-      period = period_of(id, ends)
+      period = period_of(id, moved)
       next unless period.end < period.begin
 
       raise TeamPlanning::Error,
-            "#{ends.key?(id) ? "This scenario" : "A scenario after it"} would end on #{period.end.iso8601}, before it starts on #{period.begin.iso8601}"
+            "#{moved.key?(id) ? "This scenario" : "A scenario after it"} would end on #{period.end.iso8601}, before it starts on #{period.begin.iso8601}"
     end
   end
 

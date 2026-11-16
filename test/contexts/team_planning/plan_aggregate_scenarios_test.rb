@@ -22,6 +22,8 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
 
   def last_event = @plan.unpublished_events.to_a.last
 
+  def replayed = TeamPlanning::PlanAggregate.new.tap { |plan| @plan.unpublished_events.each { plan.apply(it) } }
+
   def moves(id, ends_on)
     step, period, moved = @plan.period_moves(id, ends_on:)
     days = ->(range) { [ range.begin.iso8601, range.end.iso8601 ] }
@@ -101,6 +103,89 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     end
   end
 
+  context "a first step that starts after the base date" do
+    setup do
+      @q1 = fork(ends_on: "2027-03-31", starts_on: "2027-01-14")
+      @lean = fork(@q1, relation: "instead", name: "Lean Q1")
+      @q2 = fork(@q1, name: "Q2", ends_on: "2027-06-30")
+    end
+
+    should "start on the chosen day, give its alternatives the same period, and keep it on replay" do
+      assert_equal %w[2027-01-14 2027-03-31], period(@q1)
+      assert_equal %w[2027-01-14 2027-03-31], period(@lean)
+      assert_equal %w[2027-04-01 2027-06-30], period(@q2)
+      assert_equal @plan.period_of(@q1), replayed.period_of(@q1)
+    end
+
+    should "refuse a start before the base date" do
+      @plan = TeamPlanning::PlanAggregate.new
+      @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id)
+
+      assert_equal "A first step starts on or after the plan's base date, 2027-01-01",
+                   refusal { fork(ends_on: "2027-03-31", starts_on: "2026-12-31") }
+    end
+
+    should "move the start with the end, record both old dates, and refuse a start for a later step" do
+      @plan.set_scenario_period(@q1, starts_on: "2027-02-01", ends_on: "2027-04-30", set_by_id: @editor_id)
+
+      assert_equal({ starts_on: "2027-02-01", ends_on: "2027-04-30", previous_starts_on: "2027-01-14", previous_ends_on: "2027-03-31" },
+                   last_event.data.slice(:starts_on, :ends_on, :previous_starts_on, :previous_ends_on))
+      assert_equal %w[2027-02-01 2027-04-30], period(@q1)
+      assert_equal %w[2027-05-01 2027-06-30], period(@q2)
+      assert_equal @plan.period_of(@q1), replayed.period_of(@q1)
+
+      assert_equal "Its start follows the step before it: change that step's end",
+                   refusal { @plan.set_scenario_period(@q2, starts_on: "2027-05-02", ends_on: "2027-06-30", set_by_id: @editor_id) }
+      assert_equal "A first step starts on or after the plan's base date, 2027-01-01",
+                   refusal { @plan.set_scenario_period(@q1, starts_on: "2026-12-01", ends_on: "2027-04-30", set_by_id: @editor_id) }
+      assert_equal "This scenario would end on 2027-01-31, before it starts on 2027-02-01",
+                   refusal { @plan.set_scenario_period(@q1, ends_on: "2027-01-31", set_by_id: @editor_id) }
+    end
+
+    should "keep its start when only the end moves, and write nothing for the same period" do
+      @plan.set_scenario_period(@q1, ends_on: "2027-02-28", set_by_id: @editor_id)
+      assert_equal %w[2027-01-14 2027-02-28], period(@q1)
+
+      count = @plan.unpublished_events.count
+      @plan.set_scenario_period(@q1, starts_on: "2027-01-14", ends_on: "2027-02-28", set_by_id: @editor_id)
+      assert_equal count, @plan.unpublished_events.count
+    end
+
+    should "preview a moved start without writing it" do
+      count = @plan.unpublished_events.count
+      step, period, moved = @plan.period_moves(@q1, starts_on: "2027-01-01", ends_on: "2027-03-31")
+
+      assert_equal @q1, step
+      assert_equal Date.new(2027, 1, 1)..Date.new(2027, 3, 31), period
+      assert_equal [ @lean ], moved.map(&:first)
+      assert_equal count, @plan.unpublished_events.count
+    end
+
+    should "start on the base date once an update to today passes the chosen start" do
+      @plan.rebase(base_on: "2027-01-10", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id)
+      assert_equal %w[2027-01-14 2027-03-31], period(@q1)
+
+      @plan.rebase(base_on: "2027-02-01", expected_base_on: "2027-01-10", conflicts: [], rebased_by_id: @editor_id)
+      assert_equal %w[2027-02-01 2027-03-31], period(@q1)
+      assert_equal @plan.period_of(@q1), replayed.period_of(@q1)
+    end
+
+    should "keep the chosen start on the agreed part of a split, and give the rest the same period" do
+      placed = 2.times.map do
+        @plan.set_change(TeamPlanning::Events::AssignmentSet, scenario_id: @q1, subject_id: SecureRandom.uuid_v7, set_by_id: @editor_id,
+                                                              end_state: { placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1.0 } ] })
+        last_event.event_id
+      end
+      agreed = SecureRandom.uuid_v7
+      @plan.split_scenario(@q1, agreed_id: agreed, name: "Agreed", event_ids: [ placed.first ], split_by_id: @editor_id)
+
+      assert_equal %w[2027-01-14 2027-03-31], period(agreed)
+      assert_equal %w[2027-01-14 2027-03-31], period(@q1)
+      assert_equal %w[2027-04-01 2027-06-30], period(@q2)
+      assert_equal @plan.period_of(@q1), replayed.period_of(@q1)
+    end
+  end
+
   context "#set_scenario_period" do
     setup do
       @q1 = fork(ends_on: "2027-03-31")
@@ -114,7 +199,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
 
       assert_kind_of TeamPlanning::Events::ScenarioPeriodSet, last_event
       assert_equal({ plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-02-28",
-                     previous_ends_on: "2027-03-31", set_by_id: @editor_id }, last_event.data)
+                     previous_starts_on: "2027-01-01", previous_ends_on: "2027-03-31", set_by_id: @editor_id }, last_event.data)
       assert_equal %w[2027-01-01 2027-02-28], period(@lean)
       assert_equal %w[2027-03-01 2027-06-30], period(@q2)
       assert_equal %w[2027-03-01 2027-05-31], period(@lean_q2)
