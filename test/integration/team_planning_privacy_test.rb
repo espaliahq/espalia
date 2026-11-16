@@ -135,6 +135,7 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
 " }
     values[:basis] = "full_time" if [ Operations::TeamPlanning::SetActualPay, Operations::TeamPlanning::UploadActualPay ].include?(operation)
     values[:value] = {} if operation == Operations::TeamPlanning::SetRule
+    values[:facet] = "departure" if operation == Operations::TeamPlanning::MoveChange
     values.delete(:unit_id) if operation.category == :read
     values.slice(*operation.parameters.keys)
   end
