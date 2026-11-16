@@ -282,6 +282,7 @@ export default class extends BaseController {
       this.#applyMetadata(state)
       this.#writeCookie(state)
       if (state === "closed" && this.screenValue) this.#focusToggle()
+      if (state === "open" && this.#actsAsScreen()) this.paneTarget.focus({ preventScroll: true })
     }
     // Forward can return to the entry a widening stepped off.
     if (ownEntry && !this.#actsAsScreen()) this.#stepOffOverlayEntry()

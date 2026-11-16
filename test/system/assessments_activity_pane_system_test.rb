@@ -639,6 +639,8 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay === 'activity'") },
         "Forward left the overlay's entry without its marker"
+      assert wait_until_js { page.evaluate_script("document.querySelector('#assessment-activity-pane').contains(document.activeElement)") },
+        "Forward reopened the overlay with focus left behind it"
 
       close_overlay_by_its_button
     end
