@@ -427,7 +427,7 @@ and still the pane Esc closes first. Opening either closes the other
 (`#closeOtherOverlay`).
 
 **Both dismissals stand down while a modal or an open menu is up**
-(`#somethingElseIsOpen`). This matters more for the tap than for Esc: every
+(`somethingElseIsOpen` in `controllers/overlay_guard.js`). This matters more for the tap than for Esc: every
 modal is mounted on the explorer ROOT (Lesson 19), so it is *outside* the pane
 — without the guard the first tap inside a Reject / Resolve / Add-level dialog
 reads as an outside click and quietly closes the feed the reviewer opened it
