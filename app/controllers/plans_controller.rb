@@ -97,7 +97,7 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
-    render plan_page(plan, scenarios:, open_tab: :map,
+    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id,
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
                                                                can_upload_pay: policy_for(@plan_record).upload_pay? && !@plan_record.archived?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
@@ -132,7 +132,7 @@ class PlansController < ApplicationController
                                        status: read(Operations::TeamPlanning::Status, scenario_id:),
                                        attention: read(Operations::TeamPlanning::Attention, scenario_id:), can_edit: can_edit?,
                                        see_pay: policy_for(@plan_record).see_pay?)
-    render plan_page(plan, scenarios:, open_tab: :changes, body: tab)
+    render plan_page(plan, scenarios:, open_tab: :changes, body: tab, undo_in: scenario_id)
   end
 
   # GET /planning/:id/checks?scenario=:scenario_id
@@ -146,7 +146,7 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     linked_ids = read(Operations::TeamPlanning::Status, scenario_id:)[:statuses].to_set { it[:change_id] }
     tab = Views::Plans::ChecksTab.new(plan:, scenarios:, attention: read(Operations::TeamPlanning::Attention, scenario_id:), linked_ids:)
-    render plan_page(plan, scenarios:, open_tab: :checks, body: tab)
+    render plan_page(plan, scenarios:, open_tab: :checks, body: tab, undo_in: scenario_id)
   end
 
   # GET /planning/:id/budget?scenario=:scenario_id
@@ -167,7 +167,7 @@ class PlansController < ApplicationController
                                         funding: read(Operations::TeamPlanning::Funding, scenario_id:),
                                         map: read(Operations::TeamPlanning::ScenarioMap, scenario_id:), funded_here: funded_here(scenario_id))
     end
-    render plan_page(plan, scenarios:, open_tab: :budget, body: tab)
+    render plan_page(plan, scenarios:, open_tab: :budget, body: tab, undo_in: scenario_id)
   end
 
   # The positions whose funding this scenario sets itself, which are the only
@@ -471,7 +471,8 @@ class PlansController < ApplicationController
     Views::Plans::CapacityUnitTotal.new(totals: marks.totals, baseline: marks.baseline?, empty: "None counted")
   end
 
-  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil)
+  # @param undo_in [String, nil] the scenario the open tab shows, whose Undo and Redo the tab strip offers
+  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil, undo_in: nil)
     members = read(Operations::TeamPlanning::PlanMembers)[:members]
     Views::Plans::ShowView.new(
       plan:,
@@ -491,6 +492,7 @@ class PlansController < ApplicationController
       can_restore: editor? && plan[:archived].present?,
       can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
+      undo_step: (read(Operations::TeamPlanning::UndoStep, scenario_id: undo_in.downcase) if can_edit? && undo_in),
       panel_open: Views::Plans::ShowView.panel_open?(
         url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView.panel_cookie(current_user)],
         open_tab:, scenarios:
