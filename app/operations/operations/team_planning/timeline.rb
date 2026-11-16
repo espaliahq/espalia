@@ -27,7 +27,8 @@ class Operations::TeamPlanning::Timeline < Operations::Base
               "departures, transfers_out and closing, which is opening plus hires and transfers_in less departures and " \
               "transfers_out. Heads, not FTE: a person in two units is one head in each and one in the plan. The first " \
               "column, today, has a closing only. positions are keyed by id, each as " \
-              "it stands in the last column it appears in. `names` maps every person id " \
+              "it stands in the last column it appears in, plus hiring: its hiring_status and target_start in each column, null where " \
+              "the column has no such position. `names` maps every person id " \
               "to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
@@ -78,6 +79,10 @@ class Operations::TeamPlanning::Timeline < Operations::Base
   end
 
   def positions(timeline)
-    timeline.maps.flat_map { positions_payload(it) }.to_h { [ it[:position_id], it.except(:position_id) ] }
+    hiring = Hash.new { |by_id, id| by_id[id] = Array.new(timeline.maps.size) }
+    timeline.maps.each_with_index do |map, column|
+      map.positions.each { hiring[it.id][column] = { hiring_status: it.hiring_status, target_start: it.target_start&.iso8601 } }
+    end
+    timeline.maps.flat_map { positions_payload(it) }.to_h { [ it[:position_id], { **it.except(:position_id), hiring: hiring[it[:position_id]] } ] }
   end
 end

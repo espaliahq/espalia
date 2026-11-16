@@ -61,10 +61,10 @@ class TeamPlanning::ResolutionTest < ActiveSupport::TestCase
 
   def ada(scenario_id) = resolve(scenario_id).people.sole.then { [ it.title, it.site ] }
 
-  should "resolve the root to the baseline, untouched" do
+  should "resolve the root to the baseline, untouched but for the year its figures run over" do
     as_tenant do
       expected = TeamPlanning::Baseline.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)).structure
-      assert_equal expected, resolve(@plan_id)
+      assert_equal expected.with(step: TeamPlanning::Cost.year_from(expected.base_on)), resolve(@plan_id)
     end
   end
 

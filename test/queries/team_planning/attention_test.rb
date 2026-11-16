@@ -26,6 +26,20 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
   def reasons(map, changes = {}) = TeamPlanning::Attention.new(map, changes).call.map(&:reason)
 
+  should "mark an open seat whose target start has passed, by the FTE still open, and nothing dated ahead, on hold, undated or full" do
+    seat = ->(id, fte: 1, **hiring) { B::Position.new(id:, role_id: nil, level_id: nil, unit_id: LIVE, fte:, basis: "new", role_name: "Engineer", level_name: nil, **hiring) }
+    positions = [ seat.("late", fte: 2, target_start: Date.new(2026, 4, 1)), seat.("ahead", target_start: Date.new(2026, 6, 1)),
+                  seat.("held", hiring_status: "on_hold", target_start: Date.new(2026, 4, 1)), seat.("undated"),
+                  seat.("full", target_start: Date.new(2026, 4, 1)) ]
+    placed = member(places: []).with(memberships: %w[late full].map { B::Membership.new(unit_id: LIVE, position_id: it, allocation: 0.5, role: nil) })
+    items = TeamPlanning::Attention.new(map(positions:, people: [ placed.with(fte: 2) ]), {}, today: Date.new(2026, 5, 1)).call
+
+    assert_equal [ [ "late", "position", "Its target start, 1 Apr 2026, has passed with 1 FTE still open" ] ],
+                 items.select { it.check == :late_hires }.map { [ it.subject_id, it.facet, it.reason ] }
+    assert_empty TeamPlanning::Attention.new(map(positions:, people: [ placed.with(fte: 2) ]), {}, today: Date.new(2026, 4, 1)).call
+                                        .select { it.check == :late_hires }, "a start today has not passed"
+  end
+
   should "mark a place that counts for no capacity, but not a leaver's, a forgotten override's or a closed position's" do
     position = SecureRandom.uuid_v7
     unclassified = { "no_model" => nil, "leaving" => nil, "override_unknown" => nil, "closed_position" => position }.map do |reason, position_id|

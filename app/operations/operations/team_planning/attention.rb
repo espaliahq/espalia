@@ -23,6 +23,7 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "Once a capacity model is chosen for any role or family, even one no place takes, each place no model covers is listed too, except a leaver's, " \
               "a forgotten person's override and a closed position's. A seat whose reports cost more to manage than it delivers, " \
               "a person or an open position, is listed once under the facet capacity, overridden or not. " \
+              "A position whose target start is before today while some of its FTE is still open is listed under its position facet, with that FTE. " \
               "In a scenario with budget lines it also checks the budget: a held position no line matches, or two lines tie for, " \
               "with no funding set; a seat held in the period with no cost centre, once a line or seat in the plan has one; " \
               "a person costed in one cost centre while the cost centre entries that match them, their position, or a budget line it draws on names another; a line, " \

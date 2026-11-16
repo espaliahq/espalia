@@ -52,14 +52,24 @@ class TeamPlanning::Forecast
   Average = Data.define(:cost, :capacity)
   NO_AVERAGE = Average.new(cost: {}, capacity: {})
 
+  # An open position's seat, priced as the caller measures it.
+  #
+  # @!attribute cost_centre [String, nil]
+  # @!attribute cost [Hash{String => Rational}] currency => yearly amount per FTE
+  # @!attribute capacity [Hash{String => Rational}] model => what an FTE of it delivers
+  Open = Data.define(:cost_centre, :cost, :capacity) do
+    def initialize(cost_centre: nil, cost: {}, capacity: {}) = super
+  end
+
   # Each filled place priced as the caller measures it, keyed by person id and
-  # unit id. A place missing from a hash adds nothing, as an unpriced seat adds
-  # nothing to the actual figure.
+  # unit id, and each open seat by position id. A place missing from a hash
+  # adds nothing, as an unpriced seat adds nothing to the actual figure.
   #
   # @!attribute cost [Hash{Array(String, String) => Hash{String => Rational}}] currency => yearly amount per FTE
   # @!attribute capacity [Hash{Array(String, String) => Hash{String => Rational}}] model => what the place delivers
-  Pricing = Data.define(:cost, :capacity) do
-    def initialize(cost: {}, capacity: {}) = super
+  # @!attribute open [Hash{String => Open}] by position id
+  Pricing = Data.define(:cost, :capacity, :open) do
+    def initialize(cost: {}, capacity: {}, open: {}) = super
   end
 
   # An earlier step on the timeline, resolved and priced as the caller sees it.
@@ -77,8 +87,9 @@ class TeamPlanning::Forecast
   # @!attribute filled [Array<Filled>] places in filled seats: not a planned leaver's or a placeholder's
   # @!attribute averages [Hash{String, nil => Average}] by unit
   # @!attribute earlier [Array<Frame>] the earlier steps that reach this one, in timeline order
-  Frame = Data.define(:kind, :map, :step, :covered, :filled, :averages, :earlier) do
-    def initialize(filled: [], averages: {}, earlier: [], **) = super
+  # @!attribute open [Hash{String => Open}] the open seats, priced, by position id
+  Frame = Data.define(:kind, :map, :step, :covered, :filled, :averages, :earlier, :open) do
+    def initialize(filled: [], averages: {}, earlier: [], open: {}, **) = super
 
     # @param unit_id [String, nil]
     # @return [Average] what a filled FTE of the unit costs and delivers
@@ -163,7 +174,7 @@ class TeamPlanning::Forecast
   def frame(scenario_id, step, map, pricing)
     covered = @aggregate.resolution_chain(scenario_id).flat_map { @aggregate.changes_in(it) }.to_set { it.data[:subject_id] }
     filled = filled_places(map)
-    Frame.new(kind: nil, map:, step:, covered:, filled:, averages: averages(filled, pricing))
+    Frame.new(kind: nil, map:, step:, covered:, filled:, averages: averages(filled, pricing), open: pricing.open)
   end
 
   # A filled seat is a person's: an open position fills none. A planned leaver
