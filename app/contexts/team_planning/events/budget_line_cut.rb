@@ -23,7 +23,9 @@ class TeamPlanning::Events::BudgetLineCut < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map]
   def self.apply_to(map, data)
     id = data[:subject_id]
-    return map.with(budget_lines: map.budget_lines.reject { it.id == id }) if map.budget_lines.any? { it.id == id }
+    if map.line?(id)
+      return map.with(budget_lines: map.budget_lines.reject { it.id == id }, outside_lines: map.outside_lines.reject { it.id == id })
+    end
 
     data[:tenant_line] ? map.with(orphaned_lines: map.orphaned_lines.merge(id => "cut")) : map
   end

@@ -362,6 +362,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         @half_full => { @payments => 0.5, @sales => 0.5 }, @out => { @sales => 1.0 } }.each do |person, places|
         places.each { |unit, allocation| people.set_membership(person.id, unit, provider: "espalia", effective_on: "2026-01-01", allocation:) }
       end
+      { @in => "Platform", @out => "Field Sales" }.each { |person, cost_centre| people.change_cost_centre(person.id, cost_centre, provider: "espalia", effective_on: "2026-01-01") }
 
       @plan_id = call(Operations::TeamPlanning::CreatePlan, @holder, name: "Payments next year", base_on: "2026-03-02", unit_ids: [ @payments ])[:plan_id]
       call(Operations::TeamPlanning::AddPlanMember, @holder, plan_id: @plan_id, person_id: @editor.person_id, role: "editor")
@@ -450,6 +451,24 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
                      tiles, who)
         account == @holder ? assert_includes(html.text, held, who) : assert_not_includes(html.text, held, who)
         SCOPED.each_value { assert_not_includes html.to_html, it, who }
+      end
+    end
+
+    # A plan's scope decides which lines it holds, not the see-pay right
+    # ([#378](https://github.com/espaliahq/espalia/issues/378)).
+    should "show no member a line outside the plan's cost centres, nor a total that counts it, holder or not" do
+      held = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD", period: "year", cost_centre: "Platform")
+      away = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 654_321, currency: "AUD", period: "year", cost_centre: "Field Sales")
+
+      [ @holder, @editor, @viewer ].each do |account|
+        who = account == @holder ? "holder" : "non-holder"
+        budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
+        assert_equal [ held.id ], budget[:budget_lines].map { it[:budget_line_id] }, who
+        assert_equal [ "Platform" ], budget[:cost_centres].filter_map { it[:cost_centre] }, who
+        assert_in_delta held.amount * Rational(121, 365), BigDecimal(budget[:total][:approved][:native]["AUD"]), 1e-9, who
+        reads = [ budget, call(Operations::TeamPlanning::BudgetLines, account, plan_id: @plan_id, scenario_id: @q1),
+                  call(Operations::TeamPlanning::Funding, account, plan_id: @plan_id, scenario_id: @q1), budget_tab(account).to_html ].to_json
+        [ away.id, "Field Sales", "654", "654,321" ].each { assert_not_includes reads, it, who }
       end
     end
 

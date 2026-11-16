@@ -185,6 +185,64 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert person(scenario_map(@plan_id, @h1), @ada)[:manager_outside]
   end
 
+  # Platform is Ada's own; Core and Engineers come from entries a seat in
+  # Engineering can match; Field Sales and Revenue belong to Sales alone.
+  def budget_by_cost_centre
+    as_tenant do
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@ada.id, "Platform", **ESPALIA)
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@cy.id, "Field Sales", **ESPALIA)
+      call(Operations::Tenants::SetPlanningRule, rule: "cost_centre",
+                                                 value: { entries: [ { unit_id: @engineering, cost_centre: "Core" }, { unit_id: @sales, cost_centre: "Revenue" },
+                                                                     { role_id: @engineer.role_id, cost_centre: "Engineers" } ] })
+      [ "Platform", "Core", "Engineers", nil, "Field Sales", "Revenue" ].to_h do |cost_centre|
+        [ cost_centre, BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 777_123, currency: "EUR", period: "year",
+                                          cost_centre:).id ]
+      end
+    end
+  end
+
+  context "budget lines" do
+    setup { @lines = budget_by_cost_centre }
+
+    should "hold only the lines naming a cost centre its seats can draw on, or none, and hide the rest" do
+      map = resolve(@plan_id, @h1)
+      assert_equal @lines.values_at("Platform", "Core", "Engineers", nil).sort, map.budget_lines.map(&:id).sort
+      assert_equal @lines.values_at("Field Sales", "Revenue").sort, map.outside_lines.map(&:id).sort
+      assert_equal @lines.values.sort, resolve(@whole_id, @whole_h1).budget_lines.map(&:id).sort
+    end
+
+    should "keep an entry on a unit above the scope, since a seat inside it matches" do
+      set_scope(@plan_id, [ @payments ])
+      assert_includes resolve(@plan_id, @h1).budget_lines.map(&:id), @lines["Core"]
+    end
+
+    should "never let a line outside the plan's cost centres reach a plan read, nor count it, though a whole-organisation plan does" do
+      leaked = [ *@lines.values_at("Field Sales", "Revenue"), "Field Sales", "Revenue" ]
+      scoped = every_read(@plan_id, @h1)
+      leaked.each { assert_not_includes scoped, it }
+      assert_equal 4, call(Operations::TeamPlanning::BudgetLines, plan_id: @plan_id, scenario_id: @h1)[:budget_lines].size
+
+      whole = every_read(@whole_id, @whole_h1)
+      leaked.each { assert_includes whole, it, "the control proves the reads would carry it" }
+    end
+
+    should "keep a change or cut a plan made to a hidden line hidden, never reading it as orphaned" do
+      as_tenant do
+        handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineSet, scenario_id: @h1, subject_id: @lines["Field Sales"],
+                                                                          end_state: { starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 9,
+                                                                                       currency: "EUR", period: "year", cost_centre: "Field Sales", tenant_line: true })
+        handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineCut, scenario_id: @h1, subject_id: @lines["Revenue"], end_state: { tenant_line: true })
+      end
+      map = resolve(@plan_id, @h1)
+      assert_equal [ @lines["Field Sales"] ], map.outside_lines.map(&:id)
+      assert_empty map.orphaned_lines
+      # The plan's own record of a change keeps it, as it keeps one about someone the Org Graph moved out.
+      record = %w[History Overrides Status SplitNeeds].map { "Operations::TeamPlanning::#{it}" }
+      scoped = JSON.parse(every_read(@plan_id, @h1)).except(*record).to_json
+      [ *@lines.values_at("Field Sales", "Revenue"), "Field Sales" ].each { assert_not_includes scoped, it }
+    end
+  end
+
   should "bring a person in with the change that places them in scope, and let them go when it's undone" do
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])

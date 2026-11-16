@@ -48,10 +48,12 @@ class TeamPlanning::Events::BudgetLineSet < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map]
   def self.apply_to(map, data)
     id = data[:subject_id]
-    held = map.budget_lines.any? { it.id == id }
+    held = map.line?(id)
     return map.with(orphaned_lines: map.orphaned_lines.merge(id => "set")) if data[:tenant_line] && !held
 
     line = TeamPlanning::Baseline::BudgetLine.planned(id, data, source: data[:tenant_line] ? "changed" : "plan")
+    return map.with(outside_lines: map.outside_lines.map { it.id == id ? line : it }) if map.outside_line?(id)
+
     map.with(budget_lines: held ? map.budget_lines.map { it.id == id ? line : it } : map.budget_lines + [ line ])
   end
 

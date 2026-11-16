@@ -31,6 +31,9 @@ class Plans::FundingPayPrivacyTest < ActionDispatch::IntegrationTest
       people.record_person(ada.id, provider: "espalia", effective_on: "2026-01-01", employment_status: "employed",
                                    title: "Software Engineer", level: "5", fte: 1.0)
       people.set_membership(ada.id, payments, provider: "espalia", effective_on: "2026-01-01", allocation: 1.0)
+      # A scoped plan holds only the lines its seats can draw on ([#378](https://github.com/espaliahq/espalia/issues/378)).
+      people.change_cost_centre(ada.id, "Platform", provider: "espalia", effective_on: "2026-01-01")
+      call(Operations::Tenants::SetPlanningRule, @holder, rule: "cost_centre", value: { entries: [ { unit_id: payments, cost_centre: "Growth" } ] })
 
       @plan_id = call(Operations::TeamPlanning::CreatePlan, @holder, name: "Payments next year", base_on: "2026-03-02", unit_ids: [ payments ])[:plan_id]
       call(Operations::TeamPlanning::AddPlanMember, @holder, plan_id: @plan_id, person_id: @editor.person_id, role: "editor")
