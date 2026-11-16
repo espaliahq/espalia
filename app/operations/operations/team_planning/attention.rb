@@ -24,7 +24,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "a forgotten person's override and a closed position's. A seat whose reports cost more to manage than it delivers, " \
               "a person or an open position, is listed once under the facet capacity, overridden or not. " \
               "In a scenario with budget lines it also checks the budget: a held position no line matches, or two lines tie for, " \
-              "with no funding set; a seat held in the period with no cost centre, once a line or seat in the plan has one; a line, " \
+              "with no funding set; a seat held in the period with no cost centre, once a line or seat in the plan has one; " \
+              "a person costed in one cost centre while the cost centre entries that match them, their position, or a budget line it draws on names another; a line, " \
               "cost centre or the whole budget over its approved amount or head count, judged at the budget strictness rule's scope; " \
               "and a line in the period nothing draws on or ties for. No budget item names an amount, and a line, cost " \
               "centre or budget over its approved amount is flagged only to a member with the see-pay right. " \
