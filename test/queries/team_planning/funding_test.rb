@@ -11,7 +11,7 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    @departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
+    @departments, @groups, teams = Array.new(3) { SecureRandom.uuid_v7 }
     @engineering, @payments = Array.new(2) { SecureRandom.uuid_v7 }
 
     travel_to Time.utc(2025, 12, 15, 9)
@@ -20,7 +20,8 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
       @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5, title: "Senior SWE")
       @e6 = create(:framework_level, role_id: @engineer.role_id, ordinal: 6, title: "Staff SWE")
 
-      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
+      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: @groups, name: "Group" },
+                                  { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
       structure.create_unit(@engineering, "Engineering", level_id: @departments, effective_on: "2025-01-01")
       structure.create_unit(@payments, "Payments", level_id: teams, parent_id: @engineering, effective_on: "2025-01-01")
 
@@ -151,6 +152,23 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
 
       operation(Operations::TeamPlanning::SetUnit, unit_id: @payments, parent_id: sales)
       assert_equal [ "Sales" ], cost_centre_of(cost, eve), "her team now sits under Sales, though her own unit is the same"
+    end
+
+    should "count a layer the plan inserts above a team as a change, someone no entry matches keeping their own" do
+      eve = create(:person, tenant: @tenant, name: "Eve Quill")
+      as_tenant do
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0, cost_centre: "CC-2")
+        people.set_membership(eve.id, @payments, **ESPALIA, allocation: 1.0)
+      end
+      platform = operation(Operations::TeamPlanning::SetUnit, name: "Platform", level_id: @groups, parent_id: @engineering)[:unit_id]
+      operation(Operations::TeamPlanning::SetUnit, unit_id: @payments, parent_id: platform)
+
+      cost_centre_entries({ location: "Atlantis", cost_centre: "Atlantis" })
+      assert_equal [ "CC-2" ], cost_centre_of(cost, eve), "no entry matches Eve, so her own is the fallback"
+
+      cost_centre_entries({ unit_id: @engineering, cost_centre: "Engineering" })
+      assert_equal [ "Engineering" ], cost_centre_of(cost, eve), "the entries decide her once a layer sits above her team"
     end
 
     should "fund a half-filled position from its untouched occupant, while a moved one's cost line follows the entries" do

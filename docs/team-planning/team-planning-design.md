@@ -1338,8 +1338,12 @@ Funding is derived by default, in two steps. Neither writes an event.
 
 **Position to cost centre.** A real cost centre, the one the HRIS or Espalia holds for a
 person, is the source of truth. A person keeps it unless the plan changes their unit,
-role, level or location; a change of FTE alone doesn't count. Moving their unit under
-another one counts, since an entry for a unit covers the units below it. A changed person, and a
+role, level or location; a change of FTE alone doesn't count. Any planned change to the
+units above them counts too, such as their team moved or a layer inserted or removed, since
+an entry for a unit covers the units below it. The entries then decide them and their real
+cost centre is only the fallback, so where a tenant's entries already disagree with
+someone's real value, that person's cost centre moves when the units above them do; the 6.6
+mismatch check is where that shows. A changed person, and a
 real person with no cost centre of their own, take the first of these that gives one:
 
 1. A cost centre set on the position. `PositionSet` carries an optional label.
