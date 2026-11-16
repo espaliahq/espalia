@@ -105,7 +105,7 @@ class TeamPlanning::Capacity
     end
     report = price.(scenario_id)
     baseline = price.(plan.id) unless scenario_id == plan.id
-    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map).rows)
+    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing: report.pricing).rows)
   end
 
   # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named
@@ -115,6 +115,20 @@ class TeamPlanning::Capacity
   Report = Data.define(:map, :seats, :units, :totals) do
     # @return [Array<Array(Seat, Place)>] each place that counts nowhere, with its seat
     def unclassified = seats.flat_map { |seat| seat.places.select(&:unclassified?).map { [ seat, it ] } }
+
+    # What each person's places in a unit deliver, so a forecast takes away
+    # what an empty seat would have delivered.
+    #
+    # @return [TeamPlanning::Forecast::Pricing]
+    def pricing
+      live = map.units.to_set(&:id)
+      places = seats.select { it.seat.kind == "person" }.flat_map do |seat|
+        seat.places.select { it.figure && it.model }.map { [ seat.seat.id, live.include?(it.unit_id) ? it.unit_id : nil, it ] }
+      end
+      TeamPlanning::Forecast::Pricing.new(capacity: places.group_by { it.first(2) }.transform_values do |group|
+        TeamPlanning::Capacity.add(group.map { { it[2].model => it[2].figure.amount } })
+      end)
+    end
 
     # @return [Boolean] whether any place has a model chosen, so the plan measures capacity at all
     def measured? = seats.any? { |seat| seat.places.any?(&:model) }
