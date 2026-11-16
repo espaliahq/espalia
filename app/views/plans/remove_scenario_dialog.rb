@@ -15,16 +15,26 @@ class Views::Plans::RemoveScenarioDialog < Views::Base
   # @return [Hash] the data a trigger carries to open the dialog
   def self.trigger(scenario_id) = { action: "click->modal#open", modal_target_id: id_for(scenario_id) }
 
+  # The scenarios that must go before this one can: any that fork from it.
+  #
+  # @param scenario [Hash] from `team_planning_scenarios`
+  # @param scenarios [Array<Hash>] the plan's scenarios
+  # @return [Array<String>] their names; empty when it can be removed
+  def self.forks(scenario, scenarios) = scenarios.select { it[:parent_id] == scenario[:scenario_id] }.map { it[:name] }
+
   # @param plan_id [String]
   # @param scenario [Hash] from `team_planning_scenarios`
-  # @param scenarios [Array<Hash>] the plan's scenarios, to name those that fork from it
+  # @param forks [Array<String>] from {.forks}
   # @param hidden_pay [String, nil] the operation's approval notice, for an editor who can't see pay
-  def initialize(plan_id:, scenario:, scenarios:, hidden_pay: nil)
+  def initialize(plan_id:, scenario:, forks:, hidden_pay: nil)
     @plan_id = plan_id
     @scenario = scenario
-    @forks = scenarios.select { it[:parent_id] == scenario[:scenario_id] }.map { it[:name] }
+    @forks = forks
     @hidden_pay = hidden_pay
   end
+
+  # @return [String]
+  def scenario_id = @scenario[:scenario_id]
 
   def view_template
     title = @forks.any? ? "#{@scenario[:name]} can't be removed yet" : "Remove #{@scenario[:name]}?"

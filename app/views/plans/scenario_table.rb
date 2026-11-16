@@ -27,8 +27,10 @@ class Views::Plans::ScenarioTable < Views::Base
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param extra_columns [Array<Column>]
   # @param can_edit [Boolean] whether each row offers a menu to fork and edit
-  def initialize(plan_id:, scenarios:, extra_columns: [], can_edit: false)
+  # @param removable [Array<String>] the scenarios whose menu offers Remove, each with its dialog on the page
+  def initialize(plan_id:, scenarios:, extra_columns: [], can_edit: false, removable: [])
     @plan_id = plan_id
+    @removable = removable
     @scenarios = scenarios
     @extra_columns = extra_columns
     @can_edit = can_edit
@@ -105,7 +107,9 @@ class Views::Plans::ScenarioTable < Views::Base
             menu.item(href: dates_plan_path(@plan_id, scenario_id: step[:scenario_id])) { "Dates…" }
           end
           menu.item(href: split_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Split off the agreed part…" }
-          menu.item(tone: :danger, data: Views::Plans::RemoveScenarioDialog.trigger(scenario[:scenario_id])) { "Remove…" }
+          if @removable.include?(scenario[:scenario_id])
+            menu.item(tone: :danger, data: Views::Plans::RemoveScenarioDialog.trigger(scenario[:scenario_id])) { "Remove…" }
+          end
         end
       end
     end

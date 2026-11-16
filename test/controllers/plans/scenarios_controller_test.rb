@@ -178,6 +178,15 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       TeamPlanning::RuleKinds.unregister(HeadcountCap)
     end
 
+    should "offer no Remove on a frozen plan" do
+      PlanPolicy.stub(:frozen?, true) do
+        get plan_path(@plan_id)
+        assert_select "[data-modal-target-id^='remove-scenario-']", count: 0
+        get map_plan_path(@plan_id, scenario: @lean)
+        assert_select "[data-modal-target-id^='remove-scenario-']", count: 0
+      end
+    end
+
     should "offer no Remove once the plan is archived" do
       ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id) }
 

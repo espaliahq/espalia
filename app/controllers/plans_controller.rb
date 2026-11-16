@@ -81,13 +81,13 @@ class PlansController < ApplicationController
     plan = read(Operations::TeamPlanning::Plan)
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
-    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?,
+    removals = removals(plan, scenarios, scenarios.map { it[:scenario_id] })
+    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?, removable: removals.map(&:scenario_id),
                                             extra_columns: cost_columns + capacity_columns(plan, scenarios))
     removed_page = params[:removed_page].to_i.clamp(1..)
     removed = Views::Plans::RemovedScenarios.new(plan_id: plan[:plan_id], open: params.key?(:removed_page),
                                                  read: read(Operations::TeamPlanning::RemovedScenarios, page: removed_page))
-    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:,
-                           removals: removals(plan, scenarios, scenarios.map { it[:scenario_id] }))
+    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:, removals:)
   end
 
   # GET /planning/:id/map?scenario=:scenario_id
@@ -101,8 +101,9 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
-    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id, removals: removals(plan, scenarios, [ scenario_id.downcase ]),
-                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
+    removals = removals(plan, scenarios, [ scenario_id.downcase ])
+    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id, removals:,
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?, removable: removals.map(&:scenario_id),
                                                                can_upload_pay: policy_for(@plan_record).upload_pay? && !@plan_record.archived?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
@@ -539,23 +540,23 @@ class PlansController < ApplicationController
       locked_out: PlanPolicy.locked_out?(@plan_record) && !PlanPolicy.frozen?(@plan_record) }
   end
 
-  # An archived plan takes no changes, so its editors see it as its viewers do.
   # A Remove dialog for each of `ids` an editor may remove: never the baseline,
-  # nor anything on an archived or frozen plan. Only a scenario nothing forks
-  # from asks the operation how much hidden pay it holds.
+  # nor anything on an archived or frozen plan. Only a dialog that offers
+  # Remove asks the operation how much hidden pay goes with it.
   def removals(plan, scenarios, ids)
-    return [] unless can_edit?
+    return [] if !can_edit? || PlanPolicy.frozen?(@plan_record)
 
-    parents = scenarios.to_set { it[:parent_id] }
     scenarios.select { ids.include?(it[:scenario_id]) && it[:scenario_id] != plan[:plan_id] }.map do |scenario|
-      hidden_pay = unless parents.include?(scenario[:scenario_id])
+      forks = Views::Plans::RemoveScenarioDialog.forks(scenario, scenarios)
+      hidden_pay = if forks.empty?
         Operations::TeamPlanning::RemoveScenario.approval_notice(context: pundit_user,
                                                                  params: { plan_id: plan[:plan_id], scenario_id: scenario[:scenario_id] })
       end
-      Views::Plans::RemoveScenarioDialog.new(plan_id: plan[:plan_id], scenario:, scenarios:, hidden_pay:)
+      Views::Plans::RemoveScenarioDialog.new(plan_id: plan[:plan_id], scenario:, forks:, hidden_pay:)
     end
   end
 
+  # An archived plan takes no changes, so its editors see it as its viewers do.
   def can_edit?
     return @can_edit if defined?(@can_edit)
 

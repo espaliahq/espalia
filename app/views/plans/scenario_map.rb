@@ -38,9 +38,11 @@ class Views::Plans::ScenarioMap < Views::Base
   # @param summary [Phlex::SGML, nil] drawn under the date line, such as the capacity strip
   # @param can_edit [Boolean] whether the caller edits the plan: renaming the scenario shown, and moving people on it
   # @param can_upload_pay [Boolean] whether the caller may hold actual pay from a file, an editor with the see-pay right
+  # @param removable [Array<String>] the scenarios that offer Remove, each with its dialog on the page
   def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, position_marks: NONE, summary: nil, can_edit: false,
-                 can_upload_pay: false)
+                 can_upload_pay: false, removable: [])
     @can_edit = can_edit
+    @removable = removable
     @can_upload_pay = can_upload_pay
     @map = map
     @moving = can_edit && !baseline?(map[:scenario_id])
@@ -116,8 +118,10 @@ class Views::Plans::ScenarioMap < Views::Base
       variant: :ghost, size: :sm,
       data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@map[:plan_id], current[:scenario_id]), current)
     ) { "Edit…" }
-    render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, compact: true,
-                                       data: Views::Plans::RemoveScenarioDialog.trigger(current[:scenario_id])) { "Remove…" }
+    if @removable.include?(current[:scenario_id])
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, compact: true,
+                                         data: Views::Plans::RemoveScenarioDialog.trigger(current[:scenario_id])) { "Remove…" }
+    end
     step = Views::Plans::ScenarioTable.dated_step(current, @scenarios)
     return unless step
 
