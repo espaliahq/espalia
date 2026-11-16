@@ -189,8 +189,7 @@ class OrgGraph::StructureAggregate
       raise "Level still holds units from #{previous}; hand it over instead" if live_units.any? { |unit| unit.level_id == level_id }
 
       ensure_no_stated_rules!(level_id, provider) unless provider == ESPALIA
-      ensure_no_stated_rules!(level_id, provider)
-    ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+      ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
     end
 
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
