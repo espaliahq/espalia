@@ -433,8 +433,7 @@ auto_confirm { click_button_with_js_fallback("Start alignment", expect_text: "Al
 
 **The stub removes the dialog race, not the dropped click.** A bare
 `click_button` inside `auto_confirm` is lost on a starved runner like any other
-click, and two tests did exactly that
-([#691](https://github.com/mr-yum/growth-os/issues/691)). Put a JS-fallback
+click, and two tests did exactly that. Put a JS-fallback
 helper or an `execute_script` dispatch inside the block; the cop flags a bare
 `click_button` / `click_link` / `click_on` there.
 
@@ -528,7 +527,7 @@ Same principle as the `MouseEvent` rule below: dispatch the event where the list
 
 ### Tab is the same rule, with a different listener — `press_tab`
 
-**Use `press_tab` / `press_tab(shift: true)` rather than `find("body").send_keys(:tab)`.** `modal`'s focus trap decides what to do by reading `document.activeElement` — and Selenium *focuses the element it sends keys to*, so aiming keys at `body` perturbs the very state the trap reads. When the keydown misses the trap entirely, native traversal walks focus out of the dialog and the failure reads as a broken focus trap rather than a lost keystroke. That is the CI-only flake behind [PR #430](https://github.com/mr-yum/growth-os/pull/430).
+**Use `press_tab` / `press_tab(shift: true)` rather than `find("body").send_keys(:tab)`.** `modal`'s focus trap decides what to do by reading `document.activeElement` — and Selenium *focuses the element it sends keys to*, so aiming keys at `body` perturbs the very state the trap reads. When the keydown misses the trap entirely, native traversal walks focus out of the dialog and the failure reads as a broken focus trap rather than a lost keystroke. That was the cause of a past CI-only flake.
 
 ```ruby
 # WRONG — moves the focus the trap is about to read, then may miss the listener
@@ -665,8 +664,7 @@ clicked before the matrix frame's own load lands also waits for that load
 before scrolling at all. A slow worker can stretch either past any fixed sleep,
 and the reading then describes a scroll that hasn't happened yet: the card
 sits exactly where the test put it. That is how the chip-scroll tests failed
-under a full parallel precommit and passed alone
-([#501](https://github.com/mr-yum/growth-os/issues/501)).
+under a full parallel precommit and passed alone.
 
 - Wait for the eager frame (`turbo-frame#…[complete]`) and its controller
   (`wait_for_stimulus`) before arranging the page and clicking.
@@ -733,7 +731,7 @@ ChromeDriver waits on the document it loaded. A page whose script navigates
 away before that load ends (the evidence hub following an old notification
 anchor with `window.location.replace`) can come back as
 `StaleElementReferenceError` on CI. It never reproduced locally, even with a
-throttled network ([#691](https://github.com/mr-yum/growth-os/issues/691)).
+throttled network.
 Rescue the error and let the next assertion wait for where the page lands;
 visiting again only reruns the race. `visit_self_replacing_page` in
 `evidence_hub_system_test.rb` does this; move it to `test/support/system/`

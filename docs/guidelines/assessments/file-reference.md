@@ -58,7 +58,7 @@
 | `app/views/assessments/assessment_matrix_frame_view.rb` | Turbo Frame wrapper for the matrix |
 | `app/views/assessments/assessment_matrix.rb` | Container that renders each `CategorySection` |
 | `app/views/assessments/capability_card.rb` | One card per capability — eyebrow, name row, level strip, expansion panel |
-| `app/views/assessments/capability_name_row.rb` | The card's name row — name, the `×N` / Required chips ([#431](https://github.com/mr-yum/growth-os/issues/431)), Blocked badge, and the capability's own score with its split (`id="capability-name-<stable_id>"`, Turbo-replaced by the rating controllers) |
+| `app/views/assessments/capability_name_row.rb` | The card's name row — name, the `×N` / Required chips, Blocked badge, and the capability's own score with its split (`id="capability-name-<stable_id>"`, Turbo-replaced by the rating controllers) |
 | `app/views/assessments/level_strip.rb` | Horizontal flex of `LevelChip`s, scrolls horizontally on narrow |
 | `app/views/assessments/level_chip.rb` | One chip per level — solid fill by frequency, diagonal split on disagreement / partial rating (colour vs grey), evidence/comment glyphs, YOU/CURRENT current-level badge |
 | `app/views/assessments/capability_card_expansion.rb` | Focused-level panel — expectation sentence + inline FrequencyPill, divergent SecondaryRatingLines, illustrations, evidence, comments |
