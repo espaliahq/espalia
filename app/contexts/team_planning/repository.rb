@@ -59,8 +59,11 @@ class TeamPlanning::Repository
 
   # @param plan_id [String]
   # @return [Hash, nil] the pricing inputs the plan's archive copied, or nil
-  #   when it was restored since, never copied any, or its key is gone
+  #   when it was restored since, never copied any, its key is gone, or no
+  #   key can be read here, as on a copy of the database without its credentials
   def prices_frozen(plan_id)
+    return unless PlanKeyStore.available?
+
     last = @event_store.read.stream(EventStreamNaming.plan_stream(plan_id)).backward
                        .of_type([ TeamPlanning::Events::PlanPricesFrozen, TeamPlanning::Events::PlanRestored ]).first
     return unless last.is_a?(TeamPlanning::Events::PlanPricesFrozen)

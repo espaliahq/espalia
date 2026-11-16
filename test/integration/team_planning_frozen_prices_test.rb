@@ -171,6 +171,13 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
     assert_nil as_tenant { TeamPlanning::Repository.new.prices_frozen(@plan_id) }
   end
 
+  should "price an archived plan with today's inputs where no plan key can be read, rather than fail" do
+    PlanKeyStore.stub(:available?, false) do
+      assert_nil as_tenant { TeamPlanning::Repository.new.prices_frozen(@plan_id) }
+      assert_match "still use today's", operation(Operations::TeamPlanning::Cost)[:note]
+    end
+  end
+
   should "read a frozen copy only until the plan is restored, and take a fresh one when it is archived again" do
     as_tenant(&changes.fetch("a band's figures"))
     assert_equal 100_000, e5_midpoint
