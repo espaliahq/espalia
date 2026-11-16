@@ -968,7 +968,8 @@ still reads the Org Graph as of its old base, so keeping the plan would change n
 reads. `team_planning_settle_conflict` takes one of two choices, in one scenario:
 
 - **Keep the plan** writes the planned change again in the scenario. A scenario that made
-  the change sets it again. One that inherits it pins it, naming where it came from, unless
+  the change sets it again, and one that pinned it pins it again, naming what the first pin
+  kept. One that inherits it pins it, naming where it came from, unless
   its kind seals its value (a level, plan data): a pin holds its end state in clear, so a
   sealed change is set again in the child instead. The change keeps its own note unless
   the editor gives another.
@@ -976,8 +977,11 @@ reads. `team_planning_settle_conflict` takes one of two choices, in one scenario
   would hand the facet back to the parent's change, which still conflicts, so the
   scenario that made the change and its other children keep it as it was. Settled in the
   scenario that made the change, it reaches the children that inherit it, as any change
-  there does. A unit succession can't follow reality yet: the retirements written with it
-  wouldn't follow, so the editor changes it on the map.
+  there does. A level the Org Graph cleared is followed as no level, and a membership it
+  holds with no allocation as an unknown allocation; no editor can set either, so each
+  comes only from following. Cost shows that person's seat unpriced with no level, and
+  capacity shows the place unresolved. A unit succession can't follow reality yet: the
+  retirements written with it wouldn't follow, so the editor changes it on the map.
 
 Settling is refused once status no longer reads the row as conflicting: the Org Graph
 has caught up with the plan, or the person was forgotten.
@@ -1350,9 +1354,9 @@ Rules that follow:
   cannot be pinned, cleared or undone, because nothing was written.
 - **Only planned changes are approved.** The pinned point covers events. The change list
   is built from events. A forecast can appear in neither.
-- **Planned removes from forecast.** A read model leaves out of a forecast anyone a
-  planned change already covers: a person with a `DepartureSet` is not in expected
-  attrition, and a person with a `LevelSet` is not in forecast promotions.
+- **Planned removes from forecast.** Each forecast kind decides which planned changes
+  leave a person out of it: a person with a `DepartureSet` is not in expected attrition,
+  and a person with a `LevelSet` is not in forecast promotions.
 - **Read models keep the three apart** in every total, so a total can state its make-up
   and a closed step can compare its forecast with what happened.
 
@@ -1377,14 +1381,17 @@ promotions and increases, matched by cost centre and period like any other.
 
 ### Actual, planned and forecast as built
 
-[#351](https://github.com/espaliahq/espalia/issues/351) built the frame (10.1). The
-attrition, hiring and ramp assumptions (10.2 to 10.4) are stories of their own.
+[#351](https://github.com/espaliahq/espalia/issues/351) built the frame (10.1), and
+[#362](https://github.com/espaliahq/espalia/issues/362) the first kind, attrition (10.2).
+The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
 
 - **A step is the scenario's period**, the unit the timeline and cost already use. Today
   has no period, so it has no forecast and is all actual.
 - **`TeamPlanning::Forecast` reads the rows** for a scenario. It hands each forecast kind
-  a frame holding the resolved map, the step and who is covered: the subject of every
-  change in effect along the scenario's chain. A kind leaves out anyone `covered?` names.
+  a frame holding the resolved map, the step, who is covered (the subject of every change
+  in effect along the scenario's chain) and the filled seats with their average figures. A
+  kind chooses which changes take someone out: attrition drops a planned leaver, never
+  someone whose pay, level or place changed.
   A row (`kind`, `unit_id`, `cost_centre`, the step, `headcount`, `cost` per currency,
   `capacity` per model) has no id, and reading one writes nothing.
 - **The split is by what a figure measures, not by who moved.** Actual is the baseline's
@@ -1416,6 +1423,40 @@ open, so the web and an MCP client get the same answer.
 
 Assessments are read as of the plan's base date, like every other fact. A new
 assessment cycle shows up as drift and takes effect on rebase.
+
+### Attrition as built
+
+[#362](https://github.com/espaliahq/espalia/issues/362) added two rules, each a tenant
+default, a scenario chain and a unit override like any other, nearest scope winning:
+
+- **`attrition`** is a yearly rate from 0 to 1. Its default, 0, forecasts nothing.
+- **`time_to_hire`** is whole days from 0 to 730, 90 by default.
+
+An empty seat lowers both capacity and cost, so the rate applies to filled seats only. An
+open position, a placeholder hire, a planned leaver and anyone who has already left are out
+of the base. A person's FTE splits across their places by membership share, as cost splits
+it, and each place keeps the person's own cost centre.
+
+Leavers go evenly through the step. With a rate r, F filled FTE, a step of L days and a
+time to hire of T, the empty FTE-days are r × F / 365 × (T × L − T² / 2), or L² / 2 in place
+of the bracket once T reaches L. A row per unit and cost centre takes away:
+
+- **Cost:** the unit's average yearly cost of a filled FTE, times the empty FTE-days over 365.
+- **Capacity:** the unit's average capacity of a filled FTE, times the empty FTE-days over L.
+- **Headcount:** r × F × min(T, L) / 365, the FTE still empty at the end of the step.
+
+Each step counts only the empty days inside it. A seat a forecast leaver empties late in
+one step can stay empty into the next, and the next step does not count those days yet: with
+two 90-day steps and a 180-day time to hire, the second step misses every seat the first
+emptied. Carrying them over is [#381](https://github.com/espaliahq/espalia/issues/381).
+Planned leavers are unaffected, as a later step's map already leaves them out.
+
+Every figure is an exact fraction, never rounded to people, and a row names nobody. The
+average follows the caller's pay view: band midpoints without the see-pay right, actual
+pay with it. `TeamPlanning::Forecast::Pricing` carries it, built by the cost and capacity
+reads from the places they priced, so the forecast never reads pay on its own. The
+invariant holds for every caller: actual, planned and forecast add up to the total, per
+unit and overall. The pay privacy test walks the real kind for a holder and a non-holder.
 
 ## Approval and carrying a plan out
 

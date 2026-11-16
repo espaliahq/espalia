@@ -9,9 +9,10 @@ class Operations::TeamPlanning::SettleConflict < Operations::Base
 
   description "Settle a conflict an update to today carried forward in a scenario of a Team Planning plan: one " \
               "team_planning_status reads as conflicting with a since. choice 'plan' keeps the planned change, " \
-              "set again in the scenario, or pinned there when it inherits the change (set again when the change's " \
-              "value is sealed, as a level is), with the change's own note " \
-              "unless given another. choice 'reality' sets what the Org Graph holds today in this scenario alone, so " \
+              "set again in the scenario, pinned again with the same source when the scenario pinned it, or pinned " \
+              "there when it inherits the change (set again when the change's value is sealed, as a level is), with " \
+              "the change's own note unless given another. choice 'reality' sets what the Org Graph holds today in " \
+              "this scenario alone, a cleared level as no level and a missing allocation as unknown, so " \
               "the scenario that made the change, and its other children, keep it; settled in the scenario that made " \
               "the change, it reaches the children that inherit it. Either way status stops reporting the conflict, " \
               "and team_planning_history marks the write with settles. Refused for a conflict no update carried " \

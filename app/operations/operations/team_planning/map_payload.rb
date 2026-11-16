@@ -9,6 +9,7 @@
 #
 # What the plan holds privately reads as `{ value: }`, or `{ removed: true }`
 # once its key is gone, under `planned_level`, `plan_data` and `placeholder`.
+# A level the plan cleared to follow the Org Graph reads `{ value: nil }`.
 #
 # A plan with a scope never shows anyone or anything outside it
 # [#338](https://github.com/espaliahq/espalia/issues/338). A person keeps only
@@ -61,7 +62,7 @@ module Operations::TeamPlanning::MapPayload
     map.people.map do |person|
       plan_data = pay ? person.plan_data : person.plan_data.except(:pay)
       payload = person.to_h.except(:departure, :planned_level, :plan_data, :placeholder, :capacity_overrides)
-                      .merge(planned_level: sealed_payload(person.planned_level), plan_data: plan_data.transform_values { sealed_payload(it) },
+                      .merge(planned_level: planned_level_payload(person.planned_level), plan_data: plan_data.transform_values { sealed_payload(it) },
                              capacity_overrides: person.capacity_overrides.transform_values { sealed_payload(it) },
                              placeholder: sealed_payload(person.placeholder), memberships: person.memberships.map(&:to_h), allocation_total: totals[person.id],
                              leaving: person.leaving?, leaves_on: (person.departure[:leaves_on] if person.leaving?), backfill_position_id: person.backfill_id)
@@ -96,4 +97,6 @@ module Operations::TeamPlanning::MapPayload
   def names_for(map) = map.person_ids.index_with { map.name_of(it) }
 
   def sealed_payload(value) = Operations::TeamPlanning::MapPayload.sealed(value)
+
+  def planned_level_payload(level) = ::TeamPlanning::Events::LevelSet.cleared?(level) ? { value: nil } : sealed_payload(level)
 end
