@@ -142,7 +142,14 @@ class Views::Plans::ScenarioTable < Views::Base
   # @param scenarios [Array<Hash>] the plan's scenarios
   # @return [Boolean]
   def self.continues?(scenario, scenarios)
-    scenarios.any? { it[:parent_id] == scenario[:scenario_id] && (it[:relation] == "then" || continues?(it, scenarios)) }
+    scenarios.any? do |child|
+      next false unless child[:parent_id] == scenario[:scenario_id]
+
+      case child[:relation]
+      in "then" then true
+      in "on" | "instead" then continues?(child, scenarios)
+      end
+    end
   end
 
   # Whether a scenario has dates of its own to change: a step that follows
