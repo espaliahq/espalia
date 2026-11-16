@@ -47,12 +47,37 @@ class Operations::TeamPlanning::FundingTest < ActiveSupport::TestCase
     assert_equal [ @plan_id, @q2, { starts_on: "2027-04-01", ends_on: "2027-06-30" } ], read.values_at(:plan_id, :scenario_id, :period)
     assert_equal({ position_id: @seat, unit_id: @unit_id, fte: "0.5", cost_centre: nil, cost_centre_source: "none", location: nil,
                    draw_reason: "open", starts_on: "2027-04-01", source: "derived", state: "funded", reason: nil, reason_text: nil,
-                   draws: [ { budget_line_id: @engineers.id, share: "1", held: true } ], matching_ids: [ @engineers.id ] },
+                   draws: [ { budget_line_id: @engineers.id, share: "1", held: true, differs_on: [], variance: [] } ], matching_ids: [ @engineers.id ] },
                  read[:positions].sole)
     assert_equal [ { budget_line_id: @engineers.id, positions: [ { position_id: @seat, share: "1", fte: "0.5", draw_reason: "open",
                                                                    starts_on: "2027-04-01" } ] } ], read[:budget_lines]
     assert_equal [ { positions: 1, fte: "0.5" }, { positions: 1, fte: "0.5" }, { positions: 0, fte: "0" } ],
                  read.values_at(:total, :funded, :unfunded)
+  end
+
+  should "say it matched under position control until the plan sets budget_strictness" do
+    assert_equal({ preset: "position_control", match: %w[role level cost_centre location], limit: "both", scope: "line" }, funding[:strictness])
+  end
+
+  should "count a trade across cost centres as a variance under position control, and only record it under an envelope" do
+    set_funding([ { budget_line_id: @platform.id } ])
+    assert_equal [ %w[cost_centre], %w[cost_centre] ], funding[:positions].sole[:draws].sole.values_at(:differs_on, :variance)
+
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, rule: "budget_strictness", value: { preset: "envelope" })
+    read = funding
+    assert_equal "envelope", read[:strictness][:preset]
+    assert_equal [ %w[cost_centre], [] ], read[:positions].sole[:draws].sole.values_at(:differs_on, :variance)
+  end
+
+  should "refuse budget_strictness on a unit, and a cost-centre scope that lets draws cross cost centres" do
+    assert_match(/whole plan/, refusal do
+      call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, unit_id: @unit_id, rule: "budget_strictness",
+                                              value: { preset: "envelope" })
+    end)
+    assert_match(/needs cost_centre in match/, refusal do
+      call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, rule: "budget_strictness",
+                                              value: { match: [], limit: "money", scope: "cost_centre" })
+    end)
   end
 
   should "refuse a non-member as an unknown plan, and the baseline" do

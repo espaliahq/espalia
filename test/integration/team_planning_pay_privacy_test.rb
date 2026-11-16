@@ -164,6 +164,29 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     assert_not_includes event_store_text, AMOUNT
   end
 
+  should "list a pay change to an editor without the right by its facet alone, and let them split it across sealed" do
+    q1_amount = "57203"
+    hold_pay(@q1, @ada, q1_amount, "full_time")
+    moved = call(Operations::TeamPlanning::History, @holder, plan_id: @plan_id, scenario_id: @q1)[:entries].select { it[:facet] == "data:pay" }.last[:event_id]
+    call(Operations::TeamPlanning::SetPlannedLevel, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "4")
+    needs = call(Operations::TeamPlanning::SplitNeeds, @editor, plan_id: @plan_id, scenario_id: @q1)
+    pay = needs[:changes].find { it[:facet] == "data:pay" }
+
+    assert_equal({ event_id: moved, subject_id: @ada.id, facet: "data:pay", needs: [] }, pay)
+    assert_not_includes needs.to_json, q1_amount
+
+    split = call(Operations::TeamPlanning::SplitScenario, @editor, plan_id: @plan_id, scenario_id: @q1, event_ids: [ moved ], name: "Agreed")
+
+    assert_includes split[:moved_event_ids], moved
+    assert_not_includes split.to_json, q1_amount
+    agreed = call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: split[:agreed_id]).to_json
+    assert_includes agreed, q1_amount
+    assert_not_includes agreed, AMOUNT
+    assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: @plan_id).to_json, AMOUNT
+    [ split[:agreed_id], @q1, @plan_id ].each { assert_no_pay_read(it, amounts: [ AMOUNT, q1_amount ]) }
+    assert_not_includes @log.string, q1_amount
+  end
+
   should "read pay as its field alone where an override inherits it off the parent's map, to a holder too" do
     TeamPlanningOverride.where(scenario_id: @plan_id).delete_all
 
@@ -307,9 +330,10 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
 
-    # Q1 holds 121 of the year's 365 days.
+    # Q1 holds 121 of the year's 365 days. The line's 80,000 sits between the
+    # held pay and the midpoint, so over shows which of the two judged it.
     should "fund a budget line from held pay for a holder, and from midpoints alone for everyone else" do
-      line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD",
+      line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 80_000, currency: "AUD",
                                 period: "year", cost_centre: "Platform").id
       position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
                                                                          level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
@@ -327,7 +351,8 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         drawn = budget[:budget_lines].find { it[:budget_line_id] == line }
 
         assert_in_delta funded, BigDecimal(drawn[:funded][:native]["AUD"]), 1e-9, who
-        assert_in_delta 500_000 * share - funded, BigDecimal(drawn[:remaining][:amount]), 1e-9, who
+        assert_in_delta 80_000 * share - funded, BigDecimal(drawn[:remaining][:amount]), 1e-9, who
+        assert_equal({ money: account == @holder ? [] : [ "AUD" ], heads: nil, mismatched_currencies: [] }, drawn[:over], who)
         account == @holder ? assert_equal(held, drawn[:funded][:native]["AUD"], who) : assert_not_includes(budget.to_json, derived, who)
       end
     end

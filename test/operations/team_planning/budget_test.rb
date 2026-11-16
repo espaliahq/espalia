@@ -44,7 +44,10 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal [ @plan_id, @q1, "inclusive", "band_midpoints", "EUR" ], read.values_at(:plan_id, :scenario_id, :basis, :pay_view, :reference_currency)
     assert_equal({ budget_line_id: @platform.id, cost_centre: "Platform", currency: "EUR",
                    approved: { amount: "36000", head_count: "2" }, funded: { native: { "EUR" => "9000" }, positions: 1, fte: "0.5" },
-                   remaining: { amount: "27000", head_count: "1.5" }, mismatched_currencies: [] }, read[:budget_lines].sole)
+                   remaining: { amount: "27000", head_count: "1.5" }, mismatched_currencies: [],
+                   over: { money: [], heads: false, mismatched_currencies: [] } }, read[:budget_lines].sole)
+    assert_equal({ preset: "position_control", match: %w[role level cost_centre location], limit: "both", scope: "line" }, read[:strictness])
+    assert_equal [ nil, nil ], [ read[:total][:over], read[:cost_centres].sole[:over] ], "position control holds each line, and nothing above it"
     assert_equal({ native: { "EUR" => "9000" }, converted: "9000", missing: [], positions: 1, fte: "0.5" }, read[:total][:funded])
     assert_equal({ native: {}, converted: "0", missing: [], positions: 0, fte: "0" }, read[:total][:unfunded])
     assert_equal [ "Platform" ], read[:cost_centres].pluck(:cost_centre)
@@ -63,6 +66,15 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
                  refusal { call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, unit_id: @unit_id, rule: "budget_basis", value: { basis: "inclusive" }) }
     assert_match "basis must be inclusive or base_only",
                  refusal { call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, rule: "budget_basis", value: { basis: "net" }) }
+  end
+
+  should "judge over where budget_strictness holds the budget" do
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, rule: "budget_strictness", value: { match: %w[cost_centre], limit: "heads", scope: "organisation" })
+    read = budget
+
+    assert_equal({ preset: nil, match: %w[cost_centre], limit: "heads", scope: "organisation" }, read[:strictness])
+    assert_equal({ money: nil, heads: false, mismatched_currencies: [] }, read[:total][:over])
+    assert_nil read[:budget_lines].sole[:over]
   end
 
   should "refuse a non-member as an unknown plan, and the baseline" do
