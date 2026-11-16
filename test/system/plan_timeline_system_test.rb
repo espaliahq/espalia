@@ -274,8 +274,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
             const { top, height } = band.getBoundingClientRect()
             const hit = document.elementFromPoint(step.left + step.width / 2, top + height / 2)
             column.style.pointerEvents = ""
-            // A walk's cell is clear, so the band shows through it.
-            return hit === band || hit.closest("[data-timeline-walk]") !== null
+            return hit === band
           })()
         JS
         release

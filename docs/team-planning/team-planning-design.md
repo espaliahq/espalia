@@ -304,7 +304,8 @@ none of these rules:
 - **Walk** ([#451](https://github.com/espaliahq/espalia/issues/451)). Each column counts
   heads for the plan, for each block and for Unassigned: opening, hires, transfers in,
   departures, transfers out and closing. A person counts once in a unit however they split,
-  and once in the plan's total. Opening is the last column's closing; a leaver still counts
+  and once in the plan's total, so taking a second place moves a head into that unit and
+  leaves the first unit's count alone. Opening is the last column's closing; a leaver still counts
   in the step they leave in and is gone from its closing. A hire is a head the last step
   didn't hold at all; a head the plan held elsewhere, or outside a scoped plan's edge, moved
   in. Today has a closing and nothing else. Each walk is a difference of sets, so opening
@@ -320,7 +321,7 @@ the plan. Each step lists its alternatives as "or instead" links, and the last s
 `then` steps, so a viewer switches path by following one. A wide screen draws a grid: a
 column per step, a heading per block, and a row per lane, with each bar spanning the steps
 it holds. A quiet line under each step's name walks the plan's heads, and each block's
-heading row walks its own under each column. A phone shows one step at a time, picked from a row of steps that marks the
+heading row walks its own under each column, including the step a unit retires in. A phone shows one step at a time, picked from a row of steps that marks the
 current one. Since the neighbouring steps are out of sight there, each bar says where its
 person came from when they arrive and where they go when they leave. A path with nobody on
 it still shows its steps, so its alternatives stay in reach. On a phone the step's walk sits on

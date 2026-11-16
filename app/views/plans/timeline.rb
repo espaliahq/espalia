@@ -135,7 +135,7 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def wide_block(block)
-    block_heading(block_title(block), subtitle: continues_from(block), walk: block[:walk], lives: ->(index) { block[:units][index] })
+    block_heading(block_title(block), subtitle: continues_from(block), walk: block[:walk], lives: ->(index) { block[:units][index] || changed?(block[:walk][index]) })
     drop_cells(->(index) { block[:units][index]&.dig(:unit_id) }) do
       block[:lane_ids].each { |lane_id| wide_lane(lane_id) { |bar| in_block?(bar, block) } }
     end
@@ -180,7 +180,11 @@ class Views::Plans::Timeline < Views::Base
       p(class: "text-xs text-muted") { subtitle } if subtitle
     end
     walk.each_with_index do |counts, index|
-      div(class: "min-w-0 px-3 py-1.5", style: cell(@row, index + 2), data: { timeline_walk: index }) { walk_line(counts) } if lives.(index)
+      next unless lives.(index)
+
+      div(class: "pointer-events-none min-w-0 px-3 py-1.5", style: cell(@row, index + 2), data: { timeline_walk: index }) do
+        walk_line(counts, label: step_name(index))
+      end
     end
     @row += 1
   end
@@ -255,25 +259,26 @@ class Views::Plans::Timeline < Views::Base
 
   def phone_block(block)
     lane_ids = block[:lane_ids].select { |id| lanes_by_id.fetch(id)[:bars].any? { in_block?(it, block) && covers?(it) } }
-    return if lane_ids.empty?
+    walk = block[:walk][@step]
+    return if lane_ids.empty? && !changed?(walk)
 
-    phone_section(unit_name(@step, block[:units][@step]&.dig(:unit_id)) || block_title(block), walk: (block[:walk][@step] if block[:units][@step])) do
+    phone_section(unit_name(@step, block[:units][@step]&.dig(:unit_id)) || block_title(block), walk: (walk if block[:units][@step] || changed?(walk)), lanes: lane_ids.any?) do
       lane_ids.each { |id| phone_lane(id) { |bar| in_block?(bar, block) && covers?(bar) } }
     end
   end
 
   def phone_unassigned
     lane_ids = unassigned_lanes.select { |id| lanes_by_id.fetch(id)[:bars].any? { it[:unit_id].nil? && covers?(it) } }
-    return if lane_ids.empty?
+    return if lane_ids.empty? && !changed?(@timeline[:unassigned_walk][@step])
 
-    phone_section(UNASSIGNED, walk: @timeline[:unassigned_walk][@step]) { lane_ids.each { |id| phone_lane(id) { |bar| bar[:unit_id].nil? && covers?(bar) } } }
+    phone_section(UNASSIGNED, walk: @timeline[:unassigned_walk][@step], lanes: lane_ids.any?) { lane_ids.each { |id| phone_lane(id) { |bar| bar[:unit_id].nil? && covers?(bar) } } }
   end
 
-  def phone_section(title, walk:, &block)
+  def phone_section(title, walk:, lanes:, &block)
     render Components::Kit::Card.new(title:, variant: :flush, density: :compact) do |card|
       card.body do
         walk_line(walk, class: "px-3 pb-2")
-        ul(class: "divide-y divide-subtle border-t border-default", &block)
+        ul(class: "divide-y divide-subtle border-t border-default", &block) if lanes
       end
     end
   end
@@ -541,11 +546,13 @@ class Views::Plans::Timeline < Views::Base
 
   # One quiet line: "3 → 4 heads · 1 hired, 1 moved out", or "3 heads" for
   # today or a step that changes no one.
-  def walk_line(walk, **attrs)
+  # A heading row's cells name their step for a screen reader, as a bar does.
+  def walk_line(walk, label: nil, **attrs)
     return unless walk
 
     p(class: "text-xs text-muted #{attrs.delete(:class)}", data: { walk: "" }, **attrs) do
-      changes = WALK_WORDS.filter_map { |key, word| "#{walk[key]} #{word}" if walk[key].to_i.positive? }
+      span(class: "sr-only") { "#{label}: " } if label
+      changes = changes(walk)
       if changes.empty?
         plain heads(walk[:closing])
       else
@@ -559,7 +566,11 @@ class Views::Plans::Timeline < Views::Base
 
   def heads(count) = "#{count} #{'head'.pluralize(count)}"
 
-  def counted?(walk) = walk && (walk[:closing].positive? || WALK_WORDS.keys.any? { walk[it].to_i.positive? })
+  def changes(walk) = WALK_WORDS.filter_map { |key, word| "#{walk[key]} #{word}" if walk[key].to_i.positive? }
+
+  def changed?(walk) = walk.present? && changes(walk).any?
+
+  def counted?(walk) = walk.present? && (walk[:closing].positive? || changed?(walk))
 
   # -- Lookups ----------------------------------------------------------------
 

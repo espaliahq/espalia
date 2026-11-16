@@ -23,14 +23,14 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
   # `movable` lists, per column, the changes that column's step makes itself.
   def render_timeline(bars:, moves: [], departures: [], unassigned: false, step: 0, scenarios: SCENARIOS, movable: {}, can_edit: false,
-                      walk: steady_walk(scenarios.size), unit_walk: walk)
+                      walk: steady_walk(scenarios.size), unit_walk: walk, units: nil)
     timeline = {
       walk:, unassigned_walk: steady_walk(scenarios.size, heads: 0),
       plan_id: PLAN, scenario_id: scenarios.last[:scenario_id], next_ids: [],
       columns: scenarios.each_with_index.map do |scenario, index|
         { scenario_id: scenario[:scenario_id], name: scenario[:name], alternative_ids: [], movable: movable.fetch(index, []) }
       end,
-      blocks: [ { block_id: PAYMENTS, units: [ { unit_id: PAYMENTS, name: "Payments" } ] * scenarios.size, continues_from_ids: [], lane_ids: [ ADA ], walk: unit_walk } ],
+      blocks: [ { block_id: PAYMENTS, units: units || ([ { unit_id: PAYMENTS, name: "Payments" } ] * scenarios.size), continues_from_ids: [], lane_ids: [ ADA ], walk: unit_walk } ],
       unassigned_lane_ids: unassigned ? [ ADA ] : [],
       lanes: [ { lane_id: ADA, bars:, moves:, departures: } ],
       positions: {}, names: { ADA => "Ada Quill" }
@@ -168,7 +168,7 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
       unit = html.css("[data-timeline-walk] [data-walk]").map { it.text.squish }
 
       assert_equal [ "3 heads", "3 → to 4 heads · 2 hired, 1 left" ], header
-      assert_equal [ "2 heads", "2 → to 2 heads · 1 moved in, 1 moved out" ], unit
+      assert_equal [ "Today: 2 heads", "Q1 hires: 2 → to 2 heads · 1 moved in, 1 moved out" ], unit
       assert_equal "true", html.at_css("[data-timeline-step='1'] [data-walk] span[aria-hidden]")["aria-hidden"]
     end
 
@@ -178,6 +178,16 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
       assert_equal [ "1 → to 2 heads · 1 hired", "1 head" ], phone.css("[data-walk]").map { it.text.squish }
       assert_not html.text.include?(Views::Plans::Timeline::UNASSIGNED)
+    end
+
+    should "show the walk out of a unit in the step it retires in, and of a unit a step empties, on a phone too" do
+      emptied = [ counts(nil, closing: 2), counts(2, closing: 0, transfers_out: 2) ]
+      retired = render_timeline(bars: [ bar(0, 0) ], unit_walk: emptied, units: [ { unit_id: PAYMENTS, name: "Payments" }, nil ])
+      phone = render_timeline(bars: [ bar(0, 0) ], unit_walk: emptied, step: 1).at_css("[data-timeline-phone]")
+
+      assert_equal "Q1 hires: 2 → to 0 heads · 2 moved out", retired.at_css("[data-timeline-walk='1']").text.squish
+      assert_equal [ "1 head", "2 → to 0 heads · 2 moved out" ], phone.css("[data-walk]").map { it.text.squish }
+      assert_includes phone.text, "Payments"
     end
   end
 end
