@@ -1595,7 +1595,7 @@ holds no budget line. An archived plan stays unchecked, as before.
   count or both, at the scope `budget_strictness` checks. The head count says by how many FTE,
   as heads are not pay. Nothing says by how much money.
 - **Unused budget line.** A line whose period overlaps the scenario's that nothing draws on.
-  A line positions tie on is not unused: choosing a funding fixes it.
+  A line that positions tie on is not unused: choosing a funding fixes it.
 
 The mismatch check, a seat whose rules give a cost centre other than the one it keeps, follows
 in its own change.
