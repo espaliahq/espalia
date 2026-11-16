@@ -366,6 +366,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
                                                              placements: [ { position_id:, allocation: 1 } ])
       funded = call(Operations::TeamPlanning::Budget, @holder, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
       held = Views::Plans::CostMarks::Format.amount(funded, "AUD")
+      assert_not_equal funded, call(Operations::TeamPlanning::Budget, @editor, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
 
       [ @holder, @editor, @viewer ].each do |account|
         who = account == @holder ? "holder" : "non-holder"
