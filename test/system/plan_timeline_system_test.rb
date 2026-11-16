@@ -312,6 +312,27 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         release
       end
 
+      should "keep the grips locked when another move to the same path fails first" do
+        hold_move_requests
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        release
+        assert_selector "body[data-shift-posts='1']"
+
+        page.execute_script(<<~JS)
+          const other = document.createElement("form")
+          other.action = document.querySelector("#{MOVE_FORM}").action
+          document.body.appendChild(other)
+          other.dispatchEvent(new CustomEvent("turbo:submit-end", { bubbles: true, detail: { success: false } }))
+          other.remove()
+        JS
+
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        release
+        assert_selector MOVE_FORM, count: 1, visible: :all
+        assert_selector "body[data-shift-posts='1']"
+      end
+
       should "save nothing for a drop above the grid, over a lit column" do
         hold_move_requests
         step = find("[data-timeline-step='2']")
