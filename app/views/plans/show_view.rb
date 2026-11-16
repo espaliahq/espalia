@@ -12,8 +12,6 @@ class Views::Plans::ShowView < Views::Base
   # A tab over the main column. The page marks the one whose key is open.
   Tab = Data.define(:key, :label, :href)
 
-  # The side panel's choice, remembered per person on their device.
-  PANEL_COOKIE = "plan_side_panel_open"
   PANEL_URL_KEY = "panel"
 
   # @param plan [Hash] from `team_planning_plan`
@@ -64,7 +62,7 @@ class Views::Plans::ShowView < Views::Base
         archived_notice if @plan[:archived]
         div(class: "mt-6") do
           render Components::Kit::SidePanel.new(id: "plan-side-panel", title: "About this plan", open: @panel_open,
-                                                cookie: PANEL_COOKIE, url_key: PANEL_URL_KEY, narrow: :stack) do |panel|
+                                                cookie: self.class.panel_cookie(@user), url_key: PANEL_URL_KEY, narrow: :stack) do |panel|
             panel.main do
               section(aria: { labelledby: "plan-main-heading" }) do
                 tab_strip(panel)
@@ -157,6 +155,13 @@ class Views::Plans::ShowView < Views::Base
       render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit) { "Restore plan" }
     end
   end
+
+  # The cookie that remembers the side panel's choice. It names the user, so a
+  # second person signing in on the same browser starts from their own default.
+  #
+  # @param user [User]
+  # @return [String]
+  def self.panel_cookie(user) = "plan_side_panel_open_#{user.id}"
 
   # Whether the side panel opens: as the viewer last left it, from the URL or
   # the cookie; otherwise closed on the map of a plan with scenarios, where the
