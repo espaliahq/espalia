@@ -52,6 +52,8 @@ class TeamPlanning::RuleKinds::CostCentreTest < ActiveSupport::TestCase
     rules = [ { "role_id" => "em", "cost_centre" => "Managers" }, { "unit_id" => "tribe", "cost_centre" => "Tribe" } ]
 
     assert_equal rules.reverse, Kind.entries({ "rules" => rules })
+    assert_equal({ "entries" => rules.reverse }, Kind.read({ "rules" => rules }))
+    assert_equal({ "entries" => rules }, Kind.read({ "entries" => rules }))
     assert_equal({ "entries" => rules.reverse }, Kind.check({ "rules" => rules }))
     assert_raises(TeamPlanning::Error) { Kind.check({ "rules" => rules, "entries" => rules }) }
   end

@@ -70,6 +70,10 @@ class TeamPlanning::RuleKinds::CostCentre < TeamPlanning::RuleKind
   # @return [Array<Hash>] the entries in order
   def self.entries(value) = value["entries"] || value.fetch("rules", []).reverse
 
+  # @param value [Hash] as stored
+  # @return [Hash] `entries`, a stored `rules` list in reverse
+  def self.read(value) = { "entries" => entries(value) }
+
   # @param entry [Hash] one of {.entries}
   # @return [Hash{Symbol => Object}] what it matches on, its location as a key
   def self.matcher(entry)
