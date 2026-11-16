@@ -105,8 +105,10 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       assert_equal BigDecimal("10000"), band.reload.maximum
     end
 
-    should "remove a band" do
+    should "remove a band, saying the last matching band left prices its seats" do
       band = stored_band
+      get tenant_pay_bands_path
+      assert_select "#pay-band-remove-#{band.id} p", text: "Plans then price each seat from the last band left in the list that matches it, if there is one."
 
       delete tenant_pay_band_path(band)
 

@@ -167,7 +167,7 @@ class Views::Tenant::PayBands::IndexView < Views::Base
 
   def remove_form(band)
     p(class: "text-sm text-default") do
-      "Plans price the seats it covers from the next band above it in the list that matches them, if there is one."
+      "Plans then price each seat from the last band left in the list that matches it, if there is one."
     end
     settings_form(tenant_pay_band_path(band[:pay_band_id]), method: :delete, class: "mt-4 flex justify-end gap-2") do
       render Components::Kit::Button.new(variant: :outline, tone: :neutral, data: { action: "modal#close" }) { "Cancel" }
