@@ -63,7 +63,7 @@ class TeamPlanning::Forecast
   # @!attribute map [TeamPlanning::Baseline::Map] the scenario's resolved map
   # @!attribute step [Range<Date>]
   # @!attribute covered [Set<String>] subjects a planned change in the scenario's chain sets
-  # @!attribute filled [Array<Filled>] places in filled seats nobody covered holds
+  # @!attribute filled [Array<Filled>] places in filled seats: not a planned leaver's or a placeholder's
   # @!attribute averages [Hash{String, nil => Average}] by unit
   Frame = Data.define(:kind, :map, :step, :covered, :filled, :averages) do
     def initialize(filled: [], averages: {}, **) = super
@@ -105,7 +105,7 @@ class TeamPlanning::Forecast
     step = @aggregate.period_of(@scenario_id) or return []
 
     covered = @aggregate.resolution_chain(@scenario_id).flat_map { @aggregate.changes_in(it) }.to_set { it.data[:subject_id] }
-    filled = filled(covered)
+    filled = filled_places
     averages = averages(filled)
     TeamPlanning::RuleKinds.forecasts.flat_map do |kind|
       kind.forecast(Frame.new(kind:, map: @map, step:, covered:, filled:, averages:)).each do |row|
@@ -116,13 +116,13 @@ class TeamPlanning::Forecast
 
   private
 
-  # A filled seat is a person's: an open position fills none. A leaver, a
-  # planned hire and anyone else a change covers is left out, as the plan
-  # already says what happens to them. A person's places share their FTE as
+  # A filled seat is a person's: an open position fills none. A planned leaver
+  # and a placeholder hire are left out, as the plan already says what happens
+  # to them; a change to pay, level or place keeps the seat filled. A person's places share their FTE as
   # cost shares it, so the places add up to the seat.
-  def filled(covered)
+  def filled_places
     live = @map.units.to_set(&:id)
-    @map.people.reject { it.leaving? || it.placeholder? || covered.include?(it.id) }.flat_map do |person|
+    @map.people.reject { it.leaving? || it.placeholder? }.flat_map do |person|
       fte = Rational(person.fte_or_one.to_s)
       places = TeamPlanning::Baseline::Membership.shares(person.memberships)
       weight = places.sum(0r) { Rational(it[1].to_s) }
