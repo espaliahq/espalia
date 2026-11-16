@@ -225,7 +225,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
       family = create(:framework_role_family, name: "Engineering")
       engineer = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: family.role_family_id)
-      e5 = create(:framework_level, role_id: engineer.role_id, ordinal: 5, title: "Senior SWE")
+      e5 = @e5 = create(:framework_level, role_id: engineer.role_id, ordinal: 5, title: "Senior SWE")
       PayBand.create!(level: e5, currency: "AUD", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       ReferenceCurrency.create!(currency: "AUD")
 
@@ -275,6 +275,29 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         midpoints = payments_seats(account)
         assert_equal %w[band_midpoint band_midpoint band_midpoint], [ @in, @half_actual, @half_full ].map { midpoints[it.id][:pay_source] }
         assert_equal [ 100_000r, 25_000r, 25_000r ], [ @in, @half_actual, @half_full ].map { midpoints[it.id][:base].to_r }
+      end
+    end
+
+    # Q1 holds 121 of the year's 365 days.
+    should "fund a budget line from held pay for a holder, and from midpoints alone for everyone else" do
+      line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD",
+                                period: "year", cost_centre: "Platform").id
+      position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
+                                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
+                                                                         cost_centre: "Platform")[:position_id]
+      call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
+                                                             placements: [ { position_id:, allocation: 1 } ])
+      share = Rational(121, 365)
+      derived = BigDecimal(Integer(SCOPED[:in]) * share, 20).to_s("F")[0, 5]
+
+      { @holder => Integer(SCOPED[:in]) * share, @editor => 100_000 * share, @viewer => 100_000 * share }.each do |account, funded|
+        who = account == @holder ? "holder" : "non-holder"
+        budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
+        drawn = budget[:budget_lines].find { it[:budget_line_id] == line }
+
+        assert_in_delta funded, BigDecimal(drawn[:funded][:native]["AUD"]), 1e-9, who
+        assert_in_delta 500_000 * share - funded, BigDecimal(drawn[:remaining][:amount]), 1e-9, who
+        account == @holder ? assert_includes(budget.to_json, derived, who) : assert_not_includes(budget.to_json, derived, who)
       end
     end
 
