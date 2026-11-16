@@ -35,6 +35,14 @@ const FIT_BOTTOM_GAP_PX = 16
 // panes on one page don't take each other's entries.
 const HISTORY_KEY = "sidePanelOverlay"
 
+let refocusAfterRender = null
+let refocusExpiry = null
+document.addEventListener("turbo:render", () => {
+  const findTarget = refocusAfterRender
+  refocusAfterRender = null
+  if (findTarget && document.activeElement === document.body) findTarget()?.focus({ preventScroll: true })
+})
+
 export default class extends BaseController {
   static targets = ["pane", "toggle"]
   // Each surface keeps its own open/closed preference — a room that runs
@@ -251,6 +259,30 @@ export default class extends BaseController {
     toggle?.focus({ preventScroll: true })
   }
 
+  // A render can replace this controller's element and the pane with it,
+  // so these look the pane up afresh and work out from it.
+  #currentPane() {
+    const { id } = this.paneTarget
+    const pane = this.paneTarget
+    return () => (id ? document.getElementById(id) : pane)
+  }
+
+  #visibleToggleAround(pane) {
+    const root = pane?.closest(`[data-controller~="${this.identifier}"]`)
+    const toggles = root?.querySelectorAll(`[data-${this.identifier}-target~="toggle"]`) ?? []
+    return [...toggles].find((candidate) => candidate.offsetParent !== null)
+  }
+
+  // Turbo answers Back and Forward with a restoration visit whose render
+  // drops focus and can replace this controller, so the target is found
+  // again once the render ends.
+  #focusAcrossRestore(findTarget) {
+    findTarget()?.focus({ preventScroll: true })
+    refocusAfterRender = findTarget
+    clearTimeout(refocusExpiry)
+    refocusExpiry = setTimeout(() => { refocusAfterRender = null }, 5000)
+  }
+
   // A pane that stacks under the page opens below the fold on a phone, where
   // the tap that opened it would otherwise seem to do nothing.
   #revealStackedPane() {
@@ -281,8 +313,9 @@ export default class extends BaseController {
       this.#animate(state)
       this.#applyMetadata(state)
       this.#writeCookie(state)
-      if (state === "closed" && this.screenValue) this.#focusToggle()
-      if (state === "open" && this.#actsAsScreen()) this.paneTarget.focus({ preventScroll: true })
+      const pane = this.#currentPane()
+      if (state === "closed" && this.screenValue) this.#focusAcrossRestore(() => this.#visibleToggleAround(pane()))
+      if (state === "open" && this.#actsAsScreen()) this.#focusAcrossRestore(pane)
     }
     // Forward can return to the entry a widening stepped off.
     if (ownEntry && !this.#actsAsScreen()) this.#stepOffOverlayEntry()

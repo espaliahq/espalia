@@ -645,6 +645,26 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       close_overlay_by_its_button
     end
 
+    # Back and Forward are Turbo restoration visits, and their render drops focus.
+    should "keep focus on the toggle through Back and in the overlay through Forward" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      hold_matrix_frame_loads
+      focus_on_toggle = "document.activeElement.matches(#{TOGGLE.to_json})"
+      focus_in_pane = "document.querySelector('#assessment-activity-pane').contains(document.activeElement)"
+
+      2.times do
+        go_back_and_wait_until_landed
+        assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+        assert wait_until_js { page.evaluate_script(focus_on_toggle) }, "Back closed the overlay with focus lost"
+        page.go_forward
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+        assert wait_until_js { page.evaluate_script(focus_in_pane) }, "Forward reopened the overlay with focus lost"
+      end
+    end
+
     # Turbo restores a page only from an entry that carries its own state; the
     # overlay's entry didn't, so Back left the other page on screen under this URL.
     should "bring the assessment back when Back returns from another page to the open overlay" do
