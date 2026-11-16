@@ -1546,6 +1546,9 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - A change moves with every earlier change it overwrites. If the scenario set a level to
   3 and later to 4, moving only the 4 would leave the 3 behind to win. The earlier
   changes for the same subject and facet go across with it.
+- Only the latest change to a subject and facet can be named. Naming an earlier one would
+  take a newer change across that nobody chose, so the split refuses it as stale: the
+  scenario changed since the split was opened, and the editor opens it again.
 - The two parts cover the same period. This is a third relation beside `then` and
   `instead`, named `on`: the rest sits on the agreed part. The timeline shows them as one
   column with the agreed part marked.
