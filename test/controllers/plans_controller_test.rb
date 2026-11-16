@@ -136,11 +136,41 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "No one is placed on this path yet."
       assert_select "[data-timeline-step]", 2
       assert_select "[data-timeline-step='1']", text: /Q1 hires/
+      assert_select "turbo-frame#timeline-figures[loading='lazy'][src=?]", timeline_figures_plan_path(@plan_id, scenario: @q1), text: "Loading figures…"
+      assert_select "turbo-frame#timeline-figures-phone[loading='lazy'][src=?]",
+                    timeline_figures_plan_path(@plan_id, scenario: @q1, layout: "phone", step: 0)
+    end
+
+    should "load each step's figures as the timeline's frame, with head counts and no budget money without the see-pay right" do
+      get timeline_figures_plan_path(@plan_id, scenario: @q1), headers: { "Turbo-Frame" => "timeline-figures" }
+      assert_response :success
+      assert_select "turbo-frame#timeline-figures" do
+        assert_select "[data-timeline-figures]", 2
+        assert_select "[data-timeline-figures='0'] [data-timeline-figure='cost']", text: "No cost"
+        assert_select "[data-timeline-figures='0'] [data-timeline-figure='budget']", 0
+        assert_select "[data-timeline-figures='1'] [data-timeline-figure='cost']", text: "No cost"
+        assert_select "[data-timeline-figures='1'] [data-timeline-figure='budget']", text: "All positions funded"
+        assert_select ".sr-only", text: "Figures for Q1 hires:"
+      end
+    end
+
+    should "load the phone's one step, and send a plain visit to the timeline" do
+      get timeline_figures_plan_path(@plan_id, scenario: @q1, layout: "phone", step: 1), headers: { "Turbo-Frame" => "timeline-figures-phone" }
+      assert_select "turbo-frame#timeline-figures-phone [data-timeline-figures]", 1
+      assert_select "turbo-frame#timeline-figures-phone [data-timeline-figures='1']"
+
+      get timeline_figures_plan_path(@plan_id, scenario: @q1)
+      assert_redirected_to timeline_plan_path(@plan_id, scenario: @q1)
+    end
+
+    should "get a 404 for figures to a scenario that isn't in the plan" do
+      get timeline_figures_plan_path(@plan_id, scenario: SecureRandom.uuid_v7), headers: { "Turbo-Frame" => "timeline-figures" }
+      assert_response :not_found
     end
   end
 
   context "someone outside the plan" do
-    should "not see it in the index, and get a 404 for its page, map, timeline, changes, checks and budget, even as a tenant admin" do
+    should "not see it in the index, and get a 404 for its page, map, timeline and its figures, changes, checks and budget, even as a tenant admin" do
       [ @outsider, @admin ].each do |account|
         sign_in account.user
         get plans_path
@@ -152,6 +182,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
         get map_plan_path(@plan_id)
         assert_response :not_found
         get timeline_plan_path(@plan_id)
+        assert_response :not_found
+        get timeline_figures_plan_path(@plan_id), headers: { "Turbo-Frame" => "timeline-figures" }
         assert_response :not_found
         get changes_plan_path(@plan_id)
         assert_response :not_found

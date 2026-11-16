@@ -66,14 +66,23 @@ class TeamPlanning::Capacity
   # A scenario's capacity beside the baseline's, with what its forecast adds.
   #
   # @!attribute report [Report] the scenario's
-  # @!attribute baseline [Report, nil] nil when the scenario is the baseline
+  # @!attribute baseline [Report, nil] nil when the scenario is the baseline, or it was skipped
   # @!attribute forecast [Array<TeamPlanning::Forecast::Row>]
-  Split = Data.define(:report, :baseline, :forecast) do
+  # @!attribute baseline_skipped [Boolean] whether the caller asked for no baseline
+  Split = Data.define(:report, :baseline, :forecast, :baseline_skipped) do
+    def initialize(baseline_skipped: false, **) = super
+
+    # @return [Hash{String => Rational}] model => the scenario's own capacity plus what its forecast adds
+    def total = TeamPlanning::Capacity.add([ report.totals, *forecast.map(&:capacity) ])
+
     # The baseline is all actual.
     #
     # @param unit_id [String, nil] a live unit of the scenario, or nil for the plan
     # @return [Parts]
+    # @raise [ArgumentError] when the baseline was skipped
     def parts(unit_id = nil)
+      raise ArgumentError, "This capacity was read without its baseline, so it can't split its total" if baseline_skipped
+
       pick = ->(report) { unit_id ? report.units.fetch(unit_id, {}) : report.totals }
       scenario = pick.(report)
       return Parts.new(actual: scenario, planned: {}, forecast: {}, total: scenario) unless baseline
@@ -93,22 +102,33 @@ class TeamPlanning::Capacity
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] the plan's id for the baseline
   # @param repository [TeamPlanning::Repository]
+  # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
+  # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
+  #   resolved over that aggregate for this viewer, which also gives the base
+  # @param steps [Hash{String => TeamPlanning::Forecast::Step}] earlier steps
+  #   already priced, which this fills as it prices more
+  # @param baseline [Boolean] false skips pricing the baseline, for a caller that reads only {Split#total}
   # @return [Split]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def self.split(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
-    aggregate = repository.load_plan(plan.id)
-    base = TeamPlanning::Baseline.new(context:, plan:).structure
+  # @raise [ArgumentError] when shared was resolved for another viewer, plan or scenario
+  def self.split(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, shared: nil, steps: {}, baseline: true)
+    shared = shared&.for!(context, plan, scenario_id)
+    aggregate ||= repository.load_plan(plan.id)
+    base = shared&.base || TeamPlanning::Baseline.new(context:, plan:).structure
     price = lambda do |id|
       resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id: id, repository:, base:)
-      new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(resolution.call(aggregate))
+      map = shared && id == scenario_id ? shared.named(TeamPlanning::Baseline.new(context:, plan:)) : resolution.call(aggregate)
+      new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(map)
     end
     earlier = TeamPlanning::Forecast.reaching(aggregate, scenario_id, defaults: base.rules.defaults).index_with do |id|
-      price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+      steps[id] ||= price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
     end
     report = price.(scenario_id)
-    baseline = price.(plan.id) unless scenario_id == plan.id
-    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing: report.pricing, earlier:).rows)
+    steps[scenario_id] ||= TeamPlanning::Forecast::Step.new(map: report.map, pricing: report.pricing) unless scenario_id == plan.id
+    against = price.(plan.id) if baseline && scenario_id != plan.id
+    Split.new(report:, baseline: against, baseline_skipped: !baseline,
+              forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing: report.pricing, earlier:).rows)
   end
 
   # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named

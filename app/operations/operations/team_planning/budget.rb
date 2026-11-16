@@ -8,7 +8,7 @@
 # people in each position, so the forgotten-person audit walks it.
 class Operations::TeamPlanning::Budget < Operations::Base
   include Operations::TeamPlanning::PlanRead
-  include Operations::TeamPlanning::CostFigures
+  include Operations::TeamPlanning::BudgetFigures
 
   description "Get the four budget numbers for a scenario of a Team Planning plan the caller is in: approved, " \
               "funded, remaining and unfunded. basis is the budget_basis rule: inclusive (base pay plus on-cost, the " \
@@ -72,26 +72,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
       mismatched_currencies: line.mismatched, over: over(line.over) }
   end
 
-  def totals(totals, money: method(:money))
-    { approved: { **money.(totals.approved), head_count: figure(totals.head_count) },
-      funded: { **money.(totals.funded), **heads(totals.funded_heads) },
-      remaining: { **money.(totals.remaining), head_count: figure(totals.remaining_head_count),
-                   left_out: { mismatched_currencies: totals.remaining_left_out } },
-      unfunded: { **money.(totals.unfunded), **heads(totals.unfunded_heads) }, over: over(totals.over) }
-  end
-
-  def over(over) = over && { money: over.money, heads: over.heads, mismatched_currencies: over.mismatched }
-
   def unit(totals)
     { funded: { **native_money(totals.funded), **heads(totals.funded_heads) }, unfunded: { **native_money(totals.unfunded), **heads(totals.unfunded_heads) } }
   end
-
-  # A sum the caller may not see keeps its keys, each null, so its shape never says whether there was money to hide.
-  def money(sum) = sum ? sum(sum) : { native: nil, converted: nil, missing: nil }
-
-  def native_money(sum) = { native: sum&.native&.transform_values { decimal(it) } }
-
-  def heads(heads) = { positions: heads.positions, fte: decimal(heads.fte) }
-
-  def figure(value) = value.nil? ? nil : decimal(value)
 end

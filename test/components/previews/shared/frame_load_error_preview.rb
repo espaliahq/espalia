@@ -26,6 +26,11 @@ class Shared::FrameLoadErrorPreview < Lookbook::Preview
              classes: "space-y-2", retry_action: "matrix#retryExpandedRow")
   end
 
+  # Under the timeline's step headers, one quiet line
+  def inline
+    revealed(id: "timeline-figures-error", subject: "the figures", inline: true)
+  end
+
   # @!endgroup
 
   private
