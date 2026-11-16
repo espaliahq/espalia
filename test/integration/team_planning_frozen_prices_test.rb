@@ -72,7 +72,7 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
   def reads
     READS.to_h do |name|
       scenario_id = name == "ScenarioCosts" ? nil : @year
-      [ name, operation(Operations::TeamPlanning.const_get(name), scenario_id:).except(:archived_on, :note, :frozen_on) ]
+      [ name, operation(Operations::TeamPlanning.const_get(name), scenario_id:).except(:archived_on, :note, :priced_on) ]
     end
   end
 
@@ -150,7 +150,7 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
 
     operation(Operations::TeamPlanning::RestorePlan, scenario_id: nil)
     assert_nil as_tenant { TeamPlanning::Repository.new.prices_frozen(@plan_id) }, "the old copy is set aside on restore"
-    assert_nil as_tenant { TeamPlanning::PricingInputs.for(plan).frozen_on }
+    assert_nil as_tenant { TeamPlanning::PricingInputs.for(plan).priced_on }
 
     operation(Operations::TeamPlanning::ArchivePlan, scenario_id: nil)
     as_tenant { @band.update!(midpoint: 130_000, maximum: 260_000) }

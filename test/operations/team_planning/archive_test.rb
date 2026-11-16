@@ -77,7 +77,7 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
   def pricing_notes(plan_id, scenario_id)
     PRICING_READS.map do |operation, scenario_read|
       result = call(operation, plan_id:, **({ scenario_id: } if scenario_read).to_h)
-      [ operation.name, result.values_at(:archived_on, :frozen_on, :note) ]
+      [ operation.name, result.values_at(:archived_on, :priced_on, :note) ]
     end
   end
 

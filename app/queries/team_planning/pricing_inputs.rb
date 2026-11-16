@@ -14,7 +14,7 @@
 #
 # @example
 #   inputs = TeamPlanning::PricingInputs.for(plan)
-#   inputs.frozen_on # => nil while the plan is live
+#   inputs.priced_on # => nil while the plan is live
 class TeamPlanning::PricingInputs
   # The models a copy holds, each with the attributes it leaves out.
   MODELS = { pay_bands: PayBand, exchange_rates: ExchangeRate, budget_lines: BudgetLine,
@@ -35,19 +35,19 @@ class TeamPlanning::PricingInputs
   def self.for(plan, repository: TeamPlanning::Repository.new)
     CurrentPlanReads.fetch([ :pricing_inputs, plan.id, plan.archived_on ]) do
       frozen = plan.archived_on && repository.prices_frozen(plan.id)
-      frozen ? new(plan, frozen_on: plan.archived_on, copy: frozen) : new(plan)
+      frozen ? new(plan, priced_on: plan.archived_on, copy: frozen) : new(plan)
     end
   end
 
   # @return [Date, nil] the archive day an archived plan is priced as on
-  attr_reader :frozen_on
+  attr_reader :priced_on
 
   # @param plan [TeamPlanningPlan]
-  # @param frozen_on [Date, nil]
+  # @param priced_on [Date, nil]
   # @param copy [Hash, nil] as {.capture} gave it
-  def initialize(plan, frozen_on: nil, copy: nil)
+  def initialize(plan, priced_on: nil, copy: nil)
     @plan = plan
-    @frozen_on = frozen_on
+    @priced_on = priced_on
     @copy = copy
   end
 

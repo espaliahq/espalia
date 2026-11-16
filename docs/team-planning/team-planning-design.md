@@ -923,7 +923,7 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
   plan's key. Every pricing read takes its inputs from `TeamPlanning::PricingInputs`,
   which serves the copy for an archived plan and the tables for a live one. Cost,
   scenario costs, capacity, forecast, budget, funding and budget lines then return
-  `frozen_on` and a note: priced as on the archive day.
+  `priced_on` and a note: priced as on the archive day.
 - What stays live is structure. Framework roles and levels, and HRIS title mappings, say
   who is at which level, not what a level costs. The Org Graph stays live for the same
   reason, its leavers among them. Actual pay is never in

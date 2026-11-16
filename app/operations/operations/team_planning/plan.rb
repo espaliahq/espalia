@@ -40,6 +40,6 @@ class Operations::TeamPlanning::Plan < Operations::Base
     return unless plan.archived?
 
     { on: plan.archived_on.iso8601, by_id: plan.archived_by_id, by_name: Person.find_by(id: plan.archived_by_id)&.name,
-      priced_on: ::TeamPlanning::PricingInputs.for(plan).frozen_on&.iso8601 }
+      priced_on: ::TeamPlanning::PricingInputs.for(plan).priced_on&.iso8601 }
   end
 end

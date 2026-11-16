@@ -463,9 +463,9 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
       should "price a holder from held pay and everyone else from the archive day's midpoints, in cost, scenario costs, budget, funding and forecast" do
         holder = frozen_reads(@holder)
-        assert_equal "2026-02-01", holder[:cost][:frozen_on]
+        assert_equal "2026-02-01", holder[:cost][:priced_on]
         assert_equal @held, holder[:budget][:budget_lines].find { it[:budget_line_id] == @line }[:funded][:native]["AUD"]
-        assert_equal [ "2026-02-01", 1 ], holder[:funding].values_at(:frozen_on, :funded).then { [ it[0], it[1][:positions] ] }
+        assert_equal [ "2026-02-01", 1 ], holder[:funding].values_at(:priced_on, :funded).then { [ it[0], it[1][:positions] ] }
 
         [ @editor, @viewer ].each do |account|
           reads = frozen_reads(account)
