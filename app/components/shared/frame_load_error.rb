@@ -40,13 +40,16 @@ class Components::Shared::FrameLoadError < Components::Base
   # @param retry_action [String] Stimulus action the Retry dispatches — the
   #   `frame-error` controller's by default; a host that reloads by other
   #   means (the matrix's on-demand expanded row) names its own
-  def initialize(id:, subject: DEFAULT_SUBJECT, closeable: false, classes: "p-6 space-y-3",
-                 retry_action: "frame-error#retry")
+  # @param inline [Boolean] one quiet line, message then Retry, for a frame
+  #   that only adds to a page that works without it
+  def initialize(id:, subject: DEFAULT_SUBJECT, closeable: false, classes: "p-6 space-y-3", # rubocop:disable Metrics/ParameterLists
+                 retry_action: "frame-error#retry", inline: false)
     @id = id
     @subject = subject
     @closeable = closeable
     @classes = classes
     @retry_action = retry_action
+    @inline = inline
   end
 
   # Failure-agnostic by design: one state covers a dropped connection, a 500,
@@ -61,6 +64,8 @@ class Components::Shared::FrameLoadError < Components::Base
 
   # @return [void]
   def view_template
+    return inline_line if @inline
+
     div(id: @id, role: "alert", hidden: true, tabindex: "-1",
         class: @classes, data: { frame_error_target: "error" }) do
       p(class: Components::Shared::SubmitFallbackMessage::PANEL_CLASSES) { message }
@@ -70,6 +75,17 @@ class Components::Shared::FrameLoadError < Components::Base
           button(type: "button", data: { action: "modal#close" }, class: BUTTON_CLASSES) { "Close" }
         end
       end
+    end
+  end
+
+  private
+
+  def inline_line
+    p(id: @id, role: "alert", hidden: true, tabindex: "-1",
+      class: "flex flex-wrap items-baseline gap-x-2 text-xs text-danger #{@classes}", data: { frame_error_target: "error" }) do
+      span { "Couldn't load #{@subject}." }
+      button(type: "button", data: { action: @retry_action },
+             class: Components::Kit::Button.classes(variant: :link, tone: :brand, size: :xs, compact: true)) { "Retry" }
     end
   end
 end
