@@ -6,8 +6,8 @@
 # render the panel open or closed, so it doesn't flash.
 #
 # On lg+ the panel sits beside the main column. Below lg it overlays the page
-# (`narrow: :overlay`, and a tap outside closes it) or stacks under the main
-# column (`narrow: :stack`).
+# (`narrow: :overlay`: a tap outside closes it, and Back does too, as for a
+# screen of its own) or stacks under the main column (`narrow: :stack`).
 #
 # @example
 #   render Components::Kit::SidePanel.new(id: "plan-side-panel", title: "About this plan",

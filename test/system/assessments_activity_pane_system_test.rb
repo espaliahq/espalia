@@ -72,6 +72,23 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # Marks the entry the page settles on once the matrix's first load has
+  # written its own, so a test can tell which entry Back or a close lands on.
+  def mark_history_entry
+    visit assessment_path(@assignment)
+    wait_for_stimulus "activity-pane"
+    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+    page.execute_script("history.replaceState({ ...history.state, probe: true }, '')")
+  end
+
+  # Turbo stamps its own state on an entry it pops back to, wiping the probe,
+  # so the pane's marker gone and its query dropped show its entry was left.
+  # (Counting entries can't: Chrome caps history.length at 50 per tab.)
+  def assert_back_on_opening_entry
+    assert_nil page.evaluate_script("history.state?.sidePanelOverlay ?? null")
+    assert_no_match(/[?&]activity=/, page.current_url)
+  end
+
   def open_loaded_activity_pane
     visit assessment_path(@assignment)
     wait_for_stimulus "activity-pane"
@@ -367,6 +384,42 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         visible: :all
 
       assert_selector "#assessment-activity-pane", text: "Alice recorded “Launch”", visible: true
+    end
+  end
+
+  context "the activity pane and the Back button" do
+    should "add no history entry beside the matrix, so Back still leaves the entry it was opened on" do
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+
+      assert page.evaluate_script("history.state?.probe === true"), "the pane wrote over the entry it opened on, not a new one"
+    end
+
+    should "close the overlay on Back, returning to the entry it was opened on" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      page.go_back
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert_current_path assessment_path(@assignment)
+      assert_back_on_opening_entry
+    end
+
+    should "take the overlay's history entry back when its close button shuts it" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      page.execute_script("document.querySelector(arguments[0]).click()", "#assessment-activity-pane button[aria-label='Close activity']")
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert_current_path assessment_path(@assignment)
+      assert_back_on_opening_entry
     end
   end
 

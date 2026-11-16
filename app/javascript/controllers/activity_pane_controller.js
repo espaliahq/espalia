@@ -30,6 +30,9 @@ const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 const MOBILE_BREAKPOINT = 1024
 // Gap kept between the fitted pane's bottom and the viewport's.
 const FIT_BOTTOM_GAP_PX = 16
+// Marks the history entry the overlay pushed. Holds the URL key, so two
+// panes on one page don't take each other's entries.
+const HISTORY_KEY = "sidePanelOverlay"
 
 export default class extends BaseController {
   static targets = ["pane", "toggle"]
@@ -78,7 +81,7 @@ export default class extends BaseController {
 
     this.#applyMetadata(initialState)
 
-    this.onPopState = () => this.#applyFromUrl()
+    this.onPopState = () => this.#applyFromHistory()
     window.addEventListener("popstate", this.onPopState)
 
     if (this.fitViewportValue) this.#observeViewport()
@@ -140,16 +143,35 @@ export default class extends BaseController {
     return this.paneTarget.dataset.paneState === "open" ? "open" : "closed"
   }
 
-  // Animates to `state`, persists to cookie, and pushes URL — the
-  // user-driven path. Initial connect and popstate intentionally bypass
-  // this so we never pushState the cookie's value into history.
+  // Animates to `state`, persists to cookie, and records it in the URL — the
+  // user-driven path. Initial connect and popstate bypass this.
   #commit(state) {
     this.#animate(state)
     this.#applyMetadata(state)
     this.#writeCookie(state)
-    this.#pushBrowserUrl(state)
+    this.#recordInHistory(state, this.#overlaid())
     if (state === "open") this.#revealStackedPane()
   }
+
+  // Below lg the overlay covers the page like a screen of its own, so opening
+  // it adds a history entry and Back closes it; closing it any other way
+  // takes that entry back off. Beside the page on lg+, the URL changes in
+  // place and Back leaves the page.
+  #recordInHistory(state, overlaid) {
+    const ownEntry = window.history.state?.[HISTORY_KEY] === this.urlKeyValue
+    if (overlaid && state === "open" && !ownEntry) {
+      window.history.pushState({ [HISTORY_KEY]: this.urlKeyValue }, "", this.#urlWith(state))
+    } else if (state === "closed" && ownEntry) {
+      window.history.back()
+    } else {
+      window.history.replaceState(window.history.state, "", this.#urlWith(state))
+    }
+  }
+
+  #overlaid() {
+    return this.dismissOutsideValue && window.innerWidth < MOBILE_BREAKPOINT
+  }
+
 
   // A pane that stacks under the page opens below the fold on a phone, where
   // the tap that opened it would otherwise seem to do nothing.
@@ -158,11 +180,12 @@ export default class extends BaseController {
     requestAnimationFrame(() => this.paneTarget.scrollIntoView({ block: "start" }))
   }
 
-  // Browser back/forward changes the URL without remounting Stimulus
-  // controllers. Re-hydrate state from URL and animate to match.
-  #applyFromUrl() {
-    const state = this.#computeInitialState()
-    if (state === this.#visualState()) return
+  // Back and Forward change the URL without remounting the controller. Only
+  // the overlay's own entry means open; leaving it means closed.
+  #applyFromHistory() {
+    const ownEntry = window.history.state?.[HISTORY_KEY] === this.urlKeyValue
+    const state = ownEntry ? "open" : "closed"
+    if (state === this.#visualState() || (!ownEntry && !this.#overlaid())) return
     this.#animate(state)
     this.#applyMetadata(state)
     this.#writeCookie(state)
@@ -226,12 +249,10 @@ export default class extends BaseController {
     })
   }
 
-  #pushBrowserUrl(state) {
+  #urlWith(state) {
     const url = new URL(window.location.href)
     url.searchParams.set(this.urlKeyValue, state)
-    if (url.toString() !== window.location.href) {
-      window.history.pushState({}, "", url)
-    }
+    return url
   }
 
   #readCookie() {
