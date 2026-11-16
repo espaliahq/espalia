@@ -62,6 +62,29 @@ class Operations::TeamPlanning::HiringLagTest < ActiveSupport::TestCase
     found
   end
 
+  def hire(fte:, name:)
+    ActsAsTenant.with_tenant(@tenant) do
+      person = create(:person, tenant: @tenant, name:)
+      people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      people.record_person(person.id, provider: "espalia", effective_on: "2026-01-01", employment_status: "employed", fte:)
+      people.set_membership(person.id, @unit_id, provider: "espalia", effective_on: "2026-01-01", allocation: 1.0, role: "E")
+      person
+    end
+  end
+
+  def depart(person, leaves_on:)
+    call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: @q2, person_id: person.id, position_id: @seat, leaves_on:)
+  end
+
+  # Each open part of each seat: its FTE, the day it opens and the day it is forecast to fill.
+  def openings(scenario_id)
+    ActsAsTenant.with_tenant(@tenant) do
+      context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+      map = TeamPlanning::Resolution.new(context:, plan: TeamPlanningPlan.find(@plan_id), scenario_id:).structure
+      TeamPlanning::SeatStart.openings(map).map { |_, fte, start| [ fte, start.planned.iso8601, start.forecast(time_to_hire: 90).iso8601 ] }.sort_by(&:second)
+    end
+  end
+
   def time_to_hire(days, scenario_id: @plan_id)
     call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id:, rule: "time_to_hire", value: { days: days.to_s })
   end
@@ -104,6 +127,31 @@ class Operations::TeamPlanning::HiringLagTest < ActiveSupport::TestCase
     call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, unit_id: @unit_id, rule: "time_to_hire", value: { days: "0" })
 
     assert_empty lags(@q2)
+  end
+
+  context "a backfill whose leavers went in an earlier step" do
+    setup do
+      @leavers = Array.new(2) { |n| hire(fte: 0.5, name: "Leaver #{n}") }
+      @seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @plan_id, role_id: @engineer.role_id,
+                                                          level_id: @e5.level_id, unit_id: @unit_id, fte: 1, basis: "backfill")[:position_id]
+    end
+
+    should "open the half vacant since the base date then, and the leaver's half the day after they went" do
+      depart(@leavers.first, leaves_on: "2026-05-15")
+
+      assert_equal [ [ 1/2r, "2026-03-02", "2026-05-31" ], [ 1/2r, "2026-05-16", "2026-08-14" ] ], openings(@q3)
+      assert_equal [ { unit_id: @unit_id, headcount: "0", cost: { "EUR" => "-4400" }, capacity: {} } ], lags(@q3),
+                   "half of 1 July to 13 August; the vacant half filled on 31 May"
+    end
+
+    should "open each leaver's share on the day after they went" do
+      depart(@leavers.first, leaves_on: "2026-04-15")
+      depart(@leavers.last, leaves_on: "2026-05-15")
+
+      assert_equal [ [ 1/2r, "2026-04-16", "2026-07-15" ], [ 1/2r, "2026-05-16", "2026-08-14" ] ], openings(@q3)
+      assert_equal [ { unit_id: @unit_id, headcount: "0", cost: { "EUR" => "-5800" }, capacity: {} } ], lags(@q3),
+                   "half of 1 to 14 July, and half of 1 July to 13 August"
+    end
   end
 
   should "give back today's figures exactly when the tenant sets time_to_hire to 0" do

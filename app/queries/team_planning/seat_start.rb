@@ -16,9 +16,10 @@
 #   start = TeamPlanning::SeatStart.new(position)
 #   start.held_in(Date.new(2027, 1, 1)..Date.new(2027, 3, 31)) # => 2027-02-15..2027-03-31
 class TeamPlanning::SeatStart
-  # Each open part of each position on a map: the FTE each planned leaver
-  # leaves, opening the day after they go, then the rest, opening when the
-  # position does.
+  # Each open part of each position on a map: the FTE each leaver leaves,
+  # opening the day after they go, whether they go in this step or went in
+  # an earlier one, then the rest, opening when the position does. The parts
+  # never add up to more than the position has open.
   #
   # @param map [TeamPlanning::Baseline::Map]
   # @return [Array<Array(TeamPlanning::Baseline::Position, Rational, SeatStart)>] position, open FTE and start
@@ -44,13 +45,14 @@ class TeamPlanning::SeatStart
   end
 
   def self.parts(position, open, leavers)
-    dated = leavers.map { [ fte_of(it), TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) ] }
-    parts = dated.sort_by { |_, last| last || Date.new(0) }.filter_map do |fte, last|
+    staying = leavers.map { [ fte_of(it), TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on])&.next_day ] }
+    gone = position.vacated.map { [ Rational(it.fte.to_s), it.opens_on ] }
+    parts = (gone + staying).sort_by { |_, opens_on| opens_on || Date.new(0) }.filter_map do |fte, opens_on|
       fte = [ fte, open ].min
       next unless fte.positive?
 
       open -= fte
-      [ position, fte, new(position, opens_on: last&.next_day) ]
+      [ position, fte, new(position, opens_on:) ]
     end
     open.positive? ? parts << [ position, open, new(position) ] : parts
   end

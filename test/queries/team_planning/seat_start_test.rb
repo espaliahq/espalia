@@ -5,10 +5,24 @@ require "test_helper"
 class TeamPlanning::SeatStartTest < ActiveSupport::TestCase
   STEP = Date.new(2026, 4, 1)..Date.new(2026, 6, 30)
 
-  def start(opened_on: Date.new(2026, 3, 2), **hiring)
-    position = TeamPlanning::Baseline::Position.new(id: "p", role_id: "r", level_id: "l", unit_id: "u", fte: 1, basis: "new",
-                                                    role_name: nil, level_name: nil, opened_on:, **hiring)
-    TeamPlanning::SeatStart.new(position)
+  def position(opened_on: Date.new(2026, 3, 2), **hiring)
+    TeamPlanning::Baseline::Position.new(id: "p", role_id: "r", level_id: "l", unit_id: "u", fte: 1, basis: "new",
+                                         role_name: nil, level_name: nil, opened_on:, **hiring)
+  end
+
+  def start(...) = TeamPlanning::SeatStart.new(position(...))
+
+  should "open each earlier leaver's share on its own day, the rest when the seat opens, and never more than the seat has open" do
+    vacated = ->(fte, on) { TeamPlanning::Baseline::Vacated.new(fte:, opens_on: on) }
+    opens = lambda do |*parts|
+      map = TeamPlanning::Baseline::Map.new(base_on: nil, known_on: nil, units: [], people: [], unassigned_ids: [], positions: [ position(vacated: parts) ],
+                                            names: {}, rules: nil)
+      TeamPlanning::SeatStart.openings(map).map { |_, fte, seat| [ fte, seat.planned ] }
+    end
+
+    assert_equal [ [ 1/2r, Date.new(2026, 3, 2) ], [ 1/4r, Date.new(2026, 4, 16) ], [ 1/4r, Date.new(2026, 5, 16) ] ],
+                 opens.(vacated.(1/4r, Date.new(2026, 5, 16)), vacated.(1/4r, Date.new(2026, 4, 16))).sort_by(&:last)
+    assert_equal [ [ 1r, Date.new(2026, 4, 16) ] ], opens.(vacated.(1r, Date.new(2026, 4, 16)), vacated.(1r, Date.new(2026, 5, 16)))
   end
 
   should "hold an undated seat for the whole step it is open in" do

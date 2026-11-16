@@ -2034,12 +2034,13 @@ before then, and takes away capacity and headcount only when the forecast start 
 the step ends. A seat with a target start, or on hold, gets no forecast, and 0 days
 forecasts nothing, so a tenant that sets 0 keeps the figures it had before.
 
-Three edges stay as they are. Capacity counts a backfill in full when its leaver leaves on
-the step's last day, while cost prices it 0 days. Budget head counts take a position's FTE
-whatever its start, and the budget treats forecast rows as unfunded. And a backfill whose
-leavers all went in earlier steps opens on the day after the last of them went, for all its
-FTE, so the hiring lag on an earlier leaver's part runs from the later date. Within the step
-they leave in, each leaver's part opens on its own day.
+Each leaver's share of a backfill opens the day after they go, and the rest opens with the
+position. That holds in the step they leave in and in every step after, so the hiring lag on
+each share runs from its own day.
+
+Two edges stay as they are. Capacity counts a backfill in full when its leaver leaves on the
+step's last day, while cost prices it 0 days. Budget head counts take a position's FTE
+whatever its start, and the budget treats forecast rows as unfunded.
 
 Checks lists each open seat whose target start is before today under **Late hires**, with
 the FTE still open. The map labels an open seat with its status and start, such as

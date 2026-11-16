@@ -67,7 +67,7 @@ class TeamPlanning::Baseline
       map = with(people: people.map(&placed), outside: outside.map(&placed))
       map = map.cut if scope_ids
       gone, staying = map.people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
-      map = map.with(people: staying, departed: departed + gone.map { Departed.new(person_id: it.id, country: it.country, **it.departure) })
+      map = map.with(people: staying, departed: departed + gone.map { Departed.new(person_id: it.id, country: it.country, fte: TeamPlanning::SeatStart.fte_of(it), **it.departure) })
       live = map.units.to_set(&:id)
       map.with(unassigned_ids: map.people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
     end
@@ -409,14 +409,18 @@ class TeamPlanning::Baseline
     def backfill_id = departure&.dig(:position_id)
   end
 
+  # The FTE a leaver gone in an earlier step left their backfill, and the
+  # day that share opens. Nothing else of the leaver.
+  Vacated = Data.define(:fte, :opens_on)
+
   # Where a reporting line points: a person or a position, never both.
   Line = Data.define(:person_id, :position_id)
 
   # Someone a departure in an earlier step took off the map, the step they
-  # left in, the position backfilling them, if any, and the date within the
-  # step, if the plan gave one.
-  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on, :country) do
-    def initialize(leaves_on: nil, country: nil, **) = super
+  # left in, the position backfilling them, if any, the date within the
+  # step, if the plan gave one, and the FTE their backfill takes over.
+  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on, :country, :fte) do
+    def initialize(leaves_on: nil, country: nil, fte: 1r, **) = super
 
     # @return [Hash] as {TeamPlanning::Events::DepartureSet} set it, `leaves_on` only when given
     def departure = { leaves_in_id:, position_id: }.merge(leaves_on ? { leaves_on: } : {})
@@ -451,10 +455,12 @@ class TeamPlanning::Baseline
   # An open position. Its role and level names are nil until joined, and stay
   # nil for a role or level the framework no longer has. Its cost centre is
   # its own label, nil when it has none. `opened_on` is the first day of the
-  # earliest step in the chain that sets it, which resolution fills in.
+  # earliest step in the chain that sets it, and `vacated` the share each
+  # leaver gone in an earlier step left it, from the day it opens: both
+  # resolution fills in.
   Position = Data.define(:id, :role_id, :level_id, :unit_id, :fte, :basis, :cost_centre, :role_name, :level_name,
-                         :hiring_status, :target_start, :opened_on) do
-    def initialize(cost_centre: nil, hiring_status: "not_started", target_start: nil, opened_on: nil, **) = super
+                         :hiring_status, :target_start, :opened_on, :vacated) do
+    def initialize(cost_centre: nil, hiring_status: "not_started", target_start: nil, opened_on: nil, vacated: [], **) = super
 
     # @param basis [String]
     # @return [String] "committed" for a backfill, "planned" for a new position

@@ -163,18 +163,24 @@ class TeamPlanning::Resolution
     (step + aggregate.resting_on(@scenario_id)).uniq
   end
 
-  # A backfill whose leaver went in an earlier step opens no earlier than the
-  # day after they left, or the first day of the step they left in when the
-  # plan gave no date. A leaver still on this step's map holds their own seat,
-  # and cost opens it the day after they go.
+  # A leaver gone in an earlier step leaves their share of the backfill open
+  # from the day after they left, or the first day of the step they left in
+  # when the plan gave no date, never before the position opened. The rest
+  # of the position opens with it. A leaver still on this step's map holds
+  # their own seat, and cost opens it the day after they go.
   def opened(map, aggregate)
     return map if map.positions.empty?
 
     dates = self.class.opened_on(aggregate, @scenario_id)
-    vacated = map.departed.select(&:position_id).group_by(&:position_id).transform_values do |gone|
-      gone.map { TeamPlanning::Events::DepartureSet.leaving_date(it.leaves_on)&.next_day || aggregate.period_of(it.leaves_in_id)&.begin }.compact.max
-    end
-    map.with(positions: map.positions.map { it.with(opened_on: [ dates.fetch(it.id, aggregate.base_on), vacated[it.id] ].compact.max) })
+    gone = map.departed.select(&:position_id).group_by(&:position_id)
+    map.with(positions: map.positions.map do |position|
+      opened_on = dates.fetch(position.id, aggregate.base_on)
+      vacated = gone.fetch(position.id, []).map do |leaver|
+        left = TeamPlanning::Events::DepartureSet.leaving_date(leaver.leaves_on)&.next_day || aggregate.period_of(leaver.leaves_in_id)&.begin
+        TeamPlanning::Baseline::Vacated.new(fte: leaver.fte, opens_on: [ left, opened_on ].compact.max)
+      end
+      position.with(opened_on:, vacated:)
+    end)
   end
 
   # Today runs for a year from the base date, as its run rate does.
