@@ -27,6 +27,7 @@ class Views::Plans::ChecksTab < Views::Base
     unfunded: [ "Unfunded positions", "Held positions no budget line matches, with no funding set." ],
     ambiguous_funding: [ "Ambiguous funding", "Positions more than one budget line could fund, with no funding set to choose." ],
     unplaced: [ "No cost centre", "Seats with no cost centre: no label, cost centre of their own or entry gives one." ],
+    cost_centre_mismatches: [ "Cost centre mismatches", "People costed in one cost centre while their entries, position or budget line names another." ],
     budget_variance: [ "Over budget", "Budget lines, cost centres or the whole budget over their approved amount or head count." ],
     unused_budget_lines: [ "Unused budget lines", "Budget lines in this scenario's period that nothing draws on." ]
   }.freeze
