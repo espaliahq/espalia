@@ -13,6 +13,10 @@ module Views::Plans::ScenarioTab
     "budget_line" => "Budget line", "funding" => "Funding"
   }.freeze
 
+  # @param facet [String] a facet as the reads name it, such as `data:pay`
+  # @return [String] its name on the page
+  def self.facet_name(facet) = FACETS.fetch(facet) { FACETS.fetch(facet.split(":").first, facet.humanize) }
+
   private
 
   # An archived plan's checks come back empty and unchecked, so the tab says
@@ -62,7 +66,7 @@ module Views::Plans::ScenarioTab
   end
 
   # A rule or a capacity names its own kind after the colon, as in "rule:on_cost".
-  def facet_name(facet) = FACETS.fetch(facet) { FACETS.fetch(facet.split(":").first, facet.humanize) }
+  def facet_name(facet) = Views::Plans::ScenarioTab.facet_name(facet)
 
   def scenario_name(id)
     return "Today" if id == plan_id
