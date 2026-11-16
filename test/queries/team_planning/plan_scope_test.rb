@@ -348,6 +348,16 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       set_scope(@plan_id, [ @engineering ])
       assert_includes resolve(@plan_id, @h1).outside_lines.map(&:id), @lines["Revenue"]
     end
+
+    should "judge a dropped line by each scenario's own cost centre, so another scenario's relabel never excuses a cut" do
+      set_scope(@plan_id, [ @engineering, @sales ])
+      sibling = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @h1, relation: "instead", name: "B")[:scenario_id]
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Revenue"])
+      call(Operations::TeamPlanning::SetBudgetLine, plan_id: @plan_id, scenario_id: sibling, budget_line_id: @lines["Revenue"], cost_centre: "Platform",
+                                                   starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year")
+
+      assert_includes refusal { set_scope(@plan_id, [ @engineering ]) }, "1 other change"
+    end
   end
 
   should "bring a person in with the change that places them in scope, and let them go when it's undone" do
