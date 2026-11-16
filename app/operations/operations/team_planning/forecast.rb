@@ -20,7 +20,7 @@ class Operations::TeamPlanning::Forecast < Operations::Base
               "their actual part, which means the baseline's figure, not actual pay. " \
               "A row has no id and is not a change: it can't be pinned, cleared, noted or listed among the changes; " \
               "change the rule to change it. The plan's own id, Today, has no period and so no rows. Figures are " \
-              "decimal strings. Refused, as an unknown plan, unless the caller is a member."
+              "decimal strings. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -38,7 +38,7 @@ class Operations::TeamPlanning::Forecast < Operations::Base
       measured = capacity.forecast.index_by { key(it) }
       cost.forecast.rows.map { row(it.with(capacity: measured[key(it)]&.capacity || {}), names) }
     end
-    { plan_id: plan.id, scenario_id:, rows: }
+    { plan_id: plan.id, **priced_today(plan), scenario_id:, rows: }
   end
 
   private

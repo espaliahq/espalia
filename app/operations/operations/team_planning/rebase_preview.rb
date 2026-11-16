@@ -19,7 +19,7 @@ class Operations::TeamPlanning::RebasePreview < Operations::Base
               "names it. " \
               "Pass base_on to team_planning_rebase_plan. Refused when the plan already stands on today or on a " \
               "day still to come, when the plan is updated while the preview reads it, when the first step would end " \
-              "before today, naming it, and, as an unknown plan, " \
+              "before today, naming it, when the plan is archived, and, as an unknown plan, " \
               "unless the caller is a member."
   category :read
   approval :none
@@ -29,6 +29,8 @@ class Operations::TeamPlanning::RebasePreview < Operations::Base
   # @return [Hash] `{ plan_id, base_on, to, scenarios, conflicts, names, drift }`
   def perform
     plan = plan!
+    raise Operations::Base::ParameterError, ::TeamPlanning::PlanAggregate::ARCHIVED if plan.archived?
+
     report = refusing_bad_plans { ::TeamPlanning::RebasePreview.new(context:, plan:).call }
     { plan_id: plan.id, base_on: report.base_on.iso8601, to: report.to.iso8601,
       scenarios: report.scenarios.map(&:to_h), conflicts: report.conflicts, names: report.names,
