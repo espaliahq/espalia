@@ -116,7 +116,8 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     @handler.remove_scenario(@plan_id, @lean)
 
     tally = TeamPlanningRemovedScenarioTally.find(@lean)
-    assert_equal [ 2, held, @plan_id ], [ tally.changes_held, held, tally.plan_id ]
+    assert_equal 2, held
+    assert_equal [ held, @plan_id ], [ tally.changes_held, tally.plan_id ]
     assert_empty history(@lean)
 
     @handler.delete_plan(@plan_id)
