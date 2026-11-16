@@ -3,9 +3,11 @@
 require "test_helper"
 
 # Every stream in production was written before kinds stated their rules.
-# Replaying one must place units exactly as the ordered levels did: a parent
-# at a higher level, never an Espalia unit above a mirrored one, and a
-# mirrored unit only beneath the level directly above it, as the mirror reads.
+# Replaying one must place units as the ordered levels did: a parent at a
+# higher level, and never an Espalia unit above a mirrored one. The one
+# narrowing is deliberate: a level an HRIS provides now takes a parent only
+# from the HRIS level directly above it, the only place the mirror has ever
+# put one. `org_graph:taxonomy:check` finds any unit sitting elsewhere.
 class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
@@ -15,7 +17,7 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
     build_legacy_stream
   end
 
-  should "accept and refuse every placement as the ordered levels did" do
+  should "accept and refuse every placement as the ordered levels did, narrowed for mirrored units" do
     order = as_tenant { OrgTaxonomyLevel.top_first.pluck(:id) }
     providers = as_tenant { OrgTaxonomyLevel.pluck(:id, :provider).to_h }
     units = as_tenant { OrgUnit.where(retired_on: nil).to_a }
@@ -29,6 +31,18 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
                      "#{unit.name} beneath #{parent.name}"
       end
     end
+  end
+
+  should "refuse a mirrored unit beneath an HRIS level other than the one directly above, which order allowed" do
+    as_tenant { @handler.hand_over_level(id("Department"), "hibob", field: "work.department", matches: { @engineering => "eng", @marketing => "mkt" }, effective_on: @today) }
+    region = as_tenant { unit("Region", "Department", parent_id: @ops, provider: "hibob", external_ref: "region") }
+    as_tenant { @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches: { @payments => "pay", @lending => "lend", @platform => "plat" }, effective_on: @today) }
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @handler.move_unit(@lending, @ops, effective_on: @today, provider: "hibob") }
+    end
+    assert_equal "A parent must sit at a higher level", error.message
+    assert_nothing_raised { as_tenant { @handler.move_unit(@lending, region, effective_on: @today, provider: "hibob") } }
   end
 
   should "let every live unit sit where it is, and every kind at the top" do
