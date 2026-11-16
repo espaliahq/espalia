@@ -400,6 +400,26 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert page.evaluate_script("history.state?.probe === true"), "the pane wrote over the entry it opened on, not a new one"
     end
 
+    # The matrix pushes one same-URL entry when its frame first loads (#433),
+    # so the page may take two Backs to leave; toggles must add none on top.
+    should "leave the page on Back after the pane is opened and closed beside the matrix" do
+      visit assessments_path
+      assert_text "My Assessments"
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+
+      2.times do
+        break unless page.current_path == assessment_path(@assignment)
+
+        page.go_back
+      end
+      assert_current_path assessments_path
+      assert_text "My Assessments"
+    end
+
     should "close the overlay on Back, returning to the entry it was opened on" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       mark_history_entry
