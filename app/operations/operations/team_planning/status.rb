@@ -40,7 +40,7 @@ class Operations::TeamPlanning::Status < Operations::Base
               "once erased. A note on a pay change reaches only a member with the see-pay right; anyone else gets no note on it. " \
               "clearable is true on a status the caller may hand back to what the step before gives it with " \
               "team_planning_clear_change: an editor's, on a change the scenario makes itself, never on the " \
-              "baseline, and never on a pay change without the see-pay right. A change about " \
+              "baseline, and never on a pay change or on a budget line that carries an amount without the see-pay right. A change about " \
               "someone or something a scoped plan no longer covers is clearable like any other, so it can be removed. Such a status, " \
               "read as outside, also carries undoable: true when team_planning_undo_change on its change_id would take " \
               "it out and bring no earlier change back, since that would name what the plan no longer covers. #{UNCHECKED} Refused, as an unknown plan, unless " \
@@ -80,7 +80,17 @@ class Operations::TeamPlanning::Status < Operations::Base
   def clearable(plan, scenario_id, see_pay)
     return ->(_) { false } if scenario_id == plan.id || PlanPolicy.frozen?(plan) || !PlanPolicy.new(context, plan).update?
 
-    ->(entry) { entry.scenario_id == scenario_id && ::Operations::TeamPlanning::ChangeNote.visible?(entry.facet, see_pay:) }
+    ->(entry) { entry.scenario_id == scenario_id && (see_pay || stays_theirs?(plan, scenario_id, entry)) }
+  end
+
+  # Without the see-pay right, a pay change and a change on a budget line that
+  # carries an amount are not the caller's to clear.
+  def stays_theirs?(plan, scenario_id, entry)
+    return false if entry.facet == ::TeamPlanning::Events::PlanDataSet::PAY_FACET
+    return true unless entry.facet == ::TeamPlanning::LineMoney::FACET
+
+    @priced ||= ::TeamPlanning::LineMoney.priced_keys(::TeamPlanning::Repository.new.load_plan(plan.id), scenario_id)
+    !@priced.include?([ entry.subject_id, entry.facet ])
   end
 
   # @return [Proc] whether undoing an outside change brings nothing back; the plan is loaded only when asked

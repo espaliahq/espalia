@@ -372,11 +372,14 @@ class TeamPlanning::CommandHandler
   # @param facet [String] the second half of the change's key, such as "rule:<name>"
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @yieldparam plan [TeamPlanning::PlanAggregate] for the operation's scope check, run before the others
   # @see TeamPlanning::PlanAggregate#clear_change
-  def clear_change(plan_id, scenario_id:, subject_id:, facet:)
+  def clear_change(plan_id, scenario_id:, subject_id:, facet:, &check)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      check&.call(plan)
       ensure_pay_right!(plan, facet.to_s)
+      ensure_line_money_right!(plan, scenario_id, subject_id, facet.to_s)
       plan.clear_change(scenario_id:, subject_id:, facet: facet.to_s, cleared_by_id: actor_id!)
     end
   end
@@ -432,6 +435,7 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       ensure_pay_right!(plan, key.last)
+      ensure_line_money_right!(plan, scenario_id, *key)
       plan.ensure_settleable!(scenario_id, key)
       change = plan.winning_changes(scenario_id).fetch(key)
       if choice.to_s == "reality" && change.is_a?(TeamPlanning::Events::UnitSuccessionSet)
@@ -462,6 +466,7 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       ensure_pay_right!(plan, plan.facet_of(scenario_id, event_id))
+      ensure_note_right!(plan, plan.facet_of(scenario_id, event_id))
       plan.note_change(scenario_id:, event_id:, note:, noted_by_id: actor_id!)
     end
   end
@@ -509,6 +514,7 @@ class TeamPlanning::CommandHandler
   def undo_change(plan_id, scenario_id:, event_id: nil, &check)
     reverse(plan_id, scenario_id, event_id, :last_undoable_by, "You have nothing here to undo") do |plan, id|
       check&.call(plan, plan.restored_by_undo(scenario_id, id))
+      ensure_line_money_right_on!(plan, scenario_id, id)
       plan.undo_change(scenario_id:, event_id: id, undone_by_id: actor_id!)
     end
   end
@@ -527,6 +533,7 @@ class TeamPlanning::CommandHandler
   def redo_change(plan_id, scenario_id:, event_id: nil, &check)
     reverse(plan_id, scenario_id, event_id, :last_redoable_by, "You have nothing here to redo") do |plan, id|
       check&.call(plan, plan.log_of(scenario_id).find { it.event_id == id })
+      ensure_line_money_right_on!(plan, scenario_id, id)
       plan.redo_change(scenario_id:, event_id: id, redone_by_id: actor_id!)
     end
   end
@@ -537,7 +544,8 @@ class TeamPlanning::CommandHandler
     chosen = nil
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      chosen = event_id.presence || plan.public_send(pick, scenario_id, actor_id!, except_facets: untouchable_facets(plan)) or
+      chosen = event_id.presence || plan.public_send(pick, scenario_id, actor_id!, except_facets: untouchable_facets(plan),
+                                                                                  except_keys: untouchable_lines(plan, scenario_id)) or
         raise TeamPlanning::Error, nothing
       ensure_pay_right!(plan, plan.facet_of(scenario_id, chosen))
       yield plan, chosen
@@ -639,6 +647,32 @@ class TeamPlanning::CommandHandler
   end
 
   def untouchable_facets(plan) = PlanPolicy.new(@actor, plan).see_pay? ? [] : [ TeamPlanning::Events::PlanDataSet::PAY_FACET ]
+
+  def untouchable_lines(plan, scenario_id) = PlanPolicy.new(@actor, plan).see_pay? ? Set.new : TeamPlanning::LineMoney.priced_keys(plan, scenario_id)
+
+  # A budget line's amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)).
+  def ensure_line_money_right!(plan, scenario_id, subject_id, facet)
+    return if PlanPolicy.new(@actor, plan).see_pay?
+    return unless TeamPlanning::LineMoney.priced?(plan, scenario_id, subject_id, facet)
+
+    raise TeamPlanning::Error, TeamPlanning::LineMoney::REFUSAL
+  end
+
+  # Checked after the operation's own scope check, so a line the plan hides reads as it always has.
+  def ensure_line_money_right_on!(plan, scenario_id, event_id)
+    entry = plan.log_of(scenario_id).find { it.event_id == event_id } or return
+
+    ensure_line_money_right!(plan, scenario_id, entry.data[:subject_id], plan.facet_of(scenario_id, event_id))
+  end
+
+  # A note is free text and may state a line's amount, so a note on any
+  # budget-line change needs the right, amount or not.
+  def ensure_note_right!(plan, facet)
+    return unless facet == TeamPlanning::LineMoney::FACET
+    return if PlanPolicy.new(@actor, plan).see_pay?
+
+    raise TeamPlanning::Error, "Noting a budget line change needs the see-pay right."
+  end
 
   def facet_set_by(kind, end_state)
     "#{kind.facet}:#{end_state.to_h.symbolize_keys[:field]}" if kind == TeamPlanning::Events::PlanDataSet

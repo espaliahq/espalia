@@ -13,6 +13,7 @@ class Operations::TeamPlanning::Overrides < Operations::Base
               "where its value came from (a null scenario_id: read off its parent's organisation, as a rule " \
               "above the subject or the baseline gave it), and parent_moved whether its parent would now give " \
               "it something else. A " \
+              "budget line's amount, currency and period reach only a member with the see-pay right. A " \
               "forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the " \
               "caller is a member."
   category :read
@@ -33,8 +34,10 @@ class Operations::TeamPlanning::Overrides < Operations::Base
     rows.map do |row|
       note = Operations::TeamPlanning::ChangeNote.payload(row.note, facet: row.facet, see_pay:)
       above = inherits.of(row)
-      { subject_id: row.subject_id, facet: row.facet, kind: row.kind.demodulize.underscore, end_state: row.end_state,
-        pinned: row.pinned, pinned_from: (pinned_from(row) if row.pinned), parent_moved: (above[:end_state] != row.end_state if row.pinned),
+      above = above.merge(end_state: Operations::TeamPlanning::LineFigures.end_state(above[:end_state], facet: row.facet, see_pay:))
+      end_state = Operations::TeamPlanning::LineFigures.end_state(row.end_state, facet: row.facet, see_pay:)
+      { subject_id: row.subject_id, facet: row.facet, kind: row.kind.demodulize.underscore, end_state:,
+        pinned: row.pinned, pinned_from: (pinned_from(row) if row.pinned), parent_moved: (above[:end_state] != end_state if row.pinned),
         inherits: above, set_by: { person_id: row.set_by_id, name: names.fetch(row.set_by_id, Person::FORMER_MEMBER) },
         set_at: row.set_at.utc.iso8601, **({ note: } if note) }
     end
