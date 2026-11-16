@@ -96,6 +96,28 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if it is already archived
+  # @see TeamPlanning::PlanAggregate#archive
+  def archive_plan(plan_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.archive(archived_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if it isn't archived
+  # @see TeamPlanning::PlanAggregate#restore
+  def restore_plan(plan_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.restore(restored_by_id: actor_id!)
+    end
+  end
+
   # Makes someone a member of the plan, or changes their role.
   #
   # @param plan_id [String]
