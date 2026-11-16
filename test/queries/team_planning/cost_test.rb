@@ -539,6 +539,79 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     end
   end
 
+  context "the run rate at the end" do
+    should "equal Today's seats priced on the last day when nothing changes and nothing is forecast" do
+      at_end = cost.at_end
+      parts = cost.at_end_parts
+
+      assert_equal Date.new(2026, 12, 31), at_end.on
+      assert_equal 243_200r, at_end.scenario.total.converted, "each seat held on the last day costs its full yearly figure"
+      assert_equal at_end.baseline.total, at_end.scenario.total
+      assert_equal [ {}, 0r ], [ parts.planned.native.reject { _2.zero? }, parts.planned.converted ]
+      assert_equal [ {}, 0r ], [ parts.forecast.native, parts.forecast.converted ]
+    end
+
+    should "count a leaver whose last day is the day before the end out, and one who leaves on it in" do
+      operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, leaves_on: "2026-12-30")
+      assert_equal(-100_000r, cost.at_end_parts.planned.native["EUR"])
+      assert_equal [ 0r ], amounts(cost.at_end.scenario, @ada.id).compact
+
+      operation(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, leaves_on: "2026-12-31")
+      assert_equal 0r, cost.at_end_parts.planned.native.fetch("EUR", 0r)
+      assert_equal [ 100_000r ], amounts(cost.at_end.scenario, @ada.id)
+    end
+
+    should "convert at the rate in force on the last day, so a move in the rate is no planned change" do
+      as_tenant { ExchangeRate.create!(from_currency: "NZD", to_currency: "EUR", rate: "0.6", applies_from: "2026-12-01") }
+      report = cost
+
+      assert_equal 243_200r, report.scenario.total.converted, "the period still converts at its start"
+      assert_equal 255_200r, report.at_end.scenario.total.converted
+      assert_equal 0r, report.at_end_parts.planned.converted
+    end
+
+    should "convert the forecast at the last day's rate too" do
+      as_tenant { ExchangeRate.create!(from_currency: "NZD", to_currency: "EUR", rate: "0.6", applies_from: "2026-12-01") }
+      operation(Operations::TeamPlanning::SetRule, rule: "attrition", value: { yearly_rate: "0.1" })
+      forecast = cost.at_end.forecast.total
+
+      assert forecast.native.fetch("NZD").negative?
+      assert_equal forecast.native.sum { |currency, amount| amount * { "EUR" => 1r, "NZD" => 0.6r }.fetch(currency) }, forecast.converted
+    end
+
+    should "skip the run rate at the end for a caller that never reads it" do
+      report = as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).call(at_end: false) }
+
+      assert_nil report.at_end
+      assert_equal 243_200r, report.scenario.total.converted
+    end
+
+    should "add up actual, planned and forecast to the total, and every unit and cost centre to it too" do
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { unit_id: @payments, allocation: 1 } ])
+      open_position(unit_id: @payments, fte: 0.5)
+      operation(Operations::TeamPlanning::SetDeparture, person_id: @dee.id, leaves_on: "2026-06-30")
+      operation(Operations::TeamPlanning::SetRule, rule: "attrition", value: { yearly_rate: "0.1" })
+      report = cost
+      total = report.at_end_parts
+
+      assert total.forecast.converted.negative?, "attrition leaves seats empty on the last day"
+      assert_adds_up total, "plan"
+      keys = ->(scope) { [ report.at_end.scenario, report.at_end.baseline, report.at_end.forecast ].flat_map { it.public_send(scope).keys }.uniq }
+      [ :units, :cost_centres ].each do |scope|
+        parts = keys.(scope).map { report.at_end_parts(scope, it) }
+        parts.each { assert_adds_up it, scope.to_s }
+        assert_equal total.total.converted, parts.sum { it.total.converted }, "#{scope} sum to the total"
+      end
+    end
+
+    should "have no run rate at the end for Today, which already is one" do
+      report = cost(@plan_id)
+
+      assert_nil report.at_end
+      assert_nil report.at_end_parts
+    end
+  end
+
   context "the forecast frame" do
     should "forecast a row per unit and step with no id, person or position, writing nothing" do
       with_kinds(Hiring) do

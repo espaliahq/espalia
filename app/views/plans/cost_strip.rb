@@ -4,7 +4,9 @@
 # Today's over the same days, what is in no unit, and the seats no band
 # prices ([#316](https://github.com/espaliahq/espalia/issues/316)). On
 # Today's map it is the yearly run rate instead, with nothing beside it
-# ([#318](https://github.com/espaliahq/espalia/issues/318)).
+# ([#318](https://github.com/espaliahq/espalia/issues/318)). A scenario's
+# also says its run rate on its last day
+# ([#334](https://github.com/espaliahq/espalia/issues/334)).
 class Views::Plans::CostStrip < Views::Base
   Format = Views::Plans::CostMarks::Format
 
@@ -20,6 +22,7 @@ class Views::Plans::CostStrip < Views::Base
         h3(id: "cost-strip", class: "text-sm font-semibold text-default") { "Cost" }
         span(data: { cost_total: "" }, class: "text-lg font-semibold tabular-nums text-default") { figure }
         @marks.run_rate? ? span(data: { cost_run_rate: "" }, class: "text-sm text-muted") { "yearly run rate" } : change_and_parts
+        render Views::Plans::RunRateAtEnd.new(run_rate: @marks.cost[:run_rate_at_end], reference:)
       end
       not_converted
       p(class: "text-sm text-muted") { basis }

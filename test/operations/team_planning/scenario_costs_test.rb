@@ -59,8 +59,10 @@ class Operations::TeamPlanning::ScenarioCostsTest < ActiveSupport::TestCase
       row = result[:scenarios].find { it[:scenario_id] == scenario_id }
       assert_equal one[:total], row[:total]
       assert_equal [ one[:period], one[:unpriced].size ], row.values_at(:period, :unpriced)
+      assert_equal one[:run_rate_at_end].slice(:on, :total), row[:run_rate_at_end] unless scenario_id == @plan_id
     end
     assert_equal "50000", result[:scenarios].second[:total][:difference][:converted]
+    assert_equal [ nil, "2026-12-31", "2027-12-31" ], result[:scenarios].map { it.dig(:run_rate_at_end, :on) }
   end
 
   should "read the Org Graph once, however many scenarios the plan has" do
