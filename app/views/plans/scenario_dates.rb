@@ -90,12 +90,12 @@ class Views::Plans::ScenarioDates < Views::Base
     end
   end
 
-  def date_field(name, label_text, value, hint: nil, data: {})
+  def date_field(name, label_text, value, hint: nil, data: {}, disabled: false)
     field_id = "scenario-#{name.dasherize}"
     div do
       label(for: field_id, class: "block text-sm font-semibold text-default") { label_text }
       p(id: "#{field_id}-hint", class: "mt-1 text-sm text-muted") { hint } if hint
-      input(type: "date", id: field_id, name:, value:, required: true, aria: { describedby: ("#{field_id}-hint" if hint) },
+      input(type: "date", id: field_id, name:, value:, required: !disabled, disabled:, aria: { describedby: ("#{field_id}-hint" if hint) },
             class: "#{Components::Kit::Field::INPUT} mt-2 max-w-xs", data:)
     end
   end
@@ -104,7 +104,7 @@ class Views::Plans::ScenarioDates < Views::Base
     return date_field("ends_on", "Ends on", ends_on, hint: "A step comes after this one, so it needs an end.") if continues?
 
     div(class: "space-y-2", data: { controller: "no-end-date" }) do
-      date_field("ends_on", "Ends on", ends_on, data: { no_end_date_target: "date" })
+      date_field("ends_on", "Ends on", ends_on, data: { no_end_date_target: "date" }, disabled: no_end?)
       div(class: "flex items-start gap-2") do
         input(id: "scenario-no-end", type: "checkbox", name: "no_end", value: "1", checked: no_end?,
               class: "mt-0.5 #{Components::Kit::Field::CHECKBOX}", aria: { describedby: "scenario-no-end-hint" },
