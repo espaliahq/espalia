@@ -52,7 +52,14 @@ class OrgGraphTaxonomyCheckTaskTest < ActiveSupport::TestCase
   end
 
   should "report a change to the kinds dated before an earlier one, without failing" do
-    as_tenant { @handler.add_level(SecureRandom.uuid_v7, "Squad", effective_on: "2025-12-01") }
+    # The command now refuses this date, so publish one from before it did.
+    levels = [ { level_id: @division, name: "Division" }, { level_id: @department, name: "Department" },
+               { level_id: @team, name: "Team" }, { level_id: SecureRandom.uuid_v7, name: "Squad" } ]
+    Rails.configuration.event_store.publish(
+      OrgGraph::Events::TaxonomyDefined.new(data: { levels:, previous_levels: levels.first(3), effective_on: "2025-12-01", defined_by_id: nil },
+                                            metadata: { tenant_id: @tenant.id }),
+      stream_name: EventStreamNaming.org_structure_stream(tenant: @tenant)
+    )
 
     assert_match "0 misplaced units, 1 change to the kinds dated out of order", run_task
     assert_match(/TaxonomyDefined .+ is dated 2025-12-01, before 2026-01-01/, as_tenant { OrgGraph::TaxonomyCheck.new.out_of_order }.sole)
