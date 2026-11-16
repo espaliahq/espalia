@@ -80,8 +80,8 @@ module Operations::TeamPlanning::WithinScope
     kind.refers_to(end_state.to_h.symbolize_keys).any? { map.known_unit_ids.include?(it) }
   end
 
-  # A seat brings someone in only through a unit the plan covers: the map keeps
-  # a seat with no unit, and that places no one inside.
+  # A seat brings someone in only through a unit the plan covers. The scope cut
+  # keeps a seat with no unit, though no write makes one today.
   def brings_in?(map, end_state)
     unit_of = map.position_units
     units = map.known_unit_ids

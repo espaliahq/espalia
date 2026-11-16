@@ -722,8 +722,9 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     map = resolve(@plan_id, @h1)
     seat = TeamPlanning::Baseline::Position.new(id: SecureRandom.uuid_v7, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: nil,
                                                 fte: 1, basis: "new", role_name: nil, level_name: nil)
-    covered = map.positions.first || TeamPlanning::Baseline::Position.new(**seat.to_h, id: SecureRandom.uuid_v7, unit_id: @payments)
-    map = map.with(positions: map.positions + [ seat, covered ].uniq(&:id))
+    covered = seat.with(id: SecureRandom.uuid_v7, unit_id: @payments)
+    assert_includes map.known_unit_ids, @payments
+    map = map.with(positions: map.positions + [ seat, covered ])
     scope = Object.new.extend(Operations::TeamPlanning::WithinScope)
 
     assert_equal [ false, true ], [ seat, covered ].map { scope.send(:brings_in?, map, { placements: [ { position_id: it.id, allocation: 1 } ] }) }
