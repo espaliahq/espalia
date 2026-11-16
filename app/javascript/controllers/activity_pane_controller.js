@@ -103,6 +103,11 @@ export default class extends BaseController {
     this.#commit("closed")
   }
 
+  // A toggle a frame re-renders arrives with the server's aria-expanded.
+  toggleTargetConnected(toggle) {
+    toggle.setAttribute("aria-expanded", this.#visualState() === "open" ? "true" : "false")
+  }
+
   // Fired by useClickOutside on every outside click. We only act on
   // mobile — on lg+ the pane sits inline alongside the matrix, so
   // clicking the matrix should not close it. Toggle-button clicks

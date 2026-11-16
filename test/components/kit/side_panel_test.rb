@@ -50,6 +50,35 @@ class Components::Kit::SidePanelTest < ActiveSupport::TestCase
       assert_not_includes doc.at_css("aside")["class"].split, "max-lg:fixed"
     end
 
+    should "put the controller around the whole page when wrapped, with the row where columns places it" do
+      html = Components::Kit::SidePanel.new(id: "activity", title: "Activity", open: false, cookie: "c", url_key: "activity",
+                                            heading: false, sticky: true, fit_viewport: true).call do |panel|
+        panel.main { panel.p { "Matrix" } }
+        panel.body { panel.p { "Feed" } }
+        panel.wrap do
+          panel.tag(:page_header) { panel.render Components::Kit::SidePanel::Toggle.new(controls: "activity", open: false) { "Activity" } }
+          panel.columns
+        end
+      end
+      doc = Nokogiri::HTML5.fragment(html)
+
+      host = doc.at_css("[data-controller='activity-pane']")
+      assert_equal "true", host["data-activity-pane-fit-viewport-value"]
+      assert host.at_css("page-header button[data-activity-pane-target='toggle'][aria-controls='activity']")
+      aside = host.at_css("page-header + div aside#activity")
+      assert_equal "Activity", aside["aria-label"]
+      assert_includes aside["class"].split, "lg:sticky"
+      assert_nil aside.at_css("h2")
+      assert_equal "Feed", aside.text
+    end
+
+    should "close from a button the body draws" do
+      button = Nokogiri::HTML5.fragment(Components::Kit::SidePanel::Close.new(label: "Close activity").call { "×" }).at_css("button")
+
+      assert_equal "activity-pane#close", button["data-action"]
+      assert_equal "Close activity", button["aria-label"]
+    end
+
     context ".open?" do
       should "take the URL's choice over the cookie's, and the cookie's over the default" do
         assert Components::Kit::SidePanel.open?(url: "open", cookie: "closed", default: false)
