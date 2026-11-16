@@ -5,6 +5,11 @@
 # scenario's {TeamPlanning::PlanAggregate#resolution_chain}. The last change
 # for a subject and facet wins, so changes to different facets never compete.
 #
+# A scenario after a closed step stands on the Org Graph the day after that
+# step ends instead ({TeamPlanning::PlanAggregate#standing_after}). The
+# changes the closed steps made that the Org Graph then held drop away, and
+# the rest carry over, so it reads as a first step from that day would.
+#
 # Like the baseline, {#structure} is ids only and {#call} joins the names last.
 #
 # @example
@@ -104,8 +109,10 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def resolved(aggregate = @repository.load_plan(@plan.id))
+    standing = aggregate.standing_after(@scenario_id)
     winning = @repository.sealed(aggregate.winning_changes(@scenario_id))
-    base = (@base || @baseline.structure).with(step_ids: step_of(aggregate))
+    winning = winning.reject { |_, change| done_at_close(*standing).include?(change.event_id) } if standing
+    base = (standing ? standing_on(standing.last) : @base || @baseline.structure).with(step_ids: step_of(aggregate))
     hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
     map = (hires + others).reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
     [ explained(map.settled), winning ]
@@ -132,7 +139,30 @@ class TeamPlanning::Resolution
              .to_h { [ it.data[:subject_id], it.data[:unit_id] ] }
   end
 
+  # The changes a closed step and those before it made that the Org Graph
+  # held the day after it ended, as {TeamPlanning::Status} reads them. A step
+  # after it stands on that day's organisation, so they drop away; every
+  # other change carries over and lands again.
+  #
+  # @param closed_id [String] the step closed
+  # @param ends_on [Date] its last day
+  # @return [Set<String>] their event ids
+  def done_at_close(closed_id, ends_on)
+    CurrentPlanReads.fetch([ :done_at_close, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, closed_id, ends_on ]) do
+      TeamPlanning::Status.new(context: @context, plan: @plan, scenario_id: closed_id, today: ends_on + 1, repository: @repository)
+                          .call.statuses.select { it.status == :done }.to_set(&:change_id)
+    end
+  end
+
   private
+
+  # The organisation the day after a closed step ends, known now, or on the
+  # archive day once the plan is archived.
+  def standing_on(ends_on)
+    CurrentPlanReads.fetch([ :standing, *CurrentPlanReads.viewer(@context), @plan.id, @plan.archived_on, ends_on ]) do
+      @baseline.map_on(ends_on + 1, known_on: @plan.archived_on)
+    end
+  end
 
   # The scenario and those it is an alternative of: the chain after the step
   # before it on the timeline. The scenarios that step replaced come earlier
