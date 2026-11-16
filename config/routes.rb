@@ -414,6 +414,12 @@ Rails.application.routes.draw do
     get :checks, on: :member
     # What a scenario's budget lines approve, fund and leave ([#395](https://github.com/espaliahq/espalia/issues/395)).
     get :budget, on: :member
+    # Add, change and cut a scenario's budget lines from the Budget tab ([#411](https://github.com/espaliahq/espalia/issues/411)).
+    get :new_budget_line, on: :member, path: "budget/lines/new"
+    post :create_budget_line, on: :member, path: "budget/lines"
+    get :edit_budget_line, on: :member, path: "budget/lines/:budget_line_id/edit"
+    patch :update_budget_line, on: :member, path: "budget/lines/:budget_line_id"
+    delete :cut_budget_line, on: :member, path: "budget/lines/:budget_line_id"
     # Update the plan to today, from a preview an editor confirms ([#337](https://github.com/espaliahq/espalia/issues/337)).
     get :rebase, on: :member, path: "update-to-today"
     post :rebase, on: :member, path: "update-to-today", action: :rebase_plan

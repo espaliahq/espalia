@@ -18,13 +18,15 @@ class Views::Plans::BudgetTab < Views::Base
   # @param budget [Hash, nil] from `team_planning_budget`; nil on Today
   # @param funding [Hash, nil] from `team_planning_funding`; nil on Today
   # @param map [Hash, nil] from `team_planning_scenario_map`, for position and unit names; nil on Today
-  def initialize(plan:, scenarios:, lines:, budget: nil, funding: nil, map: nil)
+  # @param can_edit [Boolean] whether the viewer may change this scenario's lines and funding
+  def initialize(plan:, scenarios:, lines:, budget: nil, funding: nil, map: nil, can_edit: false)
     @plan = plan
     @scenarios = scenarios
     @lines = lines
     @budget = budget
     @funding = funding
     @map = map
+    @can_edit = can_edit
   end
 
   def view_template
@@ -120,7 +122,13 @@ class Views::Plans::BudgetTab < Views::Base
 
   def lines_section
     section(aria: { labelledby: "budget-lines-heading" }) do
-      h4(id: "budget-lines-heading", class: "text-sm font-semibold text-default") { "Budget lines" }
+      div(class: "flex flex-wrap items-center justify-between gap-2") do
+        h4(id: "budget-lines-heading", class: "text-sm font-semibold text-default") { "Budget lines" }
+        if @can_edit
+          render Components::Kit::Button.new(variant: :outline, size: :sm, href: new_budget_line_plan_path(plan_id, scenario: scenario_id),
+                                             id: "budget-line-add") { "Add a line" }
+        end
+      end
       if @budget[:budget_lines].empty?
         div(class: "mt-3") { render Components::Kit::EmptyState.new(title: "This scenario holds no budget lines.", size: :panel) }
       else
@@ -139,6 +147,7 @@ class Views::Plans::BudgetTab < Views::Base
         if line[:mismatched_currencies].any?
           render Components::Kit::Badge.new("Drawn on in #{line[:mismatched_currencies].join(', ')}", tone: :warning, data: { budget_mismatch: "" })
         end
+        change_link(id, described) if @can_edit && described
       end
       p(class: "text-xs text-muted break-words") { terms_text(described) } if described
       dl(class: "grid grid-cols-1 gap-1 text-sm sm:grid-cols-3") do
@@ -148,6 +157,12 @@ class Views::Plans::BudgetTab < Views::Base
       end
       draws(line)
     end
+  end
+
+  def change_link(id, described)
+    render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true, class: "ml-auto",
+                                       href: edit_budget_line_plan_path(plan_id, budget_line_id: id, scenario: scenario_id),
+                                       aria_label: "Change #{line_name(described)}") { "Change" }
   end
 
   def figure(label, text, heads, data: {})

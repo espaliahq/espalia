@@ -4,6 +4,8 @@
 # the Team Planning Operations, as the MCP tools do, so a plan someone isn't
 # in is a 404 here and "No such plan" there.
 class PlansController < ApplicationController
+  include Plans::BudgetEditing
+
   around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map budget]
 
   # GET /planning?state=archived
@@ -160,7 +162,7 @@ class PlansController < ApplicationController
     tab = if scenario_id == plan[:plan_id]
             Views::Plans::BudgetTab.new(plan:, scenarios:, lines:)
     else
-            Views::Plans::BudgetTab.new(plan:, scenarios:, lines:, budget: read(Operations::TeamPlanning::Budget, scenario_id:),
+            Views::Plans::BudgetTab.new(plan:, scenarios:, lines:, can_edit: can_edit?, budget: read(Operations::TeamPlanning::Budget, scenario_id:),
                                         funding: read(Operations::TeamPlanning::Funding, scenario_id:),
                                         map: read(Operations::TeamPlanning::ScenarioMap, scenario_id:))
     end
