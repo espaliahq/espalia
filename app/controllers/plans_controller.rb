@@ -108,6 +108,27 @@ class PlansController < ApplicationController
     render plan_page(plan, scenarios:, open_tab: :checks, body: tab)
   end
 
+  # GET /planning/:id/budget?scenario=:scenario_id
+  #
+  # A scenario's budget lines and what draws on them
+  # ([#395](https://github.com/espaliahq/espalia/issues/395)). Today, the
+  # default, has no period, so it shows the lines as approved.
+  def budget
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = params[:scenario].presence || plan[:plan_id]
+    lines = read(Operations::TeamPlanning::BudgetLines, scenario_id:)
+    tab = if scenario_id == plan[:plan_id]
+            Views::Plans::BudgetTab.new(plan:, scenarios:, lines:)
+    else
+            Views::Plans::BudgetTab.new(plan:, scenarios:, lines:, budget: read(Operations::TeamPlanning::Budget, scenario_id:),
+                                        funding: read(Operations::TeamPlanning::Funding, scenario_id:),
+                                        map: read(Operations::TeamPlanning::ScenarioMap, scenario_id:))
+    end
+    render plan_page(plan, scenarios:, open_tab: :budget, body: tab)
+  end
+
   # GET /planning/:id/update-to-today
   #
   # What updating the plan to today would take in, for an editor to confirm
@@ -291,7 +312,8 @@ class PlansController < ApplicationController
               Views::Plans::ShowView::Tab.new(key: :map, label: "Map", href: map_plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :timeline, label: "Timeline", href: timeline_plan_path(plan[:plan_id])),
               Views::Plans::ShowView::Tab.new(key: :changes, label: "Changes", href: changes_plan_path(plan[:plan_id])),
-              Views::Plans::ShowView::Tab.new(key: :checks, label: "Checks", href: checks_plan_path(plan[:plan_id])) ],
+              Views::Plans::ShowView::Tab.new(key: :checks, label: "Checks", href: checks_plan_path(plan[:plan_id])),
+              Views::Plans::ShowView::Tab.new(key: :budget, label: "Budget", href: budget_plan_path(plan[:plan_id])) ],
       open_tab:,
       body:,
       can_edit: can_edit?,
