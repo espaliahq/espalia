@@ -71,6 +71,11 @@ class PlanSidePanelSystemTest < ApplicationSystemTestCase
         assert_selector "#{TOGGLE}[aria-expanded='false']"
         assert_no_selector PANEL, visible: true
         assert_no_sideways_overflow
+
+        page.execute_script("const t = document.querySelector(arguments[0]); t.after(t.cloneNode(true))", TOGGLE)
+        toggle_side_panel
+        assert_selector PANEL, visible: true, text: "Members"
+        assert_selector "#{TOGGLE}[aria-expanded='true']", count: 2
       end
 
       should "start open on the Map of a plan with no scenarios yet" do

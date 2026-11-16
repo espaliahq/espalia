@@ -86,7 +86,7 @@ class Components::Kit::SidePanel < Components::Base
     @body_block = block
   end
 
-  # The button that opens and closes the panel. Call it once, inside `main`, where it should sit.
+  # The button that opens and closes the panel. Call it inside `main`, where it should sit.
   #
   # @param label [String] defaults to the panel's title
   def toggle(label = @title)

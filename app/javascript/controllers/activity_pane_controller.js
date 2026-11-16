@@ -208,9 +208,9 @@ export default class extends BaseController {
 
   #applyMetadata(state) {
     if (this.hasPaneTarget) this.paneTarget.dataset.paneState = state
-    if (this.hasToggleTarget) {
-      this.toggleTarget.setAttribute("aria-expanded", state === "open" ? "true" : "false")
-    }
+    this.toggleTargets.forEach((toggle) => {
+      toggle.setAttribute("aria-expanded", state === "open" ? "true" : "false")
+    })
   }
 
   #pushBrowserUrl(state) {
