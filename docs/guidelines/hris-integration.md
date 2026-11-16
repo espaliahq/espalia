@@ -127,7 +127,7 @@ Titles are matched case-insensitively after `downcase.strip` — `HrisRoleMappin
 
 ### Unmapped titles
 
-Skipped by Pass 5, and **the person keeps whatever assignment an earlier title gave them** — the sync neither moves nor unassigns them. That is how a renamed HiBob title leaves someone on the wrong ladder for weeks without anyone noticing ([#436](https://github.com/mr-yum/growth-os/issues/436): "Engineering Manager (EM3)" stayed on E3).
+Skipped by Pass 5, and **the person keeps whatever assignment an earlier title gave them** — the sync neither moves nor unassigns them. That is how a renamed HiBob title leaves someone on the wrong ladder for weeks without anyone noticing (once, "Engineering Manager (EM3)" stayed on E3).
 
 Three places now surface it:
 

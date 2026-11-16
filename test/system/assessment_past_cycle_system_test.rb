@@ -4,7 +4,7 @@ require "application_system_test_case"
 
 # Reading a past cycle from the header's cycle switcher: the page reloads that
 # cycle read-only, with a banner in place of the status pill, and leads back
-# to the open cycle (https://github.com/mr-yum/growth-os/issues/669).
+# to the open cycle.
 class AssessmentPastCycleSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze

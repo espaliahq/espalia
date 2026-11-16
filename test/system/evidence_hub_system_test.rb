@@ -53,9 +53,8 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
   end
 
   # The hub replaces itself while still loading when it follows an old anchor,
-  # and ChromeDriver can report the abandoned document as a stale element
-  # (https://github.com/mr-yum/growth-os/issues/691). The browser is already
-  # on its way by then, and visiting again would only rerun the race, so the
+  # and ChromeDriver can report the abandoned document as a stale element.
+  # The browser is already on its way by then, and visiting again would only rerun the race, so the
   # caller's assertions wait for where it lands.
   def visit_self_replacing_page(path)
     visit path

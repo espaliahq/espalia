@@ -27,8 +27,7 @@
 # `current_cycle` and `past_cycles` say when each lifecycle milestone last
 # happened, with who acted, in `reporting_cycle_cohort`'s field names.
 # `cycle_id` scores a past cycle instead of the open one, as the web's
-# read-only past-cycle page does, and `scoring.lens` names the cycle
-# (https://github.com/mr-yum/growth-os/issues/669).
+# read-only past-cycle page does, and `scoring.lens` names the cycle.
 class Operations::Assessments::Get < Operations::Base
   include Operations::Assessments::ReadLens
   include Operations::Assessments::ExplorationPayload

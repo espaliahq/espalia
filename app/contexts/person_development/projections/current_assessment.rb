@@ -95,7 +95,7 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     join (`joined_role_id` / `joined_level_id`), and a role-less
   #     (pre-ADR-22) alignment event is that role's, as the aggregate holds
   #     it — not the enrollment snapshot's, which a mid-cycle role change
-  #     moves (https://github.com/mr-yum/growth-os/issues/673). A rebuild backfills the columns and re-homes such rows
+  #     moves. A rebuild backfills the columns and re-homes such rows
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
   #
   # 10 — the home is tracked from this projection's own events
@@ -103,7 +103,7 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     join, moved by a transfer or promotion until any alignment starts,
   #     as the aggregate does. Nothing reads the enrollment snapshot, so a
   #     rebuild judges each event against the home as it was then, not as
-  #     the snapshot ended (https://github.com/mr-yum/growth-os/issues/687).
+  #     the snapshot ended.
   #     A role-less alignment after a pre-alignment transfer is now the new
   #     role's (REBUILD_ON_DEPLOY=person_development/current_assessment).
   CODE_VERSION = 10
@@ -684,8 +684,7 @@ class PersonDevelopment::Projections::CurrentAssessment
 
   # The role the cycle assesses the person at, as this projection tracks it
   # from its own events ({#move_home}), never the enrollment snapshot: a
-  # rebuild reads that table as it ended, not as it stood at the event
-  # (https://github.com/mr-yum/growth-os/issues/687).
+  # rebuild reads that table as it ended, not as it stood at the event.
   #
   # @param progress [AssessmentCycleProgress, nil]
   # @return [String, nil]

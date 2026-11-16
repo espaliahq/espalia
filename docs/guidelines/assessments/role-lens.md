@@ -8,7 +8,7 @@ A person can be read against a role or level they are not in — "how would I re
 
 | Term | Meaning |
 |---|---|
-| **Home role / home level** | The role and level the cycle's enrollment snapshot assesses the person at (ADR-19). What the record is. It follows a promotion or transfer until any alignment starts in the cycle, then the conversation pins it ([#687](https://github.com/mr-yum/growth-os/issues/687)). The aggregate, the snapshot and `CurrentAssessment` each apply that rule, so they name the same home. |
+| **Home role / home level** | The role and level the cycle's enrollment snapshot assesses the person at (ADR-19). What the record is. It follows a promotion or transfer until any alignment starts in the cycle, then the conversation pins it. The aggregate, the snapshot and `CurrentAssessment` each apply that rule, so they name the same home. |
 | **Lens** | A `(role, level)` the page is *read against* — `as_role` / `as_level` in URLs and Operation params. The home role is the default lens. |
 | **Role scope** | The `(capability_stable_id, level_ordinal)` cells a role's active bindings and expectations define — `Assessments::RoleScope`. |
 | **Out-of-scope cell** | A cell outside the home role's scope. Rated into the same cycle; invisible to every home-role reader. |
@@ -34,7 +34,7 @@ Avoid "aspirational assessment", "what-if", "shadow ratings" and "exploration ra
 
 ### Past cycles
 
-A lens reads one cycle. `cycle_id` names a cycle the person joined on the framework, closed or withdrawn from ([#669](https://github.com/mr-yum/growth-os/issues/669)); `Lens#past?` is then true and everything built through the lens reads that cycle.
+A lens reads one cycle. `cycle_id` names a cycle the person joined on the framework, closed or withdrawn from; `Lens#past?` is then true and everything built through the lens reads that cycle.
 
 - **Home is that cycle's snapshot.** A past cycle is scored at the role and level its enrollment recorded, not today's: an E2 cycle stays an E2 assessment after a promotion to E3.
 - **Disclosure doesn't change when a cycle ends.** The assessee sees a manager's rating on a past cycle exactly where they saw it when the cycle closed: on the cells an alignment covered. Closing a cycle discloses nothing new, so a manager's ratings that alignment never reached stay private for good. `Lens#participant_status` reads how far the participation got (`AssessmentCycleParticipation#lifecycle_status`), because the participation's own `status` turns `concluded` or `withdrawn` and would drop the home alignment; `AssessmentPolicy#view_alignment?(cycle:)` answers from that cycle's progress and rows.
@@ -81,6 +81,6 @@ Every reader that counts, scores or displays ratings says which role it reads fo
 - **Build the cells from `Assessments::RoleScope`**: `.for(role_id:, framework_id:)` for one role, `.for_roles` for a cohort, `.for_people(cycle_id:, framework_id:, person_ids:)` for each person's home role (enrollment snapshot, live assignment only before the snapshot existed). `#at_level(ordinal)` narrows it; `#bindings` feeds `PersonDevelopment::Scoring`.
 - **Filter with `AssessmentLevelRating.within(scope)`** — one scope, or a `person_id => scope` map for a cohort.
 - **Say so when a read spans every role**: `.across_all_roles` for activity history, cross-cycle seeding, and a cell someone already named.
-- **A scope is built fresh by default**, because a replay changes the framework between events. A rating wraps itself in `Assessments::RoleScope.reusing { … }` to build each role's scope once: the rating Operations do it in `RatingCell#call` (so MCP gets it too), the rating controllers around the whole request through `Assessments::TurboStreamHelpers` (the response re-reads the page's lens), and the bulk confirm across its cells ([#489](https://github.com/mr-yum/growth-os/issues/489)). The memo lives in `CurrentRoleScopes`, which Rails resets after every request and job, and `Frameworks::Repository#with_framework` empties it after any framework write.
+- **A scope is built fresh by default**, because a replay changes the framework between events. A rating wraps itself in `Assessments::RoleScope.reusing { … }` to build each role's scope once: the rating Operations do it in `RatingCell#call` (so MCP gets it too), the rating controllers around the whole request through `Assessments::TurboStreamHelpers` (the response re-reads the page's lens), and the bulk confirm across its cells. The memo lives in `CurrentRoleScopes`, which Rails resets after every request and job, and `Frameworks::Repository#with_framework` empties it after any framework write.
 - **The `Espalia/RatingsMustBeRoleScoped` cop fails CI** on a chain that does neither. Exempt: record building, a `find_by` naming both `capability_stable_id` and `level_ordinal`, and the `CurrentAssessment` projection.
 - **Every reader carries an "ignores ratings outside the assessed role" test** built on `create_out_of_scope_rating` ([testing.md](../testing.md)).
