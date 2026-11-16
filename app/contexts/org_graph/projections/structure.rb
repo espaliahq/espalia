@@ -6,7 +6,9 @@
 # Writes `org_taxonomy_levels`, `org_units`, `org_unit_successions`,
 # `org_unit_owners` and `org_fact_providers`, and nothing else writes them. The level and unit
 # primary keys are event-carried ids, so references survive a rebuild.
-# A level's effective_on is the date its name or place last changed.
+# A level's effective_on is the date its name or place last changed. Its
+# parent_level_ids and top hold the rules it states, and stay null on a level
+# that never stated them, so {OrgTaxonomyLevel.taxonomy} derives the legacy rule.
 #
 class OrgGraph::Projections::Structure
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -14,7 +16,7 @@ class OrgGraph::Projections::Structure
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   # @return [Array<Class>]
   def self.handled_events
@@ -78,8 +80,9 @@ class OrgGraph::Projections::Structure
 
     levels.each.with_index do |level, position|
       row = OrgTaxonomyLevel.find_or_initialize_by(id: level[:level_id])
+      rules = level.key?(:parent_level_ids) ? { parent_level_ids: level[:parent_level_ids], top: level[:top] } : { parent_level_ids: nil, top: nil }
       unchanged = row.persisted? && row.name == level[:name] && row.position == -position - 1
-      row.assign_attributes(name: level[:name], position: position)
+      row.assign_attributes(name: level[:name], position: position, **rules)
       row.effective_on = data[:effective_on] unless unchanged
       row.save!
     end

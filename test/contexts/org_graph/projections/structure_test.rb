@@ -42,6 +42,16 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         assert_equal Date.new(2026, 1, 1), OrgTaxonomyLevel.find(@team_level).effective_on
       end
     end
+    should "hold the rules a level states, leaving them null on a level that never stated any" do
+      as_tenant do
+        @handler.set_kind_parents(@team_level, parent_ids: [ @team_level, @department_level ], top: true, effective_on: Date.current)
+
+        assert_equal [ [ @department_level, @team_level ], true ], OrgTaxonomyLevel.find(@team_level).values_at(:parent_level_ids, :top)
+        assert_equal [ nil, nil ], OrgTaxonomyLevel.find(@department_level).values_at(:parent_level_ids, :top)
+        assert_equal [ [ [], true ], [ [ @department_level, @team_level ], true ] ],
+                     OrgTaxonomyLevel.taxonomy.kinds.map { [ it.parent_ids, it.top ] }
+      end
+    end
   end
 
   context "the providers" do
@@ -262,6 +272,7 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         @handler.add_unit_owner(@engineering, SecureRandom.uuid_v7, effective_on: "2026-06-01")
         @handler.add_unit_owner(@billing, SecureRandom.uuid_v7.tap { |id| @former = id }, effective_on: "2026-07-01")
         @handler.remove_unit_owner(@billing, @former, effective_on: "2026-08-01")
+        @handler.set_kind_parents(@team_level, parent_ids: [ @department_level, @team_level ], top: true, effective_on: Date.current)
       end
 
       before = snapshot_read_models(OrgGraph::Projections::Structure, @tenant)
