@@ -648,8 +648,8 @@ class TeamPlanning::CommandHandler
 
   # A budget line's amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)).
   def ensure_line_money_right!(plan, scenario_id, subject_id, facet)
-    return unless TeamPlanning::LineMoney.priced?(plan, scenario_id, subject_id, facet)
     return if PlanPolicy.new(@actor, plan).see_pay?
+    return unless TeamPlanning::LineMoney.priced?(plan, scenario_id, subject_id, facet)
 
     raise TeamPlanning::Error, TeamPlanning::LineMoney::REFUSAL
   end
