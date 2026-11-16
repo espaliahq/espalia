@@ -746,8 +746,8 @@ and a scenario. `TeamPlanning::PayUpload` reads and matches the file in memory.
   pay changes, those already held as the file has it, and the people on the map the file
   leaves out. It returns an HMAC over the file, basis and scenario, keyed per plan. The
   confirm sends the same file again with that signature, and any changed byte refuses it.
-  The confirm checks the file against the scenario again, and refuses it if a row no
-  longer names one person on the map. Nothing is stored between the two calls.
+  The confirm checks the file again against the scenario and the plan's scope as they
+  stand once the plan is locked, and refuses it if a row no longer names one person on the map. Nothing is stored between the two calls.
 - **All rows or none.** One bad row holds nothing. Each bad row is reported as its line
   number and reason codes, never its values, since the uploader has the file. The number is
   the line the row starts on, so a quoted field across lines shifts nothing after it. Each good row

@@ -11,15 +11,15 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    teams = SecureRandom.uuid_v7
+    @teams = SecureRandom.uuid_v7
     @payments = SecureRandom.uuid_v7
 
     travel_to Time.utc(2025, 12, 15, 9)
     ActsAsTenant.with_tenant(@tenant) do
       engineer = create(:framework_role, code: "E", name: "Software Engineer")
       e5 = create(:framework_level, role_id: engineer.role_id, ordinal: 5, title: "Senior SWE")
-      structure.define_taxonomy([ { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
-      structure.create_unit(@payments, "Payments", level_id: teams, effective_on: "2025-01-01")
+      structure.define_taxonomy([ { level_id: @teams, name: "Team" } ], effective_on: "2025-01-01")
+      structure.create_unit(@payments, "Payments", level_id: @teams, effective_on: "2025-01-01")
 
       @ada = create(:person, tenant: @tenant, name: "Ada Quill", email: "ada.quill@example.com", external_id: "E-100")
       @cy = create(:person, tenant: @tenant, name: "Cy Quill", email: "cy.quill@example.com")
@@ -169,6 +169,25 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     assert_equal changed, refusal { upload(csv, scenario_id: @plan_id, signature:) }
     assert_equal changed, refusal { upload(csv, signature: signature.reverse) }
     assert_equal 1, upload(csv, signature:)[:written]
+  end
+
+  should "judge a confirm by the plan's scope as it stands once the plan is locked" do
+    csv = "#{HEADER}E-100,90413,EUR,year\n"
+    signature = upload(csv).fetch(:signature)
+    stale = TeamPlanningPlan.includes(:members).find(@plan_id)
+    sales = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+                                       .create_unit(sales, "Sales", level_id: @teams, effective_on: "2025-01-01")
+    end
+    call(Operations::TeamPlanning::SetPlanScope, plan_id: @plan_id, unit_ids: [ sales ])
+    before = event_count
+
+    lookup = Object.new.tap { |it| it.define_singleton_method(:find_by) { |**| stale } }
+    message = TeamPlanningPlan.stub(:includes, lookup) { refusal { upload(csv, signature:) } }
+
+    assert_match "scenario changed", message
+    assert_equal before, event_count
   end
 
   should "refuse a confirm once a line no longer names one person, and write nothing" do

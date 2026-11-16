@@ -60,6 +60,7 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
     written = 0
     refusing_bad_plans do
       handler.set_changes(plan.id) do |aggregate|
+        plan.reload
         map = ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure(aggregate)
         report = upload.against(map)
         held_now = held(map)
