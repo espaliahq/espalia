@@ -123,6 +123,12 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     assert_match "nothing to move", refusal { move(@q2, "later") }
   end
 
+  test "refuse a move out of the baseline, which holds today" do
+    place(@plan_id, @eng_id)
+
+    assert_match "Today can't be edited", refusal { move(@plan_id, "later") }
+  end
+
   test "refuse a move into a step that already changes it, naming that change" do
     place(@q1, @eng_id)
     there = place(@q2, @sales_id)

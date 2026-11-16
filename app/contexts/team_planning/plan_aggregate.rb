@@ -697,7 +697,7 @@ class TeamPlanning::PlanAggregate
   #   or a departure's date falls outside the target's period
   def move_change(scenario_id:, subject_id:, facet:, direction:, moved_by_id:, to_scenario_id: nil)
     ensure_open!
-    live_scenario!(scenario_id)
+    raise TeamPlanning::Error, "Today can't be edited. Fork a scenario and edit that." if live_scenario!(scenario_id) == @plan_id
     raise TeamPlanning::Error, "Only a place, a position or a departure moves between steps" unless MOVABLE_FACETS.include?(facet)
     raise TeamPlanning::Error, "A change moves earlier or later" unless DIRECTIONS.include?(direction)
 
