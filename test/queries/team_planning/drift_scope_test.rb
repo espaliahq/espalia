@@ -89,6 +89,23 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
     assert_equal [ [ title.event_id ], [] ], [ counted, withdrawn ].map { |kept| kept.map(&:change).select { it.kind == :fact_changed }.map(&:event_id) }
   end
 
+  should "report a joiner's own membership change on the day they join" do
+    joined = change(:joined, 10, after: { "memberships" => { @engineering => { "allocation" => 1 } } })
+    changed = change(:membership_changed, 10, unit_id: @engineering, before: { "allocation" => 1 }, after: { "allocation" => 0.5 })
+
+    assert_equal %i[joined membership_changed], cuts(joined, changed).map { it.change.kind }
+  end
+
+  should "keep a known joiner placed when the window withdraws another fact from the same event" do
+    known = change(:joined, 5, person_id: "eve", after: { "memberships" => { @engineering => {} } })
+    manager = change(:fact_changed, 5, person_id: "eve", fact: "manager", event_id: known.event_id, withdrawn: true)
+    title = change(:fact_changed, 20, person_id: "eve", fact: "title", after: { "title" => "Staff Engineer" })
+
+    kept = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ manager, title ], known: [ known ])
+
+    assert_includes kept.map { it.change.event_id }, title.event_id
+  end
+
   should "show a unit known to be created inside the plan, so its first rename keeps the name it was given" do
     created = change(:unit_created, 5, person_id: nil, unit_id: "field", after: { "parent_id" => @engineering, "name" => "Field" })
     renamed = change(:unit_renamed, 20, person_id: nil, unit_id: "field", before: { "name" => "Field" }, after: { "name" => "Field Ops" })

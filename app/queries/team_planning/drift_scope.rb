@@ -19,10 +19,11 @@
 # before a change if it was set while they were outside, before the window
 # or in it. Each cut field is listed in `outside`.
 #
-# Within a day, units move first, then people, then joiners, so a title that
-# changes on the day someone leaves goes with them and a joiner's manager who
-# arrives the same day can be named. A move the Org Graph knew before the
-# window but that takes effect after the base moves them too, on its own day,
+# Within a day, units move first, then joiners take their places, then people
+# move, and only then are joiners and facts judged. So a title that changes on
+# the day someone leaves goes with them, and a joiner's same-day moves and
+# manager are judged with everyone in place. A move the Org Graph knew before
+# the window that takes effect after the base moves them too, on its own day,
 # though the window never reports it, unless the window withdraws it.
 class TeamPlanning::DriftScope
   PERSON_KINDS = %i[joined left fact_changed].freeze
@@ -30,10 +31,8 @@ class TeamPlanning::DriftScope
   UNIT_KINDS = %i[unit_created unit_renamed unit_moved unit_retired owner_added owner_removed].freeze
   ENTERING = %i[membership_started moved].freeze
   ADVANCING = %i[joined membership_started membership_ended moved unit_created unit_moved].freeze
-  # A day's units move first, then the people in them, then those who join;
-  # every other change is judged after them.
-  RANK = { unit_created: 0, unit_moved: 0, unit_succeeded: 0,
-           membership_started: 1, membership_ended: 1, membership_changed: 1, moved: 1, joined: 2 }.freeze
+  RANK = { unit_created: 0, unit_moved: 0, unit_succeeded: 0, joined: 1,
+           membership_started: 2, membership_ended: 2, membership_changed: 2, moved: 2 }.freeze
 
   # @!attribute change [OrgGraph::ChangesBetween::Change] with outside fields cut
   # @!attribute outside [Array<String>] the fields cut: "unit_id", "from_unit_id", "before", "after" or "person_id"
@@ -60,15 +59,15 @@ class TeamPlanning::DriftScope
   #   the base: each moves the window on, on its own day and ahead of that day's changes, and is never reported
   # @return [Array<Cut>] the changes the plan covers when they happen, in the order given
   def call(changes, known: [])
-    withdrawn = changes.select(&:withdrawn).to_set(&:event_id)
-    pending = known.select { ADVANCING.include?(it.kind) && !withdrawn.include?(it.event_id) }.sort_by(&:effective_on)
+    withdrawn = changes.select(&:withdrawn).to_set { identity(it) }
+    pending = known.select { ADVANCING.include?(it.kind) && !withdrawn.include?(identity(it)) }.sort_by(&:effective_on)
     cuts = Array.new(changes.size)
     changes.each_with_index.group_by { |change, _| change.effective_on }.each_value do |day|
       known_until(pending, day.first.first.effective_on)
-      moves, rest = day.sort_by { |change, index| [ RANK.fetch(change.kind, 3), index ] }.partition { |change, _| RANK.fetch(change.kind, 3) < 2 }
-      joiners, facts = rest.partition { |change, _| change.kind == :joined }
-      moves.each { |change, index| cuts[index] = judge(change) }
+      units, joiners, moves, facts = day.group_by { |change, _| RANK.fetch(change.kind, 3) }.values_at(0, 1, 2, 3).map(&:to_a)
+      units.each { |change, index| cuts[index] = judge(change) }
       joiners.each { |change, _| advance(change) unless change.withdrawn }
+      moves.each { |change, index| cuts[index] = judge(change) }
       joiners.each { |change, index| cuts[index] = cut(change) }
       facts.each { |change, index| cuts[index] = judge(change) }
     end
@@ -81,8 +80,13 @@ class TeamPlanning::DriftScope
 
   def judge(change) = cut(change).tap { advance(change) unless change.withdrawn }
 
-  # A move known before the window counts from its own day, unreported, and
-  # whatever it creates or brings in is shown from then on.
+  # One Org Graph event writes several facts, so a withdrawal names its change
+  # by more than the event.
+  def identity(change) = [ change.event_id, change.kind, change.person_id, change.unit_id, change.fact ]
+
+  # A move known before the window counts from its own day, unreported. A
+  # joiner or unit it creates inside the plan is shown from then on; someone it
+  # moves in keeps what was set while they were outside unseen.
   def known_until(pending, day)
     while pending.first && pending.first.effective_on <= day
       change = pending.shift

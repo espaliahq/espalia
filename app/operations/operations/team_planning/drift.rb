@@ -18,7 +18,8 @@ class Operations::TeamPlanning::Drift < Operations::Base
               "(\"espalia\" for one Espalia supplies, or an HRIS such as \"hibob\"). " \
               "A person's placements are one facet, so a move in one placement meets the plan's whole list. " \
               "A plan covering some units lists only changes about the people and units it covers, at its base, in any " \
-              "scenario, or placed in one of them since. A move known before the base that takes effect after it counts on its own day. A change that takes one of them out, or a covered person now reporting " \
+              "scenario, or placed in one of them since, including by a move known before the base that takes effect after it. " \
+              "Such a move decides coverage from its own day but is not listed. A change that takes one of them out, or a covered person now reporting " \
               "to someone the plan can't show, keeps the fact and nulls what lies outside; a joiner keeps only the units and manager " \
               "the plan covers. `outside` lists the fields nulled or trimmed. " \
               "People are named by id, and `names` maps every person and unit id the changes name to a name; a forgotten " \
