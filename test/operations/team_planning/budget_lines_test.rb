@@ -43,6 +43,9 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError, &).message
   end
 
+  # An id can hold an amount's digits, as "…21d95001a426" holds 9500.
+  def without_ids(payload) = payload.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+
   def attention(scenario_id = @q2) = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id:)[:items].select { it[:check] == "budget_lines" }
 
   should "give every scenario the organisation's lines, an amount in its own currency and a head count with no amount" do
@@ -63,7 +66,7 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_equal held[:budget_lines].map(&:keys), seen[:budget_lines].map(&:keys)
     assert_equal seen[:budget_lines].first.except(:budget_line_id, :head_count, :origin), seen[:budget_lines].second.except(:budget_line_id, :head_count, :origin),
                  "a line with a hidden amount reads exactly as one with none"
-    [ "480000", "AUD" ].each { assert_not_includes seen.to_json, it }
+    [ "480000", "AUD" ].each { assert_not_includes without_ids(seen), it }
   end
 
   should "change a tenant line by its id and add a plan line, each reaching the steps after and not before" do
@@ -285,7 +288,7 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
       assert_equal seen[plain].values_at(:end_state, :sealed_fields), seen[priced].values_at(:end_state, :sealed_fields)
       assert_equal seen_q2[plain].values_at(:end_state, :inherits), seen_q2[priced].values_at(:end_state, :inherits)
       assert_equal %w[head_count tenant_line], seen_q2[@engineers.id][:end_state].keys.grep(/head_count|tenant_line|currency|period|amount/).sort
-      [ "AUD", "9000", "9500", "480000", "month" ].each { assert_not_includes [ seen, seen_q2 ].to_json, it }
+      [ "AUD", "9000", "9500", "480000", "month" ].each { assert_not_includes without_ids([ seen, seen_q2 ]), it }
     end
   end
 
