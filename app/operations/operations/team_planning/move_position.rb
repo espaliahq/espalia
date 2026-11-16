@@ -13,7 +13,7 @@ class Operations::TeamPlanning::MovePosition < Operations::Base
   include Operations::TeamPlanning::PlanWrite
 
   description "Move a position to another unit in a scenario of a Team Planning plan, keeping its role, level, " \
-              "FTE, basis and cost centre. The people in the position move with it. Written as one PositionSet. Refused on " \
+              "FTE, basis, cost centre, hiring status and target start. The people in the position move with it. Written as one PositionSet. Refused on " \
               "the baseline, and unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
@@ -37,7 +37,8 @@ class Operations::TeamPlanning::MovePosition < Operations::Base
       Operations::TeamPlanning::SetPosition.call(
         context:, params: { plan_id: plan_id!, scenario_id:, position_id: position[:position_id], role_id: position[:role_id],
                             level_id: position[:level_id], unit_id: uuid!(:to_unit_id), fte: position[:fte].to_f, basis: position[:basis],
-                            cost_centre: position[:cost_centre] }
+                            cost_centre: position[:cost_centre], hiring_status: position[:hiring_status],
+                            target_start: position[:target_start] }
       )
     end
   end
