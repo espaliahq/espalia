@@ -4,7 +4,7 @@
 # adds a kind names its class in {BUILT_IN}.
 class TeamPlanning::RuleKinds
   BUILT_IN = %w[TeamPlanning::RuleKinds::Attrition TeamPlanning::RuleKinds::BudgetBasis TeamPlanning::RuleKinds::BudgetStrictness TeamPlanning::RuleKinds::Capacity
-                TeamPlanning::RuleKinds::CostCentre TeamPlanning::RuleKinds::OnCost TeamPlanning::RuleKinds::TimeToHire TeamPlanning::RuleKinds::WorkingHours].freeze
+                TeamPlanning::RuleKinds::CostCentre TeamPlanning::RuleKinds::OnCost TeamPlanning::RuleKinds::OpenStepHorizon TeamPlanning::RuleKinds::TimeToHire TeamPlanning::RuleKinds::WorkingHours].freeze
   NAME = /\A[a-z][a-z0-9_]*\z/
 
   @registered = []

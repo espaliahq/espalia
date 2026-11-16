@@ -88,7 +88,7 @@ class Views::Plans::BudgetTab < Views::Base
     period = @budget[:period]
     on = @budget[:basis] == "inclusive" ? "base pay plus on-cost" : "base pay alone"
     priced = @budget[:pay_view] == "band_midpoints" ? "Priced at pay band midpoints" : "Priced from the actual pay the plan holds, and at pay band midpoints for the rest"
-    "For #{day_text(period[:starts_on])} to #{day_text(period[:ends_on])}, on #{on}. #{priced}. " \
+    "For #{Views::Plans::ScenarioTable.figured(period)}, on #{on}. #{priced}. " \
       "Each line keeps its own currency; only the totals convert#{" to #{reference}" if reference}."
   end
 

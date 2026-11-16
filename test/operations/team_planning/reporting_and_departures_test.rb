@@ -251,6 +251,10 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
                  refusal(Operations::TeamPlanning::SetDeparture, person_id: @ada.id, leaves_on: "2026-07-01")
     assert_equal "The leaving date must fall within the scenario's period, 2026-07-01 to 2026-09-30",
                  refusal(Operations::TeamPlanning::SetDeparture, scenario_id: @q2, person_id: @ada.id, leaves_on: "2026-06-30")
+    q3 = fork(parent_id: @q2, relation: "then", name: "Q3 onwards")
+    assert_equal "The leaving date must fall on or after the scenario's start, 2026-10-01",
+                 refusal(Operations::TeamPlanning::SetDeparture, scenario_id: q3, person_id: @ada.id, leaves_on: "2026-09-30")
+    assert_equal "2030-01-31", depart(q3, @ada, leaves_on: "2030-01-31")[:leaves_on], "a step with no end date takes any later day"
     assert_equal "The baseline has no period, so a departure in it takes no leaving date",
                  refusal(Operations::TeamPlanning::SetDeparture, scenario_id: @plan_id, person_id: @ada.id, leaves_on: "2026-03-02")
     assert_equal "A leaving date must be a date, such as 2027-03-31",

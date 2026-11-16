@@ -332,7 +332,11 @@ class PlansController < ApplicationController
                     body: Views::Plans::SplitScenario.new(plan:, scenario:, needs:, draft:, error:))
   end
 
-  def period_draft = params.permit(:starts_on, :ends_on).to_h.symbolize_keys.compact_blank
+  # A ticked "No end date" sends an empty end, which takes the end away.
+  def period_draft
+    draft = params.permit(:starts_on, :ends_on).to_h.symbolize_keys.compact_blank
+    params[:no_end] == "1" ? draft.merge(ends_on: "") : draft
+  end
 
   def dates_page(plan, draft:, error: nil, preview: true)
     scenario_id = params.expect(:scenario_id).downcase
@@ -340,7 +344,7 @@ class PlansController < ApplicationController
     scenario = scenarios.find { it[:scenario_id] == scenario_id && Views::Plans::ScenarioTable.dated?(it) }
     raise ActiveRecord::RecordNotFound, "No such step" unless scenario
 
-    if preview && draft[:ends_on]
+    if preview && draft.key?(:ends_on)
       begin
         previewed = Operations::TeamPlanning::PeriodPreview.call(context: pundit_user, params: { plan_id: plan[:plan_id], scenario_id:, **draft })
       rescue Operations::Base::ParameterError => e

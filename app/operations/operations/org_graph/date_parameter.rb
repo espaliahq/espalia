@@ -5,6 +5,7 @@
 module Operations::OrgGraph::DateParameter
   DATE_KEY = Operations::Reporting::CycleCohort::DATE_KEY
   DATE_SCHEMA = { pattern: Operations::Reporting::CycleCohort::DATE_PATTERN }.freeze
+  DATE_OR_BLANK_SCHEMA = { pattern: "^(?:#{Operations::Reporting::CycleCohort::DATE_FORMAT})?$" }.freeze
 
   private
 

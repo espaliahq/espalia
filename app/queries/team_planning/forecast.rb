@@ -147,9 +147,9 @@ class TeamPlanning::Forecast
   #
   # @return [Array<Row>] every forecast kind's rows, by kind, unit and step
   def rows
-    step = @aggregate.period_of(@scenario_id) or return []
+    step = TeamPlanning::FiguredPeriod.for(@aggregate, @scenario_id, @map)&.period or return []
 
-    earlier = @earlier.map { |id, reached| frame(id, @aggregate.period_of(id), reached.map, reached.pricing) }
+    earlier = @earlier.map { |id, reached| frame(id, TeamPlanning::FiguredPeriod.for(@aggregate, id, reached.map).period, reached.map, reached.pricing) }
     own = frame(@scenario_id, step, @map, @pricing)
     TeamPlanning::RuleKinds.forecasts.flat_map do |kind|
       kind.forecast(own.with(kind:, earlier: earlier.map { it.with(kind:) })).each do |row|

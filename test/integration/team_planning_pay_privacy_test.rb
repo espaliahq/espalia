@@ -65,6 +65,20 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     [ @q1, @plan_id ].each { assert_no_pay_read(it) }
   end
 
+  should "show no pay to anyone else from any read of a step with no end date, while a holder's cost, budget and funding run over it" do
+    open = SecureRandom.uuid_v7
+    TeamPlanning::CommandHandler.new(actor: context_for(@holder)).fork_scenario(@plan_id, open, parent_id: @q1, relation: "then", name: "Q2")
+
+    holder = call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: open)
+    assert_equal({ starts_on: "2026-07-01", ends_on: "2027-06-30", open_ended: true, horizon_months: 12 }, holder[:period])
+    assert_includes holder.to_json, AMOUNT, "a year of actual pay over the twelve months shown"
+    [ Operations::TeamPlanning::Budget, Operations::TeamPlanning::Funding ].each do |operation|
+      assert call(operation, @holder, plan_id: @plan_id, scenario_id: open)[:period][:open_ended]
+    end
+
+    assert_no_pay_read(open)
+  end
+
   should "price Today's yearly run rate from held pay for a holder, and never for anyone else" do
     holder = call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: @plan_id)
 
@@ -169,7 +183,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         cell = Views::Plans::CostCell.new(row:, reference: costs[:reference_currency]).call
 
         assert_equal [ "2026-09-30", yearly ], cost[:run_rate_at_end].then { [ it[:on], it[:total][:scenario][:converted] ] }, who
-        assert_equal cost[:run_rate_at_end].slice(:on, :total), row[:run_rate_at_end], who
+        assert_equal cost[:run_rate_at_end].slice(:on, :open_ended, :horizon_months, :total), row[:run_rate_at_end], who
         [ account, [ cost.to_json, costs.to_json, strip, cell ].map { it.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "") } ]
       end
 

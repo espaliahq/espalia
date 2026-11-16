@@ -83,6 +83,14 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
     assert_nil cell.(nil), "Today has no run rate at its end"
   end
 
+  should "say when the run rate's day is the end of the months shown for a step with no end date" do
+    figures = { scenario: sum({ "EUR" => "1200000" }, "1200000"), difference: sum({ "EUR" => "0" }, "0") }
+    run_rate = { on: "2028-03-31", open_ended: true, horizon_months: 12, total: figures }
+    line = Nokogiri::HTML5.fragment(Views::Plans::RunRateAtEnd.new(run_rate:, reference: "EUR").call)
+
+    assert_equal "Run rate on 31 Mar 2028, the end of the 12 months shown: EUR 1.2m a year, same as Today's", line.text
+  end
+
   context "the actual, planned and forecast split" do
     should "give each part, signing planned and forecast, and leave forecast out until it adds something" do
       parts = { actual: sum({ "EUR" => "1200000" }, "1200000"), planned: sum({ "EUR" => "-40000" }, "-40000"), forecast: sum({ "EUR" => "0" }, "0") }

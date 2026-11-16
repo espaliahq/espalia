@@ -20,8 +20,15 @@ class Views::Plans::RunRateAtEnd < Views::Base
     total = @run_rate[:total]
     change = Format.sum_change(total[:difference], @reference)
     span(data: { run_rate_at_end: "" }, class: "block basis-full text-xs tabular-nums text-muted") do
-      "Run rate on #{Date.iso8601(@run_rate[:on]).strftime('%-d %b %Y')}: #{Format.yearly(Format.sum(total[:scenario], @reference))}, " \
+      "Run rate on #{day}: #{Format.yearly(Format.sum(total[:scenario], @reference))}, " \
         "#{change ? "#{change} on Today's" : "same as Today's"}"
     end
+  end
+
+  private
+
+  def day
+    on = Date.iso8601(@run_rate[:on]).strftime("%-d %b %Y")
+    @run_rate[:open_ended] ? "#{on}, the end of the #{@run_rate[:horizon_months]} months shown" : on
   end
 end

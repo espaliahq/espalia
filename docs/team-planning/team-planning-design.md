@@ -54,7 +54,8 @@ Story 3.1 ([#208](https://github.com/espaliahq/espalia/issues/208)) built the tr
 - The baseline is implicit. Its id is the plan's, it stands on the base date, and it has
   no period, no alternative and can't be removed.
 - A `then` scenario starts the day after its parent ends. It holds its own end, and
-  `ScenarioPeriodSet` moves it.
+  `ScenarioPeriodSet` moves it. The last step on a line may have no end date; *Steps with
+  no end date* below has the rules.
 - The first step after the baseline starts on the base date, or on a later day of its own
   ([#404](https://github.com/espaliahq/espalia/issues/404)). The days between belong to no
   step, so Today's state carries on through them. `ScenarioPeriodSet` can move that start
@@ -94,6 +95,35 @@ come keeps it.
 
 Each date edit appears in the step's history as a `dates` entry with the new and previous
 dates. Undoing a date edit is [#407](https://github.com/espaliahq/espalia/issues/407).
+
+### Steps with no end date
+
+The last step on a line may run with no end date
+([#404](https://github.com/espaliahq/espalia/issues/404)). The aggregate keeps its period
+endless (`starts_on..nil`); only the figures give it an end.
+
+- **Only the last step may be open.** A step with a `then` after it needs an end, and
+  `ScenarioPeriodSet` refuses to take one off. An alternative shares its parent's period,
+  open or not.
+- **A step after an open one names its own start.** Forking `then` from an open step needs
+  `starts_on`, and the open step ends the day before. One `ScenarioForked` records both:
+  `closes_scenario_id` and `closes_on` name the step it closed, and its history shows a
+  `dates` entry for it. Removing the new step leaves the earlier one closed.
+- **Figures run over a horizon.** Cost, budget, funding, forecast and the run rate at the
+  end read the period through `TeamPlanning::FiguredPeriod`, which ends an open step after
+  the `open_step_horizon` rule: whole months from its start, 12 by default, 1 to 36. It is
+  plan-wide, from the plan or the tenant default. An open step prices the same as that step
+  ending on the horizon's last day. `Forecast.reaching` reads only the closed steps before
+  a step, so a horizon never carries into another step's figures.
+- **Reads say so.** Every period in a cost, budget, funding or forecast read carries
+  `open_ended` and `horizon_months`. `team_planning_fork_scenario`,
+  `team_planning_set_scenario_period` and `team_planning_period_preview` take an empty
+  `ends_on` for no end date and return a null end.
+- **On the web**, the fork dialog and the Dates page offer "No end date" on the last step,
+  and say why a step with one after it needs an end. Tables read "From 1 Apr 2027 · no end
+  date". The Cost strip and Budget tab say "For 1 Apr 2027 to 31 Mar 2028, the first 12
+  months of a step with no end date", and the run rate at the end says "Run rate on 31 Mar
+  2028, the end of the 12 months shown".
 
 ### Events
 
@@ -480,7 +510,8 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2) and `working_hours` (5.4), all below; 8.1 brings more.
+object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2), `working_hours` (5.4)
+and `open_step_horizon` (*Steps with no end date* above); 8.1 brings more.
 
 A forecast assumption is a kind too, a subclass of `TeamPlanning::ForecastKind`
 (`RuleKinds.forecasts` lists them). It sets and resolves like any rule, and adds
@@ -770,8 +801,8 @@ backfill starts the day after. Planned vacancies and placeholder hires count as 
   cost centres; `team_planning_scenario_costs` sends its total per scenario. The Cost strip
   and each Scenarios cell add one muted line that wraps, such as "Run rate on 31 Dec 2026:
   EUR 1.2m a year, +EUR 80k on Today's". Unit totals on the map stay period totals. Today
-  has none, being a run rate already, and every step has an end date, so every scenario has
-  one.
+  has none, being a run rate already. A step with no end date takes it on the last day of
+  the months shown, and says so.
 
 #### Cost on screen
 
