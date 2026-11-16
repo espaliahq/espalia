@@ -175,9 +175,9 @@ class Components::Kit::SidePanel::Toggle < Components::Base
 
   def view_template(&)
     render Components::Kit::Button.new(
-      **@button,
-      data: { action: "click->activity-pane#toggle", activity_pane_target: "toggle" },
-      aria: { expanded: @open.to_s, controls: @controls }, &
+      **@button.except(:data, :aria),
+      data: { **@button[:data].to_h, action: "click->activity-pane#toggle", activity_pane_target: "toggle" },
+      aria: { **@button[:aria].to_h, expanded: @open.to_s, controls: @controls }, &
     )
   end
 end
@@ -193,6 +193,7 @@ class Components::Kit::SidePanel::Close < Components::Base
   end
 
   def view_template(&)
-    render Components::Kit::Button.new(**@button, aria_label: @label, data: { action: "activity-pane#close" }, &)
+    render Components::Kit::Button.new(**@button.except(:data), aria_label: @label,
+                                       data: { **@button[:data].to_h, action: "activity-pane#close" }, &)
   end
 end

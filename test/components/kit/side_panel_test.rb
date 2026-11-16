@@ -81,6 +81,20 @@ class Components::Kit::SidePanelTest < ActiveSupport::TestCase
       assert_equal "Close activity", button["aria-label"]
     end
 
+    should "keep a caller's data and aria on the toggle and the close button" do
+      toggle = Nokogiri::HTML5.fragment(
+        Components::Kit::SidePanel::Toggle.new(controls: "activity", open: true, data: { test_id: "t" }, aria: { describedby: "hint" }).call { "Activity" }
+      ).at_css("button")
+      assert_equal "t", toggle["data-test-id"]
+      assert_equal "hint", toggle["aria-describedby"]
+      assert_equal "click->activity-pane#toggle", toggle["data-action"]
+      assert_equal "activity", toggle["aria-controls"]
+
+      close = Nokogiri::HTML5.fragment(Components::Kit::SidePanel::Close.new(label: "Close", data: { test_id: "c" }).call { "×" }).at_css("button")
+      assert_equal "c", close["data-test-id"]
+      assert_equal "activity-pane#close", close["data-action"]
+    end
+
     context ".open?" do
       should "take the URL's choice over the cookie's, and the cookie's over the default" do
         assert Components::Kit::SidePanel.open?(url: "open", cookie: "closed", default: false)
