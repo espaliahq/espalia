@@ -29,6 +29,9 @@
 # A change that took effect before the base, learned since, drops `before`:
 # coverage is judged from the base on, so the earlier value may have been set
 # while its subject was outside.
+#
+# A unit is named only if the plan covers it at the window's end: today's name
+# of one that has left may have been set while it was outside.
 class TeamPlanning::DriftScope
   PERSON_KINDS = %i[joined left fact_changed].freeze
   MEMBERSHIP_KINDS = %i[membership_started membership_ended membership_changed moved].freeze
@@ -83,6 +86,10 @@ class TeamPlanning::DriftScope
     end
     cuts.compact.map { backdated(it) }
   end
+
+  # @param unit_id [String]
+  # @return [Boolean] whether the plan covers the unit once {#call} has walked the window
+  def covers_unit?(unit_id) = covered_unit?(unit_id)
 
   private
 

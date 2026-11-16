@@ -443,6 +443,20 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     [ @sales, "Revenue Ops", "Field Ops" ].each { assert_not_includes changes.to_json, it }
   end
 
+  should "not name a unit that has left the plan, whose name now may have been set outside it" do
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+      structure.move_unit(@payments, @sales, **on(10))
+      structure.rename_unit(@payments, "Revenue Ops", **on(12))
+    end
+    drift = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)
+
+    assert_equal [ [ "unit_moved", @payments ] ], drift[:changes].map { [ it[:kind], it[:unit_id] ] }
+    assert_not_includes drift[:names].keys, @payments
+    assert_not_includes drift.to_json, "Revenue Ops"
+  end
+
   # Platform is Ada's own; Core and Engineers come from entries a seat in
   # Engineering can match; Field Sales and Revenue belong to Sales alone.
   def budget_by_cost_centre

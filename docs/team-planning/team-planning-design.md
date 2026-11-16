@@ -1383,7 +1383,8 @@ to someone the plan can't name reads the same way, and so does the earlier value
 fact or name last set while its subject was outside, before the window or in it.
 A change that took effect before the base, learned since, always drops its earlier
 value, since coverage is judged only from the base on; a plan covering the whole
-organisation keeps it. A joiner's first-day facts keep only the units, owned units and manager the plan
+organisation keeps it. A unit is named only if the plan covers it today, since a unit's
+name now may have been set after it left. A joiner's first-day facts keep only the units, owned units and manager the plan
 covers. `outside` lists the fields nulled or trimmed,
 and the Changes tab words each one.
 

@@ -89,7 +89,8 @@ class TeamPlanning::Drift
     whole = baseline.map_on(@plan.base_on, known_on: baseline.known_on, history: true, scoped: false)
     parents = (whole.units + whole.retired_units).to_h { [ it.id, it.parent_id ] }
     maps = [ @plan.id, *aggregate.scenarios.keys ].map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
-    TeamPlanning::DriftScope.new(base, maps, parents:).call(changes, known: known_moves(baseline, changes))
+    @scope = TeamPlanning::DriftScope.new(base, maps, parents:)
+    @scope.call(changes, known: known_moves(baseline, changes))
   end
 
   # What the baseline knew would change after its day, which the window,
@@ -122,7 +123,8 @@ class TeamPlanning::Drift
 
   def names_for(changes, sources)
     ids = changes.flat_map { [ it.person_id, it.before&.dig("manager_id"), it.after&.dig("manager_id") ] }.compact.uniq
-    units = changes.flat_map { [ it.unit_id, it.from_unit_id ] }.compact.uniq.filter_map { |id| (name = sources.unit_name(id)) && [ id, name ] }
+    units = changes.flat_map { [ it.unit_id, it.from_unit_id ] }.compact.uniq.select { @scope.nil? || @scope.covers_unit?(it) }
+                   .filter_map { |id| (name = sources.unit_name(id)) && [ id, name ] }
     units.to_h.merge(::Person.where(tenant_id: @plan.tenant_id, id: ids).pluck(:id, :name).to_h)
   end
 end
