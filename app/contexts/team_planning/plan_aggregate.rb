@@ -1179,7 +1179,7 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "That change is already undone" if undone?(event_id)
 
     ensure_dates_standing!(step_id, entry, "undo")
-    write_period(step_id, first_step_start(step_id, entry.data[:previous_starts_on]), entry.data[:previous_ends_on],
+    write_period(step_id, moved_start(step_id, entry, :previous_starts_on), entry.data[:previous_ends_on],
                  undone_by_id, undoes_event_id: event_id)
   end
 
@@ -1189,11 +1189,17 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "That change isn't undone, so there is nothing to redo" unless undone?(event_id)
 
     ensure_dates_standing!(step_id, entry, "redo")
-    write_period(step_id, first_step_start(step_id, entry.data[:starts_on]), entry.data[:ends_on], redone_by_id, redoes_event_id: event_id)
+    write_period(step_id, moved_start(step_id, entry, :starts_on), entry.data[:ends_on], redone_by_id, redoes_event_id: event_id)
   end
 
-  # Only a first step holds its own start; a later one follows the step before it.
-  def first_step_start(step_id, starts_on) = @scenarios.fetch(step_id).parent_id == @plan_id ? starts_on : nil
+  # Only a first step holds its own start, and only an edit that moved it
+  # brings one back: an end-only edit keeps whatever start a rebase has given.
+  def moved_start(step_id, entry, key)
+    return unless @scenarios.fetch(step_id).parent_id == @plan_id
+    return unless entry.data[:previous_starts_on] && entry.data[:previous_starts_on] != entry.data[:starts_on]
+
+    entry.data[key]
+  end
 
   def dates_entry!(step_id, event_id)
     entry = @dates.fetch(step_id, []).find { it.event_id == event_id } or

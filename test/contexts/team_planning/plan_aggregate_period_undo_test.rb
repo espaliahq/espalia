@@ -117,6 +117,16 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
       assert_equal "A first step starts on or after the plan's base date, 2027-01-10", refusal { undo_edit(@q1, edit) }
     end
 
+    should "undo and redo an edit that moved only a first step's end, after the base moved past its old start" do
+      edit = set(@q1, ends_on: "2027-04-30")
+      @plan.rebase(base_on: "2027-01-10", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id)
+
+      undo_edit(@q1, edit)
+      assert_equal %w[2027-01-10 2027-03-31], period(@q1)
+      redo_edit(@q1, edit)
+      assert_equal %w[2027-01-10 2027-04-30], period(@q1)
+    end
+
     should "undo through the rest of a split, and refuse through an alternative or another step" do
       edit = set(@q1, ends_on: "2027-02-28")
       lean = fork(@q1, relation: "instead", name: "Lean Q1")
