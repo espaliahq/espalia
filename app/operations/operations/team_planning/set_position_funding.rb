@@ -28,7 +28,7 @@ class Operations::TeamPlanning::SetPositionFunding < Operations::Base
               "lines. Each draw names a budget_line_id the scenario holds and its share. The scenarios that follow " \
               "inherit it. team_planning_clear_change with the position_id and the facet 'funding' goes back to the " \
               "derived line. Refused on the baseline, which has no period to fund, for a position that isn't open in " \
-              "the scenario, and unless the caller is one of the plan's editors."
+              "the scenario, for a line the plan doesn't hold, and unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
 

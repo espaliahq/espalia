@@ -18,7 +18,7 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
 
   description "Set which units a Team Planning plan covers: unit_ids, each with everything under it, or none for the " \
               "whole organisation. Widening is always allowed. Narrowing is refused while the plan holds a change about a " \
-              "person, unit or position the narrower plan would leave out; the refusal names those changes and counts any " \
+              "person, unit, position or budget line the narrower plan would leave out; the refusal names those changes and counts any " \
               "it can't name. Refused unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
@@ -54,10 +54,13 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
     narrower = TeamPlanningPlan.find(aggregate.plan_id).tap { it.scope_unit_ids = unit_ids }
     now = maps(current, aggregate, scenario_ids)
     held_now = now.transform_values { held_ids(it) }
-    held = maps(narrower, aggregate, scenario_ids).transform_values { held_ids(it) }
+    later = maps(narrower, aggregate, scenario_ids)
+    held = later.transform_values { held_ids(it) }
+    cost_centres = line_cost_centres(changes.map(&:last), now, aggregate)
     dropped = changes.select do |scenario_id, change|
       subject_id = change.data[:subject_id]
-      held_now[scenario_id].include?(subject_id) && !held[scenario_id].include?(subject_id)
+      (held_now[scenario_id].include?(subject_id) && !held[scenario_id].include?(subject_id)) ||
+        line_ids(change).map { cost_centres[scenario_id][it] }.any? { now[scenario_id].holds_cost_centre?(it) && !later[scenario_id].holds_cost_centre?(it) }
     end
     return if dropped.empty?
 
@@ -74,6 +77,37 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
   def held_ids(map)
     ((map.people + map.units + map.retired_units + map.positions + map.budget_lines + map.successions).map(&:id) +
       map.departed.map(&:person_id)).to_set
+  end
+
+  # A cut line has left both maps, so a change about a line is judged by its
+  # cost centre: held now, and not by the narrower plan
+  # ([#378](https://github.com/espaliahq/espalia/issues/378)).
+  def line_ids(change)
+    case change
+    when ::TeamPlanning::Events::BudgetLineSet, ::TeamPlanning::Events::BudgetLineCut then [ change.data[:subject_id] ]
+    when ::TeamPlanning::Events::PositionFundingSet then Array(change.data[:draws]).map { it.to_h.symbolize_keys[:budget_line_id] }
+    else []
+    end
+  end
+
+  # Each line's cost centre as each scenario last set it along its own chain,
+  # else as its map holds it, else as the tenant does, the order
+  # {WithinScope#line_outside?} reads, so one scenario's set never stands in
+  # for another's.
+  #
+  # @return [Hash{String => Hash{String => String, nil}}] by scenario id, then line id
+  def line_cost_centres(changes, maps, aggregate)
+    ids = changes.flat_map { line_ids(it) }.uniq
+    return maps.transform_values { {} } if ids.empty?
+
+    tenant = ::BudgetLine.where(id: ids).pluck(:id, :cost_centre).to_h
+    maps.to_h do |scenario_id, map|
+      held = (map.budget_lines + map.outside_lines).select { ids.include?(it.id) }.to_h { [ it.id, it.cost_centre ] }
+      set = aggregate.resolution_chain(scenario_id).flat_map { aggregate.changes_in(it) }
+                     .select { it.is_a?(::TeamPlanning::Events::BudgetLineSet) && ids.include?(it.data[:subject_id]) }
+                     .to_h { [ it.data[:subject_id], it.data[:cost_centre] ] }
+      [ scenario_id, tenant.merge(held).merge(set) ]
+    end
   end
 
   # Names each subject once and counts every change it couldn't show.
