@@ -133,6 +133,26 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
                  error.message
   end
 
+  should "hold a change of a type's provider to the same dates" do
+    @tenant = create(:tenant)
+    division, department = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    as_tenant do
+      @handler.add_level(division, "Division", effective_on: @today)
+      @handler.add_level(department, "Department", effective_on: @today)
+      @handler.set_level_provider(division, "hibob", effective_on: @today, field: "division")
+    end
+
+    { -> { @handler.set_level_provider(department, "hibob", effective_on: @today + 1, field: "department") } =>
+        "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan",
+      -> { @handler.hand_over_level(department, "hibob", field: "department", matches: {}, effective_on: @today + 1) } =>
+        "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan",
+      -> { @handler.hand_back_level(division, effective_on: @today - 1) } =>
+        "The unit types last changed on #{@today.iso8601}, so a change can't be dated before it" }.each do |change, message|
+      error = assert_raises(RuntimeError) { as_tenant { change.call } }
+      assert_equal message, error.message
+    end
+  end
+
   context "on a tenant that already holds a future-dated kinds change" do
     setup do
       @tenant = create(:tenant)
