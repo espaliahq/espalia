@@ -61,8 +61,12 @@ class Plans::FundingsControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ [ @growth, "0.4" ], [ @platform, "0.6" ] ].sort, draws.sort
     end
 
-    should "save an unchanged share at its full precision" do
+    should "save the dialog's shares unchanged at their full precision" do
       patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: { @platform => "33.333333", @growth => "66.666667" } } }
+      get budget_plan_path(@plan_id, scenario: @q1)
+      shown = css_select("[data-funding-action]").first["data-funding-draws"].split(",").to_h { it.split("=") }
+
+      patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: shown } }
 
       assert_equal "Funding set.", flash[:notice]
       assert_equal [ [ @growth, "0.66666667" ], [ @platform, "0.33333333" ] ].sort, draws.sort
