@@ -109,6 +109,26 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  should "show no pay from a closed step's outcome, to a holder or anyone else, nor from any read once the step closes" do
+    level_id = SecureRandom.uuid_v7
+    OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                     .define_taxonomy([ { level_id:, name: "Department" } ], effective_on: "2025-01-01")
+    unit_id = call(Operations::TeamPlanning::SetUnit, @holder, plan_id: @plan_id, scenario_id: @q1, name: "Ledger", top_level: true,
+                                                               level_id:)[:unit_id]
+    call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
+                                                           placements: [ { unit_id:, allocation: 1 } ])
+    travel_to Time.utc(2026, 7, 2, 9)
+    assert_no_pay_figure call(Operations::TeamPlanning::CloseStep, @editor, plan_id: @plan_id, scenario_id: @q1), AMOUNT
+
+    { "holder" => @holder, "editor" => @editor, "viewer" => @viewer }.each do |who, account|
+      outcome = call(Operations::TeamPlanning::StepOutcome, account, plan_id: @plan_id, scenario_id: @q1)
+      assert_equal "2026-06-30", outcome[:ends_on].to_s, who
+      assert_includes outcome[:units].flat_map { it[:people] }.pluck(:person_id), @ada.id, who
+      assert_no_pay_figure outcome, AMOUNT, who
+    end
+    assert_no_pay_read(@q1)
+  end
+
   # The figures under each timeline column ([#452](https://github.com/espaliahq/espalia/issues/452)).
   should "price the timeline's figures from held pay for a holder, as its cost read does, and never for anyone else" do
     holder = call(Operations::TeamPlanning::TimelineFigures, @holder, plan_id: @plan_id, scenario_id: @q1)
