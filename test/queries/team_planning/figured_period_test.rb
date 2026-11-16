@@ -11,7 +11,7 @@ class TeamPlanning::FiguredPeriodTest < ActiveSupport::TestCase
     @plan_id = SecureRandom.uuid_v7
     @editor_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id, time_zone: "UTC")
   end
 
   def fork(parent_id = @plan_id, relation: "then", ends_on: nil, starts_on: nil)

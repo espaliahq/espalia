@@ -10,7 +10,7 @@ class PlanPolicyTest < ActiveSupport::TestCase
     @viewer = create(:person, tenant: @tenant)
     [ @editor, @viewer ].each { |person| create(:tenant_user, tenant: @tenant, person:) }
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(SecureRandom.uuid_v7, name: "Next year", base_on: "2026-11-14", created_by_id: @editor.id)
+    @plan.create(SecureRandom.uuid_v7, name: "Next year", base_on: "2026-11-14", created_by_id: @editor.id, time_zone: "UTC")
     @plan.add_member(@viewer.id, role: "viewer", added_by_id: @editor.id)
   end
 

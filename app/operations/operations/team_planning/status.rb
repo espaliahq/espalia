@@ -9,7 +9,7 @@ class Operations::TeamPlanning::Status < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
   description "Get the status of each planned change in a scenario of a Team Planning plan the caller is in, " \
-              "held against the Org Graph today (a UTC day, as known now). There is one status per subject and " \
+              "held against the Org Graph today (in the tenant's time zone, as known now). There is one status per subject and " \
               "facet the scenario resolves, from its own changes and those it inherits from the scenarios it " \
               "follows; scenario_id says which scenario made it (the plan_id is the baseline). 'done' when today " \
               "reads the planned end state, 'pending' when today still reads what the plan's base held or what " \

@@ -17,7 +17,7 @@ class Operations::TeamPlanning::Scenarios < Operations::Base
               "the rest of a split step, sitting on its agreed part), its " \
               "period, what it is for, if an editor has said, and changes: how many subjects and facets it still changes, " \
               "the count its Removed scenarios entry keeps once it is removed. state says where it stands on the timeline: " \
-              "'closed' for a step closed with team_planning_close_step, with closed_on, the UTC day it was closed, and closed_by; " \
+              "'closed' for a step closed with team_planning_close_step, with closed_on, the tenant's day it was closed, and closed_by; " \
               "'not_taken' for a scenario a closed step replaced; 'ready_to_close' for the step that can close next; " \
               "otherwise 'open'. Every scenario but the one ready carries not_closable_because, saying why it can't close; the baseline is always 'open'. " \
               "Refused, as an unknown plan, unless the caller is a member."
@@ -50,7 +50,7 @@ class Operations::TeamPlanning::Scenarios < Operations::Base
   def standing(plan, aggregate, row, closed_as, names)
     why = if row.baseline? then "The baseline can't be closed"
     elsif plan.archived? then ::TeamPlanning::PlanAggregate::ARCHIVED
-    else aggregate.not_closable_because(row.id, Time.now.utc.to_date)
+    else aggregate.not_closable_because(row.id, Tenant.today)
     end
     state = if closed_as then "closed"
     elsif !row.baseline? && aggregate.frozen?(row.id) then "not_taken"

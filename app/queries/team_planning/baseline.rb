@@ -540,13 +540,23 @@ class TeamPlanning::Baseline
 
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, known_on ]) { map_on(@plan.base_on, known_on:) }
+  def structure
+    CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, known_at ]) do
+      map_on(@plan.base_on, known_on:, known_at:)
+    end
+  end
 
   # The Org Graph as known the day before the base, or on the archive day if
   # that came first, so a fact recorded after archiving moves no figure.
   #
   # @return [Date]
   def known_on = [ @plan.base_on - 1, @plan.archived_on ].compact.min
+
+  # The instant {#known_on} ended, fixed in the zone the tenant had when the
+  # plan recorded it ({TeamPlanningPlan#known_at}).
+  #
+  # @return [ActiveSupport::TimeWithZone]
+  def known_at = @plan.known_at
 
   # The organisation on another day, in the shape {#structure} gives, so a
   # reader can hold the plan up against it.
@@ -556,15 +566,16 @@ class TeamPlanning::Baseline
   #
   # @param date [Date]
   # @param known_on [Date, nil] nil for what the Org Graph knows now
+  # @param known_at [Time, nil] the instant `known_on` ended, when the plan fixed it
   # @param history [Boolean] whether to carry the units the Org Graph retired, the
   #   successions it recorded and the people it had leave, by that day
   # @param scoped [Boolean] false for the whole organisation, so a reader can
   #   find someone the plan moved out of its scope
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def map_on(date, known_on: nil, history: false, scoped: true)
+  def map_on(date, known_on: nil, known_at: nil, history: false, scoped: true)
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
-    snapshot = OrgGraph::AsOf.new(context: @context, date:, known_on:).call
+    snapshot = OrgGraph::AsOf.new(context: @context, date:, known_on:, known_at:).call
 
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }

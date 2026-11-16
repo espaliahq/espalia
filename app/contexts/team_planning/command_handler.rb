@@ -33,7 +33,7 @@ class TeamPlanning::CommandHandler
     authorize!(:create?, nil) { "Only a tenant admin or a planner can create a plan" }
     unit_ids = known_units!(unit_ids)
     @repository.with_plan(plan_id) do |plan|
-      plan.create(plan_id, name: name, base_on: base_on, created_by_id: created_by_id)
+      plan.create(plan_id, name: name, base_on: base_on, created_by_id: created_by_id, time_zone: tenant_zone)
       plan.set_scope(unit_ids:, set_by_id: created_by_id)
     end
   end
@@ -103,7 +103,7 @@ class TeamPlanning::CommandHandler
   def archive_plan(plan_id)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.archive(archived_by_id: actor_id!, prices: method(:frozen_prices))
+      plan.archive(archived_by_id: actor_id!, archived_on: Tenant.today, time_zone: tenant_zone, prices: method(:frozen_prices))
     end
   end
 
@@ -309,7 +309,7 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       conflicts = yield(plan) if block_given? && !plan.archived? && plan.base_on.to_s == expected_base_on.to_s
-      plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!)
+      plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!, time_zone: tenant_zone)
     end
   end
 
@@ -327,11 +327,11 @@ class TeamPlanning::CommandHandler
 
   # @param plan_id [String]
   # @param scenario_id [String]
-  # @param today [Date] as a UTC date
+  # @param today [Date] the tenant's today
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
   # @see TeamPlanning::PlanAggregate#close_step
-  def close_step(plan_id, scenario_id, today: Time.now.utc.to_date)
+  def close_step(plan_id, scenario_id, today: Tenant.today)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       plan.close_step(scenario_id, today:, closed_by_id: actor_id!)
@@ -451,11 +451,11 @@ class TeamPlanning::CommandHandler
   # @param facet [String]
   # @param choice [String] "plan" or "reality"
   # @param note [String, nil] why; for keeping the plan, blank keeps the change's own
-  # @param today [Date] as a UTC date
+  # @param today [Date] the tenant's today
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to settle
   # @see TeamPlanning::PlanAggregate#settle_conflict
-  def settle_conflict(plan_id, scenario_id:, subject_id:, facet:, choice:, note: nil, today: Time.now.utc.to_date)
+  def settle_conflict(plan_id, scenario_id:, subject_id:, facet:, choice:, note: nil, today: Tenant.today)
     key = [ subject_id, facet.to_s ]
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
@@ -730,6 +730,8 @@ class TeamPlanning::CommandHandler
   # Without key material nothing can be sealed, so the plan archives with
   # today's prices, as one archived before the copy existed does.
   def frozen_prices = (TeamPlanning::PricingInputs.capture(ActsAsTenant.current_tenant) if PlanKeyStore.available?)
+
+  def tenant_zone = Tenant.current!.working_zone
 
   def actor_id!
     @actor.person&.id or raise TeamPlanning::Error, "Link your account to a person to work on plans"

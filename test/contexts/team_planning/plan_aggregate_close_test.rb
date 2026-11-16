@@ -16,7 +16,7 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
     @plan_id = SecureRandom.uuid_v7
     @editor_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id, time_zone: "UTC")
     @q1 = fork(@plan_id, ends_on: "2027-03-31")
     @lean = fork(@q1, relation: "instead")
     @q2 = fork(@q1, ends_on: "2027-06-30")
@@ -38,11 +38,11 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
   def replayed = TeamPlanning::PlanAggregate.new.tap { |plan| @plan.unpublished_events.each { plan.apply(it) } }
 
   context "#close_step" do
-    should "record the step's last day, the plan's base and who closed it" do
+    should "record the step's last day, the plan's base, the day it closed and who closed it" do
       close(@q1, today: AFTER_Q1)
 
       assert_kind_of TeamPlanning::Events::StepClosed, last_event
-      assert_equal({ plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-03-31", base_on: "2027-01-01", closed_by_id: @editor_id },
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-03-31", base_on: "2027-01-01", closed_on: AFTER_Q1.iso8601, closed_by_id: @editor_id },
                    last_event.data)
       assert_equal [ [ @q1, Date.new(2027, 3, 31) ] ], replayed.closed_steps
     end
@@ -90,7 +90,7 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
       close(@q1)
       assert_equal "This step is closed: reopen it to change it", refusal { close(@q1) }
 
-      @plan.archive(archived_by_id: @editor_id)
+      @plan.archive(archived_by_id: @editor_id, archived_on: Date.new(2027, 4, 2), time_zone: "UTC")
       assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal { close(@q2) }
     end
 
@@ -177,7 +177,7 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
 
     should "refuse updating the plan to today" do
       assert_equal TeamPlanning::PlanAggregate::CLOSED_REBASE,
-                   refusal { @plan.rebase(base_on: "2027-02-01", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id) }
+                   refusal { @plan.rebase(base_on: "2027-02-01", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id, time_zone: "UTC") }
     end
   end
 

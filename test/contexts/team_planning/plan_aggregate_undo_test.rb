@@ -18,7 +18,7 @@ class TeamPlanning::PlanAggregateUndoTest < ActiveSupport::TestCase
     @ada_id = SecureRandom.uuid_v7
     @grace_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @ada_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @ada_id, time_zone: "UTC")
     @q1 = fork(@plan_id, "then", ends_on: "2027-03-31")
     @lean = fork(@q1, "instead")
   end

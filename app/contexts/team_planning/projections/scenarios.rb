@@ -18,7 +18,7 @@
 # that table, which past removals fill, so its deploy needs
 # `REBUILD_ON_DEPLOY=team_planning/scenarios`.
 #
-# A closed step holds the UTC day it was closed and who closed it, until it
+# A closed step holds the tenant's day it was closed and who closed it, until it
 # is reopened. Closing is new, so it needs no rebuild.
 #
 class TeamPlanning::Projections::Scenarios
@@ -75,7 +75,7 @@ class TeamPlanning::Projections::Scenarios
       when TeamPlanning::Events::ScenarioRemoved then remove(event)
       when TeamPlanning::Events::StepClosed
         TeamPlanningScenario.find_by(id: data[:scenario_id])
-                            &.update!(closed_on: event.timestamp.utc.to_date, closed_by_id: data[:closed_by_id], updated_at: event.timestamp)
+                            &.update!(closed_on: closed_on(event), closed_by_id: data[:closed_by_id], updated_at: event.timestamp)
       when TeamPlanning::Events::StepReopened
         TeamPlanningScenario.find_by(id: data[:scenario_id])&.update!(closed_on: nil, closed_by_id: nil, updated_at: event.timestamp)
       end
@@ -83,6 +83,8 @@ class TeamPlanning::Projections::Scenarios
   end
 
   private
+
+  def closed_on(event) = event.data[:closed_on]&.then { Date.iso8601(it) } || event.timestamp.utc.to_date
 
   def remove(event)
     data = event.data

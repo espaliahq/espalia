@@ -118,7 +118,7 @@ class Views::Plans::IndexView < Views::Base
     div do
       label(for: "plan_base_on", class: "block text-sm font-medium text-default") { "Start from the organisation on" }
       input(id: "plan_base_on", name: "plan[base_on]", type: "date", required: true,
-            value: @draft[:base_on].presence || Date.current.iso8601, class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
+            value: @draft[:base_on].presence || Tenant.today.iso8601, class: "mt-1 w-full #{Components::Kit::Field::INPUT}")
     end
   end
 

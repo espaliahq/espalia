@@ -96,6 +96,7 @@ Rails.application.routes.draw do
       get :preview
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
+    resource :time_zone, only: [ :show, :update ]
     resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ] do
       patch :reorder, on: :collection
     end

@@ -14,7 +14,7 @@ class TeamPlanning::PlanAggregateSettleTest < ActiveSupport::TestCase
     @plan_id = SecureRandom.uuid_v7
     @ada_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @ada_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @ada_id, time_zone: "UTC")
     @q1 = fork(@plan_id, "then", ends_on: "2027-03-31")
     @lean = fork(@q1, "instead")
     @bold = fork(@q1, "instead")
@@ -34,7 +34,7 @@ class TeamPlanning::PlanAggregateSettleTest < ActiveSupport::TestCase
 
   def carry(*scenario_ids, on: "2027-02-01")
     conflicts = scenario_ids.map { { scenario_id: it, subject_id: "lin", facet: "title", change_id: winning(it).event_id } }
-    @plan.rebase(base_on: on, expected_base_on: @plan.base_on, conflicts:, rebased_by_id: @ada_id)
+    @plan.rebase(base_on: on, expected_base_on: @plan.base_on, conflicts:, rebased_by_id: @ada_id, time_zone: "UTC")
   end
 
   def settle(scenario_id, choice, title, pinned_from: nil, note: nil)

@@ -25,6 +25,7 @@ class Components::Shell::TenantAdminLayout < Components::Base
     { key: :dashboard,    label: "Dashboard",    href: "/tenant" },
     { key: :theme,        label: "Theme",        href: "/tenant/theme" },
     { key: :vocabulary,   label: "Vocabulary",   href: "/tenant/vocabulary" },
+    { key: :time_zone,    label: "Time zone",    href: "/tenant/time_zone" },
     { key: :users,        label: "Users",        href: "/tenant/users" },
     { key: :org_graph,    label: "Org Graph",    href: "/tenant/org_graph" },
     { key: :pay_bands,    label: "Pay bands",    href: "/tenant/pay_bands" },
@@ -34,7 +35,7 @@ class Components::Shell::TenantAdminLayout < Components::Base
     { key: :feedback_export, label: "Feedback export", href: "/tenant/feedback_exports/new" }
   ].freeze
 
-  # @param active_section [Symbol] one of :dashboard, :theme, :vocabulary,
+  # @param active_section [Symbol] one of :dashboard, :theme, :vocabulary, :time_zone,
   #   :users, :org_graph, :pay_bands, :cost_centres, :budget, :integrations, :feedback_export
   # @param user [User]
   # @param current_tenant [Tenant]

@@ -12,11 +12,11 @@
 class Operations::OrgGraph::AsOf < Operations::Base
   include Operations::OrgGraph::DateParameter
 
-  description "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
+  description "Read the Org Graph as it stood on one date: the live units with their parent, " \
               "level, owners and direct member count, and the number of employed people. A future " \
               "date includes changes already recorded for it, such as a hire who starts then or a " \
-              "scheduled move. known_on reads what the Org Graph knew at 23:59:59 UTC on that " \
-              "earlier date, not in the tenant's local time, leaving out corrections learned " \
+              "scheduled move. known_on reads what the Org Graph knew at the end of that earlier " \
+              "date in the tenant's time zone, leaving out corrections learned " \
               "since. mode \"full\" adds each employed " \
               "person's facts (title, level, manager, site, employment) and every membership. " \
               "unit_id narrows to that unit and the units under it, counting only the people " \
@@ -25,9 +25,9 @@ class Operations::OrgGraph::AsOf < Operations::Base
   approval :none
 
   parameter :date, String, required: true, allow_blank: false,
-    schema: DATE_SCHEMA.merge(description: "UTC date, YYYY-MM-DD.")
+    schema: DATE_SCHEMA.merge(description: "Date, YYYY-MM-DD.")
   parameter :known_on, String, required: false, allow_blank: false,
-    schema: DATE_SCHEMA.merge(description: "UTC date, YYYY-MM-DD. Omit for what is known now.")
+    schema: DATE_SCHEMA.merge(description: "Date, YYYY-MM-DD. Omit for what is known now.")
   parameter :mode, String, required: false, allowed: %w[summary full]
   parameter :unit_id, String, required: false, allow_blank: false, schema: { format: "uuid" }
 

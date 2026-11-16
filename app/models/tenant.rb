@@ -12,6 +12,7 @@ class Tenant < ApplicationRecord
   include Themeable
 
   FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH = 32
+  KNOWN_ZONES = TZInfo::Timezone.all_identifiers.to_set.freeze
 
   # A hostname for custom_domain (#660): dot-separated labels, each 1-63
   # chars, ending in a TLD.
@@ -192,9 +193,59 @@ class Tenant < ApplicationRecord
   validates :ai_config, store_model: true
   validates :feedback_exchange_config, store_model: true
   validates :org_graph_config, store_model: true
+  validate :time_zone_is_known, if: :time_zone_changed?
   before_validation :sync_feedback_exchange_key_ids, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_inbound_secret_is_ours, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_secrets_are_strong, if: :feedback_exchange_credentials_changed?
+
+  # The zone names the settings page offers, as IANA identifiers: "UTC" first,
+  # then each zone Rails names, once. A tenant may hold any zone TZInfo knows.
+  #
+  # @return [Array<String>]
+  def self.time_zone_names
+    @time_zone_names ||= [ "UTC", *ActiveSupport::TimeZone.all.map { it.tzinfo.name } ].uniq.freeze
+  end
+
+  # @param name [String]
+  # @return [Boolean] whether TZInfo knows it as an IANA identifier
+  def self.time_zone_known?(name) = KNOWN_ZONES.include?(name)
+
+  # Today's date where the tenant works: the one answer to "what is today"
+  # for a business date. Timestamps stay UTC; only the calendar day moves.
+  #
+  # @param at [Time] the moment to read the date at
+  # @return [Date]
+  def today(at: Time.current) = at.in_time_zone(working_zone).to_date
+
+  # The last moment of a day where the tenant works, for reading what was
+  # known by the end of it.
+  #
+  # @param date [Date]
+  # @return [ActiveSupport::TimeWithZone]
+  def end_of(date) = date.in_time_zone(working_zone).end_of_day
+
+  # The stored zone, or UTC when TZInfo has since dropped it, so today still
+  # reads and the settings page still opens to replace it.
+  #
+  # @return [String]
+  def working_zone = self.class.time_zone_known?(time_zone) ? time_zone : "UTC"
+
+  # The current tenant's today, for code that runs inside a tenant.
+  #
+  # @return [Date]
+  # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
+  def self.today = current!.today
+
+  # The current tenant's end of a day, for code that runs inside a tenant.
+  #
+  # @param date [Date]
+  # @return [ActiveSupport::TimeWithZone]
+  # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
+  def self.end_of(date) = current!.end_of(date)
+
+  # @return [Tenant]
+  # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
+  def self.current! = ActsAsTenant.current_tenant || raise(ActsAsTenant::Errors::NoTenantSet)
 
   # The feedback exchange's signing secrets, wrapped so no accessor can print a value.
   #
@@ -454,6 +505,12 @@ class Tenant < ApplicationRecord
     claim_hris_facts!
   rescue => e
     Rails.error.report(e, handled: true, context: { tenant_id: id })
+  end
+
+  # Checked only when the zone changes, so a zone stored before an upgrade
+  # renamed it never blocks an unrelated save.
+  def time_zone_is_known
+    errors.add(:time_zone, "isn't a time zone we know; use an IANA name such as Australia/Sydney") unless self.class.time_zone_known?(time_zone)
   end
 
   def custom_domain_is_not_the_instance_host

@@ -9,7 +9,7 @@ class Operations::TeamPlanning::Drift < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
   description "Get the drift of a Team Planning plan the caller is in: every change the Org Graph learned " \
-              "on or after the plan's base date, up to today (UTC days), whatever day it took effect, in effective " \
+              "on or after the plan's base date, up to today (days in the tenant's time zone), whatever day it took effect, in effective " \
               "date order, as org_graph_changes_between by \"learned\" gives them for from (the day before the base " \
               "date) and to (today). A change it no longer believes comes back withdrawn. Each change carries `meets`, the " \
               "plan's latest change to the facet it moves, one per scenario that holds one (a scenario_id equal " \
