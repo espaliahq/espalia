@@ -172,7 +172,7 @@ plans projection keeps the list in `scope_unit_ids`.
 
 - **Units only.** A plan is scoped by units, never by people, roles or reporting lines.
 - **Widening is always allowed.** Narrowing is refused while a change is about a person,
-  unit or position the narrower plan would leave out. The refusal names up to five such
+  unit, position or budget line the narrower plan would leave out. The refusal names up to five such
   changes, and only subjects the plan already shows, and counts the rest.
 - **Everything a reader counts stops at the edge.** Baseline, map, capacity, cost,
   attention and the timeline see only what is inside. Someone with part of their time
@@ -185,8 +185,27 @@ plans projection keeps the list in `scope_unit_ids`.
   is allowed. A change about a unit or position outside is refused unless it places that unit
   or position under a covered unit, and no change may place one outside. A unit a scenario
   created inside and later moved out is treated like any other unit outside. A succession that
-  names a unit outside is refused. Budget lines sit under no unit, so a scope never drops one
-  ([#378](https://github.com/espaliahq/espalia/issues/378) asks which ones a member should see).
+  names a unit outside is refused.
+- **A plan covering some units holds only the budget lines its seats can draw on**
+  ([#378](https://github.com/espaliahq/espalia/issues/378)). A budget line sits under no
+  unit, so cost centre decides. The plan holds a line that names no cost centre, or one in
+  its set. The set is fixed by the baseline: the cost centres of the seats inside today, plus
+  every cost centre entry whose unit is inside or above a unit inside, plus entries naming no
+  unit. No label or move in a scenario widens it, so an editor cannot label a seat "Sales"
+  to read Sales's budget. A whole-organisation plan holds every line.
+  - A line left out is never named or counted: not in a total, a check, a payload, an error
+    or a frozen copy. The Budget tab says "Totals cover the budget lines this plan's seats
+    can draw on."
+  - Changing, cutting or adding a line outside the set is refused, and so is funding a seat
+    from one. The refusal names no line.
+  - The cost: a seat a scenario moves into a cost centre outside the set finds no line and
+    reads as unfunded. That is true from where the plan stands. Widen the plan's units to
+    bring the line in.
+  - Plans saved before this rule read as follows. Funding drawn on a line no longer held is
+    dropped, and the seat's funding is worked out from the lines held. A line the plan added
+    or changed outside the set, or cut, is left out silently. The plan's own change record
+    still lists those changes, as it does a change about someone the Org Graph has since
+    moved out.
 - **The guard, not narrowing, stops a change coming back.** Narrowing checks only the
   changes in effect. A change a clear, an undo or a later change took back escapes it, and
   nothing can remove one, so counting them would stop the plan ever narrowing past it.
