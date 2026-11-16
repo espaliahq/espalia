@@ -513,6 +513,21 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_back_on_opening_entry
     end
 
+    should "close the overlay on Back when the pane was opened beside the matrix and the window then narrowed" do
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay != null") },
+        "narrowing gave the overlay no entry of its own"
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      page.go_back
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert_back_on_opening_entry
+    end
+
     should "take the overlay's history entry back when its close button shuts it" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       mark_history_entry

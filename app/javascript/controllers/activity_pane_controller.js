@@ -94,12 +94,17 @@ export default class extends BaseController {
     this.onBeforeVisit = () => this.#stampOwnEntry()
     document.addEventListener("turbo:before-visit", this.onBeforeVisit)
 
+    this.narrowQuery = window.matchMedia(`(width < ${MOBILE_BREAKPOINT}px)`)
+    this.onNarrowChange = () => this.#recordOverlayWhenNarrowed()
+    this.narrowQuery.addEventListener("change", this.onNarrowChange)
+
     if (this.fitViewportValue) this.#observeViewport()
   }
 
   disconnect() {
     window.removeEventListener("popstate", this.onPopState)
     document.removeEventListener("turbo:before-visit", this.onBeforeVisit)
+    this.narrowQuery.removeEventListener("change", this.onNarrowChange)
     this.#unobserveViewport()
     super.disconnect()
   }
@@ -204,6 +209,13 @@ export default class extends BaseController {
     } else {
       window.history.replaceState(window.history.state, "", this.#urlWith(state))
     }
+  }
+
+  // A pane opened beside the page turns into the overlay when the window
+  // narrows past lg, so it needs the entry Back closes it with.
+  #recordOverlayWhenNarrowed() {
+    if (!this.#actsAsScreen() || this.#visualState() !== "open") return
+    this.#recordInHistory("open", true)
   }
 
   #onOwnEntry() {
