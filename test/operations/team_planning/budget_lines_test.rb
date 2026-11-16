@@ -235,6 +235,27 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
       assert_equal PRICED, refusal { call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, event_id:) }
       assert_equal "You have nothing here to redo", refusal { call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1) }
     end
+
+    should "read a priced line's history and override exactly as a line with a head count alone" do
+      priced = set(amount: "9000", currency: "AUD", period: "month", head_count: "3")[:budget_line_id]
+      plain = set(head_count: "3")[:budget_line_id]
+      set(budget_line_id: priced, amount: "9500", currency: "AUD", period: "month", head_count: "3", scenario_id: @q2)
+      set(budget_line_id: plain, head_count: "3", scenario_id: @q2)
+      set(budget_line_id: @engineers.id, amount: "480000", currency: "AUD", period: "year", head_count: "5", scenario_id: @q2)
+
+      history = ->(as) { call(Operations::TeamPlanning::History, as:, plan_id: @plan_id, scenario_id: @q1)[:entries].index_by { it[:subject_id] } }
+      overrides = ->(as) { call(Operations::TeamPlanning::Overrides, as:, plan_id: @plan_id, scenario_id: @q2)[:overrides].index_by { it[:subject_id] } }
+      held, seen = history.(@editor), history.(@planner)
+      held_q2, seen_q2 = overrides.(@editor), overrides.(@planner)
+
+      assert_equal [ "AUD", [ "amount" ] ], [ held[priced][:end_state]["currency"], held[priced][:sealed_fields] ]
+      assert_equal [ "AUD", "AUD" ], [ held_q2[priced], held_q2[@engineers.id] ].map { it[:inherits][:end_state]["currency"] }
+      assert_nil held_q2[@engineers.id][:inherits][:scenario_id], "read off the parent's map, not an override above"
+      assert_equal seen[plain].values_at(:end_state, :sealed_fields), seen[priced].values_at(:end_state, :sealed_fields)
+      assert_equal seen_q2[plain].values_at(:end_state, :inherits), seen_q2[priced].values_at(:end_state, :inherits)
+      assert_equal %w[head_count tenant_line], seen_q2[@engineers.id][:end_state].keys.grep(/head_count|tenant_line|currency|period|amount/).sort
+      [ "AUD", "9000", "9500", "480000", "month" ].each { assert_not_includes [ seen, seen_q2 ].to_json, it }
+    end
   end
 
   PRICED = "Changing this budget line needs the see-pay right."
