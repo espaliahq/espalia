@@ -72,6 +72,13 @@ class PlanRemoveScenarioSystemTest < ApplicationSystemTestCase
         sign_in_as(@editor.user)
         visit map_plan_path(@plan_id, scenario: @q2)
         assert_selector "h1", text: "Next year"
+        if label == "phone"
+          picker_bottom, remove_top = evaluate_script(<<~JS)
+            [document.getElementById("map-scenario").getBoundingClientRect().bottom,
+             document.querySelector("button[data-modal-target-id='remove-scenario-#{@q2}']").getBoundingClientRect().top]
+          JS
+          assert_operator picker_bottom, :<=, remove_top, "the phone's scenario picker should keep its own line above Edit… and Remove…"
+        end
         click_button_with_js_fallback("Remove…", expect_text: "Remove Q2?")
         click_button_with_js_fallback("Remove scenario", expect_text: "Removed Q2.")
 

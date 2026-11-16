@@ -95,7 +95,7 @@ class Views::Plans::ScenarioMap < Views::Base
 
   # A phone has no room for a pill per scenario, so it picks from a list.
   def scenario_select
-    form(action: map_plan_path(@map[:plan_id]), method: "get", class: "flex min-w-0 flex-1 items-center gap-2 text-sm sm:hidden",
+    form(action: map_plan_path(@map[:plan_id]), method: "get", class: "flex min-w-0 basis-full items-center gap-2 text-sm sm:hidden",
          data: { controller: "auto-submit" }) do
       label(for: "map-scenario", class: "text-muted") { "Showing" }
       select(id: "map-scenario", name: "scenario", class: "min-w-0 flex-1 #{Components::Kit::Field::SELECT}",
