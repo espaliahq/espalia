@@ -124,7 +124,9 @@ plans projection keeps the list in `scope_unit_ids`.
   refusal says nothing about them. A reporting line from someone inside to a manager outside
   is allowed. A change about a unit or position outside is refused unless it places that unit
   or position under a covered unit, and no change may place one outside. A unit a scenario
-  created inside and later moved out is treated like any other unit outside.
+  created inside and later moved out is treated like any other unit outside. A succession that
+  names a unit outside is refused. Budget lines sit under no unit, so a scope never drops one
+  ([#378](https://github.com/espaliahq/espalia/issues/378) asks which ones a member should see).
 - **The guard, not narrowing, stops a change coming back.** Narrowing checks only the
   changes in effect. A change a clear, an undo or a later change took back escapes it, and
   nothing can remove one, so counting them would stop the plan ever narrowing past it.

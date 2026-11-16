@@ -272,6 +272,16 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_includes resolve(@plan_id, @h1).units.map(&:id), platform
   end
 
+  should "refuse to redo a succession that names a unit a narrower plan no longer covers" do
+    set_scope(@plan_id, [ @engineering, @sales ])
+    call(Operations::TeamPlanning::SetUnitSuccession, plan_id: @plan_id, scenario_id: @h1, predecessor_ids: [ @payments ], successor_ids: [ @sales ])
+    call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @h1)
+    set_scope(@plan_id, [ @engineering ])
+
+    assert_equal UNIT_OUTSIDE, refusal { call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @h1) }
+    assert_empty resolve(@plan_id, @h1).successions
+  end
+
   should "refuse to undo a clear that would bring back a position a narrower plan no longer covers" do
     set_scope(@plan_id, [ @engineering, @sales ])
     seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,

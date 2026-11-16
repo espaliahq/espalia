@@ -31,6 +31,8 @@ module Operations::TeamPlanning::WithinScope
       return if lands_inside?(map, kind, subject_id, end_state)
     elsif map.cut_ids.include?(subject_id)
       noun = map.cut_unit_ids.include?(subject_id) ? "unit" : "position"
+    elsif kind == ::TeamPlanning::Events::UnitSuccessionSet && kind.refers_to(end_state.to_h.symbolize_keys).any? { map.cut_unit_ids.include?(it) }
+      noun = "unit"
     else
       return
     end
