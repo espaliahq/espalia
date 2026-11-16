@@ -203,32 +203,36 @@ class PayBandTest < ActiveSupport::TestCase
       assert_empty lookup.shadowed
     end
 
-    should "not flag a role's band that still prices a level gone from the framework when its family band follows" do
-      band(location: "New Zealand").save!
-      role_wide = entry(role: @role)
-      family = entry(role_family: @family)
-      PayBand.reorder!(PayBand.order(:position).ids - [ family.id ] + [ family.id ])
+    should "price a seat at a level gone from the framework the same, whichever unrelated bands are removed" do
+      new_zealand = band(location: "New Zealand").tap(&:save!)
+      united_states = band(location: "United States").tap(&:save!)
+      australia = entry(location: "Australia", midpoint: 1)
+      level_two = entry(level_ordinal: 2, midpoint: 2)
+      role_wide = entry(role: @role, midpoint: 3)
+      PayBand.reorder!([ australia, level_two, role_wide, new_zealand, united_states ].map(&:id))
       left = @level.level_id
       @level.destroy!
 
-      assert_equal role_wide, lookup.covering(left, "Australia")
-      assert_not_includes lookup.shadowed, role_wide
+      assert_equal australia, lookup.covering(left, "Australia")
+      united_states.destroy!
+      assert_equal australia, lookup.covering(left, "Australia")
+      new_zealand.destroy!
+      assert_equal australia, lookup.covering(left, "Australia")
     end
 
-    should "price a seat at a level gone from the framework at the number the level last had, whichever bands remain" do
-      new_zealand = band(location: "New Zealand").tap(&:save!)
-      @level.update!(ordinal: 5)
-      united_states = band(location: "United States").tap(&:save!)
-      level_two = entry(level_ordinal: 2, midpoint: 2)
-      level_five = entry(level_ordinal: 5, midpoint: 5)
+    should "price a seat at a level gone from the framework from its own band exactly as before it left" do
+      family = entry(role_family: @family, midpoint: 2)
+      role_wide = entry(role: @role, midpoint: 3)
+      own = band(location: "New Zealand").tap(&:save!)
+      PayBand.reorder!([ family, role_wide, own ].map(&:id))
+      before = lookup.covering(@level.level_id, "New Zealand")
       left = @level.level_id
       @level.destroy!
 
-      assert_equal [ 5, 5 ], [ new_zealand.reload.level_ordinal, united_states.reload.level_ordinal ]
-      assert_equal level_five, lookup.covering(left, "Australia")
-      united_states.destroy!
-      assert_equal level_five, lookup.covering(left, "Australia")
-      assert_not_equal level_two, lookup.covering(left, "Australia")
+      assert_equal [ own, own ], [ before, lookup.covering(left, "New Zealand") ]
+      assert_nil lookup.covering(left, "Australia")
+      assert lookup.left?(left)
+      assert_empty lookup.shadowed
     end
   end
 end

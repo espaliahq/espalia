@@ -134,11 +134,16 @@ class PayBand < ApplicationRecord
   # @return [String] such as "Software Engineer, E4 Staff Engineer" or "Engineering, Level 4"
   def level_label = "#{role_name}, #{level_name}"
 
-  # A band made from a framework level matches on the level, not its number,
-  # since the framework can renumber a level and keep it.
+  # A band made from a framework level matches on the level alone, which
+  # holds its role and number: the framework can renumber a level, and one
+  # that has left the framework has neither.
   #
   # @return [Hash{Symbol => Object}] the fields the band matches on, nil where it matches anything
-  def matcher = { role_family_id:, role_id:, level_ordinal: (level_ordinal unless level_id), level_id:, location_key: location_key.presence }
+  def matcher
+    return { role_family_id: nil, role_id: nil, level_ordinal: nil, level_id:, location_key: location_key.presence } if level_id
+
+    { role_family_id:, role_id:, level_ordinal:, level_id: nil, location_key: location_key.presence }
+  end
 
   # The fields an admin sets, for the tools and the working.
   #
