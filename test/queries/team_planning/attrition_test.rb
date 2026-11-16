@@ -66,6 +66,11 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
     end
   end
 
+  def position(unit_id, level: @e5)
+    operation(Operations::TeamPlanning::SetPosition, scenario_id: @year, role_id: level.role_id, level_id: level.level_id,
+                                                     unit_id:, fte: 1, basis: "new")[:position_id]
+  end
+
   def plan = TeamPlanningPlan.find(@plan_id)
 
   def cost = as_tenant { TeamPlanning::Cost.new(context:, plan:, scenario_id: @year).call }
@@ -176,6 +181,14 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
 
       assert_not rows.key?([ nil, nil ]), "Dee's place in Data is outside the plan"
       assert_equal decimal("-0.1"), decimal(rows.fetch([ @platform, nil ]).headcount)
+    end
+
+    should "take away a person's capacity in a unit once, however many of its positions they fill" do
+      seats = 2.times.map { position(@platform) }
+      operation(Operations::TeamPlanning::SetAssignment, scenario_id: @year, person_id: @dee.id,
+                                                         placements: seats.map { { position_id: it, allocation: 0.5 } })
+
+      assert_equal({ "per_fte" => decimal("-0.1") }, capacities.fetch([ @platform, nil ]))
     end
 
     should "forecast nothing with no time to hire, as no seat stays empty" do

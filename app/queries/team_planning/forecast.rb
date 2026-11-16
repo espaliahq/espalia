@@ -145,7 +145,7 @@ class TeamPlanning::Forecast
     filled.group_by(&:unit_id).transform_values do |places|
       fte = places.sum(0r, &:fte)
       cost = places.map { |place| @pricing.cost.fetch([ place.person_id, place.unit_id ], {}).transform_values { it * place.fte } }
-      capacity = places.map { |place| @pricing.capacity.fetch([ place.person_id, place.unit_id ], {}) }
+      capacity = places.uniq { [ it.person_id, it.unit_id ] }.map { |place| @pricing.capacity.fetch([ place.person_id, place.unit_id ], {}) }
       Average.new(cost: average(cost, fte), capacity: average(capacity, fte))
     end
   end
