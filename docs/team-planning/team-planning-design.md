@@ -1554,9 +1554,21 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
   rest, which keeps the original's id, its alternatives and its next step.
 - A split step is one step. Cost, capacity and the headcount walk count the pair once over
   the one period, and the timeline gives it one column. A split part can be split again.
+- An editor splits from the plan page: "Split off the agreed part…" in a scenario's menu
+  opens a page headed with the scenario's name. It lists each change in effect by subject
+  and facet, with a box to choose it, and says beside a change which others it can't go
+  across without, following each need to what it needs in turn. A unit or position only
+  the plan creates goes by the name the scenario gives it. A refused split comes back to
+  the same page with the choice kept and the left-behind changes in names. When no part
+  could go across without taking every change or leaving a need behind, the page says so
+  and offers no form. A split lands on the agreed part's timeline. The baseline and a
+  frozen plan refuse with the operation's own message.
+- `team_planning_split_needs` gives an MCP client the same list: each change's event id,
+  subject and facet, and the changes it needs. A pay change shows its facet, never its
+  value, so an editor without see-pay can still move it; its sealed value travels intact.
 - `team_planning_split_scenario` splits from an MCP client. It takes the moving changes'
-  event ids as `team_planning_history` lists them, and its refusal names the event ids
-  that block the split.
+  event ids as `team_planning_history` or `team_planning_split_needs` lists them, and its
+  refusal names the event ids that block the split.
 - The agreed part can then be approved and carried out. As its changes are done they leave
   the difference, and the rest is what remains to be argued.
 

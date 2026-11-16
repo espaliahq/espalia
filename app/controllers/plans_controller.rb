@@ -140,6 +140,42 @@ class PlansController < ApplicationController
     redirect_to changes_plan_path(plan[:plan_id]), alert: "Couldn't update to today: #{e.message}"
   end
 
+  # GET /planning/:id/scenarios/:scenario_id/split
+  #
+  # The changes a scenario makes, to choose the agreed part from, with what
+  # each can't go across without ([#360](https://github.com/espaliahq/espalia/issues/360)).
+  def split
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    render split_page(plan)
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), alert: "Can't split this scenario: #{e.message}"
+  end
+
+  # POST /planning/:id/scenarios/:scenario_id/split
+  #
+  # A refusal shows the page again with the choice kept and the operation's
+  # reason, so the editor can add what a change needs.
+  def split_scenario
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    draft = { event_ids: Array(params[:event_ids]).compact_blank, name: params[:name].to_s }
+    result = Operations::TeamPlanning::SplitScenario.call(context: pundit_user,
+                                                          params: { plan_id: plan[:plan_id], scenario_id: params.expect(:scenario_id), **draft })
+    count = (draft[:event_ids] & result[:moved_event_ids]).size
+    redirect_to timeline_plan_path(plan[:plan_id], scenario: result[:agreed_id], step: split_step(result)),
+                notice: "Split #{count} #{'change'.pluralize(count)} off into #{result[:name]}."
+  rescue Operations::Base::ParameterError => e
+    refused = -> { redirect_to plan_path(plan[:plan_id]), alert: "Couldn't split the scenario: #{e.message}" }
+    return refused.call unless can_edit?
+
+    begin
+      render split_page(plan, draft:, error: e.message), status: :unprocessable_content
+    rescue Operations::Base::ParameterError
+      refused.call
+    end
+  end
+
   # GET /planning/:id/pay-upload?scenario=:scenario_id
   #
   # A file of actual pay to preview, then hold ([#323](https://github.com/espaliahq/espalia/issues/323)).
@@ -172,6 +208,25 @@ class PlansController < ApplicationController
   end
 
   private
+
+  # The column a phone opens on: the agreed part shares one with the rest.
+  # The split has already happened, so a failed read lands on the timeline's first column rather than a 404.
+  def split_step(result)
+    halves = result.values_at(:agreed_id, :scenario_id)
+    read(Operations::TeamPlanning::Timeline, scenario_id: result[:agreed_id])[:columns]
+      .index { ([ it[:scenario_id] ] + it[:alternative_ids]).intersect?(halves) }
+  rescue ActiveRecord::RecordNotFound
+    nil
+  end
+
+  def split_page(plan, draft: {}, error: nil)
+    scenario_id = params.expect(:scenario_id).downcase
+    needs = Operations::TeamPlanning::SplitNeeds.call(context: pundit_user, params: { plan_id: plan[:plan_id], scenario_id: })
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario = scenarios.find { it[:scenario_id] == scenario_id }
+    plan_page(plan, scenarios:, open_tab: :scenarios,
+                    body: Views::Plans::SplitScenario.new(plan:, scenario:, needs:, draft:, error:))
+  end
 
   def pay_uploader_plan
     plan = read(Operations::TeamPlanning::Plan)
