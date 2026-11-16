@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Walks an ordered list of entries, each a matcher plus what it applies,
-# and finds the one with the last word for a subject (#368). A matcher
+# and finds the one with the last word for a subject ([#368](https://github.com/espaliahq/espalia/issues/368)). A matcher
 # matches on the fields it sets and ignores the ones it leaves nil. Every
 # entry that matches applies, so the last one to match wins, and the order
 # of the entries is the precedence.

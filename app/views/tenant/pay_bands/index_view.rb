@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The tenant's pay bands as one ordered list, and the form that adds one.
-# Plans price a seat from the last band in the list that matches it (#368),
+# Plans price a seat from the last band in the list that matches it ([#368](https://github.com/espaliahq/espalia/issues/368)),
 # so the list's order is the precedence: an admin moves a band with its
 # buttons, or drags it on a desktop.
 class Views::Tenant::PayBands::IndexView < Views::Base
@@ -53,7 +53,7 @@ class Views::Tenant::PayBands::IndexView < Views::Base
   def bands_column
     if @bands.empty?
       render Components::Kit::EmptyState.new(title: "No pay bands yet", size: :page) do
-        plain "Add a band below. A band for every role and every level prices any seat no other band covers."
+        plain "Add a band below. A band for every role and every level prices any seat at a framework level that no other band covers."
       end
     else
       order_card

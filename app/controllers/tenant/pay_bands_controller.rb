@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The tenant's pay bands (Team Planning 5.1): an ordered list where the last
-# band to match a seat prices it (#368). Tenant admins only. A refused form is shown again with what was
+# band to match a seat prices it ([#368](https://github.com/espaliahq/espalia/issues/368)). Tenant admins only. A refused form is shown again with what was
 # typed, so nothing has to be entered twice.
 class Tenant::PayBandsController < ApplicationController
   include PayBandsPage

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Pay bands become an ordered list of entries (#368). Each band matches on
+# Pay bands become an ordered list of entries ([#368](https://github.com/espaliahq/espalia/issues/368)). Each band matches on
 # whichever of role family, role, level number and location it sets, and of
 # the bands that match a seat, the last in the list has the last word.
 #

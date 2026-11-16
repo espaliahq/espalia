@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# Removes a pay band. A position it priced falls back to the level's
-# any-location band, or to no price at all.
+# Removes a pay band. A seat it priced takes the next band above it in the
+# list that matches the seat, or goes unpriced.
 class Operations::Tenants::RemovePayBand < Operations::Base
   include Operations::Tenants::PayBandSupport
 
-  description "Remove a pay band, by pay_band_id from tenants_pay_bands. Positions it priced fall back to the " \
-              "level's any-location band, or go unpriced. Refused unless the caller is a tenant admin."
+  description "Remove a pay band, by pay_band_id from tenants_pay_bands. Seats it priced take the next band above it " \
+              "in the list that matches them, or go unpriced. Refused unless the caller is a tenant admin."
   category :destructive
   approval :in_app
 

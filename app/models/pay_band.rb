@@ -7,7 +7,7 @@
 # Figures are kept exactly as entered. Nothing is converted or annualised:
 # conversion to a reference currency happens once, at report time.
 #
-# Bands form an ordered list (#368). Each band matches on whichever of role
+# Bands form an ordered list ([#368](https://github.com/espaliahq/espalia/issues/368)). Each band matches on whichever of role
 # family, role, level number and location it sets, and of the bands that
 # match a seat, the last in the list has the last word ({LastMatch}). A
 # blank location matches any location. A band made from a framework level
