@@ -2437,19 +2437,13 @@ export default class extends BaseController {
     const frameUrl = new URL(frameSrc, window.location.origin)
     const browserUrl = new URL(window.location)
 
-    // Only sync the active category from the frame's src — that's the
-    // ONE param the server "owns" (set when the user clicks a category
-    // tab and the frame fetches the new category). `capability` and
-    // `level_ordinal` are owned by JS focus state via setFocus +
-    // syncCapabilityToUrl/syncLevelOrdinalToUrl. Overwriting them
-    // from the frame's src would clobber a recent focus change
-    // whenever the frame finishes loading after the click.
+    // Only the category comes from the frame's src, and only when a tab
+    // switch put it there: `capability` and `level_ordinal` belong to JS
+    // focus state, and the page's own frame src never names a category,
+    // so clearing it here would strip a shared link's `?category=`.
     const category = frameUrl.searchParams.get("category")
-    if (category) {
-      browserUrl.searchParams.set("category", category)
-    } else {
-      browserUrl.searchParams.delete("category")
-    }
+    if (!category || browserUrl.searchParams.get("category") === category) return
+    browserUrl.searchParams.set("category", category)
 
     this.#replaceUrl(browserUrl)
   }
