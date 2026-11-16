@@ -15,7 +15,10 @@ class Operations::TeamPlanning::SetPosition < Operations::Base
               "key on), in a unit, at an FTE above 0 and at most 1. basis 'backfill' is committed budget; 'new' " \
               "is planned. cost_centre is the position's own label, which decides its open seat and any occupant the plan " \
               "changes, ahead of the cost_centre rules; an occupant the plan leaves alone keeps their own. Omit it to leave " \
-              "the position to the rules, which clears any label it had. Give every field each time: the scenario's position becomes exactly this. Steps after " \
+              "the position to the rules, which clears any label it had. hiring_status is not_started (the default), recruiting, " \
+              "on_hold (recruiting paused: the seat is empty and gets no forecast start) or offer_accepted, which needs a " \
+              "target_start. target_start is the date the seat is filled from; without one, an open seat is forecast to start " \
+              "the unit's time_to_hire rule after it opens. Give every field each time: the scenario's position becomes exactly this. Steps after " \
               "the scenario, and its alternatives, inherit it unless they change it. Refused unless the caller " \
               "is one of the plan's editors."
   category :write
@@ -30,12 +33,14 @@ class Operations::TeamPlanning::SetPosition < Operations::Base
   parameter :fte, Numeric, required: true, schema: { exclusiveMinimum: 0, maximum: 1 }
   parameter :basis, String, required: true, schema: { enum: POSITION::BASES }
   parameter :cost_centre, String, schema: { maxLength: POSITION::COST_CENTRE_LENGTH }
+  parameter :hiring_status, String, schema: { enum: POSITION::HIRING_STATUSES }
+  parameter :target_start, String, allow_blank: false, schema: Operations::OrgGraph::DateParameter::DATE_SCHEMA
 
-  # @return [Hash] `{ plan_id, scenario_id, position_id, role_id, level_id, unit_id, fte, basis, cost_centre, budget }`
+  # @return [Hash] `{ plan_id, scenario_id, position_id, role_id, level_id, unit_id, fte, basis, cost_centre, hiring_status, target_start, budget }`
   def perform
     position_id = params[:position_id].nil? ? SecureRandom.uuid_v7 : uuid!(:position_id)
     end_state = { role_id: uuid!(:role_id), level_id: uuid!(:level_id), unit_id: uuid!(:unit_id), fte: params[:fte], basis: params[:basis],
-                  cost_centre: params[:cost_centre] }
+                  cost_centre: params[:cost_centre], hiring_status: params[:hiring_status], target_start: params[:target_start] }
     set_change!(POSITION, subject_id: position_id, end_state:) do |plan|
       known_position!(plan, position_id) unless params[:position_id].nil?
       role_and_level!(end_state)

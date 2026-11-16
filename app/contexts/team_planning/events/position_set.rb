@@ -14,10 +14,15 @@
 #   @option data [String] :basis "backfill" (committed budget) or "new" (planned)
 #   @option data [String, nil] :cost_centre the position's own label, which
 #     wins over its occupant's and the cost centre rules; absent from older events
+#   @option data [String, nil] :hiring_status a {HIRING_STATUSES} entry; absent
+#     from older events, which read as "not_started"
+#   @option data [String, nil] :target_start an ISO date the seat starts on;
+#     absent from older events, which have none
 #   Plus {TeamPlanning::Events::Change::FIELDS}.
 #
 class TeamPlanning::Events::PositionSet < TeamPlanning::Events::Change
   BASES = %w[backfill new].freeze
+  HIRING_STATUSES = %w[not_started recruiting on_hold offer_accepted].freeze
   IDS = %i[role_id level_id unit_id].freeze
   COST_CENTRE_LENGTH = 120
 
@@ -32,14 +37,17 @@ class TeamPlanning::Events::PositionSet < TeamPlanning::Events::Change
   def self.creates_subject? = true
 
   # @param end_state [Hash]
-  # @return [Hash] the ids downcased, the FTE a Float, the cost centre squished or nil
-  # @raise [TeamPlanning::Error] for a missing id, an FTE outside (0, 1], an unknown basis or a long cost centre
+  # @return [Hash] the ids downcased, the FTE a Float, the cost centre squished or nil,
+  #   the hiring status defaulting to "not_started" and the target start an ISO date or nil
+  # @raise [TeamPlanning::Error] for a missing id, an FTE outside (0, 1], an unknown basis, a long
+  #   cost centre, an unknown hiring status, a target start that isn't a date, or an accepted offer with no start
   def self.end_state(end_state)
     ids = IDS.to_h { [ it, end_state[it].to_s.strip.downcase ] }
     missing = ids.select { |_, id| id.empty? }.keys
     raise TeamPlanning::Error, "A position needs #{missing.join(", ")}" if missing.any?
 
-    { **ids, fte: fte!(end_state[:fte]), basis: basis!(end_state[:basis]), cost_centre: cost_centre!(end_state[:cost_centre]) }
+    { **ids, fte: fte!(end_state[:fte]), basis: basis!(end_state[:basis]), cost_centre: cost_centre!(end_state[:cost_centre]),
+      **hiring!(end_state[:hiring_status], end_state[:target_start]) }
   end
 
   # @param map [TeamPlanning::Baseline::Map]
@@ -47,6 +55,8 @@ class TeamPlanning::Events::PositionSet < TeamPlanning::Events::Change
   # @return [TeamPlanning::Baseline::Map]
   def self.apply_to(map, data)
     fields = data.slice(*IDS, :fte, :basis, :cost_centre)
+    fields[:hiring_status] = data[:hiring_status].presence || "not_started"
+    fields[:target_start] = (Date.iso8601(data[:target_start]) if data[:target_start].present?)
     position = TeamPlanning::Baseline::Position.new(id: data[:subject_id], **fields, role_name: nil, level_name: nil)
     map.with(positions: map.positions.reject { it.id == position.id } + [ position ])
   end
@@ -72,5 +82,24 @@ class TeamPlanning::Events::PositionSet < TeamPlanning::Events::Change
     raise TeamPlanning::Error, "A position's cost centre is at most #{COST_CENTRE_LENGTH} characters"
   end
 
-  private_class_method :fte!, :basis!, :cost_centre!
+  def self.hiring!(status, target_start)
+    status = status.to_s.strip.downcase.presence || "not_started"
+    raise TeamPlanning::Error, "A position's hiring status is one of #{HIRING_STATUSES.join(", ")}" unless HIRING_STATUSES.include?(status)
+
+    starts_on = target_start!(target_start)
+    raise TeamPlanning::Error, "An accepted offer needs a target start" if status == "offer_accepted" && !starts_on
+
+    { hiring_status: status, target_start: starts_on&.iso8601 }
+  end
+
+  def self.target_start!(value)
+    return if value.blank?
+    return value if value.is_a?(Date)
+
+    Date.iso8601(value.to_s.strip)
+  rescue Date::Error
+    raise TeamPlanning::Error, "A position's target start is a date, such as 2026-05-01"
+  end
+
+  private_class_method :fte!, :basis!, :cost_centre!, :hiring!, :target_start!
 end

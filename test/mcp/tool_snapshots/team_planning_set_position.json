@@ -1,6 +1,6 @@
 {
   "name": "team_planning_set_position",
-  "description": "Open a position in a scenario of a Team Planning plan, or change or reopen one by passing its position_id. A position is a framework role and one of that role's levels (the level pay bands key on), in a unit, at an FTE above 0 and at most 1. basis 'backfill' is committed budget; 'new' is planned. cost_centre is the position's own label, which decides its open seat and any occupant the plan changes, ahead of the cost_centre rules; an occupant the plan leaves alone keeps their own. Omit it to leave the position to the rules, which clears any label it had. Give every field each time: the scenario's position becomes exactly this. Steps after the scenario, and its alternatives, inherit it unless they change it. Refused unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "description": "Open a position in a scenario of a Team Planning plan, or change or reopen one by passing its position_id. A position is a framework role and one of that role's levels (the level pay bands key on), in a unit, at an FTE above 0 and at most 1. basis 'backfill' is committed budget; 'new' is planned. cost_centre is the position's own label, which decides its open seat and any occupant the plan changes, ahead of the cost_centre rules; an occupant the plan leaves alone keeps their own. Omit it to leave the position to the rules, which clears any label it had. hiring_status is not_started (the default), recruiting, on_hold (recruiting paused: the seat is empty and gets no forecast start) or offer_accepted, which needs a target_start. target_start is the date the seat is filled from; without one, an open seat is forecast to start the unit's time_to_hire rule after it opens. Give every field each time: the scenario's position becomes exactly this. Steps after the scenario, and its alternatives, inherit it unless they change it. Refused unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -45,6 +45,20 @@
       "cost_centre": {
         "type": "string",
         "maxLength": 120
+      },
+      "hiring_status": {
+        "type": "string",
+        "enum": [
+          "not_started",
+          "recruiting",
+          "on_hold",
+          "offer_accepted"
+        ]
+      },
+      "target_start": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
       }
     },
     "required": [

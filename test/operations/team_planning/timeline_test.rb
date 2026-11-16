@@ -171,6 +171,15 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
     assert_equal "Software Engineer", result[:positions][fresh][:role_name]
   end
 
+  should "give each position where its hiring stood in every column" do
+    seat = open_position(@q1)
+    call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @q2, position_id: seat, role_id: @engineer.role_id,
+                                                level_id: @e2.level_id, unit_id: @payments, fte: 1, basis: "new", hiring_status: "on_hold")
+
+    assert_equal [ nil, { hiring_status: "not_started", target_start: nil }, { hiring_status: "on_hold", target_start: nil } ],
+                 timeline[:positions][seat][:hiring]
+  end
+
   should "carry a hire on in the lane of the position they fill" do
     seat = open_position(@q1, unit_id: @growth)
     hire = hire(@q2, "Growth engineer", seat)
