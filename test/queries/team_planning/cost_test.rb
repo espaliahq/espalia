@@ -295,7 +295,18 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
                                                               ends_on: "2027-12-31")[:scenario_id]
     seat = open_position(basis: "backfill")
     operation(Operations::TeamPlanning::SetDeparture, scenario_id: later, person_id: @ada.id, position_id: seat, leaves_on: "2027-03-31")
-    operation(Operations::TeamPlanning::SetScenarioPeriod, ends_on: "2027-06-30")
+    # A date edit now refuses to strand a departure, but a plan written before it may hold one.
+    as_tenant do
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        Rails.configuration.event_store.publish(
+          TeamPlanning::Events::ScenarioPeriodSet.new(data: {
+            plan_id: @plan_id, scenario_id: @year, starts_on: BASE_ON.iso8601, ends_on: "2027-06-30",
+            previous_starts_on: BASE_ON.iso8601, previous_ends_on: "2026-12-31", set_by_id: @planner.person.id
+          }),
+          stream_name: EventStreamNaming.plan_stream(@plan_id)
+        )
+      end
+    end
     scenario = cost(later).scenario
 
     assert_equal Date.new(2027, 7, 1)..Date.new(2027, 12, 31), lines(scenario, seat).sole.held
