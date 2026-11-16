@@ -16,6 +16,46 @@
 #   start = TeamPlanning::SeatStart.new(position)
 #   start.held_in(Date.new(2027, 1, 1)..Date.new(2027, 3, 31)) # => 2027-02-15..2027-03-31
 class TeamPlanning::SeatStart
+  # Each open part of each position on a map: the FTE each planned leaver
+  # leaves, opening the day after they go, then the rest, opening when the
+  # position does.
+  #
+  # @param map [TeamPlanning::Baseline::Map]
+  # @return [Array<Array(TeamPlanning::Baseline::Position, Rational, SeatStart)>] position, open FTE and start
+  def self.openings(map)
+    filled = Hash.new(0r)
+    map.people.each do |person|
+      TeamPlanning::Baseline::Membership.shares(person.memberships).each do |placement, share, _|
+        filled[placement.position_id] += fte_of(person) * share if placement.position_id && placement.position_id != person.backfill_id
+      end
+    end
+    leavers = map.people.select(&:leaving?).group_by(&:backfill_id)
+    map.positions.sort_by(&:id).flat_map do |position|
+      open = Rational(position.fte.to_s) - filled[position.id]
+      open.positive? ? parts(position, open, leavers.fetch(position.id, [])) : []
+    end
+  end
+
+  # @param member [TeamPlanning::Baseline::Member]
+  # @return [Rational] the FTE the plan counts, 1 when nobody knows it
+  def self.fte_of(member)
+    fte = member.planned_or_own(:fte)
+    fte.nil? || fte == TeamPlanning::Baseline::UNKNOWN ? 1r : Rational(fte.to_s)
+  end
+
+  def self.parts(position, open, leavers)
+    dated = leavers.map { [ fte_of(it), TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) ] }
+    parts = dated.sort_by { |_, last| last || Date.new(0) }.filter_map do |fte, last|
+      fte = [ fte, open ].min
+      next unless fte.positive?
+
+      open -= fte
+      [ position, fte, new(position, opens_on: last&.next_day) ]
+    end
+    open.positive? ? parts << [ position, open, new(position) ] : parts
+  end
+  private_class_method :parts
+
   # @param position [TeamPlanning::Baseline::Position]
   # @param opens_on [Date, nil] the day this part of the seat opens; the position's own by default
   def initialize(position, opens_on: position.opened_on)

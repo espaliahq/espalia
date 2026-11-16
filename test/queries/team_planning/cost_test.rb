@@ -74,6 +74,8 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
       handler.create_plan(@plan_id, name: "Next year", base_on: BASE_ON)
     end
     @year = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+    # These price open seats from the day they open; the hiring lag has its own tests.
+    operation(Operations::TeamPlanning::SetRule, scenario_id: @plan_id, rule: "time_to_hire", value: { days: "0" })
   end
 
   def as_tenant(tenant = @tenant, &) = ActsAsTenant.with_tenant(tenant, &)
@@ -718,6 +720,7 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     should "convert the forecast at the last day's rate too" do
       as_tenant { ExchangeRate.create!(from_currency: "NZD", to_currency: "EUR", rate: "0.6", applies_from: "2026-12-01") }
       operation(Operations::TeamPlanning::SetRule, rule: "attrition", value: { yearly_rate: "0.1" })
+      operation(Operations::TeamPlanning::SetRule, rule: "time_to_hire", value: { days: "90" })
       forecast = cost.at_end.forecast.total
 
       assert forecast.native.fetch("NZD").negative?
@@ -736,6 +739,7 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
       open_position(unit_id: @payments, fte: 0.5)
       operation(Operations::TeamPlanning::SetDeparture, person_id: @dee.id, leaves_on: "2026-06-30")
       operation(Operations::TeamPlanning::SetRule, rule: "attrition", value: { yearly_rate: "0.1" })
+      operation(Operations::TeamPlanning::SetRule, rule: "time_to_hire", value: { days: "90" })
       report = cost
       total = report.at_end_parts
 
@@ -789,7 +793,7 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     should "only hold forecast kinds among the rule kinds that forecast" do
       with_kinds(Hiring) do
         assert_includes TeamPlanning::RuleKinds.forecasts, Hiring
-        assert_equal [ TeamPlanning::RuleKinds::Attrition, Hiring ], TeamPlanning::RuleKinds.forecasts
+        assert_equal [ TeamPlanning::RuleKinds::Attrition, TeamPlanning::RuleKinds::TimeToHire, Hiring ], TeamPlanning::RuleKinds.forecasts
         assert_includes TeamPlanning::RuleKinds.all, Hiring
       end
     end

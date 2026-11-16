@@ -152,11 +152,18 @@ class TeamPlanning::Cost
     # @return [TeamPlanning::Forecast::Pricing]
     def pricing
       held = lines.select { it.kind == "person" && it.share.positive? }.group_by { [ it.seat_id, it.unit_id ] }
-      TeamPlanning::Forecast::Pricing.new(cost: held.filter_map do |key, group|
-        share = group.sum(0r, &:share)
-        priced = group.reject(&:unpriced?)
-        [ key, priced.group_by(&:currency).transform_values { |same| same.sum(0r, &:amount) / share } ] if priced.any?
-      end.to_h)
+      open = lines.select { it.kind == "position" && it.share.positive? }.group_by(&:seat_id)
+      TeamPlanning::Forecast::Pricing.new(cost: held.filter_map { |key, group| [ key, yearly(group) ] if yearly(group) }.to_h,
+                                          open: open.transform_values { TeamPlanning::Forecast::Open.new(cost_centre: it.first.cost_centre, cost: yearly(it) || {}) })
+    end
+
+    private
+
+    # @return [Hash{String => Rational}, nil] currency => yearly amount per FTE, nil when nothing is priced
+    def yearly(group)
+      share = group.sum(0r, &:share)
+      priced = group.reject(&:unpriced?)
+      priced.group_by(&:currency).transform_values { |same| same.sum(0r, &:amount) / share } if priced.any?
     end
   end
 
@@ -459,24 +466,11 @@ class TeamPlanning::Cost
   end
 
   def open_lines(map)
-    filled = Hash.new(0r)
-    map.people.each do |person|
-      TeamPlanning::Baseline::Membership.shares(person.memberships).each do |placement, share, _|
-        filled[placement.position_id] += (fte_of(person) || 1r) * share if placement.position_id && placement.position_id != person.backfill_id
-      end
+    TeamPlanning::SeatStart.openings(map).map do |position, fte, start|
+      line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id,
+           **cost_centre_working(@cost_centres.of(position)),
+           level_id: position.level_id, level_source: nil, country: nil, fte:, fraction: 1r, held: start.held_in(@period), reason: nil)
     end
-    leavers = map.people.select(&:leaving?).group_by(&:backfill_id)
-    map.positions.sort_by(&:id).filter_map do |position|
-      open = exact(position.fte) - filled[position.id]
-      next unless open.positive?
-
-      cost_centre = @cost_centres.of(position)
-      openings(position, open, leavers.fetch(position.id, [])).map do |fte, held|
-        line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id,
-             **cost_centre_working(cost_centre),
-             level_id: position.level_id, level_source: nil, country: nil, fte:, fraction: 1r, held:, reason: nil)
-      end
-    end.flatten
   end
 
   def line(country:, reason:, pay: nil, **seat)
@@ -537,18 +531,6 @@ class TeamPlanning::Cost
   # position does. Each opening is its own line, so no seat is ever held by a
   # leaver and their backfill at once. Each starts by {TeamPlanning::SeatStart}:
   # no earlier than it opens, from its target start, and never while on hold.
-  def openings(position, open, leavers)
-    dated = leavers.map { [ fte_of(it) || 1r, TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) ] }
-    held = dated.sort_by { |_, last| last || Date.new(0) }.filter_map do |fte, last|
-      fte = [ fte, open ].min
-      next unless fte.positive?
-
-      open -= fte
-      [ fte, TeamPlanning::SeatStart.new(position, opens_on: last&.next_day).held_in(@period) ]
-    end
-    open.positive? ? held << [ open, TeamPlanning::SeatStart.new(position).held_in(@period) ] : held
-  end
-
   def fte_of(member)
     fte = member.planned_or_own(:fte)
     return nil if fte == TeamPlanning::Baseline::UNKNOWN

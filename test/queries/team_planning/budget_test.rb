@@ -54,6 +54,8 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
       TeamPlanning::CommandHandler.new(actor: context_for(@planner)).create_plan(@plan_id, name: "Next year", base_on: Date.new(2026, 1, 1))
     end
     @year = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+    # These price open seats from the day they open; the hiring lag has its own tests.
+    operation(Operations::TeamPlanning::SetRule, scenario_id: @plan_id, rule: "time_to_hire", value: { days: "0" })
   end
 
   def as_tenant(tenant = @tenant, &) = ActsAsTenant.with_tenant(tenant, &)

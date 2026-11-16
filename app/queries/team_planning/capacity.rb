@@ -104,12 +104,14 @@ class TeamPlanning::Capacity
       resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id: id, repository:, base:)
       new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(resolution.call(aggregate))
     end
+    titles = Integrations::HrisTitleResolution.new(plan.tenant)
+    priced = ->(report) { report.pricing(TeamPlanning::PositionCostCentres.new(report.map, tenant_id: plan.tenant_id, base:, titles:)) }
     earlier = TeamPlanning::Forecast.reaching(aggregate, scenario_id, defaults: base.rules.defaults).index_with do |id|
-      price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+      price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: priced.(it)) }
     end
     report = price.(scenario_id)
     baseline = price.(plan.id) unless scenario_id == plan.id
-    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing: report.pricing, earlier:).rows)
+    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing: priced.(report), earlier:).rows)
   end
 
   # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named
@@ -126,14 +128,23 @@ class TeamPlanning::Capacity
     # what an empty seat would have delivered.
     #
     # @return [TeamPlanning::Forecast::Pricing]
-    def pricing
+    #
+    # @param cost_centres [TeamPlanning::PositionCostCentres, nil] each open
+    #   seat's cost centre, so a hiring-lag row joins its cost twin
+    def pricing(cost_centres = nil)
       live = map.units.to_set(&:id)
       places = seats.select { it.seat.kind == "person" }.flat_map do |seat|
         seat.places.select { it.figure && it.model }.map { [ seat.seat.id, live.include?(it.unit_id) ? it.unit_id : nil, it ] }
       end
+      positions = map.positions_by_id
+      open = seats.select { it.seat.kind == "position" }.to_h do |seat|
+        delivered = seat.places.select { it.figure && it.model }.map { { it.model => Rational(it.figure.amount.to_s) / seat.seat.fte } }
+        cost_centre = cost_centres&.of(positions.fetch(seat.seat.id))&.cost_centre
+        [ seat.seat.id, TeamPlanning::Forecast::Open.new(cost_centre:, capacity: TeamPlanning::Capacity.add(delivered)) ]
+      end
       TeamPlanning::Forecast::Pricing.new(capacity: places.group_by { it.first(2) }.transform_values do |group|
         TeamPlanning::Capacity.add(group.map { { it[2].model => it[2].figure.amount } })
-      end)
+      end, open:)
     end
 
     # @return [Boolean] whether any place has a model chosen, so the plan measures capacity at all
