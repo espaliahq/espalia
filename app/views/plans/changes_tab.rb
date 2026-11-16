@@ -203,7 +203,7 @@ class Views::Plans::ChangesTab < Views::Base
                                          aria_label: "Clear #{subject} · #{facet}") { "Clear" }
       modal.body do
         p(class: "text-sm text-default") do
-          "#{scenario_name(scenario_id)} will follow #{scenario_name(followed(scenario_id))} again here. " \
+          "#{scenario_name(scenario_id)} will follow #{scenario_name(parent_of(scenario_id))} again here. " \
             "The change stays in the history, and Undo brings it back."
         end
         form(action: plan_clears_path(plan_id), method: "post", class: "mt-6 flex flex-wrap items-center gap-3") do
@@ -218,17 +218,7 @@ class Views::Plans::ChangesTab < Views::Base
     end
   end
 
-  # The step a scenario resolves on top of: its parent for a next step, and
-  # for an alternative what its parent follows.
-  def followed(id)
-    scenario = @scenarios.find { it[:scenario_id] == id }
-    return plan_id unless scenario&.dig(:parent_id)
-
-    case scenario[:relation]
-    in "then" then scenario[:parent_id]
-    in "instead" | "on" then followed(scenario[:parent_id])
-    end
-  end
+  def parent_of(id) = @scenarios.find { it[:scenario_id] == id }&.dig(:parent_id) || plan_id
 
   def planned_in(id)
     p(class: "text-xs text-muted", data: { planned_in: id }) do
