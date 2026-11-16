@@ -179,6 +179,20 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
       assert_equal cost[:total], table[:total]
     end
 
+    should "price the step's old dates again once a move of its end is undone, the strip and the table alike" do
+      call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @year, ends_on: "2026-06-30")
+      call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @year)
+
+      get map_plan_path(@plan_id, scenario: @year)
+      strip = Nokogiri::HTML(response.body).at_css("[data-cost-strip]")
+      get plan_path(@plan_id)
+      cell = Nokogiri::HTML(response.body).at_css("[data-cost-cell='#{@year}']")
+
+      assert_includes strip.text, "1 Jan 2026 to 31 Dec 2026"
+      assert_equal [ "Actual EUR 200k", "Planned +EUR 50k" ], parts(strip)
+      assert_equal parts(strip), parts(cell)
+    end
+
     should "show Today's run rate without a split, as all of it is actual" do
       get map_plan_path(@plan_id)
       assert_nil Nokogiri::HTML(response.body).at_css("[data-figure-parts]")
