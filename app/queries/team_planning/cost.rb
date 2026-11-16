@@ -131,6 +131,19 @@ class TeamPlanning::Cost
 
     # @return [Integer] the seats priced from actual pay
     def actual_pay_seats = lines.reject(&:unpriced?).select { it.pay_source == "actual" }.uniq(&:seat_id).size
+
+    # What each person's places in a unit cost a year per FTE, as this map
+    # priced them, so a forecast prices under the same pay view.
+    #
+    # @return [TeamPlanning::Forecast::Pricing]
+    def pricing
+      held = lines.select { it.kind == "person" && it.share.positive? }.group_by { [ it.seat_id, it.unit_id ] }
+      TeamPlanning::Forecast::Pricing.new(cost: held.filter_map do |key, group|
+        share = group.sum(0r, &:share)
+        priced = group.reject(&:unpriced?)
+        [ key, priced.group_by(&:currency).transform_values { |same| same.sum(0r, &:amount) / share } ] if priced.any?
+      end.to_h)
+    end
   end
 
   # What the forecast assumptions add to the scenario
@@ -233,7 +246,7 @@ class TeamPlanning::Cost
     @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     scenario = priced(resolved(@scenario_id))
-    forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map).rows)
+    forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing).rows)
     baseline = priced(resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *band_list.map(&:updated_at) ].compact.max,
