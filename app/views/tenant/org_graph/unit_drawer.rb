@@ -107,13 +107,27 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     drawer_form(tenant_org_unit_path(@unit), method: "patch", class: "space-y-1") do
       label(for: "org-unit-parent", class: "block text-xs text-muted") { "Parent" }
       div(class: "flex gap-2") do
-        select(id: "org-unit-parent", name: "org_unit[parent_id]", class: "#{Components::Kit::Field::SELECT} flex-1 min-w-0") do
+        stays = !current_place_offered?
+        select(id: "org-unit-parent", name: "org_unit[parent_id]", required: stays,
+               class: "#{Components::Kit::Field::SELECT} flex-1 min-w-0") do
+          current_place_option if stays
           option(value: "", selected: @unit.parent_id.nil?) { "None (top level)" } if @rights.root_choice?
           @rights.parent_choices.each { |unit| unit_option(unit, selected: unit.id == @unit.parent_id) }
         end
         submit("Move")
       end
     end
+  end
+
+  def current_place_offered?
+    @unit.parent_id.nil? ? @rights.root_choice? : @rights.parent_choices.any? { |unit| unit.id == @unit.parent_id }
+  end
+
+  # Without it the browser selects the first choice, and Move would send the unit somewhere nobody picked (#448).
+  # As the select's first empty option it also makes `required` hold Move back until they choose.
+  def current_place_option
+    place = @unit.parent_id.nil? ? "Top level" : @unit.parent.name
+    option(value: "", disabled: true, selected: true) { "#{place} (stays where it is)" }
   end
 
   def unit_option(unit, selected: false)

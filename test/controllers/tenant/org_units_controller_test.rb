@@ -81,6 +81,7 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
 
       assert_equal [ "None (top level)", "Engineering" ],
                    drawer.css("select#org-unit-parent option").map(&:text).map(&:strip)
+      assert_not drawer.at_css("select#org-unit-parent").key?("required"), "None (top level) stays a choice"
     end
 
     should "show an HRIS unit's name and parent as read-only, naming the provider" do

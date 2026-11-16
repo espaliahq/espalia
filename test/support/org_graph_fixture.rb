@@ -53,4 +53,18 @@ module OrgGraphFixture
       ids.merge(people)
     end
   end
+
+  # The #448 reproduction: Squads may sit under a Team or a Squad, and the person owns Payments and Ledger, a
+  # second Squad under Platform, but not Checkout, the Team Payments sits under.
+  # @return [String] Ledger's id
+  def own_two_squads(tenant, org, person)
+    ledger = SecureRandom.uuid_v7
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    ActsAsTenant.with_tenant(tenant) do
+      structure.set_kind_parents(org[:squad], parent_ids: [ org[:team], org[:squad] ], top: false, effective_on: Date.current)
+      structure.create_unit(ledger, "Ledger", level_id: org[:squad], parent_id: org[:platform], effective_on: Date.current)
+      [ org[:payments], ledger ].each { |unit| structure.add_unit_owner(unit, person.id, effective_on: Date.current) }
+    end
+    ledger
+  end
 end
