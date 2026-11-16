@@ -51,6 +51,10 @@ class TeamPlanning::RuleKinds::BudgetStrictnessTest < ActiveSupport::TestCase
     assert_raises(FrozenError) { kind.default["match"] << "grade" }
   end
 
+  should "tell a client it takes a preset alone, or match, limit and scope together" do
+    assert_equal [ { required: %w[preset] }, { required: %w[match limit scope] } ], kind.json_schema[:oneOf]
+  end
+
   should "be plan-wide" do
     assert kind.plan_wide?
   end
