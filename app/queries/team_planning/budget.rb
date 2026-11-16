@@ -128,12 +128,16 @@ class TeamPlanning::Budget
   # @param scenario_id [String] a scenario, never the root, which has no period
   # @param repository [TeamPlanning::Repository]
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil)
+  # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
+  #   resolved over that aggregate for this viewer
+  # @raise [ArgumentError] when shared was resolved for another viewer, plan or scenario
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, shared: nil)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
     @aggregate = aggregate
+    @shared = shared&.for!(context, plan, scenario_id)
   end
 
   # @return [Report]
@@ -141,8 +145,13 @@ class TeamPlanning::Budget
   # @raise [TeamPlanning::Error] for the root, or a scenario the plan doesn't have
   def call
     aggregate = @aggregate || @repository.load_plan(@plan.id)
-    funding = TeamPlanning::Funding.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
-    cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call(at_end: false)
+    raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
+    raise TeamPlanning::Error, TeamPlanning::Funding::NO_PERIOD if @scenario_id == @plan.id
+
+    shared = @shared || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).shared(aggregate).first
+    reads = { context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:, shared: }
+    funding = TeamPlanning::Funding.new(**reads).call
+    cost = TeamPlanning::Cost.new(**reads).call(at_end: false, baseline: false)
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}

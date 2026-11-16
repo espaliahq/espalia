@@ -111,17 +111,23 @@ class TeamPlanning::Funding
     end
   end
 
+  NO_PERIOD = "The baseline has no period to fund, so read one of the plan's scenarios"
+
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] a scenario, never the root, which has no period
   # @param repository [TeamPlanning::Repository]
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil)
+  # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
+  #   resolved over that aggregate for this viewer
+  # @raise [ArgumentError] when shared was resolved for another viewer, plan or scenario
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, shared: nil)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
     @aggregate = aggregate
+    @shared = shared&.for!(context, plan, scenario_id)
   end
 
   # @return [Report]
@@ -130,10 +136,10 @@ class TeamPlanning::Funding
   def call
     aggregate = @aggregate || @repository.load_plan(@plan.id)
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
-    raise TeamPlanning::Error, "The baseline has no period to fund, so read one of the plan's scenarios" if @scenario_id == @plan.id
+    raise TeamPlanning::Error, NO_PERIOD if @scenario_id == @plan.id
 
-    base = TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
-    @map = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:).structure(aggregate)
+    base = @shared&.base || TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    @map = @shared&.map || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:).structure(aggregate)
     figured = TeamPlanning::FiguredPeriod.for(aggregate, @scenario_id, @map)
     @period = figured.period
     @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id, base:,
