@@ -33,7 +33,7 @@ class PayBand < ApplicationRecord
   before_create :take_place_after_wider_bands, unless: :position
   # Positions shift under a loaded band as others land, so the gap is read from the row.
   before_destroy do
-    lock_positions
+    self.class.with_list_lock(tenant_id)
     self.position = PayBand.where(id:).pick(:position) || position
   end
   after_destroy { PayBand.where(tenant_id:).where("position > ?", position).update_all("position = position - 1") }
@@ -84,15 +84,31 @@ class PayBand < ApplicationRecord
   # @param from [Array<String>, nil] the order the caller read, refused once another write has moved it
   # @return [true, false, :stale] false when ids aren't exactly the tenant's bands, :stale when from no longer stands
   def self.reorder!(ids, from: nil)
-    transaction do
-      Tenant.where(id: ActsAsTenant.current_tenant&.id).lock.pick(:id)
+    tenant = ActsAsTenant.current_tenant
+    with_list_lock(tenant&.id) do
       bands = lock.order(:position).to_a
-      return false unless ids.sort == bands.map(&:id).sort
-      return :stale if from && from != bands.map(&:id)
+      next false unless ids.sort == bands.map(&:id).sort
+      next :stale if from && from != bands.map(&:id)
 
-      ids.each_with_index { |id, index| where(id:).update_all(position: index + 1, updated_at: Time.current) }
-      bands.first&.tenant&.update_column(:pay_bands_changed_at, Time.current)
+      ids.each_with_index { |id, index| where(id:).update_all(position: index + 1) }
+      # The only sign the order changed, so it commits with the order or not at all.
+      tenant&.update_column(:pay_bands_changed_at, Time.current)
       true
+    end
+  end
+
+  # Runs the block in a transaction that holds the tenant's band list.
+  # Adding, changing, removing and reordering a band all take it before any
+  # band row, so their position writes never interleave. A key rather than a
+  # lock on the tenant row, which would hold up every insert that references
+  # the tenant.
+  #
+  # @param tenant_id [String]
+  # @return [Object] the block's value
+  def self.with_list_lock(tenant_id)
+    transaction do
+      connection.execute(sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "pay_bands:#{tenant_id}" ]))
+      yield if block_given?
     end
   end
 
@@ -218,14 +234,10 @@ class PayBand < ApplicationRecord
   # A new band lands after the last band no more specific than it, so the
   # wider bands stay above the narrower ones without anyone moving them.
   def take_place_after_wider_bands
-    lock_positions
+    self.class.with_list_lock(tenant_id)
     bands = PayBand.where(tenant_id:).order(:position).to_a
     after = bands.reverse.find { it.specificity <= specificity }
     self.position = after ? after.position + 1 : 1
     PayBand.where(tenant_id:).where(position: position..).update_all("position = position + 1")
   end
-
-  # Every write that moves positions locks the tenant row first. Locking the
-  # bands alone lets two first bands both take position 1, as there is no row to wait on.
-  def lock_positions = Tenant.where(id: tenant_id).lock.pick(:id)
 end
