@@ -17,7 +17,7 @@ module PayBandsPage
     render Views::Tenant::PayBands::IndexView.new(
       bands: Operations::Tenants::PayBands.call(context: pundit_user, params: {})[:pay_bands],
       rates: Operations::Tenants::ExchangeRates.call(context: pundit_user, params: {}),
-      roles: FrameworkState::Role.includes(:levels).order(:name).to_a,
+      roles: FrameworkState::Role.includes(:levels, :role_family).order(:name).to_a,
       countries: PayBand.known_countries,
       drafts:, **admin_shell
     ), status:

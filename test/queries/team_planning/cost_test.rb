@@ -161,6 +161,16 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal %w[no_band no_band], lines(cost.scenario, @brook.id).map(&:reason)
   end
 
+  should "say an open seat is unpriced because its level has left the framework, when no band made from the level covers it" do
+    position = open_position(level: @em5)
+    as_tenant do
+      PayBand.where(level_id: @em5.level_id).destroy_all
+      FrameworkState::Level.find_by(level_id: @em5.level_id).destroy!
+    end
+
+    assert_equal %w[level_left], cost.scenario.unpriced.select { it.position_id == position }.map(&:reason).uniq
+  end
+
   should "sum units, cost centres and the grand total to the same figure, with no unit and no cost centre counted" do
     place_cy = open_position(unit_id: @payments)
     operation(Operations::TeamPlanning::SetAssignment, person_id: @cy.id, placements: [ { position_id: place_cy, allocation: 1 } ])

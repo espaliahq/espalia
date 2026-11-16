@@ -72,9 +72,9 @@ class Mcp::OperationToTool
   # Cross-parameter constraints → JSON Schema, the only way to advertise rules
   # the flat `required` array above (an "all of") can't express.
   #
-  # Three kinds are emitted: `requires_any_of` groups as `anyOf`, and both
-  # `requires_when` and `forbids_when` declarations as `if`/`then` (the latter
-  # with a `not`). One constraint is merged bare; several must ALL hold, so they
+  # Four kinds are emitted: `requires_any_of` groups as `anyOf`, `excludes`
+  # pairs as `not`, and both `requires_when` and `forbids_when` declarations as
+  # `if`/`then` (the latter with a `not`). One constraint is merged bare; several must ALL hold, so they
   # nest under `allOf` — flattening them would say "satisfy any one", which is
   # weaker than declared.
   #
@@ -86,7 +86,7 @@ class Mcp::OperationToTool
   #
   # @return [Hash] merged into the input schema (empty when unconstrained)
   def constraint_schema
-    constraints = any_of_groups + if_then_schemas + dependent_required_schema
+    constraints = any_of_groups + if_then_schemas + dependent_required_schema + exclusion_schemas
 
     case constraints.size
     when 0 then {}
@@ -122,6 +122,13 @@ class Mcp::OperationToTool
     end
 
     [ { dependentRequired: map } ]
+  end
+
+  # @return [Array<Hash>] one `not` per pair an `excludes` rules out
+  def exclusion_schemas
+    @operation_class.exclusions.flat_map do |rule|
+      rule.others.map { { not: { required: [ rule.name.to_s, it.to_s ] } } }
+    end
   end
 
   def conditional_schema(rule, then_branch)

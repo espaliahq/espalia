@@ -1,13 +1,21 @@
 {
   "name": "tenants_add_pay_band",
-  "description": "Add a pay band for a framework level (level_id, from frameworks_get) in a location: a country, matched to the Org Graph's country ignoring case, or blank for any location. One band per level and location; use tenants_change_pay_band to change one. Currency is an ISO 4217 code and period is year, month or hour; figures are kept as entered, never converted or annualised. Figures are decimal strings with at most two decimal places, such as \"120000\". Refused unless the caller is a tenant admin.",
+  "description": "Add a pay band. A band matches on whichever of role_family_id, role_id (both from frameworks_get), level_ordinal (the level number, 1 for a role's first level) and location it is given; one left out matches anything. Give a role or a role family, not both. level_id instead matches one framework level, follows it when the framework renumbers it, and keeps pricing its seats once it leaves. The bands form an ordered list: of the bands that match a seat, the last has the last word. A new band lands after the last band no narrower than it; tenants_reorder_pay_bands moves it. A location is a country, matched to the Org Graph's country ignoring case, or blank for any location. Two bands can't match on exactly the same fields; use tenants_change_pay_band to change one. Currency is an ISO 4217 code and period is year, month or hour; figures are kept as entered, never converted or annualised. Figures are decimal strings with at most two decimal places, such as \"120000\". Refused unless the caller is a tenant admin.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "role_family_id": {
+        "type": "string"
+      },
+      "role_id": {
+        "type": "string"
+      },
+      "level_ordinal": {
+        "type": "integer",
+        "minimum": 1
+      },
       "level_id": {
-        "type": "string",
-        "minLength": 1,
-        "pattern": "\\S"
+        "type": "string"
       },
       "location": {
         "type": "string"
@@ -39,14 +47,47 @@
       }
     },
     "required": [
-      "level_id",
       "currency",
       "period",
       "minimum",
       "midpoint",
       "maximum"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "not": {
+          "required": [
+            "role_id",
+            "role_family_id"
+          ]
+        }
+      },
+      {
+        "not": {
+          "required": [
+            "level_id",
+            "role_id"
+          ]
+        }
+      },
+      {
+        "not": {
+          "required": [
+            "level_id",
+            "role_family_id"
+          ]
+        }
+      },
+      {
+        "not": {
+          "required": [
+            "level_id",
+            "level_ordinal"
+          ]
+        }
+      }
+    ]
   },
   "annotations": {
     "readOnlyHint": false,

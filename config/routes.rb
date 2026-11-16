@@ -96,7 +96,9 @@ Rails.application.routes.draw do
       get :preview
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
-    resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ]
+    resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ] do
+      patch :reorder, on: :collection
+    end
     resources :budget_lines, only: [ :index, :create, :edit, :update, :destroy ]
     resources :exchange_rates, only: [ :create, :edit, :update, :destroy ]
     resource :reference_currency, only: [ :update ]
@@ -412,6 +414,8 @@ Rails.application.routes.draw do
     get :changes, on: :member
     # What no longer fits in one scenario, by check ([#350](https://github.com/espaliahq/espalia/issues/350)).
     get :checks, on: :member
+    # What a scenario's budget lines approve, fund and leave ([#395](https://github.com/espaliahq/espalia/issues/395)).
+    get :budget, on: :member
     # Update the plan to today, from a preview an editor confirms ([#337](https://github.com/espaliahq/espalia/issues/337)).
     get :rebase, on: :member, path: "update-to-today"
     post :rebase, on: :member, path: "update-to-today", action: :rebase_plan
@@ -432,6 +436,8 @@ Rails.application.routes.draw do
     resources :assignments, only: [ :update ], controller: "plans/assignments"
     # Move a position to another unit on the scenario map; the id is the position's.
     resources :positions, only: [ :update ], controller: "plans/positions"
+    # Move a place, position or departure a step earlier or later on the timeline ([#309](https://github.com/espaliahq/espalia/issues/309)).
+    resources :change_moves, only: [ :create ], controller: "plans/change_moves", path: "change-moves"
     # Grant and withdraw the see-pay right ([#300](https://github.com/espaliahq/espalia/issues/300)); the id is the member's.
     resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
     # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.

@@ -83,10 +83,13 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     setup do
       @tenant.update!(hris_config: build(:tenant, :with_hibob_config).hris_config)
       engineer = create(:framework_role, code: "E", name: "Software Engineer")
-      level = create(:framework_level, role_id: engineer.role_id, ordinal: 3, title: "Engineer")
+      create(:framework_level, role_id: engineer.role_id, ordinal: 3, title: "Engineer")
       OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
                               .apply_facts(@ada.id, provider: "espalia", effective_on: "2026-02-01", title: "Software Engineer")
-      PayBand.create!(level:, currency: "AUD", period: "year", minimum: 50_000, midpoint: 100_000, maximum: 150_000)
+      # A family's band, so the walk covers a band wider than one role.
+      family = create(:framework_role_family, role_family_id: engineer.role_family_id, name: "Engineering")
+      PayBand.new(currency: "AUD", period: "year", minimum: 50_000, midpoint: 100_000, maximum: 150_000)
+             .tap { it.match_on(role_family: family, level_ordinal: 3) }.save!
       ReferenceCurrency.create!(currency: "AUD")
       TeamPlanning::RuleKinds.register(Hiring)
     end
@@ -411,6 +414,30 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
 
+    should "show each member the Budget tab's totals exactly as team_planning_budget gives them, with no figure from held pay without the right" do
+      BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD", period: "year", cost_centre: "Platform")
+      position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
+                                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
+                                                                         cost_centre: "Platform")[:position_id]
+      call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
+                                                             placements: [ { position_id:, allocation: 1 } ])
+      funded = call(Operations::TeamPlanning::Budget, @holder, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
+      held = Views::Plans::CostMarks::Format.amount(funded, "AUD")
+      assert_not_equal funded, call(Operations::TeamPlanning::Budget, @editor, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
+
+      [ @holder, @editor, @viewer ].each do |account|
+        who = account == @holder ? "holder" : "non-holder"
+        budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
+        html = budget_tab(account)
+        tiles = html.css("[data-budget-total]").to_h { [ it["data-budget-total"].to_sym, it.at_css("dd").text ] }
+
+        assert_equal(budget[:total].slice(:approved, :funded, :remaining, :unfunded).transform_values { Views::Plans::CostMarks::Format.sum(it, "AUD") },
+                     tiles, who)
+        account == @holder ? assert_includes(html.text, held, who) : assert_not_includes(html.text, held, who)
+        SCOPED.each_value { assert_not_includes html.to_html, it, who }
+      end
+    end
+
     should "refuse pay for someone outside the plan's units, in words that don't name them" do
       error = assert_raises(Operations::Base::ParameterError) { hold_pay(@q1, @out, SCOPED_OUT, "full_time") }
       [ @out.id, @out.name ].each { assert_not_includes error.message, it }
@@ -482,6 +509,16 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         amounts.each { assert_not_includes output, it, "#{tool} as #{who} in #{scenario_id == @plan_id ? 'Today' : scenario_id}" }
       end
     end
+  end
+
+  def budget_tab(account)
+    reads = { budget: Operations::TeamPlanning::Budget, funding: Operations::TeamPlanning::Funding, map: Operations::TeamPlanning::ScenarioMap,
+              lines: Operations::TeamPlanning::BudgetLines }.transform_values { call(it, account, plan_id: @plan_id, scenario_id: @q1) }
+    plan = call(Operations::TeamPlanning::Plan, account, plan_id: @plan_id)
+    scenarios = call(Operations::TeamPlanning::Scenarios, account, plan_id: @plan_id)[:scenarios]
+    controller = ApplicationController.new
+    controller.request = ActionDispatch::TestRequest.create
+    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::BudgetTab.new(plan:, scenarios:, **reads)))
   end
 
   def assert_split(total, expected, who)
