@@ -36,6 +36,13 @@ class Plans::StepClosuresControllerTest < ActionDispatch::IntegrationTest
       assert_select "##{Views::Plans::StepClosureDialog.id_for(@q2)}", count: 0
     end
 
+    should "name the original and the steps after it as not taken when an alternative closes, and not the alternative's own" do
+      ActsAsTenant.with_tenant(@tenant) { fork(@lean, "Lean Q2", "2027-06-30") }
+      get plan_path(@plan_id)
+
+      assert_select "##{Views::Plans::StepClosureDialog.id_for(@lean)} [data-not-taken]", text: "Q1 and Q2 will read Not taken."
+    end
+
     should "close Q1, mark Lean Q1 not taken, and offer Q1 back to reopen" do
       post plan_scenario_closure_path(@plan_id, @q1)
 

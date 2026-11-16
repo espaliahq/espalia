@@ -94,8 +94,16 @@ class Views::Plans::StepClosureDialog < Views::Base
       end
       ids = (chain + [ @scenario ]).to_set { it[:scenario_id] }
       rivals = @scenarios.select { instead?(it) && ids.include?(it[:parent_id]) }
-      (chain + rivals).reject { it[:scenario_id] == @scenario[:scenario_id] || SETTLED.include?(it[:state]) }.map { it[:name] }
+      passed = (chain + rivals).reject { it[:scenario_id] == @scenario[:scenario_id] }
+      (passed + passed.flat_map { following(it) }).uniq.reject { SETTLED.include?(it[:state]) }.map { it[:name] }
     end
+  end
+
+  # The steps after a passed-over scenario, and their alternatives, which close
+  # with it. The step being closed and the steps after it stay open.
+  def following(row)
+    children = @scenarios.select { it[:parent_id] == row[:scenario_id] && it[:scenario_id] != @scenario[:scenario_id] }
+    children.flat_map { [ it, *following(it) ] }
   end
 
   def instead?(row)
