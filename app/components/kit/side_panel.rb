@@ -89,12 +89,13 @@ class Components::Kit::SidePanel < Components::Base
   # The button that opens and closes the panel. Call it inside `main`, where it should sit.
   #
   # @param label [String] defaults to the panel's title
-  def toggle(label = @title)
+  # @yield the label's markup instead, such as a shorter label with the title kept for screen readers
+  def toggle(label = @title, &content)
     render Components::Kit::Button.new(
       variant: :outline, size: :sm,
       data: { action: "activity-pane#toggle", activity_pane_target: "toggle" },
       aria: { expanded: @open.to_s, controls: @id }
-    ) { label }
+    ) { content ? content.call : label }
   end
 
   private
