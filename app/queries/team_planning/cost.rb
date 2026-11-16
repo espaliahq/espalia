@@ -137,11 +137,12 @@ class TeamPlanning::Cost
     #
     # @return [TeamPlanning::Forecast::Pricing]
     def pricing
-      priced = lines.select { it.kind == "person" && !it.unpriced? && it.share.positive? }.group_by { [ it.seat_id, it.unit_id ] }
-      TeamPlanning::Forecast::Pricing.new(cost: priced.transform_values do |group|
+      held = lines.select { it.kind == "person" && it.share.positive? }.group_by { [ it.seat_id, it.unit_id ] }
+      TeamPlanning::Forecast::Pricing.new(cost: held.filter_map do |key, group|
         share = group.sum(0r, &:share)
-        group.group_by(&:currency).transform_values { |same| same.sum(0r, &:amount) / share }
-      end)
+        priced = group.reject(&:unpriced?)
+        [ key, priced.group_by(&:currency).transform_values { |same| same.sum(0r, &:amount) / share } ] if priced.any?
+      end.to_h)
     end
   end
 

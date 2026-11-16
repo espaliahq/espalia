@@ -191,6 +191,20 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
       assert_equal({ "per_fte" => decimal("-0.1") }, capacities.fetch([ @platform, nil ]))
     end
 
+    should "price a half left unpriced at nothing, not at the priced half's rate" do
+      e6 = as_tenant { create(:framework_level, role_id: @e5.role_id, ordinal: 6, title: "Staff SWE") }
+      eve = as_tenant { create(:person, tenant: @tenant, name: "Eve Quill") }
+      org do |people|
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed")
+        people.set_membership(eve.id, @platform, **ESPALIA, allocation: 1.0)
+      end
+      operation(Operations::TeamPlanning::SetAssignment, scenario_id: @year, person_id: eve.id,
+                                                         placements: [ { position_id: position(@platform), allocation: 0.5 },
+                                                                       { position_id: position(@platform, level: e6), allocation: 0.5 } ])
+
+      assert_equal({ "EUR" => decimal("-15000") }, rows.fetch([ @platform, nil ]).cost.transform_values { decimal(it) })
+    end
+
     should "forecast nothing with no time to hire, as no seat stays empty" do
       rule(@plan_id, "time_to_hire", { days: "0" })
 
