@@ -439,6 +439,28 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # Moves a scenario's change of a place, a position or a departure to the
+  # step before or after it on the timeline. None of those is pay, so it
+  # needs no see-pay right.
+  #
+  # @param plan_id [String]
+  # @param scenario_id [String]
+  # @param subject_id [String]
+  # @param facet [String]
+  # @param direction [String] "earlier" or "later"
+  # @param to_scenario_id [String, nil] the step later, when more than one follows
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the lock, once the actor may edit it
+  # @yieldparam change [TeamPlanning::Events::Change, nil] the change in effect that moves
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @see TeamPlanning::PlanAggregate#move_change
+  def move_change(plan_id, scenario_id:, subject_id:, facet:, direction:, to_scenario_id: nil, &check)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      check&.call(plan, plan.changes_in(scenario_id).reverse_each.find { it.key == [ subject_id, facet ] }) if plan.scenario?(scenario_id)
+      plan.move_change(scenario_id:, subject_id:, facet:, direction:, to_scenario_id:, moved_by_id: actor_id!)
+    end
+  end
+
   # Takes back a change, pin or clear in a scenario. Without an event id, takes
   # back the actor's own latest one that can be undone, as an Undo button does.
   #

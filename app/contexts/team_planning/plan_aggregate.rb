@@ -50,6 +50,9 @@ class TeamPlanning::PlanAggregate
   RELATIONS = %w[then instead on].freeze
   # A scenario sits `on` another only by a split.
   FORK_RELATIONS = %w[then instead].freeze
+  # The facets a change can move between steps along the timeline.
+  MOVABLE_FACETS = %w[assignment position departure].freeze
+  DIRECTIONS = %w[earlier later].freeze
   # How a carried conflict is settled: keep the plan, or follow reality.
   SETTLE_CHOICES = %w[plan reality].freeze
   # A conflict an update carries: where it was read, its key, and the change it read.
@@ -72,6 +75,7 @@ class TeamPlanning::PlanAggregate
     @undone = Set.new
     @redo_stacks = {}
     @carried = {}
+    @sequence = {}
   end
 
   # Opens the plan.
@@ -539,8 +543,13 @@ class TeamPlanning::PlanAggregate
 
     ensure_nothing_later!(scenario_id, entry, "undo")
     subject_id, facet = key_of(entry)
-    in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone | [ event_id ])
-    apply(TeamPlanning::Events::ChangeUndone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, undone_event_id: event_id, undone_by_id:, in_effect_event_id: }))
+    data = { plan_id: @plan_id, scenario_id:, subject_id:, facet:, undone_event_id: event_id, undone_by_id: }
+    if entry.is_a?(TeamPlanning::Events::ChangeMoved)
+      apply(TeamPlanning::Events::ChangeUndone.new(data: { **data, **moving_back(entry), in_effect_event_id: nil }))
+    else
+      in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone | [ event_id ])
+      apply(TeamPlanning::Events::ChangeUndone.new(data: { **data, in_effect_event_id: }))
+    end
   end
 
   # Narrowing a plan's scope checks only the changes in effect, so a change a
@@ -569,8 +578,13 @@ class TeamPlanning::PlanAggregate
 
     ensure_nothing_later!(scenario_id, entry, "redo")
     subject_id, facet = key_of(entry)
-    in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone - [ event_id ])
-    apply(TeamPlanning::Events::ChangeRedone.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id:, in_effect_event_id: }))
+    data = { plan_id: @plan_id, scenario_id:, subject_id:, facet:, redone_event_id: event_id, redone_by_id: }
+    if entry.is_a?(TeamPlanning::Events::ChangeMoved)
+      apply(TeamPlanning::Events::ChangeRedone.new(data: { **data, **moving_again(entry), in_effect_event_id: nil }))
+    else
+      in_effect_event_id = in_effect_at(scenario_id, [ subject_id, facet ], @undone - [ event_id ])
+      apply(TeamPlanning::Events::ChangeRedone.new(data: { **data, in_effect_event_id: }))
+    end
   end
 
   # @param scenario_id [String] the root or a live scenario
@@ -636,6 +650,40 @@ class TeamPlanning::PlanAggregate
       entry = log.find { it.event_id == event_id }
       undone?(event_id) && entry && !except_facets.include?(key_of(entry).last) && later_in_effect(log, entry).nil?
     end
+  end
+
+  # Moves a scenario's change to the step before or after it on the timeline
+  # path, as one entry the target's log holds, so one undo takes it back.
+  # Earlier is the step before on {#timeline_path}, past the parent an
+  # alternative stands in for. Later is the next step: the `then` child or
+  # one of its alternatives, which `to_scenario_id` names when there is more
+  # than one.
+  #
+  # @param scenario_id [String] the root or a live scenario
+  # @param subject_id [String]
+  # @param facet [String] one of {MOVABLE_FACETS}
+  # @param direction [String] "earlier" or "later"
+  # @param moved_by_id [String] person_id of the actor
+  # @param to_scenario_id [String, nil] the step later, when there is more than one
+  # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the facet not one that moves,
+  #   the scenario doesn't change it, there is no step that way or the step is the baseline, the step
+  #   later isn't named among several, either step is half of a split, the target already changes it,
+  #   or a departure's date falls outside the target's period
+  def move_change(scenario_id:, subject_id:, facet:, direction:, moved_by_id:, to_scenario_id: nil)
+    ensure_open!
+    live_scenario!(scenario_id)
+    raise TeamPlanning::Error, "Only a place, a position or a departure moves between steps" unless MOVABLE_FACETS.include?(facet)
+    raise TeamPlanning::Error, "A change moves earlier or later" unless DIRECTIONS.include?(direction)
+
+    key = [ subject_id, facet ]
+    raise TeamPlanning::Error, "#{this(scenario_id)} doesn't change this, so there is nothing to move" unless own_change?(scenario_id, key)
+
+    target_id = move_target(scenario_id, direction, to_scenario_id)
+    ensure_movable!(scenario_id, target_id, key)
+    apply(TeamPlanning::Events::ChangeMoved.new(data: {
+      plan_id: @plan_id, scenario_id:, to_scenario_id: target_id, subject_id:, facet:, direction:,
+      moved_event_ids: @logs.fetch(scenario_id).select { key_of(it) == key }.map(&:event_id), moved_by_id:
+    }))
   end
 
   # Stops a scenario overriding one facet of one subject, so it follows its
@@ -889,12 +937,26 @@ class TeamPlanning::PlanAggregate
                                 data[:end_state], event_id: event.event_id))
   end
 
+  on TeamPlanning::Events::ChangeMoved do |event|
+    data = event.data
+    (@logs[data[:to_scenario_id]] ||= []) << event
+    @sequence[event.event_id] = @sequence.size
+    redo_stack(data[:to_scenario_id], data[:moved_by_id]).clear
+    relocate(data[:moved_event_ids], from: data[:scenario_id], to: data[:to_scenario_id], before: event.event_id)
+  end
+
   on TeamPlanning::Events::ChangeUndone do |event|
+    if (to = event.data[:moves_to_id])
+      relocate(event.data[:moved_event_ids], from: event.data[:scenario_id], to:)
+    end
     @undone << event.data[:undone_event_id]
     redo_stack(event.data[:scenario_id], event.data[:undone_by_id]) << event.data[:undone_event_id]
   end
 
   on TeamPlanning::Events::ChangeRedone do |event|
+    if (to = event.data[:moves_to_id])
+      relocate(event.data[:moved_event_ids], from: event.data[:moves_from_id], to:, before: event.data[:redone_event_id])
+    end
     @undone.delete(event.data[:redone_event_id])
     @redo_stacks.fetch(event.data[:scenario_id], {}).each_value { it.delete(event.data[:redone_event_id]) }
   end
@@ -928,6 +990,8 @@ class TeamPlanning::PlanAggregate
       if entry.is_a?(TeamPlanning::Events::ChangeCleared)
         key = entry.data.values_at(:subject_id, :facet)
         in_effect.reject! { it.key == key }
+      elsif entry.is_a?(TeamPlanning::Events::ChangeMoved)
+        next
       else
         in_effect << entry
       end
@@ -986,13 +1050,16 @@ class TeamPlanning::PlanAggregate
   end
 
   def key_of(entry)
-    entry.is_a?(TeamPlanning::Events::ChangeCleared) ? entry.data.values_at(:subject_id, :facet) : entry.key
+    entry.is_a?(TeamPlanning::Events::Change) ? entry.key : entry.data.values_at(:subject_id, :facet)
   end
 
-  def actor_of(entry) = entry.data[:set_by_id] || entry.data[:cleared_by_id]
+  def actor_of(entry) = entry.data[:set_by_id] || entry.data[:cleared_by_id] || entry.data[:moved_by_id]
 
+  # A move's own entry stands after what it moved, and replaces none of it.
   def later_in_effect(log, entry)
-    log.drop(log.index(entry) + 1).reverse_each.find { !undone?(it.event_id) && key_of(it) == key_of(entry) }
+    log.drop(log.index(entry) + 1).reverse_each.find do
+      !undone?(it.event_id) && key_of(it) == key_of(entry) && !(it.is_a?(TeamPlanning::Events::ChangeMoved) && it.data[:moved_event_ids].include?(entry.event_id))
+    end
   end
 
   # Taking back or restoring an entry under a later one would change nothing
@@ -1006,6 +1073,8 @@ class TeamPlanning::PlanAggregate
   # A moved change names the agreed part as where it is set, so every reader
   # finds it where the log holds it.
   def moved_to(entry, agreed_id)
+    return entry.class.new(event_id: entry.event_id, data: entry.data.merge(to_scenario_id: agreed_id), metadata: entry.metadata.to_h) if entry.is_a?(TeamPlanning::Events::ChangeMoved)
+
     data = entry.data.merge(scenario_id: agreed_id)
     data = entry.class.moved_end_state(data, from: entry.data[:scenario_id], to: agreed_id) if entry.is_a?(TeamPlanning::Events::Change)
     entry.class.new(event_id: entry.event_id, data:, metadata: entry.metadata.to_h)
@@ -1013,7 +1082,120 @@ class TeamPlanning::PlanAggregate
 
   def record_change(event)
     (@logs[event.data[:scenario_id]] ||= []) << event
+    @sequence[event.event_id] = @sequence.size
     redo_stack(event.data[:scenario_id], actor_of(event)).clear
+  end
+
+  def move_target(scenario_id, direction, to_scenario_id)
+    if direction == "earlier"
+      path = timeline_path(scenario_id)
+      raise TeamPlanning::Error, "The baseline is today: a change can't move before the first step" if path.size < 2
+      raise TeamPlanning::Error, "The step before is the baseline, which holds today: a change can't move into it" if path[-2] == @plan_id
+
+      return path[-2]
+    end
+
+    steps = steps_after(scenario_id)
+    raise TeamPlanning::Error, "There is no step after this one to move the change into" if steps.empty?
+    if to_scenario_id.present?
+      raise TeamPlanning::Error, "That scenario isn't a step after this one" unless steps.include?(to_scenario_id)
+
+      return to_scenario_id
+    end
+
+    whole = steps.reject { split?(it) }
+    ensure_not_split!(*steps) if whole.empty?
+    raise TeamPlanning::Error, "More than one step follows this one: name the step to move the change into" unless whole.one?
+
+    whole.first
+  end
+
+  # The next step and each alternative to it, which the timeline can show after this one.
+  def steps_after(scenario_id)
+    children_of(scenario_id).select { it.relation == "then" }.flat_map { [ it.id, *standing_in_for(it.id) ] }
+  end
+
+  def standing_in_for(scenario_id) = children_of(scenario_id).reject { it.relation == "then" }.flat_map { [ it.id, *standing_in_for(it.id) ] }
+
+  def ensure_movable!(from_id, to_id, key)
+    ensure_not_split!(from_id, to_id)
+    if (there = changes_in(to_id).reverse_each.find { it.key == key })
+      raise TeamPlanning::Error, "The step it would move to already changes this (#{there.event_id}): clear it there first"
+    end
+
+    ensure_leaves_within!(changes_in(from_id).reverse_each.find { it.key == key }, to_id)
+  end
+
+  # A departure keeps its date: one outside the target's period is refused, never shifted.
+  def ensure_leaves_within!(change, to_id)
+    leaves_on = change&.data&.dig(:leaves_on) or return
+    period = period_of(to_id) or return
+    return if period.cover?(Date.iso8601(leaves_on))
+
+    raise TeamPlanning::Error, "They leave on #{leaves_on}, outside the step it would move to (#{period.begin.iso8601} to #{period.end.iso8601}): change the date first"
+  end
+
+  # Undoing a move puts its entries back where they were made, in their order.
+  def moving_back(marker)
+    from_id = marker.data[:scenario_id]
+    unless scenario?(from_id)
+      raise TeamPlanning::Error, "The step this change moved from has been removed, so the move can't be undone"
+    end
+
+    key = key_of(marker)
+    if (there = @logs.fetch(from_id, []).find { key_of(it) == key && !undone?(it.event_id) })
+      raise TeamPlanning::Error, "The step it moved from changes this again (#{there.event_id}): undo or clear that first, then undo the move"
+    end
+    ensure_not_split!(from_id, marker.data[:to_scenario_id])
+
+    { moves_to_id: from_id, moved_event_ids: marker.data[:moved_event_ids] }
+  end
+
+  def moving_again(marker)
+    from_id = marker.data[:scenario_id]
+    to_id = marker.data[:to_scenario_id]
+    raise TeamPlanning::Error, "The step this change moved from has been removed, so the move can't be redone" unless scenario?(from_id)
+
+    moved = marker.data[:moved_event_ids].to_set
+    key = key_of(marker)
+    if (there = @logs.fetch(from_id, []).find { key_of(it) == key && !moved.include?(it.event_id) && !undone?(it.event_id) })
+      raise TeamPlanning::Error, "The step it moved from changes this again (#{there.event_id}): undo or clear that first, then redo the move"
+    end
+    ensure_not_split!(from_id, to_id)
+    ensure_leaves_within!(in_effect(from_id, @undone).reverse_each.find { it.key == key }, to_id)
+
+    { moves_from_id: from_id, moves_to_id: to_id, moved_event_ids: marker.data[:moved_event_ids] }
+  end
+
+  def ensure_not_split!(*scenario_ids)
+    return unless scenario_ids.any? { split?(it) }
+
+    raise TeamPlanning::Error, "This step is split, and the split decides what is agreed: a change can't move into or out of either part"
+  end
+
+  # Moves log entries between scenarios. Going back they take their places by
+  # when they were made; going forward they land just before the move's own
+  # entry, so nothing later stands between the move and what it moved.
+  def relocate(event_ids, from:, to:, before: nil)
+    ids = event_ids.to_set
+    moving, @logs[from] = @logs.fetch(from, []).partition { ids.include?(it.event_id) }
+    moving = moving.map { moved_to_step(it, from, to) }
+    log = @logs[to] ||= []
+    if before && (at = log.index { it.event_id == before })
+      log.insert(at, *moving)
+    else
+      @logs[to] = (log + moving).sort_by { @sequence.fetch(it.event_id, 0) }
+    end
+    @redo_stacks.fetch(from, {}).each do |person_id, stack|
+      redo_stack(to, person_id).concat(stack.select { ids.include?(it) })
+      stack.reject! { ids.include?(it) }
+    end
+  end
+
+  def moved_to_step(entry, from, to)
+    data = entry.data.merge(scenario_id: to)
+    data = entry.class.moved_end_state(data, from:, to:) if entry.is_a?(TeamPlanning::Events::Change)
+    entry.class.new(event_id: entry.event_id, data:, metadata: entry.metadata.to_h)
   end
 
   def redo_stack(scenario_id, person_id) = (@redo_stacks[scenario_id] ||= {})[person_id] ||= []
