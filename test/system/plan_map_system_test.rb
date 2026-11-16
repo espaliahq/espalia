@@ -99,7 +99,7 @@ class PlanMapSystemTest < ApplicationSystemTestCase
           assert_selector "[data-map-person]", count: 12
           heights = all("[data-map-person]").map { it.evaluate_script("this.getBoundingClientRect().height") }
           assert heights.all? { it < 40 }, "each person takes one line: #{heights.inspect}"
-          eyebrow = find("dt", text: /\A#{LONG_ROLE}\z/i, visible: true)
+          eyebrow = find("dt", text: /\A#{Regexp.escape(LONG_ROLE)}\z/i, visible: true)
           fit = eyebrow.evaluate_script(<<~JS)
             (() => { const box = this.getBoundingClientRect(), card = this.closest("[data-map-unit]").getBoundingClientRect()
                      return this.scrollWidth <= this.clientWidth && box.left >= card.left && box.right <= card.right })()
@@ -152,7 +152,7 @@ class PlanMapSystemTest < ApplicationSystemTestCase
 
   private
 
-  LONG_ROLE = "Infrastructure reliability"
+  LONG_ROLE = "Infrastructure reliability and observabilityplatformengineeringoperations"
   LONG_NAME = "Maximiliana Wolkenstein-Abernathy-Okonkwo"
   LONG_POSITION_ROLE = "Observabilityplatformengineeringandreliabilityoperations"
   LONG_OCCUPANT = "Quillonmarabethwintersongvalerandorffquantelbrook"

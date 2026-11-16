@@ -231,7 +231,7 @@ class Views::Plans::ScenarioMap < Views::Base
       groups.keys.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.each do |role|
         label = role || "No role"
         div(class: "px-2 py-1") do
-          dt(class: "px-2 pt-1 text-[10px] font-medium uppercase tracking-wider text-muted break-words") { label }
+          dt(class: "px-2 pt-1 text-xs font-medium uppercase tracking-wide text-muted break-words") { label }
           dd do
             ul { groups[role].sort_by { |person, _| name(person[:id]) }.each { |person, place| person_row(person, place) } }
           end

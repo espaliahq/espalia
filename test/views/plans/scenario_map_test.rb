@@ -55,7 +55,6 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
 
       assert_equal "Infrastructure reliability engineering", eyebrow.text
       assert_nil eyebrow["title"]
-      assert_no_match(/line-clamp|truncate|text-ellipsis/, eyebrow["class"])
     end
 
     should "call a group with no role No role" do
