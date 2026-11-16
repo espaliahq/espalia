@@ -19,5 +19,9 @@ module Operations::TeamPlanning::ChangeNote
   # @param facet [String, nil]
   # @param see_pay [Boolean]
   # @return [Boolean]
-  def self.visible?(facet, see_pay:) = see_pay || facet != ::TeamPlanning::Events::PlanDataSet::PAY_FACET
+  def self.visible?(facet, see_pay:) = !hidden_facets(see_pay:).include?(facet)
+
+  # @param see_pay [Boolean]
+  # @return [Array<String>] the facets whose notes this reader may not see
+  def self.hidden_facets(see_pay:) = see_pay ? [] : [ ::TeamPlanning::Events::PlanDataSet::PAY_FACET ]
 end

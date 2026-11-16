@@ -53,7 +53,8 @@ class Operations::TeamPlanning::History < Operations::Base
     per_page = self.class.per_page
     see_pay = PlanPolicy.new(context, plan).see_pay?
     entries = TeamPlanningHistoryEntry.where(plan_id: plan.id, scenario_id:).order(:position)
-    entries = entries.where.not(action: "note", facet: ::TeamPlanning::Events::PlanDataSet::PAY_FACET) unless see_pay
+    hidden = Operations::TeamPlanning::ChangeNote.hidden_facets(see_pay:)
+    entries = entries.where.not(action: "note").or(entries.where.not(facet: hidden)) if hidden.any?
     entries = entries.offset((page - 1) * per_page).limit(per_page + 1).to_a
     next_page = entries.size > per_page
     entries = entries.first(per_page)
