@@ -113,6 +113,14 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    should "say quietly when the figures fail to load, keep focus where it was, and load them on Retry" do
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id)
+      assert_selector "turbo-frame#timeline-figures[complete]", visible: :all
+
+      assert_figures_fail_quietly("timeline-figures", focused: "main a[href]")
+    end
+
     should "follow an alternative to redraw the path" do
       sign_in_as(@viewer.user)
       visit timeline_plan_path(@plan_id)
@@ -186,6 +194,16 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       end
       assert_no_selector "turbo-frame#timeline-figures[complete]", visible: :all
       assert_no_sideways_overflow
+    end
+
+    should "say quietly when the figures fail to load, keep focus where it was, and load them on Retry" do
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id, step: 1)
+      assert_text "Step 2 of 3"
+      page.execute_script("document.querySelector('turbo-frame#timeline-figures-phone').scrollIntoView({ block: 'center' })")
+      assert_selector "turbo-frame#timeline-figures-phone[complete]", visible: :all
+
+      assert_figures_fail_quietly("timeline-figures-phone", focused: "[data-timeline-phone] a[aria-current='step']")
     end
 
     should "show an outsider no timeline" do
@@ -500,6 +518,20 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
   end
 
   # The backfill's level gets a band and the plan a budget line, so a viewer without see-pay reads midpoints and head counts.
+  # Reloading the loaded frame makes its next fetch the one that fails, so no lazy load races the stub.
+  def assert_figures_fail_quietly(frame_id, focused:)
+    page.execute_script("document.querySelector(arguments[0]).focus()", focused)
+    patch_fetch("/timeline/figures", once: true)
+    page.execute_script("document.getElementById(arguments[0]).reload()", frame_id)
+
+    assert_selector "##{frame_id}-error", text: "Couldn't load the figures."
+    assert page.evaluate_script("document.activeElement.matches(arguments[0])", focused), "a quiet figures failure moved focus"
+
+    within("##{frame_id}-error") { click_button "Retry" }
+    assert_selector "turbo-frame##{frame_id}[complete] [data-timeline-figures]", visible: :all
+    assert_no_selector "##{frame_id}-error", visible: true
+  end
+
   def price_the_backfill
     ActsAsTenant.with_tenant(@tenant) do
       ReferenceCurrency.create!(currency: "EUR")

@@ -139,7 +139,7 @@ class Views::Plans::Timeline < Views::Base
   # own, so a slow or failed load never holds up the path.
   def figures_row
     div(class: "grid border-b border-default", style: "grid-row: #{@row}; grid-column: 2 / -1; grid-template-columns: subgrid",
-        data: { controller: "frame-error" }) do
+        data: { controller: "frame-error", frame_error_quiet_value: true }) do
       render Views::Plans::TimelineFigures.new(src: figures_path)
       render Components::Shared::FrameLoadError.new(id: "#{Views::Plans::TimelineFigures::WIDE_ID}-error", subject: "the figures",
                                                     inline: true, classes: "border-l border-default px-3 pb-2 [grid-column:1/-1]")
@@ -247,7 +247,7 @@ class Views::Plans::Timeline < Views::Base
           today_continues(@step)
           alternatives(@step)
           walk_line(@timeline[:walk][@step], class: "mt-1")
-          div(data: { controller: "frame-error" }) do
+          div(data: { controller: "frame-error", frame_error_quiet_value: true }) do
             render Views::Plans::TimelineFigures.new(src: figures_path(layout: "phone", step: @step), phone: true, step: @step)
             render Components::Shared::FrameLoadError.new(id: "#{Views::Plans::TimelineFigures::PHONE_ID}-error", subject: "the figures",
                                                           inline: true, classes: "mt-1")

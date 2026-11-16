@@ -65,6 +65,9 @@ const LISTENERS = [
 
 export default class extends BaseController {
   static targets = ["frame", "error"]
+  // A quiet frame only adds to a page that works without it, so its failure
+  // must not pull focus from whatever the user is doing elsewhere.
+  static values = { quiet: Boolean }
 
   #boundListeners = []
 
@@ -149,6 +152,7 @@ export default class extends BaseController {
   // Re-fetch the frame from the URL it asked for.
   retry() {
     if (!this.hasFrameTarget || !this.requestedUrl) return
+    this.retried = true
     this.#showFrame()
 
     const frame = this.frameTarget
@@ -190,6 +194,6 @@ export default class extends BaseController {
     if (this.hasFrameTarget) this.frameTarget.hidden = true
     if (!this.hasErrorTarget) return
     this.errorTarget.hidden = false
-    this.errorTarget.focus()
+    if (!this.quietValue || this.retried) this.errorTarget.focus()
   }
 }
