@@ -119,7 +119,9 @@ class PayBandLockingTest < ActiveSupport::TestCase
   def assert_waiting_for_list(pids, worker, within: 5)
     pid = pids.pop(timeout: within) or flunk "the worker never reported its connection"
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + within
-    until PayBand.connection.select_value(PayBand.sanitize_sql_array([ "SELECT 1 FROM pg_locks WHERE pid = ? AND locktype = 'advisory' AND NOT granted", pid ]))
+    waiting = PayBand.sanitize_sql_array([ "SELECT 1 FROM pg_locks WHERE pid = ? AND locktype = 'advisory' AND NOT granted", pid ])
+    # Uncached, or the query cache answers every poll with the first one's miss.
+    until PayBand.uncached { PayBand.connection.select_value(waiting) }
       flunk "the worker finished while the list was held" unless worker.alive?
       flunk "the worker never waited for the list: #{activity(pid)}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
       sleep 0.02
