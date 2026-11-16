@@ -140,7 +140,7 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
     store_band("Gamma")
     visit tenant_pay_bands_path
     assert_text "The order"
-    wait_for_stimulus "pay-band-order"
+    wait_for_stimulus "drag-order"
 
     drag_below(find("#pay-band-#{first.id}"), find("#pay-bands-order li:last-child"))
 
@@ -156,7 +156,7 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
     store_band("Beta")
     visit tenant_pay_bands_path
     assert_text "The order"
-    wait_for_stimulus "pay-band-order"
+    wait_for_stimulus "drag-order"
 
     drag_below(find("#pay-band-#{first.id}"), find("#pay-bands-order li:last-child"), cancel: true)
 
@@ -172,7 +172,7 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
     store_band("Beta")
     visit tenant_pay_bands_path
     assert_text "The order"
-    wait_for_stimulus "pay-band-order"
+    wait_for_stimulus "drag-order"
 
     drag_below(find("#pay-band-#{first.id}"), find("#pay-bands-order li:last-child"), grab: find("#pay-band-down-#{first.id}"))
 
