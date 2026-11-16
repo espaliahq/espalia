@@ -158,8 +158,10 @@ class TeamPlanning::Funding
 
   def derived(funded)
     matching = @lines.values.filter_map do |line|
+      next unless line.starts_on <= @period.end && line.ends_on >= funded.starts_on
+
       differs = differs_on(line, funded)
-      [ line, differs ] if line.starts_on <= @period.end && line.ends_on >= funded.starts_on && (differs & @held).empty?
+      [ line, differs ] if (differs & @held).empty?
     end
     best = matching.group_by { |line, differs| specificity(line, differs) }.max_by(&:first)&.last.to_a.sort_by { it.first.id }
     return funded.with(reason: "no_line") if best.empty?
