@@ -61,6 +61,7 @@ class TeamPlanning::Attention
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
   # A place in no unit has no id an override could name, as the map's own drop target hasn't.
   UNASSIGNED = "unassigned"
+  NO_COST_CENTRE = "no_cost_centre"
   UNCOVERED = "A change about someone this plan no longer covers"
 
   # Resolves the scenario, then prices it, so the unclassified check reads
@@ -110,7 +111,7 @@ class TeamPlanning::Attention
       when UNIT then units[id]
       when POSITION, FUNDING then positions[id]
       when BUDGET_LINE then lines[id]
-      when COST_CENTRE then id
+      when COST_CENTRE then id == NO_COST_CENTRE ? "No cost centre" : id
       when SUCCESSION then successions[id]&.then { succession_name(it, units) }
       when CAPACITY then positions[id] || map.name_of(id)
       end
@@ -481,9 +482,10 @@ class TeamPlanning::Attention
   def unplaced
     return [] unless @budget && (@budget.lines.any? { it.line.cost_centre.present? } || @budget.seats.any? { it.cost_centre.present? })
 
-    @budget.seats.select { it.cost_centre.blank? && it.days.positive? }.uniq { [ it.kind, it.seat_id ] }.map do |seat|
+    @budget.seats.select { it.cost_centre.blank? && it.days.positive? }.group_by { [ it.kind, it.seat_id ] }.values.map do |seats|
+      seat = seats.first
       if seat.kind == "person"
-        item(seat.seat_id, ASSIGNMENT, "Has no cost centre: no position label, cost centre of their own or entry gives one", units: [ seat.unit_id ])
+        item(seat.seat_id, ASSIGNMENT, "Has no cost centre: no position label, cost centre of their own or entry gives one", units: seats.map(&:unit_id))
       else
         item(seat.position_id, POSITION, "Has no cost centre: no label, occupant or entry gives one")
       end
@@ -496,7 +498,7 @@ class TeamPlanning::Attention
     return [] unless @budget
 
     lines = @budget.lines.filter_map { |line| over_item(line.line.id, BUDGET_LINE, line.over) }
-    centres = @budget.cost_centres.filter_map { |name, totals| name && over_item(name, COST_CENTRE, totals.over) }
+    centres = @budget.cost_centres.filter_map { |name, totals| over_item(name || NO_COST_CENTRE, COST_CENTRE, totals.over) }
     lines + centres + [ over_item(@map.rules.plan_id, BUDGET, @budget.totals.over) ].compact
   end
 

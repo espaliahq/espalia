@@ -9,7 +9,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
   description "List what needs attention in a scenario of a Team Planning plan the caller is in: changes that " \
               "still resolve but no longer fit, often because a scenario it follows changed later. Each item has " \
               "the subject_id and facet that no longer fit (a person's assignment, a position, a unit, a " \
-              "succession, a reporting line, a budget line, a position's funding, a cost centre with its name as subject_id, the whole " \
+              "succession, a reporting line, a budget line, a position's funding, a cost centre with its name as subject_id " \
+              "(#{::TeamPlanning::Attention::NO_COST_CENTRE} for seats with none), the whole " \
               "budget with the plan's id as subject_id, or a place's capacity as capacity:<unit or position id>, or " \
               "capacity:#{::TeamPlanning::Attention::UNASSIGNED} for someone in no unit), a reason, and the change it belongs to: its " \
               "kind, the scenario that made it and its event_id. That is the later to land of the subject's own change and the change " \

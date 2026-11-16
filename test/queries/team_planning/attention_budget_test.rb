@@ -15,15 +15,15 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    departments = SecureRandom.uuid_v7
+    @departments = SecureRandom.uuid_v7
     @payments = SecureRandom.uuid_v7
 
     travel_to Time.utc(2025, 12, 15, 9)
     as_tenant do
       @engineer = create(:framework_role, code: "E", name: "Software Engineer")
       @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5, title: "Senior SWE")
-      structure.define_taxonomy([ { level_id: departments, name: "Department" } ], effective_on: "2025-01-01")
-      structure.create_unit(@payments, "Payments", level_id: departments, effective_on: "2025-01-01")
+      structure.define_taxonomy([ { level_id: @departments, name: "Department" } ], effective_on: "2025-01-01")
+      structure.create_unit(@payments, "Payments", level_id: @departments, effective_on: "2025-01-01")
 
       @ada = create(:person, tenant: @tenant, name: "Ada Quill")
       people.record_person(@ada.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0, country: "Mu")
@@ -139,6 +139,28 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
 
     operation(Operations::TeamPlanning::SetRule, rule: "budget_strictness", value: { preset: "envelope" })
     assert_equal [ [ @plan_id, "Spends over its approved amount" ] ], reasons(:budget_variance)
+  end
+
+  should "mark the seats with no cost centre over what lines naming none approve, under the cost-centre strictness" do
+    line(cost_centre: nil, amount: 150_000)
+    2.times { open_position(cost_centre: nil) }
+    operation(Operations::TeamPlanning::SetRule, rule: "budget_strictness", value: { preset: "cost_centre" })
+
+    assert_equal [ [ TeamPlanning::Attention::NO_COST_CENTRE, "Spends over its approved amount" ] ], reasons(:budget_variance)
+    names = as_tenant { TeamPlanning::Attention.for(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).names }
+    assert_equal "No cost centre", names[TeamPlanning::Attention::NO_COST_CENTRE]
+  end
+
+  should "touch every unit a person with no cost centre is placed in" do
+    growth = SecureRandom.uuid_v7
+    as_tenant { OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(growth, "Growth", level_id: @departments, effective_on: "2025-01-01") }
+    line
+    open_position
+    operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id,
+                                                       placements: [ { unit_id: @payments, allocation: 0.5 }, { unit_id: growth, allocation: 0.5 } ])
+
+    ada = found.find { it.check == :unplaced && it.subject_id == @ada.id }
+    assert_equal [ @payments, growth ].sort, ada.unit_ids.sort
   end
 
   should "mark a line in the period nothing draws on, but not one outside it" do
