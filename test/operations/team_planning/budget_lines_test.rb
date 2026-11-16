@@ -249,6 +249,16 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
       assert_equal [ nil, nil, false ], offers
     end
 
+    # A budget line never conflicts with the Org Graph, so settle turns every line away alike, before the
+    # command handler's own check on a priced line is reached.
+    should "refuse to settle a priced line in the same words as a line with no amount" do
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      priced = set(amount: "9000", currency: "AUD", period: "month", head_count: "3")[:budget_line_id]
+      settle = ->(id) { call(Operations::TeamPlanning::SettleConflict, as: @planner, plan_id: @plan_id, scenario_id: @q1, subject_id: id, facet: FACET, choice: "plan") }
+
+      assert_equal 1, [ priced, @support.id ].map { |id| refusal { settle.(id) } }.uniq.size
+    end
+
     # A pin would copy a priced line's amount, so it needs a rule of its own before it may land.
     should "refuse a pin on a priced line in the same words as one on a line with no amount" do
       pin = ->(id) { call(Operations::TeamPlanning::PinChange, as: @planner, plan_id: @plan_id, scenario_id: @q2, subject_id: id, facet: FACET) }
