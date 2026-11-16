@@ -101,7 +101,7 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
-    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id, removals: removals(plan, scenarios, [ scenario_id ]),
+    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id, removals: removals(plan, scenarios, [ scenario_id.downcase ]),
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
                                                                can_upload_pay: policy_for(@plan_record).upload_pay? && !@plan_record.archived?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))

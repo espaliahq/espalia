@@ -158,6 +158,13 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       assert_select "#remove-scenario-#{@q1}", count: 0
     end
 
+    should "open the map's Remove dialog from a link whose id is in capitals" do
+      get map_plan_path(@plan_id, scenario: @lean.upcase)
+
+      assert_select "button[data-modal-target-id='remove-scenario-#{@lean}']", text: "Remove…"
+      assert_select "#remove-scenario-#{@lean}"
+    end
+
     should "count the changes that go with it" do
       TeamPlanning::RuleKinds.register(HeadcountCap)
       ActsAsTenant.with_tenant(@tenant) do
