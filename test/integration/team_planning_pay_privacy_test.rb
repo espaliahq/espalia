@@ -186,7 +186,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         [ account, [ cost, costs, strip, cell ] ]
       end
 
-      seen[@holder].zip([ "2894" ] * 2 + [ "+AUD 2.89k" ] * 2).each { |output, change| assert_pay_figure output, change, "the holder sees the change on Today's" }
+      assert_equal [ "2894" ] * 2 + [ "+AUD 2.89k" ] * 2, seen[@holder].map { PayFigureAssertions.without_ids(it)[/\+AUD 2\.89k|2894/] }, "the holder sees the change on Today's"
       [ @editor, @viewer ].each do |account|
         seen[account].each do |output|
           %w[95311 95.3k 2894 2.89k 7583 7.58k].each { assert_no_pay_figure output, it }
