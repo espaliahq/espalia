@@ -38,4 +38,9 @@ class TeamPlanning::RuleKind
   #
   # @return [Boolean]
   def self.shreddable? = false
+
+  # A plan-wide rule is set for the whole plan or scenario, never a unit.
+  #
+  # @return [Boolean]
+  def self.plan_wide? = false
 end

@@ -27,6 +27,7 @@ class Operations::TeamPlanning::SetRule < Operations::Base
   # @return [Hash] `{ plan_id, scenario_id, subject_id, rule, value }`, the value as the rule stored it
   def perform
     subject_id = params[:unit_id].nil? ? plan_id! : uuid!(:unit_id)
+    refuse_unit_for_plan_wide_rule! unless params[:unit_id].nil?
     stored = nil
     set_change!(RULE, subject_id:, end_state: { rule: params[:rule], value: params[:value] }) do
       live_unit!(subject_id) unless params[:unit_id].nil?
@@ -37,6 +38,11 @@ class Operations::TeamPlanning::SetRule < Operations::Base
   end
 
   private
+
+  def refuse_unit_for_plan_wide_rule!
+    kind = ::TeamPlanning::RuleKinds.all.find { it.rule_name == params[:rule] }
+    raise Operations::Base::ParameterError, "#{params[:rule]} is set for the whole plan, not a unit" if kind&.plan_wide?
+  end
 
   def live_unit!(unit_id)
     map = ::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id: scenario_id!(:scenario_id)).structure
