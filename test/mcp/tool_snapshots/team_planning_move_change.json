@@ -17,11 +17,20 @@
       },
       "facet": {
         "type": "string",
+        "enum": [
+          "assignment",
+          "position",
+          "departure"
+        ],
         "minLength": 1,
         "pattern": "\\S"
       },
       "direction": {
         "type": "string",
+        "enum": [
+          "earlier",
+          "later"
+        ],
         "minLength": 1,
         "pattern": "\\S"
       },
