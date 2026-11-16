@@ -160,6 +160,17 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
     assert_empty queries
   end
 
+  should "build an archived plan's inputs once per request, even outside a reusing block" do
+    assert_same as_tenant { TeamPlanning::PricingInputs.for(plan) }, as_tenant { TeamPlanning::PricingInputs.for(plan) }
+  end
+
+  should "keep nothing revealed from a plan's copy once the plan is deleted in the same request" do
+    as_tenant { TeamPlanning::PricingInputs.for(plan).bands }
+    operation(Operations::TeamPlanning::DeletePlan, scenario_id: nil)
+
+    assert_nil as_tenant { TeamPlanning::Repository.new.prices_frozen(@plan_id) }
+  end
+
   should "read a frozen copy only until the plan is restored, and take a fresh one when it is archived again" do
     as_tenant(&changes.fetch("a band's figures"))
     assert_equal 100_000, e5_midpoint

@@ -31,6 +31,7 @@ class TeamPlanning::Repository
     plan
   ensure
     CurrentPlanReads.memo&.clear
+    CurrentPlanReads.forget_copies
   end
 
   # Holds the plan's lock while the block runs, so a write that first reads the

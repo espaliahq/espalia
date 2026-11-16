@@ -35,7 +35,9 @@ class TeamPlanning::PricingInputs
   def self.for(plan, repository: TeamPlanning::Repository.new)
     CurrentPlanReads.fetch([ :pricing_inputs, plan.id, plan.archived_on ]) do
       frozen = plan.archived_on && repository.prices_frozen(plan.id)
-      frozen ? new(plan, priced_on: plan.archived_on, copy: frozen) : new(plan)
+      next new(plan) unless frozen
+
+      CurrentPlanReads.frozen_inputs_for(frozen) { new(plan, priced_on: plan.archived_on, copy: frozen) }
     end
   end
 
