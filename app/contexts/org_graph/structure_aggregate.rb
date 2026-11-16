@@ -180,8 +180,8 @@ class OrgGraph::StructureAggregate
   # @param set_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the provider is unknown, or a field is named for Espalia
   # @raise [RuntimeError] if the level is unknown, holds live units while its
-  #   provider or field changes, would break the order of providers, or the
-  #   date is out of range
+  #   provider or field changes, would break the order of providers, would
+  #   forbid a placement held since the date, or the date is out of range
   def set_level_provider(level_id, provider, effective_on:, field: nil, set_by_id: nil)
     level_id = require_id(level_id, "Level id")
     provider = require_provider(provider)
@@ -200,6 +200,7 @@ class OrgGraph::StructureAggregate
       ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
     end
     ensure_not_before_last_change!(effective_on)
+    ensure_units_still_fit!({ level_id => provider }, from: iso_date(effective_on)) unless provider == previous
 
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id: level_id,

@@ -546,10 +546,12 @@ The dates follow the events:
   Squad dated before the day Squads may nest. A day before the unit's kind, or its
   parent's, joined the list isn't checked, so an HRIS backfill dated before a kind was
   added still lands.
-- A change to the kinds dated in the past covers every placement held since its date,
-  including placements that later moves or retirements ended. So Squads can't stop nesting
-  from a day a Squad still sat under another. The refusal names the unit and the day
-  it moved, and the change can be dated from that day.
+- A change to the kinds dated in the past, or to who provides one, covers every placement
+  held since its date, including placements that later moves or retirements ended. So
+  Squads can't stop nesting from a day a Squad still sat under another, and a kind can't
+  pass to an HRIS from a day one of its units sat where the HRIS rule forbids. A unit
+  still holds its place on the day it retires. The refusal names the unit and the first
+  day it no longer sat there, and the change can be dated from that day.
 
 Three rules hold across history, `AsOf`, `ChangesBetween` and the live tables
 (`org_memberships`, the `people` columns). First, a fact dated before one already held

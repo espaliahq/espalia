@@ -280,6 +280,39 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     end
   end
 
+  context "on a tenant whose retired Ledger sat under a Division until three days ago" do
+    setup do
+      @tenant = create(:tenant)
+      @division, @department, @team = Array.new(3) { SecureRandom.uuid_v7 }
+      as_tenant do
+        [ [ @division, "Division" ], [ @department, "Department" ], [ @team, "Team" ] ].each do |id, name|
+          @handler.add_level(id, name, effective_on: @today - 10)
+        end
+        @handler.set_level_provider(@division, "hibob", effective_on: @today - 10, field: "division")
+        @handler.set_level_provider(@department, "hibob", effective_on: @today - 10, field: "department")
+        @org = SecureRandom.uuid_v7
+        @handler.create_unit(@org, "Org", level_id: @division, provider: "hibob", external_ref: "d1", effective_on: @today - 10)
+      end
+      @ledger = create_unit("Ledger", @team, parent_id: @org, on: @today - 10)
+      as_tenant { @handler.retire_unit(@ledger, effective_on: @today - 3) }
+    end
+
+    should "refuse to hand Team to the HRIS from before the Ledger retired, naming when it left" do
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_level_provider(@team, "hibob", effective_on: @today - 5, field: "team") }
+      end
+      assert_equal "These units sat where this structure wouldn't allow after #{(@today - 5).iso8601}, " \
+                   "so date it #{(@today - 2).iso8601} or later: Ledger (Team under Division until #{(@today - 2).iso8601})",
+                   error.message
+    end
+
+    should "hand Team to the HRIS from the day after the Ledger retired" do
+      as_tenant { @handler.set_level_provider(@team, "hibob", effective_on: @today - 2, field: "team") }
+
+      assert_equal "hibob", as_tenant { OrgTaxonomyLevel.find(@team).provider }
+    end
+  end
+
   context "on a tenant whose kinds changed out of date order" do
     setup do
       @tenant = create(:tenant)
