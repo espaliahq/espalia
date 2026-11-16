@@ -56,7 +56,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         visit map_plan_path(@plan_id, scenario: @year)
         within("[data-cost-strip]") do
           assert_selector "[data-cost-total]", text: "EUR 238k"
-          assert_selector "[data-cost-change]", text: "+EUR 38k vs Today"
+          assert_selector "[data-cost-change]", text: "+EUR 37.7k vs Today"
           assert_text "Of this, EUR 100k is in no unit on the map"
           find("summary", text: "1 seat has no price").click
           assert_text "Cy Quill: no level resolves for the seat", wait: 10
