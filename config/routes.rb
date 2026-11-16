@@ -445,7 +445,10 @@ Rails.application.routes.draw do
     post :archive, on: :member
     post :restore, on: :member
     # Fork, rename and remove a scenario (#271, [#439](https://github.com/espaliahq/espalia/issues/439)).
-    resources :scenarios, only: [ :create, :update, :destroy ], controller: "plans/scenarios"
+    resources :scenarios, only: [ :create, :update, :destroy ], controller: "plans/scenarios" do
+      # Close a step once its period ends, or reopen the last one closed ([#466](https://github.com/espaliahq/espalia/issues/466)).
+      resource :closure, only: %i[create destroy], controller: "plans/step_closures"
+    end
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"
     # Move a position to another unit on the scenario map; the id is the position's.

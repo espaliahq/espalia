@@ -40,7 +40,9 @@ class Views::Plans::Timeline < Views::Base
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
   # @param step [Integer] the step a phone shows, from the left
   # @param can_edit [Boolean] whether the viewer edits the plan
-  def initialize(timeline:, scenarios:, step: 0, can_edit: false)
+  # @param closable [Hash{String => Symbol}] the steps that offer Close or Reopen, each with its dialog on the page
+  def initialize(timeline:, scenarios:, step: 0, can_edit: false, closable: {})
+    @closable = closable
     @timeline = timeline
     @moving = can_edit && timeline[:columns].size > 1
     @scenarios = scenarios.index_by { it[:scenario_id] }
@@ -124,6 +126,7 @@ class Views::Plans::Timeline < Views::Base
       div(class: "border-l border-default px-3 pt-2 pb-1", style: cell(1, index + 2), data: { timeline_step: index }) do
         p(class: "font-semibold text-default") { step_name(index) }
         p(class: "text-muted") { period(index) }
+        step_state(index)
         today_continues(index)
         alternatives(index)
         walk_line(@timeline[:walk][index], class: "mt-1")
@@ -244,6 +247,7 @@ class Views::Plans::Timeline < Views::Base
       render Components::Kit::Card.new(title: step_name(@step), density: :compact) do |card|
         card.body do
           p(class: "text-sm text-muted") { period(@step) }
+          step_state(@step)
           today_continues(@step)
           alternatives(@step)
           walk_line(@timeline[:walk][@step], class: "mt-1")
@@ -623,6 +627,23 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def scenario_name(id) = @scenarios.dig(id, :name).presence || UNNAMED
+
+  # An open step keeps its header as it was; the badge shows once a step can
+  # close, has closed or wasn't taken.
+  def step_state(index)
+    scenario = @scenarios.fetch(columns[index][:scenario_id])
+    mode = @closable[scenario[:scenario_id]]
+    return unless scenario[:parent_id] && (mode || scenario[:state] != "open")
+
+    div(class: "mt-1 flex flex-wrap items-center gap-2") do
+      render Views::Plans::StepState.new(scenario)
+      if mode
+        render Components::Kit::Button.new(variant: :outline, size: :xs, data: Views::Plans::StepClosureDialog.trigger(scenario[:scenario_id])) do
+          mode == :close ? "Close step…" : "Reopen step…"
+        end
+      end
+    end
+  end
 
   def period(index) = Views::Plans::ScenarioTable.period(@scenarios.fetch(columns[index][:scenario_id]))
 

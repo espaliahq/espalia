@@ -28,7 +28,9 @@ class Views::Plans::ScenarioTable < Views::Base
   # @param extra_columns [Array<Column>]
   # @param can_edit [Boolean] whether each row offers a menu to fork and edit
   # @param removable [Array<String>] the scenarios whose menu offers Remove, each with its dialog on the page
-  def initialize(plan_id:, scenarios:, extra_columns: [], can_edit: false, removable: [])
+  # @param closable [Hash{String => Symbol}] the scenarios whose menu offers Close or Reopen, each with its dialog on the page
+  def initialize(plan_id:, scenarios:, extra_columns: [], can_edit: false, removable: [], closable: {})
+    @closable = closable
     @plan_id = plan_id
     @removable = removable
     @scenarios = scenarios
@@ -74,7 +76,7 @@ class Views::Plans::ScenarioTable < Views::Base
           render Components::Kit::Prose.new(scenario[:description], class: "mt-0.5 text-muted") if scenario[:description]
           div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
             period_cell(scenario)
-            state(baseline)
+            state(scenario)
           end
           @extra_columns.each do |column|
             div(class: "sm:hidden mt-1 flex flex-wrap items-baseline gap-x-2") do
@@ -86,7 +88,7 @@ class Views::Plans::ScenarioTable < Views::Base
       end
       td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period_cell(scenario) }
       @extra_columns.each { |column| td(class: "#{WIDE} px-4 py-3 align-top") { render column.cell.call(scenario) } }
-      td(class: "#{WIDE} px-4 py-3 align-top") { state(baseline) }
+      td(class: "#{WIDE} px-4 py-3 align-top") { state(scenario) }
       td(class: "px-2 py-2 align-top text-right") { row_menu(scenario, baseline) } if @can_edit
     end
   end
@@ -103,10 +105,13 @@ class Views::Plans::ScenarioTable < Views::Base
           menu.item(data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@plan_id, scenario[:scenario_id]), scenario)) do
             "Edit…"
           end
-          if (step = self.class.dated_step(scenario, @scenarios))
-            menu.item(href: dates_plan_path(@plan_id, scenario_id: step[:scenario_id])) { "Dates…" }
+          closure_item(menu, scenario)
+          unless Views::Plans::StepClosureDialog.settled?(scenario)
+            if (step = self.class.dated_step(scenario, @scenarios))
+              menu.item(href: dates_plan_path(@plan_id, scenario_id: step[:scenario_id])) { "Dates…" }
+            end
+            menu.item(href: split_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Split off the agreed part…" }
           end
-          menu.item(href: split_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Split off the agreed part…" }
           if @removable.include?(scenario[:scenario_id])
             menu.item(tone: :danger, data: Views::Plans::RemoveScenarioDialog.trigger(scenario[:scenario_id])) { "Remove…" }
           end
@@ -115,8 +120,15 @@ class Views::Plans::ScenarioTable < Views::Base
     end
   end
 
-  def state(baseline)
-    render Components::Kit::Badge.new(baseline ? "Read only" : "Draft", tone: baseline ? :neutral : :info)
+  def closure_item(menu, scenario)
+    mode = @closable[scenario[:scenario_id]]
+    return unless mode
+
+    menu.item(data: Views::Plans::StepClosureDialog.trigger(scenario[:scenario_id])) { mode == :close ? "Close step…" : "Reopen step…" }
+  end
+
+  def state(scenario)
+    render Views::Plans::StepState.new(scenario)
   end
 
   def period(scenario) = self.class.period(scenario)
