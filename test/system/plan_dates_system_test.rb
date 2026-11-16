@@ -74,6 +74,31 @@ class PlanDatesSystemTest < ApplicationSystemTestCase
     end
   end
 
+  [ [ "desktop", DESKTOP_SIZE ], [ "phone", MOBILE_SIZE ] ].each do |label, size|
+    should "take the end off the last step on a #{label}, show its cost over the horizon, and keep an end on the step before it" do
+      page.driver.browser.manage.window.resize_to(*size)
+      sign_in_as(@planner.user)
+      visit dates_plan_path(@plan_id, scenario_id: @q2)
+      assert_selector "h3", text: "Dates for Q2 settle"
+
+      js_set_checkbox "No end date", checked: true
+      click_button_with_js_fallback("Preview", expect_text: "What this moves")
+      assert_selector "[data-dates-preview='#{@q2}']", text: "Q2 settle: Apr to Jun 2027, now from 1 Apr 2027 · no end date."
+      assert_no_sideways_overflow
+      click_button_with_js_fallback("Save dates", expect_text: "Saved the dates of Q2 settle.")
+
+      visit map_plan_path(@plan_id, scenario: @q2)
+      assert_selector "[data-cost-strip]", text: "For 1 Apr 2027 to 31 Mar 2028, the first 12 months of a step with no end date"
+      assert_no_sideways_overflow
+      visit plan_path(@plan_id)
+      assert_selector "tr[data-scenario-id='#{@q2}']", text: "From 1 Apr 2027 · no end date"
+
+      visit dates_plan_path(@plan_id, scenario_id: @q1)
+      assert_text "A step comes after this one, so it needs an end."
+      assert_no_field "No end date"
+    end
+  end
+
   private
 
   def account(role: :member, name: "Someone", **grants)
