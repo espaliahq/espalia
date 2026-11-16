@@ -457,6 +457,8 @@ Rails.application.routes.draw do
     # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.
     resources :notes, only: [ :update ], controller: "plans/notes"
     resources :settlements, only: [ :create ], controller: "plans/settlements"
+    # Clear or undo a change about someone the plan no longer covers ([#435](https://github.com/espaliahq/espalia/issues/435)).
+    resources :change_reversals, only: [ :create ], controller: "plans/change_reversals", path: "change-reversals"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.

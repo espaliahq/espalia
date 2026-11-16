@@ -164,8 +164,23 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       end
       rows = texts(render_tab(statuses:), "[data-planned-change]")
 
-      assert_equal [ "Done", "Pending", "Conflicting", "Unknown", "Plan only", "Outside this plan" ], rows.map { it.delete_prefix("Bo Reyes · Pay").strip }
+      assert_equal [ "Done", "Pending", "Conflicting", "Unknown", "Plan only", "Outside this plan" ],
+                   rows.map { it.sub(/\A(Bo Reyes|#{Views::Plans::ChangesTab::NO_LONGER_COVERED}) · Pay/, "").strip }
       assert_raises(KeyError) { render_tab(statuses: [ statuses.first.merge(status: "stalled") ]) }
+    end
+
+    should "offer an editor only Clear and Undo on a change about someone the plan no longer covers, and name no one" do
+      outside = { scenario_id: PLAN, change_id: "o1", subject_id: BO, facet: "level", status: "outside" }
+      html = render_tab(statuses: [ outside ], can_edit: true)
+      row = html.at_css("[data-planned-change='outside']")
+
+      assert_includes row.text.squish, "#{Views::Plans::ChangesTab::NO_LONGER_COVERED} · Level"
+      assert_not_includes row.text, "Bo Reyes"
+      assert_equal %w[Clear Undo], row.css("[data-reverse-change='level'] button").map { it.text.squish }
+      assert_equal({ "reversal[scenario_id]" => PLAN, "reversal[subject_id]" => BO, "reversal[facet]" => "level", "reversal[change_id]" => "o1" },
+                   row.css("input[name^='reversal']").to_h { [ it["name"], it["value"] ] })
+      assert_empty row.css("[data-change-note-editor], [data-settle-conflict]")
+      assert_empty render_tab(statuses: [ outside ]).css("[data-reverse-change]"), "a viewer gets no buttons"
     end
 
     should "name a rule by its kind, a plan-wide rule by the plan, a plan value apart from a level change, and a hire only the plan holds" do

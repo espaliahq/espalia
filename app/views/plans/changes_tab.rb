@@ -22,6 +22,7 @@ class Views::Plans::ChangesTab < Views::Base
   OUTSIDE = "Someone outside this plan"
   OUTSIDE_MANAGER = "someone outside this plan"
   PLAN_ONLY = "Only in this plan"
+  NO_LONGER_COVERED = "Someone this plan no longer covers"
   WHOLE_PLAN = "The whole plan"
   NARROW_NOTE = 100
   WIDE_NOTE = 320
@@ -180,17 +181,21 @@ class Views::Plans::ChangesTab < Views::Base
        data: { planned_change: entry[:status] }) do
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
-          strong(class: "font-medium") { planned_subject(entry[:subject_id]) }
+          strong(class: "font-medium") { no_longer_covered?(entry) ? NO_LONGER_COVERED : planned_subject(entry[:subject_id]) }
           plain " · #{entry[:staying] ? STAYING : facet_name(entry[:facet])}"
         end
         planned_in(entry[:scenario_id]) if entry[:scenario_id] != scenario_id
-        change_note(entry[:note])
-        note_form(entry) if notable?(entry)
-        settle(entry) if @can_edit && entry[:status].to_s == "conflicting"
+        if no_longer_covered?(entry)
+          reverse(entry) if @can_edit
+        else
+          change_note(entry[:note])
+          note_form(entry) if notable?(entry)
+          settle(entry) if @can_edit && entry[:status].to_s == "conflicting"
+        end
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         status_badge(entry)
-        sources(entry[:sources])
+        sources(entry[:sources].to_a)
       end
     end
   end
@@ -218,6 +223,22 @@ class Views::Plans::ChangesTab < Views::Base
       else
         render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "settlement[choice]", value: "reality") { "Follow reality" }
       end
+    end
+  end
+
+  def no_longer_covered?(entry) = entry[:status].to_s == "outside"
+
+  # A scope keeps the plan's own record of a change about someone it no longer
+  # covers, so the plan can still take the change out, and nothing else.
+  def reverse(entry)
+    form(action: plan_change_reversals_path(plan_id), method: "post", class: "flex flex-wrap items-center gap-2 pt-1", data: { reverse_change: entry[:facet] }) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      input(type: "hidden", name: "shown", value: scenario_param(scenario_id))
+      entry.slice(:scenario_id, :subject_id, :facet, :change_id).each do |field, value|
+        input(type: "hidden", name: "reversal[#{field}]", value:)
+      end
+      render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "reversal[choice]", value: "clear") { "Clear" }
+      render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "reversal[choice]", value: "undo") { "Undo" }
     end
   end
 
