@@ -402,17 +402,16 @@ class Views::Plans::ChangesTab < Views::Base
 
   def fact_line(person, change)
     fact = FACTS.fetch(change[:fact], change[:fact].to_s.humanize(capitalize: false))
-    before = fact_value(change[:fact], change[:before])
-    after = fact_value(change[:fact], change[:after])
+    before, after = %w[before after].map { fact_value(change[:fact], change[it.to_sym], outside: outside?(change, it)) }
     return "#{person}'s #{fact} changed" unless after
 
     before ? "#{person}'s #{fact} changed from #{before} to #{after}" : "#{person}'s #{fact} is now #{after}"
   end
 
-  def fact_value(fact, fields)
+  def fact_value(fact, fields, outside:)
+    return OUTSIDE_MANAGER if outside
     return unless fields.is_a?(Hash)
     return name_of(fields["manager_id"]) if fact == "manager" && fields["manager_id"]
-    return OUTSIDE_MANAGER if fact == "manager" && fields.key?("manager_id")
 
     fields.values.select { it.is_a?(String) || it.is_a?(Numeric) }.join(", ").presence
   end

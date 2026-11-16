@@ -82,6 +82,13 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
                    html.css("[data-drift-change] .break-words").map { it.text.squish }
     end
 
+    should "read a removed manager as no manager, not as someone outside the plan" do
+      html = render_tab(changes: [ drift_change("fact_changed", person_id: ADA, fact: "manager", before: { "manager_id" => BO },
+                                                                after: { "manager_id" => nil }) ])
+
+      assert_equal [ "Ada Quill's manager changed" ], html.css("[data-drift-change] .break-words").map { it.text.squish }
+    end
+
     should "mark a change from this plan, and link each scenario whose plan it meets" do
       html = render_tab(changes: [ drift_change("joined", person_id: ADA, from_plan: true,
                                                           meets: [ { scenario_id: PLAN }, { scenario_id: Q1 }, { scenario_id: Q1 } ]) ])
