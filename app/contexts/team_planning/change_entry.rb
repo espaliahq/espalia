@@ -63,9 +63,9 @@ TeamPlanning::ChangeEntry = Data.define(
         { action: "dates", scenario_id: data[:closes_scenario_id], actor_id: data[:forked_by_id],
           end_state: { "ends_on" => data[:closes_on], "previous_ends_on" => nil } }
     when TeamPlanning::Events::ScenarioPeriodSet
-      reverses = data.values_at(:undoes_event_id, :redoes_event_id)
-      { action: reverses.first ? "undo" : (reverses.last ? "redo" : "dates"), reverses_event_id: reverses.compact.first,
-        end_state: data.slice(:starts_on, :ends_on, :previous_starts_on, :previous_ends_on).stringify_keys, actor_id: data[:set_by_id] }.compact
+      undone, redone = data.values_at(:undoes_event_id, :redoes_event_id)
+      { action: (undone && "undo") || (redone && "redo") || "dates", reverses_event_id: undone || redone,
+        end_state: data.slice(:starts_on, :ends_on, :previous_starts_on, :previous_ends_on).stringify_keys, actor_id: data[:set_by_id] }
     when TeamPlanning::Events::PlanArchived
       { action: "archive", actor_id: data[:archived_by_id] }
     when TeamPlanning::Events::PlanRestored

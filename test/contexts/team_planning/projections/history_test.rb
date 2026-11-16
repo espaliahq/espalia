@@ -208,6 +208,16 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal({ "starts_on" => "2027-01-01", "ends_on" => "2027-04-30", "previous_ends_on" => "2027-03-31" }, history(@q1).sole.end_state)
   end
 
+  should "record a date edit that names no one who set it, with no actor" do
+    event = TeamPlanning::Events::ScenarioPeriodSet.new(
+      data: { plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-04-30", previous_ends_on: "2027-03-31" },
+      metadata: { tenant_id: @tenant.id, timestamp: Time.current }
+    )
+    TeamPlanning::Projections::History.new.call(event)
+
+    assert_equal [ "dates", nil, nil ], history(@q1).sole.then { [ it.action, it.actor_id, it.reverses_event_id ] }
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       q2 = fork(@q1, "then", "Q2", ends_on: "2027-06-30")
