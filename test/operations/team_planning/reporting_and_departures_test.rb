@@ -76,6 +76,16 @@ class Operations::TeamPlanning::ReportingAndDeparturesTest < ActiveSupport::Test
     assert_raises(Operations::Base::ParameterError) { call(operation, as:, plan_id: @plan_id, scenario_id:, **params) }.message
   end
 
+  should "open a backfill, in the steps after its leaver goes, the day after they leave or when their step began" do
+    dated, undated = open_position(@q1), open_position(@q1)
+    depart(@q1, @ada, position_id: dated, leaves_on: "2026-05-19")
+    depart(@q1, @bo, position_id: undated)
+    opens_on = ->(scenario_id) { resolved(scenario_id).positions.to_h { [ it.id, it.opened_on ] } }
+
+    assert_equal({ dated => BASE_ON, undated => BASE_ON }, opens_on.(@q1))
+    assert_equal({ dated => Date.new(2026, 5, 20), undated => BASE_ON }, opens_on.(@q2))
+  end
+
   should "read the baseline line from the Org Graph's manager fact, never from units" do
     assert_equal({ manager_id: @ada.id, manager_position_id: nil }, line_of(@plan_id, @bo))
     assert_equal({ manager_id: nil, manager_position_id: nil }, line_of(@plan_id, @cy))

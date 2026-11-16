@@ -75,14 +75,6 @@ class Operations::TeamPlanning::PositionsTest < ActiveSupport::TestCase
                                                                 unit_id: @unit_id, fte: 1, basis: "new", hiring_status: "offer_accepted")
   end
 
-  should "open a backfill on the day after its leaver goes" do
-    seat = open_position(@q1, basis: "backfill")[:position_id]
-    leaver = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
-    call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: @q1, person_id: leaver.id, position_id: seat, leaves_on: "2027-02-19")
-
-    assert_equal "2027-02-20", positions(@q1).sole[:opens_on]
-  end
-
   should "store and list the position's own cost centre" do
     opened = open_position(@q1, cost_centre: " Platform ")
 
