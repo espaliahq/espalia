@@ -10,6 +10,8 @@ module Operations::TeamPlanning::BudgetLineWrite
 
   BASELINE = "The baseline holds the organisation's approved budget as it is: change a line in a scenario"
   NO_SUCH_LINE = "This scenario has no such budget line"
+  AMOUNT_NEEDS_PAY = "Setting a budget amount needs the see-pay right."
+  MONEY_FIELDS = %i[amount currency period].freeze
   FACET = ::TeamPlanning::Events::BudgetLineSet.facet
 
   private
@@ -47,6 +49,28 @@ module Operations::TeamPlanning::BudgetLineWrite
     return if (tenant_line?(line_id) || winning_change(plan, line_id, FACET)) && !outside_line?(plan, line_id)
 
     raise Operations::Base::ParameterError, NO_SUCH_LINE
+  end
+
+  # A budget line's amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)): a line that carries
+  # one is read-only to a member without the see-pay right. Checked after {#held!}, so a hidden line reads as
+  # missing first.
+  def line_money!(plan, line_id)
+    return if see_pay?
+    return unless ::TeamPlanning::LineMoney.priced?(plan, scenario_id!(:scenario_id), line_id, FACET)
+
+    raise Operations::Base::ParameterError, ::TeamPlanning::LineMoney::REFUSAL
+  end
+
+  # A member without the see-pay right may give a line a head count only.
+  def no_money_given!
+    return if see_pay? || MONEY_FIELDS.none? { params[it].present? }
+
+    raise Operations::Base::ParameterError, AMOUNT_NEEDS_PAY
+  end
+
+  def see_pay?
+    @see_pay = PlanPolicy.new(context, TeamPlanningPlan.find(plan_id!)).see_pay? unless defined?(@see_pay)
+    @see_pay
   end
 
   # Judged as {WithinScope#lines_within_scope!} judges it under the lock.

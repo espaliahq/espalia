@@ -17,7 +17,7 @@ class Operations::TeamPlanning::SettleConflict < Operations::Base
               "the change, it reaches the children that inherit it. Either way status stops reporting the conflict, " \
               "and team_planning_history marks the write with settles. Refused for a conflict no update carried " \
               "forward (update the plan to today first), one status no longer reads as conflicting, following " \
-              "reality for a unit succession, or unless the caller is an editor."
+              "reality for a unit succession, for a budget line that carries an amount without the see-pay right, or unless the caller is an editor."
   category :write
   approval :mcp_client
 

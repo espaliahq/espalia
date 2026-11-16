@@ -20,7 +20,8 @@ class Operations::TeamPlanning::SetBudgetLine < Operations::Base
               "follow, and a later change by the organisation to the same line no longer does. " \
               "#{Operations::Tenants::BudgetLineFields::HELP} Refused on the baseline, which holds the organisation's " \
               "approved budget, in a plan that covers some units for a line whose cost centre none of its seats can draw on, " \
-              "and unless the caller is one of the plan's editors."
+              "and unless the caller is one of the plan's editors. A budget amount is pay: without the see-pay right, " \
+              "amount, currency and period are refused, and so is a change to a line that carries an amount."
   category :write
   approval :mcp_client
 
@@ -35,10 +36,15 @@ class Operations::TeamPlanning::SetBudgetLine < Operations::Base
     line_id = params[:budget_line_id].nil? ? SecureRandom.uuid_v7 : uuid!(:budget_line_id)
     changes = params[:budget_line_id].nil? ? [] : line_changes(line_id)
     held!(loaded_plan, line_id) unless params[:budget_line_id].nil?
+    line_money!(loaded_plan, line_id) unless params[:budget_line_id].nil?
+    no_money_given!
     tenant_line = !params[:budget_line_id].nil? && tenant_line?(line_id, changes.last)
     line = assign_line(held_line(line_id, changes))
     set_change!(KIND, subject_id: line_id, end_state: figures(line).merge(tenant_line:)) do |plan|
-      held!(plan, line_id) unless params[:budget_line_id].nil?
+      unless params[:budget_line_id].nil?
+        held!(plan, line_id)
+        line_money!(plan, line_id)
+      end
     end
 
     { plan_id: plan_id!, scenario_id:, budget_line_id: line_id, source: tenant_line ? "changed" : "plan" }
