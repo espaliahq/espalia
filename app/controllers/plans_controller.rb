@@ -130,7 +130,8 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     tab = Views::Plans::ChangesTab.new(plan:, scenarios:, drift: read(Operations::TeamPlanning::Drift),
                                        status: read(Operations::TeamPlanning::Status, scenario_id:),
-                                       attention: read(Operations::TeamPlanning::Attention, scenario_id:), can_edit: can_edit?)
+                                       attention: read(Operations::TeamPlanning::Attention, scenario_id:), can_edit: can_edit?,
+                                       see_pay: policy_for(@plan_record).see_pay?)
     render plan_page(plan, scenarios:, open_tab: :changes, body: tab)
   end
 
@@ -422,7 +423,7 @@ class PlansController < ApplicationController
   end
 
   def cost_columns
-    return [] unless PayBand.exists?
+    return [] unless TeamPlanning::PricingInputs.for(@plan_record).bands.any?
 
     costs = read(Operations::TeamPlanning::ScenarioCosts)
     rows = costs[:scenarios].index_by { it[:scenario_id] }
@@ -490,6 +491,10 @@ class PlansController < ApplicationController
       can_restore: editor? && plan[:archived].present?,
       can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
+      panel_open: Views::Plans::ShowView.panel_open?(
+        url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView.panel_cookie(current_user)],
+        open_tab:, scenarios:
+      ),
       **layout
     )
   end

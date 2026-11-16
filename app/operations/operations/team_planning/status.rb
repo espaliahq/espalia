@@ -34,7 +34,7 @@ class Operations::TeamPlanning::Status < Operations::Base
               "the person stays, and conflicting once the Org Graph has them leave. Subjects are named by id, and `names` maps each the Org Graph " \
               "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \
               "plan holds has none. A status whose change carries a note has it as note: { value }, or { removed: true } " \
-              "once erased. #{UNCHECKED} Refused, as an unknown plan, unless " \
+              "once erased. A note on a pay change reaches only a member with the see-pay right; anyone else gets no note on it. #{UNCHECKED} Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
   approval :none
@@ -54,8 +54,9 @@ class Operations::TeamPlanning::Status < Operations::Base
 
     report = refusing_bad_plans { ::TeamPlanning::Status.new(context:, plan:, scenario_id:).call }
     notes = notes_of(plan, report.statuses.map(&:change_id))
+    see_pay = PlanPolicy.new(context, plan).see_pay?
     { plan_id: plan.id, scenario_id:, **checked(plan), on: report.on.iso8601,
-      statuses: report.statuses.map { status_row(it, notes[it.change_id]) },
+      statuses: report.statuses.map { status_row(it, ::Operations::TeamPlanning::ChangeNote.payload(notes[it.change_id], facet: it.facet, see_pay:)) },
       names: report.names }
   end
 
@@ -70,6 +71,6 @@ class Operations::TeamPlanning::Status < Operations::Base
   def status_row(entry, note)
     entry.to_h.except(:staying).merge(status: entry.status.to_s, since: entry.since&.iso8601,
                                       **({ staying: true } if entry.staying),
-                                      **({ note: Operations::TeamPlanning::MapPayload.sealed(note) } if note))
+                                      **({ note: } if note))
   end
 end

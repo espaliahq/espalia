@@ -54,6 +54,36 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       clear_funding
       cut_line(growth_line_id)
     end
+
+    should "tell a scoped plan's reader the totals cover only its lines, and show no other" do
+      payments = SecureRandom.uuid_v7
+      field_sales = nil
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        departments = SecureRandom.uuid_v7
+        structure.define_taxonomy([ { level_id: departments, name: "Department" } ], effective_on: "2025-01-01")
+        structure.create_unit(payments, "Payments", level_id: departments, effective_on: "2025-01-01")
+        ada = create(:person, tenant: @tenant, name: "Ada Quill")
+        people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        people.record_person(ada.id, provider: "espalia", effective_on: "2025-01-01", employment_status: "employed", title: "Engineer", fte: 1.0)
+        people.set_membership(ada.id, payments, provider: "espalia", effective_on: "2025-01-01", allocation: 1.0)
+        people.change_cost_centre(ada.id, "Platform", provider: "espalia", effective_on: "2025-01-01")
+        field_sales = BudgetLine.create!(starts_on: @line.starts_on, ends_on: @line.ends_on, origin: "new", amount: 51_000, currency: "EUR",
+                                         period: "year", cost_centre: "Field Sales")
+      end
+      scoped = call(Operations::TeamPlanning::CreatePlan, @planner, name: "Payments 2027", base_on: @line.starts_on.iso8601, unit_ids: [ payments ])[:plan_id]
+
+      sign_in_as(@planner.user)
+      visit budget_plan_path(scoped)
+      assert_text "Totals cover the budget lines this plan's seats can draw on."
+      assert_selector "[data-budget-line='#{@line.id}']"
+      assert_no_selector "[data-budget-line='#{field_sales.id}']"
+      assert_no_text "Field Sales"
+
+      visit budget_plan_path(@plan_id)
+      assert_selector "[data-budget-line='#{field_sales.id}']"
+      assert_no_text "Totals cover the budget lines"
+    end
   end
 
   context "on a phone" do

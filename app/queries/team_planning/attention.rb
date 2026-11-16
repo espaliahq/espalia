@@ -8,7 +8,11 @@
 #
 # It also checks each person: allocation, someone still placed after the
 # Org Graph has them leave, and their manager (4.6), and each seat whose
-# reports cost more to manage than it delivers (7.5).
+# reports cost more to manage than it delivers (7.5), and a scenario's budget
+# (6.6, [#421](https://github.com/espaliahq/espalia/issues/421)) as the
+# budget read gives it to the viewer: positions unfunded or tied, seats with
+# no cost centre, figures over budget and lines nothing draws on. Those read
+# no figure of their own and name no money.
 #
 # Derived from the map and the changes that won, never stored. The changes
 # tab (4.4) and the checks tab (4.7) both read it.
@@ -41,7 +45,7 @@ class TeamPlanning::Attention
   Report = Data.define(:items, :names)
 
   CHECKS = %i[placements positions units unresolved uncovered successions capacity_overrides allocations leavers managers overloaded
-              unclassified budget_lines fundings].freeze
+              unclassified budget_lines fundings unfunded ambiguous_funding unplaced budget_variance unused_budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
@@ -52,9 +56,12 @@ class TeamPlanning::Attention
   BUDGET_LINE = TeamPlanning::Events::BudgetLineSet.facet
   DEPARTURE = TeamPlanning::Events::DepartureSet.facet
   FUNDING = TeamPlanning::Events::PositionFundingSet.facet
+  COST_CENTRE = "cost_centre"
+  BUDGET = "budget"
   UNSHARED = [ "Their manager shares no unit with them", "Their manager's position shares no unit with them" ].freeze
   # A place in no unit has no id an override could name, as the map's own drop target hasn't.
   UNASSIGNED = "unassigned"
+  NO_COST_CENTRE = "no_cost_centre"
   UNCOVERED = "A change about someone this plan no longer covers"
 
   # Resolves the scenario, then prices it, so the unclassified check reads
@@ -72,8 +79,9 @@ class TeamPlanning::Attention
     aggregate = repository.load_plan(plan.id)
     map, changes = resolution.resolved(aggregate)
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
+    budget = TeamPlanning::Budget.new(context:, plan:, scenario_id:, repository:, aggregate:).call if scenario_id != plan.id && map.budget_lines.any?
     items = new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
-                              unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats).call
+                              unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats, budget:).call
     Report.new(items:, names: items.empty? ? {} : names_of(resolution.named(map), items))
   end
 
@@ -93,6 +101,7 @@ class TeamPlanning::Attention
       names.merge(TeamPlanning::Baseline::Position.names(group.map { [ it.id, it.label, it.level_id ] }))
     end
     successions = map.successions.to_h { [ it.id, it ] }
+    lines = map.budget_lines.to_h { [ it.id, line_name(it) ] }
     items.filter_map do |item|
       next if item.reason == UNCOVERED
 
@@ -101,12 +110,18 @@ class TeamPlanning::Attention
       when *PERSON_FACETS then map.name_of(id)
       when UNIT then units[id]
       when POSITION, FUNDING then positions[id]
+      when BUDGET_LINE then lines[id]
+      when COST_CENTRE then id == NO_COST_CENTRE ? "No cost centre" : id
       when SUCCESSION then successions[id]&.then { succession_name(it, units) }
       when CAPACITY then positions[id] || map.name_of(id)
       end
       [ id, name ] if name
     end.to_h
   end
+
+  # As the budget tab names a line: its role and level, else any role, and its cost centre.
+  def self.line_name(line) = [ [ line.role_name, line.level_name ].compact.join(", ").presence || "Any role", line.cost_centre.presence ].compact.join(" · ")
+  private_class_method :line_name
 
   def self.succession_name(succession, units)
     sides = [ succession.predecessor_ids, succession.successor_ids ].map { |ids| ids.map { units.fetch(it, REMOVED_UNIT) }.join(", ") }
@@ -120,8 +135,11 @@ class TeamPlanning::Attention
   # @param closed_units [Hash{String => String}] the unit of each position the scenario closed
   # @param unclassified [Array<Array(TeamPlanning::Capacity::Seat, TeamPlanning::Capacity::Place)>] from {TeamPlanning::Capacity::Report#unclassified}
   # @param priced [Array<TeamPlanning::Capacity::Seat>] from {TeamPlanning::Capacity::Report#seats}
-  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [])
+  # @param budget [TeamPlanning::Budget::Report, nil] the scenario's budget, read as the viewer; nil for the
+  #   root, which has no period, and for a scenario with no budget lines, which has no budget to check
+  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [], budget: nil)
     @map = map
+    @budget = budget
     @position_units = closed_units.merge(map.positions.to_h { [ it.id, it.unit_id ] })
     @unclassified = unclassified
     @priced = priced
@@ -443,6 +461,68 @@ class TeamPlanning::Attention
     end
   end
 
+  # A held position no line matches. A share left unfunded only by a removed
+  # line is the fundings check's, and a tie is ambiguous_funding's.
+  def unfunded
+    funded_positions.select { it.reason == "no_line" }.map do |funded|
+      item(funded.position.id, FUNDING, "No budget line matches it", broken_by: [ [ funded.position.id, POSITION ] ])
+    end
+  end
+
+  def ambiguous_funding
+    funded_positions.select { it.reason == "ambiguous" }.map do |funded|
+      count = funded.matching_ids.size
+      item(funded.position.id, FUNDING, "#{count} budget lines could fund it equally, and no funding is set", broken_by: [ [ funded.position.id, POSITION ] ])
+    end
+  end
+
+  # A seat held some of the period that ends with no cost centre: no label,
+  # real value or entry gives it one. A plan where no line and no seat has a
+  # cost centre uses none.
+  def unplaced
+    return [] unless @budget && (@budget.lines.any? { it.line.cost_centre.present? } || @budget.seats.any? { it.cost_centre.present? })
+
+    @budget.seats.select { it.cost_centre.blank? && it.days.positive? }.group_by { [ it.kind, it.seat_id ] }.values.map do |seats|
+      seat = seats.first
+      if seat.kind == "person"
+        item(seat.seat_id, ASSIGNMENT, "Has no cost centre: no position label, cost centre of their own or entry gives one", units: seats.map(&:unit_id))
+      else
+        item(seat.position_id, POSITION, "Has no cost centre: no label, occupant or entry gives one")
+      end
+    end
+  end
+
+  # A line, cost centre or the whole budget over what it approves, at the
+  # strictness rule's scope, as the budget read judges it. Never a money figure.
+  def budget_variance
+    return [] unless @budget
+
+    lines = @budget.lines.filter_map { |line| over_item(line.line.id, BUDGET_LINE, line.over) }
+    centres = @budget.cost_centres.filter_map { |name, totals| over_item(name || NO_COST_CENTRE, COST_CENTRE, totals.over) }
+    lines + centres + [ over_item(@map.rules.plan_id, BUDGET, @budget.totals.over) ].compact
+  end
+
+  # A line two positions tie on is ambiguous_funding's to fix, so it is not unused.
+  def unused_budget_lines
+    return [] unless @budget
+
+    drawn = @budget.funding.by_line.keys.to_set | funded_positions.flat_map(&:matching_ids)
+    period = @budget.period
+    @budget.lines.select { |line| line.line.starts_on <= period.end && line.line.ends_on >= period.begin }
+           .reject { drawn.include?(it.line.id) }.map do |line|
+      item(line.line.id, BUDGET_LINE, "Nothing in this scenario draws on it")
+    end
+  end
+
+  def funded_positions = @budget ? @budget.funding.positions : []
+
+  def over_item(subject_id, facet, over, broken_by: [])
+    return unless over && (over.money.present? || over.heads)
+
+    parts = [ ("over its approved amount" if over.money.present?), ("over its head count by #{fte(over.heads_by)} FTE" if over.heads) ].compact
+    item(subject_id, facet, "Spends #{parts.join(' and ')}", broken_by:)
+  end
+
   # @param units [Array<String>] units the item touches beyond its subject's and broken_by's
   def item(subject_id, facet, reason, broken_by: [], fact: nil, units: [])
     keys = [ [ subject_id, facet ], *broken_by ].select { @order.key?(it) }
@@ -467,5 +547,5 @@ class TeamPlanning::Attention
 
   def gone(unit_id) = @retired.include?(unit_id) ? "a retired unit" : "a unit no longer in this scenario"
 
-  def fte(value) = value.round(4).to_s.delete_suffix(".0")
+  def fte(value) = value.to_r.round(4).to_f.to_s.delete_suffix(".0")
 end

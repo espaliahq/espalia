@@ -11,8 +11,8 @@ class Operations::TeamPlanning::CutBudgetLine < Operations::Base
 
   description "Cut a budget line from a scenario of a Team Planning plan, by budget_line_id from " \
               "team_planning_budget_lines. The scenarios that follow lose it too. Setting the line again brings it " \
-              "back. Refused on the baseline, which holds the organisation's approved budget, and unless the caller " \
-              "is one of the plan's editors."
+              "back. Refused on the baseline, which holds the organisation's approved budget, for a line the plan doesn't " \
+              "hold, and unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
 
@@ -24,6 +24,7 @@ class Operations::TeamPlanning::CutBudgetLine < Operations::Base
   def perform
     scenario_id = scenario!
     line_id = uuid!(:budget_line_id)
+    held!(loaded_plan, line_id)
     set_change!(KIND, subject_id: line_id, end_state: { tenant_line: tenant_line?(line_id, line_changes(line_id).last) }) { |plan| held!(plan, line_id) }
 
     { plan_id: plan_id!, scenario_id:, budget_line_id: line_id }

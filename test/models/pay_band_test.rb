@@ -136,10 +136,23 @@ class PayBandTest < ActiveSupport::TestCase
       role = band.tap(&:save!)
       assert_equal role, lookup.covering(@level.level_id, "Fixtureland")
 
-      assert PayBand.reorder!([ role.id, family.id ])
+      assert_equal true, PayBand.reorder!([ role.id, family.id ])
       assert_equal family, lookup.covering(@level.level_id, "Fixtureland")
       assert_equal role, lookup.covering(@level.level_id, "Testonia")
       assert_not PayBand.reorder!([ role.id ])
+    end
+
+    should "leave each band's own change stamp alone when only the order changes, and stamp the tenant's" do
+      family = entry(role_family: @family, level_ordinal: 2)
+      role = band.tap(&:save!)
+      stamps = PayBand.order(:id).pluck(:updated_at)
+
+      travel 1.day do
+        assert_equal true, PayBand.reorder!([ role.id, family.id ])
+        assert_equal stamps, PayBand.order(:id).pluck(:updated_at)
+        assert_equal [ role, family ], PayBand.order(:position).to_a
+        assert_in_delta Time.current, @tenant.reload.pay_bands_changed_at, 1.second
+      end
     end
 
     should "land a new band after the last band no more specific than it, and close the gap a removed one leaves" do
@@ -163,6 +176,18 @@ class PayBandTest < ActiveSupport::TestCase
       assert_equal [ family, role ], lookup.shadowed
       PayBand.reorder!([ everything.id, family.id, role.id ])
       assert_empty lookup.shadowed
+    end
+
+    should "flag a role and level number band once a later band made from that level overrules it, and still save both" do
+      early = entry(role: @role, level_ordinal: 6)
+      published = create(:framework_level, tenant: @tenant, role_id: @role.role_id, ordinal: 6, code: "E6", title: "Principal")
+      made = band(level: published).tap(&:save!)
+
+      assert_nil early.level_id
+      assert_equal made, lookup.covering(published.level_id, "Fixtureland")
+      assert_equal [ early ], lookup.shadowed
+      PayBand.reorder!([ made.id, early.id ])
+      assert_equal [ made ], lookup.shadowed
     end
 
     should "match on a role or a family, never both" do

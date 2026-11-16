@@ -40,11 +40,14 @@ class TeamPlanning::Baseline
   # @!attribute cut_positions [Array<Position>] the positions in units outside the plan's scope. Never shown
   # @!attribute cut_unit_ids [Set<String>] the units, live or retired, outside the plan's scope. Never shown
   # @!attribute fundings [Hash{String => Array<Hash>}] position id => the draws a {TeamPlanning::Events::PositionFundingSet} sets
+  # @!attribute held_cost_centres [Set<String>, nil] the cost centres a scoped plan's lines may name, fixed by its baseline; nil holds every line
+  # @!attribute outside_lines [Array<BudgetLine>] the lines naming a cost centre the plan doesn't hold. Never shown, named or counted
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
                     :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings, :scope_ids, :outside,
-                    :cut_positions, :cut_unit_ids) do
+                    :cut_positions, :cut_unit_ids, :held_cost_centres, :outside_lines) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
-                   orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], cut_unit_ids: Set.new, **) = super
+                   orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], cut_unit_ids: Set.new,
+                   held_cost_centres: nil, outside_lines: [], **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -78,8 +81,36 @@ class TeamPlanning::Baseline
       people, leaving = map.people.partition { inside.(it, true) }
       joining, outside = map.outside.partition { inside.(it, false) }
       kept, gone = map.positions.partition { it.unit_id.nil? || known.include?(it.unit_id) }
-      map.with(people: people + joining, outside: leaving + outside, positions: kept, cut_positions: (gone + cut_positions).uniq(&:id))
+      map.with(people: people + joining, outside: leaving + outside, positions: kept, cut_positions: (gone + cut_positions).uniq(&:id)).lines_cut
     end
+
+    # @param cost_centres [Enumerable<String>] what the plan's baseline seats can draw on
+    # @return [Map] holding only the lines {#holds_cost_centre?} keeps
+    def holding_lines(cost_centres) = with(held_cost_centres: cost_centres.to_set { it.squish }).lines_cut
+
+    # @param cost_centre [String, nil]
+    # @return [Boolean] whether a line naming it is the plan's: one naming none is any seat's
+    def holds_cost_centre?(cost_centre) = held_cost_centres.nil? || cost_centre.blank? || held_cost_centres.include?(cost_centre.squish)
+
+    # Moves each line the plan doesn't hold to {#outside_lines}, and drops a
+    # funding that draws on one, so the seat reads as the plan's own lines fund it.
+    #
+    # @return [Map]
+    def lines_cut
+      return self unless held_cost_centres
+
+      held, away = (budget_lines + outside_lines).partition { holds_cost_centre?(it.cost_centre) }
+      gone = away.to_set(&:id)
+      with(budget_lines: held, outside_lines: away, fundings: fundings.reject { |_, draws| draws.any? { gone.include?(it[:budget_line_id]) } })
+    end
+
+    # @param line_id [String]
+    # @return [Boolean] whether the map has the line, held or outside the plan's cost centres
+    def line?(line_id) = (budget_lines + outside_lines).any? { it.id == line_id }
+
+    # @param line_id [String]
+    # @return [Boolean] whether the line is one the plan's cost centres leave out
+    def outside_line?(line_id) = outside_lines.any? { it.id == line_id }
 
     # A position the cut took off the map still places its people outside,
     # so a later settle doesn't read them as placed in no unit.
@@ -481,7 +512,13 @@ class TeamPlanning::Baseline
 
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on ]) { map_on(@plan.base_on, known_on: @plan.base_on - 1) }
+  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, known_on ]) { map_on(@plan.base_on, known_on:) }
+
+  # The Org Graph as known the day before the base, or on the archive day if
+  # that came first, so a fact recorded after archiving moves no figure.
+  #
+  # @return [Date]
+  def known_on = [ @plan.base_on - 1, @plan.archived_on ].compact.min
 
   # The organisation on another day, in the shape {#structure} gives, so a
   # reader can hold the plan up against it.
@@ -507,7 +544,8 @@ class TeamPlanning::Baseline
     scope_ids = (@plan.scope_unit_ids.presence if scoped)
     map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people: scope_ids ? [] : people, outside: scope_ids ? people : [],
                   scope_ids:, unassigned_ids: [], positions: [], names: {}, step_ids: [ @plan.id ], budget_lines: approved_budget,
-                  rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
+                  rules: Rules.new(plan_id: @plan.id, defaults: inputs.rule_defaults, by_subject: {})).settled
+    map = map.holding_lines(held_on(date, known_on, map, units)) if scope_ids
     return map unless history
 
     map.with(retired_units: snapshot.retired_units.map { Unit.new(**it.to_h.slice(*Unit.members)) },
@@ -528,8 +566,35 @@ class TeamPlanning::Baseline
 
   private
 
-  # Configuration, so every day a reader asks for reads the lines as they are now.
-  def approved_budget = @approved_budget ||= ::BudgetLine.where(tenant_id: @plan.tenant_id).order(:starts_on, :id).map { BudgetLine.approved(it) }
+  # Configuration, so every day a reader asks for reads the lines as the plan is priced with them.
+  def approved_budget = @approved_budget ||= inputs.budget_lines.map { BudgetLine.approved(it) }
+
+  def inputs = @inputs ||= TeamPlanning::PricingInputs.for(@plan)
+
+  # The set is the baseline's on every day a reader asks for, so a later
+  # read can neither drop a line the plan holds nor reach one it doesn't.
+  def held_on(date, as_known, map, units)
+    return structure.held_cost_centres unless date == @plan.base_on && as_known == known_on
+
+    baseline_cost_centres(map, units)
+  end
+
+  # What a scoped plan's seats can draw on, as the Org Graph stands
+  # ([#378](https://github.com/espaliahq/espalia/issues/378)): the real cost
+  # centre of each person in scope, and each the tenant's cost centre entries
+  # can give a seat there. That is an entry naming a covered unit or one
+  # above it, or no unit, since a seat in scope can match its role, level or
+  # location. A plan's own rules and labels never widen it.
+  def baseline_cost_centres(map, units)
+    parents = units.to_h { [ it.id, it.parent_id ] }
+    reach = Set.new
+    map.units.each do |unit|
+      id = unit.id
+      id = parents[id] while id && reach.add?(id)
+    end
+    entries = TeamPlanning::RuleKinds::CostCentre.entries(map.rules.value_of("cost_centre", along: []))
+    map.people.filter_map { it.cost_centre.presence } + entries.filter_map { it["cost_centre"] if it["unit_id"].nil? || reach.include?(it["unit_id"]) }
+  end
 
   def named_positions(positions)
     return positions if positions.empty?

@@ -197,7 +197,7 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     report = budget
 
     assert_equal "position_control", TeamPlanning::RuleKinds::BudgetStrictness.preset_of(report.strictness)
-    assert_equal TeamPlanning::Budget::Over.new(money: [ "EUR" ], heads: true, mismatched: []), of(report, platform).over
+    assert_equal TeamPlanning::Budget::Over.new(money: [ "EUR" ], heads: true, heads_by: 1r, mismatched: []), of(report, platform).over
     assert_nil report.cost_centres["Platform"].over
     assert_nil report.totals.over
   end

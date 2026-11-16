@@ -149,6 +149,14 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     assert_operator headings.index("Cost"), :<, headings.index("Capacity")
   end
 
+  should "keep an archived plan's Cost column after every band is removed, as its figures still use them" do
+    call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+    ActsAsTenant.with_tenant(@tenant) { PayBand.destroy_all }
+
+    get plan_path(@plan_id)
+    assert_includes Nokogiri::HTML(response.body).at_css("[data-cost-cell='#{@year}']").text, "EUR 250k"
+  end
+
   context "the actual, planned and forecast split" do
     should "draw each surface's split from its read, adding up to the total the strip, the unit card and the table show" do
       cost = call(Operations::TeamPlanning::Cost, plan_id: @plan_id, scenario_id: @year)
@@ -169,6 +177,20 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
       assert_equal [ "EUR 250k", "EUR 250k", "EUR 150k" ],
                    [ page.at_css("[data-cost-total]").text, cell.at_css(".font-medium").text, page.at_css("[data-cost-unit='#{@payments}'] .font-medium").text ]
       assert_equal cost[:total], table[:total]
+    end
+
+    should "price the step's old dates again once a move of its end is undone, the strip and the table alike" do
+      call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @year, ends_on: "2026-06-30")
+      call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @year)
+
+      get map_plan_path(@plan_id, scenario: @year)
+      strip = Nokogiri::HTML(response.body).at_css("[data-cost-strip]")
+      get plan_path(@plan_id)
+      cell = Nokogiri::HTML(response.body).at_css("[data-cost-cell='#{@year}']")
+
+      assert_includes strip.text, "1 Jan 2026 to 31 Dec 2026"
+      assert_equal [ "Actual EUR 200k", "Planned +EUR 50k" ], parts(strip)
+      assert_equal parts(strip), parts(cell)
     end
 
     should "show Today's run rate without a split, as all of it is actual" do

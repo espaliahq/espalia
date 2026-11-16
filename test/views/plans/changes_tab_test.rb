@@ -187,6 +187,20 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_nil rows[2].at_css("[data-change-note]")
     end
 
+    should "clamp a note only where it can run past three lines, counting no blank line" do
+      paragraphs = "Moved for on-call\n\nAgreed with Bo\n\nRevisit in Q3"
+      rows = render_tab(statuses: [ noted({ value: "Short and done" }, change_id: "c1"), noted({ value: paragraphs }, change_id: "c2"),
+                                    noted({ value: "a medium note " * 12 }, change_id: "c3"), noted({ value: "a long note " * 40 }, change_id: "c4"),
+                                    noted({ value: "one\ntwo\nthree\nfour" }, change_id: "c5") ]).css("[data-planned-change]")
+      toggles = rows.map { it.at_css("[data-change-note-more]")&.[]("class")&.split }
+
+      assert_nil toggles[0]
+      assert_nil toggles[1], "three paragraphs show in three lines"
+      assert_includes toggles[2], "md:hidden", "a medium note fits a wide row's three lines"
+      assert_includes rows[2].at_css("[data-change-note]")["class"].split, "md:line-clamp-none"
+      [ 3, 4 ].each { assert_not_includes toggles[it], "md:hidden" }
+    end
+
     should "offer no note form to a viewer who can't edit" do
       assert_nil render_tab(statuses: [ noted({ value: "x" }) ]).at_css("[data-change-note-editor]")
     end

@@ -40,8 +40,8 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "planned is what the plan's changes add or take away (negative where they take away, so someone moved between " \
               "units is negative in the old unit and positive in the new), and forecast is what the plan's forecast " \
               "assumptions add, zero until a forecast rule is set; team_planning_forecast lists its rows. A run rate is all actual. A seat that can't be priced is in `unpriced` with its reason, " \
-              "never counted as zero. Pass unit_id for the working of each seat in that unit. Plans reprice live: " \
-              "bands_changed_at says when a band last changed. Bands are an ordered list (tenants_pay_bands); each matches on the " \
+              "never counted as zero. Pass unit_id for the working of each seat in that unit. A live plan reprices as the bands " \
+              "change, and an archived one holds still: bands_changed_at says when a band it reads last changed. Bands are an ordered list (tenants_pay_bands); each matches on the " \
               "role family, role, level number and location it sets, or on a framework level's level_id and location, and of the bands that match a seat the last in the list " \
               "has the last word. Each seat's band names its position in the list and its matcher. Pass the plan's id as scenario_id for Today's run rate: " \
               "basis is run_rate, period is the year from the base date to the day before the same date a year later, " \
@@ -52,7 +52,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "by FTE only when its basis is full_time, by the days held, plus on-cost), in a run rate as in a scenario: each seat's pay_source " \
               "says actual or band_midpoint, and actual_pay_seats counts the seats priced from actual pay. Held pay " \
               "the plan lost with the person's key leaves the seat unpriced as pay_unknown. Everyone else is priced " \
-              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. #{PRICED_TODAY} #{OPEN_ENDED} Refused, as an unknown " \
+              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. #{PRICED_AS_ARCHIVED} #{OPEN_ENDED} Refused, as an unknown " \
               "plan, unless the caller is a member."
   category :read
   approval :none
@@ -72,7 +72,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
     unit_id = unit!(report)
     unpriced = unpriced_lines(report)
     seats = { scenario: lines_in(report.scenario, unit_id), **({ baseline: lines_in(report.baseline, unit_id) } if report.baseline) } if unit_id
-    { plan_id: plan.id, **priced_today(plan), scenario_id:, basis: report.basis, period: period(report),
+    { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, basis: report.basis, period: period(report),
       reference_currency: report.reference_currency, bands_changed_at: report.bands_changed_at&.iso8601,
       pay_view: report.pay_view, **actual_pay_seats(report),
       total: compared(report.parts, report), units: units(report), cost_centres: cost_centres(report), **run_rate_at_end(report),

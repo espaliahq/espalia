@@ -271,6 +271,76 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  context "a change's note" do
+    setup do
+      @pay_note = "Zephyr settled on 61873 a year"
+      @level_note = "Zephyr earned the step, 61874 in band"
+      call(Operations::TeamPlanning::NoteChange, @holder, plan_id: @plan_id, scenario_id: @q1, event_id: @event_id, note: @pay_note)
+      call(Operations::TeamPlanning::SetPlannedLevel, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "4")
+      level = call(Operations::TeamPlanning::History, @holder, plan_id: @plan_id, scenario_id: @q1)[:entries]
+              .find { it[:subject_id] == @ada.id && it[:action] == "set" && it[:facet] != "data:pay" }
+      call(Operations::TeamPlanning::NoteChange, @holder, plan_id: @plan_id, scenario_id: @q1, event_id: level[:event_id], note: @level_note)
+    end
+
+    should "reach a holder on a pay change and on any other, and the rest on the other alone, in every read and on the Changes tab" do
+      { "holder" => @holder, "editor" => @editor, "viewer" => @viewer }.each do |who, account|
+        changes = changes_tab(account)
+
+        assert_note_read(account, @level_note, who)
+        assert_includes changes, @level_note, who
+        if account == @holder
+          assert_note_read(account, @pay_note, who)
+          assert_includes changes, @pay_note
+        else
+          refute_note_read(account, @pay_note, who)
+          assert_not_includes changes, @pay_note, who
+          assert_no_pay_note_read(account, who)
+        end
+      end
+    end
+
+    should "give no sign of a note on a pay change to anyone without the right" do
+      [ @editor, @viewer ].each do |account|
+        history = call(Operations::TeamPlanning::History, account, plan_id: @plan_id, scenario_id: @q1)[:entries]
+        pay = history.select { it[:facet] == "data:pay" }
+
+        assert pay.any?
+        assert pay.none? { it.key?(:note) || it[:action] == "note" }
+        [ Operations::TeamPlanning::Status, Operations::TeamPlanning::Overrides ].each do |operation|
+          rows = call(operation, account, plan_id: @plan_id, scenario_id: @q1).values_at(:statuses, :overrides).compact.flatten
+          assert rows.select { it[:facet] == "data:pay" }.none? { it.key?(:note) }, operation.name
+        end
+      end
+    end
+
+    should "offer the note form on a pay change to an editor with the right alone" do
+      assert_equal 2, changes_tab_html(@holder).css("[data-change-note-editor]").size
+      assert_equal 1, changes_tab_html(@editor).css("[data-change-note-editor]").size
+      assert_empty changes_tab_html(@viewer).css("[data-change-note-editor]")
+    end
+
+    should "hide a pay change's note from a member at once when their see-pay right is withdrawn" do
+      call(Operations::TeamPlanning::GrantSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
+      assert_note_read(@editor, @pay_note, "editor")
+      assert_includes changes_tab(@editor), @pay_note
+
+      call(Operations::TeamPlanning::WithdrawSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
+
+      refute_note_read(@editor, @pay_note, "editor")
+      assert_not_includes changes_tab(@editor), @pay_note
+      assert_no_pay_note_read(@editor, "editor")
+      assert_note_read(@editor, @level_note, "editor")
+    end
+
+    should "keep a pay change's note from the rest when it moves across a split" do
+      split = call(Operations::TeamPlanning::SplitScenario, @holder, plan_id: @plan_id, scenario_id: @q1, event_ids: [ @event_id ], name: "Agreed")
+
+      assert_not_includes split.to_json, @pay_note
+      assert_note_read(@holder, @pay_note, "holder", split[:agreed_id])
+      [ @editor, @viewer ].each { assert_no_pay_note_read(it, it == @editor ? "editor" : "viewer", split[:agreed_id]) }
+    end
+  end
+
   should "capture the log the leak check reads" do
     Rails.logger.info("probe #{AMOUNT}")
 
@@ -362,6 +432,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         @half_full => { @payments => 0.5, @sales => 0.5 }, @out => { @sales => 1.0 } }.each do |person, places|
         places.each { |unit, allocation| people.set_membership(person.id, unit, provider: "espalia", effective_on: "2026-01-01", allocation:) }
       end
+      { @in => "Platform", @out => "Field Sales" }.each { |person, cost_centre| people.change_cost_centre(person.id, cost_centre, provider: "espalia", effective_on: "2026-01-01") }
 
       @plan_id = call(Operations::TeamPlanning::CreatePlan, @holder, name: "Payments next year", base_on: "2026-03-02", unit_ids: [ @payments ])[:plan_id]
       call(Operations::TeamPlanning::AddPlanMember, @holder, plan_id: @plan_id, person_id: @editor.person_id, role: "editor")
@@ -453,6 +524,26 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
 
+    # A plan's scope decides which lines it holds, not the see-pay right
+    # ([#378](https://github.com/espaliahq/espalia/issues/378)).
+    should "show no member a line outside the plan's cost centres, nor a total that counts it, holder or not" do
+      held = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD", period: "year", cost_centre: "Platform")
+      away = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 654_321, currency: "AUD", period: "year", cost_centre: "Field Sales")
+
+      [ @holder, @editor, @viewer ].each do |account|
+        who = account == @holder ? "holder" : "non-holder"
+        budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
+        assert_equal [ held.id ], budget[:budget_lines].map { it[:budget_line_id] }, who
+        assert_equal [ "Platform" ], budget[:cost_centres].filter_map { it[:cost_centre] }, who
+        assert_in_delta held.amount * Rational(121, 365), BigDecimal(budget[:total][:approved][:native]["AUD"]), 1e-9, who
+        reads = [ budget, call(Operations::TeamPlanning::BudgetLines, account, plan_id: @plan_id, scenario_id: @q1),
+                  call(Operations::TeamPlanning::Funding, account, plan_id: @plan_id, scenario_id: @q1), budget_tab(account).to_html ].to_json
+        assert_not_includes reads, away.id, who
+        figures = reads.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+        [ "Field Sales", "654", "654,321" ].each { assert_not_includes figures, it, who }
+      end
+    end
+
     should "refuse pay for someone outside the plan's units, in words that don't name them" do
       error = assert_raises(Operations::Base::ParameterError) { hold_pay(@q1, @out, SCOPED_OUT, "full_time") }
       [ @out.id, @out.name ].each { assert_not_includes error.message, it }
@@ -508,6 +599,72 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         end
       end
     end
+
+    # Archived on 1 February 2026, then the band, the line and the rules all
+    # move. The frozen copy prices midpoints at 100,000; held pay is never in it.
+    context "once archived" do
+      setup do
+        @line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 80_000, currency: "AUD",
+                                   period: "year", cost_centre: "Platform").id
+        position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
+                                                                           level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
+                                                                           cost_centre: "Platform")[:position_id]
+        call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
+                                                               placements: [ { position_id:, allocation: 1 } ])
+        call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @plan_id, rule: "attrition", value: { "yearly_rate" => "0.1" })
+        call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @plan_id, rule: "time_to_hire", value: { "days" => "73" })
+        call(Operations::TeamPlanning::ArchivePlan, @holder, plan_id: @plan_id)
+
+        PayBand.find_by!(level_id: @e5.level_id).update!(midpoint: 130_000, maximum: 260_000)
+        BudgetLine.find(@line).update!(amount: 10_000)
+        PlanningRuleDefault.create!(rule: "on_cost", value: { "model" => "flat", "params" => { "percent" => "40" } })
+        @share = Rational(121, 365)
+        @held = BigDecimal(Integer(SCOPED[:in]) * @share, Operations::TeamPlanning::CostFigures::SIGNIFICANT_DIGITS).to_s("F")
+      end
+
+      should "price a holder from held pay and everyone else from the archive day's midpoints, in cost, scenario costs, budget, funding and forecast" do
+        holder = frozen_reads(@holder)
+        assert_equal "2026-02-01", holder[:cost][:priced_on]
+        assert_equal @held, holder[:budget][:budget_lines].find { it[:budget_line_id] == @line }[:funded][:native]["AUD"]
+        assert_equal [ "2026-02-01", 1 ], holder[:funding].values_at(:priced_on, :funded).then { [ it[0], it[1][:positions] ] }
+
+        [ @editor, @viewer ].each do |account|
+          reads = frozen_reads(account)
+          assert_in_delta 100_000 * @share, funded(reads), 1e-9, "a non-holder is priced at the copied midpoint"
+          assert_not_equal holder[:forecast][:rows], reads[:forecast][:rows], "attrition is priced as each caller sees the seat"
+          reads.each do |name, payload|
+            [ *SCOPED.values, @held[0, 5] ].each { assert_not_includes payload.to_json, it, "#{name} as a non-holder" }
+          end
+        end
+      end
+
+      should "show a viewer and an editor without the see-pay right no pay from any read" do
+        [ @q1, @plan_id ].each { assert_no_pay_read(it, amounts: SCOPED.values) }
+      end
+
+      should "keep held pay and band figures out of the copy as stored" do
+        stored = ActiveRecord::Base.connection.select_values(
+          "SELECT encode(data, 'escape') FROM event_store_events WHERE event_type = 'TeamPlanning::Events::PlanPricesFrozen'"
+        )
+
+        assert_equal 1, stored.size
+        [ *SCOPED.values, "pay_bands", "midpoint", "Platform" ].each { assert_not_includes stored.first, it }
+      end
+
+      should "leave a forgotten person's pay unknown to a holder and their seat at the midpoint for a viewer" do
+        PlanKeyStore.new.destroy_person(@in.id)
+
+        holder = call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments)
+        assert_includes holder[:unpriced].map { [ it[:seat_id], it[:reason] ] }, [ @in.id, "pay_unknown" ]
+        viewer = call(Operations::TeamPlanning::Cost, @viewer, plan_id: @plan_id, scenario_id: @q1, unit_id: @payments)
+        seat = viewer[:seats][:scenario].find { it[:seat_id] == @in.id }
+        assert_equal "band_midpoint", seat[:pay_source]
+        assert_in_delta 100_000 * @share, BigDecimal(seat[:base]), 1e-9
+        [ holder, viewer, *frozen_reads(@holder).values, *frozen_reads(@viewer).values ].each do |payload|
+          assert_not_includes payload.to_json, SCOPED[:in]
+        end
+      end
+    end
   end
 
   private
@@ -525,6 +682,57 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
   end
+
+  def note_reads(account, scenario_id = @q1)
+    [ Operations::TeamPlanning::Status, Operations::TeamPlanning::Overrides, Operations::TeamPlanning::History ]
+      .to_h { [ it.name.demodulize, call(it, account, plan_id: @plan_id, scenario_id:).to_json ] }
+  end
+
+  def assert_note_read(account, note, who, scenario_id = @q1)
+    note_reads(account, scenario_id).each { |read, output| assert_includes output, note, "#{read} as #{who}" }
+  end
+
+  def refute_note_read(account, note, who, scenario_id = @q1)
+    note_reads(account, scenario_id).each { |read, output| assert_not_includes output, note, "#{read} as #{who}" }
+  end
+
+  def assert_no_pay_note_read(account, who, scenario_id = @q1)
+    [ scenario_id, @plan_id ].each do |id|
+      READS.call.each do |operation|
+        output = begin
+          call(operation, account, **params_for(operation, scenario_id: id)).to_json
+        rescue Operations::Base::ParameterError => e
+          e.message
+        end
+        [ @pay_note, "Zephyr settled" ].each { assert_not_includes output, it, "#{Operations::Registry.tool_name_for(operation)} as #{who}" }
+      end
+    end
+  end
+
+  def changes_tab_html(account, scenario_id = @q1)
+    plan = call(Operations::TeamPlanning::Plan, account, plan_id: @plan_id)
+    scenarios = call(Operations::TeamPlanning::Scenarios, account, plan_id: @plan_id)[:scenarios]
+    reads = { drift: Operations::TeamPlanning::Drift, status: Operations::TeamPlanning::Status, attention: Operations::TeamPlanning::Attention }
+            .to_h { |key, operation| [ key, call(operation, account, **params_for(operation, scenario_id:)) ] }
+    record = TeamPlanningPlan.find(@plan_id)
+    policy = PlanPolicy.new(context_for(account), record)
+    controller = ApplicationController.new
+    controller.request = ActionDispatch::TestRequest.create
+    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ChangesTab.new(plan:, scenarios:, **reads, can_edit: policy.update?,
+                                                                                        see_pay: policy.see_pay?)))
+  end
+
+  def changes_tab(account) = changes_tab_html(account).to_html
+
+  def frozen_reads(account)
+    { cost: call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: @q1),
+      scenario_costs: call(Operations::TeamPlanning::ScenarioCosts, account, plan_id: @plan_id),
+      budget: call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1),
+      funding: call(Operations::TeamPlanning::Funding, account, plan_id: @plan_id, scenario_id: @q1),
+      forecast: call(Operations::TeamPlanning::Forecast, account, plan_id: @plan_id, scenario_id: @q1) }
+  end
+
+  def funded(reads) = BigDecimal(reads[:budget][:budget_lines].find { it[:budget_line_id] == @line }[:funded][:native]["AUD"])
 
   def budget_tab(account)
     reads = { budget: Operations::TeamPlanning::Budget, funding: Operations::TeamPlanning::Funding, map: Operations::TeamPlanning::ScenarioMap,

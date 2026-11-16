@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Takes back a change, pin or clear in a scenario
-# [#243](https://github.com/espaliahq/espalia/issues/243).
+# [#243](https://github.com/espaliahq/espalia/issues/243), or a step's date edit
+# [#407](https://github.com/espaliahq/espalia/issues/407).
 class Operations::TeamPlanning::UndoChange < Operations::Base
   include Operations::TeamPlanning::PlanWrite
   include Operations::TeamPlanning::WithinScope
@@ -13,7 +14,11 @@ class Operations::TeamPlanning::UndoChange < Operations::Base
               "already undone, or unless the caller is an editor. In a plan scoped to chosen units, an undo is " \
               "refused when the change it brings back is about someone, a unit or a position the plan no longer " \
               "covers, unless it places them in. Refused, too, when it brings back a last day outside the dates of " \
-              "the step they leave in. Nothing is deleted: the history keeps it, marked undone."
+              "the step they leave in. A date edit of a step (a dates entry) is undone too, bringing back the step's " \
+              "previous dates under the same checks as a new date edit: refused when a later date edit of the step " \
+              "replaced it, when the step forked after it closed its dates (a closing is never undone: set the dates " \
+              "instead), or when a later step would end before it starts, naming that step. " \
+              "Nothing is deleted: the history keeps it, marked undone."
   category :write
   approval :mcp_client
 

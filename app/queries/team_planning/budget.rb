@@ -61,7 +61,10 @@ class TeamPlanning::Budget
   # @!attribute heads [Boolean, nil] whether its FTE passes its head count; nil when heads aren't
   #   limited or no line states a head count
   # @!attribute mismatched [Array<String>] currencies it spends in that no line approves, never judged
-  Over = Data.define(:money, :heads, :mismatched)
+  # @!attribute heads_by [Rational, nil] the FTE past its head count, when heads says it passes
+  Over = Data.define(:money, :heads, :mismatched, :heads_by) do
+    def initialize(heads_by: nil, **) = super
+  end
 
   # One budget line's four numbers.
   #
@@ -115,29 +118,35 @@ class TeamPlanning::Budget
   # @!attribute totals [Totals]
   # @!attribute forecast [TeamPlanning::Cost::Sum] the unfunded part forecast rows add
   # @!attribute unpriced [Array<Unpriced>]
-  Report = Data.define(:basis, :strictness, :period, :open_ended, :horizon_months, :pay_view, :reference_currency, :lines, :cost_centres, :units, :totals, :forecast, :unpriced)
+  # @!attribute funding [TeamPlanning::Funding::Report] the funding read these figures rest on
+  # @!attribute seats [Array<TeamPlanning::Cost::Line>] the scenario's seat lines, priced as the viewer
+  Report = Data.define(:basis, :strictness, :period, :open_ended, :horizon_months, :pay_view, :reference_currency, :lines, :cost_centres, :units, :totals, :forecast, :unpriced,
+                       :funding, :seats)
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] a scenario, never the root, which has no period
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
+  # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
+    @aggregate = aggregate
   end
 
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for the root, or a scenario the plan doesn't have
   def call
-    aggregate = @repository.load_plan(@plan.id)
+    aggregate = @aggregate || @repository.load_plan(@plan.id)
     funding = TeamPlanning::Funding.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
     cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call(at_end: false)
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}
+    @inputs = TeamPlanning::PricingInputs.for(@plan, repository: @repository)
     @inclusive = TeamPlanning::RuleKinds::BudgetBasis.inclusive?(funding.map.rule(TeamPlanning::RuleKinds::BudgetBasis.rule_name))
     @strictness = funding.strictness
     @funded = funding.positions.index_by { it.position.id }
@@ -150,7 +159,7 @@ class TeamPlanning::Budget
                horizon_months: funding.horizon_months, pay_view: cost.pay_view, reference_currency: @reference,
                lines:, cost_centres: cost_centres(lines, funding, cost.forecast), units: units(funding, cost.forecast),
                totals: totals(lines, funding, cost.forecast),
-               forecast:, unpriced: unpriced(cost.scenario.lines))
+               forecast:, unpriced: unpriced(cost.scenario.lines), funding:, seats: cost.scenario.lines)
   end
 
   private
@@ -216,8 +225,8 @@ class TeamPlanning::Budget
     strictness = TeamPlanning::RuleKinds::BudgetStrictness
     spent = spent.reject { |_, amount| amount.zero? }
     money = approved.select { |currency, amount| amount < spent.fetch(currency, 0r) }.keys.sort if strictness.money?(@strictness) && approved.any?
-    Over.new(money:, heads: (head_count < fte if strictness.heads?(@strictness) && head_count),
-             mismatched: approved.any? ? (spent.keys - approved.keys).sort : [])
+    heads = (head_count < fte if strictness.heads?(@strictness) && head_count)
+    Over.new(money:, heads:, heads_by: (fte - head_count if heads), mismatched: approved.any? ? (spent.keys - approved.keys).sort : [])
   end
 
   # A line outside the period counts no heads over it, as it approves no money.
@@ -315,7 +324,7 @@ class TeamPlanning::Budget
   end
 
   def factor(currency)
-    @factors[currency] ||= ExchangeRate.factor(from: currency, to: @reference, on: @period.begin)
+    @factors[currency] ||= @inputs.factor(from: currency, to: @reference, on: @period.begin)
   rescue ExchangeRate::MissingRate => e
     @factors[currency] = e.message
   end
