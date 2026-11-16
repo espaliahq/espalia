@@ -131,14 +131,22 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
     should "say where hiring stands on a position's bar, and nothing on a seat not yet started" do
       bar = { kind: "position", subject_id: ADA, from: 0, to: 1, unit_id: PAYMENTS, position_id: ADA, role: "ENG", level: "L3" }
-      note = lambda do |position|
-        render_timeline(bars: [ bar ], positions: { ADA => { role_name: "Software Engineer", **position } }).at_css("[data-hiring-note]")&.text
+      note = lambda do |hiring|
+        render_timeline(bars: [ bar ], positions: { ADA => { role_name: "Software Engineer", hiring: [ hiring, hiring ] } }).at_css("[data-hiring-note]")&.text
       end
 
       assert_equal "Recruiting · starts 1 Feb 2027", note.({ hiring_status: "recruiting", target_start: "2027-02-01" })
       assert_equal "On hold", note.({ hiring_status: "on_hold", target_start: "2027-02-01" })
       assert_equal "Starts 1 Feb 2027", note.({ hiring_status: "not_started", target_start: "2027-02-01" })
       assert_nil note.({ hiring_status: "not_started", target_start: nil })
+    end
+
+    should "read where hiring stood in the column a position's bar starts, not where it ends up" do
+      bar = { kind: "position", subject_id: ADA, from: 1, to: 2, unit_id: PAYMENTS, position_id: ADA, role: "ENG", level: "L3" }
+      hiring = [ nil, { hiring_status: "recruiting", target_start: "2027-02-01" }, { hiring_status: "on_hold", target_start: nil } ]
+      html = render_timeline(bars: [ bar ], scenarios: FOUR_STEPS, positions: { ADA => { role_name: "Software Engineer", hiring: } })
+
+      assert_equal "Recruiting · starts 1 Feb 2027", html.at_css("[data-hiring-note]").text
     end
 
     should "keep a level change in the middle of a position's bar on the menu only" do
