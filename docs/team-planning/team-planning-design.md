@@ -1305,14 +1305,17 @@ promotions and increases, matched by cost centre and period like any other.
 
 ### Actual, planned and forecast as built
 
-[#351](https://github.com/espaliahq/espalia/issues/351) built the frame (10.1). The
-attrition, hiring and ramp assumptions (10.2 to 10.4) are stories of their own.
+[#351](https://github.com/espaliahq/espalia/issues/351) built the frame (10.1), and
+[#362](https://github.com/espaliahq/espalia/issues/362) the first kind, attrition (10.2).
+The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
 
 - **A step is the scenario's period**, the unit the timeline and cost already use. Today
   has no period, so it has no forecast and is all actual.
 - **`TeamPlanning::Forecast` reads the rows** for a scenario. It hands each forecast kind
-  a frame holding the resolved map, the step and who is covered: the subject of every
-  change in effect along the scenario's chain. A kind leaves out anyone `covered?` names.
+  a frame holding the resolved map, the step, who is covered (the subject of every change
+  in effect along the scenario's chain) and the filled seats with their average figures. A
+  kind chooses which changes take someone out: attrition drops a planned leaver, never
+  someone whose pay, level or place changed.
   A row (`kind`, `unit_id`, `cost_centre`, the step, `headcount`, `cost` per currency,
   `capacity` per model) has no id, and reading one writes nothing.
 - **The split is by what a figure measures, not by who moved.** Actual is the baseline's
@@ -1344,6 +1347,34 @@ open, so the web and an MCP client get the same answer.
 
 Assessments are read as of the plan's base date, like every other fact. A new
 assessment cycle shows up as drift and takes effect on rebase.
+
+### Attrition as built
+
+[#362](https://github.com/espaliahq/espalia/issues/362) added two rules, each a tenant
+default, a scenario chain and a unit override like any other, nearest scope winning:
+
+- **`attrition`** is a yearly rate from 0 to 1. Its default, 0, forecasts nothing.
+- **`time_to_hire`** is whole days from 0 to 730, 90 by default.
+
+An empty seat lowers both capacity and cost, so the rate applies to filled seats only. An
+open position, a placeholder hire, a planned leaver and anyone who has already left are out
+of the base. A person's FTE splits across their places by membership share, as cost splits
+it, and each place keeps the person's own cost centre.
+
+Leavers go evenly through the step. With a rate r, F filled FTE, a step of L days and a
+time to hire of T, the empty FTE-days are r × F / 365 × (T × L − T² / 2), or L² / 2 in place
+of the bracket once T reaches L. A row per unit and cost centre takes away:
+
+- **Cost:** the unit's average yearly cost of a filled FTE, times the empty FTE-days over 365.
+- **Capacity:** the unit's average capacity of a filled FTE, times the empty FTE-days over L.
+- **Headcount:** r × F × min(T, L) / 365, the FTE still empty at the end of the step.
+
+Every figure is an exact fraction, never rounded to people, and a row names nobody. The
+average follows the caller's pay view: band midpoints without the see-pay right, actual
+pay with it. `TeamPlanning::Forecast::Pricing` carries it, built by the cost and capacity
+reads from the places they priced, so the forecast never reads pay on its own. The
+invariant holds for every caller: actual, planned and forecast add up to the total, per
+unit and overall. The pay privacy test walks the real kind for a holder and a non-holder.
 
 ## Approval and carrying a plan out
 
