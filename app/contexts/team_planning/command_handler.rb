@@ -103,7 +103,7 @@ class TeamPlanning::CommandHandler
   def archive_plan(plan_id)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.archive(archived_by_id: actor_id!)
+      plan.archive(archived_by_id: actor_id!, prices: frozen_prices)
     end
   end
 
@@ -633,6 +633,10 @@ class TeamPlanning::CommandHandler
 
     raise TeamPlanning::Error, "A plan covers units the organisation has"
   end
+
+  # Without key material nothing can be sealed, so the plan archives with
+  # today's prices, as one archived before the copy existed does.
+  def frozen_prices = (TeamPlanning::PricingInputs.capture(ActsAsTenant.current_tenant) if PlanKeyStore.available?)
 
   def actor_id!
     @actor.person&.id or raise TeamPlanning::Error, "Link your account to a person to work on plans"
