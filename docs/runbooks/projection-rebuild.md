@@ -91,6 +91,10 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `team_planning/scenarios` v3 and `team_planning/history` v3 (removed scenarios, [#340](https://github.com/espaliahq/espalia/issues/340); split dates, [#426](https://github.com/espaliahq/espalia/issues/426))
+
+Path A: `REBUILD_ON_DEPLOY=team_planning/scenarios,team_planning/history`, removed once the deploy is live. The scenarios rebuild records every past removal in `team_planning_removed_scenarios`; the history rebuild counts what each held into `team_planning_removed_scenario_tallies`, and moves a split step's date edits to its agreed part. Writes need not pause: both projections are synchronous and each handler applies an event once, however often it sees it. While the scenarios rebuild runs, plan pages show no scenarios, so deploy when nobody is planning. Both need `active_record_encryption`, as v2 did.
+
 #### Recorded: `team_planning/plans` v2 and `team_planning/scenarios` v2 (sealed names, [#209](https://github.com/espaliahq/espalia/issues/209))
 
 Path A: `REBUILD_ON_DEPLOY=team_planning/plans,team_planning/scenarios`, removed once the deploy is live. The migration turns both `name` columns into jsonb and marks every name removed; the rebuild seals each name under its plan's key. A baseline scenario stores no name and reads "Baseline".
