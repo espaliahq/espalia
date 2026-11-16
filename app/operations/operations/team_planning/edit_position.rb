@@ -61,6 +61,6 @@ class Operations::TeamPlanning::EditPosition < Operations::Base
     position = map[:positions].find { it[:position_id] == uuid!(:position_id) } or
       raise Operations::Base::ParameterError, "This scenario has no such position"
 
-    position.slice(*FIELDS).transform_values { it.respond_to?(:iso8601) ? it.iso8601 : it }.merge(fte: position[:fte].to_f)
+    position.slice(*FIELDS).merge(fte: position[:fte].to_f)
   end
 end
