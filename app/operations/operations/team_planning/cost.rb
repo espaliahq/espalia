@@ -34,7 +34,8 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "unchanged occupant's, else the last matching entry read at its largest occupant's country (an empty seat has none), " \
               "else none; a placeholder hire in a position reads as that open seat. A seat's " \
               "cost_centre_source says which (position, person, rule or none); for a rule, cost_centre_rule is the " \
-              "entry's index in the list that unit reads and cost_centre_matcher is what it matches on. " \
+              "entry's index in the list that unit reads and cost_centre_matcher is what it matches on. A person keeping their own cost " \
+              "centre while the entries give another has that one as rule_cost_centre; it never changes what they cost in. " \
               "Unit, cost-centre and plan totals always agree. Every total carries `parts`, which add up to its " \
               "`scenario` figure exactly. In `parts`, actual means the baseline's figure, not actual pay: actual is the baseline's figure for the same unit or cost centre over the same days, " \
               "planned is what the plan's changes add or take away (negative where they take away, so someone moved between " \
@@ -128,7 +129,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
     band = line.band
     { seat_id: line.seat_id, kind: line.kind, position_id: line.position_id, cost_centre: line.cost_centre,
       cost_centre_source: line.cost_centre_source, cost_centre_rule: line.cost_centre_rule,
-      cost_centre_matcher: line.cost_centre_matcher, level_id: line.level_id, level_source: line.level_source,
+      cost_centre_matcher: line.cost_centre_matcher, rule_cost_centre: line.rule_cost_centre, level_id: line.level_id, level_source: line.level_source,
       pay_source: line.pay_source, basis: line.basis, currency: line.currency, band: band && band(band),
       hours_per_year: line.hours_per_year && decimal(line.hours_per_year), yearly: line.yearly && decimal(line.yearly),
       fte: decimal(line.fte), fraction: decimal(line.fraction),
