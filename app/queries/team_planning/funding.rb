@@ -94,18 +94,20 @@ class TeamPlanning::Funding
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] a scenario, never the root, which has no period
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
+  # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
+  def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @repository = repository
+    @aggregate = aggregate
   end
 
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for the root, or a scenario the plan doesn't have
   def call
-    aggregate = @repository.load_plan(@plan.id)
+    aggregate = @aggregate || @repository.load_plan(@plan.id)
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
     raise TeamPlanning::Error, "The baseline has no period to fund, so read one of the plan's scenarios" if @scenario_id == @plan.id
 
