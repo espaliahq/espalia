@@ -309,6 +309,14 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     assert_equal everything, replayed.then { |plan| [ @plan_id, *plan.scenarios.keys ].to_h { [ it, [ plan.winning_changes(it).transform_values { [ it.event_id, it.data ] }, plan.log_of(it).map(&:event_id) ] ] } }
   end
 
+  test "leave a change someone else moved as the latest thing its author can undo" do
+    placed = place(@q1, @eng_id)
+    @plan.move_change(scenario_id: @q1, subject_id: @grace_id, facet: "assignment", direction: "later", moved_by_id: @grace_id)
+
+    assert_equal placed, @plan.last_undoable_by(@q2, @ada_id)
+    assert_equal last_event.event_id, @plan.last_undoable_by(@q2, @grace_id)
+  end
+
   test "refuse a step named for a move earlier" do
     place(@q2, @eng_id)
 

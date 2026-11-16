@@ -682,7 +682,8 @@ class TeamPlanning::PlanAggregate
   end
 
   # What an Undo button takes back for one person: their latest entry in the
-  # scenario that is in effect and that nothing later replaced.
+  # scenario that is in effect and that nothing later replaced. A move replaces
+  # nothing, as `later_in_effect` holds.
   #
   # @param scenario_id [String] the root or a live scenario
   # @param person_id [String]
@@ -695,7 +696,7 @@ class TeamPlanning::PlanAggregate
       next if undone?(entry.event_id) || except_facets.include?(key_of(entry).last)
       return entry.event_id if actor_of(entry) == person_id && !replaced.include?(key_of(entry))
 
-      replaced << key_of(entry)
+      replaced << key_of(entry) unless entry.is_a?(TeamPlanning::Events::ChangeMoved)
     end
     nil
   end
