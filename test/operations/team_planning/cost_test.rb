@@ -84,8 +84,8 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
 
     assert_equal @payments, result[:unit_id]
     ada = result[:seats][:scenario].find { it[:seat_id] == @ada.id }
-    assert_equal [ "person", "own", "CC-1", "person", nil, "1", "1", 365, "1", "100000", "100000" ],
-                 ada.values_at(:kind, :level_source, :cost_centre, :cost_centre_source, :cost_centre_rule, :fte, :fraction, :days, :share,
+    assert_equal [ "person", "own", "CC-1", "person", nil, nil, "1", "1", 365, "1", "100000", "100000" ],
+                 ada.values_at(:kind, :level_source, :cost_centre, :cost_centre_source, :cost_centre_rule, :cost_centre_matcher, :fte, :fraction, :days, :share,
                                :base, :amount)
     assert_equal [ "Any location", "EUR", "year", "100000.00" ], ada[:band].values_at(:location, :currency, :period, :midpoint)
     assert_match(/\ASoftware Engineer, .*Senior SWE\z/, ada[:band][:level])
