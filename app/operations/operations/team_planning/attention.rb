@@ -42,7 +42,10 @@ class Operations::TeamPlanning::Attention < Operations::Base
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id) || plan.id
-    return { plan_id: plan.id, scenario_id:, **checked(plan), items: [], names: {} } if plan.archived?
+    if plan.archived?
+      known_scenario!(plan, scenario_id)
+      return { plan_id: plan.id, scenario_id:, **checked(plan), items: [], names: {} }
+    end
 
     report = refusing_bad_plans { ::TeamPlanning::Attention.for(context:, plan:, scenario_id:) }
     sources = ::TeamPlanning::SourceOfTruth.new(tenant_id: plan.tenant_id).preload(unit_ids: report.items.flat_map(&:unit_ids))

@@ -57,6 +57,13 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
     assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal(Operations::TeamPlanning::RebasePreview, plan_id: @plan_id)
   end
 
+  should "still refuse a scenario the plan doesn't have" do
+    stranger = SecureRandom.uuid_v7
+    assert_equal "This plan has no such scenario", refusal(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: stranger)
+    assert_equal "This plan has no such scenario", refusal(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: stranger)
+    assert_equal [], call(Operations::TeamPlanning::Attention, plan_id: @plan_id)[:items]
+  end
+
   should "say its figures still use today's bands, rates and rules" do
     note = "This plan was archived on 12 March 2026. Its figures still use today's pay bands, exchange rates, budget lines and rules."
 

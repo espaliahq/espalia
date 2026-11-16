@@ -33,6 +33,18 @@ module Operations::TeamPlanning::PlanRead
             "organisation that day. Restore it to check it again." }
   end
 
+  # An archived plan's checks return early, before the query that would refuse
+  # an unknown scenario, so they refuse it here instead.
+  #
+  # @param plan [TeamPlanningPlan]
+  # @param scenario_id [String]
+  # @raise [Operations::Base::ParameterError] "This plan has no such scenario" unless it is the plan's baseline or one of its scenarios
+  def known_scenario!(plan, scenario_id)
+    return if scenario_id == plan.id || TeamPlanningScenario.exists?(plan_id: plan.id, id: scenario_id)
+
+    raise Operations::Base::ParameterError, "This plan has no such scenario"
+  end
+
   # @param plan [TeamPlanningPlan]
   # @return [Hash] `{ archived_on, note }` for an archived plan, else empty
   def priced_today(plan)

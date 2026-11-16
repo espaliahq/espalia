@@ -47,7 +47,10 @@ class Operations::TeamPlanning::Status < Operations::Base
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
-    return { plan_id: plan.id, scenario_id:, **checked(plan), statuses: [], names: {} } if plan.archived?
+    if plan.archived?
+      known_scenario!(plan, scenario_id)
+      return { plan_id: plan.id, scenario_id:, **checked(plan), statuses: [], names: {} }
+    end
 
     report = refusing_bad_plans { ::TeamPlanning::Status.new(context:, plan:, scenario_id:).call }
     notes = notes_of(plan, report.statuses.map(&:change_id))
