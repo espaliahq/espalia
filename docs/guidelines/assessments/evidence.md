@@ -165,8 +165,7 @@ Rules — all deliberate:
 Feedback does not have to be asked for. `EvidencePolicy#create?` has always
 admitted any member with a Person record, so a peer could record feedback on
 any colleague with a framework assignment; what was missing was the way in,
-and the way to say it without knowing the framework
-([#502](https://github.com/mr-yum/growth-os/issues/502)). Three pieces, all
+and the way to say it without knowing the framework. Three pieces, all
 shared by web, MCP and Slack:
 
 - **The recipient directory.** `Assessments::FeedbackRecipients` finds people
@@ -206,7 +205,7 @@ shared by web, MCP and Slack:
   notifier (manager side, dedup on retry, provisioning a never-signed-in
   recipient).
 
-**On the web** ([#503](https://github.com/mr-yum/growth-os/issues/503)):
+**On the web**:
 
 - **"Give feedback"** on the hub header (and "Give feedback →" on the Home
   card, which opens it on arrival via `?give=1` and the `evidence-hub`
@@ -224,9 +223,8 @@ shared by web, MCP and Slack:
 - **"Needs you"** at the top of the Feedback / Evidence page lists feedback to
   place: items about the viewer and, for the manager side, about their
   reports, each with "Place" — the edit modal with an empty block, content
-  disabled for a non-author. A manager's switch has three views
-  ([#620](https://github.com/mr-yum/growth-os/issues/620),
-  [#652](https://github.com/mr-yum/growth-os/issues/652)): **My feedback**,
+  disabled for a non-author. A manager's switch has three views:
+  **My feedback**,
   below; **My team**, the
   default — direct reports plus active rating delegations, exactly
   `Assessments::ReviewableAssignments#team` — and **My whole org**, which adds
@@ -234,8 +232,7 @@ shared by web, MCP and Slack:
   (`?place=org`; absent is the team), switched by plain links that carry both
   counts ("My team · 3", "My whole org · 41"). The switch renders for anyone
   with reports, and offers My whole org only when the org reaches someone
-  the team doesn't. It scopes the conversations too
-  ([#650](https://github.com/mr-yum/growth-os/issues/650)). **My feedback**
+  the team doesn't. It scopes the conversations too. **My feedback**
   (`?place=mine`) holds only what is about the viewer, and their own
   exchanges. Each segment's count
   is what that view lists to place, shown only where some waits; below `sm`
@@ -251,7 +248,7 @@ shared by web, MCP and Slack:
   evidence, linking to `#needs-you`, with `?place=org` when only the org
   view lists the item (`Assessments::FeedbackToPlace#scope_for` / `#hub_path`).
 
-**From another feedback system** ([#534](https://github.com/mr-yum/growth-os/issues/534)):
+**From another feedback system**:
 feedback given in a peer such as Chip arrives through the feedback exchange
 ([feedback-exchange.md](../feedback-exchange.md)) as unplaced feedback written
 as its real author, dated by when it was given.
@@ -271,14 +268,13 @@ as its real author, dated by when it was given.
   of the record).
 - **"Needs you" is where it surfaces.** An imported item is unplaced, so it waits
   there for the recipient and the manager side, and the
-  assessment shows `UnplacedFeedbackNotice`. Placement suggestions
-  ([#558](https://github.com/mr-yum/growth-os/pull/558)), once enabled, appear
-  on the same cards.
+  assessment shows `UnplacedFeedbackNotice`. Placement suggestions, once
+  enabled, appear on the same cards.
 - **Its author edits the text, not where it was given.** The edit modal shows
   the badge in place of the reference fields, and `EvidenceDiffSubmit` keeps
   the imported reference on save.
 
-**From Slack** ([#504](https://github.com/mr-yum/growth-os/issues/504)):
+**From Slack**:
 `/espalia feedback` and the "Feedback on this message" shortcut open a
 modal that records through the same Operation, placed at the recipient's
 current level or unplaced; a giver who has never signed in gets a draft link
@@ -287,7 +283,7 @@ that opens the hub's modal prefilled after sign-in. See
 
 ## The Feedback / Evidence page: conversations
 
-`/evidence` ([#647](https://github.com/mr-yum/growth-os/issues/647)) reads like
+`/evidence` reads like
 a messaging app: "Needs you" on top, then one conversation per person, the most
 recently active first, beside the open thread. It replaced a single scroll of
 "to place", open, suggested and completed groups that grew without limit.
@@ -371,7 +367,7 @@ recently active first, beside the open thread. It replaced a single scroll of
 Feedback written by someone who never saw the framework arrives unplaced, or
 placed on one cell when it speaks to three. When a tenant switches it on,
 a model reads each new piece of feedback and suggests where it belongs; a
-person decides ([#536](https://github.com/mr-yum/growth-os/issues/536), plan
+person decides (plan
 §7 in [feedback-integration-plan.md](../../notes/feedback-integration-plan.md)).
 Rules, all deliberate:
 
@@ -398,8 +394,7 @@ Rules, all deliberate:
   feedback is always recorded from a cell, so it is never unplaced; what it
   gets is "May fit elsewhere too". It is two thirds of all feedback in
   production, and one example often speaks to several capabilities, so it
-  is where those suggestions help most
-  ([#622](https://github.com/mr-yum/growth-os/issues/622)). The prompt
+  is where those suggestions help most. The prompt
   names its giver as "the person themselves".
 - **No automatic backfill.** Self feedback recorded before that gets
   suggestions when it is next edited. `bin/rails
@@ -532,8 +527,7 @@ Rules, all deliberate:
   text contains are compiled into its pattern, so thousands of people cost a
   lookup per word. The mapping lives in the instance for one request and is
   not stored. There is no switch: placement never needs to know who said
-  what about whom, so the per-tenant `pseudonymise_names` setting was removed
-  ([#620](https://github.com/mr-yum/growth-os/issues/620)). A config stored
+  what about whom, so the per-tenant `pseudonymise_names` setting was removed. A config stored
   with it still loads and the key is ignored; the next save of the AI model
   card drops it. It
   covers the names of people Espalia knows, nothing more: a nickname, someone
@@ -599,8 +593,8 @@ Rules, all deliberate:
   the item before superseding and storing, and stores nothing if the
   feedback was edited while the model answered; the edit's own run follows.
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
-  after each stored set and is empty; the placement notifier
-  ([#534](https://github.com/mr-yum/growth-os/issues/534)) hooks in there.
+  after each stored set and is empty; a placement notifier would hook in
+  there.
 - **Eval before widening.** `bin/rails "evidence:suggestions:eval[<tenant slug>]"`
   scores the current `PlacementPrompt::VERSION` against thirty invented,
   hand-placed items in `test/fixtures/files/evidence_suggestions/` (cell match
@@ -765,8 +759,7 @@ feedback on a colleague's assessment gets no dead link.
 **Decline stays out of the way of the reply.** On an incoming request, "Decline"
 is a secondary button beside the primary "Respond" button, and it opens its own modal with a labelled, multi-line reason field and
 a note that the requester will see it. An always-open reason box under the
-reply button read as the reply box: a requestee wrote their feedback into it
-([#476](https://github.com/mr-yum/growth-os/issues/476)). The reply itself is
+reply button read as the reply box: a requestee wrote their feedback into it. The reply itself is
 written only in the evidence modal.
 
 ## Comment notifications

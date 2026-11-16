@@ -833,8 +833,7 @@ module StimulusHelpers
   # what to do — the test's whole precondition. And when the keydown does not
   # reach the listener, native traversal walks focus out of the dialog and
   # the failure looks like a broken trap rather than a lost keystroke. That
-  # is the CI-only flake this replaced, first seen on
-  # https://github.com/mr-yum/growth-os/pull/430.
+  # is the CI-only flake this replaced.
   #
   # ASSERT THE RETURN VALUE at an edge. A synthetic event performs no native
   # traversal, so where focus lands is decided solely by the trap's own

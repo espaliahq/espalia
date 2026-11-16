@@ -85,7 +85,7 @@ the change a capability with no expectation at the assessed level appeared
 in the gap list at `+0.0`, which is the same "no expectation vs not rated"
 confusion the card's "No expectation at E3" copy exists to prevent.
 
-**A gap list holds only gaps, and says when it is not whole** ([#471](https://github.com/mr-yum/growth-os/issues/471)).
+**A gap list holds only gaps, and says when it is not whole**.
 A capability already demonstrated in full at the panel's level (100% or
 more, and not blocked) is never listed, so a short list is never padded
 with capabilities that owe nothing. When none are short, the panel says
@@ -170,7 +170,7 @@ Three pieces, cheapest first:
    page never prints gets no tip** — there is nothing to hang it on — so the
    state, Carried and the below-level rule are defined in the drawer below
    instead. The wording is one glossary either way. Weight and Required
-   *are* printed now — as the card's chips ([#431](https://github.com/mr-yum/growth-os/issues/431), below) — so they carry
+   *are* printed now — as the card's chips (below) — so they carry
    their tips at the point of reading and are listed in the drawer too.
 3. **"How is this calculated?"** in the hero opens
    `Views::Assessments::ScoreExplainerModal` — a root-mounted `Kit::Modal`

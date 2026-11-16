@@ -98,7 +98,7 @@ deficit      = max(0, −contribution), counting rated cells only
 Verdict gate: deficit > deficit_threshold → capability is :blocked
 ```
 
-**Only a rating can block** ([#485](https://github.com/mr-yum/growth-os/issues/485)). An unrated cell the score counts as 0 — at or above the assessed level, where nothing is assumed — is left out of the deficit, so a capability nobody has rated is `:unrated`, never `:blocked`. Blocking used to fire on the 0 itself, so a fresh assessment showed Blocked beside "Not rated" on every card. The score is unchanged: the 0 still holds the number down, which the coverage gate and the "X of Y rated" chip already say. A "not yet" still blocks, and so does a rated gap below the assessed level while the assessed level waits on a rating.
+**Only a rating can block**. An unrated cell the score counts as 0 — at or above the assessed level, where nothing is assumed — is left out of the deficit, so a capability nobody has rated is `:unrated`, never `:blocked`. Blocking used to fire on the 0 itself, so a fresh assessment showed Blocked beside "Not rated" on every card. The score is unchanged: the 0 still holds the number down, which the coverage gate and the "X of Y rated" chip already say. A "not yet" still blocks, and so does a rated gap below the assessed level while the assessed level waits on a rating.
 
 An unrated capability still **holds** the verdict (see *Verdicts*): nothing has shown the level is met. It has to, or the rule would invert. With 23 capabilities consistent but one unrated the score is 96% and clears the meeting bar, while rating that one "not yet" blocks, so skipping the honest low rating would pass. It is reported apart from the blocked ones — `Scoring#unrated` — because "blocked" is a judgement and it has none. Nor is the hold a corner case: credit earned above the assessed level can lift the score past the bar while cells at the level are still unrated (the seeded data has someone at 104% with three unrated).
 
@@ -272,7 +272,7 @@ Two honesty guards sit above the formula, both the hero's:
 
 | Signal | When | Display |
 |--------|------|---------|
-| Weight chip | `binding.weight != 1.0` | Muted `×2` chip on the assessment card's name row, the hero gap list and the explainer's "Counts differently" list ([#431](https://github.com/mr-yum/growth-os/issues/431)); `×2` marker in the calibration cohort drawer |
+| Weight chip | `binding.weight != 1.0` | Muted `×2` chip on the assessment card's name row, the hero gap list and the explainer's "Counts differently" list; `×2` marker in the calibration cohort drawer |
 | Required chip | resolved `deficit_threshold == 0` (binding, then category, then framework default — the engine's `mandatory?`) | Muted "Required" chip on the same card row and explainer list, shown before any rating; the red "Blocked" badge is the later state once a rating shows a gap |
 | Category threshold | `deficit_threshold` on a category | Not shown on any surface today; it reaches the reader only through the capabilities it makes Required |
 | Agreed level | Derived | Shown as `"Agreed: L3"` computed from aligned assessments; no direct input |
