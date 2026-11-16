@@ -69,12 +69,30 @@ class Views::Plans::BudgetLineForm < Views::Base
     end
   end
 
+  CUT_ID = "budget-line-cut-dialog"
+
   def cut_form
-    form(action: cut_budget_line_plan_path(plan_id, budget_line_id: @budget_line_id), method: "post",
-         class: "flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4", id: "budget-line-cut") do
-      hidden_fields("delete")
+    div(class: "flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4") do
       p(class: "text-sm text-muted") { "Cutting the line takes it out of this scenario and those that follow." }
-      render Components::Kit::Button.new(variant: :outline, tone: :danger, type: :submit) { "Cut the line" }
+      render Components::Kit::Button.new(variant: :outline, tone: :danger, id: "budget-line-cut-open",
+                                         data: { action: "click->modal#open", modal_target_id: CUT_ID }) { "Cut the line" }
+    end
+    cut_dialog
+  end
+
+  def cut_dialog
+    render Components::Kit::Modal.new(id: CUT_ID, title: "Cut this line?", size: :md, standalone: false) do |m|
+      m.body do
+        p(class: "text-sm text-default") do
+          "It leaves #{scenario_name(@scenario_id)} and the scenarios that follow."
+        end
+        form(action: cut_budget_line_plan_path(plan_id, budget_line_id: @budget_line_id), method: "post",
+             class: "mt-6 flex flex-wrap items-center gap-3", id: "budget-line-cut") do
+          hidden_fields("delete")
+          render Components::Kit::Button.new(tone: :danger, type: :submit) { "Cut the line" }
+          render Components::Kit::Button.new(variant: :outline, data: { action: "click->modal#close" }) { "Keep it" }
+        end
+      end
     end
   end
 

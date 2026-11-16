@@ -42,37 +42,29 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
-    should "add a line to a scenario, change it, and split a position's funding between two lines" do
+    should "add a line to a scenario, change it, split a position's funding between two lines, then cut the line" do
       sign_in_as(@planner.user)
       visit budget_plan_path(@plan_id, scenario: @q1)
       click_link_with_js_fallback("Add a line", expect_text: "Add a budget line to Q1 hires")
-      fill_in "budget-line-starts-on", with: @line.starts_on
-      fill_in "budget-line-ends-on", with: @line.ends_on
-      fill_in "budget-line-amount", with: "40,000"
-      fill_in "budget-line-currency", with: "EUR"
-      fill_in "budget-line-cost-centre", with: "Growth"
-      click_button "Add the line"
-      assert_text "Budget line added."
+      js_fill_in "budget-line-starts-on", with: @line.starts_on.iso8601
+      js_fill_in "budget-line-ends-on", with: @line.ends_on.iso8601
+      js_fill_in "budget-line-amount", with: "40,000"
+      js_fill_in "budget-line-currency", with: "EUR"
+      js_fill_in "budget-line-cost-centre", with: "Growth"
+      click_button_with_js_fallback("Add the line", expect_text: "Budget line added.")
       assert_text "Cost centre Growth"
 
-      within("[data-budget-line='#{@line.id}']") { click_link "Change" }
-      assert_text "Change"
-      fill_in "budget-line-head-count", with: "2"
-      click_button "Save the line"
-      assert_text "Budget line changed."
+      click_selector_with_js_fallback("a[href='#{edit_budget_line_plan_path(@plan_id, budget_line_id: @line.id, scenario: @q1)}']",
+                                      expect_selector: "[data-budget-line-form='#{@line.id}']")
+      js_fill_in "budget-line-head-count", with: "2"
+      click_button_with_js_fallback("Save the line", expect_text: "Budget line changed.")
 
-      within("[data-budget-line='#{@line.id}']") { first("[data-funding-action]").click }
-      within("#funding-modal") do
-        assert_field "funding[parts][#{@line.id}]", with: "100"
-        assert_no_button "Clear the funding"
-        fill_in "funding[parts][#{@line.id}]", with: "50"
-        find("input[name^='funding[parts]']:not([name$='[#{@line.id}]'])").fill_in(with: "50")
-        click_button "Save funding"
-      end
-      assert_text "Funding set."
+      split_funding
       assert_text "Open · 50% of it · 0.5 FTE"
       assert_selector "[data-budget-draw]", count: 3, visible: :all
       assert_no_stolen_taps
+
+      cut_line(growth_line_id)
     end
   end
 
@@ -94,24 +86,55 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
-    should "set a position's funding from the dialog, then clear it" do
+    should "split a position's funding between two lines, clear it, then cut a line" do
+      add_growth_line
       sign_in_as(@planner.user)
       visit budget_plan_path(@plan_id, scenario: @q1)
-      within("[data-budget-line='#{@line.id}']") { first("[data-funding-action]").click }
-      within("#funding-modal") do
-        fill_in "funding[parts][#{@line.id}]", with: "100"
-        click_button "Save funding"
-      end
-      assert_text "Funding set."
+      split_funding
       assert_no_sideways_overflow
 
-      within("[data-budget-line='#{@line.id}']") { first("[data-funding-action]").click }
-      within("#funding-modal") { click_button "Clear the funding" }
-      assert_text "Funding goes back to the line the plan finds."
+      open_funding
+      click_button_with_js_fallback("Clear the funding", expect_text: "Funding goes back to the line the plan finds.")
+
+      cut_line(growth_line_id)
+      assert_no_sideways_overflow
     end
   end
 
   private
+
+  def add_growth_line
+    ActsAsTenant.with_tenant(@tenant) do
+      BudgetLine.create!(starts_on: @line.starts_on, ends_on: @line.ends_on, origin: "new", amount: 40_000, currency: "EUR", period: "year",
+                         head_count: 1, cost_centre: "Growth")
+    end
+  end
+
+  def growth_line_id = find("[data-budget-line]", text: "Cost centre Growth")["data-budget-line"]
+
+  def open_funding
+    wait_for_stimulus "modal"
+    trigger = find("[data-budget-line='#{@line.id}'] [data-funding-action]", match: :first)
+    click_selector_with_js_fallback("[data-funding-action='#{trigger['data-funding-action']}']", expect_selector: "#funding-modal")
+  end
+
+  def split_funding
+    open_funding
+    within("#funding-modal") do
+      js_fill_in "funding[parts][#{@line.id}]", with: "50"
+      js_fill_in find("input[name^='funding[parts]']:not([name$='[#{@line.id}]'])"), with: "50"
+    end
+    click_button_with_js_fallback("Save funding", expect_text: "Funding set.")
+  end
+
+  def cut_line(budget_line_id)
+    click_selector_with_js_fallback("a[href='#{edit_budget_line_plan_path(@plan_id, budget_line_id:, scenario: @q1)}']",
+                                    expect_selector: "[data-budget-line-form='#{budget_line_id}']")
+    wait_for_stimulus "modal"
+    click_button_with_js_fallback("budget-line-cut-open", expect_selector: "#budget-line-cut")
+    click_selector_with_js_fallback("#budget-line-cut button[type='submit']", expect_text: "Budget line cut.")
+    assert_no_selector "[data-budget-line='#{budget_line_id}']"
+  end
 
   def account(role: :member, name: "Someone", **grants)
     user = create(:user, password: TEST_PASSWORD)
