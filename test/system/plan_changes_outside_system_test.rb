@@ -60,6 +60,20 @@ class PlanChangesOutsideSystemTest < ApplicationSystemTestCase
       assert_no_selector ROW
     end
 
+    should "let an editor note a change about someone the plan no longer covers" do
+      sign_in_as(@editor.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+
+      within(ROW) do
+        click_selector_with_js_fallback("[data-change-note-editor] summary", expect_text: "Leave it blank to clear the note.")
+        js_fill_in "Note", with: "Agreed in March"
+      end
+      click_button_with_js_fallback("Save note", expect_text: "Note saved.")
+
+      assert_selector "#{ROW} [data-change-note]", text: "Agreed in March"
+      assert_no_text "Dee Quill"
+    end
+
     should "show a viewer the row with no way to change it" do
       sign_in_as(@viewer.user)
       visit changes_plan_path(@plan_id, scenario: @q1)
