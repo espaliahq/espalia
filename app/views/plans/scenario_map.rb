@@ -302,7 +302,7 @@ class Views::Plans::ScenarioMap < Views::Base
         @position_marks.call(position).each { render it }
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
         position.fetch(:occupants, []).sort_by { name(it[:person_id]) }.each do |occupant|
-          span(data: { map_occupant: occupant[:person_id] }, class: "text-muted") { "#{name(occupant[:person_id])} · #{allocation(occupant)}" }
+          span(data: { map_occupant: occupant[:person_id] }, class: "min-w-0 break-words text-muted") { "#{name(occupant[:person_id])} · #{allocation(occupant)}" }
         end
         span(class: "ml-auto") { move_position_button(position) } if movable?(position)
       end

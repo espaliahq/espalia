@@ -109,12 +109,14 @@ class PlanMapSystemTest < ApplicationSystemTestCase
 
         visit map_plan_path(plan_id, scenario: scenario_id)
         within(unit("Platform")) do
-          assert_selector "[data-map-person] button", text: "Move…", count: 12
+          assert_selector "[data-map-person] button", text: "Move…", count: 13
           widths = all("[data-map-person-details]").map { it.evaluate_script("this.getBoundingClientRect().width") }
           assert widths.all? { it >= 96 }, "a name keeps 6rem beside Move…: #{widths.inspect}"
           card = current_scope.evaluate_script("this.getBoundingClientRect().right")
           label = find("[data-map-position] span", text: LONG_POSITION_ROLE).evaluate_script("this.getBoundingClientRect().right")
           assert_operator label, :<=, card, "a one-word position label wraps inside its card"
+          occupant = find("[data-map-occupant]", text: LONG_OCCUPANT).evaluate_script("this.getBoundingClientRect().right")
+          assert_operator occupant, :<=, card, "a one-word occupant name wraps inside its card"
         end
         assert_no_sideways_overflow
       end
@@ -147,15 +149,19 @@ class PlanMapSystemTest < ApplicationSystemTestCase
   LONG_ROLE = "Infrastructure reliability"
   LONG_NAME = "Maximiliana Wolkenstein-Abernathy-Okonkwo"
   LONG_POSITION_ROLE = "Observabilityplatformengineeringandreliabilityoperations"
+  LONG_OCCUPANT = "Quillonmarabethwintersongvalerandorffquantelbrook"
 
-  # Twelve seats, one person with a long name, all under a role too long for its column, and a one-word position in the scenario.
+  # Twelve seats, one person with a long name, all under a role too long for its column, and a one-word position, filled by a one-word name, in the scenario.
   def plan_with_a_full_unit
     handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     since = (Date.current - 30).iso8601
     platform = SecureRandom.uuid_v7
+    occupant = nil
     ActsAsTenant.with_tenant(@tenant) do
       structure.create_unit(platform, "Platform", level_id: @team, parent_id: @product, effective_on: since)
+      occupant = create(:person, tenant: @tenant, name: LONG_OCCUPANT)
+      handler.record_person(occupant.id, **ESPALIA, effective_on: since, employment_status: "employed")
       12.times do |index|
         person = create(:person, tenant: @tenant, name: index.zero? ? LONG_NAME : "Seat #{index + 1}")
         handler.record_person(person.id, **ESPALIA, effective_on: since, employment_status: "employed")
@@ -169,8 +175,10 @@ class PlanMapSystemTest < ApplicationSystemTestCase
       role = create(:framework_role, tenant: @tenant, name: LONG_POSITION_ROLE)
       create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 1, title: "One")
     end
-    call(Operations::TeamPlanning::SetPosition, @planner, plan_id:, scenario_id:, role_id: level.role_id, level_id: level.level_id,
-                                                          unit_id: platform, fte: 1, basis: "new")
+    position_id = call(Operations::TeamPlanning::SetPosition, @planner, plan_id:, scenario_id:, role_id: level.role_id, level_id: level.level_id,
+                                                                        unit_id: platform, fte: 1, basis: "new")[:position_id]
+    call(Operations::TeamPlanning::SetAssignment, @planner, plan_id:, scenario_id:, person_id: occupant.id,
+                                                            placements: [ { position_id:, allocation: 1 } ])
     [ plan_id, scenario_id ]
   end
 
