@@ -190,7 +190,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_raises(KeyError) { render_tab(statuses: [ statuses.first.merge(status: "stalled") ]) }
     end
 
-    should "offer an editor only Clear and Undo on a change about someone the plan no longer covers, and name no one" do
+    should "offer an editor Clear, Undo and a note on a change about someone the plan no longer covers, and name no one" do
       outside = { scenario_id: Q1, change_id: "o1", subject_id: BO, facet: "level", status: "outside", clearable: true, undoable: true }
       html = render_tab(statuses: [ outside ], scenario_id: Q1, can_edit: true)
       row = html.at_css("[data-planned-change='outside']")
@@ -203,7 +203,10 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_equal [ "Undo #{label}" ], row.css("[data-undo-change='level'] button").map { it["aria-label"] }
       assert_equal({ "scenario_id" => Q1, "event_id" => "o1", "tab" => "changes" },
                    row.css("form[action$='/change-undos'] input[type=hidden]").to_h { [ it["name"], it["value"] ] }.except("authenticity_token"))
-      assert_empty row.css("[data-change-note-editor], [data-settle-conflict]")
+      assert_empty row.css("[data-settle-conflict]")
+      assert_equal "Add a note", row.at_css("[data-change-note-editor] summary").text.squish, "a note acts on the plan's own change"
+      noted = render_tab(statuses: [ outside.merge(note: { value: "Agreed in March" }) ], scenario_id: Q1).at_css("[data-planned-change='outside']")
+      assert_equal "Agreed in March", noted.at_css("[data-change-note]").text.squish
       assert_empty render_tab(statuses: [ outside ], scenario_id: Q1).css("[data-clear-change], [data-undo-change]"), "a viewer gets no buttons"
       assert_empty render_tab(statuses: [ outside.merge(clearable: false) ], scenario_id: Q1, can_edit: true).css("[data-undo-change]")
       bringing_back = render_tab(statuses: [ outside.merge(undoable: false) ], scenario_id: Q1, can_edit: true)

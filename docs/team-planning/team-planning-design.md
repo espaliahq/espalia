@@ -226,8 +226,8 @@ plans projection keeps the list in `scope_unit_ids`.
   other changes in the plan. Attention lists each one under "A change about someone this
   plan no longer covers", with the change, so a planner can clear it or bring the person
   back. History, status and overrides keep naming the subject by id, unnamed. The changes
-  tab names the row "Someone this plan no longer covers" and offers Clear and Undo only:
-  a removing write stays allowed, while a pin or a settle about the subject is refused
+  tab names the row "Someone this plan no longer covers" and offers Clear, Undo and its
+  note: a removing write and a note stay allowed, while a pin or a settle about the subject is refused
   ([#435](https://github.com/espaliahq/espalia/issues/435)).
 - **The scope cut runs before the pay filter.** The cut runs first, in `Map#settled`, so
   people outside never reach `map.people`. The see-pay filter runs after it, per person, in
@@ -1370,8 +1370,8 @@ reads its end state off both with `read_from`.
   and counts as no Org Graph work: a rule, a position, a capacity, a budget line, a hire
   the plan adds, or a person's pay. It still shows, so an editor sees the change exists.
 - **Outside**: a scoped plan no longer covers the subject, in the scenario's map or the
-  baseline. The entry carries only the scenario, the change, the subject's id and the
-  facet: no name, no `since` and no sources.
+  baseline. The entry carries only the scenario, the change, the subject's id, the
+  facet and the plan's own note: no name, no `since` and no sources.
 
 A plan whose base is still to come holds every change against today, so nothing reads
 conflicting before the plan starts.

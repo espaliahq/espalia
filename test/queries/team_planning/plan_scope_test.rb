@@ -245,7 +245,7 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_equal [ false, [] ], reads["Operations::TeamPlanning::Status"].values_at("checked", "statuses"), "an archived plan is checked against nothing"
   end
 
-  should "read a change about someone the plan no longer covers as outside, with only its ids" do
+  should "read a change about someone the plan no longer covers as outside, with only its ids and the plan's own note" do
     plan_change_about_dee
     call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @ada.id, level: "6")
 
@@ -253,6 +253,9 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     dee = status[:statuses].find { it[:subject_id] == @dee.id && it[:facet] == "level" }
     assert_equal %i[scenario_id change_id subject_id facet status clearable undoable].sort, dee.keys.sort
     assert_equal [ @h1, "level", "outside", true, true ], dee.values_at(:scenario_id, :facet, :status, :clearable, :undoable)
+    call(Operations::TeamPlanning::NoteChange, plan_id: @plan_id, scenario_id: @h1, event_id: dee[:change_id], note: "Agreed in March")
+    noted = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)[:statuses].find { it[:change_id] == dee[:change_id] }
+    assert_equal [ "outside", { value: "Agreed in March" } ], noted.values_at(:status, :note)
     assert_not_includes status[:names], @dee.id
     assert_equal [ @dee.id, @dee.id, @ada.id ], status[:statuses].map { it[:subject_id] }.select { [ @dee.id, @ada.id ].include?(it) }, "in the order the changes land"
     assert_equal "Ada Quill", status[:names][@ada.id]

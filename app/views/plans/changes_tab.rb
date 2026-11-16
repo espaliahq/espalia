@@ -185,11 +185,9 @@ class Views::Plans::ChangesTab < Views::Base
           plain " · #{entry[:staying] ? STAYING : facet_name(entry[:facet])}"
         end
         planned_in(entry[:scenario_id]) if entry[:scenario_id] != scenario_id
-        unless no_longer_covered?(entry)
-          change_note(entry[:note])
-          note_form(entry) if notable?(entry)
-          settle(entry) if @can_edit && entry[:status].to_s == "conflicting"
-        end
+        change_note(entry[:note])
+        note_form(entry) if notable?(entry)
+        settle(entry) if @can_edit && entry[:status].to_s == "conflicting"
       end
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         status_badge(entry)

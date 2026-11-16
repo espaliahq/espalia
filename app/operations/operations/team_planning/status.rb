@@ -19,7 +19,7 @@ class Operations::TeamPlanning::Status < Operations::Base
               "never compared, so it is no Org Graph work still to do, and has no sources. On a plan scoped to some units, " \
               "'outside' marks a change about someone or some unit the plan no longer covers: the scope hides " \
               "the organisation's data about them, so it is never compared and carries only scenario_id, " \
-              "change_id, subject_id and facet, with no since, sources, note or name. Clear or undo it. Before the plan's base " \
+              "change_id, subject_id and facet, plus the plan's own note, with no since, sources or name. Clear, undo or note it. Before the plan's base " \
               "date nothing reads conflicting. A " \
               "conflict an update to today carried forward still reads 'conflicting', with since the day of the " \
               "update that first found it, while the scenario still resolves to the same change: a set, pin, " \
@@ -100,7 +100,8 @@ class Operations::TeamPlanning::Status < Operations::Base
 
   def status_row(entry, note, clearable)
     if entry.status == :outside
-      return entry.to_h.slice(:scenario_id, :change_id, :subject_id, :facet).merge(status: "outside", clearable:, undoable: clearable && yield)
+      return entry.to_h.slice(:scenario_id, :change_id, :subject_id, :facet).merge(status: "outside", clearable:, undoable: clearable && yield,
+                                                                                   **({ note: } if note))
     end
 
     entry.to_h.except(:staying).merge(status: entry.status.to_s, since: entry.since&.iso8601, clearable:,
