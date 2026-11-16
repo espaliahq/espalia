@@ -12,6 +12,14 @@
 # match equally well leave the position ambiguous, and none leaves it
 # unmatched. Both are unfunded, and nothing is picked silently.
 #
+# The {TeamPlanning::RuleKinds::BudgetStrictness} rule names the dimensions
+# that must match ([#384](https://github.com/espaliahq/espalia/issues/384)).
+# A dimension outside it no longer blocks a line, and a line whose stated
+# dimensions agree outranks one where they differ. Each draw lists where its
+# line differs from the position: a variance on a dimension the rule holds,
+# else a record of the trade. Its default holds every dimension, which is how
+# lines have always matched.
+#
 # A {TeamPlanning::Events::PositionFundingSet} wins over the derived line. A
 # draw on a line the scenario no longer holds funds nothing.
 #
@@ -27,6 +35,14 @@
 #   TeamPlanning::Funding.new(context:, plan:, scenario_id:).call.totals
 class TeamPlanning::Funding
   DRAW_ORDER = %w[filled backfill open].freeze
+  # Each {TeamPlanning::RuleKinds::BudgetStrictness::DIMENSIONS} entry: what a
+  # line states, and what it compares with on the position.
+  MATCHED = {
+    "role" => [ :role_id, ->(funded) { funded.position.role_id } ],
+    "level" => [ :level_id, ->(funded) { funded.position.level_id } ],
+    "cost_centre" => [ :cost_centre, ->(funded) { funded.cost_centre.cost_centre } ],
+    "location" => [ :location, ->(funded) { funded.location } ]
+  }.freeze
 
   # Why a position, or part of one, is unfunded.
   REASONS = {
@@ -38,7 +54,9 @@ class TeamPlanning::Funding
   # @!attribute budget_line_id [String]
   # @!attribute share [Rational] the part of the position it funds
   # @!attribute held [Boolean] false when the scenario no longer holds the line
-  Draw = Data.define(:budget_line_id, :share, :held)
+  # @!attribute differs_on [Array<String>] the dimensions the line states that the position doesn't share
+  # @!attribute variance [Array<String>] those of them the strictness rule holds
+  Draw = Data.define(:budget_line_id, :share, :held, :differs_on, :variance)
 
   # One position's funding.
   #
@@ -72,8 +90,9 @@ class TeamPlanning::Funding
 
   # @!attribute period [Range<Date>]
   # @!attribute map [TeamPlanning::Baseline::Map]
+  # @!attribute strictness [Hash] the {TeamPlanning::RuleKinds::BudgetStrictness} value it matched under
   # @!attribute positions [Array<Funded>] by position id
-  Report = Data.define(:period, :map, :positions) do
+  Report = Data.define(:period, :map, :strictness, :positions) do
     # @return [Count] every position
     def total = Count.new(positions: positions.size, fte: positions.sum(0r, &:fte))
 
@@ -115,7 +134,9 @@ class TeamPlanning::Funding
     @map = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).structure(aggregate)
     @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id)
     @lines = @map.budget_lines.index_by(&:id)
-    Report.new(period: @period, map: @map, positions: @map.positions.sort_by(&:id).map { fund(it) })
+    @strictness = @map.rule(TeamPlanning::RuleKinds::BudgetStrictness.rule_name)
+    @held = @strictness.fetch("match")
+    Report.new(period: @period, map: @map, strictness: @strictness, positions: @map.positions.sort_by(&:id).map { fund(it) })
   end
 
   private
@@ -128,29 +149,49 @@ class TeamPlanning::Funding
   end
 
   def funded_as_set(funded, set)
-    draws = set.map { Draw.new(budget_line_id: it[:budget_line_id], share: Rational(it[:share]), held: @lines.key?(it[:budget_line_id])) }
+    draws = set.map do
+      line = @lines[it[:budget_line_id]]
+      draw(line, line ? differs_on(line, funded) : [], budget_line_id: it[:budget_line_id], share: Rational(it[:share]))
+    end
     funded.with(source: "set", draws:, reason: ("line_gone" unless draws.all?(&:held)))
   end
 
   def derived(funded)
-    matching = @lines.values.select { matches?(it, funded) }
-    best = matching.group_by { specificity(it) }.max_by(&:first)&.last.to_a.sort_by(&:id)
+    matching = @lines.values.filter_map do |line|
+      next unless line.starts_on <= @period.end && line.ends_on >= funded.starts_on
+
+      differs = differs_on(line, funded)
+      [ line, differs ] if (differs & @held).empty?
+    end
+    best = matching.group_by { |line, differs| specificity(line, differs) }.max_by(&:first)&.last.to_a.sort_by { it.first.id }
     return funded.with(reason: "no_line") if best.empty?
-    return funded.with(matching_ids: best.map(&:id), reason: "ambiguous") if best.many?
+    return funded.with(matching_ids: best.map { it.first.id }, reason: "ambiguous") if best.many?
 
-    funded.with(draws: [ Draw.new(budget_line_id: best.first.id, share: 1r, held: true) ], matching_ids: best.map(&:id))
+    line, differs = best.first
+    funded.with(draws: [ draw(line, differs, budget_line_id: line.id, share: 1r) ], matching_ids: [ line.id ])
   end
 
-  def matches?(line, funded)
-    position = funded.position
-    (line.cost_centre.blank? || line.cost_centre == funded.cost_centre.cost_centre) &&
-      line.starts_on <= @period.end && line.ends_on >= funded.starts_on &&
-      (line.role_id.blank? || line.role_id == position.role_id) &&
-      (line.level_id.blank? || line.level_id == position.level_id) &&
-      (line.location.blank? || PayBand.location_key(line.location) == PayBand.location_key(funded.location))
+  def draw(line, differs_on, budget_line_id:, share:)
+    Draw.new(budget_line_id:, share:, held: !line.nil?, differs_on:, variance: differs_on & @held)
   end
 
-  def specificity(line) = [ line.cost_centre.present? ? 1 : 0, [ line.role_id, line.level_id, line.location ].count(&:present?) ]
+  # A line with no cost centre ranks below one that agrees on it; past that,
+  # the more dimensions agree the better, and the fewer differ.
+  def specificity(line, differs)
+    agrees = ->(dimension) { stated(line, dimension) && differs.exclude?(dimension) }
+    [ agrees.("cost_centre") ? 1 : 0, %w[role level location].count(&agrees), -differs.size ]
+  end
+
+  # @return [Array<String>] the dimensions the line states that the position doesn't share
+  def differs_on(line, funded)
+    MATCHED.filter_map do |dimension, (field, of_position)|
+      dimension if stated(line, dimension) && key(dimension, line.public_send(field)) != key(dimension, of_position.(funded))
+    end
+  end
+
+  def stated(line, dimension) = line.public_send(MATCHED.fetch(dimension).first).present?
+
+  def key(dimension, value) = dimension == "location" ? PayBand.location_key(value) : value
 
   def occupants = @occupants ||= @map.occupants
 

@@ -186,6 +186,130 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_not_empty report.totals.approved.missing
   end
 
+  def strictness(**value) = operation(Operations::TeamPlanning::SetRule, rule: "budget_strictness", value:)
+
+  should "hold each line under position control, and judge nothing above it" do
+    platform = euros(150_000, cost_centre: "Platform", head_count: 1)
+    open_position
+    open_position
+    report = budget
+
+    assert_equal "position_control", TeamPlanning::RuleKinds::BudgetStrictness.preset_of(report.strictness)
+    assert_equal TeamPlanning::Budget::Over.new(money: [ "EUR" ], heads: true, mismatched: []), of(report, platform).over
+    assert_nil report.cost_centres["Platform"].over
+    assert_nil report.totals.over
+  end
+
+  should "move only where over is judged, leaving the four numbers as they were" do
+    euros(150_000, cost_centre: "Platform", head_count: 1)
+    open_position
+    numbers = ->(totals) { totals.to_h.except(:over) }
+    before = budget
+
+    strictness(preset: "cost_centre")
+    after = budget
+
+    assert_equal before.lines.map { it.to_h.except(:over) }, after.lines.map { it.to_h.except(:over) }
+    assert_equal before.cost_centres.transform_values(&numbers), after.cost_centres.transform_values(&numbers)
+    assert_equal numbers.(before.totals), numbers.(after.totals)
+    assert_equal [ nil, false ], [ after.lines.sole.over, after.cost_centres["Platform"].over.heads ]
+  end
+
+  should "judge over per currency without converting, under a cost centre's or the organisation's limit" do
+    euro = euros(150_000, cost_centre: "Platform")
+    dollar = line(amount: 1_000_000, currency: "USD", period: "year", cost_centre: "Platform")
+    as_tenant { ExchangeRate.create!(from_currency: "USD", to_currency: "EUR", rate: 1, applies_from: Date.new(2025, 1, 1)) }
+    2.times { operation(Operations::TeamPlanning::SetPositionFunding, position_id: open_position, draws: [ { budget_line_id: euro } ]) }
+    strictness(preset: "cost_centre")
+    report = budget
+
+    assert_equal TeamPlanning::Budget::Over.new(money: [ "EUR" ], heads: nil, mismatched: []), report.cost_centres["Platform"].over,
+                 "the dollars left over don't cover the euros spent"
+    assert_predicate report.cost_centres["Platform"].remaining.converted, :positive?, "converted, it would read as under"
+    assert_equal [ nil, nil, nil ], [ of(report, euro).over, of(report, dollar).over, report.totals.over ]
+
+    strictness(preset: "envelope")
+    report = budget
+
+    assert_equal TeamPlanning::Budget::Over.new(money: [ "EUR" ], heads: nil, mismatched: []), report.totals.over, "an envelope holds money, not heads"
+    assert_nil report.cost_centres["Platform"].over
+  end
+
+  should "spend a cost centre's unfunded money against its budget, and hold no money where no line approves any" do
+    platform = euros(150_000, cost_centre: "Platform")
+    line(head_count: 1, cost_centre: "Elsewhere")
+    open_position
+    open_position(cost_centre: "Elsewhere")
+    strictness(preset: "cost_centre")
+    report = budget
+
+    assert_equal 50_000r, of(report, platform).remaining
+    assert_equal [ "EUR" ], report.cost_centres["Platform"].over.money, "Brook holds no position, and is paid from Platform all the same"
+    assert_equal TeamPlanning::Budget::Over.new(money: nil, heads: false, mismatched: []), report.cost_centres["Elsewhere"].over
+  end
+
+  should "count no heads on a line outside the scenario's period, while its draws still spend" do
+    line(head_count: 1, cost_centre: "Platform")
+    later = line(head_count: 100, cost_centre: "Platform", starts_on: "2027-01-01", ends_on: "2027-12-31")
+    open_position
+    operation(Operations::TeamPlanning::SetPositionFunding, position_id: open_position, draws: [ { budget_line_id: later } ])
+    strictness(preset: "cost_centre")
+    report = budget
+
+    assert_equal [ 1r, 1r ], [ report.cost_centres["Platform"].head_count, report.totals.head_count ]
+    assert report.cost_centres["Platform"].over.heads, "next year's hundred heads don't cover this year's two"
+
+    strictness(preset: "position_control")
+
+    assert_equal [ -1r, true ], [ of(budget, later).remaining_head_count, of(budget, later).over.heads ]
+  end
+
+  should "spend a forecast's headcount against a cost centre's and the organisation's head count" do
+    with_kinds(Hiring) do
+      line(head_count: 1, cost_centre: "CC-F")
+      operation(Operations::TeamPlanning::SetRule, rule: "test_budget_hiring", value: { per_unit: "1000" })
+      strictness(preset: "cost_centre")
+
+      assert budget.cost_centres["CC-F"].over.heads, "a hire forecast in each of the two units takes two heads"
+
+      strictness(match: [], limit: "heads", scope: "organisation")
+
+      assert budget.totals.over.heads
+    end
+  end
+
+  should "count a blank cost centre's unfunded money as no cost centre's" do
+    before = budget.cost_centres
+    as_tenant do
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@brook.id, "", **ESPALIA)
+    end
+    after = budget.cost_centres
+
+    assert_equal [ "CC-1", "Platform" ], before.keys
+    assert_equal [ "CC-1", nil ], after.keys, "a blank cost centre is none, not a cost centre of its own"
+    assert_equal before["Platform"].unfunded.native, after[nil].unfunded.native
+  end
+
+  should "hold a cost centre only on the lines that state each limit" do
+    money = euros(150_000, cost_centre: "Data")
+    heads = line(head_count: 2, cost_centre: "Data")
+    fund = ->(budget_line_id) { operation(Operations::TeamPlanning::SetPositionFunding, position_id: open_position(cost_centre: "Data"), draws: [ { budget_line_id: } ]) }
+    fund.(money)
+    2.times { fund.(heads) }
+    strictness(preset: "cost_centre")
+
+    assert_equal TeamPlanning::Budget::Over.new(money: [], heads: false, mismatched: []), budget.cost_centres["Data"].over,
+                 "the head count line's seats spend no approved money, and the money line's seat takes no counted head"
+  end
+
+  should "flag a line drawn on in another currency, never judging it on that money" do
+    dollars = line(amount: 50_000, currency: "USD", period: "year", cost_centre: "Platform")
+    open_position
+
+    assert_equal TeamPlanning::Budget::Over.new(money: [], heads: nil, mismatched: [ "EUR" ]), of(budget, dollars).over,
+                 "100,000 euros against 50,000 dollars is neither over nor under"
+  end
+
   should "count a position no band prices in head count, under unpriced with no money" do
     platform = line(head_count: 2, cost_centre: "Platform")
     staff = open_position(level: @e6)
