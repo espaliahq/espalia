@@ -89,12 +89,12 @@ class Components::Kit::SidePanel < Components::Base
     aside(id: @id, class: [ PANEL, NARROW.fetch(@narrow), ("hidden" unless @open) ],
           aria: { labelledby: "#{@id}-title" },
           data: { activity_pane_target: "pane", pane_state: state }) do
-      div(class: [ "flex items-center justify-between gap-2", ("p-4 pb-0" if @narrow == :overlay) ]) do
+      div(class: [ "flex items-center justify-between gap-2", ("px-4 pt-4" if @narrow == :overlay) ]) do
         h2(id: "#{@id}-title", class: "text-base font-semibold text-default") { @title }
         render Components::Kit::Button.new(variant: :ghost, icon: true, aria_label: "Close #{@title.downcase}",
                                            data: { action: "activity-pane#close" }) { icon(:x, class: "size-5") }
       end
-      div(class: [ "mt-3 space-y-6", ("p-4 pt-0" if @narrow == :overlay) ]) { @body_block&.call }
+      div(class: [ "mt-3 space-y-6", ("px-4 pb-4" if @narrow == :overlay) ]) { @body_block&.call }
     end
   end
 end
