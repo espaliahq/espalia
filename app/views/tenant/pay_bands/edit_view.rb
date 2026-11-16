@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Changes one band's currency, period and figures. Its level and location
-# are its key, so changing either is removing the band and adding another.
+# Changes one band's currency, period and figures. What it matches and its
+# place in the list change through the list and the tools.
 class Views::Tenant::PayBands::EditView < Views::Base
   include Views::Tenant::OrgGraph::Settings::FormHelpers
   include Views::Tenant::PayBands::BandText
@@ -23,11 +23,11 @@ class Views::Tenant::PayBands::EditView < Views::Base
       active_section: :pay_bands, user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       render Components::Kit::SectionHeading.new("Change a pay band", tag: :h1, subtitle: changed_text(@band))
-      render Components::Kit::Card.new(title: band_name, heading_level: :h2, id: "pay-band-edit") do |card|
+      render Components::Kit::Card.new(title: band_name(@band), heading_level: :h2, id: "pay-band-edit") do |card|
         card.body do
           settings_form(tenant_pay_band_path(@band[:pay_band_id]), method: :patch, class: "space-y-4") do
             p(class: "text-sm text-muted") do
-              "To change the level or country, remove this band and add another."
+              "To change who or where it covers, remove this band and add another."
             end
             figure_fields(@band)
             div(class: "flex justify-end gap-2") do
@@ -39,8 +39,4 @@ class Views::Tenant::PayBands::EditView < Views::Base
       end
     end
   end
-
-  private
-
-  def band_name = "#{@band[:level]}, #{@band[:location] || 'any location'}"
 end

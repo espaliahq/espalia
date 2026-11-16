@@ -19,7 +19,9 @@ class Operations::TeamPlanning::Timeline < Operations::Base
               "give the columns a place is held (from and to are column indexes); a unit_id of null is " \
               "Unassigned, listed in unassigned_lane_ids. A person's bar carries shares, their share of their time in " \
               "that place in each of its columns, counting every place they hold as the map does. moves name the units a person left and joined after a " \
-              "column (crossing is \"out\" when they leave the units a scoped plan covers and \"in\" when they join them), and departures the column they leave in, with its backfill. positions are keyed by id, each as " \
+              "column (crossing is \"out\" when they leave the units a scoped plan covers and \"in\" when they join them), and departures the column they leave in, with its backfill. " \
+              "Each column's movable lists the places, positions and departures that step itself changes, as subject_id and facet: " \
+              "what team_planning_move_change can move a step earlier or later. positions are keyed by id, each as " \
               "it stands in the last column it appears in. `names` maps every person id " \
               "to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, " \
               "unless the caller is a member."
@@ -43,11 +45,16 @@ class Operations::TeamPlanning::Timeline < Operations::Base
   private
 
   def columns(plan, timeline)
-    rows = TeamPlanningScenario.where(plan_id: plan.id, id: timeline.columns.map(&:scenario_id)).index_by(&:id)
+    ids = timeline.columns.map(&:scenario_id)
+    rows = TeamPlanningScenario.where(plan_id: plan.id, id: ids).index_by(&:id)
+    movable = TeamPlanningOverride.where(scenario_id: ids, facet: ::TeamPlanning::PlanAggregate::MOVABLE_FACETS)
+                                  .order(:subject_id, :facet).pluck(:scenario_id, :subject_id, :facet)
+                                  .group_by(&:first)
     timeline.columns.map do |column|
       row = rows.fetch(column.scenario_id)
       { scenario_id: column.scenario_id, name: row.name&.reveal, starts_on: row.starts_on.iso8601, ends_on: row.ends_on&.iso8601,
-        alternative_ids: column.alternative_ids }
+        alternative_ids: column.alternative_ids,
+        movable: movable.fetch(column.scenario_id, []).map { |_, subject_id, facet| { subject_id:, facet: } } }
     end
   end
 
