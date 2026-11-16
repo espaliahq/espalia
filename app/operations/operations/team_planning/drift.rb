@@ -18,7 +18,7 @@ class Operations::TeamPlanning::Drift < Operations::Base
               "(\"espalia\" for one Espalia supplies, or an HRIS such as \"hibob\"). " \
               "A person's placements are one facet, so a move in one placement meets the plan's whole list. " \
               "People are named by id, and `names` maps every person and unit id the changes name to a name; a forgotten " \
-              "person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the caller is a member."
+              "person reads as \"#{Person::FORMER_MEMBER}\". #{UNCHECKED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
@@ -45,9 +45,12 @@ class Operations::TeamPlanning::Drift < Operations::Base
   end
   private_class_method :names_for, :serialize
 
-  # @return [Hash] `{ plan_id, from, to, changes, names }`
+  # @return [Hash] `{ plan_id, checked, from, to, changes, names }`; an archived plan's has
+  #   `{ plan_id, checked, archived_on, note, changes, names }`
   def perform
     plan = plan!
-    { plan_id: plan.id, **self.class.payload(::TeamPlanning::Drift.new(context:, plan:).call) }
+    return { plan_id: plan.id, **checked(plan), changes: [], names: {} } if plan.archived?
+
+    { plan_id: plan.id, **checked(plan), **self.class.payload(::TeamPlanning::Drift.new(context:, plan:).call) }
   end
 end

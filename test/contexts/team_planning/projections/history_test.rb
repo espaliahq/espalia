@@ -85,6 +85,13 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal [ [ "set", false ], [ "undo", false ], [ "redo", false ] ], history(@q1).map { [ it.action, it.undone? ] }
   end
 
+  should "keep each archive and restore in the baseline's history, with who did it" do
+    @handler.archive_plan(@plan_id)
+    @handler.restore_plan(@plan_id)
+
+    assert_equal [ [ "archive", @person.id ], [ "restore", @person.id ] ], history(@plan_id).pluck(:action, :actor_id)
+  end
+
   should "drop a removed scenario's history, and every entry of a deleted plan" do
     set_cap(@q1, 8)
     set_cap(@lean, 5)

@@ -53,7 +53,7 @@ class Operations::TeamPlanning::PlanReadsTest < ActiveSupport::TestCase
 
   should "give a member the plan, with their own role" do
     assert_equal({ plan_id: @plan_id, name: "Next year", base_on: "2026-03-02", role: "viewer",
-                   scope: { whole_organisation: true, units: [] }, frozen: false },
+                   scope: { whole_organisation: true, units: [] }, frozen: false, archived: nil },
                  read(Operations::TeamPlanning::Plan))
     assert_equal "editor", read(Operations::TeamPlanning::Plan, as: @editor)[:role]
   end

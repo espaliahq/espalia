@@ -321,6 +321,82 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "an archived plan" do
+    setup do
+      @editor = create(:person, tenant: @tenant)
+      @owner = context_for(@editor, team_planner: true)
+      handler(@owner).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14")
+      @colleague = create(:person, tenant: @tenant)
+      @colleague_context = context_for(@colleague)
+      handler(@owner).add_member(@plan_id, @colleague.id, role: "viewer")
+      handler(@owner).archive_plan(@plan_id)
+    end
+
+    should "be archived and restored by an editor, and by nobody else" do
+      event = event_store.read.stream(EventStreamNaming.plan_stream(@plan_id)).to_a.last
+      assert_kind_of TeamPlanning::Events::PlanArchived, event
+      assert_equal({ plan_id: @plan_id, archived_by_id: @editor.id }, event.data)
+
+      assert_equal "No such plan", assert_raises(TeamPlanning::Error) { handler(@colleague_context).restore_plan(@plan_id) }.message
+      assert_not handler(@owner).restore_plan(@plan_id).archived?
+      assert_equal "No such plan", assert_raises(TeamPlanning::Error) { handler(@colleague_context).archive_plan(@plan_id) }.message
+    end
+
+    should "refuse an editor's write with the archived message" do
+      error = assert_raises(TeamPlanning::Error) { handler(@owner).rename_plan(@plan_id, "Later") }
+      assert_equal TeamPlanning::PlanAggregate::ARCHIVED, error.message
+    end
+
+    should "refuse a rebase without reading its drift" do
+      read = false
+      error = assert_raises(TeamPlanning::Error) do
+        handler(@owner).rebase_plan(@plan_id, base_on: "2026-11-20", expected_base_on: "2026-11-14") { read = true and [] }
+      end
+      assert_equal TeamPlanning::PlanAggregate::ARCHIVED, error.message
+      assert_not read
+    end
+
+    should "let a viewer leave" do
+      assert_not handler(@colleague_context).remove_member(@plan_id, @colleague.id).member?(@colleague.id)
+    end
+
+    should "keep its last reachable editor and pay holder" do
+      error = assert_raises(TeamPlanning::Error) { handler(@owner).remove_member(@plan_id, @editor.id) }
+      assert_equal TeamPlanning::PlanAggregate::EDITOR_NEEDED[:archived], error.message
+    end
+
+    should "keep a viewer who is its last pay holder until an editor restores it" do
+      handler(@owner).restore_plan(@plan_id)
+      handler(@owner).grant_see_pay(@plan_id, @colleague.id)
+      handler(@owner).withdraw_see_pay(@plan_id, @editor.id)
+      handler(@owner).archive_plan(@plan_id)
+
+      error = assert_raises(TeamPlanning::Error) { handler(@colleague_context).remove_member(@plan_id, @colleague.id) }
+      assert_equal TeamPlanning::PlanAggregate::PAY_HOLDER_NEEDED[:archived], error.message
+      assert_not handler(@owner).restore_plan(@plan_id).archived?
+    end
+
+    should "freeze once its editor leaves the organisation, and let a tenant admin delete it" do
+      @editor.update!(status: "inactive")
+
+      assert PlanPolicy.frozen?(ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find(@plan_id) })
+      assert handler(@admin).delete_frozen_plan(@plan_id, reason: "Its only editor left").deleted?
+    end
+
+    should "let a tenant admin restore pay to its reachable editors while it stays archived" do
+      second = create(:person, tenant: @tenant)
+      context_for(second)
+      handler(@owner).restore_plan(@plan_id)
+      handler(@owner).add_member(@plan_id, second.id, role: "editor")
+      handler(@owner).archive_plan(@plan_id)
+      @editor.update!(status: "inactive")
+
+      plan = handler(@admin).restore_see_pay(@plan_id)
+      assert plan.sees_pay?(second.id)
+      assert plan.archived?
+    end
+  end
+
   context "a plan's creator and everyone else" do
     setup { handler(@admin).create_plan(@plan_id, name: "Next year", base_on: "2026-11-14") }
 

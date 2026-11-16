@@ -35,7 +35,7 @@ class Operations::TeamPlanning::PlanMembersTest < ActiveSupport::TestCase
     add(@colleague.person_id, "viewer")
     call(Operations::TeamPlanning::CreatePlan, as: @admin, name: "Admin's own")
 
-    assert_equal [ { plan_id: @plan_id, name: "Next year", base_on: Date.current.iso8601, role: "viewer" } ],
+    assert_equal [ { plan_id: @plan_id, name: "Next year", base_on: Date.current.iso8601, role: "viewer", archived_on: nil } ],
                  call(Operations::TeamPlanning::Plans, as: @colleague)[:plans]
     assert_equal [ "Admin's own" ], call(Operations::TeamPlanning::Plans, as: @admin)[:plans].pluck(:name)
   end

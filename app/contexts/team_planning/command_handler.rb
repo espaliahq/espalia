@@ -96,6 +96,28 @@ class TeamPlanning::CommandHandler
     end
   end
 
+  # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if it is already archived
+  # @see TeamPlanning::PlanAggregate#archive
+  def archive_plan(plan_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.archive(archived_by_id: actor_id!)
+    end
+  end
+
+  # @param plan_id [String]
+  # @return [TeamPlanning::PlanAggregate] the plan as stored
+  # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if it isn't archived
+  # @see TeamPlanning::PlanAggregate#restore
+  def restore_plan(plan_id)
+    @repository.with_plan(plan_id) do |plan|
+      authorize_plan!(:update?, plan)
+      plan.restore(restored_by_id: actor_id!)
+    end
+  end
+
   # Makes someone a member of the plan, or changes their role.
   #
   # @param plan_id [String]
@@ -273,7 +295,7 @@ class TeamPlanning::CommandHandler
 
   # A block, when given, finds the conflicts under the plan's lock, so a change
   # made since the preview can't slip past. It isn't called once the base has
-  # moved, so the refusal names the move.
+  # moved, so the refusal names the move, nor on an archived plan, which reads no drift.
   #
   # @param plan_id [String]
   # @param conflicts [Array<Hash>] used when no block is given
@@ -285,7 +307,7 @@ class TeamPlanning::CommandHandler
   def rebase_plan(plan_id, base_on:, expected_base_on:, conflicts: [])
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      conflicts = yield(plan) if block_given? && plan.base_on.to_s == expected_base_on.to_s
+      conflicts = yield(plan) if block_given? && !plan.archived? && plan.base_on.to_s == expected_base_on.to_s
       plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!)
     end
   end
@@ -586,7 +608,7 @@ class TeamPlanning::CommandHandler
     return unless plan.role_of(person_id) == "editor"
     return if PlanPolicy.reachable_ids(plan.editor_ids - [ person_id ]).any?
 
-    raise TeamPlanning::Error, "A plan needs an editor: make someone else an editor first"
+    raise TeamPlanning::Error, TeamPlanning::PlanAggregate::EDITOR_NEEDED.fetch(plan.archived? ? :archived : :open)
   end
 
   # The stream counts a holder who has since left; this counts only those who
@@ -595,7 +617,7 @@ class TeamPlanning::CommandHandler
     return unless plan.sees_pay?(person_id)
     return if PlanPolicy.reachable_ids(plan.pay_holder_ids - [ person_id ]).any?
 
-    raise TeamPlanning::Error, "A plan needs someone who can see pay: give the right to someone else first"
+    raise TeamPlanning::Error, TeamPlanning::PlanAggregate::PAY_HOLDER_NEEDED.fetch(plan.archived? ? :archived : :open)
   end
 
   # Pay is changed, cleared, noted, undone and redone only by a member who

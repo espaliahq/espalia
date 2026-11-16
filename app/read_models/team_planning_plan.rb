@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# A plan that has not been deleted, with its name, base date and creator.
+# A plan that has not been deleted, with its name, base date and creator,
+# and the day it was archived and by whom while it stays archived.
 # The name is sealed under the plan's key: show it with
 # {Components::Shared::ShreddableText}, and never order or match by it.
 #
@@ -17,6 +18,12 @@ class TeamPlanningPlan < ApplicationRecord
   belongs_to :tenant
   has_many :members, class_name: "TeamPlanningPlanMember", foreign_key: :plan_id, inverse_of: :plan,
                      dependent: nil
+
+  scope :live, -> { where(archived_on: nil) }
+  scope :archived, -> { where.not(archived_on: nil) }
+
+  # @return [Boolean]
+  def archived? = !archived_on.nil?
 
   # @param person_id [String, nil]
   # @return [String, nil] "editor", "viewer", or nil for a non-member

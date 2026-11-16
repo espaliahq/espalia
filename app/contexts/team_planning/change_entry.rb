@@ -14,7 +14,8 @@
 #
 # An update to today changes no facet, but the history keeps it as a
 # baseline entry, `rebase`, with the old and new base and the keys of the
-# conflicts it carried forward. A set or pin that settled one of those
+# conflicts it carried forward. Archiving and restoring the plan are
+# baseline entries too, `archive` and `restore`. A set or pin that settled one of those
 # conflicts holds {#settles}: the conflict's since and the choice made.
 TeamPlanning::ChangeEntry = Data.define(
   :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
@@ -53,6 +54,10 @@ TeamPlanning::ChangeEntry = Data.define(
     when TeamPlanning::Events::ChangeMoved
       { action: "move", **data.slice(:subject_id, :facet), scenario_id: data[:to_scenario_id], actor_id: data[:moved_by_id],
         end_state: { "from_scenario_id" => data[:scenario_id], "direction" => data[:direction] } }
+    when TeamPlanning::Events::PlanArchived
+      { action: "archive", actor_id: data[:archived_by_id] }
+    when TeamPlanning::Events::PlanRestored
+      { action: "restore", actor_id: data[:restored_by_id] }
     when TeamPlanning::Events::ChangeRedone
       { action: "redo", **data.slice(:subject_id, :facet), reverses_event_id: data[:redone_event_id], actor_id: data[:redone_by_id] }
     end

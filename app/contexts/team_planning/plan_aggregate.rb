@@ -5,7 +5,8 @@
 # One RES stream per plan: tenant-{tenant_id}/Plan-{plan_id}. A plan stands on
 # the Org Graph as of its base date, read as known at the end of the day
 # before (decision 3 in docs/team-planning/team-planning-plan.md). Once
-# deleted, it takes no more changes.
+# deleted, it takes no more changes. Once archived, it takes none until it is
+# restored, except its deletion and its members leaving ({#ensure_open!}).
 #
 # Its members are editors or viewers, and its creator is its first editor. A
 # plan always keeps an editor: the last one can neither leave nor become a
@@ -45,6 +46,20 @@ class TeamPlanning::PlanAggregate
   # @param text [String, nil]
   # @return [String, nil] the description as stored, nil for a blank
   def self.normalise_description(text) = text.to_s.gsub("\r\n", "\n").strip.presence
+
+  # What every write to an archived plan is refused with.
+  ARCHIVED = "This plan is archived: restore it to change it"
+  # An archived plan can't make anyone an editor or give anyone pay, so its
+  # refusals say how to get there first.
+  EDITOR_NEEDED = {
+    open: "A plan needs an editor: make someone else an editor first",
+    archived: "A plan needs an editor, and an archived plan can't make anyone else one: restore it first"
+  }.freeze
+  PAY_HOLDER_NEEDED = {
+    open: "A plan needs someone who can see pay: give the right to someone else first",
+    archived: "A plan needs someone who can see pay, and an archived plan can't give the right to " \
+              "anyone else: ask an editor to restore it first"
+  }.freeze
 
   ROLES = %w[editor viewer].freeze
   RELATIONS = %w[then instead on].freeze
@@ -133,17 +148,40 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
-  # Deletes the plan.
+  # Deletes the plan, archived or not.
   #
   # @param deleted_by_id [String]
   # @param reason [String, nil] why, when a tenant admin deletes a frozen plan
   # @raise [TeamPlanning::Error] if the plan is gone
   def delete(deleted_by_id:, reason: nil)
-    ensure_open!
+    ensure_exists!
 
     apply(TeamPlanning::Events::PlanDeleted.new(data: {
       plan_id: @plan_id, deleted_by_id: deleted_by_id, reason: reason.to_s.squish.presence
     }.compact))
+  end
+
+  # Puts the plan aside: it keeps everything and takes no change until
+  # {#restore}.
+  #
+  # @param archived_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone or already archived
+  def archive(archived_by_id:)
+    ensure_exists!
+    raise TeamPlanning::Error, "This plan is already archived" if archived?
+
+    apply(TeamPlanning::Events::PlanArchived.new(data: { plan_id: @plan_id, archived_by_id: }))
+  end
+
+  # Brings an archived plan back as it was archived.
+  #
+  # @param restored_by_id [String]
+  # @raise [TeamPlanning::Error] if the plan is gone or isn't archived
+  def restore(restored_by_id:)
+    ensure_exists!
+    raise TeamPlanning::Error, "This plan isn't archived" unless archived?
+
+    apply(TeamPlanning::Events::PlanRestored.new(data: { plan_id: @plan_id, restored_by_id: }))
   end
 
   # Moves the plan's base to a later day. Every scenario re-resolves over the
@@ -214,7 +252,9 @@ class TeamPlanning::PlanAggregate
     }))
   end
 
-  # Takes someone off the plan, or lets them leave it.
+  # Takes someone off the plan, or lets them leave it. An archived plan lets
+  # a member leave, and takes off one who has departed, but an editor can't
+  # take anyone else off it.
   #
   # @param person_id [String]
   # @param removed_by_id [String]
@@ -223,7 +263,7 @@ class TeamPlanning::PlanAggregate
   # @raise [TeamPlanning::Error] if the plan is gone, they aren't a member, or
   #   they are its last editor or, unless departed, its last pay holder
   def remove_member(person_id, removed_by_id:, departed: false)
-    ensure_open!
+    person_id == removed_by_id || departed ? ensure_exists! : ensure_open!
     raise TeamPlanning::Error, "They aren't a member of this plan" unless member?(person_id)
 
     ensure_editor_remains!(person_id)
@@ -238,10 +278,10 @@ class TeamPlanning::PlanAggregate
   #
   # @param person_id [String]
   # @param granted_by_id [String]
-  # @param recovery [Boolean] a tenant admin restoring a locked-out plan
+  # @param recovery [Boolean] a tenant admin restoring a locked-out plan, which an archived plan allows too
   # @raise [TeamPlanning::Error] if the plan is gone or they aren't a member
   def grant_see_pay(person_id, granted_by_id:, recovery: false)
-    ensure_open!
+    recovery ? ensure_exists! : ensure_open!
     raise TeamPlanning::Error, "They aren't a member of this plan" unless member?(person_id)
     return if sees_pay?(person_id)
 
@@ -870,6 +910,9 @@ class TeamPlanning::PlanAggregate
   # @return [Boolean]
   def deleted? = @deleted == true
 
+  # @return [Boolean]
+  def archived? = @archived == true
+
   on TeamPlanning::Events::PlanCreated do |event|
     @plan_id = event.data[:plan_id]
     @base_on = Date.iso8601(event.data[:base_on])
@@ -919,6 +962,14 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::PlanDeleted do |_event|
     @deleted = true
+  end
+
+  on TeamPlanning::Events::PlanArchived do |_event|
+    @archived = true
+  end
+
+  on TeamPlanning::Events::PlanRestored do |_event|
+    @archived = false
   end
 
   on TeamPlanning::Events::ScenarioForked do |event|
@@ -1329,16 +1380,23 @@ class TeamPlanning::PlanAggregate
   def ensure_editor_remains!(person_id)
     return unless editor_ids == [ person_id ]
 
-    raise TeamPlanning::Error, "A plan needs an editor: make someone else an editor first"
+    raise TeamPlanning::Error, EDITOR_NEEDED.fetch(archived? ? :archived : :open)
   end
 
   def ensure_pay_holder_remains!(person_id)
     return unless pay_holder_ids == [ person_id ]
 
-    raise TeamPlanning::Error, "A plan needs someone who can see pay: give the right to someone else first"
+    raise TeamPlanning::Error, PAY_HOLDER_NEEDED.fetch(archived? ? :archived : :open)
   end
 
+  # Every command but {#delete}, {#archive}, {#restore}, leaving and a see-pay
+  # recovery passes here, so an archived plan refuses them all in one place.
   def ensure_open!
+    ensure_exists!
+    raise TeamPlanning::Error, ARCHIVED if archived?
+  end
+
+  def ensure_exists!
     raise TeamPlanning::Error, "No such plan" unless exists?
     raise TeamPlanning::Error, "This plan has been deleted" if deleted?
   end
