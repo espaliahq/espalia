@@ -64,6 +64,7 @@ class Components::Kit::SidePanelTest < ActiveSupport::TestCase
 
       host = doc.at_css("[data-controller='activity-pane']")
       assert_equal "true", host["data-activity-pane-fit-viewport-value"]
+      assert_equal "keydown.esc@window->activity-pane#escape", host["data-action"]
       assert host.at_css("page-header button[data-activity-pane-target='toggle'][aria-controls='activity']")
       aside = host.at_css("page-header + div aside#activity")
       assert_equal "Activity", aside["aria-label"]

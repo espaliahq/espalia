@@ -6,8 +6,8 @@
 # render the panel open or closed, so it doesn't flash.
 #
 # On lg+ the panel sits beside the main column. Below lg it overlays the page
-# (`narrow: :overlay`: a tap outside closes it, and Back does too, as for a
-# screen of its own) or stacks under the main column (`narrow: :stack`).
+# (`narrow: :overlay`: a tap outside or Escape closes it, and Back does too,
+# as for a screen of its own) or stacks under the main column (`narrow: :stack`).
 #
 # @example
 #   render Components::Kit::SidePanel.new(id: "plan-side-panel", title: "About this plan",
@@ -131,7 +131,8 @@ class Components::Kit::SidePanel < Components::Base
       activity_pane_url_key_value: @url_key,
       activity_pane_default_state_value: state,
       activity_pane_dismiss_outside_value: @narrow[:dismiss_outside].to_s,
-      activity_pane_fit_viewport_value: (@fit_viewport.to_s if @fit_viewport) }.compact
+      activity_pane_fit_viewport_value: (@fit_viewport.to_s if @fit_viewport),
+      action: "keydown.esc@window->activity-pane#escape" }.compact
   end
 
   def row(**)
@@ -142,7 +143,7 @@ class Components::Kit::SidePanel < Components::Base
   end
 
   def panel
-    aside(id: @id, class: [ PANEL, @narrow[:panel], (STICKY if @sticky), ("hidden" unless @open) ],
+    aside(id: @id, class: [ PANEL, @narrow[:panel], (STICKY if @sticky), ("hidden" unless @open) ], tabindex: "-1",
           aria: @heading ? { labelledby: "#{@id}-title" } : { label: @title },
           data: { activity_pane_target: "pane", pane_state: state }) do
       if @heading

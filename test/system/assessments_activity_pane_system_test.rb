@@ -5,6 +5,7 @@ require "application_system_test_case"
 class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
+  TOGGLE = "button[aria-controls='assessment-activity-pane']"
 
   setup do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
@@ -420,6 +421,42 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
       assert_current_path assessment_path(@assignment)
       assert_back_on_opening_entry
+    end
+  end
+
+  context "the overlay and the keyboard" do
+    setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
+
+    should "take focus in when it opens, and close on Escape with focus back on its toggle" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      page.execute_script("document.querySelector(arguments[0]).click()", TOGGLE)
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_equal "assessment-activity-pane", page.evaluate_script("document.activeElement.id")
+
+      press_escape
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert page.evaluate_script("document.activeElement.matches(arguments[0])", TOGGLE), "focus returns to the toggle"
+    end
+
+    should "leave Escape to a modal open over it" do
+      open_loaded_activity_pane
+      page.execute_script(<<~JS)
+        const overlay = document.createElement("div")
+        overlay.dataset.modalTarget = "overlay"
+        document.body.append(overlay)
+      JS
+
+      press_escape
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+    end
+  end
+
+  context "the activity pane beside the matrix and Escape" do
+    should "stay open on Escape" do
+      open_loaded_activity_pane
+      press_escape
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
     end
   end
 

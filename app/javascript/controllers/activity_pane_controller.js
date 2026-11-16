@@ -106,6 +106,13 @@ export default class extends BaseController {
     this.#commit("closed")
   }
 
+  // Bound to Escape on the window. Only the overlay answers it, and it gives
+  // way to a modal or menu open on top, which Escape closes first.
+  escape() {
+    if (!this.#overlaid() || this.#visualState() !== "open" || this.#somethingElseIsOpen()) return
+    this.#commit("closed")
+  }
+
   // A toggle a frame re-renders arrives with the server's aria-expanded.
   toggleTargetConnected(toggle) {
     toggle.setAttribute("aria-expanded", this.#visualState() === "open" ? "true" : "false")
@@ -146,11 +153,18 @@ export default class extends BaseController {
   // Animates to `state`, persists to cookie, and records it in the URL — the
   // user-driven path. Initial connect and popstate bypass this.
   #commit(state) {
+    const overlaid = this.#overlaid()
+    const focusWasInside = this.paneTarget.contains(document.activeElement)
     this.#animate(state)
     this.#applyMetadata(state)
     this.#writeCookie(state)
-    this.#recordInHistory(state, this.#overlaid())
-    if (state === "open") this.#revealStackedPane()
+    this.#recordInHistory(state, overlaid)
+    if (state === "open") {
+      this.#revealStackedPane()
+      if (overlaid) this.paneTarget.focus({ preventScroll: true })
+    } else if (overlaid || focusWasInside) {
+      this.#focusToggle()
+    }
   }
 
   // Below lg the overlay covers the page like a screen of its own, so opening
@@ -172,6 +186,18 @@ export default class extends BaseController {
     return this.dismissOutsideValue && window.innerWidth < MOBILE_BREAKPOINT
   }
 
+  // The rule the framework explorer's panes follow for Escape.
+  #somethingElseIsOpen() {
+    return Boolean(
+      document.querySelector("[data-modal-target='overlay']:not(.hidden)") ||
+      document.querySelector("[role='menu']:not([hidden])")
+    )
+  }
+
+  #focusToggle() {
+    const toggle = this.toggleTargets.find((candidate) => candidate.offsetParent !== null)
+    toggle?.focus({ preventScroll: true })
+  }
 
   // A pane that stacks under the page opens below the fold on a phone, where
   // the tap that opened it would otherwise seem to do nothing.
@@ -189,6 +215,7 @@ export default class extends BaseController {
     this.#animate(state)
     this.#applyMetadata(state)
     this.#writeCookie(state)
+    if (state === "closed") this.#focusToggle()
   }
 
   #animate(state) {
