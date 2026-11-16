@@ -31,6 +31,10 @@ class TeamPlanning::RuleKind
   # @raise [TeamPlanning::Error] naming what is wrong, never the value
   def self.check(value) = value
 
+  # @param value [Hash] as stored, perhaps in a shape the kind has since replaced
+  # @return [Hash] the value in the kind's current shape
+  def self.read(value) = value
+
   # A shreddable value is stored encrypted under the plan's key, so it can be
   # shredded. The shredding comes with Team Planning 2.2
   # (https://github.com/espaliahq/espalia/issues/213); until then

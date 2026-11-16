@@ -10,7 +10,7 @@
 # once, matching when it includes the matcher's value: a seat carries its
 # unit and every unit above it, so a unit's entry reaches the units beneath.
 #
-# Pay bands use it; cost-centre rules are meant to.
+# Pay bands and cost-centre rules use it.
 #
 # @example
 #   LastMatch.find(bands, { role_id: "r1", level_ordinal: 3 }, %i[role_id level_ordinal], &:matcher)

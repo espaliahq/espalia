@@ -25,7 +25,8 @@ class Operations::TeamPlanning::Rule < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     unit_id = params[:unit_id].nil? ? nil : uuid!(:unit_id)
-    rule = refusing_bad_plans { ::TeamPlanning::RuleKinds.fetch(params[:rule]).rule_name }
+    kind = refusing_bad_plans { ::TeamPlanning::RuleKinds.fetch(params[:rule]) }
+    rule = kind.rule_name
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure }
 
     live = unit_id && map.units.any? { it.id == unit_id }
@@ -33,6 +34,6 @@ class Operations::TeamPlanning::Rule < Operations::Base
       raise Operations::Base::ParameterError, "There is no such unit in this scenario"
     end
 
-    { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, unit_id:, rule:, value: map.rule(rule, unit_id: live ? unit_id : nil) }
+    { plan_id: plan.id, **priced_as_archived(plan), scenario_id:, unit_id:, rule:, value: kind.read(map.rule(rule, unit_id: live ? unit_id : nil)) }
   end
 end
