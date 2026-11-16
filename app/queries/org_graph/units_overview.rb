@@ -66,6 +66,9 @@ class OrgGraph::UnitsOverview
   # @return [OrgTaxonomyLevel, nil]
   def level_of(unit) = levels.find { |level| level.id == unit.level_id }
 
+  # @return [OrgGraph::Taxonomy] where each kind of unit may sit
+  def taxonomy = @taxonomy ||= OrgTaxonomyLevel.taxonomy(levels)
+
   # @param unit [OrgUnit]
   # @return [Integer] distinct people in the unit and every unit beneath it
   def headcount(unit) = people_within(unit).size

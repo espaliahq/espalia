@@ -195,9 +195,17 @@ lists the people with no membership of a live unit, for the "in no team" tray.
   top switch, and `add_level` can state both up front. A kind that lists itself lets its
   units nest. A kind needs somewhere to sit: a parent other than itself, or the top. A
   change that would leave live units where they no longer fit is refused, naming each
-  unit and where it sits. A kind an HRIS provides keeps the HRIS rule for now. Removing a
-  kind drops it from every list that named it. Until the readers move to the lists, the
-  unit settings and Team Planning still place units by level order.
+  unit and where it sits. Removing a kind drops it from every list that named it. The
+  unit drawer's parent choices, Team Planning's `SetUnit` and the HRIS mirror all read
+  the lists through `OrgTaxonomyLevel.taxonomy`, so they offer and accept exactly what
+  the aggregate does.
+- **A kind an HRIS provides lists at most one parent, an HRIS kind above it, and the
+  top.** The mirror reads a unit's parent from one field, so it can place a unit under one
+  kind only, and it reads the kinds top first, so that kind must sit above. It never
+  lists an Espalia kind and never leaves the top off, since a unit whose people hold no
+  value above has nowhere else to go. Stating any other list for an HRIS kind is refused
+  naming the HRIS, and so is handing an HRIS a kind whose stated list breaks the rule. A
+  kind can't come back to Espalia while an HRIS kind lists it, naming that kind.
 - **A kinds change is dated today or earlier, and not before the last one.** A future
   structure belongs in a plan, so a later date is refused. The aggregate keeps every date
   across `TaxonomyDefined` and `LevelProviderSet`, as older streams hold them out of
@@ -226,6 +234,10 @@ lists the people with no membership of a live unit, for the "in no team" tray.
 `org_taxonomy_levels`, and each succession's links into `org_unit_successions`, so a
 reader can list a unit's predecessors and successors. The history that reads "was X" is in the stream:
 `UnitRenamed` carries the previous name, and the history projection (R4) will read it.
+
+`org_taxonomy_levels` holds each kind's stated `parent_level_ids` and `top`, both null for
+a kind that never stated rules. Readers build an `OrgGraph::Taxonomy` from the rows with
+`OrgTaxonomyLevel.taxonomy`, so the legacy rule is derived in one place, never stored.
 
 ### The shape of the organisation has a history too
 
@@ -707,8 +719,8 @@ screen (6.9, below) hosts them.
   would. A value matches one unit only, and a unit that can't retire today (it has live
   sub-units, or a change dated later) blocks the switch until someone deals with it.
 - **Every unit must still fit.** A level an HRIS provides sits only beneath the HRIS
-  level directly above it, so the switch is refused, naming the units, while one sits
-  further up. Move those units first. Adding an HRIS level between two others is refused
+  kind its list names (by default, the HRIS level directly above it), so the switch is
+  refused, naming the units, while one sits elsewhere. Move those units first. Adding an HRIS level between two others is refused
   the same way.
 - **One cause, one transaction.** The switch records the field as the level's source,
   gives each matched unit its value (`UnitHandedOver`), writes each succession and

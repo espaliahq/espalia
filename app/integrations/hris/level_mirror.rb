@@ -14,8 +14,9 @@
 #   level; a value sent blank ends it; a record that withholds the field
 #   changes nothing for that person. A person Espalia holds a membership
 #   for at the level is left alone.
-# - **Parents.** A unit sits under the unit at the level above that all its
-#   people with a value there share. A unit whose people disagree keeps its
+# - **Parents.** A unit sits under the unit at the level its kind lists as a
+#   parent (at most one, which the HRIS also provides) that all its people with
+#   a value there share. A unit whose people disagree keeps its
 #   parent, or is created with none, and is listed in the result's
 #   :split_units. A parent changes only when two syncs in a row read the same
 #   one ({HrisUnitParentProposal}). A new unit takes the parent read when it
@@ -94,7 +95,7 @@ class Hris::LevelMirror
   private
 
   def mirror
-    taxonomy = OrgTaxonomyLevel.top_first.pluck(:id)
+    taxonomy = OrgTaxonomyLevel.taxonomy
     plans = @levels.filter_map { |level| plan(level, taxonomy) }
     @plans = plans.index_by { it.level.id }
     @proposals = HrisUnitParentProposal.where(unit_id: OrgUnit.where(level_id: @levels.map(&:id))).index_by(&:unit_id)
@@ -124,8 +125,7 @@ class Hris::LevelMirror
     values = @readings.to_h { |person, mapper| [ person, mapper.field_value(field.id, kind: field.kind) ] }
     values.transform_values! { |value| value.value? && live_keys && !live_keys.key?(value.key) ? Hris::FieldValue.withheld : value }
 
-    index = taxonomy.index(level.id)
-    LevelPlan.new(level:, field:, above_id: (taxonomy[index - 1] if index.positive?), values:,
+    LevelPlan.new(level:, field:, above_id: taxonomy.kind(level.id).parent_ids.first, values:,
                   held: values.values.select(&:value?).group_by(&:key), withheld: values.values.any? { !it.value? && !it.blank? }, live_keys:)
   end
 

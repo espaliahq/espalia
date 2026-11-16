@@ -228,6 +228,13 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_not HrisUnitParentProposal.exists?
     end
 
+    should "read the parent from the type its kind states, not from the level above" do
+      @structure.set_kind_parents(@team, parent_ids: [], top: true, effective_on: "2026-01-01")
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+
+      assert_nil unit("work.department/t1").parent_id
+    end
+
     should "keep the parent of a unit nobody reads a value for" do
       mirror(@staff[0] => { division: "d1", team: "t1" })
       mirror(@staff[0] => { team: "t1" })

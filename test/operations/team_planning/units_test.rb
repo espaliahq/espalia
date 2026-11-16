@@ -88,7 +88,7 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
         "provide at least one of: unit_id, level_id" => { name: "Risk" },
         "provide at least one of: unit_id, name" => { level_id: @squad },
         "Level is not in the taxonomy" => { name: "Risk", level_id: SecureRandom.uuid_v7 },
-        "A parent must sit at a higher level" => { name: "Risk", level_id: @squad, parent_id: @payments },
+        "Squad can't sit under Squad" => { name: "Risk", level_id: @squad, parent_id: @payments },
         "The parent must be a live unit in this scenario" => { name: "Risk", level_id: @squad, parent_id: SecureRandom.uuid_v7 },
         "A unit's level can't change: create a unit at the new level instead" => { unit_id: risk, level_id: @department },
         "A unit can't move beneath itself or a unit below it" => { unit_id: @engineering, parent_id: @engineering },
@@ -97,6 +97,18 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
       }.each { |message, params| assert_equal message, refusal(Operations::TeamPlanning::SetUnit, **params) }
       assert_equal "There is no such unit in this scenario",
                    refusal(Operations::TeamPlanning::SetUnit, scenario_id: @plan_id, unit_id: risk, name: "Risk")
+    end
+
+    should "place units where the unit types' stated rules let them sit" do
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+                                         .set_kind_parents(@squad, parent_ids: [ @department, @squad ], top: false, effective_on: "2026-02-01")
+      end
+
+      assert_equal @payments, write(Operations::TeamPlanning::SetUnit, name: "Risk", level_id: @squad, parent_id: @payments)[:parent_id]
+      assert_equal "Squad can't sit at the top", refusal(Operations::TeamPlanning::SetUnit, name: "Lone", level_id: @squad, top_level: true)
+      sales = write(Operations::TeamPlanning::SetUnit, name: "Sales", level_id: @department)[:unit_id]
+      assert_equal "Department can't sit under Squad", refusal(Operations::TeamPlanning::SetUnit, unit_id: sales, parent_id: @payments)
     end
 
     should "rename a unit whose level has left the taxonomy, and refuse to place a unit beneath it" do

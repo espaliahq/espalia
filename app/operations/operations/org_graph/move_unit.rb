@@ -5,8 +5,8 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
   include Operations::OrgGraph::UnitWrite
   prepend Operations::OrgGraph::PlanWrite
 
-  description "Move a unit in the Org Graph beneath another live unit at a higher level, or to the top " \
-              "when parent_id is omitted, from effective_on (today by default). Only a unit Espalia holds " \
+  description "Move a unit in the Org Graph beneath another live unit of a kind its own kind can sit " \
+              "under, or to the top when parent_id is omitted and its kind can sit there, from effective_on (today by default). Only a unit Espalia holds " \
               "can be moved here. Moving a unit changes who inherits its ownership, so the caller needs " \
               "rights on the unit and where it lands."
   approval :in_app
