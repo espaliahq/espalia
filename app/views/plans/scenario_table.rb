@@ -29,8 +29,10 @@ class Views::Plans::ScenarioTable < Views::Base
   # @param can_edit [Boolean] whether each row offers a menu to fork and edit
   # @param removable [Array<String>] the scenarios whose menu offers Remove, each with its dialog on the page
   # @param closable [Hash{String => Symbol}] the scenarios whose menu offers Close or Reopen, each with its dialog on the page
-  def initialize(plan_id:, scenarios:, extra_columns: [], can_edit: false, removable: [], closable: {})
+  # @param outcomes [Boolean] whether the page holds each closed step's outcome dialog
+  def initialize(plan_id:, scenarios:, extra_columns: [], can_edit: false, removable: [], closable: {}, outcomes: false)
     @closable = closable
+    @outcomes = outcomes
     @plan_id = plan_id
     @removable = removable
     @scenarios = scenarios
@@ -129,6 +131,16 @@ class Views::Plans::ScenarioTable < Views::Base
 
   def state(scenario)
     render Views::Plans::StepState.new(scenario)
+    outcome_trigger(scenario, class: "mt-1 block") if @outcomes
+  end
+
+  def outcome_trigger(scenario, **)
+    return unless Views::Plans::StepOutcomeDialog.offered?(scenario)
+
+    span(**) do
+      render Components::Kit::Button.new(variant: :link, tone: :brand, size: :xs, compact: true,
+                                         data: Views::Plans::StepOutcomeDialog.trigger(scenario[:scenario_id])) { "Planned against actual…" }
+    end
   end
 
   def period(scenario) = self.class.period(scenario)

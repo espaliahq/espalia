@@ -41,8 +41,10 @@ class Views::Plans::Timeline < Views::Base
   # @param step [Integer] the step a phone shows, from the left
   # @param can_edit [Boolean] whether the viewer edits the plan
   # @param closable [Hash{String => Symbol}] the steps that offer Close or Reopen, each with its dialog on the page
-  def initialize(timeline:, scenarios:, step: 0, can_edit: false, closable: {})
+  # @param outcomes [Boolean] whether the page holds each closed step's outcome dialog
+  def initialize(timeline:, scenarios:, step: 0, can_edit: false, closable: {}, outcomes: false)
     @closable = closable
+    @outcomes = outcomes
     @timeline = timeline
     @moving = can_edit && timeline[:columns].size > 1
     @scenarios = scenarios.index_by { it[:scenario_id] }
@@ -640,6 +642,11 @@ class Views::Plans::Timeline < Views::Base
       if mode
         render Components::Kit::Button.new(variant: :outline, size: :xs, data: Views::Plans::StepClosureDialog.trigger(scenario[:scenario_id])) do
           mode == :close ? "Close step…" : "Reopen step…"
+        end
+      end
+      if @outcomes && Views::Plans::StepOutcomeDialog.offered?(scenario)
+        render Components::Kit::Button.new(variant: :outline, size: :xs, data: Views::Plans::StepOutcomeDialog.trigger(scenario[:scenario_id])) do
+          "Planned against actual…"
         end
       end
     end

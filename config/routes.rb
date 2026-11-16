@@ -448,6 +448,8 @@ Rails.application.routes.draw do
     resources :scenarios, only: [ :create, :update, :destroy ], controller: "plans/scenarios" do
       # Close a step once its period ends, or reopen the last one closed ([#466](https://github.com/espaliahq/espalia/issues/466)).
       resource :closure, only: %i[create destroy], controller: "plans/step_closures"
+      # A closed step's plan beside what happened, as a lazy frame in its dialog.
+      resource :outcome, only: :show, controller: "plans/step_outcomes"
     end
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"

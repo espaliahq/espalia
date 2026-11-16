@@ -84,12 +84,12 @@ class PlansController < ApplicationController
     removals = removals(plan, scenarios, scenarios.map { it[:scenario_id] })
     closures = closures(plan, scenarios)
     table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?, removable: removals.map(&:scenario_id),
-                                            closable: closures.to_h { [ it.scenario_id, it.mode ] },
+                                            closable: closures.to_h { [ it.scenario_id, it.mode ] }, outcomes: true,
                                             extra_columns: cost_columns + capacity_columns(plan, scenarios))
     removed_page = params[:removed_page].to_i.clamp(1..)
     removed = Views::Plans::RemovedScenarios.new(plan_id: plan[:plan_id], open: params.key?(:removed_page),
                                                  read: read(Operations::TeamPlanning::RemovedScenarios, page: removed_page))
-    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:, removals:, closures:)
+    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:, removals:, closures:, outcomes: outcomes(plan, scenarios))
   end
 
   # GET /planning/:id/map?scenario=:scenario_id
@@ -122,9 +122,9 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || Views::Plans::Timeline.first_leaf(scenarios, plan[:plan_id])
     timeline = read(Operations::TeamPlanning::Timeline, scenario_id:)
     closures = closures(plan, scenarios, return_to: timeline_plan_path(plan[:plan_id], scenario: params[:scenario].presence, step: params[:step].presence))
-    render plan_page(plan, scenarios:, open_tab: :timeline, closures:,
+    render plan_page(plan, scenarios:, open_tab: :timeline, closures:, outcomes: outcomes(plan, scenarios),
                            body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i, can_edit: can_edit?,
-                                                            closable: closures.to_h { [ it.scenario_id, it.mode ] }))
+                                                            closable: closures.to_h { [ it.scenario_id, it.mode ] }, outcomes: true))
   end
 
   # GET /planning/:id/timeline/figures?scenario=:scenario_id&layout=phone&step=:index
@@ -499,8 +499,9 @@ class PlansController < ApplicationController
   # @param undo_in [String, nil] the scenario the open tab shows, whose Undo and Redo the tab strip offers
   # @param removals [Array<Views::Plans::RemoveScenarioDialog>] the Remove dialogs the open tab's triggers open
   # @param closures [Array<Views::Plans::StepClosureDialog>] the Close and Reopen dialogs the open tab's triggers open
+  # @param outcomes [Array<Views::Plans::StepOutcomeDialog>] the closed steps' outcome dialogs the open tab's triggers open
   def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil, undo_in: nil, removed: nil,
-                removals: [], closures: [])
+                removals: [], closures: [], outcomes: [])
     members = read(Operations::TeamPlanning::PlanMembers)[:members]
     Views::Plans::ShowView.new(
       plan:,
@@ -523,6 +524,7 @@ class PlansController < ApplicationController
       removed:,
       removals:,
       closures:,
+      outcomes:,
       undo_step: (read(Operations::TeamPlanning::UndoStep, scenario_id: undo_in.downcase) if can_edit? && undo_in),
       panel_open: Views::Plans::ShowView.panel_open?(
         url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView.panel_cookie(current_user)],
@@ -570,6 +572,11 @@ class PlansController < ApplicationController
     Views::Plans::StepClosureDialog.offered(scenarios).map do |scenario, mode|
       Views::Plans::StepClosureDialog.new(plan_id: plan[:plan_id], scenario:, mode:, scenarios:, return_to:)
     end
+  end
+
+  # An outcome dialog for each closed step, for any member.
+  def outcomes(plan, scenarios)
+    scenarios.select { Views::Plans::StepOutcomeDialog.offered?(it) }.map { Views::Plans::StepOutcomeDialog.new(plan_id: plan[:plan_id], scenario: it) }
   end
 
   # A Remove dialog for each of `ids` an editor may remove: never the baseline,
