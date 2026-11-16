@@ -81,12 +81,13 @@ class PlansController < ApplicationController
     plan = read(Operations::TeamPlanning::Plan)
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
-    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?,
+    removals = removals(plan, scenarios, scenarios.map { it[:scenario_id] })
+    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?, removable: removals.map(&:scenario_id),
                                             extra_columns: cost_columns + capacity_columns(plan, scenarios))
     removed_page = params[:removed_page].to_i.clamp(1..)
     removed = Views::Plans::RemovedScenarios.new(plan_id: plan[:plan_id], open: params.key?(:removed_page),
                                                  read: read(Operations::TeamPlanning::RemovedScenarios, page: removed_page))
-    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:)
+    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:, removals:)
   end
 
   # GET /planning/:id/map?scenario=:scenario_id
@@ -100,8 +101,9 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
-    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id,
-                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
+    removals = removals(plan, scenarios, [ scenario_id.downcase ])
+    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id, removals:,
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?, removable: removals.map(&:scenario_id),
                                                                can_upload_pay: policy_for(@plan_record).upload_pay? && !@plan_record.archived?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
@@ -475,7 +477,9 @@ class PlansController < ApplicationController
   end
 
   # @param undo_in [String, nil] the scenario the open tab shows, whose Undo and Redo the tab strip offers
-  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil, undo_in: nil, removed: nil)
+  # @param removals [Array<Views::Plans::RemoveScenarioDialog>] the Remove dialogs the open tab's triggers open
+  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil, undo_in: nil, removed: nil,
+                removals: [])
     members = read(Operations::TeamPlanning::PlanMembers)[:members]
     Views::Plans::ShowView.new(
       plan:,
@@ -496,6 +500,7 @@ class PlansController < ApplicationController
       can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
       removed:,
+      removals:,
       undo_step: (read(Operations::TeamPlanning::UndoStep, scenario_id: undo_in.downcase) if can_edit? && undo_in),
       panel_open: Views::Plans::ShowView.panel_open?(
         url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView.panel_cookie(current_user)],
@@ -533,6 +538,22 @@ class PlansController < ApplicationController
     { can_manage_see_pay: policy_for(@plan_record).manage_see_pay? && !@plan_record.archived?,
       reachable_ids: PlanPolicy.reachable_ids(members.pluck(:person_id)),
       locked_out: PlanPolicy.locked_out?(@plan_record) && !PlanPolicy.frozen?(@plan_record) }
+  end
+
+  # A Remove dialog for each of `ids` an editor may remove: never the baseline,
+  # nor anything on an archived or frozen plan. Only a dialog that offers
+  # Remove asks the operation how much hidden pay goes with it, all in one load of the plan.
+  def removals(plan, scenarios, ids)
+    return [] if !can_edit? || PlanPolicy.frozen?(@plan_record)
+
+    offered = scenarios.select { ids.include?(it[:scenario_id]) && it[:scenario_id] != plan[:plan_id] }
+                       .map { [ it, Views::Plans::RemoveScenarioDialog.forks(it, scenarios) ] }
+    notices = Operations::TeamPlanning::RemoveScenario.approval_notices(
+      context: pundit_user, plan_id: plan[:plan_id], scenario_ids: offered.filter_map { |scenario, forks| scenario[:scenario_id] if forks.empty? }
+    )
+    offered.map do |scenario, forks|
+      Views::Plans::RemoveScenarioDialog.new(plan_id: plan[:plan_id], scenario:, forks:, hidden_pay: notices[scenario[:scenario_id]])
+    end
   end
 
   # An archived plan takes no changes, so its editors see it as its viewers do.
