@@ -818,6 +818,16 @@ class TeamPlanning::PlanAggregate
     apply(TeamPlanning::Events::ChangeCleared.new(data: { plan_id: @plan_id, scenario_id:, subject_id:, facet:, cleared_by_id: }))
   end
 
+  # Refuses a clear exactly as {#clear_change} refuses one the scenario has
+  # nothing to clear for, so a subject the plan hides reads as unknown.
+  #
+  # @param scenario_id [String]
+  # @raise [TeamPlanning::Error] always
+  def nothing_to_clear!(scenario_id)
+    ensure_open!
+    raise TeamPlanning::Error, "#{this(live_scenario!(scenario_id))} doesn't change this, so there is nothing to clear"
+  end
+
   # The change a scenario inherits for a key: the last one along its parent's
   # resolution chain.
   #
@@ -1314,7 +1324,7 @@ class TeamPlanning::PlanAggregate
   def own_change?(scenario_id, key) = changes_in(scenario_id).any? { it.key == key }
 
   def ensure_overrides!(scenario_id, key)
-    raise TeamPlanning::Error, "#{this(scenario_id)} doesn't change this, so there is nothing to clear" unless own_change?(scenario_id, key)
+    nothing_to_clear!(scenario_id) unless own_change?(scenario_id, key)
   end
 
   # A pin resolves as a change of the kind it keeps.

@@ -372,10 +372,12 @@ class TeamPlanning::CommandHandler
   # @param facet [String] the second half of the change's key, such as "rule:<name>"
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
+  # @yieldparam plan [TeamPlanning::PlanAggregate] for the operation's scope check, run before the others
   # @see TeamPlanning::PlanAggregate#clear_change
-  def clear_change(plan_id, scenario_id:, subject_id:, facet:)
+  def clear_change(plan_id, scenario_id:, subject_id:, facet:, &check)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      check&.call(plan)
       ensure_pay_right!(plan, facet.to_s)
       ensure_line_money_right!(plan, scenario_id, subject_id, facet.to_s)
       plan.clear_change(scenario_id:, subject_id:, facet: facet.to_s, cleared_by_id: actor_id!)

@@ -336,6 +336,29 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       end
     end
 
+    # The gap predates [#367](https://github.com/espaliahq/espalia/issues/367), whose money refusal
+    # would otherwise have been first to tell an outside line apart.
+    should "refuse to clear a change to a line outside the plan exactly as one to an id no line has, with or without the see-pay right" do
+      outside = @lines["Field Sales"]
+      as_tenant do
+        handler.set_change(@plan_id, TeamPlanning::Events::BudgetLineSet, scenario_id: @h1, subject_id: outside,
+                                                                          end_state: { starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 9,
+                                                                                       currency: "EUR", period: "year", cost_centre: "Field Sales", tenant_line: true })
+      end
+      editor = as_tenant { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
+      call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: editor.person_id, role: "editor")
+      clear = lambda do |id, as|
+        as_tenant do
+          Operations::TeamPlanning::ClearChange.call(context: AuthorizationContext.new(user: as.user, tenant_user: as, person: as.person),
+                                                     params: { plan_id: @plan_id, scenario_id: @h1, subject_id: id, facet: TeamPlanning::Events::BudgetLineSet.facet })
+        end
+      end
+
+      [ @planner, editor ].each do |as|
+        assert_equal refusal { clear.(SecureRandom.uuid_v7, as) }, refusal { clear.(outside, as) }
+      end
+    end
+
     should "judge a line the scenario holds as the scenario holds it, though the organisation since moved it outside" do
       line = { plan_id: @plan_id, scenario_id: @h1, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
       call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Platform")
