@@ -89,7 +89,7 @@ export default class extends BaseController {
 
     this.#applyMetadata(initialState)
 
-    this.onPopState = () => this.#applyFromHistory()
+    this.onPopState = (event) => this.#applyFromHistory(event.state)
     window.addEventListener("popstate", this.onPopState)
     this.onBeforeVisit = () => this.#stampOwnEntry()
     document.addEventListener("turbo:before-visit", this.onBeforeVisit)
@@ -212,16 +212,14 @@ export default class extends BaseController {
   }
 
   // An open pane changes shape when the window crosses lg. Narrowing turns it
-  // into the overlay, which needs the entry Back closes it with. Widening sets
-  // it beside the page, where that entry would make Back close it instead of
-  // leaving, so step off the entry and keep the pane open on the one below.
+  // into the overlay, which needs the entry Back closes it with; widening sets
+  // it beside the page, where that entry no longer belongs.
   #followBreakpoint() {
     if (this.#visualState() !== "open") return
     if (this.#actsAsScreen()) {
       this.#recordInHistory("open", true)
-    } else if (this.screenValue && this.#onOwnEntry() && !this.#leaving) {
-      this.#leaving = true
-      window.history.back()
+    } else if (this.#onOwnEntry()) {
+      this.#stepOffOverlayEntry()
     }
   }
 
@@ -258,7 +256,9 @@ export default class extends BaseController {
   // Back and Forward change the URL without remounting the controller. The
   // overlay's own entry means open; any other entry says what it holds in
   // the URL, and one that says nothing leaves the pane as it is.
-  #applyFromHistory() {
+  // Turbo's popstate listener runs first and stamps its own state over an
+  // entry it finds without one, so the marker survives only in the event.
+  #applyFromHistory(poppedState) {
     if (this.#leaving) {
       this.#leaving = false
       // Reopened while our Back was on its way: record it afresh.
@@ -266,12 +266,24 @@ export default class extends BaseController {
       return
     }
     const fromUrl = new URL(window.location.href).searchParams.get(this.urlKeyValue)
-    const state = this.#onOwnEntry() ? "open" : fromUrl
-    if ((state !== "open" && state !== "closed") || state === this.#visualState()) return
-    this.#animate(state)
-    this.#applyMetadata(state)
-    this.#writeCookie(state)
-    if (state === "closed" && this.screenValue) this.#focusToggle()
+    const ownEntry = poppedState?.[HISTORY_KEY] === this.urlKeyValue
+    const state = ownEntry ? "open" : fromUrl
+    if ((state === "open" || state === "closed") && state !== this.#visualState()) {
+      this.#animate(state)
+      this.#applyMetadata(state)
+      this.#writeCookie(state)
+      if (state === "closed" && this.screenValue) this.#focusToggle()
+    }
+    // Forward can return to the entry a widening stepped off.
+    if (ownEntry && !this.#actsAsScreen()) this.#stepOffOverlayEntry()
+  }
+
+  // The overlay's entry means nothing beside the page: Back from it would only
+  // land on the same page. Step off it and keep the pane open on the entry below.
+  #stepOffOverlayEntry() {
+    if (this.#leaving) return
+    this.#leaving = true
+    window.history.back()
   }
 
   #animate(state) {

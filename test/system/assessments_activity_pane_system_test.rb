@@ -551,6 +551,36 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_text "My Assessments"
     end
 
+    should "step back off the overlay's entry when Forward returns to it after the window widened" do
+      visit assessments_path
+      assert_text "My Assessments"
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      hold_matrix_frame_loads
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay == null") },
+        "widening left the overlay's entry in history"
+
+      page.execute_script(<<~JS)
+        window.pops = 0
+        window.addEventListener("popstate", () => { window.pops += 1 })
+      JS
+      page.go_forward
+      assert wait_until_js { page.evaluate_script("window.pops >= 2 && history.state?.sidePanelOverlay == null") },
+        "Forward left the page on the overlay's entry beside the matrix"
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      2.times do
+        break unless page.current_path == assessment_path(@assignment)
+
+        go_back_and_wait_until_landed
+      end
+      assert_current_path assessments_path
+    end
+
     should "take the overlay's history entry back when its close button shuts it" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       mark_history_entry
