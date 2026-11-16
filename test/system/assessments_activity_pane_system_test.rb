@@ -106,14 +106,15 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   end
 
   # Both entries carry the same path, so the URL alone can't show a Back has
-  # landed; a second Back sent too soon leaves the page behind as well.
-  def go_back_and_wait_for_popstate
+  # landed; a second Back sent too soon leaves the page behind as well. A Back
+  # that leaves for another document drops the flag, which counts as landed.
+  def go_back_and_wait_until_landed
     page.execute_script(<<~JS)
-      window.backPopped = false
-      window.addEventListener("popstate", () => { window.backPopped = true }, { once: true })
+      window.backLanded = false
+      window.addEventListener("popstate", () => { window.backLanded = true }, { once: true })
     JS
     page.go_back
-    assert wait_until_js { page.evaluate_script("window.backPopped") }, "Back never reached the page"
+    assert wait_until_js { page.evaluate_script("window.backLanded !== false") }, "Back never landed"
   end
 
   # A slow runner reloads the restored matrix frame, and its load pushes an
@@ -486,7 +487,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       2.times do
         break unless page.current_path == assessment_path(@assignment)
 
-        go_back_and_wait_for_popstate
+        go_back_and_wait_until_landed
       end
       assert_current_path assessments_path
       assert_text "My Assessments"
