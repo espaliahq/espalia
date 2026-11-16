@@ -85,22 +85,33 @@ class PlanMapSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
-      should "keep a full unit and a long role the width of every other card, with what was cut reachable" do
-        plan_id = plan_with_a_full_unit
+      should "fit a full unit with a long role on one line a person, with what was cut reachable" do
+        plan_id, scenario_id = plan_with_a_full_unit
         sign_in_as(@planner.user)
         visit map_plan_path(plan_id)
 
-        widths = page.evaluate_script("[...document.querySelectorAll('[data-map-unit]')].map((card) => card.getBoundingClientRect().width)")
-        assert_equal 1, widths.map(&:round).uniq.size, "a full unit's card is as wide as the rest: #{widths.inspect}"
-        assert_no_sideways_overflow
-
+        cards = page.evaluate_script(<<~JS)
+          [...document.querySelectorAll("[data-map-unit]")].map((card) => [Math.round(card.getBoundingClientRect().left), Math.round(card.getBoundingClientRect().width)])
+        JS
+        assert_equal 1, cards.map(&:last).uniq.size, "a full unit's card is as wide as the rest: #{cards.inspect}"
+        assert_operator cards.map(&:first).uniq.size, :>=, 3, "three units a row at 1400px: #{cards.inspect}" if label == "desktop"
         within(unit("Platform")) do
           assert_selector "[data-map-person]", count: 12
+          heights = all("[data-map-person]").map { it.evaluate_script("this.getBoundingClientRect().height") }
+          assert heights.all? { it < 40 }, "each person takes one line: #{heights.inspect}"
           find("summary", text: LONG_NAME).click
           within("details[open]") do
             assert_text LONG_ROLE
             assert_text LONG_NAME
           end
+        end
+        assert_no_sideways_overflow
+
+        visit map_plan_path(plan_id, scenario: scenario_id)
+        within(unit("Platform")) do
+          assert_selector "button", text: "Move…", count: 12
+          widths = all("[data-map-person-details]").map { it.evaluate_script("this.getBoundingClientRect().width") }
+          assert widths.all? { it >= 96 }, "a name keeps 6rem beside Move…: #{widths.inspect}"
         end
         assert_no_sideways_overflow
       end
@@ -130,7 +141,7 @@ class PlanMapSystemTest < ApplicationSystemTestCase
 
   private
 
-  LONG_ROLE = "Infrastructure-and-operations-reliability"
+  LONG_ROLE = "Infrastructure reliability"
   LONG_NAME = "Maximiliana Wolkenstein-Abernathy-Okonkwo"
 
   # Twelve seats, one person with a long name, all under a role too long for its column.
@@ -147,7 +158,10 @@ class PlanMapSystemTest < ApplicationSystemTestCase
         handler.set_membership(person.id, platform, **ESPALIA, effective_on: since, allocation: 1.0, role: LONG_ROLE)
       end
     end
-    call(Operations::TeamPlanning::CreatePlan, @planner, name: "Full unit", base_on: (Date.current + 1).iso8601)[:plan_id]
+    plan_id = call(Operations::TeamPlanning::CreatePlan, @planner, name: "Full unit", base_on: (Date.current + 1).iso8601)[:plan_id]
+    scenario_id = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id:, relation: "then", name: "Next quarter",
+                                                                         ends_on: (Date.current + 120).iso8601)[:scenario_id]
+    [ plan_id, scenario_id ]
   end
 
   # Pills from `sm` up, a list on a phone (#271).
