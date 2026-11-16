@@ -383,15 +383,17 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_select "form[action='#{plan_path(@plan_id)}'] input[name='_method'][value='delete']", count: 1
       assert_select "##{Views::Plans::DeleteDialog::ID} form[action='#{archive_plan_path(@plan_id)}']", text: "Archive instead", count: 1
 
-      delete plan_path(@plan_id), params: { confirm_name: " Pay review 2027 " }
+      delete plan_path(@plan_id), params: { confirm_name: " Pay  review 2027 " }
+      assert_response :see_other
       assert_redirected_to plans_path
-      assert_equal "Deleted \"Pay review 2027\".", flash[:notice]
+      assert_equal "Plan deleted.", flash[:notice]
       assert_not plan_exists?
     end
 
     should "keep the plan when the typed name doesn't match" do
       sign_in @editor.user
       delete plan_path(@plan_id), params: { confirm_name: "pay review 2027" }
+      assert_response :see_other
       assert_redirected_to plan_path(@plan_id)
       assert_equal "The name you typed doesn't match, so the plan is still here.", flash[:alert]
       assert plan_exists?

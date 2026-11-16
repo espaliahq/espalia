@@ -138,7 +138,7 @@ class PlansSystemTest < ApplicationSystemTestCase
         assert_button "Archive instead"
         assert_no_sideways_overflow
         js_fill_in "Type the plan's name to confirm", with: "Pay review 2027"
-        click_selector_with_js_fallback("##{Views::Plans::DeleteDialog::ID} button[type='submit'].tone-danger", expect_text: "Deleted \"Pay review 2027\".")
+        click_selector_with_js_fallback("##{Views::Plans::DeleteDialog::ID} button[type='submit'].tone-danger", expect_text: "Plan deleted.")
 
         assert_selector "h1", text: "Planning"
         assert_no_link "Pay review 2027"

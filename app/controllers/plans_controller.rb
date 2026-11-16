@@ -63,14 +63,15 @@ class PlansController < ApplicationController
   def destroy
     plan = read(Operations::TeamPlanning::Plan)
     authorize TeamPlanningPlan.find(plan[:plan_id]), :destroy?, policy_class: PlanPolicy
-    unless params[:confirm_name].to_s.strip == plan[:name]
-      return redirect_to(plan_path(plan[:plan_id]), alert: "The name you typed doesn't match, so the plan is still here.")
+    unless params[:confirm_name].to_s.squish == plan[:name]
+      return redirect_to(plan_path(plan[:plan_id]), status: :see_other, alert: "The name you typed doesn't match, so the plan is still here.")
     end
 
     Operations::TeamPlanning::DeletePlan.call(context: pundit_user, params: { plan_id: plan[:plan_id] })
-    redirect_to plans_path(state: ("archived" if plan[:archived])), notice: "Deleted \"#{plan[:name]}\"."
+    # The name stays out of the flash, which would carry it in the session cookie after its key is shredded.
+    redirect_to plans_path(state: ("archived" if plan[:archived])), status: :see_other, notice: "Plan deleted."
   rescue Operations::Base::ParameterError => e
-    redirect_to plan_path(plan[:plan_id]), alert: "Couldn't delete this plan: #{e.message}"
+    redirect_to plan_path(plan[:plan_id]), status: :see_other, alert: "Couldn't delete this plan: #{e.message}"
   end
 
   # GET /planning/:id
