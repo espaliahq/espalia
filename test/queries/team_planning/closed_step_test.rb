@@ -233,6 +233,24 @@ class TeamPlanning::ClosedStepTest < ActiveSupport::TestCase
     end
   end
 
+  should "keep someone in the seat the closed step placed them in when the Org Graph made the placement happen" do
+    seat = as_tenant do
+      Operations::TeamPlanning::SetPosition.call(context:, params: { plan_id: @plan_id, scenario_id: @h1, role_id: @e5.role_id, level_id: @e5.level_id,
+                                                                     unit_id: @payments, fte: 1, basis: "new", cost_centre: "Platform" })[:position_id]
+    end
+    as_tenant do
+      handler.set_change(@plan_id, TeamPlanning::Events::AssignmentSet, scenario_id: @h1, subject_id: @ada.id,
+                                                                        end_state: { placements: [ { position_id: seat, allocation: 1.0 } ] })
+    end
+    close
+
+    as_tenant do
+      map = TeamPlanning::Resolution.new(context:, plan: TeamPlanningPlan.find(@plan_id), scenario_id: @h2).structure
+      assert_equal [ seat ], map.people.find { it.id == @ada.id }.memberships.map(&:position_id)
+      assert_equal 0, map.open_fte(map.positions_by_id.fetch(seat), map.occupants.fetch(seat, []))
+    end
+  end
+
   should "drop a change the Org Graph made happen, and carry over one it didn't" do
     close
 

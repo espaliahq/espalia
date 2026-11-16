@@ -113,7 +113,7 @@ class TeamPlanning::Resolution
     winning = @repository.sealed(aggregate.winning_changes(@scenario_id))
     if standing
       done = done_at_close(*standing)
-      winning = winning.reject { |_, change| done.include?(change.event_id) }
+      winning = winning.reject { |_, change| done.include?(change.event_id) && !seats_someone?(change) }
     end
     base = (standing ? standing_on(standing.last) : @base || @baseline.structure).with(step_ids: step_of(aggregate))
     hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
@@ -159,6 +159,12 @@ class TeamPlanning::Resolution
     aggregate.resolution_chain(@scenario_id).flat_map { aggregate.changes_in(it) }
              .select { it.is_a?(TeamPlanning::Events::PositionSet) && closed.include?(it.data[:subject_id]) }
              .to_h { [ it.data[:subject_id], it.data[:unit_id] ] }
+  end
+
+  # The Org Graph can't say who fills a position, so a done placement in one
+  # stays, or the seat would read as empty with its person beside it.
+  def seats_someone?(change)
+    change.is_a?(TeamPlanning::Events::AssignmentSet) && Array(change.data[:placements]).any? { it.to_h.with_indifferent_access[:position_id] }
   end
 
   # The changes a closed step and those before it made that the Org Graph
