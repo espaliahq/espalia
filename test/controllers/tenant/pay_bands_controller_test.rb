@@ -111,6 +111,7 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       delete tenant_pay_band_path(band)
 
       assert_redirected_to tenant_pay_bands_path
+      assert_equal "Band removed for Software Engineer, E2 Engineer II, Testonia.", flash[:notice]
       assert_equal 0, ActsAsTenant.with_tenant(@tenant) { PayBand.count }
     end
 

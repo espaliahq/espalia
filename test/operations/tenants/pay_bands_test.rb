@@ -53,7 +53,7 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_equal [ "NZD", "month", "9000.50" ], changed.values_at(:currency, :period, :midpoint)
 
     removed = call(:RemovePayBand, pay_band_id: added[:pay_band_id])
-    assert_equal "Fixtureland", removed[:location]
+    assert_equal [ "Fixtureland", "Software Engineer", "E2 Engineer II" ], removed.values_at(:location, :role, :level_name)
     assert_empty call(:PayBands)[:pay_bands]
   end
 

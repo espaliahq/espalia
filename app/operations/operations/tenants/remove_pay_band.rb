@@ -12,10 +12,9 @@ class Operations::Tenants::RemovePayBand < Operations::Base
 
   parameter :pay_band_id, String, required: true, allow_blank: false
 
-  # @return [Hash] `{ pay_band_id, level, location }` of the band removed
+  # @return [Hash] the band removed, as tenants_pay_bands listed it
   def perform
     band = find_band(params[:pay_band_id])
-    band.destroy!
-    { pay_band_id: band.id, level: band.level_label, location: band.location.presence }
+    band_payload(band, shadowed: Set.new).except(:shadowed).tap { band.destroy! }
   end
 end
