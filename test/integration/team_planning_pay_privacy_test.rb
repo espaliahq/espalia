@@ -339,6 +339,25 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       assert_note_read(@holder, @pay_note, "holder", split[:agreed_id])
       [ @editor, @viewer ].each { assert_no_pay_note_read(it, it == @editor ? "editor" : "viewer", split[:agreed_id]) }
     end
+
+    # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)).
+    should "keep a note on a budget-line change to holders, and offer its form to them alone" do
+      line_note = "Zephyr's line goes to 61875"
+      call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id: @q1, starts_on: "2026-01-01", ends_on: "2026-12-31",
+                                                             origin: "new", amount: "61875", currency: "AUD", period: "year", head_count: "1")
+      set = call(Operations::TeamPlanning::History, @holder, plan_id: @plan_id, scenario_id: @q1)[:entries].find { it[:facet] == "budget_line" }
+      call(Operations::TeamPlanning::NoteChange, @holder, plan_id: @plan_id, scenario_id: @q1, event_id: set[:event_id], note: line_note)
+
+      assert_note_read(@holder, line_note, "holder")
+      assert_equal 3, changes_tab_html(@holder).css("[data-change-note-editor]").size
+      assert_equal 1, changes_tab_html(@editor).css("[data-change-note-editor]").size
+      { "editor" => @editor, "viewer" => @viewer }.each do |who, account|
+        refute_note_read(account, line_note, who)
+        assert_not_includes changes_tab(account), line_note, who
+        history = call(Operations::TeamPlanning::History, account, plan_id: @plan_id, scenario_id: @q1)[:entries]
+        assert history.select { it[:facet] == "budget_line" }.none? { it.key?(:note) || it[:action] == "note" }, who
+      end
+    end
   end
 
   should "capture the log the leak check reads" do
