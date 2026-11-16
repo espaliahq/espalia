@@ -375,7 +375,7 @@ edits the change, then approves again.
 |---|---|---|
 | 9.1 | Timeline projection: one path from the baseline to a leaf, with lanes and moves | 3.6 |
 | 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.1 |
-| 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.2, 3.12 |
+| 9.3 | Edit in time: drag a person between blocks, move a change a step earlier or later (a "When…" menu for now; dragging a bar's end is still to come). [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.2, 3.12 |
 | 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit | 9.1 |
 | 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |
 

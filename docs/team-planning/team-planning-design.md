@@ -93,6 +93,7 @@ Every change event has the same shape:
 | Clearing | `ChangeCleared` (scenario, subject, facet): the item follows its parent again |
 | Pinning | `ChangePinned`: an inherited item made explicit as it stands |
 | Undo | `ChangeUndone`, `ChangeRedone`, each naming the event it reverses |
+| Moving | `ChangeMoved`: a place, position or departure moved to the step before or after |
 | Notes | `ChangeNoted`: a change's or pin's note written, rewritten or cleared |
 | The Org Graph | `PlanRebased` (the date the plan now stands on, the one before, and the conflicts it carries) |
 | Reality | `StepClosed`, `PlanApproved`, `ChangeRaised`, `ChangeApplied` |
@@ -233,7 +234,34 @@ a drop outside the bar's own steps is refused. Each bar also has a "Move…" but
 its steps when it spans several, so the keyboard and a phone reach the same form. On a phone
 it moves the person in the step shown. The form is the map's, one per step, and saves
 through `MovePlace`, then returns to the same step of the timeline. Today has no handles,
-and a viewer sees none. Moving a change a step earlier or later is the next part of 9.3.
+and a viewer sees none.
+
+An editor also moves a change a step earlier or later. `ChangeMoved` carries a person's
+place, a position or a departure, one subject and facet at a time, from its step to the
+step before or after on the path. Every entry of that key's log goes across, undone ones
+included, so undo and redo behave as before, and a departure leaves in the step it reached.
+The move is refused into the baseline, past the last step, into a step that already changes
+the same thing (naming that change), past a step in between that does, as the step an
+alternative stands in for may, into or out of a split step, and for a departure whose date
+falls outside the step it would reach. It is refused, too, when it would leave a change
+without the position it fills, or bring a change ahead of the position it needs. It is
+refused while the last update to today carried a conflict with the change that isn't
+settled, since the move would drop the warning unseen; the editor settles it on the Changes
+tab first. When more than one step follows, the editor
+names the one. Moving touches only the place, position or departure, so a `data:pay` change
+on the same person stays where it was and the move needs no see-pay right.
+Undo takes the whole move back as one step, and redo puts it back, each leaving every step
+resolving as it did. Undo is refused once the step it left, or a later change in the step it
+reached, changes the same thing, and the refusal names that change. An undo is checked as
+a move the other way, so it is refused for the same reasons, and redo as the move again.
+Both are refused once another move, undo or redo has taken the change elsewhere. An undo
+puts the change back where it stood among the step's entries, so the next undo picks what
+it did before.
+The timeline offers the move through a "When…" menu on the bar where the change shows, with
+"earlier" missing next to Today, and it saves through `MoveChange`, which MCP shares as
+`team_planning_move_change`. Each timeline column lists the keys it can move. The menu
+stands in for dragging a bar's end, which is not built yet; it gives the keyboard and a
+phone the same path.
 
 ### Unit changes as built
 
@@ -855,7 +883,7 @@ make ends what they can redo, as in an editor. Undo and redo are for editors, li
 other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
-undo, redo and note, in order, with who made it and, while it stands undone, who undid it.
+undo, redo, move and note, in order, with who made it and, while it stands undone, who undid it.
 The baseline's history also lists each update to today, with the base it left and the
 conflicts it carried.
 `team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as

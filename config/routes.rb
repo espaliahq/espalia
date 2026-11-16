@@ -436,6 +436,8 @@ Rails.application.routes.draw do
     resources :assignments, only: [ :update ], controller: "plans/assignments"
     # Move a position to another unit on the scenario map; the id is the position's.
     resources :positions, only: [ :update ], controller: "plans/positions"
+    # Move a place, position or departure a step earlier or later on the timeline ([#309](https://github.com/espaliahq/espalia/issues/309)).
+    resources :change_moves, only: [ :create ], controller: "plans/change_moves", path: "change-moves"
     # Grant and withdraw the see-pay right ([#300](https://github.com/espaliahq/espalia/issues/300)); the id is the member's.
     resources :see_pay, only: [ :update, :destroy ], controller: "plans/see_pay"
     # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.
