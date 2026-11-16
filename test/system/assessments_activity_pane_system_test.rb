@@ -95,6 +95,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   # place would also end on a closed URL with no marker, but leave it in history.
   def close_overlay_by_its_button
     assert_selector "#assessment-activity-pane button[aria-label='Close activity']", visible: true
+    expect_a_back
     page.execute_script(<<~JS)
       window.overlayPopped = false
       window.addEventListener("popstate", () => { window.overlayPopped = true }, { once: true })
@@ -102,7 +103,10 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     JS
     assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
     assert wait_until_js { page.evaluate_script("window.overlayPopped") }, "closing stepped Back off the overlay's entry"
+    assert_back_landed
     assert_back_on_opening_entry
+    assert page.evaluate_script("document.activeElement.matches(arguments[0])", TOGGLE),
+      "closing left focus behind instead of on the toggle"
   end
 
   # Both entries carry the same path, so the URL alone can't show a Back has
@@ -111,6 +115,12 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   # a Back that starts one lands only at that visit's turbo:load. A Back that
   # leaves for another document drops the flag, which counts as landed.
   def go_back_and_wait_until_landed
+    expect_a_back
+    page.go_back
+    assert_back_landed
+  end
+
+  def expect_a_back
     page.execute_script(<<~JS)
       window.backLanded = false
       let restoring = false
@@ -121,7 +131,9 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         else settle()
       }, { once: true })
     JS
-    page.go_back
+  end
+
+  def assert_back_landed
     assert wait_until_js { page.evaluate_script("window.backLanded !== false") }, "Back never landed"
   end
 
@@ -695,14 +707,16 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
 
     should "take focus in when it opens, and close on Escape with focus back on its toggle" do
-      visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
+      mark_history_entry
+      hold_matrix_frame_loads
       page.execute_script("document.querySelector(arguments[0]).click()", TOGGLE)
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_equal "assessment-activity-pane", page.evaluate_script("document.activeElement.id")
 
+      expect_a_back
       press_escape
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert_back_landed
       assert page.evaluate_script("document.activeElement.matches(arguments[0])", TOGGLE), "focus returns to the toggle"
     end
 
