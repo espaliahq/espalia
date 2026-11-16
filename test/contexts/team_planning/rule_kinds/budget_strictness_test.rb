@@ -46,6 +46,11 @@ class TeamPlanning::RuleKinds::BudgetStrictnessTest < ActiveSupport::TestCase
                  refusal({ match: [], limit: "money", scope: "line", currency: "EUR" })
   end
 
+  should "keep its presets from being changed through the default" do
+    assert_raises(FrozenError) { kind.default["scope"] = "organisation" }
+    assert_raises(FrozenError) { kind.default["match"] << "grade" }
+  end
+
   should "be plan-wide" do
     assert kind.plan_wide?
   end

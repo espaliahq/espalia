@@ -21,9 +21,9 @@ class TeamPlanning::RuleKinds::BudgetStrictness < TeamPlanning::RuleKind
 
   PRESETS = {
     "position_control" => { "match" => DIMENSIONS, "limit" => "both", "scope" => "line" },
-    "cost_centre" => { "match" => %w[cost_centre], "limit" => "both", "scope" => "cost_centre" },
-    "envelope" => { "match" => [], "limit" => "money", "scope" => "organisation" }
-  }.freeze
+    "cost_centre" => { "match" => %w[cost_centre].freeze, "limit" => "both", "scope" => "cost_centre" },
+    "envelope" => { "match" => [].freeze, "limit" => "money", "scope" => "organisation" }
+  }.transform_values(&:freeze).freeze
 
   # @return [String]
   def self.rule_name = "budget_strictness"
