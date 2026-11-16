@@ -21,7 +21,9 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "their kind prices them on either basis. Funded plus unfunded is team_planning_cost's scenario total, per " \
               "currency, on an inclusive basis. Remaining is approved less funded in the line's own currency, and " \
               "head_count less the FTE drawn. Money stays per currency: a line drawn on in another currency lists it in " \
-              "mismatched_currencies, never converted, and only the scenario-wide total and forecast carry `converted` and `missing`, in the " \
+              "mismatched_currencies, never converted, and its remaining amount is null, as approved less only the part in " \
+              "its own currency would overstate it; a remaining total leaves such lines out and lists their ids under " \
+              "remaining.left_out.mismatched_currencies, so a total with any listed is not complete. Only the scenario-wide total and forecast carry `converted` and `missing`, in the " \
               "reference currency at the period's start; every group sum is `native` alone. cost_centres (by the cost " \
               "centre a line was approved for, null for none; unfunded money by the seat's cost centre, unfunded head " \
               "count by the position's) carry all four; budget_lines carry approved, funded and remaining; units carry " \
@@ -64,7 +66,8 @@ class Operations::TeamPlanning::Budget < Operations::Base
   def totals(totals, money: method(:sum))
     { approved: { **money.(totals.approved), head_count: figure(totals.head_count) },
       funded: { **money.(totals.funded), **heads(totals.funded_heads) },
-      remaining: { **money.(totals.remaining), head_count: figure(totals.remaining_head_count) },
+      remaining: { **money.(totals.remaining), head_count: figure(totals.remaining_head_count),
+                   left_out: { mismatched_currencies: totals.remaining_left_out } },
       unfunded: { **money.(totals.unfunded), **heads(totals.unfunded_heads) } }
   end
 

@@ -1309,8 +1309,10 @@ gives the four numbers for a scenario, never the baseline.
   forecast rows, which count as their kind prices them on either basis. On an inclusive basis,
   funded plus unfunded is the cost read's total, per currency.
 - **Remaining** is approved less funded, in the line's own currency, and head count less the
-  FTE drawn. A line drawn on in another currency lists it as mismatched and never converts
-  it. Only the grand totals, the scenario total and its forecast, convert, once, to the reference currency; every group sum stays
+  FTE drawn. A line drawn on in another currency lists it as mismatched, never converts
+  it, and has no remaining amount, as approved less only the part in its own currency would
+  overstate it. A remaining total leaves such lines out and names them, so a total that
+  leaves one out is never read as complete. Only the grand totals, the scenario total and its forecast, convert, once, to the reference currency; every group sum stays
   per currency.
 - **Where it adds up.** Cost centres carry all four. Lines carry approved, funded and
   remaining, since a line's unfunded money has no line to sit on. Units carry funded and

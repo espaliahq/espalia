@@ -17,8 +17,10 @@
 # Approved is a line's amount, made yearly, over the days its period overlaps
 # the scenario's, out of a 365-day year as the cost read counts. A line with
 # no amount approves none, never zero. Money keeps its currency: a line drawn
-# on in another currency is flagged and never converted, and its remaining is
-# in its own currency only. Only the grand totals convert, to the reference
+# on in another currency is flagged and never converted, and has no remaining
+# amount, as approved less the part in its own currency would overstate it.
+# A remaining total leaves such a line out and names it, so it is never read
+# as complete when it isn't. Only the grand totals convert, to the reference
 # currency at the period's start.
 #
 # Lines and cost centres carry all four numbers; a line's cost centre is the
@@ -47,7 +49,7 @@ class TeamPlanning::Budget
   # @!attribute approved [Rational, nil] in the line's currency over the overlap; nil with no amount
   # @!attribute funded [Hash{String => Rational}] currency => what its draws cost
   # @!attribute funded_heads [Heads] the positions drawing on it, and the FTE they draw
-  # @!attribute remaining [Rational, nil] approved less funded in the line's currency
+  # @!attribute remaining [Rational, nil] approved less funded; nil with no amount or a mismatched currency
   # @!attribute remaining_head_count [Rational, nil] the head count less the FTE drawn
   # @!attribute mismatched [Array<String>] the other currencies its positions cost in
   Line = Data.define(:line, :approved, :funded, :funded_heads, :remaining, :remaining_head_count, :mismatched)
@@ -57,10 +59,12 @@ class TeamPlanning::Budget
   # @!attribute funded [TeamPlanning::Cost::Sum]
   # @!attribute funded_heads [Heads]
   # @!attribute remaining [TeamPlanning::Cost::Sum]
+  # @!attribute remaining_left_out [Array<String>] ids of lines with an amount but no remaining, for a mismatched currency
   # @!attribute remaining_head_count [Rational, nil]
   # @!attribute unfunded [TeamPlanning::Cost::Sum]
   # @!attribute unfunded_heads [Heads]
-  Totals = Data.define(:approved, :head_count, :funded, :funded_heads, :remaining, :remaining_head_count, :unfunded, :unfunded_heads)
+  Totals = Data.define(:approved, :head_count, :funded, :funded_heads, :remaining, :remaining_left_out, :remaining_head_count,
+                       :unfunded, :unfunded_heads)
 
   # @!attribute funded [TeamPlanning::Cost::Sum]
   # @!attribute funded_heads [Heads]
@@ -165,10 +169,10 @@ class TeamPlanning::Budget
     funded = @drawn[budget_line.id].sort.to_h
     heads = heads_of(draws)
     head_count = budget_line.head_count && Rational(budget_line.head_count.to_s)
+    mismatched = approved ? funded.keys - [ budget_line.currency ] : []
     Line.new(line: budget_line, approved:, funded:, funded_heads: heads,
-             remaining: approved && approved - funded.fetch(budget_line.currency, 0r),
-             remaining_head_count: head_count && head_count - heads.fte,
-             mismatched: approved ? funded.keys - [ budget_line.currency ] : [])
+             remaining: approved && mismatched.empty? ? approved - funded.fetch(budget_line.currency, 0r) : nil,
+             remaining_head_count: head_count && head_count - heads.fte, mismatched:)
   end
 
   def heads_of(draws) = Heads.new(positions: draws.map { it.first.position.id }.uniq.size, fte: draws.sum(0r) { |funded, draw| funded.fte * draw.share })
@@ -227,7 +231,8 @@ class TeamPlanning::Budget
     head_count = counted.sum(0r) { Rational(it.line.head_count.to_s) } if counted.any?
     Totals.new(approved: converted(priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:approved) }),
                head_count:, funded: converted(lines.map(&:funded).reduce({}) { |sum, money| add(sum, money) }), funded_heads:,
-               remaining: converted(priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:remaining) }),
+               remaining: converted(priced.select(&:remaining).group_by { it.line.currency }.transform_values { it.sum(0r, &:remaining) }),
+               remaining_left_out: priced.reject(&:remaining).map { it.line.id },
                remaining_head_count: head_count && counted.sum(0r, &:remaining_head_count),
                unfunded: converted(unfunded), unfunded_heads:)
   end

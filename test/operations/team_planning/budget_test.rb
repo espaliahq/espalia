@@ -46,6 +46,8 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
                    approved: { amount: "36000", head_count: "2" }, funded: { native: { "EUR" => "9000" }, positions: 1, fte: "0.5" },
                    remaining: { amount: "27000", head_count: "1.5" }, mismatched_currencies: [] }, read[:budget_lines].sole)
     assert_equal({ native: { "EUR" => "9000" }, converted: "9000", missing: [], positions: 1, fte: "0.5" }, read[:total][:funded])
+    assert_equal({ native: { "EUR" => "27000" }, converted: "27000", missing: [], head_count: "1.5", left_out: { mismatched_currencies: [] } },
+                 read[:total][:remaining])
     assert_equal({ native: {}, converted: "0", missing: [], positions: 0, fte: "0" }, read[:total][:unfunded])
     assert_equal [ "Platform" ], read[:cost_centres].pluck(:cost_centre)
     assert_equal({ native: { "EUR" => "9000" }, positions: 1, fte: "0.5" }, read[:cost_centres].sole[:funded], "only the total converts")

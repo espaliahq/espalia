@@ -176,12 +176,14 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     end
   end
 
-  should "flag a line drawn on in another currency, and keep its remaining in its own" do
+  should "flag a line drawn on in another currency, give it no remaining, and name it as left out of the remaining totals" do
     dollars = line(amount: 150_000, currency: "USD", period: "year", cost_centre: "Platform")
     open_position
     report = budget
 
-    assert_equal [ { "EUR" => 100_000r }, [ "EUR" ], 150_000r ], of(report, dollars).then { [ it.funded, it.mismatched, it.remaining ] }
+    assert_equal [ { "EUR" => 100_000r }, [ "EUR" ], nil ], of(report, dollars).then { [ it.funded, it.mismatched, it.remaining ] }
+    assert_equal [ {}, [ dollars ] ], report.totals.then { [ it.remaining.native, it.remaining_left_out ] }
+    assert_equal [ dollars ], report.cost_centres.fetch("Platform").remaining_left_out
     assert_nil report.totals.approved.converted, "no USD rate, so the grand total doesn't convert"
     assert_not_empty report.totals.approved.missing
   end
