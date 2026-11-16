@@ -295,6 +295,20 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     assert @plan.winning_changes(@q1).key?([ @grace_id, "departure" ])
   end
 
+  test "undo the first of two moves, which takes the change back to the step it was made in" do
+    placed = place(@q1, @eng_id)
+    first = move(@q1, "later")
+    second = move(@q2, "later")
+
+    undo(@q3, first)
+
+    assert_equal [ placed ], @plan.log_of(@q1).map(&:event_id)
+    assert_equal [ first, second ], @plan.log_of(@q3).map(&:event_id)
+    assert_equal placed, @plan.winning_changes(@q3)[key].event_id
+    assert_match "moved again since", refusal { undo(@q3, second) }
+    assert_equal everything, replayed.then { |plan| [ @plan_id, *plan.scenarios.keys ].to_h { [ it, [ plan.winning_changes(it).transform_values { [ it.event_id, it.data ] }, plan.log_of(it).map(&:event_id) ] ] } }
+  end
+
   test "refuse a step named for a move earlier" do
     place(@q2, @eng_id)
 
