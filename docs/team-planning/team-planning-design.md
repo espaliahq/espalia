@@ -1826,7 +1826,8 @@ promotions and increases, matched by cost centre and period like any other.
 
 [#351](https://github.com/espaliahq/espalia/issues/351) built the frame (10.1), and
 [#362](https://github.com/espaliahq/espalia/issues/362) the first kind, attrition (10.2).
-The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
+[#458](https://github.com/espaliahq/espalia/issues/458) added hiring dates (10.3). The ramp
+(10.4) is a story of its own.
 
 - **A step is the scenario's period**, the unit the timeline and cost already use. Today
   has no period, so it has no forecast and is all actual.
@@ -1938,6 +1939,49 @@ pay with it. `TeamPlanning::Forecast::Pricing` carries it, built by the cost and
 reads from the places they priced, so the forecast never reads pay on its own. The
 invariant holds for every caller: actual, planned and forecast add up to the total, per
 unit and overall. The pay privacy test walks the real kind for a holder and a non-holder.
+
+### Hiring dates as built
+
+[#458](https://github.com/espaliahq/espalia/issues/458) gave `PositionSet` two optional
+fields, both plan-held:
+
+- **`hiring_status`** is not_started, recruiting, on_hold or offer_accepted. An older
+  event, which carries none, reads as not_started.
+- **`target_start`** is the day someone is planned to start. offer_accepted needs one.
+
+Each position also knows the day it opens: the base date for a position the baseline
+already holds, else the first day of the step that opens it. A backfill opens the day after
+its leaver goes.
+
+`TeamPlanning::SeatStart` is the one rule cost, capacity, the forecast, the headcount walk
+and Checks share. An open seat starts on its target start, never before it opens, and not
+at all while on hold. An undated seat starts the day it opens, as the plan's own figures
+always had it. The start applies to open FTE and placeholders, never to a named person.
+
+- **Capacity reads the step's last day.** A seat has started in a step when its start falls
+  on or before that day, and then counts in full; an unstarted seat counts zero.
+- **Cost prices the days from the start.** A seat starting halfway through a step costs
+  half the step.
+- **The walk counts a placeholder as hired** in the step it starts.
+- **There is no step average** for a dated seat: each read takes its own reading of the one
+  start.
+
+The `time_to_hire` rule, already read for backfills, now forecasts an undated open seat
+too: it fills that many days after it opens. The forecast row takes away cost for the days
+before then, and takes away capacity and headcount only when the forecast start falls after
+the step ends. A seat with a target start, or on hold, gets no forecast, and 0 days
+forecasts nothing, so a tenant that sets 0 keeps the figures it had before.
+
+Two edges stay as they were. Capacity counts a backfill in full when its leaver leaves on
+the step's last day, while cost prices it 0 days. Budget head counts take a position's FTE
+whatever its start, and the budget treats forecast rows as unfunded.
+
+Checks lists each open seat whose target start is before today under **Late hires**, with
+the FTE still open. The map labels an open seat with its status and start, such as
+"Recruiting · starts 1 Jun 2027", and so does its bar on the timeline. Not started goes
+unsaid. The Hiring dialog that sets both fields from the map follows in
+[#465](https://github.com/espaliahq/espalia/issues/465); until then they are set through
+`team_planning_set_position`.
 
 ## Approval and carrying a plan out
 

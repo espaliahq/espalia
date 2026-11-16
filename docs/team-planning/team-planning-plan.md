@@ -385,7 +385,7 @@ edits the change, then approves again.
 |---|---|---|
 | 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), shown on screen in [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out. Built in [#362](https://github.com/espaliahq/espalia/issues/362), API only | 10.1 |
-| 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
+| 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire. Built in [#458](https://github.com/espaliahq/espalia/issues/458); the Hiring dialog follows in [#465](https://github.com/espaliahq/espalia/issues/465) | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |
 | 10.5 | An Operation for promotion readiness and place in band for a person on a date, as known at the end of the day before, from `PersonDevelopment::Scoring`, gated by `AssessmentPolicy#show?`; and the assessment changes recorded between two dates, for the drift report | none |
 | 10.6 | Forecast promotions per unit and level, under the cohort minimum of `Reporting::CapabilityAttainment`, drawing on a pool | 10.1, 10.5, 6.1 |
