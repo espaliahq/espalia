@@ -773,7 +773,8 @@ number and a country, and leaves the rest open; a band that sets none matches ev
   matches only the bands made from that level and those that set no role, family or
   number, so removing an unrelated band never changes its price. With none for its
   country it is unpriced with the reason `level_left`. An admin prices it with a band for
-  every role and level in that country, or moves the seat to a current level.
+  every role and level in that country, or moves the seat to a current level. An open seat
+  has no country, so only such a band for any location prices it.
 
 #### Run rate at the end
 
