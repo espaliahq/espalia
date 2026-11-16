@@ -588,7 +588,7 @@ class TeamPlanning::CommandHandler
     return unless plan.role_of(person_id) == "editor"
     return if PlanPolicy.reachable_ids(plan.editor_ids - [ person_id ]).any?
 
-    raise TeamPlanning::Error, "A plan needs an editor: make someone else an editor first"
+    raise TeamPlanning::Error, TeamPlanning::PlanAggregate::EDITOR_NEEDED.fetch(plan.archived? ? :archived : :open)
   end
 
   # The stream counts a holder who has since left; this counts only those who
@@ -597,7 +597,7 @@ class TeamPlanning::CommandHandler
     return unless plan.sees_pay?(person_id)
     return if PlanPolicy.reachable_ids(plan.pay_holder_ids - [ person_id ]).any?
 
-    raise TeamPlanning::Error, "A plan needs someone who can see pay: give the right to someone else first"
+    raise TeamPlanning::Error, TeamPlanning::PlanAggregate::PAY_HOLDER_NEEDED.fetch(plan.archived? ? :archived : :open)
   end
 
   # Pay is changed, cleared, noted, undone and redone only by a member who

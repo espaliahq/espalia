@@ -341,7 +341,18 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
 
     should "keep its last reachable editor and pay holder" do
       error = assert_raises(TeamPlanning::Error) { handler(@owner).remove_member(@plan_id, @editor.id) }
-      assert_match "A plan needs an editor", error.message
+      assert_equal TeamPlanning::PlanAggregate::EDITOR_NEEDED[:archived], error.message
+    end
+
+    should "keep a viewer who is its last pay holder until an editor restores it" do
+      handler(@owner).restore_plan(@plan_id)
+      handler(@owner).grant_see_pay(@plan_id, @colleague.id)
+      handler(@owner).withdraw_see_pay(@plan_id, @editor.id)
+      handler(@owner).archive_plan(@plan_id)
+
+      error = assert_raises(TeamPlanning::Error) { handler(@colleague_context).remove_member(@plan_id, @colleague.id) }
+      assert_equal TeamPlanning::PlanAggregate::PAY_HOLDER_NEEDED[:archived], error.message
+      assert_not handler(@owner).restore_plan(@plan_id).archived?
     end
 
     should "freeze once its editor leaves the organisation, and let a tenant admin delete it" do

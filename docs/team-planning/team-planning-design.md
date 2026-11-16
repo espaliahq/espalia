@@ -871,7 +871,8 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
   it". Four things still work, so nobody is trapped: deleting it, a member leaving or an
   editor removing a departed member, and a tenant admin restoring the see-pay right.
 - The lock-outs still hold. The last editor can't leave, and the last member who sees pay
-  can't give that up. A plan whose editors have all gone is frozen as before, archived or
+  can't give that up. An archived plan can't hand either on, so the refusal says to
+  restore it first. A plan whose editors have all gone is frozen as before, archived or
   not, and a tenant admin can delete it.
 - `team_planning_plans` gains `archived_on` and `archived_by_id`. New events fill them,
   so no past event projects differently and `CODE_VERSION` stays put. The history shows

@@ -49,6 +49,17 @@ class TeamPlanning::PlanAggregate
 
   # What every write to an archived plan is refused with.
   ARCHIVED = "This plan is archived: restore it to change it"
+  # An archived plan can't make anyone an editor or give anyone pay, so its
+  # refusals say how to get there first.
+  EDITOR_NEEDED = {
+    open: "A plan needs an editor: make someone else an editor first",
+    archived: "A plan needs an editor, and an archived plan can't make anyone else one: restore it first"
+  }.freeze
+  PAY_HOLDER_NEEDED = {
+    open: "A plan needs someone who can see pay: give the right to someone else first",
+    archived: "A plan needs someone who can see pay, and an archived plan can't give the right to " \
+              "anyone else: ask an editor to restore it first"
+  }.freeze
 
   ROLES = %w[editor viewer].freeze
   RELATIONS = %w[then instead on].freeze
@@ -1061,13 +1072,13 @@ class TeamPlanning::PlanAggregate
   def ensure_editor_remains!(person_id)
     return unless editor_ids == [ person_id ]
 
-    raise TeamPlanning::Error, "A plan needs an editor: make someone else an editor first"
+    raise TeamPlanning::Error, EDITOR_NEEDED.fetch(archived? ? :archived : :open)
   end
 
   def ensure_pay_holder_remains!(person_id)
     return unless pay_holder_ids == [ person_id ]
 
-    raise TeamPlanning::Error, "A plan needs someone who can see pay: give the right to someone else first"
+    raise TeamPlanning::Error, PAY_HOLDER_NEEDED.fetch(archived? ? :archived : :open)
   end
 
   # Every command but {#delete}, {#archive}, {#restore}, leaving and a see-pay
