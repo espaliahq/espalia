@@ -1332,7 +1332,8 @@ destination: the reader learns they left the plan's units, not where they went. 
 change that brings them in nulls where they came from. A covered person now reporting
 to someone the plan can't name reads the same way, and so does the earlier value of a
 fact or name last set while its subject was outside, before the window or in it.
-`outside` lists the fields nulled,
+A joiner's first-day facts keep only the units, owned units and manager the plan
+covers. `outside` lists the fields nulled or trimmed,
 and the Changes tab words each one.
 
 `team_planning_drift` gives the same report to MCP, with people by id and a `names` map

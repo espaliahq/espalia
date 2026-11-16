@@ -111,7 +111,7 @@ class TeamPlanning::DriftScope
 
   def person(change)
     return unseen(change, change.person_id) unless covered?(change.person_id) || joins_covered?(change)
-    return shown(change, change.person_id) if change.kind == :joined
+    return joined(change) if change.kind == :joined
 
     cut = seen?(change, change.person_id) ? { before: nil } : {}
     if change.fact == "manager"
@@ -141,6 +141,17 @@ class TeamPlanning::DriftScope
       @known << key
     end
     outside && !change.before.nil?
+  end
+
+  # A joiner's facts arrive whole, so whatever names a unit or someone outside
+  # the plan goes, and the rest stays.
+  def joined(change)
+    after = change.after.to_h
+    kept = after.merge({ "memberships" => after["memberships"]&.select { |unit_id, _| covered_unit?(unit_id) },
+                         "owned_unit_ids" => after["owned_unit_ids"]&.select { covered_unit?(it) },
+                         "manager_id" => (after["manager_id"] if nameable?(after["manager_id"])) }.slice(*after.keys))
+    @shown << change.person_id unless change.withdrawn
+    kept == after ? Cut.new(change:, outside: []) : Cut.new(change: change.with(after: kept), outside: [ "after" ])
   end
 
   def shown(change, subject_id)

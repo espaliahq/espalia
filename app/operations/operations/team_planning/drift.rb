@@ -19,7 +19,8 @@ class Operations::TeamPlanning::Drift < Operations::Base
               "A person's placements are one facet, so a move in one placement meets the plan's whole list. " \
               "A plan covering some units lists only changes about the people and units it covers, at its base, in any " \
               "scenario, or placed in one of them since. A change that takes one of them out, or a covered person now reporting " \
-              "to someone the plan can't show, keeps the fact and nulls what lies outside; `outside` lists the fields nulled. " \
+              "to someone the plan can't show, keeps the fact and nulls what lies outside; a joiner keeps only the units and manager " \
+              "the plan covers. `outside` lists the fields nulled or trimmed. " \
               "People are named by id, and `names` maps every person and unit id the changes name to a name; a forgotten " \
               "person reads as \"#{Person::FORMER_MEMBER}\". #{UNCHECKED} Refused, as an unknown plan, unless the caller is a member."
   category :read

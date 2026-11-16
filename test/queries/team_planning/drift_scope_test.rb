@@ -60,4 +60,14 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
 
     assert_equal [ { "manager_id" => nil }, [ "after" ] ], cuts(left, manager).last.then { [ it.change.after, it.outside ] }
   end
+
+  should "keep only what a joiner holds inside the plan" do
+    joined = change(:joined, 10, after: { "title" => "Staff Engineer", "manager_id" => "cy",
+                                          "memberships" => { @engineering => { "allocation" => 1 }, @sales => { "allocation" => 0 } },
+                                          "owned_unit_ids" => [ @engineering, @sales ] })
+    cut = cuts(joined).sole
+
+    assert_equal [ { "title" => "Staff Engineer", "manager_id" => nil, "memberships" => { @engineering => { "allocation" => 1 } }, "owned_unit_ids" => [ @engineering ] },
+                   [ "after" ] ], [ cut.change.after, cut.outside ]
+  end
 end
