@@ -196,6 +196,26 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
       assert_equal outside, refusal { @plan.redo_change(scenario_id: @lean, event_id: earlier, redone_by_id: @editor_id) }
     end
 
+    should "judge a pinned departure by the step they leave in, not the step that pins it" do
+      person_id = SecureRandom.uuid_v7
+      @plan.pin_change(TeamPlanning::Events::DepartureSet, scenario_id: @q2, subject_id: person_id, facet: "departure",
+                                                           end_state: { leaves_in_id: @q1, leaves_on: "2027-02-15" }, pinned_by_id: @editor_id)
+      pin = last_event.event_id
+
+      @plan.set_scenario_period(@q1, ends_on: "2027-04-30", set_by_id: @editor_id)
+      assert_equal %w[2027-05-01 2027-06-30], period(@q2)
+
+      @plan.undo_change(scenario_id: @q2, event_id: pin, undone_by_id: @editor_id)
+      @plan.redo_change(scenario_id: @q2, event_id: pin, redone_by_id: @editor_id)
+      assert_not @plan.undone?(pin)
+
+      @plan.undo_change(scenario_id: @q2, event_id: pin, undone_by_id: @editor_id)
+      @plan.set_scenario_period(@q1, starts_on: "2027-03-01", ends_on: "2027-04-30", set_by_id: @editor_id)
+      assert_equal "They leave on 2027-02-15, outside the dates of the step they leave in (2027-03-01 to 2027-04-30): " \
+                   "change the step's dates first",
+                   refusal { @plan.redo_change(scenario_id: @q2, event_id: pin, redone_by_id: @editor_id) }
+    end
+
     should "keep its start when only the end moves, and write nothing for the same period" do
       @plan.set_scenario_period(@q1, ends_on: "2027-02-28", set_by_id: @editor_id)
       assert_equal %w[2027-01-14 2027-02-28], period(@q1)

@@ -1613,15 +1613,28 @@ class TeamPlanning::PlanAggregate
   # Refuses periods that would leave someone's last day outside the scenario
   # that has them leave, as a move into a step refuses it.
   def ensure_departures_within!(moved)
+    leaving = standing_departures
     @scenarios.each_key do |id|
       period = period_of(id, moved)
       next if period == period_of(id)
 
-      standing = changes_in(id).index_by(&:key).values
-      leaves_on = standing.filter_map { it.data[:leaves_on] }.find { !period.cover?(Date.iso8601(it)) } or next
+      leaves_on = leaving.fetch(id, []).find { !period.cover?(Date.iso8601(it)) } or next
       raise TeamPlanning::Error,
             "Someone leaves on #{leaves_on}, outside the dates this gives the scenario they leave in " \
             "(#{period.begin.iso8601} to #{period.end.iso8601}): change their date first"
+    end
+  end
+
+  # A pin in a later step keeps the step they leave in, so each date belongs
+  # to that step, not the one holding the change.
+  #
+  # @return [Hash{String => Array<String>}] the last days in effect, by the scenario they leave in
+  def standing_departures
+    [ @plan_id, *@scenarios.keys ].each_with_object(Hash.new { |hash, id| hash[id] = [] }) do |holder_id, leaving|
+      changes_in(holder_id).index_by(&:key).each_value do |change|
+        leaves_on = change.data[:leaves_on] or next
+        leaving[change.data[:leaves_in_id] || holder_id] << leaves_on
+      end
     end
   end
 
@@ -1629,7 +1642,7 @@ class TeamPlanning::PlanAggregate
   # brings back is checked as it returns.
   def ensure_leaves_in_period!(scenario_id, change)
     leaves_on = change&.data&.dig(:leaves_on) or return
-    period = period_of(scenario_id) or return
+    period = period_of(change.data[:leaves_in_id] || scenario_id) or return
     return if period.cover?(Date.iso8601(leaves_on))
 
     raise TeamPlanning::Error, "They leave on #{leaves_on}, outside the dates of the step they leave in " \
