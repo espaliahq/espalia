@@ -680,10 +680,11 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "#{this(scenario_id)} doesn't change this, so there is nothing to move" unless own_change?(scenario_id, key)
 
     target_id = move_target(scenario_id, direction, to_scenario_id)
+    moved_event_ids = @logs.fetch(scenario_id).select { key_of(it) == key }.map(&:event_id)
     ensure_movable!(scenario_id, target_id, key)
+    ensure_references_kept!(scenario_id, target_id, moved_event_ids)
     apply(TeamPlanning::Events::ChangeMoved.new(data: {
-      plan_id: @plan_id, scenario_id:, to_scenario_id: target_id, subject_id:, facet:, direction:,
-      moved_event_ids: @logs.fetch(scenario_id).select { key_of(it) == key }.map(&:event_id), moved_by_id:
+      plan_id: @plan_id, scenario_id:, to_scenario_id: target_id, subject_id:, facet:, direction:, moved_event_ids:, moved_by_id:
     }))
     target_id
   end
@@ -949,7 +950,7 @@ class TeamPlanning::PlanAggregate
 
   on TeamPlanning::Events::ChangeUndone do |event|
     if (to = event.data[:moves_to_id])
-      relocate(event.data[:moved_event_ids], from: event.data[:scenario_id], to:)
+      relocate(event.data[:moved_event_ids], from: event.data[:scenario_id], to:, before: event.data[:moves_before_id])
     end
     @undone << event.data[:undone_event_id]
     redo_stack(event.data[:scenario_id], event.data[:undone_by_id]) << event.data[:undone_event_id]
@@ -1072,8 +1073,9 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "A later change to this replaced it (#{later.event_id}): undo that first, then #{action} this"
   end
 
-  # A moved change names the agreed part as where it is set, so every reader
-  # finds it where the log holds it.
+  # A moved change names the step it moved to, the agreed part of a split or
+  # another step, as where it is set, so every reader finds it where the log
+  # holds it. A move's own entry keeps the step it came from.
   def moved_to(entry, agreed_id)
     return entry.class.new(event_id: entry.event_id, data: entry.data.merge(to_scenario_id: agreed_id), metadata: entry.metadata.to_h) if entry.is_a?(TeamPlanning::Events::ChangeMoved)
 
@@ -1091,6 +1093,7 @@ class TeamPlanning::PlanAggregate
   def move_target(scenario_id, direction, to_scenario_id)
     if direction == "earlier"
       path = timeline_path(scenario_id)
+      raise TeamPlanning::Error, "A change moves earlier only into the step before, so name no step" if to_scenario_id.present? && to_scenario_id != path[-2]
       raise TeamPlanning::Error, "The baseline is today: a change can't move before the first step" if path.size < 2
       raise TeamPlanning::Error, "The step before is the baseline, which holds today: a change can't move into it" if path[-2] == @plan_id
 
@@ -1119,10 +1122,13 @@ class TeamPlanning::PlanAggregate
 
   def standing_in_for(scenario_id) = children_of(scenario_id).reject { it.relation == "then" }.flat_map { [ it.id, *standing_in_for(it.id) ] }
 
+  # A step between the two on the resolution chain, as the step an alternative
+  # stands in for is, would come to override the change or stop doing so.
   def ensure_movable!(from_id, to_id, key)
     ensure_not_split!(from_id, to_id)
-    if (there = changes_in(to_id).reverse_each.find { it.key == key })
-      raise TeamPlanning::Error, "The step it would move to already changes this (#{there.event_id}): clear it there first"
+    [ *steps_between(from_id, to_id), to_id ].each do |step_id|
+      there = changes_in(step_id).reverse_each.find { it.key == key } or next
+      raise TeamPlanning::Error, "#{step_id == to_id ? "The step it would move to" : "A step in between"} already changes this (#{there.event_id}): clear it there first"
     end
 
     ensure_leaves_within!(changes_in(from_id).reverse_each.find { it.key == key }, to_id)
@@ -1137,6 +1143,47 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "They leave on #{leaves_on}, outside the step it would move to (#{period.begin.iso8601} to #{period.end.iso8601}): change the date first"
   end
 
+  # The scenarios strictly between two steps on the deeper one's resolution chain.
+  def steps_between(one_id, other_id)
+    chain = resolution_chain(other_id)
+    chain = resolution_chain(one_id) unless chain.include?(one_id)
+    chain.drop_while { it != one_id && it != other_id }[1...-1] || []
+  end
+
+  def descendants(scenario_id) = children_of(scenario_id).flat_map { [ it.id, *descendants(it.id) ] }
+
+  # A move can't leave a change behind without the position or hire it refers
+  # to, or bring one ahead of it. Every entry counts, undone or cleared, since
+  # an undo can bring it back, as a split counts them.
+  def ensure_references_kept!(holder_id, dest_id, moved_event_ids)
+    moved = moved_event_ids.to_set
+    changes = ->(ids) { ids.flat_map { @logs.fetch(it, []) }.grep(TeamPlanning::Events::Change) }
+    created_by = ->(entries) { entries.select { it.class.creates_subject? }.to_h { [ it.data[:subject_id], it ] } }
+    needs = ->(change) { change.class.refers_to(change.data) + (change.class.creates_subject? ? [] : [ change.data[:subject_id] ]) }
+
+    if resolution_chain(dest_id).include?(holder_id)
+      taken = created_by.(changes.([ holder_id ]).select { moved.include?(it.event_id) })
+      return if taken.empty?
+
+      ([ holder_id, *descendants(holder_id) ] - [ dest_id, *descendants(dest_id) ]).each do |step_id|
+        kept = created_by.(changes.(resolution_chain(step_id)).reject { moved.include?(it.event_id) })
+        changes.([ step_id ]).reject { moved.include?(it.event_id) }.each do |change|
+          next if (needs.(change) & (taken.keys - kept.keys)).empty?
+
+          raise TeamPlanning::Error, "A change that stays (#{change.event_id}) needs what this one creates, so it can't move later: change that first"
+        end
+      end
+    else
+      moving = changes.([ holder_id ]).select { moved.include?(it.event_id) }
+      ahead = created_by.(changes.(resolution_chain(dest_id)))
+      behind = created_by.(changes.([ *steps_between(dest_id, holder_id), holder_id ]).reject { moved.include?(it.event_id) })
+      moving.each do |change|
+        id = ((needs.(change) - created_by.(moving).keys - ahead.keys) & behind.keys).first or next
+        raise TeamPlanning::Error, "It needs what a later change creates (#{behind.fetch(id).event_id}), so it can't move earlier: move that first"
+      end
+    end
+  end
+
   # Undoing a move puts its entries back where they were made, in their order.
   def moving_back(marker)
     from_id = marker.data[:scenario_id]
@@ -1149,8 +1196,10 @@ class TeamPlanning::PlanAggregate
       raise TeamPlanning::Error, "The step it moved from changes this again (#{there.event_id}): undo or clear that first, then undo the move"
     end
     ensure_not_split!(from_id, marker.data[:to_scenario_id])
+    ensure_leaves_within!(in_effect(marker.data[:to_scenario_id], @undone).reverse_each.find { it.key == key }, from_id)
+    ensure_references_kept!(marker.data[:to_scenario_id], from_id, marker.data[:moved_event_ids])
 
-    { moves_to_id: from_id, moved_event_ids: marker.data[:moved_event_ids] }
+    { moves_to_id: from_id, moved_event_ids: marker.data[:moved_event_ids], moves_before_id: back_before(marker) }
   end
 
   def moving_again(marker)
@@ -1165,6 +1214,7 @@ class TeamPlanning::PlanAggregate
     end
     ensure_not_split!(from_id, to_id)
     ensure_leaves_within!(in_effect(from_id, @undone).reverse_each.find { it.key == key }, to_id)
+    ensure_references_kept!(from_id, to_id, marker.data[:moved_event_ids])
 
     { moves_from_id: from_id, moves_to_id: to_id, moved_event_ids: marker.data[:moved_event_ids] }
   end
@@ -1175,29 +1225,26 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "This step is split, and the split decides what is agreed: a change can't move into or out of either part"
   end
 
-  # Moves log entries between scenarios. Going back they take their places by
-  # when they were made; going forward they land just before the move's own
-  # entry, so nothing later stands between the move and what it moved.
+  # The entry an undone move's entries go back in front of: the first one made
+  # after them, so they keep their order and their place among the rest.
+  def back_before(marker)
+    first = @sequence.fetch(marker.data[:moved_event_ids].first)
+    @logs.fetch(marker.data[:scenario_id], []).find { @sequence.fetch(it.event_id) > first }&.event_id
+  end
+
+  # Moves log entries between scenarios as one block, in their order, in front
+  # of the entry named or at the end. A move's entries land just before its
+  # own entry, so nothing later stands between the move and what it moved.
   def relocate(event_ids, from:, to:, before: nil)
     ids = event_ids.to_set
     moving, @logs[from] = @logs.fetch(from, []).partition { ids.include?(it.event_id) }
-    moving = moving.map { moved_to_step(it, from, to) }
+    moving = moving.map { moved_to(it, to) }
     log = @logs[to] ||= []
-    if before && (at = log.index { it.event_id == before })
-      log.insert(at, *moving)
-    else
-      @logs[to] = (log + moving).sort_by { @sequence.fetch(it.event_id, 0) }
-    end
+    log.insert(log.index { it.event_id == before } || log.size, *moving)
     @redo_stacks.fetch(from, {}).each do |person_id, stack|
       redo_stack(to, person_id).concat(stack.select { ids.include?(it) })
       stack.reject! { ids.include?(it) }
     end
-  end
-
-  def moved_to_step(entry, from, to)
-    data = entry.data.merge(scenario_id: to)
-    data = entry.class.moved_end_state(data, from:, to:) if entry.is_a?(TeamPlanning::Events::Change)
-    entry.class.new(event_id: entry.event_id, data:, metadata: entry.metadata.to_h)
   end
 
   def redo_stack(scenario_id, person_id) = (@redo_stacks[scenario_id] ||= {})[person_id] ||= []

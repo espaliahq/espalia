@@ -41,6 +41,20 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     last_event.event_id
   end
 
+  def open_position(scenario_id, position_id)
+    @plan.set_change(TeamPlanning::Events::PositionSet, scenario_id:, subject_id: position_id, set_by_id: @ada_id,
+                                                        end_state: { role_id: SecureRandom.uuid_v7, level_id: SecureRandom.uuid_v7, unit_id: @eng_id, fte: 1, basis: "new" })
+    last_event.event_id
+  end
+
+  def place_in_position(scenario_id, position_id)
+    @plan.set_change(TeamPlanning::Events::AssignmentSet, scenario_id:, subject_id: @grace_id, set_by_id: @ada_id,
+                                                          end_state: { placements: [ { position_id:, allocation: 1.0 } ] })
+    last_event.event_id
+  end
+
+  def undo(scenario_id, event_id) = @plan.undo_change(scenario_id:, event_id:, undone_by_id: @ada_id)
+
   def resolved(scenario_id) = @plan.winning_changes(scenario_id).transform_values { [ it.event_id, it.data ] }
 
   def everything = [ @plan_id, *@plan.scenarios.keys ].to_h { [ it, [ resolved(it), @plan.log_of(it).map(&:event_id) ] ] }
@@ -195,5 +209,79 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     move(@q1, "later")
 
     assert_equal [ pay ], @plan.changes_in(@q1).map(&:event_id)
+  end
+
+  test "undo two moves of one change in turn, each putting it back a step" do
+    placed = place(@q1, @eng_id)
+    first = move(@q1, "later")
+    second = move(@q2, "later")
+
+    undo(@q3, second)
+    assert_equal placed, @plan.winning_changes(@q2)[key].event_id
+    undo(@q2, first)
+
+    assert_equal [ placed ], @plan.changes_in(@q1).map(&:event_id)
+    assert_nil @plan.winning_changes(@plan_id)[key]
+  end
+
+  test "undoing a move puts its entries back in their order, so a clear made after a change still clears it" do
+    place(@q2, @eng_id)
+    @plan.clear_change(scenario_id: @q2, subject_id: @grace_id, facet: "assignment", cleared_by_id: @ada_id)
+    arrived = place(@q1, @sales_id)
+    move(@q1, "later")
+    onward = move(@q2, "later")
+
+    undo(@q3, onward)
+
+    assert_equal arrived, @plan.winning_changes(@q2)[key].event_id
+    assert_equal everything, replayed.then { |plan| [ @plan_id, *plan.scenarios.keys ].to_h { [ it, [ plan.winning_changes(it).transform_values { |c| [ c.event_id, c.data ] }, plan.log_of(it).map(&:event_id) ] ] } }
+  end
+
+  test "refuse to move a position later while a change left behind places someone in it" do
+    position_id = SecureRandom.uuid_v7
+    opened = open_position(@q1, position_id)
+    placed = place_in_position(@q1, position_id)
+
+    assert_match placed, refusal { @plan.move_change(scenario_id: @q1, subject_id: position_id, facet: "position", direction: "later", moved_by_id: @ada_id) }
+    assert_equal [ opened, placed ], @plan.changes_in(@q1).map(&:event_id)
+  end
+
+  test "refuse to move a placement earlier than the position it fills, naming the position" do
+    position_id = SecureRandom.uuid_v7
+    opened = open_position(@q2, position_id)
+    place_in_position(@q2, position_id)
+
+    assert_match opened, refusal { move(@q2, "earlier") }
+  end
+
+  test "refuse to undo a move that would leave a later change without the position it moved" do
+    position_id = SecureRandom.uuid_v7
+    open_position(@q2, position_id)
+    moved = @plan.move_change(scenario_id: @q2, subject_id: position_id, facet: "position", direction: "earlier", moved_by_id: @ada_id).then { last_event.event_id }
+    place_in_position(@q1, position_id)
+
+    assert_match "can't move later", refusal { undo(@q1, moved) }
+  end
+
+  test "refuse to move an alternative's change earlier past the step it stands in for when that step changes it too" do
+    alternative = fork(@q2, "instead")
+    there = place(@q2, @sales_id)
+    place(alternative, @eng_id)
+
+    assert_match there, refusal { move(alternative, "earlier") }
+  end
+
+  test "refuse to undo a departure's move into a step whose period doesn't hold its date" do
+    leave(@q1, leaves_on: "2027-03-14")
+    @plan.set_scenario_period(@q1, ends_on: "2027-02-28", set_by_id: @ada_id)
+    moved = move(@q1, "later", facet: "departure")
+
+    assert_match "2027-03-14", refusal { undo(@q2, moved) }
+  end
+
+  test "refuse a step named for a move earlier" do
+    place(@q2, @eng_id)
+
+    assert_match "name no step", refusal { move(@q2, "earlier", to_scenario_id: @q3) }
   end
 end
