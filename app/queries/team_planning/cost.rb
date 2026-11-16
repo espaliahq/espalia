@@ -12,7 +12,9 @@
 # position's occupants leave, priced at the position's level with no
 # country, under its position's cost centre
 # ({TeamPlanning::PositionCostCentres}). A person's seat keeps their real
-# cost centre unless the plan changes their unit, role, level or location;
+# cost centre unless the plan changes their unit, role, level or location,
+# judged against the organisation the step stands on, the day after a closed
+# step for the steps after it;
 # someone changed, or with none, is decided by their position's label, then
 # the cost centre entries at their planned place
 # ([#387](https://github.com/espaliahq/espalia/issues/387)). A seat no band
@@ -414,11 +416,15 @@ class TeamPlanning::Cost
     @live = map.units.to_set(&:id)
     @rules = {}
     @positions = map.positions.index_by(&:id)
-    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id, base: @base, titles:)
+    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id, base: standing_base(map), titles:)
     people = map.people.flat_map { person_lines(it) }
     lines = people + open_lines(map)
     units = by(lines, &:unit_id)
     Priced.new(map:, lines:, total: sum(lines), units:, units_with_below: with_below(units), cost_centres: by(lines, &:cost_centre))
+  end
+
+  def standing_base(map)
+    TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base: @base).standing_base(map)
   end
 
   def person_lines(member)

@@ -38,7 +38,8 @@ class TeamPlanning::PositionCostCentres
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param tenant_id [String]
-  # @param base [TeamPlanning::Baseline::Map] Today, which {#changed?} compares the map with
+  # @param base [TeamPlanning::Baseline::Map] Today, which {#changed?} compares the map with: the plan's
+  #   baseline, or for a step after a closed one, the organisation the day after the close
   # @param titles [Integrations::HrisTitleResolution] each person's own role and level
   def initialize(map, tenant_id:, base:, titles:)
     @map = map

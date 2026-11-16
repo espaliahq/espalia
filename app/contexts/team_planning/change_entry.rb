@@ -19,7 +19,8 @@
 # `dates` entry of that step, with its period before and after; a fork that
 # closes a step with no end date is a `dates` entry of the step it closes. An
 # undo or redo of a date edit is an `undo` or `redo` entry of that step, with
-# the period it restores. A set or pin that settled one of those
+# the period it restores. Closing and reopening a step are `close` and
+# `reopen` entries of that step, with who and when and nothing else. A set or pin that settled one of those
 # conflicts holds {#settles}: the conflict's since and the choice made.
 TeamPlanning::ChangeEntry = Data.define(
   :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
@@ -70,6 +71,10 @@ TeamPlanning::ChangeEntry = Data.define(
       { action: "archive", actor_id: data[:archived_by_id] }
     when TeamPlanning::Events::PlanRestored
       { action: "restore", actor_id: data[:restored_by_id] }
+    when TeamPlanning::Events::StepClosed
+      { action: "close", actor_id: data[:closed_by_id] }
+    when TeamPlanning::Events::StepReopened
+      { action: "reopen", actor_id: data[:reopened_by_id] }
     when TeamPlanning::Events::ChangeRedone
       { action: "redo", **data.slice(:subject_id, :facet), reverses_event_id: data[:redone_event_id], actor_id: data[:redone_by_id] }
     end

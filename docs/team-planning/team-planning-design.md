@@ -2154,9 +2154,47 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - The next step resolves over the Org Graph, not over what the closed step planned.
 - Changes still pending in the closed step are shown in the next step as carried over.
   This is derived: no event copies them.
+- A seat still open at the close opens the day after it. At a close we know the seat is
+  still open, so its time to hire runs from the day after, as in a fresh plan.
 - The closed step is read as planned against actual, using the Org Graph as of its end (R4).
 - Alternatives to the closed step that were not taken are kept with it and no longer
   offered.
+
+### Planned against actual as built
+
+A closed step's row on the plan page, and its bar on the timeline, carry "Planned against
+actual…" ([#466](https://github.com/espaliahq/espalia/issues/466)). It opens a dialog that
+loads `TeamPlanning::StepOutcome` in a lazy frame, so the plan page pays nothing for it until
+someone asks. `team_planning_step_outcome` returns the same read to an agent. Every member
+may read it, viewers included.
+
+- **The planned side** is the step as it closed, resolved on the plan's own base.
+- **The actual side** is the Org Graph on the step's last day (`ends_on`), as it reads now.
+  An archived plan reads it as known on its archive day (`known_on`).
+- **Rows key on unit id**, under the plan's name for the unit. A unit renamed since still
+  matches, and one retired since keeps its row with nothing on the actual side.
+- **Each unit** carries planned and actual heads, and its people by outcome: as planned,
+  planned here but not here, here but not planned, and a placeholder hire not filled.
+  Someone planned here but not here gets no word on where they went: they may be outside the
+  plan's scope, or have left.
+- **A seat is filled** only where the plan placed someone in that position and they are in
+  its unit on the last day. Nobody new turning up fills it.
+- **Heads and names only.** No level, pay, cost or budget, so the read is the same for a
+  holder of the see-pay right as for anyone else, and the pay privacy test walks it.
+- **On a phone** the table becomes a card per unit.
+
+Known limits, each its own issue:
+
+- The outcome moves as the Org Graph learns more about the step's last day. Freezing it at
+  the close is [#477](https://github.com/espaliahq/espalia/issues/477).
+- The next step's changes that carried over aren't marked as such:
+  [#478](https://github.com/espaliahq/espalia/issues/478).
+- Updating to today is refused while a step is closed:
+  [#467](https://github.com/espaliahq/espalia/issues/467).
+- The Changes tab still lists drift from the plan's original base:
+  [#468](https://github.com/espaliahq/espalia/issues/468).
+- "The step's last day has passed" uses the UTC date:
+  [#469](https://github.com/espaliahq/espalia/issues/469).
 
 ## Projections
 

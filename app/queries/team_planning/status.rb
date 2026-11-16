@@ -69,13 +69,15 @@ class TeamPlanning::Status
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] the plan's id for the root
   # @param today [Date] as a UTC date
+  # @param known_on [Date, nil] read today's organisation as known at the end of this day, nil for as known now
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, scenario_id:, today: Time.now.utc.to_date, repository: TeamPlanning::Repository.new)
+  def initialize(context:, plan:, scenario_id:, today: Time.now.utc.to_date, known_on: nil, repository: TeamPlanning::Repository.new)
     @baseline = TeamPlanning::Baseline.new(context:, plan:)
     @context = context
     @plan = plan
     @scenario_id = scenario_id
     @today = today
+    @known_on = known_on
     @repository = repository
   end
 
@@ -139,7 +141,7 @@ class TeamPlanning::Status
   # the base date came before the plan, so today leaves it out. Both read the
   # whole organisation, as a change can move someone out of the plan's scope.
   def maps
-    now = @baseline.map_on(@today, history: true, scoped: false)
+    now = @baseline.map_on(@today, known_on: @known_on, history: true, scoped: false)
     return [ now, now ] if @today < @plan.base_on
 
     base = @baseline.map_on(@plan.base_on, known_on: @plan.base_on - 1, history: true, scoped: false)

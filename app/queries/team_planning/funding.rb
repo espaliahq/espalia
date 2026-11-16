@@ -139,10 +139,11 @@ class TeamPlanning::Funding
     raise TeamPlanning::Error, NO_PERIOD if @scenario_id == @plan.id
 
     base = @shared&.base || TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
-    @map = @shared&.map || TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:).structure(aggregate)
+    resolution = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:)
+    @map = @shared&.map || resolution.structure(aggregate)
     figured = TeamPlanning::FiguredPeriod.for(aggregate, @scenario_id, @map)
     @period = figured.period
-    @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id, base:,
+    @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id, base: resolution.standing_base(@map),
                                                                 titles: Integrations::HrisTitleResolution.new(@plan.tenant))
     @lines = @map.budget_lines.index_by(&:id)
     @strictness = @map.rule(TeamPlanning::RuleKinds::BudgetStrictness.rule_name)

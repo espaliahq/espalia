@@ -5,6 +5,13 @@
 # scenario's {TeamPlanning::PlanAggregate#resolution_chain}. The last change
 # for a subject and facet wins, so changes to different facets never compete.
 #
+# A scenario after a closed step stands on the Org Graph the day after that
+# step ends instead ({TeamPlanning::PlanAggregate#standing_after}). The
+# changes the closed steps made that the Org Graph then held drop away, and
+# the rest carry over, so it reads as a first step from that day would. A
+# placement in a position always carries over: who fills a seat is the plan's
+# own fact, which the Org Graph never holds.
+#
 # Like the baseline, {#structure} is ids only and {#call} joins the names last.
 #
 # @example
@@ -104,8 +111,13 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def resolved(aggregate = @repository.load_plan(@plan.id))
+    standing = aggregate.standing_after(@scenario_id)
     winning = @repository.sealed(aggregate.winning_changes(@scenario_id))
-    base = (@base || @baseline.structure).with(step_ids: step_of(aggregate))
+    if standing
+      done = done_at_close(*standing)
+      winning = winning.reject { |_, change| done.include?(change.event_id) && !seats_someone?(change) }
+    end
+    base = (standing ? standing_on(standing.last) : @base || @baseline.structure).with(step_ids: step_of(aggregate))
     hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
     map = (hires + others).reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
     [ explained(stepped(opened(map.settled, aggregate), aggregate)), winning ]
@@ -151,6 +163,53 @@ class TeamPlanning::Resolution
              .to_h { [ it.data[:subject_id], it.data[:unit_id] ] }
   end
 
+  # The Org Graph can't say who fills a position, so a done placement in one
+  # stays, or the seat would read as empty with its person beside it.
+  def seats_someone?(change)
+    change.is_a?(TeamPlanning::Events::AssignmentSet) && Array(change.data[:placements]).any? { it.to_h.with_indifferent_access[:position_id] }
+  end
+
+  # The changes a closed step and those before it made that the Org Graph
+  # held the day after it ended, as {TeamPlanning::Status} reads them. A step
+  # after it stands on that day's organisation, so they drop away; every
+  # other change carries over and lands again. An archived plan reads them as
+  # the Org Graph knew them on its archive day, so a fact recorded later moves nothing.
+  #
+  # @param closed_id [String] the step closed
+  # @param ends_on [Date] its last day
+  # @return [Set<String>] their event ids
+  def done_at_close(closed_id, ends_on)
+    CurrentPlanReads.fetch([ :done_at_close, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @plan.archived_on, closed_id, ends_on ]) do
+      TeamPlanning::Status.new(context: @context, plan: @plan, scenario_id: closed_id, today: ends_on + 1, known_on: @plan.archived_on,
+                               repository: @repository)
+                          .call.statuses.select { it.status == :done }.to_set(&:change_id)
+    end
+  end
+
+  # The organisation the day after a closed step ends, known now, or on the
+  # archive day once the plan is archived: what a step after it stands on.
+  #
+  # @param ends_on [Date] the closed step's last day
+  # @return [TeamPlanning::Baseline::Map]
+  def standing_on(ends_on)
+    CurrentPlanReads.fetch([ :standing, *CurrentPlanReads.viewer(@context), @plan.id, @plan.archived_on, ends_on ]) do
+      @baseline.map_on(ends_on + 1, known_on: @plan.archived_on)
+    end
+  end
+
+  # The organisation a map this resolution gave stands on: the plan's base,
+  # or the day after the closed step before it. A reader that asks whether the
+  # plan moved someone compares with this, so a move the Org Graph made
+  # before the close never reads as the plan's.
+  #
+  # @param map [TeamPlanning::Baseline::Map] from {#resolved}
+  # @return [TeamPlanning::Baseline::Map]
+  def standing_base(map)
+    return @base ||= @baseline.structure if map.base_on == @plan.base_on
+
+    standing_on(map.base_on - 1)
+  end
+
   private
 
   # The scenario and those it is an alternative of: the chain after the step
@@ -167,14 +226,16 @@ class TeamPlanning::Resolution
   # from the day after they left, or the first day of the step they left in
   # when the plan gave no date, never before the position opened. The rest
   # of the position opens with it. A leaver still on this step's map holds
-  # their own seat, and cost opens it the day after they go.
+  # their own seat, and cost opens it the day after they go. A step after a
+  # closed one stands on the day after the close, so a seat still open then
+  # opens that day, as in a fresh plan from it.
   def opened(map, aggregate)
     return map if map.positions.empty?
 
     dates = self.class.opened_on(aggregate, @scenario_id)
     gone = map.departed.select(&:position_id).group_by(&:position_id)
     map.with(positions: map.positions.map do |position|
-      opened_on = dates.fetch(position.id, aggregate.base_on)
+      opened_on = [ dates.fetch(position.id, aggregate.base_on), map.base_on ].compact.max
       vacated = gone.fetch(position.id, []).map do |leaver|
         left = TeamPlanning::Events::DepartureSet.leaving_date(leaver.leaves_on)&.next_day || aggregate.period_of(leaver.leaves_in_id)&.begin
         TeamPlanning::Baseline::Vacated.new(fte: leaver.fte, opens_on: [ left, opened_on ].compact.max)
