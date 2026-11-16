@@ -497,11 +497,17 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   context "the activity pane and the Back button" do
     should "add no history entry beside the matrix, so Back still leaves the entry it was opened on" do
       mark_history_entry
+      page.execute_script(<<~JS)
+        window.pushes = 0
+        const push = history.pushState.bind(history)
+        history.pushState = (...args) => { window.pushes++; return push(...args) }
+      JS
       toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
 
+      assert_equal 0, page.evaluate_script("window.pushes"), "the pane added a history entry beside the matrix"
       assert page.evaluate_script("history.state?.probe === true"), "the pane wrote over the entry it opened on, not a new one"
     end
 
