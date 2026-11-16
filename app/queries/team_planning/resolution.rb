@@ -77,11 +77,9 @@ class TeamPlanning::Resolution
   end
 
   # @param map [TeamPlanning::Baseline::Map]
-  # @return [Array<String>] the people on the map the Org Graph has had leave by today, a UTC day, or
-  #   by the archive day for an archived plan
+  # @return [Array<String>] the people on the map the Org Graph has had leave by today, a UTC day
   def left_since(map)
-    on = TeamPlanning::PricingInputs.for(@plan, repository: @repository).leavers_on
-    OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..on).pluck(:person_id)
+    OrgLeaver.where(tenant_id: @plan.tenant_id, person_id: map.people.map(&:id), left_on: ..Time.now.utc.to_date).pluck(:person_id)
   end
 
   # A closed position is off the map, so its unit comes from the last

@@ -145,16 +145,4 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
     as_tenant { @band.update!(midpoint: 130_000, maximum: 260_000) }
     assert_equal 120_000, e5_midpoint
   end
-
-  should "read the Org Graph's leavers as of the archive day" do
-    travel_to Time.utc(2026, 2, 1, 9)
-    as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).leave(@brook.id, provider: "espalia", effective_on: "2026-01-20") }
-    resolution = TeamPlanning::Resolution.new(context: context_for(@planner), plan:, scenario_id: @year)
-    map, = as_tenant { resolution.resolved }
-
-    assert_empty as_tenant { resolution.left_since(map) }
-
-    operation(Operations::TeamPlanning::RestorePlan, scenario_id: nil)
-    assert_equal [ @brook.id ], as_tenant { resolution.left_since(map) }
-  end
 end

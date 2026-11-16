@@ -2,17 +2,15 @@
 
 # What a plan is priced with beyond its own changes: the tenant's pay bands,
 # reference currency, exchange rates, budget lines and planning rule
-# defaults, and the day the Org Graph's leavers are read to. Every read that
-# prices a plan takes these from here and never from the tables, so an
-# archived plan can hold still.
+# defaults. Every read that prices a plan takes these from here and never
+# from the tables, so an archived plan can hold still.
 #
 # A live plan reads the tables as they are now. An archived plan reads the
 # copy its {TeamPlanning::Events::PlanPricesFrozen} sealed under the plan's
-# key, and the leavers as of its archive day. A plan archived before the copy
-# existed has none, and reads live.
+# key. A plan archived before the copy existed has none, and reads live.
 #
-# Framework roles and levels, and HRIS title mappings, stay live: they say
-# who is at which level, not what a level costs.
+# Framework roles and levels, HRIS title mappings and the Org Graph stay
+# live: they say who is at which level, not what a level costs.
 #
 # @example
 #   inputs = TeamPlanning::PricingInputs.for(plan)
@@ -86,9 +84,6 @@ class TeamPlanning::PricingInputs
     defaults = TeamPlanning::RuleKinds.defaults
     defaults.merge(rows(:planning_rule_defaults).select { defaults.key?(it.rule) }.to_h { [ it.rule, it.value ] })
   end
-
-  # @return [Date] the day the Org Graph's leavers are read to
-  def leavers_on = @frozen_on || Time.now.utc.to_date
 
   private
 
