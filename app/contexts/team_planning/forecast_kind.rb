@@ -21,4 +21,12 @@ class TeamPlanning::ForecastKind < TeamPlanning::RuleKind
   # @param frame [TeamPlanning::Forecast::Frame]
   # @return [Array<TeamPlanning::Forecast::Row>]
   def self.forecast(frame) = raise(NotImplementedError, "#{name} must say what it forecasts")
+
+  # How many days past its step's end the assumption can still add to later
+  # steps, from every value its rules could take there, so a later step reads
+  # only the earlier steps that could reach it.
+  #
+  # @param values [Hash{String => Array<Hash>}] rule name => each value it could take
+  # @return [Integer, nil] nil when nothing carries past the step
+  def self.reach(values) = nil
 end

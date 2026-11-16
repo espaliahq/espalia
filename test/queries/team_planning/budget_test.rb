@@ -176,12 +176,14 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     end
   end
 
-  should "flag a line drawn on in another currency, and keep its remaining in its own" do
+  should "flag a line drawn on in another currency, give it no remaining, and name it as left out of the remaining totals" do
     dollars = line(amount: 150_000, currency: "USD", period: "year", cost_centre: "Platform")
     open_position
     report = budget
 
-    assert_equal [ { "EUR" => 100_000r }, [ "EUR" ], 150_000r ], of(report, dollars).then { [ it.funded, it.mismatched, it.remaining ] }
+    assert_equal [ { "EUR" => 100_000r }, [ "EUR" ], nil ], of(report, dollars).then { [ it.funded, it.mismatched, it.remaining ] }
+    assert_equal [ {}, [ dollars ] ], report.totals.then { [ it.remaining.native, it.remaining_left_out ] }
+    assert_equal [ dollars ], report.cost_centres.fetch("Platform").remaining_left_out
     assert_nil report.totals.approved.converted, "no USD rate, so the grand total doesn't convert"
     assert_not_empty report.totals.approved.missing
   end
@@ -308,6 +310,16 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
 
     assert_equal TeamPlanning::Budget::Over.new(money: [], heads: nil, mismatched: [ "EUR" ]), of(budget, dollars).over,
                  "100,000 euros against 50,000 dollars is neither over nor under"
+  end
+
+  should "not flag a line as drawn on in another currency for a draw on days its period misses" do
+    dollars = line(amount: 150_000, currency: "USD", period: "year", cost_centre: "Platform", starts_on: "2027-01-01", ends_on: "2027-12-31")
+    seat = open_position(cost_centre: "Elsewhere")
+    operation(Operations::TeamPlanning::SetPositionFunding, position_id: seat, draws: [ { budget_line_id: dollars, share: "1" } ])
+    report = budget
+
+    assert_equal [ {}, [], 0r ], of(report, dollars).then { [ it.funded, it.mismatched, it.remaining ] }
+    assert_empty report.totals.remaining_left_out
   end
 
   should "count a position no band prices in head count, under unpriced with no money" do

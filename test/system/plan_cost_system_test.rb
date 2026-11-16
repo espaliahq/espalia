@@ -76,6 +76,26 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         within("[data-cost-strip]") { assert_text "Priced from the actual pay the plan holds for 1 seat here, and at pay band midpoints for the rest" }
       end
 
+      should "split the cost into actual, planned and forecast, wrapping three long figures rather than widening the page" do
+        call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: @year, person_id: @ada_id)
+        call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "attrition", value: { "yearly_rate" => "0.1" })
+        sign_in_as(@planner.user)
+        visit map_plan_path(@plan_id, scenario: @year)
+
+        within("[data-cost-strip] [data-figure-parts]") do
+          assert_selector "[data-part='actual']", text: "Actual EUR 200k"
+          assert_selector "[data-part='planned']", text: /Planned -EUR \d/
+          assert_selector "[data-part='forecast']", text: /Forecast -EUR \d/
+        end
+        assert_selector "[data-cost-unit='#{@payments}'] [data-part='planned']", text: /Planned -EUR \d/
+        assert_no_sideways_overflow
+
+        visit plan_path(@plan_id)
+        assert_selector "[data-cost-cell='#{@year}'] [data-part='forecast']", text: /Forecast -EUR \d/
+        assert_no_selector "[data-cost-cell='#{@plan_id}'] [data-figure-parts]"
+        assert_no_sideways_overflow
+      end
+
       should "show Today's map at its yearly run rate, with no change beside it" do
         sign_in_as(@planner.user)
         visit map_plan_path(@plan_id)

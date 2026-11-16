@@ -149,7 +149,68 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     assert_operator headings.index("Cost"), :<, headings.index("Capacity")
   end
 
+  context "the actual, planned and forecast split" do
+    should "draw each surface's split from its read, adding up to the total the strip, the unit card and the table show" do
+      cost = call(Operations::TeamPlanning::Cost, plan_id: @plan_id, scenario_id: @year)
+      table = call(Operations::TeamPlanning::ScenarioCosts, plan_id: @plan_id)[:scenarios].find { it[:scenario_id] == @year }
+      payments = cost[:units].find { it[:unit_id] == @payments }
+      [ cost[:total], payments ].each do |figures|
+        assert_equal BigDecimal(figures[:scenario][:converted]), figures[:parts].values.sum { BigDecimal(it[:converted]) }
+      end
+
+      get map_plan_path(@plan_id, scenario: @year)
+      page = Nokogiri::HTML(response.body)
+      get plan_path(@plan_id)
+      cell = Nokogiri::HTML(response.body).at_css("[data-cost-cell='#{@year}']")
+
+      assert_equal [ "Actual EUR 200k", "Planned +EUR 50k" ], parts(page.at_css("[data-cost-strip]"))
+      assert_equal [ "Actual EUR 100k", "Planned +EUR 50k" ], parts(page.at_css("[data-cost-unit='#{@payments}']"))
+      assert_equal parts(page.at_css("[data-cost-strip]")), parts(cell)
+      assert_equal [ "EUR 250k", "EUR 250k", "EUR 150k" ],
+                   [ page.at_css("[data-cost-total]").text, cell.at_css(".font-medium").text, page.at_css("[data-cost-unit='#{@payments}'] .font-medium").text ]
+      assert_equal cost[:total], table[:total]
+    end
+
+    should "show Today's run rate without a split, as all of it is actual" do
+      get map_plan_path(@plan_id)
+      assert_nil Nokogiri::HTML(response.body).at_css("[data-figure-parts]")
+      get plan_path(@plan_id)
+      assert_nil Nokogiri::HTML(response.body).at_css("[data-cost-cell='#{@plan_id}'] [data-figure-parts]")
+    end
+
+    # Ada's actual pay sits EUR 23,457 above her band's midpoint, so every
+    # figure it reaches (123k, 173k, 223k, 273k, 23.5k) is one no midpoint gives.
+    should "split from actual pay for a see-pay holder, and from midpoints only for a member without the right" do
+      viewer = ActsAsTenant.with_tenant(@tenant) { account(name: "Vic Viewer") }
+      call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: viewer.person.id, role: "viewer")
+      call(Operations::TeamPlanning::SetActualPay, plan_id: @plan_id, scenario_id: @plan_id, person_id: @ada.id,
+                                                   amount: "123457", currency: "EUR", period: "year", basis: "full_time")
+      held = %w[123k 173k 223k 273k 23.5k]
+
+      { @editor => [ "EUR 223k", "EUR 123k" ], viewer => [ "EUR 200k", "EUR 100k" ] }.each do |member, (actual, unit_actual)|
+        sign_in member.user
+        get map_plan_path(@plan_id, scenario: @year)
+        page = Nokogiri::HTML(response.body)
+        get plan_path(@plan_id)
+        cell = Nokogiri::HTML(response.body).at_css("[data-cost-cell='#{@year}']")
+        surfaces = { strip: page.at_css("[data-cost-strip]"), unit: page.at_css("[data-cost-unit='#{@payments}']"), cell: }
+
+        assert_equal [ "Actual #{actual}", "Actual #{unit_actual}", "Actual #{actual}" ], surfaces.values.map { parts(it).first }, member.person.name
+        surfaces.each do |surface, html|
+          shown = held.select { html.text.include?(it) }
+          member == @editor ? assert_not_empty(shown, "#{surface} for the holder") : assert_empty(shown, "#{surface} for the viewer")
+        end
+        next if member == @editor
+
+        assert_includes page.at_css("[data-cost-strip]").text, "Priced at pay band midpoints"
+        assert_empty held.select { "#{page.at_css('main').text} #{cell.ancestors('main').first.text}".include?(it) }
+      end
+    end
+  end
+
   private
+
+  def parts(html) = html.css("[data-figure-parts] [data-part]").map(&:text)
 
   def account(role: :member, name: "Someone", **grants)
     user = create(:user)

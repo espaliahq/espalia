@@ -314,7 +314,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated by the `budget_basis` rule, read through `team_planning_budget` ([#369](https://github.com/espaliahq/espalia/issues/369)) | 6.3 |
 | 6.5 | Strictness: position control, envelope, or the dimensions that must match | 6.3 |
 | 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line | 6.4, 4.6 |
-| 6.7 | Budget tab | 6.4 |
+| 6.7 | Budget tab: read-only first ([#395](https://github.com/espaliahq/espalia/issues/395)), editing after | 6.4 |
 
 ### P7 Capacity
 
@@ -383,7 +383,7 @@ edits the change, then approves again.
 
 | # | Story | Needs |
 |---|---|---|
-| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), API only; the screen is [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
+| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), shown on screen in [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out. Built in [#362](https://github.com/espaliahq/espalia/issues/362), API only | 10.1 |
 | 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |

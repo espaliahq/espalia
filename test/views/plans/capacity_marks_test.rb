@@ -85,4 +85,27 @@ class Views::Plans::CapacityMarksTest < ActiveSupport::TestCase
     assert marks(payload(PLAN, "1", [])).baseline?
     assert_not marks(payload(SCENARIO, "1", [])).baseline?
   end
+
+  should "split the strip's total and each unit's, leaving forecast out until it adds something, and draw none on Today" do
+    split = lambda do |actual, planned, forecast|
+      { actual: { "units" => actual }, planned: { "units" => planned }, forecast: { "units" => forecast } }
+    end
+    scenario = payload(SCENARIO, "2.5", [ [ UNITS.first, "0.5" ] ]).merge(parts: split.("3", "-1", "0.5"))
+    scenario[:units].first[:parts] = split.("1.5", "-1", "0")
+    shown = marks(scenario, payload(PLAN, "3", [ [ UNITS.first, "1.5" ] ]))
+    unit = Nokogiri::HTML5.fragment(shown.unit_marks.({ id: UNITS.first }).sole.call)
+    strip = Nokogiri::HTML5.fragment(Views::Plans::CapacityStrip.new(marks: shown).call)
+    today = Nokogiri::HTML5.fragment(Views::Plans::CapacityStrip.new(marks: marks(payload(PLAN, "3", []).merge(parts: split.("3", "0", "0")))).call)
+
+    assert_equal [ "Actual 3.0u", "Planned −1.0u", "Forecast +0.5u" ], strip.css("[data-figure-parts] [data-part]").map(&:text)
+    assert_equal [ "Actual 1.5u", "Planned −1.0u" ], unit.css("[data-figure-parts] [data-part]").map(&:text)
+    assert_nil today.at_css("[data-figure-parts]")
+  end
+
+  should "read a planned part a hair under nothing as nothing, never as a negative zero" do
+    total = Views::Plans::CapacityMarks::Total.new(model: "m", unit: "u", amount: BigDecimal("1"), change: BigDecimal("0"),
+                                                   parts: { actual: BigDecimal("1"), planned: BigDecimal("-1e-20"), forecast: BigDecimal("0") })
+
+    assert_equal [ [ "Actual", "1.0u" ], [ "Planned", "0.0u" ] ], Views::Plans::CapacityMarks::Format.parts(total)
+  end
 end
