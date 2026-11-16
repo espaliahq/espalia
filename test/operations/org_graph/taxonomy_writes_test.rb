@@ -29,6 +29,8 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
 
   def level_ids = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_first.pluck(:id) }
 
+  def undo_step = call(Operations::TeamPlanning::UndoStep, plan_id: @plan_id, scenario_id: @scenario_id)
+
   def assert_refused_bringing_back(&)
     error = assert_raises(Operations::Base::ParameterError, &)
     assert_equal "This change places a unit of a type that has been removed, so it can't be brought back", error.message
@@ -224,6 +226,22 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
 
         assert_refused_bringing_back { call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @scenario_id) }
+      end
+
+      should "stop offering Undo of a clear of the unit once its level is gone" do
+        call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @scenario_id, subject_id: @unit_id, facet: "unit")
+        assert undo_step[:undo]
+
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+        assert_nil undo_step[:undo]
+      end
+
+      should "stop offering Redo of the unit once its level is gone" do
+        call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @scenario_id)
+        assert undo_step[:redo]
+
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+        assert_nil undo_step[:redo]
       end
 
       should "keep the level while the plan is live, counting the plans" do
