@@ -11,7 +11,7 @@ class PlanMapSystemTest < ApplicationSystemTestCase
     structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     since = (Date.current - 30).iso8601
     group = SecureRandom.uuid_v7
-    team = SecureRandom.uuid_v7
+    @team = team = SecureRandom.uuid_v7
     @product = SecureRandom.uuid_v7
     @payments = SecureRandom.uuid_v7
     @growth = SecureRandom.uuid_v7
@@ -85,6 +85,42 @@ class PlanMapSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
+      should "fit a full unit with a long role on one line a person, with what was cut reachable" do
+        plan_id, scenario_id = plan_with_a_full_unit
+        sign_in_as(@planner.user)
+        visit map_plan_path(plan_id)
+
+        cards = page.evaluate_script(<<~JS)
+          [...document.querySelectorAll("[data-map-unit]")].map((card) => [Math.round(card.getBoundingClientRect().left), Math.round(card.getBoundingClientRect().width)])
+        JS
+        assert_equal 1, cards.map(&:last).uniq.size, "a full unit's card is as wide as the rest: #{cards.inspect}"
+        assert_operator cards.map(&:first).uniq.size, :>=, 3, "three units a row at 1400px: #{cards.inspect}" if label == "desktop"
+        within(unit("Platform")) do
+          assert_selector "[data-map-person]", count: 12
+          heights = all("[data-map-person]").map { it.evaluate_script("this.getBoundingClientRect().height") }
+          assert heights.all? { it < 40 }, "each person takes one line: #{heights.inspect}"
+          find("summary", text: LONG_NAME).click
+          within("details[open]") do
+            assert_text LONG_ROLE
+            assert_text LONG_NAME
+          end
+        end
+        assert_no_sideways_overflow
+
+        visit map_plan_path(plan_id, scenario: scenario_id)
+        within(unit("Platform")) do
+          assert_selector "[data-map-person] button", text: "Move…", count: 13
+          widths = all("[data-map-person-details]").map { it.evaluate_script("this.getBoundingClientRect().width") }
+          assert widths.all? { it >= 96 }, "a name keeps 6rem beside Move…: #{widths.inspect}"
+          card = current_scope.evaluate_script("this.getBoundingClientRect().right")
+          label = find("[data-map-position] span", text: LONG_POSITION_ROLE).evaluate_script("this.getBoundingClientRect().right")
+          assert_operator label, :<=, card, "a one-word position label wraps inside its card"
+          occupant = find("[data-map-occupant]", text: LONG_OCCUPANT).evaluate_script("this.getBoundingClientRect().right")
+          assert_operator occupant, :<=, card, "a one-word occupant name wraps inside its card"
+        end
+        assert_no_sideways_overflow
+      end
+
       should "name a forgotten person as a former member" do
         ActsAsTenant.with_tenant(@tenant) do
           @ada.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
@@ -109,6 +145,42 @@ class PlanMapSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  LONG_ROLE = "Infrastructure reliability"
+  LONG_NAME = "Maximiliana Wolkenstein-Abernathy-Okonkwo"
+  LONG_POSITION_ROLE = "Observabilityplatformengineeringandreliabilityoperations"
+  LONG_OCCUPANT = "Quillonmarabethwintersongvalerandorffquantelbrook"
+
+  # Twelve seats, one person with a long name, all under a role too long for its column, and a one-word position, filled by a one-word name, in the scenario.
+  def plan_with_a_full_unit
+    handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    since = (Date.current - 30).iso8601
+    platform = SecureRandom.uuid_v7
+    occupant = nil
+    ActsAsTenant.with_tenant(@tenant) do
+      structure.create_unit(platform, "Platform", level_id: @team, parent_id: @product, effective_on: since)
+      occupant = create(:person, tenant: @tenant, name: LONG_OCCUPANT)
+      handler.record_person(occupant.id, **ESPALIA, effective_on: since, employment_status: "employed")
+      12.times do |index|
+        person = create(:person, tenant: @tenant, name: index.zero? ? LONG_NAME : "Seat #{index + 1}")
+        handler.record_person(person.id, **ESPALIA, effective_on: since, employment_status: "employed")
+        handler.set_membership(person.id, platform, **ESPALIA, effective_on: since, allocation: 1.0, role: LONG_ROLE)
+      end
+    end
+    plan_id = call(Operations::TeamPlanning::CreatePlan, @planner, name: "Full unit", base_on: (Date.current + 1).iso8601)[:plan_id]
+    scenario_id = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id:, relation: "then", name: "Next quarter",
+                                                                         ends_on: (Date.current + 120).iso8601)[:scenario_id]
+    level = ActsAsTenant.with_tenant(@tenant) do
+      role = create(:framework_role, tenant: @tenant, name: LONG_POSITION_ROLE)
+      create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: 1, title: "One")
+    end
+    position_id = call(Operations::TeamPlanning::SetPosition, @planner, plan_id:, scenario_id:, role_id: level.role_id, level_id: level.level_id,
+                                                                        unit_id: platform, fte: 1, basis: "new")[:position_id]
+    call(Operations::TeamPlanning::SetAssignment, @planner, plan_id:, scenario_id:, person_id: occupant.id,
+                                                            placements: [ { position_id:, allocation: 1 } ])
+    [ plan_id, scenario_id ]
+  end
 
   # Pills from `sm` up, a list on a phone (#271).
   def switch_to(name)

@@ -117,8 +117,57 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal [ [ 2, "level" ] ], history(@q1).pluck(:position, :facet)
   end
 
+  def place(scenario_id)
+    @handler.set_change(@plan_id, TeamPlanning::Events::AssignmentSet, scenario_id:, subject_id: @person.id,
+                                                                       end_state: { placements: [ { unit_id: @plan_id, allocation: 1.0 } ] })
+  end
+
+  def move_later(scenario_id) = @handler.move_change(@plan_id, scenario_id:, subject_id: @person.id, facet: "assignment", direction: "later")
+
+  should "take a moved change's entries to the step it reached, record the move there, and bring them back on undo" do
+    q2 = fork(@q1, "then", "Q2", ends_on: "2027-06-30")
+    place(@q1)
+    placed = history(@q1).sole.id
+    move_later(@q1)
+
+    assert_empty history(@q1)
+    assert_equal [ [ placed, "set" ], [ nil, "move" ] ], history(q2).pluck(:id, :action).map { |id, action| [ (id if id == placed), action ] }
+    assert_equal({ "from_scenario_id" => @q1, "direction" => "later" }, history(q2).last.end_state)
+
+    @handler.undo_change(@plan_id, scenario_id: q2)
+    assert_equal [ placed ], history(@q1).pluck(:id)
+    assert_equal [ [ "move", @person.id ], [ "undo", nil ] ], history(q2).pluck(:action, :undone_by_id)
+
+    @handler.redo_change(@plan_id, scenario_id: q2)
+    assert_empty history(@q1)
+    assert_equal %w[set move undo redo], history(q2).pluck(:action)
+  end
+
+  should "take a moved change's notes, undos and redos with it, and on undo put it back in its place" do
+    q2 = fork(@q1, "then", "Q2", ends_on: "2027-06-30")
+    place(@q1)
+    placed = history(@q1).sole.id
+    @handler.note_change(@plan_id, scenario_id: @q1, event_id: placed, note: "Starts in March")
+    @handler.undo_change(@plan_id, scenario_id: @q1)
+    @handler.redo_change(@plan_id, scenario_id: @q1)
+    set_cap(@q1, 8)
+    move_later(@q1)
+
+    assert_equal %w[set], history(@q1).pluck(:action)
+    assert_equal %w[set note undo redo move], history(q2).pluck(:action)
+
+    @handler.undo_change(@plan_id, scenario_id: q2)
+    assert_equal [ [ placed, "set" ], [ placed, "note" ], [ placed, "undo" ], [ placed, "redo" ], [ nil, "set" ] ],
+                 history(@q1).pluck(:id, :action, :noted_event_id, :reverses_event_id).map { |id, action, noted, reverses| [ [ id, noted, reverses ].include?(placed) ? placed : nil, action ] }
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
+      q2 = fork(@q1, "then", "Q2", ends_on: "2027-06-30")
+      place(@q1)
+      move_later(@q1)
+      @handler.undo_change(@plan_id, scenario_id: q2)
+      @handler.redo_change(@plan_id, scenario_id: q2)
       set_cap(@q1, 8, note: "Hiring freeze until the spring")
       set_cap(@q1, 6)
       @handler.undo_change(@plan_id, scenario_id: @q1)
@@ -131,7 +180,7 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
       split(@q1, history(@q1).last.noted_event_id)
 
       before = snapshot_read_models(TeamPlanning::Projections::History, @tenant)
-      assert_equal 8, before[:history].size
+      assert_equal 12, before[:history].size
 
       TeamPlanning::Projections::History.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningHistoryEntry.count

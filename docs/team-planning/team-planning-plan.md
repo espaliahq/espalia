@@ -294,7 +294,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
-| 5.1 | Pay bands as tenant configuration: role and level from the framework, location, currency. Held by tenant admins | none |
+| 5.1 | Pay bands as tenant configuration: an ordered list, each band matching any mix of role family, role, level number and location, or one framework level by its id with a location, the last match winning ([#368](https://github.com/espaliahq/espalia/issues/368)). A band made from a level follows it through a renumbering, and keeps pricing its seats once it leaves the framework. Held by tenant admins | none |
 | 5.2 | On-cost models (flat, by country, itemised) as rules with a tenant default | 5.1, 3.3 |
 | 5.3 | Exchange rates and a reference currency, applied once at report time | 5.1 |
 | 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). | 5.2, 5.3, 3.5, 3.7 |
@@ -314,7 +314,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated by the `budget_basis` rule, read through `team_planning_budget` ([#369](https://github.com/espaliahq/espalia/issues/369)) | 6.3 |
 | 6.5 | Strictness: position control, envelope, or the dimensions that must match | 6.3 |
 | 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line | 6.4, 4.6 |
-| 6.7 | Budget tab | 6.4 |
+| 6.7 | Budget tab: read-only first ([#395](https://github.com/espaliahq/espalia/issues/395)), editing after | 6.4 |
 
 ### P7 Capacity
 
@@ -375,7 +375,7 @@ edits the change, then approves again.
 |---|---|---|
 | 9.1 | Timeline projection: one path from the baseline to a leaf, with lanes and moves | 3.6 |
 | 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.1 |
-| 9.3 | Edit in time: drag a person between blocks, drag a bar's end a step earlier or later. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.2, 3.12 |
+| 9.3 | Edit in time: drag a person between blocks, move a change a step earlier or later (a "When…" menu for now; dragging a bar's end is still to come). [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.2, 3.12 |
 | 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit | 9.1 |
 | 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |
 
@@ -383,7 +383,7 @@ edits the change, then approves again.
 
 | # | Story | Needs |
 |---|---|---|
-| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), API only; the screen is [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
+| 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), shown on screen in [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out. Built in [#362](https://github.com/espaliahq/espalia/issues/362), API only | 10.1 |
 | 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |

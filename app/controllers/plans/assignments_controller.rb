@@ -19,14 +19,6 @@ class Plans::AssignmentsController < ApplicationController
 
   private
 
-  # Only this plan's timeline, so the field can't send someone off the page.
-  def back_path
-    uri = URI.parse(params[:return_to].to_s)
-    params[:return_to] if uri.host.nil? && uri.scheme.nil? && uri.path == timeline_plan_path(plan_id)
-  rescue URI::InvalidURIError
-    nil
-  end
-
   # The form gives the allocation as a percentage, and its destination as a
   # unit, "unassigned", or a position as {Views::Plans::MoveDialog.position_choice}.
   def move

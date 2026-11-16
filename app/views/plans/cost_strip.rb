@@ -19,7 +19,7 @@ class Views::Plans::CostStrip < Views::Base
       div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-1") do
         h3(id: "cost-strip", class: "text-sm font-semibold text-default") { "Cost" }
         span(data: { cost_total: "" }, class: "text-lg font-semibold tabular-nums text-default") { figure }
-        @marks.run_rate? ? span(data: { cost_run_rate: "" }, class: "text-sm text-muted") { "yearly run rate" } : change
+        @marks.run_rate? ? span(data: { cost_run_rate: "" }, class: "text-sm text-muted") { "yearly run rate" } : change_and_parts
       end
       not_converted
       p(class: "text-sm text-muted") { basis }
@@ -41,11 +41,12 @@ class Views::Plans::CostStrip < Views::Base
 
   def reference = @marks.reference
 
-  def change
+  def change_and_parts
     text = Format.sum_change(total[:difference], reference)
     span(data: { cost_change: "" }, class: "text-sm tabular-nums #{text ? 'text-default' : 'text-muted'}") do
       text ? "#{text} vs Today" : "same as Today"
     end
+    render Views::Plans::FigureParts.new(parts: Format.parts(total[:parts], reference))
   end
 
   def not_converted

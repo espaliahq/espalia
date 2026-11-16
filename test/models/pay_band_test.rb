@@ -17,6 +17,18 @@ class PayBandTest < ActiveSupport::TestCase
                 period: "year", minimum: 100, midpoint: 150, maximum: 200, **attrs)
   end
 
+  def lookup = PayBand::Lookup.new(PayBand.order(:position).to_a, tenant_id: @tenant.id)
+
+  def entry(role: nil, role_family: nil, level_ordinal: nil, location: nil, midpoint: 150)
+    PayBand.new(location:, currency: "AUD", period: "year", minimum: 0, midpoint:, maximum: 1_000)
+           .tap { it.match_on(role:, role_family:, level_ordinal:) }.tap(&:save!)
+  end
+
+  def entry_for_level(level)
+    PayBand.new(currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2)
+           .tap { it.match_on(role: @role, level_ordinal: level.ordinal) }
+  end
+
   def site(country, from: Date.current, to: nil, person_id: SecureRandom.uuid_v7)
     OrgFactPeriod.create!(subject_type: "person", subject_id: person_id, fact: "site", value: { country: },
                           effective_from: from, effective_to: to, learned_at: Time.current,
@@ -29,11 +41,11 @@ class PayBandTest < ActiveSupport::TestCase
   end
 
   should "price a seat at its country's band, ignoring case and spacing, else at the band for any location" do
-    bands = [ band(location: "Atlantis"), band(location: nil), band(location: "Lemuria") ]
-    bands.each { it.valid? }
+    [ band(location: "Atlantis"), band(location: nil), band(location: "Lemuria") ].each(&:save!)
 
-    assert_equal [ "Atlantis", "Lemuria", "Any location", "Any location" ], [ " atlantis ", "LEMURIA", "Mu", nil ].map { PayBand.covering(bands, it).location_name }
-    assert_nil PayBand.covering(bands.first(1), "Mu")
+    assert_equal [ "Atlantis", "Lemuria", "Any location", "Any location" ], [ " atlantis ", "LEMURIA", "Mu", nil ].map { lookup.covering(@level.level_id, it).location_name }
+    PayBand.where(location_key: "").destroy_all
+    assert_nil lookup.covering(@level.level_id, "Mu")
   end
 
   should "name its level by role, code and title, so the name outlives the level" do
@@ -58,12 +70,12 @@ class PayBandTest < ActiveSupport::TestCase
     assert_equal "Any location", saved.location_name
   end
 
-  should "keep one band per level and location" do
+  should "keep one band per matcher" do
     band(location: "Fixtureland").save!
     duplicate = band(location: "FIXTURELAND")
 
     assert_not duplicate.valid?
-    assert_includes duplicate.errors[:base], "There is already a band for this level in FIXTURELAND"
+    assert_includes duplicate.errors[:base], "There is already a band for Software Engineer, E2 Engineer II in FIXTURELAND"
   end
 
   should "refuse figures out of order, negative or missing" do
@@ -100,5 +112,134 @@ class PayBandTest < ActiveSupport::TestCase
     site("Testonia", from: 1.month.from_now.to_date, person_id:)
 
     assert_equal %w[Fixtureland], PayBand.known_countries
+  end
+
+  context "as an ordered list" do
+    setup do
+      @level.update!(ordinal: 2)
+      @family = create(:framework_role_family, tenant: @tenant, role_family_id: @role.role_family_id, name: "Engineering")
+      @other_role = create(:framework_role, tenant: @tenant, name: "Designer")
+    end
+
+    should "let the last band that matches have the last word, skipping one that doesn't match" do
+      general = entry(level_ordinal: 2, midpoint: 100)
+      entry(role: @other_role, level_ordinal: 2, midpoint: 200)
+      assert_equal [ general, 0 ], lookup.deciding(@level.level_id, "Fixtureland")
+
+      specific = entry(role: @role, level_ordinal: 2, midpoint: 300)
+      assert_equal [ specific, 2 ], lookup.deciding(@level.level_id, "Fixtureland")
+      assert_equal [ 1, 2, 3 ], PayBand.order(:position).map(&:position)
+    end
+
+    should "change the winner when the order changes" do
+      family = entry(role_family: @family, level_ordinal: 2, location: "Fixtureland")
+      role = band.tap(&:save!)
+      assert_equal role, lookup.covering(@level.level_id, "Fixtureland")
+
+      assert PayBand.reorder!([ role.id, family.id ])
+      assert_equal family, lookup.covering(@level.level_id, "Fixtureland")
+      assert_equal role, lookup.covering(@level.level_id, "Testonia")
+      assert_not PayBand.reorder!([ role.id ])
+    end
+
+    should "land a new band after the last band no more specific than it, and close the gap a removed one leaves" do
+      role_x = band(location: "Fixtureland").tap(&:save!)
+      role = band.tap(&:save!)
+      family = entry(role_family: @family, level_ordinal: 2)
+      everything = entry(level_ordinal: 2)
+      anything_x = entry(location: "Fixtureland")
+
+      assert_equal [ everything, anything_x, family, role, role_x ], PayBand.order(:position).to_a
+      family.destroy!
+      assert_equal [ 1, 2, 3, 4 ], PayBand.order(:position).pluck(:position)
+    end
+
+    should "flag a band a later band matches every seat of" do
+      family = entry(role_family: @family, level_ordinal: 2)
+      role = band.tap(&:save!)
+      everything = entry(level_ordinal: 2)
+      PayBand.reorder!([ family.id, role.id, everything.id ])
+
+      assert_equal [ family, role ], lookup.shadowed
+      PayBand.reorder!([ everything.id, family.id, role.id ])
+      assert_empty lookup.shadowed
+    end
+
+    should "match on a role or a family, never both" do
+      both = PayBand.new(role_id: @role.role_id, role_family_id: @family.role_family_id, role_name: "x", level_name: "y",
+                         currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2)
+
+      assert_not both.valid?
+      assert_equal [ "Engineering", "Level 3" ], entry(role_family: @family, level_ordinal: 3).values_at(:role_name, :level_name)
+      assert_equal [ "Every role", "Every level" ], entry(location: "Testonia").values_at(:role_name, :level_name)
+      assert_equal({ role_id: @role.role_id, level_ordinal: 7 }, entry(role: @role, level_ordinal: 7, location: "Mu").matcher_fields.except(:location))
+    end
+
+    should "report a band made from a framework level by that level, not the role and number it was made with" do
+      made = band(location: "Mu").tap(&:save!)
+      made.update_columns(level_ordinal: 99)
+
+      assert_equal({ level_id: @level.level_id, location: "Mu" }, made.matcher_fields)
+    end
+
+    should "still price a seat at a level that has left the framework from the band made from it" do
+      role = band.tap(&:save!)
+      entry(role_family: @family, level_ordinal: 2, location: "Fixtureland")
+      left = @level.level_id
+      @level.destroy!
+
+      assert_equal role, lookup.covering(left, "Fixtureland")
+    end
+
+    should "keep pricing a level's seats from its band when the framework renumbers the level" do
+      role = band.tap(&:save!)
+      @level.update!(ordinal: 5)
+
+      assert_equal role, lookup.covering(@level.level_id, "Mu")
+      assert_not entry_for_level(@level).valid?
+    end
+
+    should "not flag a band for a level that has left the framework when only its role's family band follows" do
+      role = band.tap(&:save!)
+      family = entry(role_family: @family, level_ordinal: 2)
+      PayBand.reorder!([ role.id, family.id ])
+      left = @level.level_id
+      @level.destroy!
+
+      assert_equal role, lookup.covering(left, nil)
+      assert_empty lookup.shadowed
+    end
+
+    should "price a seat at a level gone from the framework the same, whichever unrelated bands are removed" do
+      new_zealand = band(location: "New Zealand").tap(&:save!)
+      united_states = band(location: "United States").tap(&:save!)
+      australia = entry(location: "Australia", midpoint: 1)
+      level_two = entry(level_ordinal: 2, midpoint: 2)
+      role_wide = entry(role: @role, midpoint: 3)
+      PayBand.reorder!([ australia, level_two, role_wide, new_zealand, united_states ].map(&:id))
+      left = @level.level_id
+      @level.destroy!
+
+      assert_equal australia, lookup.covering(left, "Australia")
+      united_states.destroy!
+      assert_equal australia, lookup.covering(left, "Australia")
+      new_zealand.destroy!
+      assert_equal australia, lookup.covering(left, "Australia")
+    end
+
+    should "price a seat at a level gone from the framework from its own band exactly as before it left" do
+      family = entry(role_family: @family, midpoint: 2)
+      role_wide = entry(role: @role, midpoint: 3)
+      own = band(location: "New Zealand").tap(&:save!)
+      PayBand.reorder!([ family, role_wide, own ].map(&:id))
+      before = lookup.covering(@level.level_id, "New Zealand")
+      left = @level.level_id
+      @level.destroy!
+
+      assert_equal [ own, own ], [ before, lookup.covering(left, "New Zealand") ]
+      assert_nil lookup.covering(left, "Australia")
+      assert lookup.left?(left)
+      assert_empty lookup.shadowed
+    end
   end
 end

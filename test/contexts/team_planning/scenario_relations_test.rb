@@ -12,7 +12,8 @@ class TeamPlanning::ScenarioRelationsTest < ActiveSupport::TestCase
   # relation: a new one needs this list read again before it joins RELATIONS.
   SINGLE_COMPARISONS = {
     "app/contexts/team_planning/plan_aggregate.rb" => {
-      "then" => 4, # a fork's next step or alternative, a held end, a parent's one next step, the first steps a rebase moves
+      "then" => 6, # a fork's next step or alternative, a held end, a parent's one next step, the first steps a rebase moves,
+      # and the steps a change moves later into: the next step, and what stands in its place
       "on" => 4 # either half of a split pair, what rests on a scenario, and a parent's next step taken by the rest of a split
     }
   }.freeze
