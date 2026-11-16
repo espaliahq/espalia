@@ -236,6 +236,19 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
       assert_equal "You have nothing here to redo", refusal { call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1) }
     end
 
+    should "be offered undo, redo and clear on a change to a line with no amount, and none on one that carries an amount" do
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      set_as_planner(budget_line_id: @support.id, head_count: "6")
+      latest, nothing_to_redo, clearable = offers
+      assert_equal [ true, nil, true ], [ latest.present?, nothing_to_redo, clearable ]
+
+      undo_as_planner
+      assert_equal latest, offers.second
+
+      as_tenant { @support.update!(amount: 90_000, currency: "AUD", period: "year") }
+      assert_equal [ nil, nil, false ], offers
+    end
+
     # A pin would copy a priced line's amount, so it needs a rule of its own before it may land.
     should "refuse a pin on a priced line in the same words as one on a line with no amount" do
       pin = ->(id) { call(Operations::TeamPlanning::PinChange, as: @planner, plan_id: @plan_id, scenario_id: @q2, subject_id: id, facet: FACET) }
@@ -275,6 +288,13 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
   def cut_as_planner(line_id) = call(Operations::TeamPlanning::CutBudgetLine, as: @planner, plan_id: @plan_id, scenario_id: @q1, budget_line_id: line_id)
 
   def undo_as_planner(**params) = call(Operations::TeamPlanning::UndoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, **params)
+
+  # @return [Array] what the planner's Undo and Redo would step, and whether they may clear @support's change
+  def offers
+    step = call(Operations::TeamPlanning::UndoStep, as: @planner, plan_id: @plan_id, scenario_id: @q1)
+    status = call(Operations::TeamPlanning::Status, as: @planner, plan_id: @plan_id, scenario_id: @q1)[:statuses].find { it[:subject_id] == @support.id }
+    [ step[:undo]&.dig(:event_id), step[:redo]&.dig(:event_id), status[:clearable] ]
+  end
 
   def change_of(line_id, scenario_id = @q1)
     call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id:)[:entries].find { it[:subject_id] == line_id && it[:facet] == FACET }[:event_id]
