@@ -266,6 +266,7 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-update-to-today] input[name='base_on'][value='2026-11-14']"
       assert_select "[data-update-to-today] input[name='to'][value='2026-11-20']"
       assert_includes response.body, "The plan stands on 14 Nov 2026"
+      assert_select "[data-update-start='#{@q1}']", text: "Q1 hires starts on 14 Nov 2026; it will start on 20 Nov 2026."
 
       post rebase_plan_path(@plan_id), params: { base_on: "2026-11-14", to: "2026-11-20" }
       assert_redirected_to changes_plan_path(@plan_id)

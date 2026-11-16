@@ -283,13 +283,14 @@ class TeamPlanning::CommandHandler
   # @param plan_id [String]
   # @param scenario_id [String]
   # @param ends_on [Date, String]
+  # @param starts_on [Date, String, nil] a first step's new start
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
   # @see TeamPlanning::PlanAggregate#set_scenario_period
-  def set_scenario_period(plan_id, scenario_id, ends_on:)
+  def set_scenario_period(plan_id, scenario_id, ends_on:, starts_on: nil)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.set_scenario_period(scenario_id, ends_on:, set_by_id: actor_id!)
+      plan.set_scenario_period(scenario_id, ends_on:, starts_on:, set_by_id: actor_id!)
     end
   end
 

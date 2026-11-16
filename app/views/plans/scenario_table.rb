@@ -71,7 +71,7 @@ class Views::Plans::ScenarioTable < Views::Base
           p(class: "text-muted") { "The Org Graph. Nothing set by this plan." } if baseline
           render Components::Kit::Prose.new(scenario[:description], class: "mt-0.5 text-muted") if scenario[:description]
           div(class: "sm:hidden mt-1 flex flex-wrap items-center gap-2 text-muted") do
-            span { period(scenario) }
+            period_cell(scenario)
             state(baseline)
           end
           @extra_columns.each do |column|
@@ -82,7 +82,7 @@ class Views::Plans::ScenarioTable < Views::Base
           end
         end
       end
-      td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period(scenario) }
+      td(class: "#{WIDE} px-4 py-3 align-top text-muted whitespace-nowrap") { period_cell(scenario) }
       @extra_columns.each { |column| td(class: "#{WIDE} px-4 py-3 align-top") { render column.cell.call(scenario) } }
       td(class: "#{WIDE} px-4 py-3 align-top") { state(baseline) }
       td(class: "px-2 py-2 align-top text-right") { row_menu(scenario, baseline) } if @can_edit
@@ -101,6 +101,9 @@ class Views::Plans::ScenarioTable < Views::Base
           menu.item(data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@plan_id, scenario[:scenario_id]), scenario)) do
             "Edit…"
           end
+          if (step = self.class.dated_step(scenario, @scenarios))
+            menu.item(href: dates_plan_path(@plan_id, scenario_id: step[:scenario_id])) { "Dates…" }
+          end
           menu.item(href: split_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Split off the agreed part…" }
         end
       end
@@ -112,6 +115,66 @@ class Views::Plans::ScenarioTable < Views::Base
   end
 
   def period(scenario) = self.class.period(scenario)
+
+  def period_cell(scenario)
+    span { period(scenario) }
+    continues = self.class.today_continues_to(@scenarios) if scenario[:parent_id].nil?
+    span(class: "block", data: { today_continues: continues.iso8601 }) { "Today continues to #{continues.strftime('%-d %b %Y')}" } if continues
+  end
+
+  # The last day Today runs on its own, when the plan's first step starts
+  # after the base date ([#404](https://github.com/espaliahq/espalia/issues/404)).
+  #
+  # @param scenarios [Array<Hash>] from `team_planning_scenarios`
+  # @return [Date, nil]
+  def self.today_continues_to(scenarios)
+    baseline = scenarios.find { it[:parent_id].nil? }
+    first = scenarios.find { dated?(it) && it[:parent_id] == baseline&.dig(:scenario_id) }
+    return unless first && first[:starts_on] > baseline[:starts_on]
+
+    Date.iso8601(first[:starts_on]) - 1
+  end
+
+  # Whether a scenario has dates of its own to change: a step that follows
+  # another. A split's halves and an alternative take their parent's period.
+  #
+  # @param scenario [Hash] from `team_planning_scenarios`
+  # @return [Boolean]
+  def self.dated?(scenario)
+    case scenario[:relation]
+    in "then" then true
+    in "on" | "instead" | nil then false
+    end
+  end
+
+  # The step whose dates a scenario's Dates… page changes, as the aggregate
+  # resolves it: a step itself, the rest of a split its step, and an
+  # alternative none, as it can't be moved apart from what it replaces.
+  #
+  # @param scenario [Hash] from `team_planning_scenarios`
+  # @param scenarios [Array<Hash>] the plan's scenarios
+  # @return [Hash, nil]
+  def self.dated_step(scenario, scenarios)
+    case scenario[:relation]
+    in "then" then scenario
+    in "on" then period_owner(scenario, scenarios)
+    in "instead" | nil then nil
+    end
+  end
+
+  # The step whose dates a scenario takes: itself for a step, else the
+  # nearest step above it. Nil for the baseline.
+  #
+  # @param scenario [Hash, nil] from `team_planning_scenarios`
+  # @param scenarios [Array<Hash>] the plan's scenarios
+  # @return [Hash, nil]
+  def self.period_owner(scenario, scenarios)
+    case scenario&.dig(:relation)
+    in "then" then scenario
+    in "on" | "instead" then period_owner(scenarios.find { it[:scenario_id] == scenario[:parent_id] }, scenarios)
+    in nil then nil
+    end
+  end
 
   # A scenario's period as the plan's pages print it: "As of" for the baseline,
   # whole months by name.

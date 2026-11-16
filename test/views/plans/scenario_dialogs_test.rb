@@ -43,4 +43,12 @@ class Views::Plans::ScenarioDialogsTest < ActiveSupport::TestCase
     assert_equal [ [ "Today", "true" ], [ "· Agreed hires", "true" ], [ "· · Q1 hires", "false" ], [ "· · · Slower hiring", "false" ] ],
                  options
   end
+
+  should "describe the end as a step's last day, true whether or not the step has a start of its own" do
+    controller = ApplicationController.new
+    controller.request = ActionDispatch::TestRequest.create
+    html = Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ScenarioDialogs.new(plan_id: PLAN, scenarios: [ scenario(PLAN, nil, nil, "Pay review") ])))
+
+    assert_equal "Its last day. A step after another starts the day after that one ends.", html.at_css("#fork-scenario-ends-on-hint").text
+  end
 end

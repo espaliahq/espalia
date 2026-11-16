@@ -305,11 +305,50 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
                                                               ends_on: "2027-12-31")[:scenario_id]
     seat = open_position(basis: "backfill")
     operation(Operations::TeamPlanning::SetDeparture, scenario_id: later, person_id: @ada.id, position_id: seat, leaves_on: "2027-03-31")
-    operation(Operations::TeamPlanning::SetScenarioPeriod, ends_on: "2027-06-30")
+    # A date edit now refuses to strand a departure, but a plan written before it may hold one.
+    as_tenant do
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        Rails.configuration.event_store.publish(
+          TeamPlanning::Events::ScenarioPeriodSet.new(data: {
+            plan_id: @plan_id, scenario_id: @year, starts_on: BASE_ON.iso8601, ends_on: "2027-06-30",
+            previous_starts_on: BASE_ON.iso8601, previous_ends_on: "2026-12-31", set_by_id: @planner.person.id
+          }),
+          stream_name: EventStreamNaming.plan_stream(@plan_id)
+        )
+      end
+    end
     scenario = cost(later).scenario
 
     assert_equal Date.new(2027, 7, 1)..Date.new(2027, 12, 31), lines(scenario, seat).sole.held
     assert_equal [ 0 ], lines(scenario, @ada.id).map(&:days)
+  end
+
+  # Lines are compared without the ids each plan mints for its own positions.
+  def figures(report)
+    priced = ->(side) { [ side.total, side.units, side.cost_centres, side.lines.map { it.to_h.except(:seat_id, :position_id) } ] }
+    { period: report.period, scenario: priced.(report.scenario), baseline: priced.(report.baseline), difference: report.difference }
+  end
+
+  # The same changes in a plan whose first step starts on starts_on.
+  def first_step_figures(base_on:, starts_on:)
+    @plan_id = SecureRandom.uuid_v7
+    as_tenant { handler.create_plan(@plan_id, name: "Gap", base_on:) }
+    @year = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, relation: "then", name: "2026",
+                                                               starts_on:, ends_on: "2026-12-31")[:scenario_id]
+    operation(Operations::TeamPlanning::SetPlannedLevel, person_id: @ada.id, level: "6")
+    seat = open_position(basis: "backfill")
+    operation(Operations::TeamPlanning::SetDeparture, person_id: @dee.id, position_id: seat, leaves_on: "2026-07-01")
+    open_position(unit_id: @payments, fte: 0.5)
+    figures(cost)
+  end
+
+  should "price a first step that starts after the base date as if the base were its start" do
+    gap = first_step_figures(base_on: "2026-01-01", starts_on: "2026-02-14")
+    moved = first_step_figures(base_on: "2026-02-14", starts_on: "2026-02-14")
+
+    assert_equal Date.new(2026, 2, 14)..Date.new(2026, 12, 31), gap[:period]
+    assert_equal moved, gap
+    assert_not_equal first_step_figures(base_on: "2026-01-01", starts_on: "2026-01-01")[:scenario], gap[:scenario]
   end
 
   should "set the scenario beside the baseline over the same days, with the difference" do

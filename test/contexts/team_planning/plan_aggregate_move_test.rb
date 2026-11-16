@@ -279,7 +279,11 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
 
   test "refuse to undo a departure's move into a step whose period doesn't hold its date" do
     leave(@q1, leaves_on: "2027-03-14")
-    @plan.set_scenario_period(@q1, ends_on: "2027-02-28", set_by_id: @ada_id)
+    # A date edit now refuses to strand a departure, but a plan written before it may hold one.
+    @plan.apply(TeamPlanning::Events::ScenarioPeriodSet.new(data: {
+      plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-02-28",
+      previous_starts_on: "2027-01-01", previous_ends_on: "2027-03-31", set_by_id: @ada_id
+    }))
     moved = move(@q1, "later", facet: "departure")
 
     assert_match "2027-03-14", refusal { undo(@q2, moved) }
