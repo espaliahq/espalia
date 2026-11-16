@@ -355,6 +355,37 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     [ @sales, "Sales Engineer" ].each { assert_not_includes changes.to_json, it }
   end
 
+  should "drop the value someone held before the window brought them in, and judge a day's moves before its facts" do
+    changes = drift_after do |people, _|
+      people.move_membership(@dee.id, @sales, @payments, effective_on: on(10)[:effective_on])
+      people.change_title(@dee.id, "Staff Engineer", **on(10))
+      people.move_membership(@ada.id, @payments, @sales, effective_on: on(12)[:effective_on])
+      people.change_title(@ada.id, "Sales Engineer", **on(12))
+    end
+
+    title = changes.find { it[:person_id] == @dee.id && it[:fact] == "title" }
+    assert_equal [ nil, "Staff Engineer", [ "before" ] ], [ title[:before], title.dig(:after, "title"), title[:outside] ]
+    assert_empty titles(changes, @ada), "a title that changes the day someone leaves goes with them"
+  end
+
+  should "keep counting someone whose last place ends, as the baseline keeps them unassigned" do
+    changes = drift_after do |people, _|
+      people.end_membership(@ada.id, @payments, **on(10))
+      people.change_title(@ada.id, "Staff Engineer", **on(20))
+    end
+
+    assert_equal [ "Staff Engineer" ], titles(changes, @ada)
+  end
+
+  should "count someone a scenario holds throughout, though the baseline has them outside" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    changes = drift_after { |people, _| people.change_title(@dee.id, "Staff Engineer", **on(20)) }
+
+    title = changes.find { it[:person_id] == @dee.id && it[:fact] == "title" }
+    assert_equal [ "Software Engineer", "Staff Engineer", [] ], [ title.dig(:before, "title"), title.dig(:after, "title"), title[:outside] ]
+  end
+
   should "stop counting someone from the move out, and count them again once they come back" do
     changes = drift_after do |people, _|
       people.change_title(@ada.id, "Senior Engineer", **on(5))

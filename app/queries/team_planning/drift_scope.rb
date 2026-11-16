@@ -16,13 +16,17 @@
 # and the change that brings them in doesn't say where from: the other end
 # is data about something outside. The same for a covered person now
 # reporting to someone the plan can't name, and for the value a fact held
-# before a change if it was set while they were outside. Each cut field is
-# listed in `outside`.
+# before a change if it was set while they were outside, before the window
+# or in it. Each cut field is listed in `outside`.
+#
+# Within a day, the changes that move someone or some unit are judged first,
+# so a title that changes on the day someone leaves goes with them.
 class TeamPlanning::DriftScope
   PERSON_KINDS = %i[joined left fact_changed].freeze
   MEMBERSHIP_KINDS = %i[membership_started membership_ended membership_changed moved].freeze
   UNIT_KINDS = %i[unit_created unit_renamed unit_moved unit_retired owner_added owner_removed].freeze
   ENTERING = %i[membership_started moved].freeze
+  MOVES = %i[joined membership_started membership_ended membership_changed moved unit_created unit_moved unit_succeeded].freeze
 
   # @!attribute change [OrgGraph::ChangesBetween::Change] with outside fields cut
   # @!attribute outside [Array<String>] the fields cut: "unit_id", "from_unit_id", "before", "after" or "person_id"
@@ -30,24 +34,28 @@ class TeamPlanning::DriftScope
 
   # @param base [TeamPlanning::Baseline::Map] the plan's baseline
   # @param maps [Array<TeamPlanning::Baseline::Map>] each scenario's, the root's included
-  def initialize(base, maps)
+  # @param parents [Hash{String => String, nil}] every unit's parent on the base day, outside ones included
+  def initialize(base, maps, parents: {})
     based = held_people(base)
-    @pinned = maps.flat_map { held_people(it).to_a }.to_set - based - base.outside_ids
+    @pinned = maps.flat_map { held_people(it).to_a }.to_set - based
     @unplaced = base.people.select { it.memberships.none?(&:unit_id) }.to_set(&:id)
     @placed = (base.people + base.outside).to_h { [ it.id, it.memberships.filter_map(&:unit_id).to_set ] }
-    @placed.reject! { |id, _| @unplaced.include?(id) }
     @nameable = [ base, *maps ].flat_map(&:person_ids).to_set | based | @pinned
     @roots = Set.new(base.scope_ids) | (maps.flat_map { it.known_unit_ids.to_a }.to_set - base.known_unit_ids)
-    @parents = [ base, *maps ].flat_map { it.units + it.retired_units }.to_h { [ it.id, it.parent_id ] }
+    @parents = parents.merge([ base, *maps ].flat_map { it.units + it.retired_units }.to_h { [ it.id, it.parent_id ] })
+    @shown = based | @pinned | @unplaced | base.known_unit_ids | @roots
     @unseen = Set.new
+    @known = Set.new
   end
 
   # @param changes [Array<OrgGraph::ChangesBetween::Change>] in date order
   # @return [Array<Cut>] the changes the plan covers when they happen, in the order given
   def call(changes)
-    changes.filter_map do |change|
-      cut(change).tap { advance(change) unless change.withdrawn }
-    end
+    cuts = changes.group_by(&:effective_on).values.flat_map do |day|
+      moves, facts = day.partition { MOVES.include?(it.kind) }
+      (moves + facts).map { |change| [ change, cut(change).tap { advance(change) unless change.withdrawn } ] }
+    end.to_h
+    changes.filter_map { cuts[it] }
   end
 
   private
@@ -81,9 +89,13 @@ class TeamPlanning::DriftScope
     end
   end
 
+  # Someone the plan covers who loses their last place stays, as unassigned,
+  # just as the baseline keeps them.
   def place(person_id)
+    was = covered?(person_id)
     @unplaced.delete(person_id)
     @placed[person_id] = yield(@placed.fetch(person_id, Set.new).dup).delete(nil)
+    @unplaced << person_id if was && @placed[person_id].empty?
   end
 
   def cut(change)
@@ -97,21 +109,44 @@ class TeamPlanning::DriftScope
 
   def person(change)
     return unseen(change, change.person_id) unless covered?(change.person_id) || joins_covered?(change)
-    return Cut.new(change: change.with(before: nil), outside: [ "before" ]) if seen?(change, change.person_id)
-    return Cut.new(change:, outside: []) unless change.fact == "manager"
+    return shown(change, change.person_id) if change.kind == :joined
 
-    fields = %w[before after].select { (id = change.public_send(it)&.dig("manager_id")) && !nameable?(id) }
-    Cut.new(change: change.with(**fields.to_h { [ it.to_sym, change.public_send(it).merge("manager_id" => nil) ] }), outside: fields)
+    cut = seen?(change, change.person_id) ? { before: nil } : {}
+    if change.fact == "manager"
+      %i[before after].each do |side|
+        next if cut.key?(side)
+
+        id = change.public_send(side)&.dig("manager_id")
+        cut[side] = change.public_send(side).merge("manager_id" => nil) if id && !nameable?(id)
+      end
+    end
+    Cut.new(change: change.with(**cut), outside: %w[before after] & cut.keys.map(&:to_s))
   end
 
-  # A fact or name set while its subject was outside the plan is data about
-  # something outside, so the next change to it once covered drops it as `before`.
+  # A fact or name set while its subject was outside the plan, before the
+  # window or during it, is data about something outside, so the next change
+  # to it once covered drops it as `before`.
   def unseen(change, subject_id)
-    @unseen << [ subject_id, change.kind, change.fact ] unless change.withdrawn
+    @unseen << marker(change, subject_id) unless change.withdrawn
     nil
   end
 
-  def seen?(change, subject_id) = !!@unseen.delete?([ subject_id, change.kind, change.fact ])
+  def seen?(change, subject_id)
+    key = marker(change, subject_id)
+    outside = @unseen.include?(key) || !(@shown.include?(subject_id) || @known.include?(key))
+    unless change.withdrawn
+      @unseen.delete(key)
+      @known << key
+    end
+    outside && !change.before.nil?
+  end
+
+  def shown(change, subject_id)
+    @shown << subject_id unless change.withdrawn
+    Cut.new(change:, outside: [])
+  end
+
+  def marker(change, subject_id) = [ subject_id, change.kind, change.fact ]
 
   def joins_covered?(change)
     change.kind == :joined && Array(change.after&.dig("memberships")&.keys).any? { covered_unit?(it) }
@@ -129,6 +164,8 @@ class TeamPlanning::DriftScope
   def unit(change)
     entering = %i[unit_created unit_moved].include?(change.kind) && covered_unit?(change.after&.dig("parent_id"))
     return unseen(change, change.unit_id) unless covered_unit?(change.unit_id) || entering
+
+    return shown(change, change.unit_id) if change.kind == :unit_created
 
     case change.kind
     when :unit_renamed

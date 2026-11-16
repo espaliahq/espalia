@@ -84,9 +84,12 @@ class TeamPlanning::Drift
   def within_scope(aggregate, changes)
     return changes.map { TeamPlanning::DriftScope::Cut.new(change: it, outside: []) } if @plan.scope_unit_ids.blank?
 
-    base = TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
-    maps = aggregate.scenarios.keys.map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
-    TeamPlanning::DriftScope.new(base, [ TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @plan.id, base:).structure(aggregate), *maps ]).call(changes)
+    baseline = TeamPlanning::Baseline.new(context: @context, plan: @plan)
+    base = baseline.structure
+    whole = baseline.map_on(@plan.base_on, known_on: baseline.known_on, history: true, scoped: false)
+    parents = (whole.units + whole.retired_units).to_h { [ it.id, it.parent_id ] }
+    maps = [ @plan.id, *aggregate.scenarios.keys ].map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
+    TeamPlanning::DriftScope.new(base, maps, parents:).call(changes)
   end
 
   def planned_changes(plan)

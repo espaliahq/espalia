@@ -1319,16 +1319,20 @@ A plan covering some units sees only drift about the people and units it covers
 ([#435](https://github.com/espaliahq/espalia/issues/435)). `TeamPlanning::DriftScope`
 follows the window in date order, judging each change by who and what the plan covers
 when it happens. Someone the baseline covers stops counting from the change that takes
-them out of the plan's units, and counts again if they come back. Someone the window
-brings in counts from that change on. Anyone a scenario holds that the baseline doesn't,
-and any unit a scenario created, count throughout. Units follow the same rule. A change
-about anything the plan doesn't cover at that point is dropped, names and all.
+them out of the plan's units, and counts again if they come back. Someone whose last
+place ends stays, as the baseline keeps them unassigned. Someone the window brings in
+counts from that change on, and so does anyone in a unit beneath one it brings in.
+Anyone a scenario holds, and any unit a scenario created, count throughout. Units
+follow the same rule. Within a day, the changes that move someone or some unit are
+judged first, so a title that changes on the day someone leaves goes with them. A
+change about anything the plan doesn't cover at that point is dropped, names and all.
 
 The change that takes a person or unit out keeps the plan's side and nulls the
 destination: the reader learns they left the plan's units, not where they went. The
 change that brings them in nulls where they came from. A covered person now reporting
 to someone the plan can't name reads the same way, and so does the earlier value of a
-fact or name last set while its subject was outside. `outside` lists the fields nulled,
+fact or name last set while its subject was outside, before the window or in it.
+`outside` lists the fields nulled,
 and the Changes tab words each one.
 
 `team_planning_drift` gives the same report to MCP, with people by id and a `names` map
