@@ -93,6 +93,9 @@ class PlanDatesSystemTest < ApplicationSystemTestCase
       visit plan_path(@plan_id)
       assert_selector "tr[data-scenario-id='#{@q2}']", text: "From 1 Apr 2027 · no end date"
 
+      visit dates_plan_path(@plan_id, scenario_id: @q2)
+      assert_selector "[data-dates-current='#{@q2}']", text: "Now from 1 Apr 2027 · no end date."
+
       visit dates_plan_path(@plan_id, scenario_id: @q1)
       assert_text "A step comes after this one, so it needs an end."
       assert_no_field "No end date"

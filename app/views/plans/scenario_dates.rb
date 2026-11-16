@@ -32,7 +32,7 @@ class Views::Plans::ScenarioDates < Views::Base
     section(aria: { labelledby: "dates-heading" }, class: "space-y-6", data: { scenario_dates: id }) do
       div do
         h3(id: "dates-heading", class: "text-base font-semibold text-default break-words") { "Dates for #{@scenario[:name]}" }
-        p(class: "mt-1 text-sm text-muted", data: { dates_current: id }) { "Now #{period(@scenario)}." }
+        p(class: "mt-1 text-sm text-muted", data: { dates_current: id }) { "Now #{in_sentence(period(@scenario))}." }
       end
       render(Components::Kit::Alert.new(tone: :danger, role: "alert", title: "Couldn't use those dates")) { @error } if @error
       choose
