@@ -2,7 +2,7 @@
 
 # What moving a step's period would move
 # ([#404](https://github.com/espaliahq/espalia/issues/404)), before
-# team_planning_set_scenario_period moves it. The plan page's Dates dialog
+# team_planning_set_scenario_period moves it. The Dates page
 # shows it, so the rule for what follows a step lives only in the aggregate.
 class Operations::TeamPlanning::PeriodPreview < Operations::Base
   include Operations::TeamPlanning::PlanRead

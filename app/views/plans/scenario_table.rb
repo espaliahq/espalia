@@ -101,6 +101,7 @@ class Views::Plans::ScenarioTable < Views::Base
           menu.item(data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@plan_id, scenario[:scenario_id]), scenario)) do
             "Edit…"
           end
+          menu.item(href: dates_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Dates…" } if scenario[:relation] == "then"
           menu.item(href: split_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Split off the agreed part…" }
         end
       end

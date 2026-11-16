@@ -112,6 +112,10 @@ class Views::Plans::ScenarioMap < Views::Base
       variant: :ghost, size: :sm,
       data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@map[:plan_id], current[:scenario_id]), current)
     ) { "Edit…" }
+    return unless current[:relation] == "then"
+
+    render Components::Kit::Button.new(variant: :ghost, size: :sm, compact: true,
+                                       href: dates_plan_path(@map[:plan_id], scenario_id: current[:scenario_id], from: "map")) { "Dates…" }
   end
 
   def upload_pay_link
