@@ -384,4 +384,46 @@ class TenantTest < ActiveSupport::TestCase
       assert_nil membership.reload.slack_user_id
     end
   end
+
+  context "#today" do
+    should "be the UTC date for a tenant that hasn't chosen a zone" do
+      tenant = build(:tenant)
+
+      assert_equal "UTC", tenant.time_zone
+      assert_equal Date.new(2026, 11, 16), tenant.today(at: Time.utc(2026, 11, 16, 23, 59))
+    end
+
+    should "be tomorrow already for a tenant ahead of UTC, from its local midnight" do
+      tenant = build(:tenant, time_zone: "Australia/Sydney")
+
+      assert_equal Date.new(2026, 11, 16), tenant.today(at: Time.utc(2026, 11, 16, 12, 59))
+      assert_equal Date.new(2026, 11, 17), tenant.today(at: Time.utc(2026, 11, 16, 13, 0))
+    end
+
+    should "still be yesterday for a tenant behind UTC, until its local midnight" do
+      tenant = build(:tenant, time_zone: "America/Los_Angeles")
+
+      assert_equal Date.new(2026, 11, 16), tenant.today(at: Time.utc(2026, 11, 17, 7, 59))
+      assert_equal Date.new(2026, 11, 17), tenant.today(at: Time.utc(2026, 11, 17, 8, 0))
+    end
+
+    should "read the clock when no moment is given" do
+      tenant = build(:tenant, time_zone: "Pacific/Auckland")
+
+      travel_to Time.utc(2026, 11, 16, 11, 30) do
+        assert_equal Date.new(2026, 11, 17), tenant.today
+      end
+    end
+  end
+
+  context "time_zone" do
+    should "accept an IANA zone and refuse a name it doesn't know" do
+      assert build(:tenant, time_zone: "Australia/Sydney").valid?
+
+      tenant = build(:tenant, time_zone: "Middle Earth")
+
+      assert_not tenant.valid?
+      assert_includes tenant.errors[:time_zone], "isn't a time zone we know"
+    end
+  end
 end

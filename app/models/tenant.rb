@@ -192,9 +192,25 @@ class Tenant < ApplicationRecord
   validates :ai_config, store_model: true
   validates :feedback_exchange_config, store_model: true
   validates :org_graph_config, store_model: true
+  validates :time_zone, inclusion: { in: ->(_) { time_zone_names }, message: "isn't a time zone we know" }
   before_validation :sync_feedback_exchange_key_ids, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_inbound_secret_is_ours, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_secrets_are_strong, if: :feedback_exchange_credentials_changed?
+
+  # The zone names a tenant can choose, as IANA identifiers: "UTC" first, then
+  # each zone Rails names, once.
+  #
+  # @return [Array<String>]
+  def self.time_zone_names
+    @time_zone_names ||= [ "UTC", *ActiveSupport::TimeZone.all.map { it.tzinfo.name } ].uniq.freeze
+  end
+
+  # Today's date where the tenant works: the one answer to "what is today"
+  # for a business date. Timestamps stay UTC; only the calendar day moves.
+  #
+  # @param at [Time] the moment to read the date at
+  # @return [Date]
+  def today(at: Time.current) = at.in_time_zone(time_zone).to_date
 
   # The feedback exchange's signing secrets, wrapped so no accessor can print a value.
   #
