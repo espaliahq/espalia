@@ -86,6 +86,17 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
     assert_equal [ @plan_id, lean ], timeline(lean)[:columns].pluck(:scenario_id)
   end
 
+  should "list in each column the places, positions and departures that step itself changes, and nothing else" do
+    assign(@q1, @ada, { unit_id: @growth, allocation: 1 })
+    seat = open_position(@q2)
+    leave(@q2, @bo)
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @q2, person_id: @cy.id, level: "4")
+
+    assert_equal [ [], [ { subject_id: @ada.id, facet: "assignment" } ],
+                   [ { subject_id: @bo.id, facet: "departure" }, { subject_id: seat, facet: "position" } ].sort_by { it[:subject_id] } ],
+                 timeline[:columns].pluck(:movable)
+  end
+
   should "keep a renamed unit as one block, continue it into a one-to-one successor, and link a split" do
     unit(@q1, unit_id: @payments, name: "Billing")
     core = unit(@q2, name: "Core", level_id: @squad)
