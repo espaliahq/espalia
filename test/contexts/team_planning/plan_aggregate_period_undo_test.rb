@@ -24,6 +24,12 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
     last_event.event_id
   end
 
+  def place(id, subject_id: SecureRandom.uuid_v7)
+    @plan.set_change(TeamPlanning::Events::AssignmentSet, scenario_id: id, subject_id:, set_by_id: @editor_id,
+                                                          end_state: { placements: [ { unit_id: SecureRandom.uuid_v7, allocation: 1.0 } ] })
+    last_event.event_id
+  end
+
   def undo_edit(id, event_id, by: @editor_id) = @plan.undo_change(scenario_id: id, event_id:, undone_by_id: by)
 
   def redo_edit(id, event_id, by: @editor_id) = @plan.redo_change(scenario_id: id, event_id:, redone_by_id: by)
@@ -216,8 +222,27 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
       assert_nil @plan.last_redoable_by(@q1, @editor_id)
 
       undo_edit(@q1, last_event.event_id)
-      set(@q2, ends_on: "2027-06-15")
       set(@q1, ends_on: "2027-03-15")
+      assert_nil @plan.last_redoable_by(@q1, @editor_id)
+    end
+
+    should "end the redo of a change in the rest of a split once its dates are edited through it" do
+      placed = 2.times.map { place(@q1) }
+      @plan.split_scenario(@q1, agreed_id: SecureRandom.uuid_v7, name: "Agreed", event_ids: [ placed.first ], split_by_id: @editor_id)
+      undo_edit(@q1, placed.last)
+      assert_equal placed.last, @plan.last_redoable_by(@q1, @editor_id)
+
+      set(@q1, ends_on: "2027-03-15")
+      assert_nil @plan.last_redoable_by(@q1, @editor_id)
+    end
+
+    should "end the redo of a date edit once a change moves into its step" do
+      subject_id = SecureRandom.uuid_v7
+      place(@q2, subject_id:)
+      undo_edit(@q1, set(@q1, ends_on: "2027-02-28"))
+      assert_predicate @plan.last_redoable_by(@q1, @editor_id), :present?
+
+      @plan.move_change(scenario_id: @q2, subject_id:, facet: "assignment", direction: "earlier", moved_by_id: @editor_id)
       assert_nil @plan.last_redoable_by(@q1, @editor_id)
     end
 

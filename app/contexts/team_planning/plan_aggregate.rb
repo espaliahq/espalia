@@ -1084,7 +1084,7 @@ class TeamPlanning::PlanAggregate
     data = event.data
     (@logs[data[:to_scenario_id]] ||= []) << event
     @sequence[event.event_id] = @sequence.size
-    redo_stack(data[:to_scenario_id], data[:moved_by_id]).clear
+    end_redo(data[:to_scenario_id], data[:moved_by_id])
     relocate(data[:moved_event_ids], from: data[:scenario_id], to: data[:to_scenario_id], before: event.event_id)
   end
 
@@ -1173,8 +1173,7 @@ class TeamPlanning::PlanAggregate
       (@dates[step_id] ||= []) << event
       @date_steps[event.event_id] = step_id
       @sequence[event.event_id] = @sequence.size
-      redo_stack(step_id, data[:set_by_id]).clear
-      @dates_redo.dig(step_id, data[:set_by_id])&.clear
+      [ step_id, *resting_on(step_id) ].each { end_redo(it, data[:set_by_id]) }
     end
   end
 
@@ -1383,9 +1382,15 @@ class TeamPlanning::PlanAggregate
   def record_change(event)
     (@logs[event.data[:scenario_id]] ||= []) << event
     @sequence[event.event_id] = @sequence.size
-    redo_stack(event.data[:scenario_id], actor_of(event)).clear
-    step_id = dates_step(event.data[:scenario_id])
-    @dates_redo.dig(step_id, actor_of(event))&.clear if step_id
+    end_redo(event.data[:scenario_id], actor_of(event))
+  end
+
+  # A new change or date edit ends what its maker can redo where an Undo
+  # button reaches: the scenario's changes and its step's date edits.
+  def end_redo(scenario_id, person_id)
+    redo_stack(scenario_id, person_id).clear
+    step_id = dates_step(scenario_id) or return
+    @dates_redo.dig(step_id, person_id)&.clear
   end
 
   def move_target(scenario_id, direction, to_scenario_id)
