@@ -86,7 +86,7 @@ class Views::Plans::SplitScenario < Views::Base
     wanted = needed(change)
     stuck = stuck?(change)
     li(class: "flex gap-3 p-3", data: { split_change: change[:event_id] }) do
-      input(type: "checkbox", id:, name: "event_ids[]", value: change[:event_id], checked: @chosen.include?(change[:event_id]),
+      input(type: "checkbox", id:, name: "event_ids[]", value: change[:event_id], checked: !stuck && @chosen.include?(change[:event_id]),
             disabled: stuck, data: { split_count_target: "box" }, aria: { describedby: ("#{id}-needs" if wanted.any?) },
             class: "#{Components::Kit::Field::CHECKBOX} mt-0.5 shrink-0")
       div(class: "min-w-0 text-sm") do
@@ -142,7 +142,7 @@ class Views::Plans::SplitScenario < Views::Base
   end
 
   def submit_label
-    chosen = changes.count { @chosen.include?(it[:event_id]) }
+    chosen = changes.count { !stuck?(it) && @chosen.include?(it[:event_id]) }
     chosen.zero? ? "Split off the chosen changes" : "Split off #{chosen} #{'change'.pluralize(chosen)}"
   end
 

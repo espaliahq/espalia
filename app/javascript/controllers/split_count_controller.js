@@ -19,7 +19,7 @@ export default class extends BaseController {
   }
 
   count() {
-    const chosen = this.boxTargets.filter((box) => box.checked).length
+    const chosen = this.boxTargets.filter((box) => box.checked && !box.disabled).length
     this.labelTarget.textContent = this.constructor.label(chosen)
   }
 

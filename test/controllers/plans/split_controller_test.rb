@@ -152,6 +152,17 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_select "input[name='name'][value='Agreed moves']"
     end
 
+    should "never draw a change that can't go across as chosen, nor count it on the button" do
+      call(Operations::TeamPlanning::ClearChange, @editor, plan_id: @plan_id, scenario_id: @q1, subject_id: @platform, facet: "unit")
+
+      post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @to_platform, @to_payments ], name: "Agreed moves" }
+
+      assert_response :unprocessable_content
+      assert_select "input[value='#{@to_platform}'][disabled]:not([checked])"
+      assert_select "input[value='#{@to_payments}'][checked]"
+      assert_select "button[type='submit']", text: "Split off 1 change"
+    end
+
     should "refuse the baseline with the operation's words" do
       refusal = assert_raises(Operations::Base::ParameterError) do
         call(Operations::TeamPlanning::SplitScenario, @editor, plan_id: @plan_id, scenario_id: @plan_id, event_ids: [ @to_payments ], name: "X")
