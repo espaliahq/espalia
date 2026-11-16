@@ -51,6 +51,8 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
 
   def set_pay(as: @editor) = call(:SetActualPay, as:, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, **PAY)
 
+  def leave(on) = call(:SetDeparture, as: @editor, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, leaves_on: on)
+
   def latest = call(:History, plan_id: @plan_id, scenario_id: @q1)[:entries].last[:event_id]
 
   def clearable(as: @editor, scenario_id: @q1)
@@ -157,6 +159,24 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     assert_equal @ada.id, step[:redo][:subject_id]
 
     as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).move_membership(@ada.id, @engineering, @sales, effective_on: "2026-01-15") }
+
+    assert_nil step[:redo]
+    assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
+  end
+
+  should "offer no undo that would bring back a departure outside the step's dates, as the operation refuses it" do
+    leave("2026-05-15")
+    leave("2026-04-01")
+    call(:SetScenarioPeriod, as: @editor, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-04-30")
+
+    assert_nil step[:undo]
+    assert_raises(Operations::Base::ParameterError) { call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
+  end
+
+  should "offer no redo of a departure outside the step's dates" do
+    leave("2026-05-15")
+    call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
+    call(:SetScenarioPeriod, as: @editor, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-04-30")
 
     assert_nil step[:redo]
     assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }

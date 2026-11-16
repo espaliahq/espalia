@@ -5,7 +5,8 @@
 # picks as `team_planning_undo_change` and `team_planning_redo_change` do with
 # no event_id, skipping the facets the caller may no longer touch, so a member
 # without the see-pay right is never offered a pay change, nor told one
-# exists. It offers nothing the operation would refuse on scope.
+# exists. It offers nothing the operation would refuse, on scope or on a
+# departure's day.
 class Operations::TeamPlanning::UndoStep < Operations::Base
   include Operations::TeamPlanning::PlanRead
   include Operations::TeamPlanning::WithinScope
@@ -62,6 +63,8 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
 
     restored = yield(entry)
     within_scope!(aggregate, restored.class, restored.data[:subject_id], restored.data) if restored
+    return nil unless entry.is_a?(::TeamPlanning::Events::ChangeMoved) || aggregate.leaves_in_period?(scenario_id, restored)
+
     subject_id = entry.data[:subject_id]
     { event_id:, action: action_of(entry), subject_id:, subject: name_of(subject_id), facet: aggregate.facet_of(scenario_id, event_id), scenario_id: }
   rescue Operations::Base::ParameterError

@@ -666,6 +666,15 @@ class TeamPlanning::PlanAggregate
     in_effect(scenario_id, @undone | [ event_id ]).reverse_each.find { it.key == key }
   end
 
+  # @param scenario_id [String]
+  # @param change [TeamPlanning::Events::Change, nil] a change an undo or redo would put back in effect
+  # @return [Boolean] false only for a departure whose day falls outside the step it leaves in
+  def leaves_in_period?(scenario_id, change)
+    leaves_on = change&.data&.dig(:leaves_on) or return true
+    period = period_of(change.data[:leaves_in_id] || scenario_id) or return true
+    period.cover?(Date.iso8601(leaves_on))
+  end
+
   # Restores an undone entry of a scenario's log, in its place.
   #
   # @param scenario_id [String] the root or a live scenario
@@ -1704,10 +1713,10 @@ class TeamPlanning::PlanAggregate
   # A date edit checks only the departures in effect, so one an undo or redo
   # brings back is checked as it returns.
   def ensure_leaves_in_period!(scenario_id, change)
-    leaves_on = change&.data&.dig(:leaves_on) or return
-    period = period_of(change.data[:leaves_in_id] || scenario_id) or return
-    return if period.cover?(Date.iso8601(leaves_on))
+    return if leaves_in_period?(scenario_id, change)
 
+    leaves_on = change.data[:leaves_on]
+    period = period_of(change.data[:leaves_in_id] || scenario_id)
     raise TeamPlanning::Error, "They leave on #{leaves_on}, outside the dates of the step they leave in " \
                                "(#{self.class.dates(period)}): change the step's dates first"
   end
