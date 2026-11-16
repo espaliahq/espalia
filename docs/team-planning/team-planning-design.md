@@ -1414,9 +1414,12 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - An editor splits from the plan page: "Split off the agreed part…" in a scenario's menu
   opens a page headed with the scenario's name. It lists each change in effect by subject
   and facet, with a box to choose it, and says beside a change which others it can't go
-  across without. A refused split comes back to the same page with the choice kept and
-  the refusal in names. A scenario with fewer than two changes has nothing to split off.
-  The baseline and a frozen plan refuse with the operation's own message.
+  across without, following each need to what it needs in turn. A unit or position only
+  the plan creates goes by the name the scenario gives it. A refused split comes back to
+  the same page with the choice kept and the left-behind changes in names. When no part
+  could go across without taking every change or leaving a need behind, the page says so
+  and offers no form. A split lands on the agreed part's timeline. The baseline and a
+  frozen plan refuse with the operation's own message.
 - `team_planning_split_needs` gives an MCP client the same list: each change's event id,
   subject and facet, and the changes it needs. A pay change shows its facet, never its
   value, so an editor without see-pay can still move it; its sealed value travels intact.
