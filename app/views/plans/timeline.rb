@@ -334,21 +334,32 @@ class Views::Plans::Timeline < Views::Base
   # -- Moving a change a step earlier or later --------------------------------
 
   SHIFT_WORDS = { "assignment" => "Change place in %s instead", "departure" => "Leave in %s instead",
-                  "position" => "Open it in %s instead" }.freeze
+                  "position" => "Open it in %s instead", "position_change" => "Change it in %s instead" }.freeze
 
-  # The changes a bar shows the start of, in `range`, that its step makes
-  # itself: the place it starts with, the position it opens, or the departure
-  # it shows. Each moves to the column before or after; never into Today.
+  # The changes a bar shows, in `range`, that a step makes itself: the place
+  # it starts with, the departure it shows, or for a position each step that
+  # opens or changes it (a new level keeps the bar going). Each moves to the
+  # column before or after; never into Today.
   def shifts(lane, bar, range)
     return [] unless @moving
 
-    changes = []
-    changes << [ bar[:from], bar[:kind] == "person" ? "assignment" : "position" ] if range.cover?(bar[:from]) && bar[:from].positive?
-    leaving = lane[:departures].find { it[:person_id] == bar[:subject_id] && (bar[:from]..bar[:to]).cover?(it[:column]) && range.cover?(it[:column]) }
-    changes << [ leaving[:column], "departure" ] if bar[:kind] == "person" && leaving
-    changes.select { |column, facet| movable?(column, bar[:subject_id], facet) }.flat_map do |column, facet|
-      [ ([ column, facet, "earlier", column - 1 ] if column >= 2), ([ column, facet, "later", column + 1 ] if column + 1 < columns.size) ].compact
+    changes = bar[:kind] == "person" ? person_changes(lane, bar, range) : position_changes(bar, range)
+    changes.select { |column, facet| movable?(column, bar[:subject_id], facet) }.flat_map do |column, facet, words|
+      [ ([ column, facet, "earlier", column - 1, words ] if column >= 2), ([ column, facet, "later", column + 1, words ] if column + 1 < columns.size) ].compact
     end
+  end
+
+  def person_changes(lane, bar, range)
+    changes = []
+    changes << [ bar[:from], "assignment", "assignment" ] if range.cover?(bar[:from]) && bar[:from].positive?
+    leaving = lane[:departures].find { it[:person_id] == bar[:subject_id] && (bar[:from]..bar[:to]).cover?(it[:column]) && range.cover?(it[:column]) }
+    changes << [ leaving[:column], "departure", "departure" ] if leaving
+    changes
+  end
+
+  def position_changes(bar, range)
+    (bar[:from]..bar[:to]).select { range.cover?(it) && it.positive? }
+                          .map { [ it, "position", it == bar[:from] ? "position" : "position_change" ] }
   end
 
   def movable?(column, subject_id, facet) = columns[column].fetch(:movable, []).include?({ subject_id:, facet: })
@@ -358,9 +369,9 @@ class Views::Plans::Timeline < Views::Base
     render Components::Kit::Dropdown.new(strategy: :fixed) do |menu|
       menu.trigger(label:, button: { variant: :ghost, size: :sm, compact: true }) { "When…" }
       menu.menu(label:, width: "w-64") do
-        shifts.each do |column, facet, direction, to|
+        shifts.each do |column, facet, direction, to, words|
           menu.item(href: shift_path(bar, column, facet, direction, to), data: { turbo_method: :post }) do
-            SHIFT_WORDS.fetch(facet) % step_name(to)
+            SHIFT_WORDS.fetch(words) % step_name(to)
           end
         end
       end

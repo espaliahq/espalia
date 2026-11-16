@@ -60,6 +60,26 @@ class Plans::ChangeMovesControllerTest < ActionDispatch::IntegrationTest
       assert_select "a[data-turbo-method='post']", text: "Leave in Q2 settle instead"
       assert_select "a", text: /Leave in Today/, count: 0
     end
+
+    should "offer When… for a position's later change, not only the step that opens it" do
+      ActsAsTenant.with_tenant(@tenant) do
+        squad = SecureRandom.uuid_v7
+        payments = SecureRandom.uuid_v7
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.define_taxonomy([ { level_id: squad, name: "Squad" } ], effective_on: "2026-01-01")
+        structure.create_unit(payments, "Payments", level_id: squad, effective_on: "2026-01-01")
+        role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
+        two, three = [ 2, 3 ].map { create(:framework_level, tenant: @tenant, role_id: role.role_id, ordinal: it, title: "Engineer #{it}").level_id }
+        opened = { plan_id: @plan_id, role_id: role.role_id, unit_id: payments, fte: 1, basis: "new" }
+        position = call(Operations::TeamPlanning::SetPosition, **opened, scenario_id: @q1, level_id: two)[:position_id]
+        call(Operations::TeamPlanning::SetPosition, **opened, scenario_id: @q2, position_id: position, level_id: three)
+      end
+
+      get timeline_plan_path(@plan_id, scenario: @q2)
+
+      assert_select "a[data-turbo-method='post']", text: "Open it in Q2 settle instead"
+      assert_select "a[data-turbo-method='post']", text: "Change it in Q1 hires instead"
+    end
   end
 
   should "refuse a viewer and offer them no When…" do
