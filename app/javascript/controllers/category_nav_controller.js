@@ -43,8 +43,9 @@ export default class extends BaseController {
     this._onScroll = () => this.#scheduleActiveCategoryUpdate()
     window.addEventListener("scroll", this._onScroll, { passive: true })
 
-    const linked = new URL(window.location).searchParams.get("category")
-    if (linked) {
+    const params = new URL(window.location).searchParams
+    const linked = { capability: params.get("capability"), category: params.get("category") }
+    if (linked.capability || linked.category) {
       this.#holdLinkedCategory(linked)
     } else {
       // Defer the first highlight to after layout so the sticky header
@@ -201,20 +202,22 @@ export default class extends BaseController {
     })
   }
 
-  // A link naming a category (shared, or reached by Back and Forward)
-  // opens on it. A short page may never scroll a later section up to the
-  // threshold, so the link's chip holds until the person scrolls or picks
-  // another chip themselves.
-  #holdLinkedCategory(categoryId) {
-    this._linkedCategory = categoryId
-    this.#setActiveCategory(categoryId)
+  // A link (shared, or reached by Back and Forward) opens on the card or
+  // category it names. A short page may never scroll a later section up to
+  // the threshold, so the link's chip holds until the person scrolls or
+  // picks another chip themselves.
+  #holdLinkedCategory(linked) {
+    this._linkedCategory = linked
+    if (linked.category) this.#setActiveCategory(linked.category)
     this._onUserScrollIntent = () => this.#releaseLinkedCategory()
     for (const type of ["wheel", "touchmove", "keydown"]) {
       window.addEventListener(type, this._onUserScrollIntent, { passive: true })
     }
-    if (!this.#revealSection(categoryId)) {
-      this._onLinkedFrameLoad = () => {
-        if (this._linkedCategory && this.#revealSection(this._linkedCategory)) this.#stopAwaitingFrame()
+    if (!this.#revealLinked(linked)) {
+      this._onLinkedFrameLoad = (event) => {
+        if (!this._linkedCategory) return
+        if (this.#revealLinked(this._linkedCategory)) this.#stopAwaitingFrame()
+        else if (event.target.id === "assessment-matrix") this.#releaseLinkedCategory()
       }
       document.addEventListener("turbo:frame-load", this._onLinkedFrameLoad)
     }
@@ -234,6 +237,19 @@ export default class extends BaseController {
     if (!this._onLinkedFrameLoad) return
     document.removeEventListener("turbo:frame-load", this._onLinkedFrameLoad)
     this._onLinkedFrameLoad = null
+  }
+
+  // A focused card wins over the category: the matrix scrolls to the card,
+  // so only its section's chip needs marking.
+  #revealLinked({ capability, category }) {
+    const card = capability &&
+      document.querySelector(`[data-matrix-target="card"][data-capability-stable-id="${CSS.escape(capability)}"]`)
+    const cardSection = card?.closest("section[data-category-id]")
+    if (cardSection) {
+      this.#setActiveCategory(cardSection.dataset.categoryId)
+      return true
+    }
+    return category ? this.#revealSection(category) : false
   }
 
   #revealSection(categoryId) {

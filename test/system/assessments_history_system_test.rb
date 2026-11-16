@@ -24,11 +24,13 @@ class AssessmentsHistorySystemTest < ApplicationSystemTestCase
       handler.add_role(@framework_id, role_id, rf_id, "Software Engineer", "E", "ic")
       handler.add_level(@framework_id, level_id, role_id, 1, "Engineer 1", "E1", is_entry: true)
 
+      @stable_ids = []
       @categories = [ "Thinking", "Delivering" ].each_with_index.map do |name, index|
         cat_id = SecureRandom.uuid_v7
         handler.add_capability_category(@framework_id, cat_id, name, ordinal: index + 1)
         cap_id = SecureRandom.uuid_v7
-        handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "#{name} capability")
+        @stable_ids << SecureRandom.uuid_v7
+        handler.add_capability(@framework_id, cap_id, @stable_ids.last, cat_id, "#{name} capability")
         handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, role_id, weight: 1.0)
         handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, cap_id, 1, "#{name} expectation")
         cat_id
@@ -68,6 +70,7 @@ class AssessmentsHistorySystemTest < ApplicationSystemTestCase
         assert_equal url_inside, current_url
         await_matrix
         assert_current_category @categories.last
+        assert_equal url_inside, current_url
       end
 
       should "open a shared link on the category it names" do
@@ -75,6 +78,14 @@ class AssessmentsHistorySystemTest < ApplicationSystemTestCase
         await_matrix
         assert_current_category @categories.last
         assert_operator evaluate_script("document.getElementById('category-#{@categories.last}').getBoundingClientRect().top"), :<, size.last
+        assert_includes current_url, "category=#{@categories.last}"
+      end
+
+      should "mark the chip of the card a link opens on, when the link also names another category" do
+        visit assessment_path(@assignment, category: @categories.last, capability: @stable_ids.first)
+        await_matrix
+        assert_selector "section#category-#{@categories.first} [data-matrix-target='card'][data-focused='true']"
+        assert_current_category @categories.first
       end
     end
   end
