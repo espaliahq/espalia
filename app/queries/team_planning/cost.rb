@@ -365,7 +365,7 @@ class TeamPlanning::Cost
 
   # The scenario's own map, which holds the horizon an open step's period runs to.
   def own_map
-    (@shared ? TeamPlanning::Baseline.new(context: @context, plan: @plan).named(@shared.map) : resolved(@scenario_id)).tap do |map|
+    (@shared ? @shared.named(TeamPlanning::Baseline.new(context: @context, plan: @plan)) : resolved(@scenario_id)).tap do |map|
       @figured = TeamPlanning::FiguredPeriod.for(@aggregate, @scenario_id, map)
       @period = @figured.period if @figured
     end

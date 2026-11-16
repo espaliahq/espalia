@@ -27,6 +27,10 @@ class TeamPlanning::Resolution
 
       raise ArgumentError, "This map was resolved for another viewer, plan or scenario"
     end
+
+    # @param baseline [TeamPlanning::Baseline] the plan's, to join the names
+    # @return [TeamPlanning::Baseline::Map] the map with names, as {Resolution#call} gives and caches it
+    def named(baseline) = CurrentPlanReads.fetch([ :scenario, *key ]) { baseline.named(map) }
   end
 
   # @param context [AuthorizationContext]
@@ -49,7 +53,7 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call(aggregate = nil)
-    CurrentPlanReads.fetch([ :scenario, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @plan.archived_on, @scenario_id ]) do
+    CurrentPlanReads.fetch([ :scenario, *Shared.key(@context, @plan, @scenario_id) ]) do
       @baseline.named(structure(aggregate || @repository.load_plan(@plan.id)))
     end
   end
