@@ -32,7 +32,7 @@ class Tenant::CostCentreRulesController < ApplicationController
   # GET /tenant/cost_centre_rules/:id/edit
   def edit
     authorize_rules
-    return list_changed unless current? && entries[place]
+    return list_changed unless current? && place && entries[place]
 
     render_edit(Views::Tenant::CostCentreRules::EntryFields.form_values(entries[place]))
   end
@@ -40,7 +40,7 @@ class Tenant::CostCentreRulesController < ApplicationController
   # PATCH /tenant/cost_centre_rules/:id
   def update
     authorize_rules
-    return list_changed unless current? && entries[place]
+    return list_changed unless current? && place && entries[place]
 
     save(entries.dup.tap { it[place] = entry })
     redirect_to tenant_cost_centre_rules_path, notice: "Entry #{place + 1} changed.", status: :see_other
@@ -52,7 +52,7 @@ class Tenant::CostCentreRulesController < ApplicationController
   # DELETE /tenant/cost_centre_rules/:id
   def destroy
     authorize_rules
-    return list_changed unless current? && entries[place]
+    return list_changed unless current? && place && entries[place]
 
     save(entries.dup.tap { it.delete_at(place) })
     redirect_to tenant_cost_centre_rules_path, notice: "Entry #{place + 1} removed.", status: :see_other
@@ -86,7 +86,8 @@ class Tenant::CostCentreRulesController < ApplicationController
 
   def current? = params[:version] == Views::Tenant::CostCentreRules::EntryFields.version(entries)
 
-  def place = params[:id].to_i - 1
+  # @return [Integer, nil] the entry's index, nil for an id that names no place
+  def place = (params[:id].to_i - 1 if params[:id].to_s.match?(/\A[1-9]\d*\z/))
 
   def save(list)
     Operations::Tenants::SetPlanningRule.call(context: pundit_user, params: { rule: KIND.rule_name, value: { "entries" => list } })

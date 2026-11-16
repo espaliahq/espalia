@@ -131,6 +131,10 @@ class Tenant::CostCentreRulesControllerTest < ActionDispatch::IntegrationTest
       patch reorder_tenant_cost_centre_rules_path, params: { version:, entry_ids: %w[1 1 2] }
       get edit_tenant_cost_centre_rule_path(4, version:)
       assert_equal STALE, flash[:alert]
+      %w[0 -1 abc].each do |id|
+        delete tenant_cost_centre_rule_path(id), params: { version: }
+        assert_equal STALE, flash[:alert], "an id of #{id} names no entry, not the last one"
+      end
       assert_equal %w[Alpha Beta Gamma], labels
     end
   end
