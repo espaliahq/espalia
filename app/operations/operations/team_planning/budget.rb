@@ -21,10 +21,11 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "their kind prices them on either basis. Funded plus unfunded is team_planning_cost's scenario total, per " \
               "currency, on an inclusive basis. Remaining is approved less funded in the line's own currency, and " \
               "head_count less the FTE drawn. Money stays per currency: a line drawn on in another currency lists it in " \
-              "mismatched_currencies, never converted, and only totals carry `converted`, in the reference currency " \
-              "at the period's start. budget_lines and cost_centres (by the cost centre a line was approved for, null " \
-              "for none; unfunded money by the seat's cost centre, unfunded head count by the position's) carry all " \
-              "four; units carry funded and unfunded only. Head counts are positions and FTE: a line or cost centre counts " \
+              "mismatched_currencies, never converted, and only the total carries `converted` and `missing`, in the " \
+              "reference currency at the period's start; every group sum is `native` alone. cost_centres (by the cost " \
+              "centre a line was approved for, null for none; unfunded money by the seat's cost centre, unfunded head " \
+              "count by the position's) carry all four; budget_lines carry approved, funded and remaining; units carry " \
+              "funded and unfunded. Head counts are positions and FTE: a line or cost centre counts " \
               "each position drawing on it once, at the FTE it draws, while units and the total count the positions " \
               "funded whole, as team_planning_funding does, so funded and unfunded add up to every position. A position with a seat no pay band prices still counts in head count and is listed under " \
               "unpriced with no money; so is one whose on-cost is refused, unless the basis is base_only, which funds its base. Figures are decimal strings. The baseline has no period, so it can't be the " \
@@ -44,7 +45,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
     { plan_id: plan.id, scenario_id:, basis: report.basis, period: period(report), pay_view: report.pay_view,
       reference_currency: report.reference_currency, total: totals(report.totals), forecast: sum(report.forecast),
       budget_lines: report.lines.map { line(it) },
-      cost_centres: report.cost_centres.map { |cost_centre, totals| { cost_centre:, **totals(totals) } },
+      cost_centres: report.cost_centres.map { |cost_centre, totals| { cost_centre:, **totals(totals, money: method(:native)) } },
       units: report.units.map { |unit_id, totals| { unit_id:, **unit(totals) } },
       unpriced: report.unpriced.map(&:to_h) }
   end
@@ -60,16 +61,18 @@ class Operations::TeamPlanning::Budget < Operations::Base
       mismatched_currencies: line.mismatched }
   end
 
-  def totals(totals)
-    { approved: { **sum(totals.approved), head_count: figure(totals.head_count) },
-      funded: { **sum(totals.funded), **heads(totals.funded_heads) },
-      remaining: { **sum(totals.remaining), head_count: figure(totals.remaining_head_count) },
-      unfunded: { **sum(totals.unfunded), **heads(totals.unfunded_heads) } }
+  def totals(totals, money: method(:sum))
+    { approved: { **money.(totals.approved), head_count: figure(totals.head_count) },
+      funded: { **money.(totals.funded), **heads(totals.funded_heads) },
+      remaining: { **money.(totals.remaining), head_count: figure(totals.remaining_head_count) },
+      unfunded: { **money.(totals.unfunded), **heads(totals.unfunded_heads) } }
   end
 
   def unit(totals)
-    { funded: { **sum(totals.funded), **heads(totals.funded_heads) }, unfunded: { **sum(totals.unfunded), **heads(totals.unfunded_heads) } }
+    { funded: { **native(totals.funded), **heads(totals.funded_heads) }, unfunded: { **native(totals.unfunded), **heads(totals.unfunded_heads) } }
   end
+
+  def native(sum) = { native: sum.native.transform_values { decimal(it) } }
 
   def heads(heads) = { positions: heads.positions, fte: decimal(heads.fte) }
 

@@ -48,6 +48,8 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal({ native: { "EUR" => "9000" }, converted: "9000", missing: [], positions: 1, fte: "0.5" }, read[:total][:funded])
     assert_equal({ native: {}, converted: "0", missing: [], positions: 0, fte: "0" }, read[:total][:unfunded])
     assert_equal [ "Platform" ], read[:cost_centres].pluck(:cost_centre)
+    assert_equal({ native: { "EUR" => "9000" }, positions: 1, fte: "0.5" }, read[:cost_centres].sole[:funded], "only the total converts")
+    assert_equal({ native: { "EUR" => "9000" }, positions: 1, fte: "0.5" }, read[:units].sole[:funded])
     assert_equal [ [ nil, "9000", 1 ] ], read[:units].map { [ it[:unit_id], it[:funded][:native]["EUR"], it[:funded][:positions] ] }, "a unit the map doesn't hold is no unit, as in the cost read"
     assert_empty read[:unpriced]
   end

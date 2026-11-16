@@ -1262,9 +1262,11 @@ gives the four numbers for a scenario, never the baseline.
   funded plus unfunded is the cost read's total, per currency.
 - **Remaining** is approved less funded, in the line's own currency, and head count less the
   FTE drawn. A line drawn on in another currency lists it as mismatched and never converts
-  it. Only the grand totals convert, once, to the reference currency.
-- **Where it adds up.** Lines and cost centres carry all four; units carry funded and unfunded
-  only, as a budget line is approved for a cost centre, not a unit. A position with a seat no
+  it. Only the grand totals convert, once, to the reference currency; every group sum stays
+  per currency.
+- **Where it adds up.** Cost centres carry all four. Lines carry approved, funded and
+  remaining, since a line's unfunded money has no line to sit on. Units carry funded and
+  unfunded only, as a budget line is approved for a cost centre, not a unit. A position with a seat no
   band prices still counts in head count and is listed as unpriced, with no money. So is a
   seat whose on-cost rule is refused, except on base_only, which funds its base.
 
