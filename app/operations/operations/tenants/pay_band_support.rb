@@ -23,6 +23,20 @@ module Operations::Tenants::PayBandSupport
   FIGURE_SCHEMA = { type: "string", pattern: FIGURE.source.sub("\\A", "^").sub("\\z", "$") }.freeze
   FIGURE_HELP = "Figures are decimal strings with at most two decimal places, such as \"120000\"."
 
+  # Declares the matcher fields, and the pairs a band can't match on together.
+  #
+  # @param operation [Class<Operations::Base>]
+  def self.declare_matcher(operation)
+    operation.parameter :role_family_id, String
+    operation.parameter :role_id, String
+    operation.parameter :level_ordinal, Integer, schema: { type: "integer", minimum: 1 }
+    operation.parameter :level_id, String
+    operation.excludes :role_id, :role_family_id,
+                       message: "A band matches on a role or a role family, not both: a role already names its family"
+    operation.excludes :level_id, :role_id, :role_family_id, :level_ordinal,
+                       message: "Give level_id, or a role or role family and a level number, not both"
+  end
+
   # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin
   def policy_check
     authorize ActsAsTenant.current_tenant, :manage_pay_bands?, policy_class: TenantPolicy
@@ -52,10 +66,6 @@ module Operations::Tenants::PayBandSupport
   end
 
   def find_in_framework(model, key, noun)
-    if key == :level_id && (MATCHER_PARAMS - [ :level_id ]).any? { params[it].present? }
-      raise Operations::Base::ParameterError, "Give level_id, or a role or role family and a level number, not both"
-    end
-
     model.find_by(key => params[key].to_s.downcase) || raise(Operations::Base::ParameterError, "There is no such #{noun} in the framework")
   end
 

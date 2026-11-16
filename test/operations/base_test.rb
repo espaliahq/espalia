@@ -888,6 +888,42 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  ExcludesFixture = Class.new(Operations::Base) do
+    parameter :level_id, String
+    parameter :role_id, String
+    parameter :level_ordinal, Integer
+    excludes :level_id, :role_id, :level_ordinal
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "excludes DSL" do
+    should "accept either side alone, and the others together" do
+      assert_equal "l", ExcludesFixture.call(context: build_context, params: { level_id: "l" })[:level_id]
+      assert_equal 2, ExcludesFixture.call(context: build_context, params: { role_id: "r", level_ordinal: 2 })[:level_ordinal]
+    end
+
+    should "refuse a pair that arrives together, a blank included, as the schema does" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ExcludesFixture.new(context: build_context, params: { level_id: "l", role_id: "" })
+      end
+      assert_equal "Give level_id or role_id, not both", err.message
+      assert_equal [ { not: { required: %w[level_id role_id] } }, { not: { required: %w[level_id level_ordinal] } } ],
+                   Mcp::OperationToTool.new(ExcludesFixture).send(:exclusion_schemas)
+    end
+
+    should "reject an undeclared parameter or a parameter excluding itself at load time" do
+      [ %i[level_id nope], %i[level_id level_id], %i[level_id] ].each do |names|
+        assert_raises(ArgumentError) do
+          Class.new(Operations::Base) do
+            parameter :level_id, String
+            excludes(*names)
+          end
+        end
+      end
+    end
+  end
+
   BlankFixture = Class.new(Operations::Base) do
     parameter :name, String, allow_blank: false
     parameter :description, String

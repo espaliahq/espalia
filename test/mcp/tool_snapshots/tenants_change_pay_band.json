@@ -16,7 +16,8 @@
         "type": "string"
       },
       "level_ordinal": {
-        "type": "integer"
+        "type": "integer",
+        "minimum": 1
       },
       "level_id": {
         "type": "string"
@@ -58,7 +59,41 @@
       "midpoint",
       "maximum"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "not": {
+          "required": [
+            "role_id",
+            "role_family_id"
+          ]
+        }
+      },
+      {
+        "not": {
+          "required": [
+            "level_id",
+            "role_id"
+          ]
+        }
+      },
+      {
+        "not": {
+          "required": [
+            "level_id",
+            "role_family_id"
+          ]
+        }
+      },
+      {
+        "not": {
+          "required": [
+            "level_id",
+            "level_ordinal"
+          ]
+        }
+      }
+    ]
   },
   "annotations": {
     "readOnlyHint": false,

@@ -291,6 +291,7 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
         { role_id: SecureRandom.uuid_v7 } => "There is no such role in the framework",
         { role_family_id: SecureRandom.uuid_v7 } => "There is no such role family in the framework",
         { level_id: @level.level_id, level_ordinal: 2 } => "Give level_id, or a role or role family and a level number, not both",
+        { level_id: @level.level_id, role_id: "" } => "Give level_id, or a role or role family and a level number, not both",
         { level_ordinal: 0 } => "level_ordinal must be 1 or more"
       }.each do |matcher, message|
         assert_equal message, assert_raises(Operations::Base::ParameterError) { entry(**matcher) }.message

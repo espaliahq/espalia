@@ -13,10 +13,7 @@ class Operations::Tenants::AddPayBand < Operations::Base
   category :write
   approval :in_app
 
-  parameter :role_family_id, String
-  parameter :role_id, String
-  parameter :level_ordinal, Integer
-  parameter :level_id, String
+  Operations::Tenants::PayBandSupport.declare_matcher(self)
   parameter :location, String
   parameter :currency, String, required: true, allow_blank: false
   parameter :period, String, required: true, allowed: PayBand::PERIODS
