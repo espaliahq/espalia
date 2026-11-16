@@ -6,6 +6,10 @@
 # entry that matches applies, so the last one to match wins, and the order
 # of the entries is the precedence.
 #
+# A subject's field can hold a set where the subject sits in several at
+# once, matching when it includes the matcher's value: a seat carries its
+# unit and every unit above it, so a unit's entry reaches the units beneath.
+#
 # Pay bands use it; cost-centre rules are meant to.
 #
 # @example
@@ -13,7 +17,7 @@
 #   # => [band, 4]
 module LastMatch
   # @param entries [Array] in order
-  # @param subject [Hash{Symbol => Object}] the subject's attributes
+  # @param subject [Hash{Symbol => Object}] the subject's attributes, each a value or a set of values
   # @param fields [Array<Symbol>] the matcher fields
   # @yieldparam entry [Object]
   # @yieldreturn [Hash{Symbol => Object}] the entry's matcher; the entry itself without a block
@@ -27,10 +31,13 @@ module LastMatch
   end
 
   # @param matcher [Hash{Symbol => Object}]
-  # @param subject [Hash{Symbol => Object}]
+  # @param subject [Hash{Symbol => Object}] each field a value or a set of values
   # @param fields [Array<Symbol>]
-  # @return [Boolean] whether every field the matcher sets equals the subject's
-  def self.matches?(matcher, subject, fields) = fields.all? { matcher[it].nil? || matcher[it] == subject[it] }
+  # @return [Boolean] whether the subject has every field the matcher sets
+  def self.matches?(matcher, subject, fields) = fields.all? { matcher[it].nil? || has?(subject[it], matcher[it]) }
+
+  def self.has?(held, value) = held.is_a?(Set) || held.is_a?(Array) ? held.include?(value) : held == value
+  private_class_method :has?
 
   # The entries that can never have the last word: for each, a later entry
   # matches every subject it does.
@@ -38,7 +45,7 @@ module LastMatch
   # @param matchers [Array<Hash{Symbol => Object}>] in order
   # @param fields [Array<Symbol>]
   # @param reaches [Array<Hash{Symbol => Object}>] for each entry, what every subject it matches has,
-  #   where a field implies another (a role its family); the matchers themselves by default
+  #   where a field implies another (a role its family, a unit the units above it); the matchers by default
   # @return [Array<Integer>] the indexes of those entries
   def self.shadowed(matchers, fields, reaches: matchers)
     matchers.each_index.select do |index|

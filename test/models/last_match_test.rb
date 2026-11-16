@@ -26,4 +26,14 @@ class LastMatchTest < ActiveSupport::TestCase
     assert_equal [ 0 ], LastMatch.shadowed(matchers, FIELDS)
     assert_equal [], LastMatch.shadowed(matchers.reverse, FIELDS)
   end
+
+  should "match a subject that sits in a set of values, as a seat sits in its unit and every unit above" do
+    entries = [ { unit: "company" }, { unit: "eng", level: 3 }, { unit: "payments" } ]
+    seat = { unit: Set["platform", "eng", "company"], level: 3 }
+
+    assert_equal 1, LastMatch.find(entries, seat, FIELDS).last
+    assert_equal 0, LastMatch.find(entries, seat.merge(level: 4), FIELDS).last
+    assert_equal [ 0 ], LastMatch.shadowed([ { unit: "eng", level: 3 }, { unit: "company" } ], FIELDS,
+                                           reaches: [ { unit: Set["eng", "company"], level: 3 }, { unit: Set["company"] } ])
+  end
 end
