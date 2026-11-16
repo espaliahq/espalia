@@ -22,9 +22,26 @@ class PlanDatesSystemTest < ApplicationSystemTestCase
       @q1 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1 hires", ends_on: "2027-03-31")[:scenario_id]
       @q2 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2 settle",
                                                          ends_on: "2027-06-30")[:scenario_id]
-      call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @q1, role_id: engineer.role_id,
-                                                  level_id: senior.level_id, unit_id: payments, fte: 1, basis: "new")
+      @position = ->(fte) do
+        call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @q1, role_id: engineer.role_id,
+                                                    level_id: senior.level_id, unit_id: payments, fte:, basis: "new")
+        call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id: @q1)[:entries].last[:event_id]
+      end
+      @agreed_position = @position.(1)
     end
+  end
+
+  should "go back to the map of a split's rest after opening its agreed part's dates" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    @position.(0.5)
+    call(Operations::TeamPlanning::SplitScenario, plan_id: @plan_id, scenario_id: @q1, event_ids: [ @agreed_position ], name: "Agreed hires")
+    sign_in_as(@planner.user)
+    visit map_plan_path(@plan_id, scenario: @q1)
+    assert_selector "h1", text: "Next year"
+
+    click_link_with_js_fallback("Dates…", expect_text: "Dates for Agreed hires")
+    click_link_with_js_fallback("Cancel", expect_text: "Q1 hires")
+    assert_current_path map_plan_path(@plan_id, scenario: @q1)
   end
 
   [ [ "desktop", DESKTOP_SIZE ], [ "phone", MOBILE_SIZE ] ].each do |label, size|

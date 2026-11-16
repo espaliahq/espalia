@@ -15,7 +15,8 @@ class Views::Plans::ScenarioDates < Views::Base
   # @param preview [Hash, nil] from `team_planning_period_preview`, for the draft
   # @param error [String, nil] why the draft was refused
   # @param from [String, nil] "map" when the editor came from the map
-  def initialize(plan:, scenarios:, scenario:, draft: {}, preview: nil, error: nil, from: nil)
+  # @param map_scenario [String, nil] the map's scenario when it isn't this step, as for an alternative
+  def initialize(plan:, scenarios:, scenario:, draft: {}, preview: nil, error: nil, from: nil, map_scenario: nil)
     @plan = plan
     @scenarios = scenarios
     @scenario = scenario
@@ -23,6 +24,7 @@ class Views::Plans::ScenarioDates < Views::Base
     @preview = preview
     @error = error
     @from = from
+    @map_scenario = map_scenario if from == "map"
   end
 
   def view_template
@@ -49,11 +51,16 @@ class Views::Plans::ScenarioDates < Views::Base
   # parent takes its period from when the parent is a split or an alternative.
   def parent = Views::Plans::ScenarioTable.period_owner(@scenarios.find { it[:scenario_id] == @scenario[:parent_id] }, @scenarios)
 
-  def back = @from == "map" ? map_plan_path(plan_id, scenario: id) : plan_path(plan_id)
+  def back = @from == "map" ? map_plan_path(plan_id, scenario: @map_scenario || id) : plan_path(plan_id)
+
+  def came_from
+    input(type: "hidden", name: "from", value: @from) if @from
+    input(type: "hidden", name: "map_scenario", value: @map_scenario) if @map_scenario
+  end
 
   def choose
     form(action: dates_plan_path(plan_id, scenario_id: id), method: "get", class: "space-y-4") do
-      input(type: "hidden", name: "from", value: @from) if @from
+      came_from
       first_step? ? start_field : start_text
       date_field("ends_on", "Ends on", @draft[:ends_on] || @scenario[:ends_on])
       div(class: "flex flex-wrap items-center gap-2") do
@@ -73,7 +80,7 @@ class Views::Plans::ScenarioDates < Views::Base
       p(class: "text-sm font-semibold text-default") { "Starts on" }
       p(class: "mt-1 text-sm text-default") do
         plain "#{day(@scenario[:starts_on])}, the day after "
-        a(href: dates_plan_path(plan_id, scenario_id: parent[:scenario_id], from: @from), class: "underline") { parent[:name] }
+        a(href: dates_plan_path(plan_id, scenario_id: parent[:scenario_id], from: @from, map_scenario: @map_scenario), class: "underline") { parent[:name] }
         plain " ends. Change that step's end to move it."
       end
     end
@@ -104,7 +111,7 @@ class Views::Plans::ScenarioDates < Views::Base
       p(class: "text-sm text-muted") { "Nothing else moves." } if @preview[:moves].empty?
       form(action: dates_plan_path(plan_id, scenario_id: id), method: "post", class: "flex flex-wrap items-center gap-2") do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-        input(type: "hidden", name: "from", value: @from) if @from
+        came_from
         input(type: "hidden", name: "starts_on", value: @preview[:starts_on]) if first_step?
         input(type: "hidden", name: "ends_on", value: @preview[:ends_on])
         render(Components::Kit::Button.new(type: :submit, tone: :brand)) { "Save dates" }

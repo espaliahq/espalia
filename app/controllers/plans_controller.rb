@@ -336,7 +336,8 @@ class PlansController < ApplicationController
       end
     end
     plan_page(plan, scenarios:, open_tab: params[:from] == "map" ? :map : :scenarios,
-                    body: Views::Plans::ScenarioDates.new(plan:, scenarios:, scenario:, draft:, preview: previewed, error:, from: params[:from]))
+                    body: Views::Plans::ScenarioDates.new(plan:, scenarios:, scenario:, draft:, preview: previewed, error:, from: params[:from],
+                                                                map_scenario: params[:map_scenario].presence))
   end
 
   def dates_scenario_name
@@ -344,7 +345,7 @@ class PlansController < ApplicationController
     read(Operations::TeamPlanning::Scenarios)[:scenarios].find { it[:scenario_id] == id }&.dig(:name)
   end
 
-  def dates_back(plan_id) = params[:from] == "map" ? map_plan_path(plan_id, scenario: params[:scenario_id]) : plan_path(plan_id)
+  def dates_back(plan_id) = params[:from] == "map" ? map_plan_path(plan_id, scenario: params[:map_scenario].presence || params[:scenario_id]) : plan_path(plan_id)
 
   def pay_uploader_plan
     plan = read(Operations::TeamPlanning::Plan)

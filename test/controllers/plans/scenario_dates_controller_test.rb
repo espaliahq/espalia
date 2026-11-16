@@ -84,6 +84,30 @@ class Plans::ScenarioDatesControllerTest < ActionDispatch::IntegrationTest
       get map_plan_path(@plan_id, scenario: @q2)
       assert_select "a[href='#{dates_plan_path(@plan_id, scenario_id: @q2, from: 'map')}']", text: "Dates…"
     end
+
+    should "go back to the map of a split's rest when its Dates… opened the agreed part" do
+      rest = @q1
+      agreed = ActsAsTenant.with_tenant(@tenant) do
+        leaving = [ "Ada Quill", "Bo Brook" ].map do |name|
+          person = create(:person, tenant: @tenant, name:)
+          OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                  .record_person(person.id, provider: "espalia", effective_on: "2026-01-02", employment_status: "employed")
+          call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: rest, person_id: person.id)
+          call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id: rest)[:entries].last[:event_id]
+        end.first
+        call(Operations::TeamPlanning::SplitScenario, plan_id: @plan_id, scenario_id: rest, event_ids: [ leaving ], name: "Agreed")[:agreed_id]
+      end
+      get map_plan_path(@plan_id, scenario: rest)
+      dates = dates_plan_path(@plan_id, scenario_id: agreed, from: "map", map_scenario: rest)
+      assert_select "a[href='#{dates}']", text: "Dates…"
+
+      get dates
+      assert_select "a[href='#{map_plan_path(@plan_id, scenario: rest)}']", text: "Cancel"
+      assert_select "input[name='map_scenario'][value='#{rest}']"
+
+      post dates_plan_path(@plan_id, scenario_id: agreed), params: { ends_on: "2027-04-30", from: "map", map_scenario: rest }
+      assert_redirected_to map_plan_path(@plan_id, scenario: rest)
+    end
   end
 
   should "refuse a viewer, and offer them no Dates…" do
