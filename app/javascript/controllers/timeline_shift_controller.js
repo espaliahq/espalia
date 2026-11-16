@@ -9,7 +9,7 @@
 //
 // Usage:
 //   <div data-controller="timeline-shift">
-//     <div data-timeline-step="1">… <p data-timeline-shift-hint="1" hidden>Move here</p></div>
+//     <div data-timeline-step="1">… <p class="invisible" data-timeline-shift-hint="1">Move here</p></div>
 //     <div data-timeline-shift-column="1"></div>
 //     <div data-shifting?>
 //       <a data-turbo-method="post" data-timeline-shift="start:2" href="/planning/…/change-moves?…">…</a>
@@ -39,7 +39,7 @@ export default class extends BaseController {
     this.grip.parentElement.dataset.shifting = ""
     this.reach.forEach(step => {
       this.#column(step).dataset.lit = ""
-      this.#hint(step).hidden = false
+      this.#hint(step).classList.remove("invisible")
     })
 
     this.listeners = {
@@ -88,7 +88,7 @@ export default class extends BaseController {
       const column = this.#column(step)
       delete column.dataset.lit
       delete column.dataset.over
-      this.#hint(step).hidden = true
+      this.#hint(step).classList.add("invisible")
     })
     this.grip = null
   }

@@ -126,7 +126,8 @@ class Views::Plans::Timeline < Views::Base
         p(class: "text-muted") { period(index) }
         today_continues(index)
         alternatives(index)
-        p(class: "font-medium text-brand", hidden: true, data: { timeline_shift_hint: index }) { "Move here" } if @moving
+        # Keeps its line while unseen, so the header row doesn't grow under the pointer mid-drag.
+        p(class: "invisible font-medium text-brand", data: { timeline_shift_hint: index }) { "Move here" } if @moving
       end
     end
     @row += 1

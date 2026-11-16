@@ -217,6 +217,9 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       end
 
       should "move a departure a step later by dropping its end on the lit column" do
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert page.evaluate_script("document.querySelector(\"[data-timeline-shift-hint='2']\").offsetHeight").positive?,
+               "the unseen hint keeps its line, so the header row can't grow under the pointer mid-drag"
         hold(leaver_end_grip, over: "[data-timeline-step='2']")
         assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
         assert_no_selector "[data-timeline-shift-hint='0']", visible: true
