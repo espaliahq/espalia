@@ -53,7 +53,7 @@ class TeamPlanning::RuleKinds::BudgetStrictness < TeamPlanning::RuleKind
         scope: { type: "string", enum: SCOPES,
                  description: "Where the limit is checked. cost_centre needs cost_centre in match" }
       },
-      oneOf: [ { required: %w[preset], not: { anyOf: %w[match limit scope].map { { required: [ it ] } } } }, { required: %w[match limit scope] } ],
+      oneOf: [ { required: %w[preset], not: { anyOf: %w[match limit scope].map { { required: [ it ] } } } }, { required: %w[match limit scope], not: { required: %w[preset] } } ],
       additionalProperties: false }
   end
 
