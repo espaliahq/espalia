@@ -22,6 +22,7 @@ class Views::Assessments::ShowView < Views::Base
   # @param can_relink_others_evidence [Boolean] whether the viewer may manage
   #   links (add/remove capability × level) on evidence authored by others
   # @param activity_entries [Array<Assessments::ActivityFeedQuery::Entry>]
+  # @param activity_open [Boolean] whether the activity pane renders open; see `Activity::PaneToggle.open?`
   # @param exploration [AssessmentExploration, nil] the open exploration of
   #   the lens role (ADR-22)
   # @param can_explore [Boolean] the viewer may declare or close one
@@ -38,7 +39,7 @@ class Views::Assessments::ShowView < Views::Base
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
-                 activity_entries: [],
+                 activity_entries: [], activity_open: false,
                  exploration: nil, can_explore: false, unplaced_feedback_count: 0, cycles: [],
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
@@ -58,6 +59,7 @@ class Views::Assessments::ShowView < Views::Base
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
     @activity_entries = activity_entries
+    @activity_open = activity_open
     @exploration = exploration
     @can_explore = can_explore
     @user = user
@@ -69,8 +71,14 @@ class Views::Assessments::ShowView < Views::Base
     render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: { controller: "activity-pane", activity_pane_fit_viewport_value: true }) do
-        assessment_layout
+      render Components::Kit::SidePanel.new(
+        id: Views::Assessments::Activity::PaneToggle::PANE_ID, title: "Activity", open: @activity_open,
+        cookie: Views::Assessments::Activity::PaneToggle::COOKIE, url_key: Views::Assessments::Activity::PaneToggle::URL_KEY,
+        heading: false, sticky: true, fit_viewport: true
+      ) do |panel|
+        panel.main { main_section }
+        panel.body { activity_frame }
+        panel.wrap { assessment_layout(panel) }
       end
     end
   end
@@ -79,7 +87,7 @@ class Views::Assessments::ShowView < Views::Base
 
   # ── Layout ──
 
-  def assessment_layout
+  def assessment_layout(panel)
     # `modal` + `evidence-modal` live here (not on an outer wrapper) so the
     # unified evidence modal — overlay, frame, and its submit — sits INSIDE the
     # assessment-sync element; the submit then arms the suppress window and the
@@ -99,13 +107,7 @@ class Views::Assessments::ShowView < Views::Base
       if @unplaced_feedback_count.positive?
         render Views::Assessments::UnplacedFeedbackNotice.new(count: @unplaced_feedback_count, whose: "you")
       end
-      # Main + activity sit side-by-side. When the activity sidebar
-      # is `hidden`, the main pane gets the full width; when shown,
-      # it compresses to make room.
-      div(class: "flex gap-6 items-start") do
-        div(class: "flex-1 min-w-0") { main_section }
-        activity_sidebar
-      end
+      panel.columns
 
       # Root-mounted, so the hero's trigger can sit inside a frame that
       # reloads on every rating without taking an open dialog down with it.
@@ -173,7 +175,7 @@ class Views::Assessments::ShowView < Views::Base
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
-          render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
+          render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size, open: @activity_open)
         end
       end
       render_past_cycle_banner
@@ -250,39 +252,19 @@ class Views::Assessments::ShowView < Views::Base
     end
   end
 
-  def activity_sidebar
-    # On lg+ viewports, the sidebar sits inline next to the matrix and
-    # compresses it when open. On smaller viewports it overlays (fixed)
-    # so the matrix gets the full width and isn't squeezed to nothing.
-    aside(
-      id: "assessment-activity-pane",
-      # The height cap subtracts the sticky header the pane sits under, or its
-      # bottom (and the feed's last entries) lands below the viewport. Both
-      # offsets are lg-only so the overlay below lg keeps its full height.
-      class: "hidden bg-subtle overflow-auto overscroll-contain " \
-             "border border-default " \
-             "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
-             "max-lg:w-80 max-lg:shadow-drawer max-lg:border-l max-lg:rounded-none " \
-             "lg:shrink-0 lg:w-80 lg:rounded-xl lg:sticky lg:self-start " \
-             "lg:top-[calc(var(--sticky-header-h,0px)+1rem)] " \
-             "lg:max-h-[calc(100dvh-var(--sticky-header-h,0px)-2rem)]",
-      data: { activity_pane_target: "pane", pane_state: "closed" }
+  def activity_frame
+    # The feed draws the pane's heading, count and close button, so the count
+    # re-renders with the feed on every broadcast.
+    turbo_frame_tag(
+      "assessment-activity",
+      src: assessment_activity_path(@assignment),
+      loading: "lazy",
+      data: { assessment_sync_target: "activityFrame" }
     ) do
-      # No separate sidebar header — the feed's own header carries
-      # "Activity" + entry count + close button so it all lives in
-      # one row (and the count re-renders with the feed on ActionCable
-      # broadcasts).
-      turbo_frame_tag(
-        "assessment-activity",
-        src: assessment_activity_path(@assignment),
-        loading: "lazy",
-        data: { assessment_sync_target: "activityFrame" }
-      ) do
-        render Views::Assessments::Activity::Feed.new(
-          entries: @activity_entries,
-          assignment: @assignment
-        )
-      end
+      render Views::Assessments::Activity::Feed.new(
+        entries: @activity_entries,
+        assignment: @assignment
+      )
     end
   end
 

@@ -5,6 +5,7 @@ require "application_system_test_case"
 class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
+  TOGGLE = "button[aria-controls='assessment-activity-pane']"
 
   setup do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
@@ -70,6 +71,106 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
           content: "Body content for entry #{i}.", author_id: @person.id, valence: "demonstrated")
       end
     end
+  end
+
+  # Marks the entry the page settles on once the matrix's first load has
+  # written its own, so a test can tell which entry Back or a close lands on.
+  def mark_history_entry
+    visit assessment_path(@assignment)
+    wait_for_stimulus "activity-pane"
+    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+    page.execute_script("history.replaceState({ ...history.state, probe: true }, '')")
+  end
+
+  # Turbo stamps its own state on an entry it pops back to, wiping the probe,
+  # so the pane's marker gone shows its entry was left. The entry it opened on
+  # says closed, or the cookie would reopen the pane there on a reload.
+  # (Counting entries can't: Chrome caps history.length at 50 per tab.)
+  def assert_back_on_opening_entry
+    assert_nil page.evaluate_script("history.state?.sidePanelOverlay ?? null")
+    assert_current_path assessment_path(@assignment, activity: "closed")
+  end
+
+  # Closing must step Back off the overlay's entry. Rewriting that entry in
+  # place would also end on a closed URL with no marker, but leave it in history.
+  def close_overlay_by_its_button
+    assert_selector "#assessment-activity-pane button[aria-label='Close activity']", visible: true
+    expect_a_back
+    page.execute_script(<<~JS)
+      window.overlayPopped = false
+      window.addEventListener("popstate", () => { window.overlayPopped = true }, { once: true })
+      document.querySelector("#assessment-activity-pane button[aria-label='Close activity']").click()
+    JS
+    assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+    assert wait_until_js { page.evaluate_script("window.overlayPopped") }, "closing stepped Back off the overlay's entry"
+    assert_back_landed
+    assert_back_on_opening_entry
+    assert page.evaluate_script("document.activeElement.matches(arguments[0])", TOGGLE),
+      "closing left focus behind instead of on the toggle"
+  end
+
+  # Both entries carry the same path, so the URL alone can't show a Back has
+  # landed; a second Back sent too soon leaves the page behind as well. Turbo
+  # starts its restore visit inside its own popstate listener, before ours, so
+  # a Back that starts one lands only at that visit's turbo:load. A Back that
+  # leaves for another document drops the flag, which counts as landed.
+  def go_back_and_wait_until_landed
+    expect_a_back
+    page.go_back
+    assert_back_landed
+  end
+
+  def expect_a_back
+    page.execute_script(<<~JS)
+      window.backLanded = false
+      let restoring = false
+      const settle = () => { window.backLanded = true }
+      document.addEventListener("turbo:visit", () => { restoring = true }, { once: true })
+      window.addEventListener("popstate", () => {
+        if (restoring) document.addEventListener("turbo:load", settle, { once: true })
+        else settle()
+      }, { once: true })
+    JS
+  end
+
+  def assert_back_landed
+    assert wait_until_js { page.evaluate_script("window.backLanded !== false") }, "Back never landed"
+  end
+
+  # The matrix may push an entry over the overlay's as its frame loads (#433),
+  # so the overlay can take a second Back to close. Without an overlay entry
+  # of its own, those Backs leave the assessment instead.
+  def back_until_pane_closes
+    2.times do
+      break if page.has_css?("#assessment-activity-pane[data-pane-state='closed']", visible: :all, wait: 0)
+
+      go_back_and_wait_until_landed
+    end
+    assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+  end
+
+  # A slow runner reloads the restored matrix frame, and its load pushes an
+  # entry over the overlay's (#433). Holding that load keeps the test on the
+  # pane's own entry; drop this once #433 is fixed.
+  def hold_matrix_frame_loads
+    page.execute_script(<<~JS)
+      document.addEventListener("turbo:before-fetch-request", (event) => {
+        if (event.target.id === "assessment-matrix") event.preventDefault()
+      })
+    JS
+  end
+
+  # Chrome keeps 50 history entries per tab, and the suite shares one tab, so a
+  # late test starts at the cap. A capped tab dropped the entries under a
+  # restored overlay, and closing it went Back past the assessment.
+  def in_a_fresh_tab
+    tab = open_new_window(:tab)
+    within_window(tab) do
+      keep_page_focused
+      yield
+    end
+  ensure
+    tab&.close
   end
 
   def open_loaded_activity_pane
@@ -349,6 +450,29 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
     end
 
+    should "stay open under a click inside a modal laid over it, and close once the modal has gone" do
+      open_loaded_activity_pane
+      click_outside = <<~JS
+        document.querySelector(arguments[0]).dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+        )
+      JS
+      page.execute_script(<<~JS)
+        const overlay = document.createElement("div")
+        overlay.id = "probe-modal"
+        overlay.dataset.modalTarget = "overlay"
+        document.body.append(overlay)
+      JS
+
+      page.execute_script(click_outside, "#probe-modal")
+      assert page.evaluate_script("document.querySelector('#assessment-activity-pane').dataset.paneState === 'open'"),
+        "a click inside the modal closed the pane under it"
+
+      page.execute_script("document.getElementById('probe-modal').remove()")
+      page.execute_script(click_outside, "main")
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+    end
+
     should "name the author on an evidence-recorded feed entry" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.record_evidence(
@@ -367,6 +491,297 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         visible: :all
 
       assert_selector "#assessment-activity-pane", text: "Alice recorded “Launch”", visible: true
+    end
+  end
+
+  context "the activity pane and the Back button" do
+    should "add no history entry beside the matrix, so Back still leaves the entry it was opened on" do
+      mark_history_entry
+      page.execute_script(<<~JS)
+        window.pushes = 0
+        const push = history.pushState.bind(history)
+        history.pushState = (...args) => { window.pushes++; return push(...args) }
+      JS
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+
+      assert_equal 0, page.evaluate_script("window.pushes"), "the pane added a history entry beside the matrix"
+      assert page.evaluate_script("history.state?.probe === true"), "the pane wrote over the entry it opened on, not a new one"
+    end
+
+    # The matrix pushes one same-URL entry when its frame first loads (#433),
+    # so the page may take two Backs to leave; toggles must add none on top.
+    should "leave the page on Back after the pane is opened and closed beside the matrix" do
+      visit assessments_path
+      assert_text "My Assessments"
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+
+      2.times do
+        break unless page.current_path == assessment_path(@assignment)
+
+        go_back_and_wait_until_landed
+      end
+      assert_current_path assessments_path
+      assert_text "My Assessments"
+    end
+
+    should "close the overlay on Back, returning to the entry it was opened on" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      page.go_back
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert_back_on_opening_entry
+    end
+
+    should "close the overlay on Back when the pane was opened beside the matrix and the window then narrowed" do
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay != null") },
+        "narrowing gave the overlay no entry of its own"
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      page.go_back
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert_back_on_opening_entry
+    end
+
+    should "keep the pane open and leave the page on Back when the overlay was opened and the window then widened" do
+      visit assessments_path
+      assert_text "My Assessments"
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay == null") },
+        "widening left the overlay's entry in history"
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      2.times do
+        break unless page.current_path == assessment_path(@assignment)
+
+        go_back_and_wait_until_landed
+      end
+      assert_current_path assessments_path
+      assert_text "My Assessments"
+    end
+
+    should "step back off the overlay's entry when Forward returns to it after the window widened" do
+      visit assessments_path
+      assert_text "My Assessments"
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      hold_matrix_frame_loads
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay == null") },
+        "widening left the overlay's entry in history"
+
+      page.execute_script(<<~JS)
+        window.pops = 0
+        window.addEventListener("popstate", () => { window.pops += 1 })
+      JS
+      page.go_forward
+      assert wait_until_js { page.evaluate_script("window.pops >= 2 && history.state?.sidePanelOverlay == null") },
+        "Forward left the page on the overlay's entry beside the matrix"
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      2.times do
+        break unless page.current_path == assessment_path(@assignment)
+
+        go_back_and_wait_until_landed
+      end
+      assert_current_path assessments_path
+    end
+
+    should "close the overlay on Back when the page opens with it up from the URL" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      in_a_fresh_tab do
+        visit assessments_path
+        assert_text "My Assessments"
+        visit assessment_path(@assignment, activity: "open")
+        wait_for_stimulus "activity-pane"
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+        back_until_pane_closes
+        assert_back_on_opening_entry
+      end
+    end
+
+    should "close the overlay on Back when the page opens with it up from the cookie" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      in_a_fresh_tab do
+        visit assessments_path
+        assert_text "My Assessments"
+        page.driver.browser.manage.add_cookie(name: "assessment_activity_pane_open", value: "open")
+        visit assessment_path(@assignment)
+        wait_for_stimulus "activity-pane"
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+        back_until_pane_closes
+        assert_back_on_opening_entry
+      end
+    end
+
+    should "take the overlay's history entry back when its close button shuts it" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      close_overlay_by_its_button
+    end
+
+    should "take the overlay's history entry back when its close button shuts it after Back and Forward" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      hold_matrix_frame_loads
+
+      go_back_and_wait_until_landed
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      page.go_forward
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay === 'activity'") },
+        "Forward left the overlay's entry without its marker"
+      assert wait_until_js { page.evaluate_script("document.querySelector('#assessment-activity-pane').contains(document.activeElement)") },
+        "Forward reopened the overlay with focus left behind it"
+
+      close_overlay_by_its_button
+    end
+
+    # Back and Forward are Turbo restoration visits, and their render drops focus.
+    should "keep focus on the toggle through Back and in the overlay through Forward" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      hold_matrix_frame_loads
+      focus_on_toggle = "document.activeElement.matches(#{TOGGLE.to_json})"
+      focus_in_pane = "document.querySelector('#assessment-activity-pane').contains(document.activeElement)"
+
+      2.times do
+        go_back_and_wait_until_landed
+        assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+        assert wait_until_js { page.evaluate_script(focus_on_toggle) }, "Back closed the overlay with focus lost"
+        page.go_forward
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+        assert wait_until_js { page.evaluate_script(focus_in_pane) }, "Forward reopened the overlay with focus lost"
+      end
+    end
+
+    # Turbo restores a page only from an entry that carries its own state; the
+    # overlay's entry didn't, so Back left the other page on screen under this URL.
+    should "bring the assessment back when Back returns from another page to the open overlay" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      in_a_fresh_tab do
+        mark_history_entry
+        toggle_activity_pane
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+        page.execute_script("Turbo.visit(arguments[0])", assessments_path)
+        assert_no_selector "#assessment-activity-pane", visible: :all
+
+        hold_matrix_frame_loads
+        page.go_back
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+        assert_selector "turbo-frame#assessment-matrix", visible: :all
+        assert_match(/[?&]activity=open/, page.current_url)
+
+        wait_for_stimulus "activity-pane"
+        close_overlay_by_its_button
+      end
+    end
+  end
+
+  context "the overlay and the keyboard" do
+    setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
+
+    should "take focus in when it opens, and close on Escape with focus back on its toggle" do
+      mark_history_entry
+      hold_matrix_frame_loads
+      page.execute_script("document.querySelector(arguments[0]).click()", TOGGLE)
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_equal "assessment-activity-pane", page.evaluate_script("document.activeElement.id")
+
+      expect_a_back
+      press_escape
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert_back_landed
+      assert page.evaluate_script("document.activeElement.matches(arguments[0])", TOGGLE), "focus returns to the toggle"
+    end
+
+    should "leave Escape to a modal open over it" do
+      open_loaded_activity_pane
+      page.execute_script(<<~JS)
+        const overlay = document.createElement("div")
+        overlay.dataset.modalTarget = "overlay"
+        document.body.append(overlay)
+      JS
+
+      press_escape
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+    end
+
+    # The menu's own Escape closes it before a bubbling listener would look,
+    # so the pane checks in the capture phase, while the menu is still open.
+    should "leave the first Escape to a menu open inside it, and close on the next" do
+      open_loaded_activity_pane
+      page.execute_script(<<~JS)
+        document.getElementById("assessment-activity-pane").insertAdjacentHTML("afterbegin", `
+          <div id="probe-dropdown" data-controller="dropdown" data-action="keydown.esc@window->dropdown#close">
+            <button type="button" data-action="dropdown#toggle" data-dropdown-target="trigger">More</button>
+            <div role="menu" data-dropdown-target="menu" hidden><button role="menuitem">Item</button></div>
+          </div>`)
+      JS
+      wait_for_stimulus "dropdown", scope: "#probe-dropdown"
+      # Reconnect the pane so the menu's listener comes first, as the navbar's
+      # menus do on a real page: Stimulus runs a shared window listener's
+      # bindings in the order they connected.
+      page.execute_script(<<~JS)
+        const host = document.getElementById("assessment-activity-pane").closest("[data-controller~='activity-pane']")
+        host.removeAttribute("data-connected")
+        host.dataset.controller = ""
+        requestAnimationFrame(() => { host.dataset.controller = "activity-pane" })
+      JS
+      wait_for_stimulus "activity-pane"
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      page.execute_script("document.querySelector('#probe-dropdown button').click()")
+      assert_selector "#probe-dropdown [role='menu']", visible: true
+
+      # From the pane, as a real key would come: a dispatch on window itself
+      # runs its listeners in the order they were added, capture or not.
+      press_escape(scope: "#probe-dropdown")
+      assert_no_selector "#probe-dropdown [role='menu']", visible: true
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      press_escape(scope: "#assessment-activity-pane")
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+    end
+  end
+
+  context "the activity pane beside the matrix and Escape" do
+    should "stay open on Escape" do
+      open_loaded_activity_pane
+      press_escape
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
     end
   end
 
