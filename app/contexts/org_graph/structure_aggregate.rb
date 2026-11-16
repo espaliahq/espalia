@@ -527,6 +527,7 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::TaxonomyDefined do |event|
     levels = event.data[:levels].map { |level| level.to_h.symbolize_keys }
+    @taxonomy = nil
     @levels = levels.map { |level| level.slice(:level_id, :name) }
     @level_rules = levels.select { |level| level.key?(:parent_level_ids) }
                          .to_h { |level| [ level[:level_id], level.slice(:parent_level_ids, :top) ] }
@@ -535,6 +536,7 @@ class OrgGraph::StructureAggregate
   end
 
   on OrgGraph::Events::LevelProviderSet do |event|
+    @taxonomy = nil
     @level_providers[event.data[:level_id]] = event.data[:provider]
     @level_fields[event.data[:level_id]] = event.data[:field]
   end
@@ -597,8 +599,8 @@ class OrgGraph::StructureAggregate
   #
   # @return [OrgGraph::Taxonomy]
   def taxonomy
-    OrgGraph::Taxonomy.new(@levels.map { |level| level.merge(@level_rules.fetch(level[:level_id], {})) },
-                           providers: @level_providers)
+    @taxonomy ||= OrgGraph::Taxonomy.new(@levels.map { |level| level.merge(@level_rules.fetch(level[:level_id], {})) },
+                                         providers: @level_providers)
   end
 
   # The live units sitting where their kind's rules no longer allow.

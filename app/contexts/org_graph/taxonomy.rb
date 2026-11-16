@@ -15,7 +15,7 @@
 #   taxonomy = OrgGraph::Taxonomy.new(event.data[:levels], providers: { team_id => "hibob" })
 #   taxonomy.allows?(squad_id, beneath: team_id)
 class OrgGraph::Taxonomy
-  ESPALIA = "espalia"
+  ESPALIA = OrgGraph::StructureAggregate::ESPALIA
 
   # One kind of unit, with the kinds its parent may be.
   Kind = Data.define(:id, :name, :provider, :parent_ids, :top) do
