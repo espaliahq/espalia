@@ -295,7 +295,7 @@ class TeamPlanning::CommandHandler
 
   # A block, when given, finds the conflicts under the plan's lock, so a change
   # made since the preview can't slip past. It isn't called once the base has
-  # moved, so the refusal names the move.
+  # moved, so the refusal names the move, nor on an archived plan, which reads no drift.
   #
   # @param plan_id [String]
   # @param conflicts [Array<Hash>] used when no block is given
@@ -307,7 +307,7 @@ class TeamPlanning::CommandHandler
   def rebase_plan(plan_id, base_on:, expected_base_on:, conflicts: [])
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      conflicts = yield(plan) if block_given? && plan.base_on.to_s == expected_base_on.to_s
+      conflicts = yield(plan) if block_given? && !plan.archived? && plan.base_on.to_s == expected_base_on.to_s
       plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!)
     end
   end

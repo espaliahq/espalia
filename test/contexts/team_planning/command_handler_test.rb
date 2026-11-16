@@ -347,6 +347,15 @@ class TeamPlanning::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal TeamPlanning::PlanAggregate::ARCHIVED, error.message
     end
 
+    should "refuse a rebase without reading its drift" do
+      read = false
+      error = assert_raises(TeamPlanning::Error) do
+        handler(@owner).rebase_plan(@plan_id, base_on: "2026-11-20", expected_base_on: "2026-11-14") { read = true and [] }
+      end
+      assert_equal TeamPlanning::PlanAggregate::ARCHIVED, error.message
+      assert_not read
+    end
+
     should "let a viewer leave" do
       assert_not handler(@colleague_context).remove_member(@plan_id, @colleague.id).member?(@colleague.id)
     end
