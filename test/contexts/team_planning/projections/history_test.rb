@@ -117,6 +117,20 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal [ [ 2, "level" ] ], history(@q1).pluck(:position, :facet)
   end
 
+  should "move a split step's dates entries to the agreed part, with the undo that reverses one" do
+    set_cap(@q1, 8)
+    set_level(@q1, "4")
+    @handler.set_scenario_period(@plan_id, @q1, ends_on: "2027-04-30")
+    edit = history(@q1).last.id
+
+    agreed = split(@q1, history(@q1).first.id)
+    @handler.undo_change(@plan_id, scenario_id: agreed)
+
+    assert_equal [ [ 1, "set", nil ], [ 2, "dates", nil ], [ 3, "undo", edit ] ], history(agreed).pluck(:position, :action, :reverses_event_id)
+    assert history(agreed).find_by(id: edit).undone?
+    assert_equal [ [ 2, "level" ] ], history(@q1).pluck(:position, :facet)
+  end
+
   def place(scenario_id)
     @handler.set_change(@plan_id, TeamPlanning::Events::AssignmentSet, scenario_id:, subject_id: @person.id,
                                                                        end_state: { placements: [ { unit_id: @plan_id, allocation: 1.0 } ] })

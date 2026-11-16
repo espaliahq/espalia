@@ -8,7 +8,8 @@
 # Writes `team_planning_history_entries`, and nothing else writes it. An undo
 # marks the entry it reverses as undone and a redo lifts the mark; both stay
 # as entries of their own. A split moves the entries of its subjects and facets
-# to the agreed part, in their order, and a move, or an undo or redo of one,
+# to the agreed part, in their order, with the step's dates entries and their
+# undos and redos, as the plan's log moves them. A move, or an undo or redo of one,
 # takes the entries it moved to the step they now stand in. A removed scenario
 # or a deleted plan takes its entries with it; the stream keeps them. It hears
 # every kind in {TeamPlanning::ChangeKinds}.
@@ -17,6 +18,9 @@
 # it needs `REBUILD_ON_DEPLOY=team_planning/history`. Version 2 adds each
 # step's new dates, which production already holds, so it needs the same. A
 # fork that closes a step with no end date is new, so it needs no rebuild.
+# Version 3 moves a split step's dates entries to the agreed part
+# ([#426](https://github.com/espaliahq/espalia/issues/426)), which changes
+# what replay writes, so it needs the same rebuild.
 #
 class TeamPlanning::Projections::History
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -24,7 +28,7 @@ class TeamPlanning::Projections::History
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 2
+  CODE_VERSION = 3
 
   # @return [Array<Class>]
   def self.handled_events
@@ -66,12 +70,17 @@ class TeamPlanning::Projections::History
 
   def split(data)
     keys = data[:keys].map(&:to_a).to_set
-    moving = TeamPlanningHistoryEntry.where(scenario_id: data[:scenario_id]).order(:position).select { keys.include?([ it.subject_id, it.facet ]) }
+    moving = TeamPlanningHistoryEntry.where(scenario_id: data[:scenario_id]).order(:position)
+                                     .select { keys.include?([ it.subject_id, it.facet ]) || dates?(it) }
     moving.each.with_index(next_position(data[:agreed_id])) do |entry, position|
       end_state = TeamPlanning::ChangeEntry.moved_end_state(entry.kind, entry.end_state, from: entry.scenario_id, to: data[:agreed_id])
       entry.update!(scenario_id: data[:agreed_id], position:, end_state:)
     end
   end
+
+  # A step's dates, and each undo and redo of them, name no subject: an undo
+  # or redo of a change always does.
+  def dates?(entry) = entry.subject_id.nil? && entry.action.in?(%w[dates undo redo])
 
   def recorded?(event) = TeamPlanningHistoryEntry.exists?(id: event.event_id)
 

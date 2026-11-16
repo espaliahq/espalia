@@ -1037,7 +1037,9 @@ a former member.
 Production already holds changes, pins and clears, so the deploy that ships the history
 needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeploy's
 `verify` stops the deploy. Version 2 adds date edits, so the deploy that ships it needs the
-same rebuild. The history and overrides projections read events through one mapping,
+same rebuild. Version 3 moves a split step's date edits, with their undos and redos, to the
+agreed part, as the plan's log does ([#426](https://github.com/espaliahq/espalia/issues/426)),
+so it needs the rebuild too. The history and overrides projections read events through one mapping,
 `TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
 never reaches either table: the history names the field in `sealed_fields` and leaves
 the value out. The note is the one exception, held in a sealed column (see below).
