@@ -901,8 +901,17 @@ class OrgGraph::StructureAggregate
     levels.map { |level| level.key?(:parent_level_ids) ? level.merge(parent_level_ids: ids & level[:parent_level_ids]) : level }
   end
 
+  # A kind's first unit sits at the top or under a unit of a kind that can
+  # already have one, so two kinds that list only each other can never start.
   def ensure_every_kind_can_sit!(levels)
-    stuck = levels.find { |level| level[:top] == false && (Array(level[:parent_level_ids]) - [ level[:level_id] ]).empty? }
+    seated = levels.reject { |level| level[:top] == false }.map { |level| level[:level_id] }
+    loop do
+      more = levels.select { |level| !seated.include?(level[:level_id]) && Array(level[:parent_level_ids]).intersect?(seated) }
+      break if more.empty?
+
+      seated += more.map { |level| level[:level_id] }
+    end
+    stuck = levels.find { |level| !seated.include?(level[:level_id]) }
     raise "#{stuck[:name]} would have nowhere to sit, so give it another place first" if stuck
   end
 

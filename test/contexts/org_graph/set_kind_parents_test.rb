@@ -87,6 +87,22 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     assert_equal [ [ @tribe ], false ], rules(@squad)
   end
 
+  should "refuse two kinds that may sit only under each other, since neither could have a first unit" do
+    guild, chapter = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    as_tenant do
+      @handler.add_level(guild, "Guild", effective_on: @today)
+      @handler.add_level(chapter, "Chapter", effective_on: @today)
+      @handler.set_kind_parents(guild, parent_ids: [ chapter ], top: false, effective_on: @today)
+    end
+    before = rules(chapter)
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @handler.set_kind_parents(chapter, parent_ids: [ guild, chapter ], top: false, effective_on: @today) }
+    end
+    assert_equal "Guild would have nowhere to sit, so give it another place first", error.message
+    assert_equal before, rules(chapter)
+  end
+
   should "refuse to remove the only kind another kind can sit under" do
     pod = SecureRandom.uuid_v7
     as_tenant do
