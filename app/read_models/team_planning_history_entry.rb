@@ -3,7 +3,8 @@
 # One entry of a scenario's history: a change, pin or clear it made, an
 # undo or redo of one, or, in the baseline, an update to today or the plan
 # being archived or restored, with who did it and when. A move is an entry of
-# the step the change moved to. A step's new dates are a `dates` entry.
+# the step the change moved to. A step's new dates are a `dates` entry, and
+# closing or reopening it a `close` or `reopen` entry.
 #
 # Projected from the plan streams by {TeamPlanning::Projections::History},
 # and nothing else writes it. Its id is the event's, so a rebuild keeps it.
@@ -15,7 +16,7 @@
 class TeamPlanningHistoryEntry < ApplicationRecord
   include Shreddable::Column
 
-  ACTIONS = %w[set pin clear undo redo note rebase move dates archive restore].freeze
+  ACTIONS = %w[set pin clear undo redo note rebase move dates archive restore close reopen].freeze
 
   shreddable_column :note, by: :person, person: TeamPlanning::ChangeKinds::NOTED_PERSON
 
@@ -34,7 +35,7 @@ class TeamPlanningHistoryEntry < ApplicationRecord
 
   # The subjects and facets each scenario still changes, as the plan's log
   # works them out: a standing change or pin holds its key and a clear lets
-  # it go; undone entries, undos, redos, notes, moves and dates hold nothing.
+  # it go; undone entries, undos, redos, notes, moves, dates, closes and reopens hold nothing.
   # The Removed scenarios tally keeps this count, so a scenario's count
   # before it is removed matches its entry afterwards.
   #

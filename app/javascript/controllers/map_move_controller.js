@@ -20,7 +20,7 @@
 //       </li>
 //       <div data-map-position="<position id>" data-map-drag="position" draggable="true" data-map-move-from="<unit id>"
 //            data-action="dragstart->map-move#start … drop->map-move#drop">
-//         <button data-modal-target-id="move-position-modal" …>Move…</button>
+//         <button aria-haspopup="menu" data-menu="position" …>⋮</button>   (its delegated menu holds Move…)
 //       </div>
 //     </section>
 //   </div>
@@ -74,14 +74,29 @@ export default class extends BaseController {
     event.stopPropagation()
     const { mapStep } = target.dataset
     const dialog = DIALOGS[this.dragged.dataset.mapDrag] + (mapStep === undefined ? "" : `-${mapStep}`)
-    const trigger = this.dragged.querySelector(`[data-modal-target-id='${dialog}']`)
+    const row = this.dragged
+    const destination = this.#destination(target)
     this.end()
-    trigger.dataset.moveTo = this.#destination(target)
-    trigger.click()
-    delete trigger.dataset.moveTo
+    const trigger = row.querySelector(`[data-modal-target-id='${dialog}']`)
+    if (trigger) return this.#openDialog(trigger, destination)
+
+    // A position's Move… lives in its delegated menu, which exists only while
+    // open. Stimulus binds a new element's actions from a MutationObserver,
+    // so the item is clicked a task after the ⋮ builds it.
+    row.querySelector("[aria-haspopup][data-menu]")?.click()
+    setTimeout(() => {
+      const item = row.querySelector(`[data-modal-target-id='${dialog}']`)
+      if (item) this.#openDialog(item, destination)
+    })
   }
 
   // private
+
+  #openDialog(trigger, destination) {
+    trigger.dataset.moveTo = destination
+    trigger.click()
+    delete trigger.dataset.moveTo
+  }
 
   // A position sits inside its unit, so a drop refused on the position the
   // person already holds would otherwise land on the unit as a move.

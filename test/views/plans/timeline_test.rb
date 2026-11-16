@@ -23,7 +23,7 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
   # `movable` lists, per column, the changes that column's step makes itself.
   def render_timeline(bars:, moves: [], departures: [], unassigned: false, step: 0, scenarios: SCENARIOS, movable: {}, can_edit: false,
-                      walk: steady_walk(scenarios.size), unit_walk: walk, units: nil)
+                      walk: steady_walk(scenarios.size), unit_walk: walk, units: nil, positions: {})
     timeline = {
       walk:, unassigned_walk: steady_walk(scenarios.size, heads: 0),
       plan_id: PLAN, scenario_id: scenarios.last[:scenario_id], next_ids: [],
@@ -33,7 +33,7 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
       blocks: [ { block_id: PAYMENTS, units: units || ([ { unit_id: PAYMENTS, name: "Payments" } ] * scenarios.size), continues_from_ids: [], lane_ids: [ ADA ], walk: unit_walk } ],
       unassigned_lane_ids: unassigned ? [ ADA ] : [],
       lanes: [ { lane_id: ADA, bars:, moves:, departures: } ],
-      positions: {}, names: { ADA => "Ada Quill" }
+      positions:, names: { ADA => "Ada Quill" }
     }
     controller = ApplicationController.new
     controller.request = ActionDispatch::TestRequest.create
@@ -127,6 +127,26 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
       html = render_timeline(bars: [ bar(3, 3) ], scenarios: FOUR_STEPS, movable: { 3 => [ { subject_id: ADA, facet: "assignment" } ] }, can_edit: true)
 
       assert_equal [ [ 2 ] ], grip_targets(html, "start")
+    end
+
+    should "say where hiring stands on a position's bar, and nothing on a seat not yet started" do
+      bar = { kind: "position", subject_id: ADA, from: 0, to: 1, unit_id: PAYMENTS, position_id: ADA, role: "ENG", level: "L3" }
+      note = lambda do |hiring|
+        render_timeline(bars: [ bar ], positions: { ADA => { role_name: "Software Engineer", hiring: [ hiring, hiring ] } }).at_css("[data-hiring-note]")&.text
+      end
+
+      assert_equal "Recruiting · starts 1 Feb 2027", note.({ hiring_status: "recruiting", target_start: "2027-02-01" })
+      assert_equal "On hold", note.({ hiring_status: "on_hold", target_start: "2027-02-01" })
+      assert_equal "Starts 1 Feb 2027", note.({ hiring_status: "not_started", target_start: "2027-02-01" })
+      assert_nil note.({ hiring_status: "not_started", target_start: nil })
+    end
+
+    should "read where hiring stood in the column a position's bar starts, not where it ends up" do
+      bar = { kind: "position", subject_id: ADA, from: 1, to: 2, unit_id: PAYMENTS, position_id: ADA, role: "ENG", level: "L3" }
+      hiring = [ nil, { hiring_status: "recruiting", target_start: "2027-02-01" }, { hiring_status: "on_hold", target_start: nil } ]
+      html = render_timeline(bars: [ bar ], scenarios: FOUR_STEPS, positions: { ADA => { role_name: "Software Engineer", hiring: } })
+
+      assert_equal "Recruiting · starts 1 Feb 2027", html.at_css("[data-hiring-note]").text
     end
 
     should "keep a level change in the middle of a position's bar on the menu only" do

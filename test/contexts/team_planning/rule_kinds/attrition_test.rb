@@ -24,12 +24,12 @@ class TeamPlanning::RuleKinds::AttritionTest < ActiveSupport::TestCase
 
   def refusal(rule, value) = assert_raises(TeamPlanning::Error) { check(rule, value) }.message
 
-  should "forecast nothing by default, and keep a backfill out for 90 days" do
+  should "forecast no attrition by default, and keep a backfill out for 90 days" do
     defaults = TeamPlanning::RuleKinds.defaults
     assert_equal 0r, TeamPlanning::RuleKinds::Attrition.yearly_rate(defaults.fetch("attrition"))
     assert_equal 90, TeamPlanning::RuleKinds::TimeToHire.days(defaults.fetch("time_to_hire"))
     assert_includes TeamPlanning::RuleKinds.forecasts, TeamPlanning::RuleKinds::Attrition
-    assert_not_includes TeamPlanning::RuleKinds.forecasts, TeamPlanning::RuleKinds::TimeToHire
+    assert_includes TeamPlanning::RuleKinds.forecasts, TeamPlanning::RuleKinds::TimeToHire
   end
 
   should "keep a rate from 0 to 1 as typed" do

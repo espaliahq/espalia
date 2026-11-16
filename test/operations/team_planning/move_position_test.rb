@@ -60,6 +60,15 @@ class Operations::TeamPlanning::MovePositionTest < ActiveSupport::TestCase
     assert_equal "Platform", map[:positions].find { it[:position_id] == @position }[:cost_centre]
   end
 
+  should "keep where hiring for the position stands" do
+    call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @q1, position_id: @position, role_id: @engineer.role_id,
+                                                level_id: @e2.level_id, unit_id: @payments, fte: 0.5, basis: "backfill",
+                                                hiring_status: "offer_accepted", target_start: "2026-05-04")
+    move(to_unit_id: @growth)
+
+    assert_equal [ "offer_accepted", "2026-05-04" ], map[:positions].find { it[:position_id] == @position }.values_at(:hiring_status, :target_start)
+  end
+
   should "move the position and keep its role, level, FTE and basis" do
     move(to_unit_id: @growth)
 

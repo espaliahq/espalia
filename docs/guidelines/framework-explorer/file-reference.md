@@ -72,7 +72,7 @@
 | `app/views/frameworks/explorer/concerns/kebab_chrome.rb` | Shared ⋮ chrome for the remaining `Kit::Dropdown` kebab (the role tree) |
 | `app/views/frameworks/explorer/concerns/sticky_column.rb` | Shared sticky capability-column styling + the NON-NEGOTIABLE opacity invariant and its current composites (Hard-Won Lesson 24, issue #371) |
 | `app/views/frameworks/explorer/concerns/pending_archive.rb` | The ONE definition of "staged for archive in the open draft" (`pending_archive?`) + `STRIKETHROUGH_CLASSES`, shared by `MatrixRow` / `MatrixCategoryGroup` / `ExpandedRow` (§11) |
-| `app/javascript/controllers/explorer_menu_controller.js` | ONE delegated kebab-menu controller for the whole grid (§11a) |
+| `app/javascript/controllers/explorer_menu_controller.js` | ONE delegated kebab-menu controller for the whole grid (§11a), extending `delegated_menu_controller.js` |
 | `app/components/kit/icon_sprite.rb` | The ONE `<symbol>` set, rendered per page by `Shell::PageLayout`; call sites use `icon(name, class:)` |
 | `app/components/helpers/icon_helpers.rb` | `icon("pencil", class: …)` → `<svg><use href="#icon-pencil">` |
 | `app/controllers/concerns/frameworks/suggestion_authority.rb` | Resolves the viewer's `SuggestionApprovalAuthority` for controllers whose frame responses carry approval kebabs |

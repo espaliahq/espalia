@@ -1221,6 +1221,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_200129) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.jsonb "description"
+    t.date "closed_on"
+    t.uuid "closed_by_id"
     t.index ["tenant_id", "plan_id"], name: "index_team_planning_scenarios_on_tenant_id_and_plan_id"
   end
 

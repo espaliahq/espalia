@@ -273,7 +273,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 3.9 | `ChangeCleared` and `ChangePinned`, and the overrides projection behind the one override mark. Built in [#239](https://github.com/espaliahq/espalia/issues/239) | 3.2 |
 | 3.10 | `ChangeUndone` and `ChangeRedone`, and a scenario's history with who made each change. Built in [#243](https://github.com/espaliahq/espalia/issues/243) | 3.2 |
 | 3.11 | Fork, rename and switch scenarios from the plan page. Built in [#271](https://github.com/espaliahq/espalia/issues/271) | 3.1, 1.5 |
-| 3.12 | Edit on the map: drag a person or position, drop on the Unassigned bucket, set allocation as they land. Moving a person, by drag or Move…, writes through `MovePlace`, which can also place them in a position; moving a position writes through `MovePosition`, and the people in it go with it. Built in [#285](https://github.com/espaliahq/espalia/issues/285) | 3.6, 1.6 |
+| 3.12 | Edit on the map: drag a person or position, drop on the Unassigned bucket, set allocation as they land. Moving a person, by drag or Move…, writes through `MovePlace`, which can also place them in a position; moving a position writes through `MovePosition`, and the people in it go with it. Each position has one menu: Edit…, Move… and Close…. Each unit card can open a position. An edit sends only the fields the editor changed, through `EditPosition`, so another editor's change to a different field survives. Built in [#285](https://github.com/espaliahq/espalia/issues/285) and [#461](https://github.com/espaliahq/espalia/issues/461) | 3.6, 1.6 |
 | 3.13a | `ScenarioDescribed`: what a scenario is for, shreddable under the plan key. Built in [#272](https://github.com/espaliahq/espalia/issues/272) | 3.2, 2.2 |
 | 3.13b | Notes on changes, shreddable under the subject's key: the person's for a change to a person, else the plan's. Settle one sealed note on the `Change` base first ([#273](https://github.com/espaliahq/espalia/issues/273)). [Design: Notes](team-planning-design.md#notes). Built in [#273](https://github.com/espaliahq/espalia/issues/273) | 3.2, 2.2 |
 | 3.14 | `PlanDataSet` for a corrected level or FTE and a placeholder hire, and `LevelSet` for a planned promotion, each shreddable under the person's key. Built in [#270](https://github.com/espaliahq/espalia/issues/270) | 3.6, 2.2 |
@@ -313,7 +313,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 6.3 | Funding: the most specific matching budget line, draw order, and `PositionFundingSet` for trades. Built in [#345](https://github.com/espaliahq/espalia/issues/345) | 6.1, 6.2, 5.4 |
 | 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated by the `budget_basis` rule, read through `team_planning_budget`. Built in [#369](https://github.com/espaliahq/espalia/issues/369) | 6.3 |
 | 6.5 | Strictness: position control, envelope, or the dimensions that must match. Built in [#384](https://github.com/espaliahq/espalia/issues/384) | 6.3 |
-| 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line. All but mismatch are built ([#421](https://github.com/espaliahq/espalia/issues/421)) | 6.4, 4.6 |
+| 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line. Built in [#421](https://github.com/espaliahq/espalia/issues/421) and [#449](https://github.com/espaliahq/espalia/pull/449) | 6.4, 4.6 |
 | 6.7 | Budget tab: read-only first ([#395](https://github.com/espaliahq/espalia/issues/395)), then editing lines and funding on a scenario ([#411](https://github.com/espaliahq/espalia/issues/411)). Built in [#395](https://github.com/espaliahq/espalia/issues/395) and [#411](https://github.com/espaliahq/espalia/issues/411) | 6.4 |
 
 ### P7 Capacity
@@ -337,7 +337,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 8.5 | The change list Operation for an approved point, with a stable id per entry, and `ChangeRaised` with the upstream reference | 8.4 |
 | 8.6a | Split a scenario from the plan page: choose the agreed changes, see before submit which can't go across alone, name the part and split. Built in [#360](https://github.com/espaliahq/espalia/issues/360) | 8.2 |
 | 8.6b | Approve the agreed part and carry it out, on the 8.6a page ([#359](https://github.com/espaliahq/espalia/issues/359)) | 8.6a, 8.5 |
-| 8.7 | `StepClosed`: the next step stands on the Org Graph, pending changes show as carried over, and the closed step reads planned against actual through `AsOf` on its end date | 4.3 |
+| 8.7 | `StepClosed`: the next step stands on the Org Graph, pending changes carry over, and the closed step reads planned against actual on its end date. [Design: Planned against actual as built](team-planning-design.md#planned-against-actual-as-built). Built in [#466](https://github.com/espaliahq/espalia/issues/466); marking what carried over is [#478](https://github.com/espaliahq/espalia/issues/478) | 4.3 |
 
 **One transaction.** 8.4 builds the person and structure handlers with the approval's
 id as `cause_id`, and passes `plan_id` and `plan_change_id` on every command. Each kind
@@ -385,7 +385,7 @@ edits the change, then approves again.
 |---|---|---|
 | 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), shown on screen in [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out. Built in [#362](https://github.com/espaliahq/espalia/issues/362), API only | 10.1 |
-| 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
+| 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire. Built in [#458](https://github.com/espaliahq/espalia/issues/458); the Hiring dialog follows in [#465](https://github.com/espaliahq/espalia/issues/465) | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |
 | 10.5 | An Operation for promotion readiness and place in band for a person on a date, as known at the end of the day before, from `PersonDevelopment::Scoring`, gated by `AssessmentPolicy#show?`; and the assessment changes recorded between two dates, for the drift report | none |
 | 10.6 | Forecast promotions per unit and level, under the cohort minimum of `Reporting::CapabilityAttainment`, drawing on a pool | 10.1, 10.5, 6.1 |

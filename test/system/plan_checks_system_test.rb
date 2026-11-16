@@ -138,6 +138,40 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
     end
   end
 
+  [ [ "desktop", DESKTOP_SIZE ], [ "phone", MOBILE_SIZE ] ].each do |label, size|
+    context "an open seat whose target start has passed, on a #{label}" do
+      setup do
+        page.driver.browser.manage.window.resize_to(*size)
+        level = ActsAsTenant.with_tenant(@tenant) do
+          role = create(:framework_role, code: "E", name: "Software Engineer")
+          create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Engineer II")
+        end
+        call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @plan_id, role_id: level.role_id,
+                                                              level_id: level.level_id, unit_id: @payments, fte: 1.0, basis: "new",
+                                                              hiring_status: "recruiting", target_start: (Date.current - 10).iso8601)
+        @started = (Date.current - 10).strftime("%-d %b %Y")
+      end
+
+      should "list it under Late hires, and say on the map and timeline where its hiring stands" do
+        sign_in_as(@planner.user)
+        visit checks_plan_path(@plan_id)
+        within("#checks-late-hires") do
+          assert_selector "h4", text: "Late hires"
+          assert_selector "[data-check-item]", text: "Its target start, #{@started}, has passed with 1 FTE still open"
+        end
+        assert_no_sideways_overflow
+
+        visit map_plan_path(@plan_id)
+        assert_selector "[data-map-position] [data-hiring-note]", text: "Recruiting · starts #{@started}"
+        assert_no_sideways_overflow
+
+        visit timeline_plan_path(@plan_id)
+        assert_selector "[data-timeline-lane] [data-hiring-note]", text: "Recruiting · starts #{@started}"
+        assert_no_sideways_overflow
+      end
+    end
+  end
+
   def disagreeing_entry
     idle_line
     call(Operations::TeamPlanning::SetAssignment, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @bo.id,

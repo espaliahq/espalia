@@ -12,7 +12,9 @@
 # position's occupants leave, priced at the position's level with no
 # country, under its position's cost centre
 # ({TeamPlanning::PositionCostCentres}). A person's seat keeps their real
-# cost centre unless the plan changes their unit, role, level or location;
+# cost centre unless the plan changes their unit, role, level or location,
+# judged against the organisation the step stands on, the day after a closed
+# step for the steps after it;
 # someone changed, or with none, is decided by their position's label, then
 # the cost centre entries at their planned place
 # ([#387](https://github.com/espaliahq/espalia/issues/387)). A seat no band
@@ -153,11 +155,18 @@ class TeamPlanning::Cost
     # @return [TeamPlanning::Forecast::Pricing]
     def pricing
       held = lines.select { it.kind == "person" && it.share.positive? }.group_by { [ it.seat_id, it.unit_id ] }
-      TeamPlanning::Forecast::Pricing.new(cost: held.filter_map do |key, group|
-        share = group.sum(0r, &:share)
-        priced = group.reject(&:unpriced?)
-        [ key, priced.group_by(&:currency).transform_values { |same| same.sum(0r, &:amount) / share } ] if priced.any?
-      end.to_h)
+      open = lines.select { it.kind == "position" && it.share.positive? }.group_by(&:seat_id)
+      TeamPlanning::Forecast::Pricing.new(cost: held.filter_map { |key, group| (cost = yearly(group)) && [ key, cost ] }.to_h,
+                                          open: open.transform_values { TeamPlanning::Forecast::Open.new(cost_centre: it.first.cost_centre, cost: yearly(it) || {}) })
+    end
+
+    private
+
+    # @return [Hash{String => Rational}, nil] currency => yearly amount per FTE, nil when nothing is priced
+    def yearly(group)
+      share = group.sum(0r, &:share)
+      priced = group.reject(&:unpriced?)
+      priced.group_by(&:currency).transform_values { |same| same.sum(0r, &:amount) / share } if priced.any?
     end
   end
 
@@ -407,16 +416,20 @@ class TeamPlanning::Cost
     @live = map.units.to_set(&:id)
     @rules = {}
     @positions = map.positions.index_by(&:id)
-    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id, base: @base, titles:)
+    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id, base: standing_base(map), titles:)
     people = map.people.flat_map { person_lines(it) }
     lines = people + open_lines(map)
     units = by(lines, &:unit_id)
     Priced.new(map:, lines:, total: sum(lines), units:, units_with_below: with_below(units), cost_centres: by(lines, &:cost_centre))
   end
 
+  def standing_base(map)
+    TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base: @base).standing_base(map)
+  end
+
   def person_lines(member)
     places = TeamPlanning::Baseline::Membership.shares(member.memberships)
-    held = held_by(member)
+    held = member.placeholder? ? placeholder_held(member) : held_by(member)
     seat = { seat_id: member.id, kind: "person", fte: fte_of(member) || 1r }
     pay = member.plan_data[:pay] if @actual_pay
     unpriced = ("pay_unknown" if pay&.removed?) || ("fte_unknown" unless fte_of(member)) ||
@@ -461,24 +474,11 @@ class TeamPlanning::Cost
   end
 
   def open_lines(map)
-    filled = Hash.new(0r)
-    map.people.each do |person|
-      TeamPlanning::Baseline::Membership.shares(person.memberships).each do |placement, share, _|
-        filled[placement.position_id] += (fte_of(person) || 1r) * share if placement.position_id && placement.position_id != person.backfill_id
-      end
+    TeamPlanning::SeatStart.openings(map).map do |position, fte, start|
+      line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id,
+           **cost_centre_working(@cost_centres.of(position)),
+           level_id: position.level_id, level_source: nil, country: nil, fte:, fraction: 1r, held: start.held_in(@period), reason: nil)
     end
-    leavers = map.people.select(&:leaving?).group_by(&:backfill_id)
-    map.positions.sort_by(&:id).filter_map do |position|
-      open = exact(position.fte) - filled[position.id]
-      next unless open.positive?
-
-      cost_centre = @cost_centres.of(position)
-      openings(open, leavers.fetch(position.id, [])).map do |fte, held|
-        line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id,
-             **cost_centre_working(cost_centre),
-             level_id: position.level_id, level_source: nil, country: nil, fte:, fraction: 1r, held:, reason: nil)
-      end
-    end.flatten
   end
 
   def line(country:, reason:, pay: nil, **seat)
@@ -526,28 +526,11 @@ class TeamPlanning::Cost
     last && (@period.begin..[ last, @period.end ].min)
   end
 
-  # A backfill opens a leaver's FTE the day after they leave, or for the
-  # whole step when they have no date, as they then cost none of it. The
-  # earliest leaver is replaced first, and FTE no leaver opens is held all
-  # step like any open seat. Each opening is its own line, so no seat is
-  # ever held by a leaver and their backfill at once.
-  def openings(open, leavers)
-    dated = leavers.map { [ fte_of(it) || 1r, TeamPlanning::Events::DepartureSet.leaving_date(it.departure[:leaves_on]) ] }
-    held = dated.sort_by { |_, last| last || Date.new(0) }.filter_map do |fte, last|
-      fte = [ fte, open ].min
-      next unless fte.positive?
-
-      open -= fte
-      [ fte, backfill_held(last) ]
-    end
-    open.positive? ? held << [ open, @period ] : held
-  end
-
-  def backfill_held(last)
-    return @period unless last
-    return nil if last >= @period.end
-
-    [ last + 1, @period.begin ].max..@period.end
+  # A placeholder hire starts when the position it fills does
+  # ({TeamPlanning::SeatStart}); one in no position holds the whole step.
+  def placeholder_held(member)
+    position = member.memberships.lazy.filter_map { @positions[it.position_id] if it.position_id }.first
+    position ? TeamPlanning::SeatStart.new(position).held_in(@period) : @period
   end
 
   def fte_of(member)

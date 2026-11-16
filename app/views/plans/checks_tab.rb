@@ -12,6 +12,7 @@ class Views::Plans::ChecksTab < Views::Base
   HEADINGS = {
     placements: [ "Placements", "People placed in a unit or position the scenario no longer has." ],
     positions: [ "Positions", "Positions in a unit the scenario retired, or filled past their FTE." ],
+    late_hires: [ "Late hires", "Open seats whose target start has passed with nobody started in them." ],
     units: [ "Units", "Units whose parent the scenario retired." ],
     unresolved: [ "People the plan can't place", "People placed who joined after the base or have left, so the Org Graph can't place them." ],
     uncovered: [ "People the plan no longer covers", "Changes about someone outside the plan's units, since a bring-in was undone or the Org Graph moved them out." ],

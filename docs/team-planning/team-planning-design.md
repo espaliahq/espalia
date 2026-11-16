@@ -427,6 +427,16 @@ which is committed budget, or `new`, which is planned; the map reads it as the p
 budget. A position's unit is not checked at write: a position in a retired unit still
 resolves, and 3.8 marks it. The baseline has no positions, so every one starts in a plan.
 
+The map opens, edits, moves and closes a position
+([#461](https://github.com/espaliahq/espalia/issues/461)). Opening writes through
+`SetPosition` and closing through `ClosePosition`. An edit goes through `EditPosition`,
+which reads the position from the resolved map, merges in only the fields the editor
+changed and writes one `PositionSet`. The read and the write share the plan's lock, so
+two editors who change different fields of one position both keep their change. An
+omitted field keeps its value. An empty or null cost centre clears it; the other fields
+are required, so an empty one is refused. `MovePosition` is an edit
+of the unit alone.
+
 ### Assignments as built
 
 `AssignmentSet` ([#229](https://github.com/espaliahq/espalia/issues/229)) has the facet
@@ -1891,7 +1901,8 @@ promotions and increases, matched by cost centre and period like any other.
 
 [#351](https://github.com/espaliahq/espalia/issues/351) built the frame (10.1), and
 [#362](https://github.com/espaliahq/espalia/issues/362) the first kind, attrition (10.2).
-The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
+[#458](https://github.com/espaliahq/espalia/issues/458) added hiring dates (10.3). The ramp
+(10.4) is a story of its own.
 
 - **A step is the scenario's period**, the unit the timeline and cost already use. Today
   has no period, so it has no forecast and is all actual.
@@ -2004,6 +2015,54 @@ reads from the places they priced, so the forecast never reads pay on its own. T
 invariant holds for every caller: actual, planned and forecast add up to the total, per
 unit and overall. The pay privacy test walks the real kind for a holder and a non-holder.
 
+### Hiring dates as built
+
+[#458](https://github.com/espaliahq/espalia/issues/458) gave `PositionSet` two optional
+fields, both plan-held:
+
+- **`hiring_status`** is not_started, recruiting, on_hold or offer_accepted. An older
+  event, which carries none, reads as not_started.
+- **`target_start`** is the day someone is planned to start. offer_accepted needs one.
+
+Each position also knows the day it opens: the base date for a position the baseline
+already holds, else the first day of the step that opens it. A backfill opens the day after
+its leaver goes.
+
+`TeamPlanning::SeatStart` is the one rule cost, capacity, the forecast, the headcount walk
+and Checks share. An open seat starts on its target start, never before it opens, and not
+at all while on hold. An undated seat starts the day it opens, as the plan's own figures
+always had it. The start applies to open FTE and placeholders, never to a named person.
+
+- **Capacity reads the step's last day.** A seat has started in a step when its start falls
+  on or before that day, and then counts in full; an unstarted seat counts zero.
+- **Cost prices the days from the start.** A seat starting halfway through a step costs
+  half the step.
+- **The walk counts a placeholder as hired** in the step it starts.
+- **There is no step average** for a dated seat: each read takes its own reading of the one
+  start.
+
+The `time_to_hire` rule, already read for backfills, now forecasts an undated open seat
+too: it fills that many days after it opens. The forecast row takes away cost for the days
+before then, and takes away capacity and headcount only when the forecast start falls after
+the step ends. A seat with a target start, or on hold, gets no forecast, and 0 days
+forecasts nothing, so a tenant that sets 0 keeps the figures it had before.
+
+Each leaver's share of a backfill opens the day after they go, and the rest opens with the
+position. That holds in the step they leave in and in every step after, so the hiring lag on
+each share runs from its own day.
+
+Two edges stay as they are. Capacity counts a backfill in full when its leaver leaves on the
+step's last day, while cost prices it 0 days. Budget head counts take a position's FTE
+whatever its start, and the budget treats forecast rows as unfunded.
+
+Checks lists each open seat whose target start is before today under **Late hires**, with
+the FTE still open. The map labels an open seat with its status and start, such as
+"Recruiting · starts 1 Jun 2027", and so does its bar on the timeline, as the seat stood
+in the step the bar starts. Not started goes
+unsaid. The Hiring dialog that sets both fields from the map follows in
+[#465](https://github.com/espaliahq/espalia/issues/465); until then they are set through
+`team_planning_set_position`.
+
 ## Approval and carrying a plan out
 
 Approval is the one process this module owns.
@@ -2098,9 +2157,47 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - The next step resolves over the Org Graph, not over what the closed step planned.
 - Changes still pending in the closed step are shown in the next step as carried over.
   This is derived: no event copies them.
+- A seat still open at the close opens the day after it. At a close we know the seat is
+  still open, so its time to hire runs from the day after, as in a fresh plan.
 - The closed step is read as planned against actual, using the Org Graph as of its end (R4).
 - Alternatives to the closed step that were not taken are kept with it and no longer
   offered.
+
+### Planned against actual as built
+
+A closed step's row on the plan page, and its bar on the timeline, carry "Planned against
+actual…" ([#466](https://github.com/espaliahq/espalia/issues/466)). It opens a dialog that
+loads `TeamPlanning::StepOutcome` in a lazy frame, so the plan page pays nothing for it until
+someone asks. `team_planning_step_outcome` returns the same read to an agent. Every member
+may read it, viewers included.
+
+- **The planned side** is the step as it closed, resolved on the plan's own base.
+- **The actual side** is the Org Graph on the step's last day (`ends_on`), as it reads now.
+  An archived plan reads it as known on its archive day (`known_on`).
+- **Rows key on unit id**, under the plan's name for the unit. A unit renamed since still
+  matches, and one retired since keeps its row with nothing on the actual side.
+- **Each unit** carries planned and actual heads, and its people by outcome: as planned,
+  planned here but not here, here but not planned, and a placeholder hire not filled.
+  Someone planned here but not here gets no word on where they went: they may be outside the
+  plan's scope, or have left.
+- **A seat is filled** only where the plan placed someone in that position and they are in
+  its unit on the last day. Nobody new turning up fills it.
+- **Heads and names only.** No level, pay, cost or budget, so the read is the same for a
+  holder of the see-pay right as for anyone else, and the pay privacy test walks it.
+- **On a phone** the table becomes a card per unit.
+
+Known limits, each its own issue:
+
+- The outcome moves as the Org Graph learns more about the step's last day. Freezing it at
+  the close is [#477](https://github.com/espaliahq/espalia/issues/477).
+- The next step's changes that carried over aren't marked as such:
+  [#478](https://github.com/espaliahq/espalia/issues/478).
+- Updating to today is refused while a step is closed:
+  [#467](https://github.com/espaliahq/espalia/issues/467).
+- The Changes tab still lists drift from the plan's original base:
+  [#468](https://github.com/espaliahq/espalia/issues/468).
+- "The step's last day has passed" uses the UTC date:
+  [#469](https://github.com/espaliahq/espalia/issues/469).
 
 ## Projections
 
