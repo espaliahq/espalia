@@ -2,7 +2,7 @@
 
 # One entry of a scenario's history: a change, pin or clear it made, an
 # undo or redo of one, or, in the baseline, an update to today, with who did
-# it and when.
+# it and when. A move is an entry of the step the change moved to.
 #
 # Projected from the plan streams by {TeamPlanning::Projections::History},
 # and nothing else writes it. Its id is the event's, so a rebuild keeps it.
@@ -14,7 +14,7 @@
 class TeamPlanningHistoryEntry < ApplicationRecord
   include Shreddable::Column
 
-  ACTIONS = %w[set pin clear undo redo note rebase].freeze
+  ACTIONS = %w[set pin clear undo redo note rebase move].freeze
 
   shreddable_column :note, by: :person, person: TeamPlanning::ChangeKinds::NOTED_PERSON
 

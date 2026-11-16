@@ -9,6 +9,9 @@
 # planner's note as the event holds it, sealed; a note entry names the
 # change it notes in {#noted_event_id}.
 #
+# A move is an entry of the step it moved the change to, whose end state
+# names the step it came from and the direction.
+#
 # An update to today changes no facet, but the history keeps it as a
 # baseline entry, `rebase`, with the old and new base and the keys of the
 # conflicts it carried forward. A set or pin that settled one of those
@@ -23,7 +26,8 @@ TeamPlanning::ChangeEntry = Data.define(
   def self.from(event)
     fields = fields_of(event) or return nil
 
-    new(event_id: event.event_id, plan_id: event.data[:plan_id], scenario_id: event.data[:scenario_id] || event.data[:plan_id],
+    scenario_id = fields.delete(:scenario_id) || event.data[:scenario_id] || event.data[:plan_id]
+    new(event_id: event.event_id, plan_id: event.data[:plan_id], scenario_id:,
         at: event.timestamp, subject_id: nil, facet: nil, kind: nil, end_state: nil, sealed_fields: [],
         pinned_from_scenario_id: nil, pinned_from_event_id: nil, reverses_event_id: nil, note: nil, noted_event_id: nil,
         settles: event.data[:settles]&.to_h&.stringify_keys, **fields)
@@ -46,6 +50,9 @@ TeamPlanning::ChangeEntry = Data.define(
       { action: "note", **data.slice(:subject_id, :facet, :noted_event_id, :note), actor_id: data[:noted_by_id] }
     when TeamPlanning::Events::PlanRebased
       { action: "rebase", end_state: data.slice(:base_on, :previous_base_on, :conflicts).deep_stringify_keys, actor_id: data[:rebased_by_id] }
+    when TeamPlanning::Events::ChangeMoved
+      { action: "move", **data.slice(:subject_id, :facet), scenario_id: data[:to_scenario_id], actor_id: data[:moved_by_id],
+        end_state: { "from_scenario_id" => data[:scenario_id], "direction" => data[:direction] } }
     when TeamPlanning::Events::ChangeRedone
       { action: "redo", **data.slice(:subject_id, :facet), reverses_event_id: data[:redone_event_id], actor_id: data[:redone_by_id] }
     end
@@ -84,4 +91,13 @@ TeamPlanning::ChangeEntry = Data.define(
 
   # @return [Boolean] whether it reverses another entry
   def reverses? = !reverses_event_id.nil?
+
+  # Where the entries an undo or redo of a move takes across go, and from.
+  #
+  # @param event [RubyEventStore::Event] a ChangeUndone or ChangeRedone
+  # @return [Array(String, String), nil] from and to; nil unless it reverses a move
+  def self.moving(event)
+    to = event.data[:moves_to_id] or return nil
+    [ event.data[:moves_from_id] || event.data[:scenario_id], to ]
+  end
 end
