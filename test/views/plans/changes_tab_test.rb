@@ -164,7 +164,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       end
       rows = texts(render_tab(statuses:), "[data-planned-change]")
 
-      assert_equal [ "Done", "Pending", "Conflicting", "Unknown", "Plan only" ], rows.map { it.delete_prefix("Bo Reyes · Pay").strip }
+      assert_equal [ "Done", "Pending", "Conflicting", "Unknown", "Plan only", "Outside this plan" ], rows.map { it.delete_prefix("Bo Reyes · Pay").strip }
       assert_raises(KeyError) { render_tab(statuses: [ statuses.first.merge(status: "stalled") ]) }
     end
 

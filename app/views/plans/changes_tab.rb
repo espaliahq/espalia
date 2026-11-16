@@ -15,7 +15,8 @@ class Views::Plans::ChangesTab < Views::Base
   }.freeze
   STATUSES = {
     "done" => [ "Done", :success ], "pending" => [ "Pending", :neutral ],
-    "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ], "plan_only" => [ "Plan only", :info ]
+    "conflicting" => [ "Conflicting", :danger ], "unknown" => [ "Unknown", :warning ], "plan_only" => [ "Plan only", :info ],
+    "outside" => [ "Outside this plan", :warning ]
   }.freeze
   STAYING = "Staying"
   OUTSIDE = "Someone outside this plan"
