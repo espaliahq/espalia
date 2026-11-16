@@ -247,6 +247,24 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: q2) }
   end
 
+  should "offer no undo or redo of a move that would change a closed step" do
+    q2 = call(:ForkScenario, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2", ends_on: "2026-09-30")[:scenario_id]
+    call(:SetDeparture, as: @editor, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id)
+    call(:MoveChange, as: @editor, plan_id: @plan_id, scenario_id: @q1, subject_id: @ada.id, facet: "departure", direction: "later")
+    travel_to Time.utc(2026, 7, 1, 9)
+    call(:CloseStep, plan_id: @plan_id, scenario_id: @q1)
+
+    assert_nil step(scenario_id: q2)[:undo]
+    assert_raises(Operations::Base::ParameterError) { call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: q2) }
+
+    call(:ReopenStep, plan_id: @plan_id, scenario_id: @q1)
+    call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: q2)
+    call(:CloseStep, plan_id: @plan_id, scenario_id: @q1)
+
+    assert_nil step(scenario_id: q2)[:redo]
+    assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: q2) }
+  end
+
   should "leave the plan's stream as it was, having tried both offers" do
     set_level("4")
     set_level("5")
