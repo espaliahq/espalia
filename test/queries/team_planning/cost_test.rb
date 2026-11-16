@@ -469,7 +469,7 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     should "only hold forecast kinds among the rule kinds that forecast" do
       with_kinds(Hiring) do
         assert_includes TeamPlanning::RuleKinds.forecasts, Hiring
-        assert_equal [ Hiring ], TeamPlanning::RuleKinds.forecasts, "no built-in kind forecasts yet"
+        assert_equal [ TeamPlanning::RuleKinds::Attrition, Hiring ], TeamPlanning::RuleKinds.forecasts
         assert_includes TeamPlanning::RuleKinds.all, Hiring
       end
     end
