@@ -8,8 +8,6 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
   ESPALIA = { provider: "espalia", effective_on: "2025-12-01" }.freeze
   SYSTEM = OrgGraph::Authorization::SYSTEM
   READS = %w[Cost ScenarioCosts Capacity Budget Funding Forecast BudgetLines].freeze
-  # What a frozen read may still take live: the plan itself, who may see it,
-  # and who is at which level where. Prices come from the archive's copy.
   # What each archive's copy holds, frozen into every PlanPricesFrozen already stored.
   COPIED = { pay_bands: %w[id level_id role_name level_name location location_key currency period minimum midpoint maximum
                            role_family_id role_id level_ordinal position created_at updated_at],
@@ -18,6 +16,8 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
                               cost_centre origin approved_on created_at updated_at],
              reference_currencies: %w[id currency created_at updated_at],
              planning_rule_defaults: %w[id rule value created_at updated_at] }.freeze
+  # What a frozen read may still take live: the plan itself, who may see it,
+  # and who is at which level where. Prices come from the archive's copy.
   STRUCTURE = %w[event_store_events event_store_events_in_streams plan_encryption_keys team_planning_plans team_planning_plan_members
                  tenants people org_fact_periods org_leavers framework_roles framework_levels hris_role_mappings person_framework_assignments].to_set.freeze
 
