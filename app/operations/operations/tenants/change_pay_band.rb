@@ -27,7 +27,9 @@ class Operations::Tenants::ChangePayBand < Operations::Base
   # @return [Hash] the band, as tenants_pay_bands lists it
   def perform
     band = find_band(params[:pay_band_id])
-    band.with_lock do
+    PayBand.transaction do
+      PayBand.lock_list(band.tenant_id)
+      band.lock!
       matcher_given? ? match!(band) : take_current_names(band, framework_for([ band ]))
       band.location = params[:location] unless params[:location].nil?
       band.assign_attributes(currency: params[:currency], period: params[:period], **figures)
