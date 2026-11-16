@@ -6,7 +6,8 @@ class Operations::Tenants::PayBands < Operations::Base
 
   description "List the active tenant's pay bands in order, position 1 first. Of the bands that match a seat, " \
               "the last in the list has the last word. Each band gives its position, its matcher (the role " \
-              "family, role, level number and location it matches on; one left out matches anything), its " \
+              "family, role, level number and location it matches on, one left out matching anything; or a " \
+              "framework level's level_id and location), its " \
               "currency, period (year, month or hour) and minimum, midpoint and maximum as decimal strings, as " \
               "entered and never converted. shadowed is true for a band that can never have the last word, as " \
               "a later band matches every seat it does. in_framework is false for a band whose level, role or " \
