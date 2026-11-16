@@ -143,6 +143,35 @@ class TeamPlanning::ClosedStepTest < ActiveSupport::TestCase
     assert_equal figures(fresh, first), figures(@plan_id, @h2)
   end
 
+  should "keep the real cost centre of someone the Org Graph moved before the close, as a fresh plan from the day after does" do
+    platform_rule = lambda do |plan_id|
+      as_tenant do
+        Operations::TeamPlanning::SetRule.call(context:, params: { plan_id:, scenario_id: plan_id, unit_id: @platform, rule: "cost_centre",
+                                                                   value: { entries: [ { unit_id: @platform, cost_centre: "Platform rule" } ] } })
+      end
+    end
+    platform_rule.(@plan_id)
+    on(Time.utc(2026, 6, 20, 9)) do
+      @org.end_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-06-15")
+      @org.set_membership(@ada.id, @platform, **ESPALIA, effective_on: "2026-06-15", allocation: 1.0)
+    end
+    close
+
+    centre = ->(plan_id, scenario_id) do
+      as_tenant do
+        TeamPlanning::Cost.new(context:, plan: TeamPlanningPlan.find(plan_id), scenario_id:).call.scenario.lines
+                          .select { it.seat_id == @ada.id }.map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+      end
+    end
+    assert_equal [ [ "Platform rule", "rule" ] ], centre.(@plan_id, @h1), "the plan moved Ada in H1, as its own baseline reads"
+    assert_equal [ [ "Platform", "person" ] ], centre.(@plan_id, @h2), "the Org Graph moved Ada, so the plan changes nothing of hers"
+
+    fresh = new_plan(base_on: "2026-07-01")
+    platform_rule.(fresh)
+    first = fork(fresh, fresh, "H2", ends_on: "2026-12-31")
+    assert_equal centre.(fresh, first), centre.(@plan_id, @h2)
+  end
+
   should "drop a change the Org Graph made happen, and carry over one it didn't" do
     close
 

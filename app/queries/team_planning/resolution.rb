@@ -156,15 +156,18 @@ class TeamPlanning::Resolution
     end
   end
 
-  private
-
   # The organisation the day after a closed step ends, known now, or on the
-  # archive day once the plan is archived.
+  # archive day once the plan is archived: what a step after it stands on.
+  #
+  # @param ends_on [Date] the closed step's last day
+  # @return [TeamPlanning::Baseline::Map]
   def standing_on(ends_on)
     CurrentPlanReads.fetch([ :standing, *CurrentPlanReads.viewer(@context), @plan.id, @plan.archived_on, ends_on ]) do
       @baseline.map_on(ends_on + 1, known_on: @plan.archived_on)
     end
   end
+
+  private
 
   # The scenario and those it is an alternative of: the chain after the step
   # before it on the timeline. The scenarios that step replaced come earlier
