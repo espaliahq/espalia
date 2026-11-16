@@ -82,7 +82,7 @@ class TeamPlanning::RuleKinds::CostCentre < TeamPlanning::RuleKind
 
   # @param location [String, nil]
   # @return [String, nil] the location as entries and seats compare it
-  def self.location_key(location) = location.to_s.squish.downcase.presence
+  def self.location_key(location) = PayBand.location_key(location).presence
 
   # @param value [Hash] as stored
   # @param unit_ids [Array<String>] the seat's unit and every unit above it
