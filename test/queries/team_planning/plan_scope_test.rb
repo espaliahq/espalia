@@ -236,6 +236,18 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_includes resolve(@plan_id, @h2).people.map(&:id), @cy.id
   end
 
+  should "refuse to move a change earlier into a step where the person it is about is still outside the scope" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h2, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetDeparture, plan_id: @plan_id, scenario_id: @h2, person_id: @dee.id)
+
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::MoveChange, plan_id: @plan_id, scenario_id: @h2, subject_id: @dee.id, facet: "departure", direction: "earlier")
+    end
+    assert_equal "This person is outside the units this plan covers. Place them in one of its units first.", error.message
+    assert_empty as_tenant { TeamPlanning::Repository.new.load_plan(@plan_id) }.changes_in(@h1)
+  end
+
   should "refuse to undo a clear that would bring back a change about someone a narrower plan no longer covers" do
     set_scope(@plan_id, [ @engineering, @sales ])
     call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")

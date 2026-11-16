@@ -32,8 +32,8 @@ class Operations::TeamPlanning::MoveChange < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     to_scenario_id = refusing_bad_plans do
       handler.move_change(plan_id, scenario_id:, subject_id: params[:subject_id], facet: params[:facet],
-                                   direction: params[:direction], to_scenario_id: scenario_id!(:to_scenario_id)) do |plan, change|
-        within_scope!(plan, change.class, change.data[:subject_id], change.data) if change
+                                   direction: params[:direction], to_scenario_id: scenario_id!(:to_scenario_id)) do |plan, change, step_id|
+        within_scope!(plan, change.class, change.data[:subject_id], change.data, scenario_id: step_id) if change
       end
     end
     { plan_id:, scenario_id:, to_scenario_id:, subject_id: params[:subject_id], facet: params[:facet], moved: true }

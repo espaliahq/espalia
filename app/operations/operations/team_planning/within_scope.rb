@@ -12,11 +12,11 @@ module Operations::TeamPlanning::WithinScope
   # outside only through the change that places them in a covered unit
   # ([#338](https://github.com/espaliahq/espalia/issues/338)). The refusal
   # says nothing about the person the plan can't show.
-  def within_scope!(plan, kind, subject_id, end_state)
+  def within_scope!(plan, kind, subject_id, end_state, scenario_id: scenario_id!(:scenario_id))
     record = TeamPlanningPlan.find(plan.plan_id)
     return if record.scope_unit_ids.blank?
 
-    resolution = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id: scenario_id!(:scenario_id))
+    resolution = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id:)
     map, winning = resolution.resolved(plan)
     place_within_scope!(map, kind, subject_id, end_state, closed_units: resolution.closed_position_units(plan, winning))
     return unless map.outside_ids.include?(subject_id)

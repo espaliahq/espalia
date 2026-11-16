@@ -473,6 +473,8 @@ class TeamPlanning::CommandHandler
   # @param to_scenario_id [String, nil] the step later, when more than one follows
   # @yieldparam plan [TeamPlanning::PlanAggregate] under the lock, once the actor may edit it
   # @yieldparam change [TeamPlanning::Events::Change, nil] the change in effect that moves
+  # @yieldparam step_id [String] where it is checked: the step it leaves, then
+  #   the one it reaches, once moved
   # @return [String] the step the change moved to
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor
   # @see TeamPlanning::PlanAggregate#move_change
@@ -480,8 +482,10 @@ class TeamPlanning::CommandHandler
     moved_to = nil
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      check&.call(plan, plan.changes_in(scenario_id).reverse_each.find { it.key == [ subject_id, facet ] }) if plan.scenario?(scenario_id)
+      key = [ subject_id, facet ]
+      check&.call(plan, plan.changes_in(scenario_id).reverse_each.find { it.key == key }, scenario_id) if plan.scenario?(scenario_id)
       moved_to = plan.move_change(scenario_id:, subject_id:, facet:, direction:, to_scenario_id:, moved_by_id: actor_id!)
+      check&.call(plan, plan.changes_in(moved_to).reverse_each.find { it.key == key }, moved_to)
     end
     moved_to
   end
