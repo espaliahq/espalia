@@ -134,6 +134,19 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
     end
   end
 
+  should "read the Org Graph as known on the archive day, so someone recorded as leaving after it moves no archived figure" do
+    archived = reads
+    travel_to Time.utc(2025, 12, 20, 9)
+    as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).leave(@ada.id, provider: "espalia", effective_on: "2025-12-20") }
+
+    assert_equal archived, reads, "a leave recorded after the archive day moved an archived plan's figures"
+
+    operation(Operations::TeamPlanning::RestorePlan, scenario_id: nil)
+    live = operation(Operations::TeamPlanning::Cost)
+    assert_not_equal archived["Cost"], live.except(:archived_on, :note, :priced_on), "the leave should move a live plan's figures"
+    assert_not_includes live[:names].keys, @ada.id
+  end
+
   should "read no table but the plan's own and the organisation's structure while frozen, so no new input bypasses the copy" do
     tables = Set.new
     watch = ->(*, payload) { tables.merge(payload[:sql].scan(/(?:FROM|JOIN)\s+"(\w+)"/i).flatten) }

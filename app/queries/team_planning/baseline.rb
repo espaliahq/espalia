@@ -481,7 +481,13 @@ class TeamPlanning::Baseline
 
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on ]) { map_on(@plan.base_on, known_on: @plan.base_on - 1) }
+  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, known_on ]) { map_on(@plan.base_on, known_on:) }
+
+  # The Org Graph as known the day before the base, or on the archive day if
+  # that came first, so a fact recorded after archiving moves no figure.
+  #
+  # @return [Date]
+  def known_on = [ @plan.base_on - 1, @plan.archived_on ].compact.min
 
   # The organisation on another day, in the shape {#structure} gives, so a
   # reader can hold the plan up against it.

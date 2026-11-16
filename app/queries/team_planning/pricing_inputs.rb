@@ -9,8 +9,9 @@
 # copy its {TeamPlanning::Events::PlanPricesFrozen} sealed under the plan's
 # key. A plan archived before the copy existed has none, and reads live.
 #
-# Framework roles and levels, HRIS title mappings and the Org Graph stay
-# live: they say who is at which level, not what a level costs.
+# Framework roles and levels and HRIS title mappings stay live: they say who
+# is at which level, not what a level costs. The Org Graph is read as known
+# on the archive day ({TeamPlanning::Baseline#known_on}).
 #
 # @example
 #   inputs = TeamPlanning::PricingInputs.for(plan)

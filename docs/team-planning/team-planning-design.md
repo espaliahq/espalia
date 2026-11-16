@@ -1074,8 +1074,9 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
   scenario costs, capacity, forecast, budget, funding and budget lines then return
   `priced_on` and a note: priced as on the archive day.
 - What stays live is structure. Framework roles and levels, and HRIS title mappings, say
-  who is at which level, not what a level costs. The Org Graph stays live for the same
-  reason, its leavers among them. Actual pay is never in
+  who is at which level, not what a level costs. A plan reads the Org Graph as known the
+  day before its base date, or on the archive day if that comes first, so someone
+  recorded as leaving after the archive moves no archived figure. Actual pay is never in
   the copy: it stays sealed per person, and the reader's see-pay view applies at read
   time, so forgetting a person still removes it.
 - The copy carries tenant configuration text as it stood: location, cost centre, a
