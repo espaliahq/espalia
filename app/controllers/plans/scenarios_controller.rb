@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Forks, edits and removes a plan's scenarios from its page (#271, #272, #439), through the same
+# Forks, edits and removes a plan's scenarios from its page ([#271](https://github.com/espaliahq/espalia/issues/271),
+# [#272](https://github.com/espaliahq/espalia/issues/272), [#439](https://github.com/espaliahq/espalia/issues/439)), through the same
 # Operations the MCP tools use. A plan someone isn't in is a 404 here, as it is
 # on the plan's page; a viewer is refused.
 class Plans::ScenariosController < ApplicationController
@@ -43,8 +44,7 @@ class Plans::ScenariosController < ApplicationController
   def destroy
     authorize_editor
     scenario_id = params.expect(:id)
-    name = Operations::TeamPlanning::Scenarios.call(context: pundit_user, params: { plan_id: })[:scenarios]
-                                              .find { it[:scenario_id] == scenario_id.downcase }&.dig(:name)
+    name = TeamPlanningScenario.find_by(id: scenario_id.downcase, plan_id:)&.name&.reveal
     Operations::TeamPlanning::RemoveScenario.call(context: pundit_user, params: { plan_id:, scenario_id: })
     redirect_to plan_path(plan_id, removed_page: 1, anchor: "removed-scenarios"), status: :see_other,
                                                                                   notice: "Removed #{name || 'the scenario'}."
