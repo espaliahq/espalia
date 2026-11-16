@@ -53,8 +53,12 @@ Story 3.1 ([#208](https://github.com/espaliahq/espalia/issues/208)) built the tr
 
 - The baseline is implicit. Its id is the plan's, it stands on the base date, and it has
   no period, no alternative and can't be removed.
-- A `then` scenario starts the day after its parent ends, or on the base date after the
-  baseline. It holds its own end, and `ScenarioPeriodSet` moves only that end.
+- A `then` scenario starts the day after its parent ends. It holds its own end, and
+  `ScenarioPeriodSet` moves it.
+- The first step after the baseline starts on the base date, or on a later day of its own
+  ([#404](https://github.com/espaliahq/espalia/issues/404)). The days between belong to no
+  step, so Today's state carries on through them. `ScenarioPeriodSet` can move that start
+  too, and records both previous dates.
 - An `instead` scenario covers its parent's period exactly, so an alternative of an
   alternative covers the original's.
 - A parent has at most one `then` step. A second next step is an alternative to the first.
@@ -65,6 +69,31 @@ Story 3.1 ([#208](https://github.com/espaliahq/espalia/issues/208)) built the tr
   [#209](https://github.com/espaliahq/espalia/issues/209) shreds them, the name parameter
   asks callers to leave people's names out.
 - `team_planning_scenarios` holds one row per scenario, with the period the tree gives it.
+
+### Scenario dates
+
+Changing a step's dates moves other steps: each later step starts the day after the one
+before it ends, and an alternative shares its parent's period.
+`team_planning_period_preview` reads that rule from the aggregate and lists every scenario
+whose period would change, with its dates before and after. The web and agents read the
+same list, so neither works it out again.
+
+On the web, an editor opens the Dates page from a step's "Dates…" in the Scenarios table or
+on the map, at `/planning/:id/scenarios/:scenario_id/dates`. A step that follows another
+shows its start as text, linked to the step whose end sets it. A first step's start is a
+field. Preview lists what moves, or says nothing else does, and Save posts the same dates.
+Save and Cancel go back where the editor came from: the map with that step open, or the
+Scenarios table. A refused date re-renders the page with the reason.
+
+Forking a first step from Today offers a start date. It defaults to the base date and is
+refused before it. When the first step starts later, the timeline and the Scenarios table
+say "Today continues to" the day before. Cost prices a first step over its own period, so
+the gap costs nothing. An update to today that passes the first step's start moves it to
+the new base, and the confirm names the step and both dates. A step whose start is still to
+come keeps it.
+
+Each date edit appears in the step's history as a `dates` entry with the new and previous
+dates. Undoing a date edit is [#407](https://github.com/espaliahq/espalia/issues/407).
 
 ### Events
 
@@ -913,15 +942,15 @@ make ends what they can redo, as in an editor. Undo and redo are for editors, li
 other change.
 
 A scenario's history is `team_planning_history_entries`, one row per change, pin, clear,
-undo, redo, move and note, in order, with who made it and, while it stands undone, who undid it.
+undo, redo, move, note and date edit, in order, with who made it and, while it stands undone, who undid it.
 The baseline's history also lists each update to today, with the base it left and the
 conflicts it carried.
 `team_planning_history` lists it, a hundred entries a page, and a forgotten person reads as
 a former member.
 Production already holds changes, pins and clears, so the deploy that ships the history
 needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeploy's
-`verify` stops the deploy. The
-history and overrides projections read events through one mapping,
+`verify` stops the deploy. Version 2 adds date edits, so the deploy that ships it needs the
+same rebuild. The history and overrides projections read events through one mapping,
 `TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
 never reaches either table: the history names the field in `sealed_fields` and leaves
 the value out. The note is the one exception, held in a sealed column (see below).
@@ -1044,7 +1073,7 @@ day before its base date has passed. Until then its base moves as edits land.
 Every scenario keeps its changes and resolves them over the Org Graph as of the new base,
 so someone who joined since the old base comes onto the map, and someone who left drops
 off it, with "has left" against any change that still places them. The first step after
-the baseline starts on the new base.
+the baseline starts on the new base, unless its own start is still to come.
 
 A base only moves forward. The update is refused when the plan already stands on today,
 or on a day still to come, which already reads the Org Graph as known now. It is refused

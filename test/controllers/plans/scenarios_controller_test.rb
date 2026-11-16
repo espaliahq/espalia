@@ -30,6 +30,19 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ @q1, "then" ], [ scenario.parent_id, scenario.relation ]
     end
 
+    should "start a first step after the base date, so Today carries on until then" do
+      fresh = ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::CreatePlan, @editor, name: "Hiring 2027", base_on: "2026-11-14")[:plan_id] }
+      get plan_path(fresh)
+      assert_select "input[name='scenario[starts_on]'][value='2026-11-14'][min='2026-11-14']"
+
+      post plan_scenarios_path(fresh), params: { scenario: { parent_id: fresh, relation: "then", name: "Q1 hires",
+                                                             starts_on: "2026-12-01", ends_on: "2027-03-31" } }
+
+      scenario = ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: fresh, relation: "then").sole }
+      assert_redirected_to map_plan_path(fresh, scenario: scenario.id)
+      assert_equal [ Date.new(2026, 12, 1), Date.new(2027, 3, 31) ], [ scenario.starts_on, scenario.ends_on ]
+    end
+
     should "fork an alternative that keeps its parent's period, ignoring a blank end date" do
       post plan_scenarios_path(@plan_id), params: { scenario: { parent_id: @q1, relation: "instead", name: "Slower hiring", ends_on: "" } }
 
