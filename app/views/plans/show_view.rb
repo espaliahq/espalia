@@ -189,14 +189,19 @@ class Views::Plans::ShowView < Views::Base
 
   def tab_strip(panel)
     if tabs.size > 1
-      div(class: "@container mb-4 flex flex-wrap items-end gap-x-3 border-b border-default") do
+      div(class: "@container mb-4 flex flex-wrap items-end gap-x-3 border-b border-default sm:flex-nowrap") do
         nav(aria: { label: "Plan views" }, class: "min-w-0 flex-1") do
-          div(class: "-mb-px flex flex-wrap gap-x-1") { tabs.each { tab(it) } }
+          div(class: "-mb-px flex flex-wrap gap-x-0.5 sm:flex-nowrap sm:overflow-x-auto @3xl:gap-x-1") { tabs.each { tab(it) } }
         end
         # On a phone the controls take a row above the tabs, so they never push a tab onto another line.
         div(class: "order-first flex w-full shrink-0 items-center justify-end gap-1 sm:order-none sm:w-auto sm:pb-1.5") do
           undo_controls
-          panel.toggle
+          panel.toggle do
+            span do
+              plain "About "
+              span(class: "sr-only @3xl:not-sr-only") { "this plan" }
+            end
+          end
         end
       end
       h2(id: "plan-main-heading", class: "sr-only") { current_tab.label }
@@ -247,7 +252,7 @@ class Views::Plans::ShowView < Views::Base
   def tab(tab)
     open = tab.key == @open_tab
     a(href: tab.href, aria: { current: ("page" if open) },
-      class: "shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-sm font-medium sm:px-3 " \
+      class: "shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-sm font-medium focus-visible:outline-offset-[-2px] sm:px-1.5 @3xl:px-3 " \
              "#{open ? 'border-brand text-default' : 'border-transparent text-muted hover:text-default'}") { tab.label }
   end
 
