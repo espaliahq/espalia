@@ -305,6 +305,20 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { cost(as: @outsider) }
   end
 
+  should "give the run rate on the scenario's last day, with its units and cost centres adding up to it" do
+    call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @year, role_id: @engineer.role_id,
+                                                 level_id: @e5.level_id, unit_id: @payments, fte: 0.5, basis: "new")
+    at_end = cost[:run_rate_at_end]
+
+    assert_equal "2026-12-31", at_end[:on]
+    assert_equal %w[150000 100000 50000], at_end[:total].values_at(:scenario, :baseline, :difference).pluck(:converted)
+    assert_equal %w[100000 50000 0], at_end[:total][:parts].values.pluck(:converted)
+    assert_equal [ [ @payments, "Payments", "150000", "150000" ] ],
+                 at_end[:units].map { [ it[:unit_id], it[:name], it[:scenario][:converted], it[:with_below][:scenario][:converted] ] }
+    assert_equal [ [ "CC-1", "100000" ], [ nil, "50000" ] ], at_end[:cost_centres].map { [ it[:cost_centre], it[:scenario][:converted] ] }
+    assert_not cost(scenario_id: @plan_id).key?(:run_rate_at_end), "Today is a run rate already"
+  end
+
   should "give Today's run rate for the plan's id, with no baseline or difference anywhere in it" do
     result = cost(scenario_id: @plan_id, unit_id: @payments)
 

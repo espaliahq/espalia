@@ -14,7 +14,8 @@
 # every kind in {TeamPlanning::ChangeKinds}.
 #
 # Production already holds changes, pins and clears, so the deploy that ships
-# it needs `REBUILD_ON_DEPLOY=team_planning/history`.
+# it needs `REBUILD_ON_DEPLOY=team_planning/history`. Version 2 adds each
+# step's new dates, which production already holds, so it needs the same.
 #
 class TeamPlanning::Projections::History
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -22,14 +23,14 @@ class TeamPlanning::Projections::History
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   # @return [Array<Class>]
   def self.handled_events
     TeamPlanning::ChangeKinds.all + [
       TeamPlanning::Events::ChangePinned, TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangeUndone,
       TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::PlanRebased,
-      TeamPlanning::Events::ChangeMoved,
+      TeamPlanning::Events::ChangeMoved, TeamPlanning::Events::ScenarioPeriodSet,
       TeamPlanning::Events::PlanArchived, TeamPlanning::Events::PlanRestored, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::ScenarioSplit,
       TeamPlanning::Events::PlanDeleted
     ]

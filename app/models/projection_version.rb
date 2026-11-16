@@ -73,13 +73,17 @@ class ProjectionVersion < ApplicationRecord
   # first reset to its final stamp, so its tables are empty or half replayed
   # throughout; a write that read them then would decide from a wrong list.
   # Shares the same key, so the write refuses at once, and a rebuild that
-  # starts meanwhile waits for it to finish.
+  # starts meanwhile waits for it to finish. Inside a transaction the locks
+  # last until it ends, as a rebuild that starts before the commit would
+  # replay without the write.
   #
   # @param names [Array<String>] `PROJECTION_NAME`s
   # @yield while no rebuild can start
   # @return [Object] the block's value
   # @raise [Rebuilding] when a rebuild holds any of them
-  def self.unless_rebuilding(*names)
+  def self.unless_rebuilding(*names, &)
+    return unless_rebuilding_until_commit(names, &) if in_real_transaction?
+
     held = []
     names.each do |name|
       key = lock_key(name)
@@ -89,8 +93,37 @@ class ProjectionVersion < ApplicationRecord
     end
     yield
   ensure
-    release_shared(held) if held
+    release_when_transaction_ends(held) if held
   end
+
+  # Postgres frees a transaction's own locks when it ends, which no failing
+  # commit callback can skip.
+  def self.unless_rebuilding_until_commit(names)
+    names.each { |name| raise Rebuilding unless advisory("pg_try_advisory_xact_lock_shared", lock_key(name)) }
+    yield
+  end
+  private_class_method :unless_rebuilding_until_commit
+
+  # A savepoint's lock passes to the transaction around it. A test's own
+  # transaction, the one Rails won't let a write join, never commits, so a lock
+  # under it would outlive the write. Rails lists open transactions nowhere
+  # public.
+  def self.in_real_transaction?
+    transactions = connection.transaction_manager.instance_variable_get(:@stack)
+    transactions.any? && transactions.all?(&:joinable?)
+  end
+  private_class_method :in_real_transaction?
+
+  # Under a test's own transaction, or none, the locks go when the outermost
+  # transaction a write can join ends, or at once.
+  def self.release_when_transaction_ends(keys)
+    transaction = connection.current_transaction
+    return release_shared(keys) unless transaction.joinable?
+
+    transaction.after_commit { release_shared(keys) }
+    transaction.after_rollback { release_shared(keys) }
+  end
+  private_class_method :release_when_transaction_ends
 
   # A failed statement aborts the transaction around it, and an aborted
   # transaction runs nothing more, an unlock included, until it ends. A caller

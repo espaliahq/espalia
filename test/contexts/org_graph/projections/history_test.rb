@@ -309,6 +309,45 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
         timeline(@payments, "owner", key: @ada.id)
       assert_equal [ [ "2026-02-01", nil, { "owner" => true } ] ], timeline(@payments, "owner", key: @grace.id)
     end
+
+    should "hold each kind of unit's name, place, provider and removal" do
+      guild = SecureRandom.uuid_v7
+      as_tenant do
+        @structure.add_level(guild, "Guild", effective_on: "2026-02-01")
+        @structure.reorder_levels([ guild, @departments, @squads ], effective_on: "2026-03-01")
+        @structure.set_level_provider(guild, "hibob", effective_on: "2026-03-15", field: "work.guild")
+        @structure.hand_back_level(guild, effective_on: "2026-04-01")
+        @structure.remove_level(guild, effective_on: "2026-04-01")
+      end
+
+      assert_equal [ [ "2026-01-01", "2026-03-01", { "name" => "Department", "position" => 0, "provider" => "espalia" } ],
+                     [ "2026-03-01", "2026-04-01", { "name" => "Department", "position" => 1, "provider" => "espalia" } ],
+                     [ "2026-04-01", nil, { "name" => "Department", "position" => 0, "provider" => "espalia" } ] ],
+        timeline(@departments, "kind")
+      assert_equal [ [ "2026-01-01", "2026-03-01", { "name" => "Squad", "position" => 1, "provider" => "espalia" } ],
+                     [ "2026-03-01", "2026-04-01", { "name" => "Squad", "position" => 2, "provider" => "espalia" } ],
+                     [ "2026-04-01", nil, { "name" => "Squad", "position" => 1, "provider" => "espalia" } ] ], timeline(@squads, "kind")
+      assert_equal [ [ "2026-02-01", "2026-03-01", { "name" => "Guild", "position" => 2, "provider" => "espalia" } ],
+                     [ "2026-03-01", "2026-03-15", { "name" => "Guild", "position" => 0, "provider" => "espalia" } ],
+                     [ "2026-03-15", "2026-04-01", { "name" => "Guild", "position" => 0, "provider" => "hibob" } ],
+                     [ "2026-04-01", nil, nil ] ], timeline(guild, "kind")
+    end
+
+    should "hold the rules a kind states, and let event order decide when its dates run backwards" do
+      levels = [ { level_id: @departments, name: "Department", parent_level_ids: [], top: true },
+                 { level_id: @squads, name: "Squad", parent_level_ids: [ @departments, @squads ], top: false } ]
+      as_tenant do
+        Rails.configuration.event_store.publish(
+          OrgGraph::Events::TaxonomyDefined.new(data: { levels:, previous_levels: [], effective_on: "2025-12-01", defined_by_id: nil },
+                                                metadata: { tenant_id: @tenant.id }),
+          stream_name: EventStreamNaming.org_structure_stream
+        )
+      end
+
+      assert_equal [ [ "2026-01-01", nil, { "name" => "Squad", "position" => 1, "provider" => "espalia",
+                                             "parent_level_ids" => [ @departments, @squads ], "top" => false } ] ],
+        timeline(@squads, "kind")
+    end
   end
 
   context "rebuild contract" do
@@ -329,6 +368,10 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
         @handler.leave(@grace.id, **ESPALIA, effective_on: "2026-04-30")
         @structure.rename_unit(@platform, "Platform Core", effective_on: "2026-01-15")
         @structure.add_unit_owner(@platform, @ada.id, effective_on: "2026-02-01")
+        guild = SecureRandom.uuid_v7
+        @structure.add_level(guild, "Guild", effective_on: "2026-02-01")
+        @structure.reorder_levels([ guild, @departments, @squads ], effective_on: "2026-02-01")
+        @structure.set_level_provider(guild, "hibob", effective_on: "2026-02-01", field: "work.guild")
       end
 
       before = snapshot_read_models(OrgGraph::Projections::History, @tenant)

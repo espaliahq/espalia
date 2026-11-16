@@ -247,6 +247,31 @@ class PlansController < ApplicationController
     end
   end
 
+  # GET /planning/:id/scenarios/:scenario_id/dates
+  #
+  # A step's dates, and what moving them would move once the editor previews
+  # new ones ([#404](https://github.com/espaliahq/espalia/issues/404)).
+  def dates
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    render dates_page(plan, draft: period_draft)
+  end
+
+  # POST /planning/:id/scenarios/:scenario_id/dates
+  #
+  # Saves the dates the preview showed. A refusal shows the page again with
+  # those dates and the reason.
+  def set_dates
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    draft = period_draft
+    Operations::TeamPlanning::SetScenarioPeriod.call(context: pundit_user,
+                                                     params: { plan_id: plan[:plan_id], scenario_id: params.expect(:scenario_id), **draft })
+    redirect_to dates_back(plan[:plan_id]), notice: "Saved the dates of #{dates_scenario_name}."
+  rescue Operations::Base::ParameterError => e
+    render dates_page(plan, draft:, error: e.message, preview: false), status: :unprocessable_content
+  end
+
   # GET /planning/:id/pay-upload?scenario=:scenario_id
   #
   # A file of actual pay to preview, then hold ([#323](https://github.com/espaliahq/espalia/issues/323)).
@@ -306,6 +331,33 @@ class PlansController < ApplicationController
     plan_page(plan, scenarios:, open_tab: :scenarios,
                     body: Views::Plans::SplitScenario.new(plan:, scenario:, needs:, draft:, error:))
   end
+
+  def period_draft = params.permit(:starts_on, :ends_on).to_h.symbolize_keys.compact_blank
+
+  def dates_page(plan, draft:, error: nil, preview: true)
+    scenario_id = params.expect(:scenario_id).downcase
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario = scenarios.find { it[:scenario_id] == scenario_id && Views::Plans::ScenarioTable.dated?(it) }
+    raise ActiveRecord::RecordNotFound, "No such step" unless scenario
+
+    if preview && draft[:ends_on]
+      begin
+        previewed = Operations::TeamPlanning::PeriodPreview.call(context: pundit_user, params: { plan_id: plan[:plan_id], scenario_id:, **draft })
+      rescue Operations::Base::ParameterError => e
+        error = e.message
+      end
+    end
+    plan_page(plan, scenarios:, open_tab: params[:from] == "map" ? :map : :scenarios,
+                    body: Views::Plans::ScenarioDates.new(plan:, scenarios:, scenario:, draft:, preview: previewed, error:, from: params[:from],
+                                                                map_scenario: params[:map_scenario].presence))
+  end
+
+  def dates_scenario_name
+    id = params.expect(:scenario_id).downcase
+    read(Operations::TeamPlanning::Scenarios)[:scenarios].find { it[:scenario_id] == id }&.dig(:name)
+  end
+
+  def dates_back(plan_id) = params[:from] == "map" ? map_plan_path(plan_id, scenario: params[:map_scenario].presence || params[:scenario_id]) : plan_path(plan_id)
 
   def pay_uploader_plan
     plan = read(Operations::TeamPlanning::Plan)

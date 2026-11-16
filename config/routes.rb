@@ -428,6 +428,9 @@ Rails.application.routes.draw do
     # Split the agreed part off a scenario, from a page an editor confirms ([#360](https://github.com/espaliahq/espalia/issues/360)).
     get :split, on: :member, path: "scenarios/:scenario_id/split"
     post :split, on: :member, path: "scenarios/:scenario_id/split", action: :split_scenario
+    # Change a step's dates, from a preview an editor confirms ([#404](https://github.com/espaliahq/espalia/issues/404)).
+    get :dates, on: :member, path: "scenarios/:scenario_id/dates"
+    post :dates, on: :member, path: "scenarios/:scenario_id/dates", action: :set_dates
     # Hold actual pay from a file, previewed then confirmed ([#323](https://github.com/espaliahq/espalia/issues/323)).
     get :pay_upload, on: :member, path: "pay-upload"
     post :pay_upload, on: :member, path: "pay-upload", action: :upload_pay

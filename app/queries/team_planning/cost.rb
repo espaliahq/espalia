@@ -40,6 +40,14 @@
 # ([#318](https://github.com/espaliahq/espalia/issues/318)). A run rate has
 # no baseline to stand against, and is never compared with a period total.
 #
+# A scenario also gets a run rate at its end
+# ([#334](https://github.com/espaliahq/espalia/issues/334)): every seat it
+# holds on its last day, each priced for a full year, beside Today's seats
+# priced on that same day, so a move in exchange rates never reads as the
+# plan's change. Its forecast part is each forecast row's headcount still
+# changed that day, a year of it at the row's own average, which for
+# attrition is the steady share of seats waiting to be filled.
+#
 # @example
 #   report = TeamPlanning::Cost.new(context:, plan:, scenario_id:).call
 #   report.scenario.totals # => { "EUR" => (60000/1) }
@@ -167,7 +175,25 @@ class TeamPlanning::Cost
   # @!attribute planned [Sum]
   # @!attribute forecast [Sum]
   # @!attribute total [Sum] the scenario's priced seats plus the forecast: the three parts' sum
-  Parts = Data.define(:actual, :planned, :forecast, :total)
+  Parts = Data.define(:actual, :planned, :forecast, :total) do
+    # @param scenario [Sum] the scenario's priced seats
+    # @param baseline [Sum] the baseline's over the same days
+    # @param forecast [Sum]
+    # @return [Parts]
+    def self.of(scenario, baseline, forecast)
+      new(actual: baseline, planned: TeamPlanning::Cost.difference(scenario, baseline), forecast:,
+          total: TeamPlanning::Cost.plus(scenario, forecast))
+    end
+  end
+
+  # A scenario's yearly run rate on its last day
+  # ([#334](https://github.com/espaliahq/espalia/issues/334)).
+  #
+  # @!attribute on [Date] the scenario's last day
+  # @!attribute scenario [Priced] every seat it holds that day, each for a full year
+  # @!attribute baseline [Priced] Today's seats, priced on the same day
+  # @!attribute forecast [Forecasted] a year of what the forecast rows still change that day
+  RunRate = Data.define(:on, :scenario, :baseline, :forecast)
 
   # @!attribute basis [String] "period" for a scenario, "run_rate" for Today's year
   # @!attribute period [Range<Date>] the scenario's period, or Today's year
@@ -177,7 +203,8 @@ class TeamPlanning::Cost
   # @!attribute scenario [Priced]
   # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
   # @!attribute forecast [Forecasted]
-  Report = Data.define(:basis, :period, :pay_view, :reference_currency, :bands_changed_at, :scenario, :baseline, :forecast) do
+  # @!attribute at_end [RunRate, nil] nil for Today, which is a run rate already
+  Report = Data.define(:basis, :period, :pay_view, :reference_currency, :bands_changed_at, :scenario, :baseline, :forecast, :at_end) do
     # @return [Boolean]
     def run_rate? = basis == "run_rate"
 
@@ -195,9 +222,20 @@ class TeamPlanning::Cost
       priced = pick.(scenario)
       return Parts.new(actual: priced, planned: nothing, forecast: nothing, total: priced) if run_rate?
 
-      actual = pick.(baseline)
-      forecast = pick.(self.forecast)
-      Parts.new(actual:, planned: TeamPlanning::Cost.difference(priced, actual), forecast:, total: TeamPlanning::Cost.plus(priced, forecast))
+      Parts.of(priced, pick.(baseline), pick.(forecast))
+    end
+
+    # The run rate at the end, split as {#parts} splits the period's total.
+    #
+    # @param scope [Symbol] :total, :units, :units_with_below or :cost_centres
+    # @param key [String, nil]
+    # @return [Parts, nil] nil without a run rate at the end
+    def at_end_parts(scope = :total, key = nil)
+      return unless at_end
+
+      nothing = TeamPlanning::Cost.nothing(reference_currency)
+      pick = ->(figures) { (scope == :total ? figures.total : figures.public_send(scope)[key]) || nothing }
+      Parts.of(pick.(at_end.scenario), pick.(at_end.baseline), pick.(at_end.forecast))
     end
   end
 
@@ -236,20 +274,23 @@ class TeamPlanning::Cost
     end
   end
 
+  # @param at_end [Boolean] false skips the run rate at the scenario's end, for a caller that never reads it
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call
+  def call(at_end: true)
     aggregate = prepare
     run_rate = @scenario_id == @plan.id
     earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
     scenario = priced(resolved(@scenario_id))
     @steps[@scenario_id] ||= TeamPlanning::Forecast::Step.new(map: scenario.map, pricing: scenario.pricing) unless run_rate
-    forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows)
-    baseline = priced(resolved(@plan.id)) unless run_rate
+    rows = TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows
+    forecast = forecasted(rows)
+    at_end = (run_rate_at_end(scenario.map, rows) if at_end && !run_rate)
+    baseline = priced(at_end ? at_end.baseline.map : resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *band_list.map(&:updated_at) ].compact.max,
-               scenario:, baseline:, forecast:)
+               scenario:, baseline:, forecast:, at_end:)
   end
 
   # @param starts_on [Date]
@@ -305,6 +346,22 @@ class TeamPlanning::Cost
     @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     aggregate
+  end
+
+  # Each seat held on the last day, for a full year: a one-day period of a
+  # one-day year. The forecast is summed while the scenario's units hold.
+  def run_rate_at_end(map, rows)
+    on = @period.end
+    scenario, forecast = on_day(on) { [ priced(map), forecasted(rows, &:run_rate) ] }
+    RunRate.new(on:, scenario:, forecast:, baseline: on_day(on) { priced(resolved(@plan.id)) })
+  end
+
+  def on_day(day)
+    period, year_days = @period, @year_days
+    @period, @year_days = day..day, 1
+    yield
+  ensure
+    @period, @year_days = period, year_days
   end
 
   def resolved(scenario_id)
@@ -488,13 +545,17 @@ class TeamPlanning::Cost
   def sum(lines) = converted(lines.reject(&:unpriced?).group_by(&:currency).transform_values { |group| group.sum(0r, &:amount) })
 
   # Called straight after the scenario is priced, so its units hold.
-  def forecasted(rows)
-    units = rows.group_by { live_unit(it.unit_id) }.transform_values { forecast_sum(it) }
-    Forecasted.new(rows:, total: forecast_sum(rows), units:, units_with_below: with_below(units),
-                   cost_centres: rows.group_by(&:cost_centre).transform_values { forecast_sum(it) })
+  def forecasted(rows, &figure)
+    figure ||= :cost.to_proc
+    total = ->(some) { forecast_sum(some, figure) }
+    units = rows.group_by { live_unit(it.unit_id) }.transform_values(&total)
+    Forecasted.new(rows:, total: total.(rows), units:, units_with_below: with_below(units),
+                   cost_centres: rows.group_by(&:cost_centre).transform_values(&total))
   end
 
-  def forecast_sum(rows) = converted(rows.flat_map { it.cost.to_a }.group_by(&:first).transform_values { |pairs| pairs.sum(0r) { exact(it.last) } })
+  def forecast_sum(rows, figure)
+    converted(rows.flat_map { figure.(it).to_a }.group_by(&:first).transform_values { |pairs| pairs.sum(0r) { exact(it.last) } })
+  end
 
   def converted(native)
     native = native.sort.to_h
@@ -513,9 +574,9 @@ class TeamPlanning::Cost
   end
 
   def factor(currency)
-    @factors[currency] ||= ExchangeRate.factor(from: currency, to: @reference, on: @period.begin)
+    @factors[[ currency, @period.begin ]] ||= ExchangeRate.factor(from: currency, to: @reference, on: @period.begin)
   rescue ExchangeRate::MissingRate => e
-    @factors[currency] = e.message
+    @factors[[ currency, @period.begin ]] = e.message
   end
 
   def band_list = @band_list ||= PayBand.where(tenant_id: @plan.tenant_id).order(:position).to_a

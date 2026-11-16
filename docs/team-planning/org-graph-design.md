@@ -174,8 +174,22 @@ lists the people with no membership of a live unit, for the "in no team" tray.
 - **A change comes from the unit's own provider.** A command names its provider, which
   defaults to Espalia, and a unit refuses a change from any other. So an HRIS team
   rejects an edit made in Espalia and still takes the sync's rename.
-- **A parent sits at a higher level**, is live, and is never the unit itself or a unit
-  beneath it. A unit with live sub-units can't be retired.
+- **A unit sits where its kind allows.** Each kind of unit (a taxonomy level) lists the
+  kinds its parent may be, and whether it may sit at the top. A parent is live, and is
+  never the unit itself or a unit beneath it; a move checks the new parent's chain to
+  the root, since kinds may list each other. It checks the chain on every day the move
+  covers, so a back-dated move can't loop on a day between other moves. A unit with live sub-units can't be
+  retired, and a succession retires the deepest units first. A back-dated move is
+  checked against today's rules, not those in force on its date.
+- **A kind written before kinds stated their rules keeps the rule it had.** No event
+  changes. `OrgGraph::Taxonomy` reads an older `TaxonomyDefined` level as: it may sit
+  under every level above it in that event's list, and at the top. A level an HRIS
+  provides is the one exception: it may sit only under the level directly above it, when
+  an HRIS provides that level too, as the mirror has only ever placed it there. The
+  aggregate, the projections and the history all read rules through this class.
+  `bin/rails org_graph:taxonomy:check` names any live unit sitting where its kind may
+  not, and fails on one; it runs per tenant before kinds can state their rules
+  ([#391](https://github.com/espaliahq/espalia/issues/391)).
 - **A unit comes from its level's provider.** Levels an HRIS supplies sit above every
   level Espalia holds, so the same holds for top-level units as for a parent and its
   child.
@@ -440,7 +454,8 @@ projection keeps one row per fact, per period of validity, per time learned. A c
 adds a row with a later learned time. It never overwrites the row it corrects, or the Org
 Graph could no longer say what it knew before. From it:
 
-- `OrgGraph::AsOf` gives the roster, the structure and the memberships in effect on a day.
+- `OrgGraph::AsOf` gives the roster, the structure, its kinds of unit and the memberships
+  in effect on a day. Each kind comes with its provider and where it may sit.
   By default it reads what the Org Graph knows now, so a later day includes the changes
   already recorded for it: a hire who starts then, a move or a leaving scheduled for it.
   With `known_on` it reads what was known at the end of that day in UTC. Tenants hold no
@@ -481,7 +496,7 @@ was known last Tuesday, even if a backdated correction arrived since. The correc
 shows up as drift.
 
 The projection is `org_graph/history`, and it writes one table, `org_fact_periods`. A row
-names its subject (a person, a unit or a succession, by id), the fact, a key (the unit,
+names its subject (a person, a unit, a succession or a kind of unit, by id), the fact, a key (the unit,
 for a membership; the person, for a unit's owner; empty otherwise), the value and its
 provider. Two windows place it:
 
@@ -503,6 +518,11 @@ The dates follow the events:
 - A change-back on the same date as the change it reverses withdraws that change, as
   though it never took effect. On a later date it is an ordinary change.
 - `PersonForgotten` changes nothing here. The rows hold ids, and the history stays.
+- A kind of unit has one fact, `kind`: its name, its place in the list, its provider
+  and, once stated, its rules. Removing the kind ends it. Older streams can date a change
+  to the kinds before an earlier one; a kind's change then starts on its last change's
+  date, so the order of events decides. A new rule change dated before the latest one
+  will be refused.
 
 Three rules hold across history, `AsOf`, `ChangesBetween` and the live tables
 (`org_memberships`, the `people` columns). First, a fact dated before one already held
@@ -668,6 +688,10 @@ screen (6.9, below) hosts them.
   people added by hand. Those may stand: the switch moves, ends or keeps them as a sync
   would. A value matches one unit only, and a unit that can't retire today (it has live
   sub-units, or a change dated later) blocks the switch until someone deals with it.
+- **Every unit must still fit.** A level an HRIS provides sits only beneath the HRIS
+  level directly above it, so the switch is refused, naming the units, while one sits
+  further up. Move those units first. Adding an HRIS level between two others is refused
+  the same way.
 - **One cause, one transaction.** The switch records the field as the level's source,
   gives each matched unit its value (`UnitHandedOver`), writes each succession and
   retirement, hands the HRIS the memberships of the people it reads, and mirrors the

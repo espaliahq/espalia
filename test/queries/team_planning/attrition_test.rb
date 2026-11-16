@@ -134,6 +134,13 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
       assert(cost.forecast.rows.all? { it.kind == "attrition" })
     end
 
+    should "take away a year of each seat still empty on the last day from the run rate at the end" do
+      # The steady share of seats waiting to be filled: Ada's CC-1 has 0.02 FTE empty, at the unit's average of EUR 100k.
+      assert_equal({ [ @engineering, "CC-1" ] => decimal("-2000"), [ @engineering, "CC-2" ] => decimal("-1000"), [ @platform, nil ] => decimal("-20000") },
+                   rows.transform_values { decimal(it.run_rate.fetch("EUR")) })
+      assert_equal decimal("-23000"), decimal(cost.at_end_parts.forecast.converted)
+    end
+
     should "keep actual, planned and forecast adding up to the total, per unit and overall" do
       report = cost
       [ [ :total, nil ], [ :units, @engineering ], [ :units, @platform ], [ :units_with_below, @engineering ],

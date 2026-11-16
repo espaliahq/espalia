@@ -33,7 +33,9 @@ class TeamPlanning::Forecast
   # @!attribute headcount [Rational] people added, or taken away when negative
   # @!attribute cost [Hash{String => Rational}] currency => amount over the step
   # @!attribute capacity [Hash{String => Rational}] capacity model => amount
-  Row = Data.define(:kind, :unit_id, :cost_centre, :starts_on, :ends_on, :headcount, :cost, :capacity)
+  # @!attribute run_rate [Hash{String => Rational}] currency => what the headcount
+  #   still changed on the step's last day costs a year
+  Row = Data.define(:kind, :unit_id, :cost_centre, :starts_on, :ends_on, :headcount, :cost, :capacity, :run_rate)
 
   # One person's place in a unit, in a seat they fill.
   #
@@ -91,8 +93,8 @@ class TeamPlanning::Forecast
     def rule_at(unit_id) = map.rule(kind.rule_name, unit_id:)
 
     # @return [Row] a row of this kind for this step
-    def row(unit_id:, cost_centre: nil, headcount: 0r, cost: {}, capacity: {})
-      Row.new(kind: kind.rule_name, unit_id:, cost_centre:, starts_on: step.begin, ends_on: step.end, headcount:, cost:, capacity:)
+    def row(unit_id:, cost_centre: nil, headcount: 0r, cost: {}, capacity: {}, run_rate: {})
+      Row.new(kind: kind.rule_name, unit_id:, cost_centre:, starts_on: step.begin, ends_on: step.end, headcount:, cost:, capacity:, run_rate:)
     end
   end
 

@@ -49,6 +49,31 @@ class Views::Plans::ScenarioTableTest < ActiveSupport::TestCase
     assert_nil html.css("tbody tr")[0].at_css(".md-prose")
   end
 
+  should "offer the rest of a split the Dates… of its agreed step, and an alternative none" do
+    baseline = { scenario_id: "plan", parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-14", ends_on: nil }
+    agreed = step("2026-11-14", "2027-03-31").merge(name: "Agreed Q1")
+    rest = agreed.merge(scenario_id: SecureRandom.uuid, parent_id: agreed[:scenario_id], relation: "on", name: "Q1 hires")
+    other = agreed.merge(scenario_id: SecureRandom.uuid, parent_id: agreed[:scenario_id], relation: "instead", name: "Q1 freeze")
+    html = Nokogiri::HTML5.fragment(render_view(Views::Plans::ScenarioTable.new(plan_id: "plan", scenarios: [ baseline, agreed, rest, other ],
+                                                                                can_edit: true)))
+    dates = ->(scenario) { html.at_css("tr[data-scenario-id='#{scenario[:scenario_id]}']").css("a").find { it.text == "Dates…" }&.[]("href") }
+
+    assert_equal "/planning/plan/scenarios/#{agreed[:scenario_id]}/dates", dates.(rest)
+    assert_nil dates.(other)
+  end
+
+  should "find the step a scenario takes its dates from, through splits and alternatives" do
+    agreed = step("2026-11-14", "2027-03-31")
+    rest = agreed.merge(scenario_id: SecureRandom.uuid, parent_id: agreed[:scenario_id], relation: "on")
+    other = agreed.merge(scenario_id: SecureRandom.uuid, parent_id: rest[:scenario_id], relation: "instead")
+    scenarios = [ agreed, rest, other ]
+
+    assert_equal agreed, Views::Plans::ScenarioTable.period_owner(other, scenarios)
+    assert_equal agreed, Views::Plans::ScenarioTable.dated_step(rest, scenarios)
+    assert_nil Views::Plans::ScenarioTable.dated_step(other, scenarios)
+    assert_nil Views::Plans::ScenarioTable.period_owner({ scenario_id: "plan", parent_id: nil, relation: nil }, scenarios)
+  end
+
   should "draw a visible kebab on each row's menu, sized to stay inside the table" do
     baseline = { scenario_id: "plan", parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-14", ends_on: nil }
     html = Nokogiri::HTML5.fragment(render_view(Views::Plans::ScenarioTable.new(plan_id: "plan", scenarios: [ baseline ], can_edit: true)))
