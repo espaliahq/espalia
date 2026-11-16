@@ -9,7 +9,7 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
   ESPALIA = { provider: "espalia", effective_on: "2025-12-01" }.freeze
   SYSTEM = OrgGraph::Authorization::SYSTEM
   YEAR = { starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new" }.freeze
-  BUDGET_CHECKS = %i[unfunded ambiguous_funding unplaced budget_variance unused_budget_lines].freeze
+  BUDGET_CHECKS = %i[unfunded ambiguous_funding unplaced cost_centre_mismatches budget_variance unused_budget_lines].freeze
 
   setup do
     @tenant = create(:tenant, :with_hibob_config)
@@ -67,7 +67,20 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
     end
   end
 
+  def seat(person, position, allocation: 1)
+    operation(Operations::TeamPlanning::SetAssignment, person_id: person.id, placements: [ { position_id: position, allocation: } ])
+  end
+
   def reasons(check) = found.select { it.check == check }.map { [ it.subject_id, it.reason ] }
+
+  def cost_centre_entries(*entries)
+    as_tenant { Operations::Tenants::SetPlanningRule.call(context: context_for(@planner), params: { rule: "cost_centre", value: { entries: } }) }
+  end
+
+  def cost_line(person)
+    as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).call }
+      .scenario.lines.find { it.seat_id == person.id }
+  end
 
   should "check nothing about budgets in a scenario with no budget lines, or in the baseline" do
     open_position(cost_centre: nil)
@@ -189,6 +202,116 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
 
     assert_equal "#{named.role_label} · Platform", report.names[idle.subject_id]
     assert_match(/\ASoftware Engineer, .*Senior SWE · Platform\z/, report.names[idle.subject_id])
+  end
+
+  context "a person whose cost centre disagrees" do
+    setup do
+      as_tenant do
+        @ledger = SecureRandom.uuid_v7
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(@ledger, "Ledger", level_id: @departments, effective_on: "2025-01-01")
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        @bo, @cy = [ [ "Bo Reed", @payments, "Platform" ], [ "Cy Lark", @ledger, "Growth" ] ].map do |name, unit_id, cost_centre|
+          create(:person, tenant: @tenant, name:).tap do |person|
+            people.record_person(person.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0, country: "Mu", cost_centre:)
+            people.set_membership(person.id, unit_id, **ESPALIA, allocation: 1.0)
+          end
+        end
+      end
+      @platform = line(cost_centre: "Platform")
+    end
+
+    should "be named when they keep their real one and the entries that match them give another, and still costed there" do
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" })
+
+      assert_includes reasons(:cost_centre_mismatches), [ @bo.id, "Costed in Platform, while the cost centre entries give Payments" ]
+      assert_not_includes reasons(:cost_centre_mismatches).map(&:first), @cy.id, "no entry matches Cy in Ledger"
+      assert_equal [ "Platform", "person", "Payments" ], cost_line(@bo).then { [ it.cost_centre, it.cost_centre_source, it.rule_cost_centre ] }
+    end
+
+    should "be named against a labelled position they sit in untouched" do
+      seat(@bo, open_position(cost_centre: "Growth"))
+
+      assert_equal [ [ @bo.id, "Costed in Platform, while their position is in Growth" ] ], reasons(:cost_centre_mismatches)
+    end
+
+    should "be named when the plan moves them into a position whose untouched occupant decides it" do
+      shared = open_position(cost_centre: nil)
+      seat(@bo, shared, allocation: 0.5)
+      seat(@cy, shared, allocation: 0.5)
+
+      assert_equal [ [ @cy.id, "Costed in Growth, while their position is in Platform" ] ], reasons(:cost_centre_mismatches),
+                   "Bo stays put and decides the position; Cy's move brings Growth to their own cost line only"
+    end
+
+    should "be named against a line their position draws on that is approved for another cost centre" do
+      growth = line(cost_centre: "Growth")
+      position = open_position(cost_centre: nil)
+      seat(@bo, position)
+      assert_empty reasons(:cost_centre_mismatches), "Bo decides the position, which draws on Platform"
+
+      operation(Operations::TeamPlanning::SetPositionFunding, position_id: position, draws: [ { budget_line_id: growth } ])
+      assert_equal [ [ @bo.id, "Costed in Platform, while their position draws on a budget line for Growth" ] ], reasons(:cost_centre_mismatches)
+      assert_kind_of TeamPlanning::Events::PositionFundingSet, found.find { it.check == :cost_centre_mismatches }.change,
+                     "the funding that draws on Growth explains it"
+    end
+
+    should "leave out a line their position draws on that covers none of the days they hold the seat" do
+      growth = line(cost_centre: "Growth", starts_on: "2026-07-01", ends_on: "2026-12-31")
+      position = open_position(cost_centre: nil)
+      seat(@bo, position)
+      operation(Operations::TeamPlanning::SetPositionFunding, position_id: position, draws: [ { budget_line_id: growth } ])
+      assert_equal [ [ @bo.id, "Costed in Platform, while their position draws on a budget line for Growth" ] ], reasons(:cost_centre_mismatches)
+
+      operation(Operations::TeamPlanning::SetDeparture, person_id: @bo.id, leaves_on: "2026-03-31")
+      assert_empty reasons(:cost_centre_mismatches), "Bo leaves in March, before the Growth line starts in July"
+    end
+
+    should "name the cost centre of the seat that disagrees when a person is costed in two" do
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" })
+      labelled = open_position(cost_centre: "Platform")
+      ruled = open_position(cost_centre: nil)
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @cy.id,
+                                                         placements: [ { position_id: labelled, allocation: 0.5 }, { position_id: ruled, allocation: 0.5 } ])
+      operation(Operations::TeamPlanning::SetPositionFunding, position_id: ruled, draws: [ { budget_line_id: @platform } ])
+
+      assert_equal [ [ @cy.id, "Costed in Payments, while their position draws on a budget line for Platform" ] ],
+                   reasons(:cost_centre_mismatches).select { it.first == @cy.id }
+    end
+
+    should "give the entries' cost centre only to a person who keeps a real one the entries disagree with" do
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Platform" }, { unit_id: @ledger, cost_centre: "Payments" })
+      seat(@cy, open_position(cost_centre: nil))
+
+      assert_equal [ "Platform", "person", nil ], cost_line(@bo).then { [ it.cost_centre, it.cost_centre_source, it.rule_cost_centre ] },
+                   "Bo's entries agree with his own"
+      assert_equal [ "Platform", "rule", nil ], cost_line(@cy).then { [ it.cost_centre, it.cost_centre_source, it.rule_cost_centre ] },
+                   "the plan moved Cy, so the entries decide"
+      assert_empty reasons(:cost_centre_mismatches)
+    end
+
+    should "name only cost centres a scoped plan holds" do
+      line(cost_centre: "Growth")
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" })
+      operation(Operations::TeamPlanning::SetPlanScope, unit_ids: [ @payments ])
+
+      assert_equal [ [ @bo.id, "Costed in Platform, while the cost centre entries give Payments" ] ], reasons(:cost_centre_mismatches),
+                   "Cy, costed in Growth, sits outside the scope"
+      assert_empty found.map(&:reason).grep(/Growth/), "nor does any budget item name Growth, a cost centre the plan doesn't hold"
+    end
+
+    should "read the same for a member without the see-pay right" do
+      editor = as_tenant { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
+      as_tenant { Operations::TeamPlanning::AddPlanMember.call(context: context_for(@planner), params: { plan_id: @plan_id, person_id: editor.person_id, role: "editor" }) }
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" })
+      shared = open_position(cost_centre: nil)
+      seat(@bo, shared, allocation: 0.5)
+      seat(@cy, shared, allocation: 0.5)
+      operation(Operations::TeamPlanning::SetPositionFunding, position_id: shared, draws: [ { budget_line_id: line(cost_centre: "Ledger") } ])
+
+      mismatches = ->(viewer) { as_viewer(viewer).select { it.first == :cost_centre_mismatches } }
+      assert_equal 4, mismatches.(@planner).size, mismatches.(@planner).inspect
+      assert_equal mismatches.(@planner), mismatches.(editor)
+    end
   end
 
   context "for a plan member without the see-pay right" do

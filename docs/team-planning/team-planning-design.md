@@ -315,6 +315,30 @@ none of these rules:
 The baseline is read once and every step resolves over it, so each column sees the same Org
 Graph and the read costs one Org Graph query whatever the path's length.
 
+**Figures** ([#452](https://github.com/espaliahq/espalia/issues/452)).
+`TeamPlanning::TimelineFigures` (the `team_planning_timeline_figures` tool) gives each column
+what it costs, what of its budget is unfunded, and what it can deliver. Each figure is the one
+the step's own cost, budget and capacity reads give, so the timeline can't disagree with those
+tabs. It resolves each step once and hands that resolution to all three reads, and the budget
+read reuses the cost read's pricing.
+
+- **Cost.** Today shows its yearly run rate. A step shows its seats and forecast over its
+  period, and an open last step over the months its period shows, labelled so. Seats no band
+  prices are counted beside it, never priced at nothing.
+- **Budget.** Approved and unfunded for a step; Today has no period, so no budget. A step over
+  its budget says so wherever the plan's budget strictness judges it: a line, a cost centre or
+  the total, as the Budget tab and the variance check do. Without the see-pay right only heads
+  can put a step over, as money stays hidden.
+- **Capacity.** The total per capacity model, the step's own and its forecast.
+- **Pay.** Without the see-pay right a viewer gets band midpoints in cost and a budget in
+  positions, with every budget amount left out. A scoped plan counts only its units.
+
+It is a tool of its own so `team_planning_timeline` stays free of money. The tab loads it in a
+lazy frame once the path is drawn, so the grid is usable before any figure arrives. On a wide
+screen the figures sit on a row of their own under the step headers, one cell per column on
+the grid's own tracks, so no column grows wider. A phone fetches the
+same path's figures and shows its own step's on the card. Loading reads "Loading figures…" and a failure is one line with a Retry beside it.
+
 The tab shows one path at a time. With no scenario named, it follows the first `then` at
 each step to a leaf, and the page says which path it shows and how many others run through
 the plan. Each step lists its alternatives as "or instead" links, and the last step its
@@ -1687,8 +1711,13 @@ holds no budget line. An archived plan stays unchecked, as before.
 - **Unused budget line.** A line whose period overlaps the scenario's that nothing draws on.
   A line that positions tie on is not unused: choosing a funding fixes it.
 
-The mismatch check, a seat whose rules give a cost centre other than the one it keeps, follows
-in its own change.
+- **Cost centre mismatch.** A person costed in one cost centre while something else names
+  another, once for each: the entries that match them, while they keep their real one; their
+  position, by its label or the untouched occupant who decides it; or a budget line their
+  position draws on that names a third. The cost read keeps the value it gives, so the check
+  only names the disagreement. The cost read carries the entries' answer as
+  `rule_cost_centre` on a person who keeps their real one, and never costs them there. In a
+  scoped plan an item names only cost centres the plan holds.
 
 As built in 6.5 ([#384](https://github.com/espaliahq/espalia/issues/384)): the
 `budget_strictness` rule says how strictly positions follow budget lines. It is plan-wide, like
@@ -1759,7 +1788,10 @@ Graph, by which rule) and reports three conditions as checks:
   upstream. The rules never move a person's cost on their own. Two cases reach it from the
   cost centre resolution above: a labelled position whose untouched occupant keeps a
   different real cost centre, and a position the plan moves one occupant into while
-  another stays, whose cost centre follows the one who stays.
+  another stays, whose cost centre follows the one who stays. As built
+  ([#421](https://github.com/espaliahq/espalia/issues/421)), the check is per person, and
+  also names an untouched person whose entries give another cost centre and a position
+  drawing on a line for a third.
 - **Unplaced.** An open position with no cost centre: it has no label of its own and no rule
   matches it. It can draw only on a budget line that states
   no cost centre, which matches any position, and is unfunded when none matches. This is a
@@ -2040,6 +2072,7 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 | Capability profile | Per unit and per position, under the existing cohort rule. |
 | Timeline | One path through the scenario tree, with lanes and moves. Read on demand by `TeamPlanning::Timeline`, not stored. |
 | Headcount walk | Per step and unit: opening, hires, known and expected departures, transfers, closing. Drawn as a lane of the timeline. |
+| Timeline figures | Per step: cost, budget and unfunded, and capacity per model, from the step's own reads. Read on demand by `TeamPlanning::TimelineFigures`, not stored. |
 | Checks | Every warning, with guardrail checks marked. |
 | Change list | The approved changes with their derived status. |
 
