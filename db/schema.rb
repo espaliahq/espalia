@@ -1186,6 +1186,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_145314) do
     t.index ["tenant_id", "created_by_id"], name: "index_team_planning_plans_on_tenant_id_and_created_by_id"
   end
 
+  create_table "team_planning_removed_scenario_tallies", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.integer "changes_held", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "plan_id"], name: "idx_on_tenant_id_plan_id_7b6d7ae4db"
+  end
+
+  create_table "team_planning_removed_scenarios", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "plan_id", null: false
+    t.jsonb "name"
+    t.string "relation"
+    t.date "starts_on"
+    t.date "ends_on"
+    t.uuid "removed_by_id"
+    t.datetime "removed_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "plan_id"], name: "index_team_planning_removed_scenarios_on_tenant_id_and_plan_id"
+  end
+
   create_table "team_planning_scenarios", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "plan_id", null: false
