@@ -32,7 +32,8 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
   should "say why a total isn't in one currency when only Today's fails to convert" do
     marks = Struct.new(:total, :reference, :cost, :outside_units, :unpriced) { def run_rate? = false }.new(
       { scenario: sum({ "EUR" => "100" }, "100"), baseline: sum({ "GBP" => "80" }, nil, [ "No GBP rate." ]),
-        difference: sum({ "EUR" => "100", "GBP" => "-80" }) },
+        difference: sum({ "EUR" => "100", "GBP" => "-80" }),
+        parts: { actual: sum({ "GBP" => "80" }, nil, [ "No GBP rate." ]), planned: sum({ "EUR" => "100", "GBP" => "-80" }), forecast: sum({}) } },
       "EUR", { period: { starts_on: "2026-01-01", ends_on: "2026-12-31" } }, nil, []
     )
     strip = Nokogiri::HTML5.fragment(Views::Plans::CostStrip.new(marks:).call)
@@ -43,7 +44,8 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
   should "name actual pay in the basis for a holder whose plan holds some, and midpoints otherwise" do
     basis = lambda do |cost|
       marks = Struct.new(:total, :reference, :cost, :outside_units, :unpriced) { def run_rate? = false }.new(
-        { scenario: sum({ "EUR" => "100" }, "100"), baseline: sum({ "EUR" => "100" }, "100"), difference: sum({}, "0") },
+        { scenario: sum({ "EUR" => "100" }, "100"), baseline: sum({ "EUR" => "100" }, "100"), difference: sum({}, "0"),
+          parts: { actual: sum({ "EUR" => "100" }, "100"), planned: sum({}, "0"), forecast: sum({}, "0") } },
         "EUR", { period: { starts_on: "2026-01-01", ends_on: "2026-12-31" }, **cost }, nil, []
       )
       Nokogiri::HTML5.fragment(Views::Plans::CostStrip.new(marks:).call).at_css("p.text-muted").text
@@ -65,5 +67,32 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
 
     assert_equal "EUR 1.2m a year(run rate)", today.text
     assert_equal [ "Can't be priced", "No period" ], [ broken.text, broken.at_css("span")["title"] ]
+  end
+
+  context "the actual, planned and forecast split" do
+    should "give each part, signing planned and forecast, and leave forecast out until it adds something" do
+      parts = { actual: sum({ "EUR" => "1200000" }, "1200000"), planned: sum({ "EUR" => "-40000" }, "-40000"), forecast: sum({ "EUR" => "0" }, "0") }
+
+      assert_equal [ [ "Actual", "EUR 1.2m" ], [ "Planned", "-EUR 40k" ] ], Format.parts(parts, "EUR")
+      assert_equal [ [ "Actual", "EUR 1.2m" ], [ "Planned", "-EUR 40k" ], [ "Forecast", "+EUR 15k" ] ],
+                   Format.parts(parts.merge(forecast: sum({ "EUR" => "15000" }, "15000")), "EUR")
+      assert_equal [ [ "Actual", "EUR 1.2m" ], [ "Planned", "EUR 0" ] ], Format.parts(parts.merge(planned: sum({}, "0")), "EUR")
+    end
+
+    should "draw the split under a unit's figure and a table cell, and nothing under a run rate" do
+      parts = { actual: sum({ "EUR" => "100000" }, "100000"), planned: sum({ "EUR" => "-20000" }, "-20000"), forecast: sum({ "EUR" => "5000" }, "5000") }
+      figures = { scenario: sum({ "EUR" => "85000" }, "85000"), baseline: parts[:actual], difference: sum({ "EUR" => "-15000" }, "-15000"), parts: }
+      unit = Nokogiri::HTML5.fragment(Views::Plans::CostUnitTotal.new(row: { unit_id: "u", **figures }, reference: "EUR").call)
+      cell = Nokogiri::HTML5.fragment(Views::Plans::CostCell.new(row: { scenario_id: "s", total: figures, unpriced: 0 }, reference: "EUR").call)
+      today = Nokogiri::HTML5.fragment(
+        Views::Plans::CostUnitTotal.new(row: { unit_id: "u", scenario: parts[:actual], parts: { **parts, planned: sum({}, "0"), forecast: sum({}, "0") } },
+                                        reference: "EUR", run_rate: true).call
+      )
+
+      [ unit, cell ].each do |html|
+        assert_equal [ "Actual EUR 100k", "Planned -EUR 20k", "Forecast +EUR 5k" ], html.css("[data-figure-parts] [data-part]").map(&:text)
+      end
+      assert_nil today.at_css("[data-figure-parts]")
+    end
   end
 end

@@ -20,6 +20,7 @@ class Views::Plans::CostStrip < Views::Base
         h3(id: "cost-strip", class: "text-sm font-semibold text-default") { "Cost" }
         span(data: { cost_total: "" }, class: "text-lg font-semibold tabular-nums text-default") { figure }
         @marks.run_rate? ? span(data: { cost_run_rate: "" }, class: "text-sm text-muted") { "yearly run rate" } : change
+        render Views::Plans::FigureParts.new(parts: Format.parts(total[:parts], reference)) unless @marks.run_rate?
       end
       not_converted
       p(class: "text-sm text-muted") { basis }
