@@ -4,6 +4,8 @@ require "application_system_test_case"
 
 class PlanTimelineSystemTest < ApplicationSystemTestCase
   ESPALIA = { provider: "espalia" }.freeze
+  # Turbo turns a "When…" item into this form the moment it is clicked.
+  MOVE_FORM = "body > form[data-turbo='true'][hidden]"
 
   setup do
     @tenant = create(:tenant)
@@ -179,6 +181,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit timeline_plan_path(@plan_id, step: 1)
       assert_text "Step 2 of 3"
+      assert_no_selector "[data-timeline-shift-edge]"
       wait_for_stimulus "move-form"
       click_selector_with_js_fallback("[data-timeline-phone] button[aria-label='Move Bo Reyes in Q1 hires']", expect_text: "Moving Bo Reyes in Q1 hires")
       within("#move-person-modal-1") { select "Unassigned", from: "To" }
@@ -207,6 +210,157 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    context "dragging a bar's edge" do
+      setup do
+        page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+        visit timeline_plan_path(@plan_id)
+        assert_text "Showing the path to Q2 settle."
+        wait_for_stimulus "timeline-shift"
+      end
+
+      should "move a departure a step later by dropping its end on the lit column" do
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert page.evaluate_script("document.querySelector(\"[data-timeline-shift-hint='2']\").offsetHeight").positive?,
+               "the unseen hint keeps its line, so the header row can't grow under the pointer mid-drag"
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
+        assert_no_selector "[data-timeline-shift-hint='0']", visible: true
+        assert page.evaluate_script(<<~JS), "the lit column paints over its own hint"
+          (() => {
+            // The overlay ignores the pointer, so it takes hits only while this reads what paints on top.
+            const column = document.querySelector("[data-timeline-shift-column='2']")
+            column.style.pointerEvents = "auto"
+            const hint = document.querySelector("[data-timeline-shift-hint='2']").getBoundingClientRect()
+            const top = document.elementFromPoint(hint.left + hint.width / 2, hint.top + hint.height / 2)
+            column.style.pointerEvents = ""
+            return top.dataset.timelineShiftHint === "2"
+          })()
+        JS
+        assert page.evaluate_script(<<~JS), "the lit column paints under a block's heading"
+          (() => {
+            const column = document.querySelector("[data-timeline-shift-column='2']")
+            column.style.pointerEvents = "auto"
+            const band = document.querySelector("[data-timeline-grid] h3").parentElement
+            const step = document.querySelector("[data-timeline-step='2']").getBoundingClientRect()
+            const { top, height } = band.getBoundingClientRect()
+            const hit = document.elementFromPoint(step.left + step.width / 2, top + height / 2)
+            column.style.pointerEvents = ""
+            return hit === band
+          })()
+        JS
+        release
+
+        assert_text "Moved to Q2 settle."
+        within("[data-timeline-grid]") do
+          assert_selector "[data-timeline-lane]", text: "leaves in Q2 settle"
+          assert_no_text "leaves in Q1 hires"
+        end
+      end
+
+      should "save nothing for a drop on a column that isn't lit" do
+        hold(leaver_end_grip, over: "[data-timeline-step='0']")
+        assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
+        release
+
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert_no_text "Moved to"
+        within("[data-timeline-grid]") { assert_selector "[data-timeline-lane]", text: "leaves in Q1 hires" }
+      end
+
+      should "save nothing when Escape lets go of the edge" do
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_selector "[data-timeline-shift-hint='2']", visible: true
+        press_escape
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        release
+
+        assert_no_text "Moved to"
+        within("[data-timeline-grid]") { assert_selector "[data-timeline-lane]", text: "leaves in Q1 hires" }
+      end
+
+      should "post one move while the first drop's request is still on its way" do
+        hold_move_requests
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        release
+        assert_selector "body[data-shift-posts='1']"
+
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        release
+
+        assert_selector MOVE_FORM, count: 1, visible: :all
+        assert_selector "body[data-shift-posts='1']"
+      end
+
+      should "free the grips again when a move's request fails" do
+        page.execute_script(<<~JS)
+          const send = window.fetch
+          window.fetch = (url, options = {}) => {
+            if ((options.method || "GET").toUpperCase() !== "POST") return send(url, options)
+            document.body.dataset.failedPosts = "1"
+            return Promise.reject(new TypeError("Failed to fetch"))
+          }
+        JS
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        release
+        assert_selector "body[data-failed-posts='1']"
+        assert_no_selector MOVE_FORM, visible: :all
+
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
+        press_escape
+        release
+      end
+
+      should "keep the grips locked when another move to the same path fails first" do
+        hold_move_requests
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        release
+        assert_selector "body[data-shift-posts='1']"
+
+        page.execute_script(<<~JS)
+          const other = document.createElement("form")
+          other.action = document.querySelector("#{MOVE_FORM}").action
+          document.body.appendChild(other)
+          other.dispatchEvent(new CustomEvent("turbo:submit-end", { bubbles: true, detail: { success: false } }))
+          other.remove()
+        JS
+
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        release
+        assert_selector MOVE_FORM, count: 1, visible: :all
+        assert_selector "body[data-shift-posts='1']"
+      end
+
+      should "save nothing for a drop above the grid, over a lit column" do
+        hold_move_requests
+        step = find("[data-timeline-step='2']")
+        above = -((step.native.rect.height / 2) + 24).round
+        # One chain, since a later chain moves with the button up and Chrome then drops the capture.
+        page.driver.browser.action.move_to(leaver_end_grip.native).click_and_hold
+            .move_to(step.native).move_to(step.native, 10, above).perform
+        assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
+        assert_no_selector "[data-timeline-shift-column='2'][data-over]", visible: :all
+        release
+
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert_no_selector MOVE_FORM, visible: :all
+        assert_no_selector "body[data-shift-posts]"
+      end
+
+      should "let go cleanly when the held grip leaves the page" do
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_selector "[data-timeline-shift-hint='2']", visible: true
+        page.execute_script("document.querySelectorAll('[data-shifting] > [data-timeline-shift-edge]').forEach(grip => grip.remove())")
+        release
+
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert_no_selector "[data-shifting]"
+        assert_no_text "Moved to"
+      end
+    end
+
     should "move a change of place a step later on a phone, from the step that makes it" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit timeline_plan_path(@plan_id, step: 1)
@@ -230,6 +384,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       visit timeline_plan_path(@plan_id)
       assert_text "Showing the path to Q2 settle."
       assert_no_selector "[draggable]"
+      assert_no_selector "[data-timeline-shift-edge]"
       assert_no_button "Move…"
       assert_no_button "When…"
       assert_no_selector "[id^='move-person-modal']", visible: :all
@@ -251,6 +406,29 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       fire(row, "dragend")
       return taken
     JS
+  end
+
+  # Real pointer input, so pointer capture and the controller's hit-testing run as they do for a person.
+  def hold(grip, over:)
+    page.driver.browser.action.move_to(grip.native).click_and_hold.move_to(find(over).native).perform
+  end
+
+  def release = page.driver.browser.action.release.perform
+
+  # Counts the move's POSTs and holds each one, so the page stays as it was.
+  def hold_move_requests
+    page.execute_script(<<~JS)
+      document.addEventListener("turbo:before-fetch-request", (event) => {
+        if (event.detail.fetchOptions.method.toUpperCase() !== "POST") return
+        document.body.dataset.shiftPosts = Number(document.body.dataset.shiftPosts || 0) + 1
+        event.preventDefault()
+      })
+    JS
+  end
+
+  def leaver_end_grip
+    find(:xpath, "//*[@data-timeline-grid]//div[.//*[@data-timeline-lane][contains(normalize-space(.), 'leaves in Q1 hires')]]" \
+                 "/span[@data-timeline-shift-edge='end']")
   end
 
   def fork(**params) = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, **params)[:scenario_id]

@@ -346,9 +346,13 @@ puts the change back where it stood among the step's entries, so the next undo p
 it did before.
 The timeline offers the move through a "When…" menu on the bar where the change shows, with
 "earlier" missing next to Today, and it saves through `MoveChange`, which MCP shares as
-`team_planning_move_change`. Each timeline column lists the keys it can move. The menu
-stands in for dragging a bar's end, which is not built yet; it gives the keyboard and a
-phone the same path.
+`team_planning_move_change`. Each timeline column lists the keys it can move. On a wide
+screen an editor can also drag a bar's start or end edge one step either way
+([#393](https://github.com/espaliahq/espalia/issues/393)). An edge carries a grip only where
+the menu offers that move, and the drop posts the menu item's own URL. While a grip is held,
+the steps it can reach light up and say "Move here"; a drop anywhere else, or Escape, saves
+nothing. The grip takes no focus, so the menu stays the path for the keyboard and a phone.
+Viewers, archived plans and frozen plans get no grips.
 
 ### Unit changes as built
 
