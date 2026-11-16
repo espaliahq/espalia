@@ -12,6 +12,7 @@ class Tenant < ApplicationRecord
   include Themeable
 
   FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH = 32
+  KNOWN_ZONES = TZInfo::Timezone.all_identifiers.to_set.freeze
 
   # A hostname for custom_domain (#660): dot-separated labels, each 1-63
   # chars, ending in a TLD.
@@ -207,7 +208,7 @@ class Tenant < ApplicationRecord
 
   # @param name [String]
   # @return [Boolean] whether TZInfo knows it as an IANA identifier
-  def self.time_zone_known?(name) = TZInfo::Timezone.all_identifiers.include?(name)
+  def self.time_zone_known?(name) = KNOWN_ZONES.include?(name)
 
   # Today's date where the tenant works: the one answer to "what is today"
   # for a business date. Timestamps stay UTC; only the calendar day moves.

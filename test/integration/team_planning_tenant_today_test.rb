@@ -75,6 +75,17 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
     end
   end
 
+  should "close a step from the tenant's day after it ends" do
+    plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-11-02")[:plan_id]
+    step_id = call(Operations::TeamPlanning::ForkScenario, plan_id:, relation: "then", name: "Q4", ends_on: "2026-11-16")[:scenario_id]
+    travel_to SYDNEY_9AM_17TH
+
+    step = call(Operations::TeamPlanning::Scenarios, plan_id:)[:scenarios].find { it[:scenario_id] == step_id }
+    assert_equal [ "ready_to_close", nil ], step.values_at(:state, :not_closable_because)
+
+    assert_equal "2026-11-16", call(Operations::TeamPlanning::CloseStep, plan_id:, scenario_id: step_id)[:ends_on]
+  end
+
   should "archive a plan on the tenant's today, and keep that day on replay" do
     plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-11-02")[:plan_id]
     travel_to SYDNEY_9AM_17TH

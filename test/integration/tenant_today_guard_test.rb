@@ -35,6 +35,7 @@ class TenantTodayGuardTest < ActiveSupport::TestCase
     app/operations/operations/org_graph/unit_write.rb
     app/queries/org_graph/date_comparison.rb
     app/queries/org_graph/person_profile.rb
+    app/queries/team_planning/attention.rb
     app/read_models/org_leaver.rb
     app/views/evidence/conversation_chrome.rb
     app/views/tenant/org_graph/activity_sidebar.rb

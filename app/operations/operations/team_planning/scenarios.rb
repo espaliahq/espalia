@@ -50,7 +50,7 @@ class Operations::TeamPlanning::Scenarios < Operations::Base
   def standing(plan, aggregate, row, closed_as, names)
     why = if row.baseline? then "The baseline can't be closed"
     elsif plan.archived? then ::TeamPlanning::PlanAggregate::ARCHIVED
-    else aggregate.not_closable_because(row.id, Time.now.utc.to_date)
+    else aggregate.not_closable_because(row.id, Tenant.today)
     end
     state = if closed_as then "closed"
     elsif !row.baseline? && aggregate.frozen?(row.id) then "not_taken"
