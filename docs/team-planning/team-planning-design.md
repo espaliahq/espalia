@@ -334,8 +334,8 @@ read reuses the cost read's pricing.
 It is a tool of its own so `team_planning_timeline` stays free of money. The tab loads it in a
 lazy frame once the path is drawn, so the grid is usable before any figure arrives. On a wide
 screen the figures sit on a row of their own under the step headers, one cell per column on
-the grid's own tracks, so no column grows wider. A phone loads only the step it shows, on its
-card. Loading reads "Loading figures…" and a failure is one line with a Retry beside it.
+the grid's own tracks, so no column grows wider. A phone fetches the
+same path's figures and shows its own step's on the card. Loading reads "Loading figures…" and a failure is one line with a Retry beside it.
 
 The tab shows one path at a time. With no scenario named, it follows the first `then` at
 each step to a leaf, and the page says which path it shows and how many others run through
