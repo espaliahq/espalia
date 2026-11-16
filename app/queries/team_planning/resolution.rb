@@ -142,14 +142,16 @@ class TeamPlanning::Resolution
   # The changes a closed step and those before it made that the Org Graph
   # held the day after it ended, as {TeamPlanning::Status} reads them. A step
   # after it stands on that day's organisation, so they drop away; every
-  # other change carries over and lands again.
+  # other change carries over and lands again. An archived plan reads them as
+  # the Org Graph knew them on its archive day, so a fact recorded later moves nothing.
   #
   # @param closed_id [String] the step closed
   # @param ends_on [Date] its last day
   # @return [Set<String>] their event ids
   def done_at_close(closed_id, ends_on)
-    CurrentPlanReads.fetch([ :done_at_close, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, closed_id, ends_on ]) do
-      TeamPlanning::Status.new(context: @context, plan: @plan, scenario_id: closed_id, today: ends_on + 1, repository: @repository)
+    CurrentPlanReads.fetch([ :done_at_close, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @plan.archived_on, closed_id, ends_on ]) do
+      TeamPlanning::Status.new(context: @context, plan: @plan, scenario_id: closed_id, today: ends_on + 1, known_on: @plan.archived_on,
+                               repository: @repository)
                           .call.statuses.select { it.status == :done }.to_set(&:change_id)
     end
   end

@@ -166,6 +166,21 @@ class TeamPlanning::ClosedStepTest < ActiveSupport::TestCase
     assert_equal :conflicting, report.statuses.find { it.subject_id == @ada.id }.status
   end
 
+  should "read what happened by the close as the Org Graph knew it on an archived plan's archive day" do
+    close
+    as_tenant { handler.archive_plan(@plan_id) }
+    on(Time.utc(2026, 7, 10, 9)) do
+      @org.end_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-06-15")
+      @org.set_membership(@ada.id, @platform, **ESPALIA, effective_on: "2026-06-15", allocation: 1.0)
+    end
+    travel_to Time.utc(2026, 7, 11, 9)
+    done = -> { as_tenant { TeamPlanning::Resolution.new(context:, plan: TeamPlanningPlan.find(@plan_id), scenario_id: @h2).done_at_close(@h1, Date.new(2026, 6, 30)) } }
+
+    assert_equal 1, done.call.size, "a move recorded after the archive counted as done"
+    as_tenant { handler.restore_plan(@plan_id) }
+    assert_equal 2, done.call.size, "once restored, the move reads as done"
+  end
+
   should "restore every figure exactly once the step reopens" do
     before = [ figures(@plan_id, @h1), figures(@plan_id, @h2) ]
     close
