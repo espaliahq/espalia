@@ -398,6 +398,9 @@ class TeamPlanning::CommandHandler
   # @param subject_id [String]
   # @param facet [String]
   # @param note [String, nil] why the scenario keeps it, sealed under the subject's key
+  # @yieldparam plan [TeamPlanning::PlanAggregate] under the lock, once the actor may edit it
+  # @yieldparam kind [Class] the kind of change the pin keeps
+  # @yieldparam end_state [Hash] what it keeps
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if nothing can be pinned
   # @see TeamPlanning::PlanAggregate#pin_change
@@ -408,6 +411,7 @@ class TeamPlanning::CommandHandler
       ensure_pay_right!(plan, facet)
       plan.ensure_pinnable!(scenario_id, [ subject_id, facet ])
       kind, end_state, pinned_from = inherited(plan, scenario_id, subject_id, facet)
+      yield plan, kind, end_state if block_given?
       plan.pin_change(kind, scenario_id:, subject_id:, facet:, end_state:, pinned_from:, pinned_by_id: actor_id!, note:)
     end
   end

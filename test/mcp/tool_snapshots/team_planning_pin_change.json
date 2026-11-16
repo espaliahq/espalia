@@ -1,6 +1,6 @@
 {
   "name": "team_planning_pin_change",
-  "description": "Pin what a scenario of a Team Planning plan inherits for one facet of one subject, as it resolves now, so a later change in its parent no longer reaches it: the 'keep the plan' answer when reconciling. facet is as team_planning_overrides lists it, such as 'rule:<name>'. The pin records where the value came from. Refused for the baseline, for a facet the scenario already changes, or unless the caller is an editor. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "description": "Pin what a scenario of a Team Planning plan inherits for one facet of one subject, as it resolves now, so a later change in its parent no longer reaches it: the 'keep the plan' answer when reconciling. facet is as team_planning_overrides lists it, such as 'rule:<name>'. The pin records where the value came from. Refused for the baseline, for a facet the scenario already changes, in a plan scoped to chosen units for someone, a unit or a position the plan no longer covers, or unless the caller is an editor. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {
