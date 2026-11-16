@@ -243,6 +243,21 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_path
   end
 
+  should "refuse a viewer's split of an active plan and split nothing" do
+    refusal = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::SplitScenario, @viewer, plan_id: @plan_id, scenario_id: @q1, event_ids: [ @to_payments ], name: "X")
+    end
+    sign_in @viewer.user
+    scenarios = -> { ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).count } }
+
+    assert_no_difference(scenarios) do
+      post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @to_payments ], name: "X" }
+    end
+
+    assert_redirected_to plan_path(@plan_id)
+    assert_equal "Couldn't split the scenario: #{refusal.message}", flash[:alert]
+  end
+
   should "give anyone outside the plan a 404" do
     sign_in @outsider.user
     get split_plan_path(@plan_id, scenario_id: @q1)
