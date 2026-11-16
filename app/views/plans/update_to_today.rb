@@ -28,6 +28,7 @@ class Views::Plans::UpdateToToday < Views::Base
       end
       drift_line
       scenario_counts
+      moved_starts
       carried_conflicts
       confirm
     end
@@ -66,6 +67,16 @@ class Views::Plans::UpdateToToday < Views::Base
         render Components::Kit::Badge.new("#{counts[:done]} done", tone: :success)
         render Components::Kit::Badge.new("#{counts[:pending]} pending", tone: :neutral)
         render Components::Kit::Badge.new("#{counts[:conflicting]} conflicting", tone: counts[:conflicting].positive? ? :danger : :neutral)
+      end
+    end
+  end
+
+  # A first step starts on the base unless it was given a later start, so
+  # the update moves the start of one that begins before today.
+  def moved_starts
+    @preview.fetch(:starts, []).each do |start|
+      p(class: "text-sm text-default", data: { update_start: start[:scenario_id] }) do
+        "#{scenario_name(start[:scenario_id])} starts on #{day(start[:starts_on])}; it will start on #{day(start[:will_start_on])}."
       end
     end
   end
