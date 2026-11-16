@@ -670,10 +670,11 @@ it once, for the scenario and the baseline together.
   nothing in the period, and their backfill holds the whole of it. A backfill for several
   leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
   period any FTE no leaver opens.
-- **A cost centre** is the person's, from the Org Graph, or none. An open seat takes its
-  position's cost centre, resolved as [Position to cost centre](#which-budget-line-a-position-draws-on)
-  describes, and the working says how (`cost_centre_source`). No cost centre is a bucket of
-  its own, counted like any other.
+- **A cost centre** is resolved as [Position to cost centre](#which-budget-line-a-position-draws-on)
+  describes, for people and open seats alike. The working says how (`cost_centre_source`),
+  which entry of the position's own list or of the rules decided it (`cost_centre_rule`),
+  and that entry's matcher (`cost_centre_matcher`). No cost centre is a bucket of its own,
+  counted like any other.
 - **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
   that refuses it, or a level or FTE lost with a forgotten person's key), never counted
   as zero.
@@ -1335,26 +1336,37 @@ values, under the plan's key and deleted with it
 
 Funding is derived by default, in two steps. Neither writes an event.
 
-**Position to cost centre.** The first of these that applies:
+**Position to cost centre.** A real cost centre, the one the HRIS or Espalia holds for a
+person, is the source of truth. A person keeps it unless the plan changes their unit,
+role, level or location; a change of FTE alone doesn't count. An open seat, a placeholder,
+a changed person and a person with no cost centre of their own take the first of these
+that gives one:
 
 1. A cost centre set on the position. `PositionSet` carries an optional label.
-2. For a filled position, the occupant's cost centre in the Org Graph, or the plan's change
-   to it.
-3. For an open position or a placeholder, the cost centre rules.
+2. The cost centre rules, matched at the seat's planned place.
+3. For a person, their real cost centre.
+4. None.
 
-Cost centre rules are a kind of `RuleSet`: an ordered list of a matcher and a label, where
-the first match wins. A matcher names a unit (and so its subtree), a role or role family
-from the framework, or a unit and a role together. The list is ordered because
-organisations differ on whether the unit or the role decides. Rules start from the
-tenant default, and a plan or scenario can change them.
+An untouched person seated in a labelled position keeps their real cost centre, so the
+label decides only the open seat and the changed occupant. A label that disagrees with an
+untouched occupant's real value is a case for the 6.6 mismatch check.
 
-As built in 6.2 ([#325](https://github.com/espaliahq/espalia/issues/325)): the rules are the
-`cost_centre` rule kind, set through the generic rule write. A matcher names a unit, a role
-or a role family, or a unit with one of the other two. Each position's result records its
-source (`position`, `person`, `rule` with the rule's index, or `none`). Step 2 reads only the
-occupant's own cost centre, the one with the largest allocation first: no event carries a
-plan's change to a person's cost centre yet, and the mismatch check in 6.6 is where one is
-needed.
+Cost centre rules are a kind of `RuleSet`: an ordered list of entries, each a matcher and a
+label, read as pay bands are read. Every entry that matches applies, so the last one to
+match has the last word. A matcher names any of a unit (and so its subtree), a role or a
+role family (never both), a level number and a location. Rules start from the tenant
+default, and a plan or scenario can change them.
+
+As built in 6.2 ([#325](https://github.com/espaliahq/espalia/issues/325)) and reworked as
+ordered entries in [#387](https://github.com/espaliahq/espalia/issues/387): the rules are the
+`cost_centre` rule kind, set through the generic rule write as `{ "entries": [...] }`. A
+`rules` list stored before #387 kept the first match, so it reads as its entries in
+reverse, which picks the same label for every seat. Each result records its source
+(`position`, `person`, `rule` or `none`), the entry's place and its matcher. A person's real
+cost centre is the one on their largest allocation. A tenant admin keeps the tenant's list
+on the Cost centres page, in order by drag or by buttons, where an entry a later one always
+overrides is flagged "Never used". No event carries a plan's change to a person's cost
+centre yet, and the mismatch check in 6.6 is where one is needed.
 
 **Cost centre to budget line.** The most specific budget line that matches the position's cost centre and
 period, and whichever of role, level and location the budget line states. `PositionFundingSet` is
