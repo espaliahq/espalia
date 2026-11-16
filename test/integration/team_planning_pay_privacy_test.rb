@@ -284,16 +284,15 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
     should "reach a holder on a pay change and on any other, and the rest on the other alone, in every read and on the Changes tab" do
       { "holder" => @holder, "editor" => @editor, "viewer" => @viewer }.each do |who, account|
-        reads = note_reads(account)
         changes = changes_tab(account)
 
-        assert_includes reads, @level_note, who
+        assert_note_read(account, @level_note, who)
         assert_includes changes, @level_note, who
         if account == @holder
-          assert_includes reads, @pay_note
+          assert_note_read(account, @pay_note, who)
           assert_includes changes, @pay_note
         else
-          assert_not_includes reads, @pay_note, who
+          refute_note_read(account, @pay_note, who)
           assert_not_includes changes, @pay_note, who
           assert_no_pay_note_read(account, who)
         end
@@ -322,22 +321,22 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
     should "hide a pay change's note from a member at once when their see-pay right is withdrawn" do
       call(Operations::TeamPlanning::GrantSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
-      assert_includes note_reads(@editor), @pay_note
+      assert_note_read(@editor, @pay_note, "editor")
       assert_includes changes_tab(@editor), @pay_note
 
       call(Operations::TeamPlanning::WithdrawSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
 
-      assert_not_includes note_reads(@editor), @pay_note
+      refute_note_read(@editor, @pay_note, "editor")
       assert_not_includes changes_tab(@editor), @pay_note
       assert_no_pay_note_read(@editor, "editor")
-      assert_includes note_reads(@editor), @level_note
+      assert_note_read(@editor, @level_note, "editor")
     end
 
     should "keep a pay change's note from the rest when it moves across a split" do
       split = call(Operations::TeamPlanning::SplitScenario, @holder, plan_id: @plan_id, scenario_id: @q1, event_ids: [ @event_id ], name: "Agreed")
 
       assert_not_includes split.to_json, @pay_note
-      assert_includes note_reads(@holder, split[:agreed_id]), @pay_note
+      assert_note_read(@holder, @pay_note, "holder", split[:agreed_id])
       [ @editor, @viewer ].each { assert_no_pay_note_read(it, it == @editor ? "editor" : "viewer", split[:agreed_id]) }
     end
   end
@@ -599,7 +598,15 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
   def note_reads(account, scenario_id = @q1)
     [ Operations::TeamPlanning::Status, Operations::TeamPlanning::Overrides, Operations::TeamPlanning::History ]
-      .map { call(it, account, plan_id: @plan_id, scenario_id:) }.to_json
+      .to_h { [ it.name.demodulize, call(it, account, plan_id: @plan_id, scenario_id:).to_json ] }
+  end
+
+  def assert_note_read(account, note, who, scenario_id = @q1)
+    note_reads(account, scenario_id).each { |read, output| assert_includes output, note, "#{read} as #{who}" }
+  end
+
+  def refute_note_read(account, note, who, scenario_id = @q1)
+    note_reads(account, scenario_id).each { |read, output| assert_not_includes output, note, "#{read} as #{who}" }
   end
 
   def assert_no_pay_note_read(account, who, scenario_id = @q1)
