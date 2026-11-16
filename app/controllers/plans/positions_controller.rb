@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Opens, edits, closes and moves positions from the scenario map (#285,
+# Opens, edits, closes and moves positions from the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285),
 # [#461](https://github.com/espaliahq/espalia/issues/461)), through the same
 # Operations as the `team_planning_set_position`, `_edit_position`,
 # `_close_position` and `_move_position` tools. A plan someone isn't in is a

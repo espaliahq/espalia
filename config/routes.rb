@@ -448,7 +448,7 @@ Rails.application.routes.draw do
     resources :scenarios, only: [ :create, :update, :destroy ], controller: "plans/scenarios"
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"
-    # Open, edit, close and move a position on the scenario map (#285, [#461](https://github.com/espaliahq/espalia/issues/461)).
+    # Open, edit, close and move a position on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285), [#461](https://github.com/espaliahq/espalia/issues/461)).
     resources :positions, only: [ :create, :update, :destroy ], controller: "plans/positions" do
       patch :move, on: :member
     end

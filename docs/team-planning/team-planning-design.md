@@ -433,7 +433,8 @@ The map opens, edits, moves and closes a position
 which reads the position from the resolved map, merges in only the fields the editor
 changed and writes one `PositionSet`. The read and the write share the plan's lock, so
 two editors who change different fields of one position both keep their change. An
-omitted field keeps its value; an empty or null one clears it. `MovePosition` is an edit
+omitted field keeps its value. An empty or null cost centre clears it; the other fields
+are required, so an empty one is refused. `MovePosition` is an edit
 of the unit alone.
 
 ### Assignments as built

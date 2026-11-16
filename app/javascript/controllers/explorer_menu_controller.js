@@ -1,5 +1,5 @@
 // The framework explorer's kebab menus, on the shared `delegated-menu`
-// controller (#380). Mounted once on the explorer root. The grid ships a bare
+// controller ([#380](https://github.com/espaliahq/espalia/issues/380)). Mounted once on the explorer root. The grid ships a bare
 // trigger carrying only its entity's ids, and this builds the items on open
 // from the trigger's dataset plus the coordinates the grid already publishes
 // (`tr[data-capability-id]`, `tr[data-capability-name]`, `tr[data-category-id]`).
