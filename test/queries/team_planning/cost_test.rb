@@ -194,41 +194,171 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
                  "Payments sits under Engineering, and only Ada is in no unit"
   end
 
-  def cost_centre_rules(*rules, unit_id: nil)
-    operation(Operations::TeamPlanning::SetRule, unit_id:, rule: "cost_centre", value: { rules: })
+  def cost_centre_rules(*entries, unit_id: nil)
+    operation(Operations::TeamPlanning::SetRule, unit_id:, rule: "cost_centre", value: { entries: })
+  end
+
+  def position_cost_centre(priced, position_id)
+    as_tenant do
+      base = TeamPlanning::Baseline.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id)).structure
+      TeamPlanning::PositionCostCentres.new(priced.map, tenant_id: @tenant.id, base:, titles: Integrations::HrisTitleResolution.new(@tenant))
+                                       .of(priced.map.positions.find { it.id == position_id })
+    end
   end
 
   def open_cost_centre(priced, position_id) = lines(priced, position_id).sole.then { [ it.cost_centre, it.cost_centre_source, it.cost_centre_rule ] }
 
-  should "put an open seat under its position's own cost centre first, then an occupant's" do
-    labelled = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+  should "put an open seat under its position's own cost centre first, then an untouched occupant's" do
+    labelled = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @engineering,
                                                                 fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
-    shared = open_position(unit_id: @payments)
+    shared = open_position
     operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: labelled, allocation: 0.5 },
                                                                                         { position_id: shared, allocation: 0.5 } ])
     cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" })
 
     assert_equal [ "Platform", "position", nil ], open_cost_centre(cost.scenario, labelled), "its own label beats Ada's CC-1"
-    assert_equal [ "CC-1", "person", nil ], open_cost_centre(cost.scenario, shared), "Ada fills half of it and brings CC-1"
+    assert_equal [ "CC-1", "person", nil ], open_cost_centre(cost.scenario, shared), "Ada still sits in Engineering at E5 and brings CC-1"
+
+    operation(Operations::TeamPlanning::SetPosition, position_id: shared, role_id: @engineer.role_id, level_id: @e5.level_id,
+                                                     unit_id: @payments, fte: 1, basis: "new")
+    assert_equal [ "Engineering", "rule", 0 ], open_cost_centre(cost.scenario, shared), "moved to Payments, Ada no longer brings hers"
   end
 
-  should "put an unfilled position under the first cost centre rule that matches at its unit, and none without one" do
+  should "put an unfilled position under the last cost centre entry that matches at its unit, and none without one" do
     seat = open_position(unit_id: @payments)
     assert_equal [ nil, "none", nil ], open_cost_centre(cost.scenario, seat)
 
-    cost_centre_rules({ role_id: @manager.role_id, cost_centre: "Managers" },
+    cost_centre_rules({ unit_id: @payments, cost_centre: "Payments" },
                       { unit_id: @engineering, role_family_id: @engineer.role_family_id, cost_centre: "Engineering" },
-                      { unit_id: @payments, cost_centre: "Payments" })
+                      { role_id: @manager.role_id, cost_centre: "Managers" })
 
     assert_equal [ "Engineering", "rule", 1 ], open_cost_centre(cost.scenario, seat), "Payments sits under Engineering"
     assert_includes cost.scenario.cost_centres.keys, "Engineering"
+    assert_equal({ "unit_id" => @engineering, "role_family_id" => @engineer.role_family_id }, position_cost_centre(cost.scenario, seat).rule_matcher)
   end
 
-  should "never move a person's own cost centre by the rules" do
-    cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" })
+  should "match an open position's level number, and never decide it by a location it does not have" do
+    senior, staff = open_position(unit_id: @payments), open_position(level: @e6, unit_id: @payments)
+    cost_centre_rules({ unit_id: @engineering, cost_centre: "Engineering" }, { level_ordinal: 6, cost_centre: "Staff" },
+                      { location: "Mu", cost_centre: "Mu" })
 
-    assert_equal [ [ nil, "none" ] ], lines(cost.scenario, @cy.id).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
-    assert_equal [ [ "CC-1", "person" ] ], lines(cost.scenario, @ada.id).map { [ it.cost_centre, it.cost_centre_source ] }.uniq
+    assert_equal [ [ "Engineering", "rule", 0 ], [ "Staff", "rule", 1 ] ], [ senior, staff ].map { open_cost_centre(cost.scenario, it) }
+  end
+
+  def person_cost_centre(priced, person_id) = lines(priced, person_id).map { [ it.cost_centre, it.cost_centre_source, it.cost_centre_rule ] }.uniq
+
+  def move(person, unit_id) = operation(Operations::TeamPlanning::SetAssignment, person_id: person.id, placements: [ { unit_id:, allocation: 1 } ])
+
+  context "a person's cost centre" do
+    setup do
+      entries = [ { role_family_id: @engineer.role_family_id, cost_centre: "Engineering" },
+                  { role_family_id: SecureRandom.uuid_v7, cost_centre: "Product" }, { unit_id: @payments, cost_centre: "Payments" } ]
+      as_tenant { Operations::Tenants::SetPlanningRule.call(context: context_for(@planner), params: { rule: "cost_centre", value: { entries: } }) }
+    end
+
+    should "come from the last entry that matches, as in the worked example, for someone with none of their own" do
+      today = cost(@plan_id).scenario
+
+      assert_equal [ [ "Payments", "rule", 2 ] ], person_cost_centre(today, @cy.id), "Cy has none, so the rules decide even in Today"
+      assert_equal({ "unit_id" => @payments }, lines(today, @cy.id).sole.cost_centre_matcher)
+      cy_engineer = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @engineering,
+                                                                     fte: 1, basis: "new")[:position_id]
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @cy.id, placements: [ { position_id: cy_engineer, allocation: 1 } ])
+      assert_equal [ [ "Engineering", "rule", 0 ] ], person_cost_centre(cost.scenario, @cy.id), "an engineer outside Payments"
+      operation(Operations::TeamPlanning::SetPosition, position_id: cy_engineer, role_id: @engineer.role_id, level_id: @e5.level_id,
+                                                       unit_id: @payments, fte: 1, basis: "new")
+      assert_equal [ [ "Payments", "rule", 2 ] ], person_cost_centre(cost.scenario, @cy.id), "the department entry has the last word"
+    end
+
+    should "give a placeholder hire what the open half of its position reads, an untouched occupant's real one before the entries" do
+      seat = open_position
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: seat, allocation: 0.5 } ])
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, seat), "the open half takes Ada's"
+
+      hire = operation(Operations::TeamPlanning::SetPlaceholderHire, label: "Payments engineer", fte: 0.5)[:placeholder_id]
+      operation(Operations::TeamPlanning::SetAssignment, person_id: hire, placements: [ { position_id: seat, allocation: 1 } ])
+
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, hire), "not the Engineering entry"
+    end
+
+    should "count a seat at a new level as a change for someone priced at their position's level" do
+      eve = create(:person, tenant: @tenant, name: "Eve Quill")
+      as_tenant do
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "9", fte: 1.0, cost_centre: "CC-3")
+        people.set_membership(eve.id, @payments, **ESPALIA, allocation: 1.0)
+      end
+      cost_centre_rules({ level_ordinal: 5, cost_centre: "Seniors" })
+      assert_equal [ [ "CC-3", "person", nil ] ], person_cost_centre(cost.scenario, eve.id), "no level of her own and no seat yet"
+
+      seat = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                              fte: 1, basis: "new")[:position_id]
+      operation(Operations::TeamPlanning::SetAssignment, person_id: eve.id, placements: [ { position_id: seat, allocation: 1 } ])
+
+      assert_equal [ [ "Seniors", "rule", 0 ] ], person_cost_centre(cost.scenario, eve.id), "priced at the seat's level 5, so the level entry applies"
+    end
+
+    should "stay a real one the plan leaves untouched, in Today and in a scenario, whatever the rules say" do
+      operation(Operations::TeamPlanning::SetPlanValue, person_id: @dee.id, field: "fte", value: "0.5")
+
+      [ cost(@plan_id).scenario, cost.scenario, cost.baseline ].each do |priced|
+        assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(priced, @ada.id)
+        assert_equal [ [ "CC-2", "person", nil ] ], person_cost_centre(priced, @dee.id), "a changed FTE alone changes nothing; Dee sits in Payments"
+      end
+    end
+
+    should "take the entry for where the plan moves them, or keep the real one when no entry matches there" do
+      move(@ada, @payments)
+      assert_equal [ [ "Payments", "rule", 2 ] ], person_cost_centre(cost.scenario, @ada.id)
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.baseline, @ada.id)
+
+      cost_centre_rules({ unit_id: @engineering, role_id: @manager.role_id, cost_centre: "Managers" })
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, @ada.id), "never blank because the rules were silent"
+    end
+
+    should "take a location entry only once the plan changes them some other way, as a plan cannot relocate a person yet" do
+      cost_centre_rules({ unit_id: @payments, cost_centre: "Payments" }, { location: " mu ", cost_centre: "Mu" })
+      assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, @ada.id), "untouched, so the location entry waits"
+
+      move(@ada, @payments)
+      assert_equal [ [ "Mu", "rule", 1 ] ], person_cost_centre(cost.scenario, @ada.id)
+      assert_equal({ "location" => "mu" }, lines(cost.scenario, @ada.id).sole.cost_centre_matcher)
+    end
+
+    should "count someone a scoped plan brings in from outside it as changed, as Today holds them outside" do
+      operation(Operations::TeamPlanning::SetPlanScope, unit_ids: [ @payments ])
+      [ cost(@plan_id).scenario, cost.scenario, cost.baseline ].each do |priced|
+        assert_empty lines(priced, @ada.id), "the cost read names nobody outside the scope"
+      end
+      move(@ada, @payments)
+
+      assert_equal [ [ "Payments", "rule", 2 ] ], person_cost_centre(cost.scenario, @ada.id)
+      assert_equal [ [ "CC-2", "person", nil ] ], person_cost_centre(cost.scenario, @dee.id), "Dee was inside all along"
+    end
+
+    should "be read again when the plan changes their level, and take a changed person's position label first" do
+      cost_centre_rules({ level_ordinal: 6, cost_centre: "Staff" })
+      operation(Operations::TeamPlanning::SetPlannedLevel, person_id: @dee.id, level: "6")
+      assert_equal [ [ "Staff", "rule", 0 ] ], person_cost_centre(cost.scenario, @dee.id)
+
+      labelled = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                                  fte: 1, basis: "new", cost_centre: "Platform")[:position_id]
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @dee.id, placements: [ { position_id: labelled, allocation: 1 } ])
+      assert_equal [ [ "Platform", "position", nil ] ], person_cost_centre(cost.scenario, @dee.id)
+    end
+
+    should "total the same by unit and by cost centre as overall, per currency" do
+      move(@ada, @payments)
+      open_position(unit_id: @payments)
+
+      [ cost(@plan_id).scenario, cost.scenario, cost.baseline ].each do |priced|
+        assert_operator priced.cost_centres.size, :>, 1
+        %i[units cost_centres].each do |scope|
+          summed = priced.public_send(scope).values.flat_map { it.native.to_a }.each_with_object(Hash.new(0r)) { |(currency, amount), sum| sum[currency] += amount }
+          assert_equal priced.total.native, summed, scope
+        end
+      end
+    end
   end
 
   should "give a placeholder hire their position's cost centre, as they have none of their own" do
@@ -353,6 +483,70 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 2, 14)..Date.new(2026, 12, 31), gap[:period]
     assert_equal moved, gap
     assert_not_equal first_step_figures(base_on: "2026-01-01", starts_on: "2026-01-01")[:scenario], gap[:scenario]
+  end
+
+  context "a step with no end date" do
+    setup do
+      open_position(unit_id: @payments, fte: 0.5)
+      @open = SecureRandom.uuid_v7
+      as_tenant { handler.fork_scenario(@plan_id, @open, parent_id: @year, relation: "then", name: "2027") }
+    end
+
+    def figures(report) = [ report.period, report.scenario.total, report.baseline.total, report.forecast.total ]
+
+    should "price over the twelve months the horizon shows, as the same step ending there would" do
+      open = cost(@open)
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 12, 31), true, 12 ], [ open.period, open.open_ended, open.horizon_months ]
+
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-12-31") }
+      ended = cost(@open)
+
+      assert_equal figures(ended), figures(open)
+      assert_equal [ false, nil ], [ ended.open_ended, ended.horizon_months ]
+    end
+
+    should "run over the tenant's horizon, and the plan's own over it" do
+      as_tenant { PlanningRuleDefault.create!(rule: "open_step_horizon", value: { "months" => "6" }) }
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 6, 30), 6 ], cost(@open).then { [ it.period, it.horizon_months ] }
+
+      operation(Operations::TeamPlanning::SetRule, scenario_id: @plan_id, rule: "open_step_horizon", value: { months: "18" })
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2028, 6, 30), 18 ], cost(@open).then { [ it.period, it.horizon_months ] }
+      assert_equal BASE_ON..Date.new(2026, 12, 31), cost.period, "a step with an end keeps it"
+    end
+
+    should "run to an end once one is set, whatever the horizon" do
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-03-31") }
+      report = cost(@open)
+
+      assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 3, 31), false, nil ], [ report.period, report.open_ended, report.horizon_months ]
+    end
+
+    should "take the run rate at its end on the last day of the months shown, as the same step ending there would" do
+      open = cost(@open).at_end
+      assert_equal Date.new(2027, 12, 31), open.on
+
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-12-31") }
+      ended = cost(@open).at_end
+
+      assert_equal [ ended.scenario.total, ended.baseline.total, ended.forecast.total ],
+                   [ open.scenario.total, open.baseline.total, open.forecast.total ]
+    end
+
+    should "price an alternative sharing the open period over the same horizon" do
+      lean = SecureRandom.uuid_v7
+      as_tenant { handler.fork_scenario(@plan_id, lean, parent_id: @open, relation: "instead", name: "Lean 2027") }
+
+      assert_equal figures(cost(@open)), figures(cost(lean))
+      assert cost(lean).open_ended
+    end
+
+    should "spread each amount over a finite count of days" do
+      report = cost(@open)
+
+      assert_equal 365, report.period.count
+      assert_not_empty report.scenario.total.native
+      assert report.scenario.total.native.values.all? { it.to_f.finite? && it.positive? }, "every currency's total is a finite amount"
+    end
   end
 
   should "set the scenario beside the baseline over the same days, with the difference" do

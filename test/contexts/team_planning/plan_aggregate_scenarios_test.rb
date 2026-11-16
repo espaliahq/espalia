@@ -16,7 +16,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     id
   end
 
-  def period(id) = @plan.period_of(id).then { [ it.begin.iso8601, it.end.iso8601 ] }
+  def period(id) = @plan.period_of(id).then { [ it.begin.iso8601, it.end&.iso8601 ] }
 
   def refusal(&) = assert_raises(TeamPlanning::Error, &).message
 
@@ -61,7 +61,6 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
 
       assert_equal "A step after its parent starts on 2027-04-01, the day it begins",
                    refusal { fork(q1, name: "Q2", starts_on: "2027-04-02", ends_on: "2027-06-30") }
-      assert_equal "Say when this step ends", refusal { fork(q1, name: "Q2") }
       assert_equal "This step would end on 2027-03-30, before it starts on 2027-04-01",
                    refusal { fork(q1, name: "Q2", ends_on: "2027-03-30") }
       assert_equal "An alternative covers its parent's period, 2027-01-01 to 2027-03-31",
@@ -100,6 +99,66 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     should "refuse once the plan is deleted" do
       @plan.delete(deleted_by_id: @editor_id)
       assert_equal "This plan has been deleted", refusal { fork(ends_on: "2027-03-31") }
+    end
+  end
+
+  context "a step with no end date" do
+    setup do
+      @q1 = fork(ends_on: "2027-03-31")
+      @q2 = fork(@q1, name: "Q2")
+    end
+
+    should "run from its start with no end, and keep that on replay" do
+      assert_nil last_event.data[:ends_on]
+      assert_equal [ "2027-04-01", nil ], period(@q2)
+      assert @plan.period_of(@q2).cover?(Date.new(2040, 1, 1))
+      assert_equal @plan.period_of(@q2), replayed.period_of(@q2)
+    end
+
+    should "give an alternative the same open period" do
+      lean = fork(@q2, relation: "instead", name: "Lean Q2")
+      assert_equal [ "2027-04-01", nil ], period(lean)
+    end
+
+    should "be closed by the step forked after it, in the one event, the day before that step starts" do
+      lean = fork(@q2, relation: "instead", name: "Lean Q2")
+      q3 = fork(@q2, name: "Q3", starts_on: "2027-07-01")
+
+      assert_equal({ closes_scenario_id: @q2, closes_on: "2027-06-30", starts_on: "2027-07-01", ends_on: nil },
+                   last_event.data.slice(:closes_scenario_id, :closes_on, :starts_on, :ends_on))
+      assert_equal %w[2027-04-01 2027-06-30], period(@q2)
+      assert_equal %w[2027-04-01 2027-06-30], period(lean)
+      assert_equal [ "2027-07-01", nil ], period(q3)
+      [ @q2, lean, q3 ].each { assert_equal @plan.period_of(it), replayed.period_of(it) }
+    end
+
+    should "close it from an alternative, as the step it shares a period with" do
+      lean = fork(@q2, relation: "instead", name: "Lean Q2")
+      fork(lean, name: "Q3", starts_on: "2027-07-01", ends_on: "2027-09-30")
+
+      assert_equal @q2, last_event.data[:closes_scenario_id]
+      assert_equal %w[2027-04-01 2027-06-30], period(@q2)
+    end
+
+    should "refuse a step after it with no start, or one that starts on or before it" do
+      assert_equal "Its parent has no end date: say when the new step starts", refusal { fork(@q2, name: "Q3") }
+      assert_equal "The new step starts after its parent starts on 2027-04-01", refusal { fork(@q2, name: "Q3", starts_on: "2027-04-01") }
+    end
+
+    should "refuse to leave a step open when a step comes after it, and allow it on the last" do
+      assert_equal "Only the last step on a line can have no end date: a step comes after this one",
+                   refusal { @plan.set_scenario_period(@q1, ends_on: nil, set_by_id: @editor_id) }
+
+      @plan.set_scenario_period(@q2, ends_on: "2027-06-30", set_by_id: @editor_id)
+      assert_equal %w[2027-04-01 2027-06-30], period(@q2)
+      @plan.set_scenario_period(@q2, ends_on: nil, set_by_id: @editor_id)
+      assert_equal({ ends_on: nil, previous_ends_on: "2027-06-30" }, last_event.data.slice(:ends_on, :previous_ends_on))
+      assert_equal [ "2027-04-01", nil ], period(@q2)
+    end
+
+    should "name the open period in a refusal" do
+      assert_equal "An alternative covers its parent's period, from 2027-04-01, with no end date",
+                   refusal { fork(@q2, relation: "instead", ends_on: "2027-06-30") }
     end
   end
 

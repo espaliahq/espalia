@@ -1,18 +1,20 @@
-// Drags the pay bands into a new order on a desktop. The up and down buttons
-// on each row work without it, and are the way on a phone or a keyboard.
+// Drags an ordered list, such as the pay bands or the cost-centre entries, into
+// a new order on a desktop. The up and down buttons on each row work without
+// it, and are the way on a phone or a keyboard.
 //
 // While a band is dragged, the rows move under the pointer. When the drag
 // ends, the whole order goes to the server through the hidden form, with the
 // order the page showed so a list moved since is refused. Turbo
 // follows the redirect and the positions and "Never used" flags come back fresh.
+// The order goes as `<field>[]`, and the order shown as `from_<field>[]`.
 //
 // Usage:
-//   <div data-controller="pay-band-order">
-//     <form data-pay-band-order-target="form" action="/tenant/pay_bands/reorder" hidden>…</form>
-//     <ol data-pay-band-order-target="list">
-//       <li draggable="true" data-pay-band-id="<id>"
-//           data-action="pointerdown->pay-band-order#press dragstart->pay-band-order#start
-//                        dragover->pay-band-order#over drop->pay-band-order#drop dragend->pay-band-order#end">…</li>
+//   <div data-controller="drag-order" data-drag-order-field-value="pay_band_ids">
+//     <form data-drag-order-target="form" action="/tenant/pay_bands/reorder" hidden>…</form>
+//     <ol data-drag-order-target="list">
+//       <li draggable="true" data-order-id="<id>"
+//           data-action="pointerdown->drag-order#press dragstart->drag-order#start
+//                        dragover->drag-order#over drop->drag-order#drop dragend->drag-order#end">…</li>
 //     </ol>
 //   </div>
 
@@ -20,6 +22,7 @@ import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
   static targets = ["form", "list"]
+  static values = { field: String }
 
   // A drag's target is the row, wherever in it the pointer went down, so the
   // control pressed is read here instead.
@@ -34,7 +37,7 @@ export default class extends BaseController {
     this.dropped = false
     this.before = [...this.listTarget.children]
     event.dataTransfer.effectAllowed = "move"
-    event.dataTransfer.setData("text/plain", this.dragged.dataset.payBandId)
+    event.dataTransfer.setData("text/plain", this.dragged.dataset.orderId)
     // Changing the page inside dragstart cancels the drag in Chrome.
     setTimeout(() => { if (this.dragged) this.dragged.dataset.dragSource = "" })
   }
@@ -75,11 +78,12 @@ export default class extends BaseController {
 
   #save() {
     const order = this.#order()
-    if (order.join() === this.before.map((row) => row.dataset.payBandId).join()) return
+    const before = this.before.map((row) => row.dataset.orderId)
+    if (order.join() === before.join()) return
 
-    this.formTarget.querySelectorAll("input[type='hidden'][name$='pay_band_ids[]']").forEach((input) => input.remove())
-    this.#fields("pay_band_ids[]", order)
-    this.#fields("from_pay_band_ids[]", this.before.map((row) => row.dataset.payBandId))
+    this.formTarget.querySelectorAll(`input[type='hidden'][name$='${this.fieldValue}[]']`).forEach((input) => input.remove())
+    this.#fields(`${this.fieldValue}[]`, order)
+    this.#fields(`from_${this.fieldValue}[]`, before)
     this.formTarget.requestSubmit()
   }
 
@@ -94,6 +98,6 @@ export default class extends BaseController {
   }
 
   #order() {
-    return [...this.listTarget.querySelectorAll("[data-pay-band-id]")].map((row) => row.dataset.payBandId)
+    return [...this.listTarget.querySelectorAll("[data-order-id]")].map((row) => row.dataset.orderId)
   }
 }

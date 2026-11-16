@@ -54,7 +54,8 @@ Story 3.1 ([#208](https://github.com/espaliahq/espalia/issues/208)) built the tr
 - The baseline is implicit. Its id is the plan's, it stands on the base date, and it has
   no period, no alternative and can't be removed.
 - A `then` scenario starts the day after its parent ends. It holds its own end, and
-  `ScenarioPeriodSet` moves it.
+  `ScenarioPeriodSet` moves it. The last step on a line may have no end date; *Steps with
+  no end date* below has the rules.
 - The first step after the baseline starts on the base date, or on a later day of its own
   ([#404](https://github.com/espaliahq/espalia/issues/404)). The days between belong to no
   step, so Today's state carries on through them. `ScenarioPeriodSet` can move that start
@@ -94,6 +95,35 @@ come keeps it.
 
 Each date edit appears in the step's history as a `dates` entry with the new and previous
 dates. Undoing a date edit is [#407](https://github.com/espaliahq/espalia/issues/407).
+
+### Steps with no end date
+
+The last step on a line may run with no end date
+([#404](https://github.com/espaliahq/espalia/issues/404)). The aggregate keeps its period
+endless (`starts_on..nil`); only the figures give it an end.
+
+- **Only the last step may be open.** A step with a `then` after it needs an end, and
+  `ScenarioPeriodSet` refuses to take one off. An alternative shares its parent's period,
+  open or not.
+- **A step after an open one names its own start.** Forking `then` from an open step needs
+  `starts_on`, and the open step ends the day before. One `ScenarioForked` records both:
+  `closes_scenario_id` and `closes_on` name the step it closed, and its history shows a
+  `dates` entry for it. Removing the new step leaves the earlier one closed.
+- **Figures run over a horizon.** Cost, budget, funding, forecast and the run rate at the
+  end read the period through `TeamPlanning::FiguredPeriod`, which ends an open step after
+  the `open_step_horizon` rule: whole months from its start, 12 by default, 1 to 36. It is
+  plan-wide, from the plan or the tenant default. An open step prices the same as that step
+  ending on the horizon's last day. `Forecast.reaching` reads only the closed steps before
+  a step, so a horizon never carries into another step's figures.
+- **Reads say so.** Every period in a cost, budget, funding or forecast read carries
+  `open_ended` and `horizon_months`. `team_planning_fork_scenario`,
+  `team_planning_set_scenario_period` and `team_planning_period_preview` take an empty
+  `ends_on` for no end date and return a null end.
+- **On the web**, the fork dialog and the Dates page offer "No end date" on the last step,
+  and say why a step with one after it needs an end. Tables read "From 1 Apr 2027 · no end
+  date". The Cost strip and Budget tab say "For 1 Apr 2027 to 31 Mar 2028, the first 12
+  months of a step with no end date", and the run rate at the end says "Run rate on 31 Mar
+  2028, the end of the 12 months shown".
 
 ### Events
 
@@ -480,7 +510,8 @@ Several lanes add kinds at once, so each adds one the same way. `PositionSet`
 A rule is a setting a plan can change, such as a headcount cap or how strictly a budget
 holds. Each kind is a `TeamPlanning::RuleKind`, listed in `TeamPlanning::RuleKinds::BUILT_IN`.
 A kind names itself, gives a built-in default and checks a value. A value is always an
-object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2) and `working_hours` (5.4), all below; 8.1 brings more.
+object. The kinds so far are `capacity_model` (7.1), `on_cost` (5.2), `working_hours` (5.4)
+and `open_step_horizon` (*Steps with no end date* above); 8.1 brings more.
 
 A forecast assumption is a kind too, a subclass of `TeamPlanning::ForecastKind`
 (`RuleKinds.forecasts` lists them). It sets and resolves like any rule, and adds
@@ -699,10 +730,11 @@ it once, for the scenario and the baseline together.
   nothing in the period, and their backfill holds the whole of it. A backfill for several
   leavers opens each one's FTE on its own date, the earliest leaver first, and holds all
   period any FTE no leaver opens.
-- **A cost centre** is the person's, from the Org Graph, or none. An open seat takes its
-  position's cost centre, resolved as [Position to cost centre](#which-budget-line-a-position-draws-on)
-  describes, and the working says how (`cost_centre_source`). No cost centre is a bucket of
-  its own, counted like any other.
+- **A cost centre** is resolved as [Position to cost centre](#which-budget-line-a-position-draws-on)
+  describes, for people and open seats alike. The working says how (`cost_centre_source`),
+  which entry of the position's own list or of the rules decided it (`cost_centre_rule`),
+  and that entry's matcher (`cost_centre_matcher`). No cost centre is a bucket of its own,
+  counted like any other.
 - **A seat that can't be priced** is listed with its reason (no level, no band, an on-cost rule
   that refuses it, or a level or FTE lost with a forgotten person's key), never counted
   as zero.
@@ -770,8 +802,8 @@ backfill starts the day after. Planned vacancies and placeholder hires count as 
   cost centres; `team_planning_scenario_costs` sends its total per scenario. The Cost strip
   and each Scenarios cell add one muted line that wraps, such as "Run rate on 31 Dec 2026:
   EUR 1.2m a year, +EUR 80k on Today's". Unit totals on the map stay period totals. Today
-  has none, being a run rate already, and every step has an end date, so every scenario has
-  one.
+  has none, being a run rate already. A step with no end date takes it on the last day of
+  the months shown, and says so.
 
 #### Cost on screen
 
@@ -1372,13 +1404,19 @@ values, under the plan's key and deleted with it
   is, so only a scenario changes it. Removing a tenant line a plan has changed or cut
   leaves the plan's change orphaned: `team_planning_budget_lines` lists it under `orphaned`,
   and Attention flags it rather than dropping it.
-- **The Budget tab shows the reads, read-only.** On Today it lists the lines as approved,
-  since Today has no period to fund against, and links each scenario's budget. On a scenario
-  it shows `team_planning_budget`'s four totals, each line's approved, funded and remaining
-  figures, the positions `team_planning_funding` draws on each line (open when the line is
-  over or a position is short), and the unfunded positions. Every figure is the read's,
-  under the viewer's pay view, so the tab and an agent never disagree. Editing lines on the
-  tab comes later.
+- **The Budget tab shows the reads, and an editor changes a scenario's from it.** On Today
+  it lists the lines as approved, since Today has no period to fund against, and links each
+  scenario's budget. On a scenario it shows `team_planning_budget`'s four totals, each line's
+  approved, funded and remaining figures, the positions `team_planning_funding` draws on each
+  line (open when the line is over or a position is short), and the unfunded positions. Every
+  figure is the read's, under the viewer's pay view, so the tab and an agent never disagree.
+  An editor adds, changes or cuts a scenario's line on a page of its own, with the tenant
+  budget page's fields, through `team_planning_set_budget_line` and
+  `team_planning_cut_budget_line` ([#411](https://github.com/espaliahq/espalia/issues/411)).
+  Each position's Funding… opens one dialog that lists the scenario's lines by name and
+  terms and takes each line's part as a percentage, for `team_planning_set_position_funding`;
+  Clear hands a set funding back to `team_planning_clear_change`. The dialog shows no
+  amount, so the tab stays the one place that shows money. Today stays read-only.
 - **Money keeps its currency.** An amount keeps its own currency and period, a year or a
   month, as a pay band's does, and is never converted. A line with a head count and no amount
   has no amount, never zero.
@@ -1394,26 +1432,55 @@ values, under the plan's key and deleted with it
 
 Funding is derived by default, in two steps. Neither writes an event.
 
-**Position to cost centre.** The first of these that applies:
+**Position to cost centre.** A real cost centre, the one the HRIS or Espalia holds for a
+person, is the source of truth. A person keeps it unless the plan changes their unit,
+role, level or location; a change of FTE alone doesn't count. Any planned change to the
+units above them counts too, such as their team moved or a layer inserted or removed, since
+an entry for a unit covers the units below it. The entries then decide them and their real
+cost centre is only the fallback, so where a tenant's entries already disagree with
+someone's real value, that person's cost centre moves when the units above them do; the 6.6
+mismatch check is where that shows. A changed person, and a
+real person with no cost centre of their own, take the first of these that gives one:
 
 1. A cost centre set on the position. `PositionSet` carries an optional label.
-2. For a filled position, the occupant's cost centre in the Org Graph, or the plan's change
-   to it.
-3. For an open position or a placeholder, the cost centre rules.
+2. The cost centre rules, matched at the seat's planned place.
+3. Their real cost centre.
+4. None.
 
-Cost centre rules are a kind of `RuleSet`: an ordered list of a matcher and a label, where
-the first match wins. A matcher names a unit (and so its subtree), a role or role family
-from the framework, or a unit and a role together. The list is ordered because
-organisations differ on whether the unit or the role decides. Rules start from the
-tenant default, and a plan or scenario can change them.
+An open seat takes the position's label, then the real cost centre of an occupant the plan
+leaves untouched, then the rules, then none, so the open half of a half-filled position
+follows the person in the other half. An occupant the plan moves brings their real cost
+centre to their own cost line only when nothing else decides it, never to the position, so
+the position's cost centre in funding and the budget line it draws on agree with the moved
+person's cost line. The rules read a filled position at the country of its largest
+occupant that has one, where funding places it, so an entry for a country decides the
+position as it decides that occupant's cost line. An empty position has no country, so such
+an entry never decides it. When one occupant is moved and another untouched, the untouched one
+decides the position. A position has one cost centre and each person has their own, so a
+mixed position must disagree with someone, and it should not be the person the plan left
+alone. A placeholder hire in a position fills that open seat, so it reads as the open
+seat does. A placeholder with no position takes the rules at its unit, then none.
 
-As built in 6.2 ([#325](https://github.com/espaliahq/espalia/issues/325)): the rules are the
-`cost_centre` rule kind, set through the generic rule write. A matcher names a unit, a role
-or a role family, or a unit with one of the other two. Each position's result records its
-source (`position`, `person`, `rule` with the rule's index, or `none`). Step 2 reads only the
-occupant's own cost centre, the one with the largest allocation first: no event carries a
-plan's change to a person's cost centre yet, and the mismatch check in 6.6 is where one is
-needed.
+An untouched person seated in a labelled position keeps their real cost centre, so the
+label decides only the open seat and the changed occupant. A label that disagrees with an
+untouched occupant's real value is a case for the 6.6 mismatch check.
+
+Cost centre rules are a kind of `RuleSet`: an ordered list of entries, each a matcher and a
+label, read as pay bands are read. Every entry that matches applies, so the last one to
+match has the last word. A matcher names any of a unit (and so its subtree), a role or a
+role family (never both), a level number and a location. Rules start from the tenant
+default, and a plan or scenario can change them.
+
+As built in 6.2 ([#325](https://github.com/espaliahq/espalia/issues/325)) and reworked as
+ordered entries in [#387](https://github.com/espaliahq/espalia/issues/387): the rules are the
+`cost_centre` rule kind, set through the generic rule write as `{ "entries": [...] }`. A
+`rules` list stored before #387 kept the first match, so it reads as its entries in
+reverse, which picks the same label for every seat. Each result records its source
+(`position`, `person`, `rule` or `none`), the entry's place and its matcher. A person's real
+cost centre is the one on their largest allocation. A tenant admin keeps the tenant's list
+on the Cost centres page, in order by drag or by buttons, where an entry a later one always
+overrides is flagged "Never used". No event carries a plan's change to a person's cost
+centre yet, and the mismatch check in 6.6 is where one is needed.
 
 **Cost centre to budget line.** The most specific budget line that matches the position's cost centre and
 period, and whichever of role, level and location the budget line states. `PositionFundingSet` is
@@ -1510,7 +1577,10 @@ Graph, by which rule) and reports three conditions as checks:
 - **Mismatch.** A filled position whose occupant's cost centre differs from what the rules
   give the position. The known value is used and the mismatch is always flagged. It is
   resolved by planning the cost centre change, which joins the change list to be raised
-  upstream. The rules never move a person's cost on their own.
+  upstream. The rules never move a person's cost on their own. Two cases reach it from the
+  cost centre resolution above: a labelled position whose untouched occupant keeps a
+  different real cost centre, and a position the plan moves one occupant into while
+  another stays, whose cost centre follows the one who stays.
 - **Unplaced.** An open position with no cost centre: it has no label of its own and no rule
   matches it. It can draw only on a budget line that states
   no cost centre, which matches any position, and is unfunded when none matches. This is a

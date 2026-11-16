@@ -3,15 +3,16 @@
 # A step's dates ([#404](https://github.com/espaliahq/espalia/issues/404)):
 # the editor picks new ones, previews what they move, then saves. A later step
 # starts the day after the one before it ends, so only a first step's start is
-# its own to change. What moves comes from `team_planning_period_preview`, and
-# the page never works it out itself.
+# its own to change, and only the last step on a line may have no end date.
+# What moves comes from `team_planning_period_preview`, and the page never
+# works it out itself.
 class Views::Plans::ScenarioDates < Views::Base
   include Views::Plans::ScenarioTab
 
   # @param plan [Hash] from `team_planning_plan`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
   # @param scenario [Hash] the step whose dates change
-  # @param draft [Hash] `{ starts_on:, ends_on: }` the editor asked for
+  # @param draft [Hash] `{ starts_on:, ends_on: }` the editor asked for, ends_on "" for no end date
   # @param preview [Hash, nil] from `team_planning_period_preview`, for the draft
   # @param error [String, nil] why the draft was refused
   # @param from [String, nil] "map" when the editor came from the map
@@ -31,7 +32,7 @@ class Views::Plans::ScenarioDates < Views::Base
     section(aria: { labelledby: "dates-heading" }, class: "space-y-6", data: { scenario_dates: id }) do
       div do
         h3(id: "dates-heading", class: "text-base font-semibold text-default break-words") { "Dates for #{@scenario[:name]}" }
-        p(class: "mt-1 text-sm text-muted", data: { dates_current: id }) { "Now #{period(@scenario)}." }
+        p(class: "mt-1 text-sm text-muted", data: { dates_current: id }) { "Now #{in_sentence(period(@scenario))}." }
       end
       render(Components::Kit::Alert.new(tone: :danger, role: "alert", title: "Couldn't use those dates")) { @error } if @error
       choose
@@ -65,7 +66,7 @@ class Views::Plans::ScenarioDates < Views::Base
     form(action: dates_plan_path(plan_id, scenario_id: id), method: "get", class: "space-y-4") do
       came_from
       first_step? ? start_field : start_text
-      date_field("ends_on", "Ends on", @draft[:ends_on] || @scenario[:ends_on])
+      end_fields
       div(class: "flex flex-wrap items-center gap-2") do
         render(Components::Kit::Button.new(type: :submit, variant: changes? ? :outline : :solid, tone: changes? ? :neutral : :brand)) { "Preview" }
         render(Components::Kit::Button.new(variant: :ghost, href: back)) { "Cancel" } unless changes?
@@ -89,15 +90,40 @@ class Views::Plans::ScenarioDates < Views::Base
     end
   end
 
-  def date_field(name, label_text, value, hint: nil)
+  def date_field(name, label_text, value, hint: nil, data: {}, disabled: false)
     field_id = "scenario-#{name.dasherize}"
     div do
       label(for: field_id, class: "block text-sm font-semibold text-default") { label_text }
       p(id: "#{field_id}-hint", class: "mt-1 text-sm text-muted") { hint } if hint
-      input(type: "date", id: field_id, name:, value:, required: true, aria: { describedby: ("#{field_id}-hint" if hint) },
-            class: "#{Components::Kit::Field::INPUT} mt-2 max-w-xs")
+      input(type: "date", id: field_id, name:, value:, required: !disabled, disabled:, aria: { describedby: ("#{field_id}-hint" if hint) },
+            class: "#{Components::Kit::Field::INPUT} mt-2 max-w-xs", data:)
     end
   end
+
+  def end_fields
+    return date_field("ends_on", "Ends on", ends_on, hint: "A step comes after this one, so it needs an end.") if continues?
+
+    div(class: "space-y-2", data: { controller: "no-end-date" }) do
+      date_field("ends_on", "Ends on", ends_on, data: { no_end_date_target: "date" }, disabled: no_end?)
+      div(class: "flex items-start gap-2") do
+        input(id: "scenario-no-end", type: "checkbox", name: "no_end", value: "1", checked: no_end?,
+              class: "mt-0.5 #{Components::Kit::Field::CHECKBOX}", aria: { describedby: "scenario-no-end-hint" },
+              data: { no_end_date_target: "check", action: "change->no-end-date#sync" })
+        label(for: "scenario-no-end", class: "text-sm") do
+          span(class: "font-medium text-default") { "No end date" }
+          span(id: "scenario-no-end-hint", class: "block text-muted") do
+            "It runs until a step comes after it. Cost and budget show a set number of months from its start, and say how many."
+          end
+        end
+      end
+    end
+  end
+
+  def continues? = Views::Plans::ScenarioTable.continues?(@scenario, @scenarios)
+
+  def no_end? = @draft.key?(:ends_on) ? @draft[:ends_on].blank? : @scenario[:ends_on].nil?
+
+  def ends_on = @draft[:ends_on].presence || @scenario[:ends_on]
 
   def changes?
     @preview && [ @preview[:starts_on], @preview[:ends_on] ] != [ @preview[:previous_starts_on], @preview[:previous_ends_on] ]
@@ -117,6 +143,7 @@ class Views::Plans::ScenarioDates < Views::Base
         came_from
         input(type: "hidden", name: "starts_on", value: @preview[:starts_on]) if first_step?
         input(type: "hidden", name: "ends_on", value: @preview[:ends_on])
+        input(type: "hidden", name: "no_end", value: "1") unless @preview[:ends_on]
         render(Components::Kit::Button.new(type: :submit, tone: :brand)) { "Save dates" }
         render(Components::Kit::Button.new(variant: :ghost, href: back)) { "Cancel" }
       end
@@ -129,11 +156,13 @@ class Views::Plans::ScenarioDates < Views::Base
     after = period(scenario.merge(starts_on: move[:starts_on], ends_on: move[:ends_on]))
     li(data: { dates_move: move[:scenario_id] }) do
       strong(class: "font-medium") { scenario_name(move[:scenario_id]) }
-      plain ": #{before}, now #{after}."
+      plain ": #{in_sentence(before)}, now #{in_sentence(after)}."
     end
   end
 
   def period(scenario) = Views::Plans::ScenarioTable.period(scenario)
+
+  def in_sentence(period) = period.sub(/\AFrom /, "from ")
 
   def day(iso) = Date.iso8601(iso).strftime("%-d %b %Y")
 end

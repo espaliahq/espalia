@@ -27,10 +27,14 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "Totals are per currency in `native`, and `converted` is the same in the reference currency at the " \
               "period's start, null with `missing` saying why when a rate is missing. Units count their own places, " \
               "with null for no unit; `with_below` adds the units below. Cost centres use null for no cost centre. " \
-              "A person's seat takes the person's cost centre. A placeholder hire's seat and an open seat take their position's own " \
-              "cost centre, else its occupant's, else the first cost_centre rule at its unit that matches; a seat's " \
-              "cost_centre_source says which (position, person, rule or none), and cost_centre_rule is the " \
-              "winning rule's index in the cost_centre list that unit reads. " \
+              "A person keeps their own cost centre unless the plan changes their unit or the units above it, role, level or location " \
+              "(an FTE change alone doesn't). A changed person, or a real person with none, takes their position's own cost centre, else the " \
+              "last entry of the cost_centre rule at their unit that matches their planned unit, role or role family, level " \
+              "number and location, else their own, else none. An open seat takes its position's own cost centre, else an " \
+              "unchanged occupant's, else the last matching entry read at its largest occupant's country (an empty seat has none), " \
+              "else none; a placeholder hire in a position reads as that open seat. A seat's " \
+              "cost_centre_source says which (position, person, rule or none); for a rule, cost_centre_rule is the " \
+              "entry's index in the list that unit reads and cost_centre_matcher is what it matches on. " \
               "Unit, cost-centre and plan totals always agree. Every total carries `parts`, which add up to its " \
               "`scenario` figure exactly. In `parts`, actual means the baseline's figure, not actual pay: actual is the baseline's figure for the same unit or cost centre over the same days, " \
               "planned is what the plan's changes add or take away (negative where they take away, so someone moved between " \
@@ -48,7 +52,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "by FTE only when its basis is full_time, by the days held, plus on-cost), in a run rate as in a scenario: each seat's pay_source " \
               "says actual or band_midpoint, and actual_pay_seats counts the seats priced from actual pay. Held pay " \
               "the plan lost with the person's key leaves the seat unpriced as pay_unknown. Everyone else is priced " \
-              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. #{PRICED_TODAY} Refused, as an unknown " \
+              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. #{PRICED_TODAY} #{OPEN_ENDED} Refused, as an unknown " \
               "plan, unless the caller is a member."
   category :read
   approval :none
@@ -123,7 +127,8 @@ class Operations::TeamPlanning::Cost < Operations::Base
   def line(line)
     band = line.band
     { seat_id: line.seat_id, kind: line.kind, position_id: line.position_id, cost_centre: line.cost_centre,
-      cost_centre_source: line.cost_centre_source, cost_centre_rule: line.cost_centre_rule, level_id: line.level_id, level_source: line.level_source,
+      cost_centre_source: line.cost_centre_source, cost_centre_rule: line.cost_centre_rule,
+      cost_centre_matcher: line.cost_centre_matcher, level_id: line.level_id, level_source: line.level_source,
       pay_source: line.pay_source, basis: line.basis, currency: line.currency, band: band && band(band),
       hours_per_year: line.hours_per_year && decimal(line.hours_per_year), yearly: line.yearly && decimal(line.yearly),
       fte: decimal(line.fte), fraction: decimal(line.fraction),

@@ -11,10 +11,12 @@
 # resolves to none; the working names which. An open seat is the FTE a
 # position's occupants leave, priced at the position's level with no
 # country, under its position's cost centre
-# ({TeamPlanning::PositionCostCentres}). A person's seat keeps the person's
-# own cost centre, as the cost centre rules never move it; a placeholder
-# hire takes their position's. A seat no band prices is unpriced, with its reason,
-# and never counts as zero.
+# ({TeamPlanning::PositionCostCentres}). A person's seat keeps their real
+# cost centre unless the plan changes their unit, role, level or location;
+# someone changed, or with none, is decided by their position's label, then
+# the cost centre entries at their planned place
+# ([#387](https://github.com/espaliahq/espalia/issues/387)). A seat no band
+# prices is unpriced, with its reason, and never counts as zero.
 #
 # A leaver costs up to their leaving date and their backfill from the day
 # after, so the seat is never counted twice. Without a date the step is the
@@ -85,7 +87,8 @@ class TeamPlanning::Cost
   # @!attribute position_id [String, nil]
   # @!attribute cost_centre [String, nil] nil for no cost centre
   # @!attribute cost_centre_source [String] a {TeamPlanning::PositionCostCentres::SOURCES} entry
-  # @!attribute cost_centre_rule [Integer, nil] the winning cost centre rule's index, for "rule"
+  # @!attribute cost_centre_rule [Integer, nil] the deciding cost centre entry's place in the list, for "rule"
+  # @!attribute cost_centre_matcher [Hash, nil] that entry's matcher, for "rule"
   # @!attribute level_id [String, nil]
   # @!attribute level_source [String, nil] a {LEVEL_SOURCES} key
   # @!attribute band [PayBand, nil] nil when priced from actual pay
@@ -101,7 +104,7 @@ class TeamPlanning::Cost
   # @!attribute base [Rational, nil]
   # @!attribute on_cost [TeamPlanning::OnCostModel::Figure, nil]
   # @!attribute reason [String, nil] a {REASONS} key when unpriced
-  Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :cost_centre_source, :cost_centre_rule, :level_id, :level_source, :band,
+  Line = Data.define(:seat_id, :kind, :unit_id, :position_id, :cost_centre, :cost_centre_source, :cost_centre_rule, :cost_centre_matcher, :level_id, :level_source, :band,
                      :currency, :pay_source, :basis, :fte, :fraction, :held, :year_days, :hours_per_year, :yearly, :base, :on_cost, :reason) do
     # @return [Boolean]
     def unpriced? = reason.present?
@@ -197,7 +200,9 @@ class TeamPlanning::Cost
   RunRate = Data.define(:on, :scenario, :baseline, :forecast)
 
   # @!attribute basis [String] "period" for a scenario, "run_rate" for Today's year
-  # @!attribute period [Range<Date>] the scenario's period, or Today's year
+  # @!attribute period [Range<Date>] the scenario's period as {TeamPlanning::FiguredPeriod} figures it, or Today's year
+  # @!attribute open_ended [Boolean] whether the step has no end date, so the period runs to the horizon
+  # @!attribute horizon_months [Integer, nil] the months shown, for an open step
   # @!attribute pay_view [String] a {PAY_VIEWS} entry
   # @!attribute reference_currency [String, nil]
   # @!attribute bands_changed_at [Time, nil] when a pay band last changed; plans reprice live
@@ -205,7 +210,8 @@ class TeamPlanning::Cost
   # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
   # @!attribute forecast [Forecasted]
   # @!attribute at_end [RunRate, nil] nil for Today, which is a run rate already
-  Report = Data.define(:basis, :period, :pay_view, :reference_currency, :bands_changed_at, :scenario, :baseline, :forecast, :at_end) do
+  Report = Data.define(:basis, :period, :open_ended, :horizon_months, :pay_view, :reference_currency, :bands_changed_at,
+                       :scenario, :baseline, :forecast, :at_end) do
     # @return [Boolean]
     def run_rate? = basis == "run_rate"
 
@@ -283,13 +289,14 @@ class TeamPlanning::Cost
     aggregate = prepare
     run_rate = @scenario_id == @plan.id
     earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
-    scenario = priced(resolved(@scenario_id))
+    scenario = priced(own_map)
     @steps[@scenario_id] ||= TeamPlanning::Forecast::Step.new(map: scenario.map, pricing: scenario.pricing) unless run_rate
     rows = TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows
     forecast = forecasted(rows)
     at_end = (run_rate_at_end(scenario.map, rows) if at_end && !run_rate)
     baseline = priced(at_end ? at_end.baseline.map : resolved(@plan.id)) unless run_rate
-    Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
+    Report.new(basis: run_rate ? "run_rate" : "period", period: @period, open_ended: @figured&.open_ended || false,
+               horizon_months: @figured&.horizon_months, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *band_list.map(&:updated_at) ].compact.max,
                scenario:, baseline:, forecast:, at_end:)
   end
@@ -330,7 +337,7 @@ class TeamPlanning::Cost
   #
   # @return [TeamPlanning::Forecast::Step]
   def step
-    @steps[@scenario_id] ||= prepare.then { priced(resolved(@scenario_id)) }.then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+    @steps[@scenario_id] ||= prepare.then { priced(own_map) }.then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
   end
 
   private
@@ -340,13 +347,21 @@ class TeamPlanning::Cost
     run_rate = @scenario_id == @plan.id
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
 
-    @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
+    @period = TeamPlanning::Cost.year_from(aggregate.base_on) if run_rate
     @year_days = run_rate ? @period.count : YEAR_DAYS
     @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
     @factors = {}
     @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     aggregate
+  end
+
+  # The scenario's own map, which holds the horizon an open step's period runs to.
+  def own_map
+    resolved(@scenario_id).tap do |map|
+      @figured = TeamPlanning::FiguredPeriod.for(@aggregate, @scenario_id, map)
+      @period = @figured.period if @figured
+    end
   end
 
   # Each seat held on the last day, for a full year: a one-day period of a
@@ -381,7 +396,7 @@ class TeamPlanning::Cost
     @live = map.units.to_set(&:id)
     @rules = {}
     @positions = map.positions.index_by(&:id)
-    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id)
+    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id, base: @base, titles:)
     people = map.people.flat_map { person_lines(it) }
     lines = people + open_lines(map)
     units = by(lines, &:unit_id)
@@ -397,26 +412,33 @@ class TeamPlanning::Cost
                ("level_unknown" if !pay && member.planned_or_own(:level) == TeamPlanning::Baseline::UNKNOWN)
     own_level_id, own_source = person_level(member)
     away = @map.outside_places(member)
+    changed = @cost_centres.changed?(member)
     fractions(places).reject { |placement, _| away.include?(placement) }.map do |placement, fraction|
       position = @positions[placement.position_id]
       level_id, source = own_level_id || !position ? [ own_level_id, own_source ] : [ position.level_id, "position" ]
-      line(**seat, **person_cost_centre(member, position), unit_id: live_unit(placement.unit_id), position_id: placement.position_id, level_id:,
+      unit_id = live_unit(placement.unit_id)
+      line(**seat, **person_cost_centre(member, position, changed:, unit_id:, level_id:), unit_id:, position_id: placement.position_id, level_id:,
                    level_source: level_id && source, country: member.country, fraction:, held:, reason: unpriced,
                    pay: pay && !pay.removed? ? pay.reveal : nil)
     end
   end
 
-  # A person keeps their own cost centre, as the cost centre rules never move
-  # it. A placeholder hire has none of their own, so takes their position's.
-  def person_cost_centre(member, position)
-    resolved = if member.placeholder?
-      position ? @cost_centres.of(position) : TeamPlanning::PositionCostCentres::NONE
-    else
-      cost_centre = member.cost_centre.presence
-      TeamPlanning::PositionCostCentres::Resolved.new(cost_centre:, source: cost_centre ? "person" : "none")
-    end
-    { cost_centre: resolved.cost_centre, cost_centre_source: resolved.source, cost_centre_rule: resolved.rule_index }
+  # See {TeamPlanning::PositionCostCentres#person}. A placeholder hire fills
+  # its position's open seat, so it reads as that seat does.
+  def person_cost_centre(member, position, changed:, unit_id:, level_id:)
+    return cost_centre_working(@cost_centres.of(position)) if member.placeholder? && position
+
+    resolved = @cost_centres.person(cost_centre: (member.cost_centre unless member.placeholder?), changed:, position:, unit_id:,
+                                    role_id: role_at(member, position), level_id:, location: member.country)
+    cost_centre_working(resolved)
   end
+
+  def cost_centre_working(resolved)
+    { cost_centre: resolved.cost_centre, cost_centre_source: resolved.source, cost_centre_rule: resolved.rule_index,
+      cost_centre_matcher: resolved.rule_matcher }
+  end
+
+  def role_at(member, position) = @cost_centres.role_at(member, position)
 
   # Each place's part of the seat, so the places of a person always add up
   # to the whole seat. A person in no place carries it under no unit.
@@ -442,7 +464,7 @@ class TeamPlanning::Cost
       cost_centre = @cost_centres.of(position)
       openings(open, leavers.fetch(position.id, [])).map do |fte, held|
         line(seat_id: position.id, kind: "position", unit_id: live_unit(position.unit_id), position_id: position.id,
-             cost_centre: cost_centre.cost_centre, cost_centre_source: cost_centre.source, cost_centre_rule: cost_centre.rule_index,
+             **cost_centre_working(cost_centre),
              level_id: position.level_id, level_source: nil, country: nil, fte:, fraction: 1r, held:, reason: nil)
       end
     end.flatten

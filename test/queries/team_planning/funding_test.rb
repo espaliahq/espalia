@@ -11,7 +11,7 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
+    @departments, @groups, teams = Array.new(3) { SecureRandom.uuid_v7 }
     @engineering, @payments = Array.new(2) { SecureRandom.uuid_v7 }
 
     travel_to Time.utc(2025, 12, 15, 9)
@@ -20,8 +20,9 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
       @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5, title: "Senior SWE")
       @e6 = create(:framework_level, role_id: @engineer.role_id, ordinal: 6, title: "Staff SWE")
 
-      structure.define_taxonomy([ { level_id: departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
-      structure.create_unit(@engineering, "Engineering", level_id: departments, effective_on: "2025-01-01")
+      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: @groups, name: "Group" },
+                                  { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
+      structure.create_unit(@engineering, "Engineering", level_id: @departments, effective_on: "2025-01-01")
       structure.create_unit(@payments, "Payments", level_id: teams, parent_id: @engineering, effective_on: "2025-01-01")
 
       @ada, @brook, @cy = %w[Ada Brook Cy].map { create(:person, tenant: @tenant, name: "#{it} Quill") }
@@ -69,6 +70,126 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
   def of(report, position_id) = report.positions.find { it.position.id == position_id }
 
   def drawn_on(report, position_id) = of(report, position_id).then { [ it.draws.map(&:budget_line_id), it.reason ] }
+
+  def cost
+    as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year).call.scenario }
+  end
+
+  def cost_centre_of(priced, person) = priced.lines.select { it.seat_id == person.id }.map(&:cost_centre).uniq
+
+  def cost_centre_entries(*entries)
+    as_tenant { Operations::Tenants::SetPlanningRule.call(context: context_for(@planner), params: { rule: "cost_centre", value: { entries: } }) }
+  end
+
+  def assert_cost_centres_add_up(priced)
+    assert_equal priced.total.converted, priced.cost_centres.values.sum(&:converted), "the cost centres add up to the total"
+  end
+
+  context "a position's cost centre and the cost lines in it" do
+    setup do
+      cost_centre_entries({ unit_id: @engineering, cost_centre: "Engineering" }, { unit_id: @payments, cost_centre: "Payments" })
+      @lines = { "CC-1" => line(cost_centre: "CC-1"), "Engineering" => line(cost_centre: "Engineering"), "Payments" => line(cost_centre: "Payments") }
+    end
+
+    should "agree on the entry's cost centre for someone the plan moves into an unlabelled position" do
+      seat = open_position
+      fill(seat, @ada)
+      priced, report = cost, funding
+
+      assert_equal [ "Payments" ], cost_centre_of(priced, @ada), "Ada moves from Engineering to Payments"
+      assert_equal "Payments", of(report, seat).cost_centre.cost_centre
+      assert_equal [ [ @lines["Payments"] ], nil ], drawn_on(report, seat)
+      assert_cost_centres_add_up(priced)
+    end
+
+    should "read the entries at a filled position's occupant's country, as their cost line does, and an open one at none" do
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" }, { location: "Mu", cost_centre: "Mu" })
+      mu = line(cost_centre: "Mu")
+      seat, empty = open_position, open_position
+      fill(seat, @ada)
+      priced, report = cost, funding
+
+      assert_equal [ "Mu" ], cost_centre_of(priced, @ada), "Ada works in Mu"
+      assert_equal "Mu", of(report, seat).cost_centre.cost_centre
+      assert_equal [ [ mu ], nil ], drawn_on(report, seat)
+      assert_equal "Payments", of(report, empty).cost_centre.cost_centre
+    end
+
+    should "keep an untouched occupant's real cost centre for the position" do
+      seat = open_position(unit_id: @engineering)
+      fill(seat, @ada)
+      priced, report = cost, funding
+
+      assert_equal [ "CC-1" ], cost_centre_of(priced, @ada), "Ada stays in Engineering at E5"
+      assert_equal [ "CC-1", "person" ], of(report, seat).cost_centre.then { [ it.cost_centre, it.source ] }
+      assert_equal [ [ @lines["CC-1"] ], nil ], drawn_on(report, seat)
+      assert_cost_centres_add_up(priced)
+    end
+
+    should "name nobody outside a scoped plan, and fund someone it brings in from outside by the entries" do
+      operation(Operations::TeamPlanning::SetPlanScope, unit_ids: [ @payments ])
+      seat = open_position
+      report = funding
+      assert_not_includes report.map.people.map(&:id), @ada.id, "Ada sits in Engineering, outside the scope"
+      assert_equal [ "Payments", "rule" ], of(report, seat).cost_centre.then { [ it.cost_centre, it.source ] }
+
+      fill(seat, @ada)
+      assert_equal [ "Payments" ], cost_centre_of(cost, @ada), "Today holds Ada outside, so the plan moved her"
+      assert_equal "Payments", of(funding, seat).cost_centre.cost_centre
+      assert_equal [ [ @lines["Payments"] ], nil ], drawn_on(funding, seat)
+    end
+
+    should "count a team the plan moves under another unit as a change for the people in it" do
+      sales, eve = SecureRandom.uuid_v7, create(:person, tenant: @tenant, name: "Eve Quill")
+      as_tenant do
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(sales, "Sales", level_id: @departments, effective_on: "2025-01-01")
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0, cost_centre: "CC-2")
+        people.set_membership(eve.id, @payments, **ESPALIA, allocation: 1.0)
+      end
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" }, { unit_id: sales, cost_centre: "Sales" })
+      assert_equal [ "CC-2" ], cost_centre_of(cost, eve), "Eve keeps her own while Payments sits in Engineering"
+
+      operation(Operations::TeamPlanning::SetUnit, unit_id: @payments, parent_id: sales)
+      assert_equal [ "Sales" ], cost_centre_of(cost, eve), "her team now sits under Sales, though her own unit is the same"
+    end
+
+    should "count a layer the plan inserts above a team as a change, someone no entry matches keeping their own" do
+      eve = create(:person, tenant: @tenant, name: "Eve Quill")
+      as_tenant do
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0, cost_centre: "CC-2")
+        people.set_membership(eve.id, @payments, **ESPALIA, allocation: 1.0)
+      end
+      platform = operation(Operations::TeamPlanning::SetUnit, name: "Platform", level_id: @groups, parent_id: @engineering)[:unit_id]
+      operation(Operations::TeamPlanning::SetUnit, unit_id: @payments, parent_id: platform)
+
+      cost_centre_entries({ location: "Atlantis", cost_centre: "Atlantis" })
+      assert_equal [ "CC-2" ], cost_centre_of(cost, eve), "no entry matches Eve, so her own is the fallback"
+
+      cost_centre_entries({ unit_id: @engineering, cost_centre: "Engineering" })
+      assert_equal [ "Engineering" ], cost_centre_of(cost, eve), "the entries decide her once a layer sits above her team"
+    end
+
+    should "fund a half-filled position from its untouched occupant, while a moved one's cost line follows the entries" do
+      eve = create(:person, tenant: @tenant, name: "Eve Quill")
+      as_tenant do
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0, cost_centre: "CC-2")
+        people.set_membership(eve.id, @payments, **ESPALIA, allocation: 1.0)
+      end
+      seat = open_position(unit_id: @engineering)
+      operation(Operations::TeamPlanning::SetAssignment, person_id: eve.id, placements: [ { position_id: seat, allocation: 0.6 } ])
+      operation(Operations::TeamPlanning::SetAssignment, person_id: @ada.id, placements: [ { position_id: seat, allocation: 0.4 } ])
+      priced, report = cost, funding
+
+      assert_equal [ "Engineering" ], cost_centre_of(priced, eve), "Eve moves from Payments to Engineering"
+      assert_equal [ "CC-1" ], cost_centre_of(priced, @ada), "Ada stays, at a smaller share than Eve"
+      assert_equal "CC-1", of(report, seat).cost_centre.cost_centre, "the position is funded as it is today"
+      assert_equal [ [ @lines["CC-1"] ], nil ], drawn_on(report, seat)
+      assert_cost_centres_add_up(priced)
+    end
+  end
 
   should "draw on a line with the position's cost centre before any line with none, however much more that one states" do
     platform = line(cost_centre: "Platform")
@@ -195,6 +316,26 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     assert_equal [ [ first_half ], nil ], drawn_on(report, held_all_year)
     assert_equal Date.new(2026, 7, 1), of(report, from_july).starts_on
     assert_equal [ [], "no_line" ], drawn_on(report, from_july)
+  end
+
+  should "leave out a backfill whose leaver goes after the months an open step shows, as it costs nothing in them" do
+    seat = open_position(basis: "backfill")
+    open_step = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, parent_id: @year, relation: "then", name: "2027 on")[:scenario_id]
+    operation(Operations::TeamPlanning::SetDeparture, scenario_id: open_step, person_id: @cy.id, position_id: seat, leaves_on: "2028-03-31")
+    budget_line = line(starts_on: "2027-01-01", ends_on: "2027-12-31")
+
+    report = funding(open_step)
+    assert_equal Date.new(2027, 12, 31), report.period.end
+    assert_nil of(report, seat)
+    assert_equal [ 0, 0 ], [ report.total.positions, report.total.fte ]
+
+    budget = as_tenant { TeamPlanning::Budget.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: open_step).call }
+    cost = as_tenant { TeamPlanning::Cost.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: open_step).call }
+    assert_equal [ [ nil, 0 ] ], cost.scenario.lines.select { it.position_id == seat }.map { [ it.held, it.amount ] },
+                 "the cost read holds it no day and prices it at nothing"
+    assert_equal({}, budget.lines.find { it.line.id == budget_line }.funded)
+    assert_equal [ 0, 0 ], [ budget.totals.funded_heads.positions, budget.totals.unfunded_heads.positions ]
+    assert_equal [ 0, 0 ], [ budget.totals.funded_heads.fte, budget.totals.unfunded_heads.fte ]
   end
 
   should "hold a backfill from the period's start when a leaver has no date or leaves part of it open, as the cost read does" do

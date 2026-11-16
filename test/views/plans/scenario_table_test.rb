@@ -34,7 +34,14 @@ class Views::Plans::ScenarioTableTest < ActiveSupport::TestCase
     end
 
     should "say when an open-ended scenario starts" do
-      assert_equal "From 1 Apr 2027", periods(step("2027-04-01", nil)).last
+      assert_equal "From 1 Apr 2027 · no end date", periods(step("2027-04-01", nil)).last
+    end
+
+    should "name the months a step with no end date is figured over" do
+      assert_equal "1 Apr 2027 to 31 Mar 2028, the first 12 months of a step with no end date",
+                   Views::Plans::ScenarioTable.figured({ starts_on: "2027-04-01", ends_on: "2028-03-31", open_ended: true, horizon_months: 12 })
+      assert_equal "1 Apr 2027 to 30 Jun 2027",
+                   Views::Plans::ScenarioTable.figured({ starts_on: "2027-04-01", ends_on: "2027-06-30", open_ended: false, horizon_months: nil })
     end
   end
 

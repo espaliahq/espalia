@@ -13,9 +13,9 @@ class Operations::TeamPlanning::SetPosition < Operations::Base
   description "Open a position in a scenario of a Team Planning plan, or change or reopen one by passing its " \
               "position_id. A position is a framework role and one of that role's levels (the level pay bands " \
               "key on), in a unit, at an FTE above 0 and at most 1. basis 'backfill' is committed budget; 'new' " \
-              "is planned. cost_centre is the position's own label, which wins over its occupant's cost centre " \
-              "and the tenant's cost centre rules; omit it to leave the position to those, which clears any label it " \
-              "had. Give every field each time: the scenario's position becomes exactly this. Steps after " \
+              "is planned. cost_centre is the position's own label, which decides its open seat and any occupant the plan " \
+              "changes, ahead of the cost_centre rules; an occupant the plan leaves alone keeps their own. Omit it to leave " \
+              "the position to the rules, which clears any label it had. Give every field each time: the scenario's position becomes exactly this. Steps after " \
               "the scenario, and its alternatives, inherit it unless they change it. Refused unless the caller " \
               "is one of the plan's editors."
   category :write

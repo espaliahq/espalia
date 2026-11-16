@@ -304,6 +304,39 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
       [ @first, @second ].each { assert_equal cost_in(it).forecast.rows, every.fetch(it).forecast.rows }
     end
 
+    should "carry step 1 into a step with no end date over its horizon, as into the same step ending there, alternative and all" do
+      rule(@platform, "time_to_hire", { days: "180" })
+      open = SecureRandom.uuid_v7
+      lean = SecureRandom.uuid_v7
+      as_tenant do
+        handler.fork_scenario(@plan_id, open, parent_id: @second, relation: "then", name: "Q3", starts_on: "2026-06-30")
+        handler.set_scenario_period(@plan_id, open, ends_on: nil)
+        handler.fork_scenario(@plan_id, lean, parent_id: open, relation: "instead", name: "Lean Q3")
+      end
+      rule(@plan_id, "open_step_horizon", { months: "3" })
+
+      rows = step_row(open)
+      assert_equal [ Date.new(2026, 6, 30), Date.new(2026, 9, 29) ], [ rows.starts_on, rows.ends_on ]
+      assert_equal rows, step_row(lean)
+
+      as_tenant { handler.set_scenario_period(@plan_id, open, ends_on: "2026-09-29") }
+      assert_equal rows, step_row(open)
+    end
+
+    should "carry a step that had no end date into the step forked after it, which closes it" do
+      rule(@platform, "time_to_hire", { days: "180" })
+      forked = step(@second, "Q3", "2026-09-27")
+      expected = step_row(forked)
+      as_tenant do
+        handler.remove_scenario(@plan_id, forked)
+        handler.set_scenario_period(@plan_id, @second, ends_on: nil)
+      end
+      third = SecureRandom.uuid_v7
+      as_tenant { handler.fork_scenario(@plan_id, third, parent_id: @second, relation: "then", name: "Q3", starts_on: "2026-06-30", ends_on: "2026-09-27") }
+
+      assert_equal expected, step_row(third)
+    end
+
     should "list the carried figures in the forecast tool, cost and capacity together" do
       rule(@platform, "time_to_hire", { days: "180" })
       row = operation(Operations::TeamPlanning::Forecast, scenario_id: @second)[:rows].find { it[:unit_id] == @platform }

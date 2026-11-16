@@ -276,21 +276,24 @@ below zero. A position never draws more than its cost, across all the lines it d
 Nobody wires each position to a budget line by hand. The plan works out a default in two steps, and
 shows its reason beside the position.
 
-- **Which cost centre a position belongs to.** A filled position takes the cost centre its person
-  has in the Org Graph. An open position takes it from **cost centre rules**: by unit ("every
-  position in this unit draws on the unit's own centre"), by role ("product managers and
-  designers draw on Product"), or by both together. The rules are an ordered list and the
-  first match wins. They start from the tenant default and a plan or scenario can change
-  them. A planner can also set a position's cost centre directly.
+- **Which cost centre a position belongs to.** A person keeps the cost centre on their record
+  until the plan moves them to another unit, role, level or country. A person the plan
+  moves takes the position's own cost centre if a planner set one, then the **cost centre
+  rules**, then their own. An open position takes the position's own, then the cost centre
+  of a person already in it, then the rules; a placeholder hire in it reads the same. The
+  rules go by unit ("every position in this unit draws on the unit's own
+  centre"), by role ("product managers and designers draw on Product"), by level, by
+  country, or by any of them together. The rules are an ordered list, and the last entry
+  that matches has the last word, as with pay bands. They start from the tenant default,
+  which an admin keeps on the Cost centres page, and a plan or scenario can change them.
 - **Which budget line it draws on.** The most specific budget line that matches the position's cost centre
   and period. A position funded any other way, from another centre or split across budget lines, is
   a trade.
 
-When a plan moves a person, the rules may give their position a different cost centre from
-the one on their record. The plan keeps costing them where their record says and flags
-the mismatch. The planner resolves it by planning the cost centre change, which then
-joins the changes to raise in the HRIS. A plan never assumes a change nobody has asked
-for.
+When a plan moves a person, it costs them where their new place says, and the change
+joins the changes to raise in the HRIS. A person the plan leaves alone keeps the cost
+centre on their record, even in a position labelled with another; that disagreement is
+flagged as a mismatch. A plan never assumes a change nobody has asked for.
 
 How strictly positions must follow budget lines is a rule of the scenario. It starts from the tenant
 default and a descendant can change it:
@@ -573,7 +576,7 @@ keep to them in the product, the events and the documents.
 | Open position | A position nobody holds: a backfill or a new position. | Vacant seat |
 | Budget line | One approved piece of the headcount budget. Always written in full, because "line" alone also means a reporting line. | Line |
 | Approved, funded, remaining, unfunded | The four budget numbers. | Headroom, the ask |
-| Cost centre rules | The ordered rules that give an open position its cost centre. | Allocation rules |
+| Cost centre rules | The ordered entries that give an open position, or a moved person, its cost centre. | Allocation rules |
 | Allocation | A person's share of a position or unit. | Fraction |
 | FTE | How much of full time a person or position is. | Employment fraction |
 | Band midpoint | The price of a position when pay is not shown. | Band price |

@@ -66,7 +66,7 @@ class Views::Plans::CostStrip < Views::Base
     changed = @marks.cost[:bands_changed_at]
     return run_rate_basis(period, changed) if @marks.run_rate?
 
-    "For #{day(period[:starts_on])} to #{day(period[:ends_on])}, measured against Today over the same days, not against " \
+    "For #{Views::Plans::ScenarioTable.figured(period)}, measured against Today over the same days, not against " \
       "the scenario this one follows. #{priced_from}, plus the on-cost rule at each unit" \
       "#{"; bands last changed #{Time.zone.parse(changed).strftime('%-d %b %Y')}" if changed}."
   end

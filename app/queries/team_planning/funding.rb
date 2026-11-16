@@ -27,8 +27,8 @@
 # open ones replacing a leaver, as that budget is already committed, then
 # other open ones, each group by the day it is first held, then by id.
 #
-# Positions are the resolved map's, the same ones {TeamPlanning::Cost} reads,
-# each at its whole FTE, so funded and unfunded always add up to its
+# Positions are the resolved map's held in the period, the same ones
+# {TeamPlanning::Cost} prices, each at its whole FTE, so funded and unfunded always add up to its
 # positions and their FTE.
 #
 # @example
@@ -88,11 +88,13 @@ class TeamPlanning::Funding
   # @!attribute fte [Rational]
   Count = Data.define(:positions, :fte)
 
-  # @!attribute period [Range<Date>]
+  # @!attribute period [Range<Date>] as {TeamPlanning::FiguredPeriod} figures it
+  # @!attribute open_ended [Boolean] whether the step has no end date, so the period runs to the horizon
+  # @!attribute horizon_months [Integer, nil] the months shown, for an open step
   # @!attribute map [TeamPlanning::Baseline::Map]
   # @!attribute strictness [Hash] the {TeamPlanning::RuleKinds::BudgetStrictness} value it matched under
   # @!attribute positions [Array<Funded>] by position id
-  Report = Data.define(:period, :map, :strictness, :positions) do
+  Report = Data.define(:period, :open_ended, :horizon_months, :map, :strictness, :positions) do
     # @return [Count] every position
     def total = Count.new(positions: positions.size, fte: positions.sum(0r, &:fte))
 
@@ -130,20 +132,29 @@ class TeamPlanning::Funding
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
     raise TeamPlanning::Error, "The baseline has no period to fund, so read one of the plan's scenarios" if @scenario_id == @plan.id
 
-    @period = aggregate.period_of(@scenario_id)
-    @map = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).structure(aggregate)
-    @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id)
+    base = TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    @map = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:).structure(aggregate)
+    figured = TeamPlanning::FiguredPeriod.for(aggregate, @scenario_id, @map)
+    @period = figured.period
+    @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id, base:,
+                                                                titles: Integrations::HrisTitleResolution.new(@plan.tenant))
     @lines = @map.budget_lines.index_by(&:id)
     @strictness = @map.rule(TeamPlanning::RuleKinds::BudgetStrictness.rule_name)
     @held = @strictness.fetch("match")
-    Report.new(period: @period, map: @map, strictness: @strictness, positions: @map.positions.sort_by(&:id).map { fund(it) })
+    Report.new(period: @period, **figured.payload, map: @map, strictness: @strictness, positions: @map.positions.sort_by(&:id).filter_map { fund(it) })
   end
 
   private
 
+  # A backfill whose leaver goes after the period isn't held in it, so it has
+  # nothing to fund, as it has nothing to cost.
   def fund(position)
+    first_held = first_held(position)
+    return if first_held > @period.end
+
     funded = Funded.new(position:, fte: Rational(position.fte.to_s), cost_centre: @cost_centres.of(position), location: location_of(position),
-                        draw_reason: draw_reason(position), starts_on: starts_on(position), source: "derived", draws: [], matching_ids: [], reason: nil)
+                        draw_reason: draw_reason(position), starts_on: first_held.clamp(@period.begin, @period.end), source: "derived",
+                        draws: [], matching_ids: [], reason: nil)
     set = @map.fundings[position.id]
     set ? funded_as_set(funded, set) : derived(funded)
   end
@@ -210,7 +221,7 @@ class TeamPlanning::Funding
   # The first day any part of it is held, as {TeamPlanning::Cost} opens it:
   # each leaver it replaces opens their FTE the day after they go, or all
   # step without a date, and FTE no leaver here opens is held all step.
-  def starts_on(position)
+  def first_held(position)
     return @period.begin if occupants.key?(position.id)
 
     open = Rational(position.fte.to_s)
@@ -224,7 +235,7 @@ class TeamPlanning::Funding
       last ? last + 1 : @period.begin
     end
     starts << @period.begin if open.positive?
-    starts.min.clamp(@period.begin, @period.end)
+    starts.min
   end
 
   def fte_of(member)

@@ -28,13 +28,14 @@ class Components::Shell::TenantAdminLayout < Components::Base
     { key: :users,        label: "Users",        href: "/tenant/users" },
     { key: :org_graph,    label: "Org Graph",    href: "/tenant/org_graph" },
     { key: :pay_bands,    label: "Pay bands",    href: "/tenant/pay_bands" },
+    { key: :cost_centres, label: "Cost centres", href: "/tenant/cost_centre_rules" },
     { key: :budget,       label: "Budget",       href: "/tenant/budget_lines" },
     { key: :integrations, label: "Integrations", href: "/tenant/integrations" },
     { key: :feedback_export, label: "Feedback export", href: "/tenant/feedback_exports/new" }
   ].freeze
 
   # @param active_section [Symbol] one of :dashboard, :theme, :vocabulary,
-  #   :users, :org_graph, :pay_bands, :budget, :integrations, :feedback_export
+  #   :users, :org_graph, :pay_bands, :cost_centres, :budget, :integrations, :feedback_export
   # @param user [User]
   # @param current_tenant [Tenant]
   # @param tenants [Array<Tenant>]
