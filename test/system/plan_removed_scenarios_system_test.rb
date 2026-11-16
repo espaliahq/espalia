@@ -52,15 +52,20 @@ class PlanRemovedScenariosSystemTest < ApplicationSystemTestCase
 
   should "wrap a long unbroken name on a phone rather than run off the side" do
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-    long = ActsAsTenant.with_tenant(@tenant) { fork(name: "Q3" + "x" * 80, parent_id: @q1, relation: "instead") }
+    name = "Q3" + "x" * 80
+    long = ActsAsTenant.with_tenant(@tenant) { fork(name:, parent_id: @q1, relation: "instead") }
     remove(long)
     sign_in_as(@viewer.user)
     visit plan_path(@plan_id)
     assert_selector "h1", text: "Pay review 2027"
     open_section
 
-    assert_selector "#{SECTION} [data-removed-scenario='#{long}']", text: "Q3xxx"
+    assert_selector "#{SECTION} [data-removed-scenario='#{long}'] span", exact_text: name
     assert_no_sideways_overflow
+    assert page.evaluate_script(<<~JS), "the name runs past the side of the page"
+      [...document.querySelector("[data-removed-scenario='#{long}'] span").getClientRects()]
+        .every((line) => line.right <= document.documentElement.clientWidth)
+    JS
   end
 
   should "leave the section out while nothing has been removed" do
