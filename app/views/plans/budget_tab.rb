@@ -95,6 +95,7 @@ class Views::Plans::BudgetTab < Views::Base
     lines_section
     unfunded_positions
     unpriced
+    render Views::Plans::FundingDialog.new(scenario_id:, scenario_name: scenario_name(scenario_id), lines: @lines[:budget_lines]) if @can_edit
   end
 
   def totals
@@ -165,6 +166,12 @@ class Views::Plans::BudgetTab < Views::Base
                                        aria_label: "Change #{line_name(described)}") { "Change" }
   end
 
+  def funding_button(position_id, **)
+    name = position_name(position_id)
+    trigger = Views::Plans::FundingDialog.trigger(url: plan_funding_path(plan_id, position_id), name:, position: funding_by_position.fetch(position_id))
+    render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true, aria_label: "Change the funding of #{name}", data: trigger, **) { "Funding…" }
+  end
+
   def figure(label, text, heads, data: {})
     div(class: "min-w-0", data:) do
       dt(class: "text-xs text-muted") { label }
@@ -195,6 +202,7 @@ class Views::Plans::BudgetTab < Views::Base
             span(class: "text-default break-words") { position_name(draw[:position_id]) }
             span(class: "text-xs text-muted") { "#{DRAWS.fetch(draw[:draw_reason], draw[:draw_reason])} · #{share(draw[:share])} of it · #{decimal(draw[:fte])} FTE" }
             render Components::Kit::Badge.new("Partly unfunded", tone: :warning) if short.include?(draw)
+            funding_button(draw[:position_id]) if @can_edit
           end
         end
       end
@@ -211,7 +219,10 @@ class Views::Plans::BudgetTab < Views::Base
         ul(class: "mt-3 divide-y divide-default rounded-lg border border-default bg-default") do
           positions.each do |position|
             li(class: "space-y-1 p-3", data: { budget_unfunded: position[:position_id] }) do
-              p(class: "text-sm font-medium text-default break-words") { position_name(position[:position_id]) }
+              div(class: "flex flex-wrap items-center gap-2") do
+                p(class: "text-sm font-medium text-default break-words") { position_name(position[:position_id]) }
+                funding_button(position[:position_id], class: "ml-auto") if @can_edit
+              end
               p(class: "text-sm text-muted") { position[:reason_text] || "Part of it draws on no budget line" }
               tied(position[:matching_ids])
             end
@@ -242,6 +253,8 @@ class Views::Plans::BudgetTab < Views::Base
 
   # Over is the read's judgement under budget_strictness; nil where its scope doesn't hold this figure.
   def over?(figure) = (over = figure[:over]).present? && (over[:money].present? || over[:heads] == true)
+
+  def funding_by_position = @funding_by_position ||= @funding[:positions].index_by { it[:position_id] }
 
   def described_lines = @described_lines ||= @lines[:budget_lines].index_by { it[:budget_line_id] }
 
