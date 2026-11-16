@@ -313,7 +313,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 6.3 | Funding: the most specific matching budget line, draw order, and `PositionFundingSet` for trades. Built in [#345](https://github.com/espaliahq/espalia/issues/345) | 6.1, 6.2, 5.4 |
 | 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated by the `budget_basis` rule, read through `team_planning_budget`. Built in [#369](https://github.com/espaliahq/espalia/issues/369) | 6.3 |
 | 6.5 | Strictness: position control, envelope, or the dimensions that must match. Built in [#384](https://github.com/espaliahq/espalia/issues/384) | 6.3 |
-| 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line. All but mismatch are built ([#421](https://github.com/espaliahq/espalia/issues/421)) | 6.4, 4.6 |
+| 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line. Built in [#421](https://github.com/espaliahq/espalia/issues/421) and [#449](https://github.com/espaliahq/espalia/pull/449) | 6.4, 4.6 |
 | 6.7 | Budget tab: read-only first ([#395](https://github.com/espaliahq/espalia/issues/395)), then editing lines and funding on a scenario ([#411](https://github.com/espaliahq/espalia/issues/411)). Built in [#395](https://github.com/espaliahq/espalia/issues/395) and [#411](https://github.com/espaliahq/espalia/issues/411) | 6.4 |
 
 ### P7 Capacity
