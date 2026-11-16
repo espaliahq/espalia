@@ -136,8 +136,8 @@ class OrgGraph::ChangesBetween
   # end. A step only the end knows was learned; one only the start knew was
   # withdrawn.
   def learned_changes
-    opened = @opened_at || ActsAsTenant.current_tenant.end_of(@from)
-    closed = ActsAsTenant.current_tenant.end_of(@to)
+    opened = @opened_at || Tenant.end_of(@from)
+    closed = Tenant.end_of(@to)
     periods = OrgFactPeriod.arel_table
     inside = ->(column) { OrgFactPeriod.where(periods[column].gt(opened).and(periods[column].lteq(closed))) }
     touched = facts(inside.(:learned_at).or(inside.(:superseded_at)))

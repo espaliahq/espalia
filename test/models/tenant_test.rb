@@ -417,13 +417,28 @@ class TenantTest < ActiveSupport::TestCase
   end
 
   context "time_zone" do
-    should "accept an IANA zone and refuse a name it doesn't know" do
+    should "accept any IANA zone and refuse a name it doesn't know" do
       assert build(:tenant, time_zone: "Australia/Sydney").valid?
+      assert build(:tenant, time_zone: "America/Toronto").valid?, "an IANA zone Rails doesn't name"
 
       tenant = build(:tenant, time_zone: "Middle Earth")
 
       assert_not tenant.valid?
-      assert_includes tenant.errors[:time_zone], "isn't a time zone we know"
+      assert_match(/isn't a time zone we know/, tenant.errors[:time_zone].first)
+    end
+
+    should "refuse to read today or a day's end outside a tenant" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ActsAsTenant::Errors::NoTenantSet) { Tenant.today }
+        assert_raises(ActsAsTenant::Errors::NoTenantSet) { Tenant.end_of(Date.new(2026, 11, 16)) }
+      end
+    end
+
+    should "let a tenant save while it keeps a zone no longer known" do
+      tenant = create(:tenant)
+      tenant.update_column(:time_zone, "Middle Earth")
+
+      assert tenant.reload.update(name: "Renamed")
     end
   end
 end

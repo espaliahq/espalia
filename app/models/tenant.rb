@@ -192,18 +192,22 @@ class Tenant < ApplicationRecord
   validates :ai_config, store_model: true
   validates :feedback_exchange_config, store_model: true
   validates :org_graph_config, store_model: true
-  validates :time_zone, inclusion: { in: ->(_) { time_zone_names }, message: "isn't a time zone we know" }
+  validate :time_zone_is_known, if: :time_zone_changed?
   before_validation :sync_feedback_exchange_key_ids, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_inbound_secret_is_ours, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_secrets_are_strong, if: :feedback_exchange_credentials_changed?
 
-  # The zone names a tenant can choose, as IANA identifiers: "UTC" first, then
-  # each zone Rails names, once.
+  # The zone names the settings page offers, as IANA identifiers: "UTC" first,
+  # then each zone Rails names, once. A tenant may hold any zone TZInfo knows.
   #
   # @return [Array<String>]
   def self.time_zone_names
     @time_zone_names ||= [ "UTC", *ActiveSupport::TimeZone.all.map { it.tzinfo.name } ].uniq.freeze
   end
+
+  # @param name [String]
+  # @return [Boolean] whether TZInfo knows it as an IANA identifier
+  def self.time_zone_known?(name) = TZInfo::Timezone.all_identifiers.include?(name)
 
   # Today's date where the tenant works: the one answer to "what is today"
   # for a business date. Timestamps stay UTC; only the calendar day moves.
@@ -223,7 +227,18 @@ class Tenant < ApplicationRecord
   #
   # @return [Date]
   # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
-  def self.today = (ActsAsTenant.current_tenant || raise(ActsAsTenant::Errors::NoTenantSet)).today
+  def self.today = current!.today
+
+  # The current tenant's end of a day, for code that runs inside a tenant.
+  #
+  # @param date [Date]
+  # @return [ActiveSupport::TimeWithZone]
+  # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
+  def self.end_of(date) = current!.end_of(date)
+
+  # @return [Tenant]
+  # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
+  def self.current! = ActsAsTenant.current_tenant || raise(ActsAsTenant::Errors::NoTenantSet)
 
   # The feedback exchange's signing secrets, wrapped so no accessor can print a value.
   #
@@ -483,6 +498,12 @@ class Tenant < ApplicationRecord
     claim_hris_facts!
   rescue => e
     Rails.error.report(e, handled: true, context: { tenant_id: id })
+  end
+
+  # Checked only when the zone changes, so a zone stored before an upgrade
+  # renamed it never blocks an unrelated save.
+  def time_zone_is_known
+    errors.add(:time_zone, "isn't a time zone we know; use an IANA name such as Australia/Sydney") unless self.class.time_zone_known?(time_zone)
   end
 
   def custom_domain_is_not_the_instance_host
