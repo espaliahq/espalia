@@ -96,6 +96,20 @@ class PlanCostSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
+      should "say each scenario's run rate on its last day in a quiet line that wraps, in the table and the strip" do
+        last_day = (Date.current + 365).strftime("%-d %b %Y")
+        line = "Run rate on #{last_day}: EUR 250k a year, +EUR 50k on Today's"
+        sign_in_as(@planner.user)
+        visit plan_path(@plan_id)
+        assert_selector "[data-cost-cell='#{@year}'] [data-run-rate-at-end]", text: line
+        assert_no_selector "[data-cost-cell='#{@plan_id}'] [data-run-rate-at-end]"
+        assert_no_sideways_overflow
+
+        visit map_plan_path(@plan_id, scenario: @year)
+        assert_selector "[data-cost-strip] [data-run-rate-at-end]", text: line
+        assert_no_sideways_overflow
+      end
+
       should "show Today's map at its yearly run rate, with no change beside it" do
         sign_in_as(@planner.user)
         visit map_plan_path(@plan_id)
