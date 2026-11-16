@@ -117,6 +117,16 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal({ "EUR" => 100_000r }, budget.cost_centres["Platform"].remaining.native)
   end
 
+  should "fund only the days a line's period covers, and leave the rest unfunded" do
+    second_half = euros(100_000, cost_centre: "Platform", starts_on: "2026-07-01")
+    open_position
+    report = budget
+    covered = 100_000r * Rational(184, 365)
+
+    assert_equal({ "EUR" => covered }, of(report, second_half).funded)
+    assert_equal({ "EUR" => 300_000r - covered }, report.totals.unfunded.native, "January to June, plus Ada and Brook")
+  end
+
   should "split a position's money across the lines it draws on" do
     one = euros(100_000, cost_centre: "Platform")
     other = euros(100_000, cost_centre: "Platform", role_id: @engineer.role_id)

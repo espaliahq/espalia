@@ -31,8 +31,6 @@
 # @example
 #   TeamPlanning::Budget.new(context:, plan:, scenario_id:).call.totals
 class TeamPlanning::Budget
-  BASES = TeamPlanning::RuleKinds::BudgetBasis::BASES
-
   # @!attribute positions [Integer]
   # @!attribute fte [Rational]
   Heads = Data.define(:positions, :fte) do
@@ -77,7 +75,7 @@ class TeamPlanning::Budget
   # @!attribute budget_line_ids [Array<String>] the held lines it draws on
   Unpriced = Data.define(:position_id, :unit_id, :reasons, :budget_line_ids)
 
-  # @!attribute basis [String] a {BASES} entry
+  # @!attribute basis [String] a {TeamPlanning::RuleKinds::BudgetBasis::BASES} entry
   # @!attribute period [Range<Date>]
   # @!attribute pay_view [String] the cost read's
   # @!attribute reference_currency [String, nil]
@@ -111,6 +109,7 @@ class TeamPlanning::Budget
     @factors = {}
     @inclusive = TeamPlanning::RuleKinds::BudgetBasis.inclusive?(funding.map.rule(TeamPlanning::RuleKinds::BudgetBasis.rule_name))
     @funded = funding.positions.index_by { it.position.id }
+    @budget_lines = funding.map.budget_lines.index_by(&:id)
     split(cost.scenario.lines)
     lines = funding.map.budget_lines.sort_by(&:id).map { line(it, funding.by_line.fetch(it.id, [])) }
     forecast = cost.forecast.total
@@ -133,16 +132,28 @@ class TeamPlanning::Budget
       money = @inclusive ? seat.amount : seat.base
       funded = @funded[seat.position_id] if seat.position_id
       draws = funded ? funded.draws.select(&:held) : []
-      draws.each do |draw|
-        @drawn[draw.budget_line_id][seat.currency] += money * draw.share
-        @drawn_by_unit[seat.unit_id][seat.currency] += money * draw.share
+      drawn = draws.sum(0r) do |draw|
+        part = money * draw.share * covered(@budget_lines[draw.budget_line_id], seat)
+        @drawn[draw.budget_line_id][seat.currency] += part
+        @drawn_by_unit[seat.unit_id][seat.currency] += part
+        part
       end
-      left = money * (1 - draws.sum(0r, &:share))
+      left = money - drawn
       next if left.zero?
 
       @unfunded_by_unit[seat.unit_id][seat.currency] += left
       @unfunded_by_cost_centre[seat.cost_centre][seat.currency] += left
     end
+  end
+
+  # The share of a seat's held days a line's period covers, so a line approved
+  # for January funds none of what February and March cost.
+  def covered(budget_line, seat)
+    return 0r unless budget_line && seat.days.positive?
+
+    first = [ budget_line.starts_on, seat.held.begin ].max
+    last = [ budget_line.ends_on, seat.held.end ].min
+    last >= first ? Rational((last - first).to_i + 1, seat.days) : 0r
   end
 
   def line(budget_line, draws)
