@@ -129,6 +129,28 @@ class PlansSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
+      should "let an editor delete a plan once they type its name" do
+        sign_in_as(@planner.user)
+        visit plan_path(@plan_id)
+        wait_for_stimulus "modal"
+        click_button_with_js_fallback("Delete plan", expect_text: "Delete this plan?")
+        assert_text "It can't be restored."
+        assert_button "Archive instead"
+        assert_no_sideways_overflow
+        js_fill_in "Type the plan's name to confirm", with: "Pay review 2027"
+        click_selector_with_js_fallback("##{Views::Plans::DeleteDialog::ID} button[type='submit'].tone-danger", expect_text: "Deleted \"Pay review 2027\".")
+
+        assert_selector "h1", text: "Planning"
+        assert_no_link "Pay review 2027"
+      end
+
+      should "show a viewer no way to delete a plan" do
+        sign_in_as(@viewer.user)
+        visit plan_path(@plan_id)
+        assert_text "You're a viewer."
+        assert_no_button "Delete plan"
+      end
+
       should "tell a viewer their plan is frozen once its only editor is forgotten" do
         ActsAsTenant.with_tenant(@tenant) do
           @planner.person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
