@@ -56,22 +56,31 @@ class OrgGraph::StructureCommandHandler
   end
 
   # @see OrgGraph::StructureAggregate#set_level_provider
+  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
   def set_level_provider(level_id, provider, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_structure!
-    with_structure(plan) { |structure| structure.set_level_provider(level_id, provider, **attributed(options, :set_by_id)) }
+    unless_history_rebuilding do
+      with_structure(plan) { |structure| structure.set_level_provider(level_id, provider, **attributed(options, :set_by_id)) }
+    end
   end
 
   # @see OrgGraph::StructureAggregate#hand_over_level
+  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
   def hand_over_level(level_id, provider, **options)
     authorize_structure!
-    with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_over_level(level_id, provider, **attributed(options, :set_by_id)) }
+    unless_history_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_over_level(level_id, provider, **attributed(options, :set_by_id)) }
+    end
   end
 
   # @see OrgGraph::StructureAggregate#hand_back_level
+  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
   def hand_back_level(level_id, **options)
     authorize_structure!
-    with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_back_level(level_id, **attributed(options, :set_by_id)) }
+    unless_history_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_back_level(level_id, **attributed(options, :set_by_id)) }
+    end
   end
 
   # @see OrgGraph::StructureAggregate#set_fact_provider
@@ -186,6 +195,13 @@ class OrgGraph::StructureCommandHandler
   end
 
   private
+
+  # The history records a provider change only when it changes the kind, so a
+  # change that reached both the live subscriber and a replay would leave the
+  # replay's older provider standing.
+  def unless_history_rebuilding(&)
+    ProjectionVersion.unless_rebuilding(OrgGraph::Projections::History::PROJECTION_NAME, &)
+  end
 
   # Checks every placement before any is written. Once the succession is
   # recorded, someone already in their successor and in no predecessor was

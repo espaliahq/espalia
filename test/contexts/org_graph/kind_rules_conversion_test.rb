@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 # Every stream in production was written before kinds stated their rules.
 # Replaying one must place units as the ordered levels did: a parent at a
@@ -9,6 +10,8 @@ require "test_helper"
 # from the HRIS level directly above it, the only place the mirror has ever
 # put one. `org_graph:taxonomy:check` finds any unit sitting elsewhere.
 class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
+  include RebuildLock
+
   setup do
     @tenant = create(:tenant)
     @handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
@@ -60,6 +63,18 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
 
     as_tenant { @handler.move_unit(@platform, @engineering, effective_on: @today) }
     assert_nothing_raised { as_tenant { @handler.hand_over_level(id("Team"), "hibob", field: "work.team", matches:, effective_on: @today) } }
+  end
+
+  should "refuse to change a level's provider while the history is rebuilt" do
+    while_rebuilding(@tenant, OrgGraph::Projections::History) do
+      as_tenant do
+        assert_raises(ProjectionVersion::Rebuilding) do
+          @handler.hand_over_level(id("Department"), "hibob", field: "work.department", matches: { @engineering => "eng", @marketing => "mkt" }, effective_on: @today)
+        end
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.hand_back_level(id("Division"), effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.set_level_provider(id("Squad"), "hibob", effective_on: @today, field: "work.squad") }
+      end
+    end
   end
 
   should "let every live unit sit where it is, and every kind at the top" do
