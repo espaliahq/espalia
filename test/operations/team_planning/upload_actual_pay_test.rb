@@ -148,6 +148,14 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     assert_equal [ "bad_csv", 4 ], upload(csv).values_at(:problem, :line)
   end
 
+  should "find the line ending outside quoted fields, and still refuse a stray one" do
+    quoted_heading = "person,amount,currency,period,\"extra\nheading\"\r\nE-100,90413,EUR,year,x\r\n"
+    stray = "person,amount,currency,period\r\nE-100,90413,EUR,ye\nar\r\n"
+
+    assert_nil upload(quoted_heading)[:problem]
+    assert_equal [ "bad_csv", 2 ], upload(stray).values_at(:problem, :line)
+  end
+
     should "call an email two people share ambiguous" do
     ActsAsTenant.with_tenant(@tenant) do
       create(:tenant_user, tenant: @tenant, person: @off_map, user: create(:user, email: "shared@example.com"))

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "csv"
+require "strscan"
 
 # A file of actual pay, read in memory and matched against one scenario's map
 # ([#323](https://github.com/espaliahq/espalia/issues/323)). Nothing here
@@ -106,7 +107,7 @@ class TeamPlanning::PayUpload
     return Report.new(problem: "empty") if text.strip.empty?
 
     @lines_read = 0
-    rows_of(CSV.new(text, headers: true, return_headers: true))
+    rows_of(CSV.new(text, headers: true, return_headers: true, row_sep: row_sep(text)))
   rescue CSV::MalformedCSVError
     Report.new(problem: "bad_csv", line: @lines_read + 1)
   end
@@ -130,6 +131,20 @@ class TeamPlanning::PayUpload
 
   def read_from(csv)
     csv.shift.tap { @lines_read += csv.line.to_s.scan(/\r\n|\r|\n/).size }
+  end
+
+  # CSV guesses the separator from the first line ending, even one inside a quoted field.
+  def row_sep(text)
+    scanner = StringScanner.new(text)
+    quoted = false
+    while scanner.skip_until(/["\r\n]/)
+      if scanner.matched == '"'
+        quoted = !quoted
+      elsif !quoted
+        return scanner.matched == "\r" && scanner.peek(1) == "\n" ? "\r\n" : scanner.matched
+      end
+    end
+    :auto
   end
 
   # @return [Hash{Symbol => Integer}, nil] each column's index, nil when one is missing
