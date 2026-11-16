@@ -104,7 +104,10 @@ class PayBandLockingTest < ActiveSupport::TestCase
         end
       end
     end
-    started.pop
+    unless started.pop(timeout: 5)
+      writer.join unless writer.alive?
+      flunk "the writer never started its transaction"
+    end
     yield
   ensure
     finish << true
@@ -118,9 +121,17 @@ class PayBandLockingTest < ActiveSupport::TestCase
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + within
     until PayBand.connection.select_value(PayBand.sanitize_sql_array([ "SELECT 1 FROM pg_locks WHERE pid = ? AND locktype = 'advisory' AND NOT granted", pid ]))
       flunk "the worker finished while the list was held" unless worker.alive?
-      flunk "the worker never waited for the list" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      flunk "the worker never waited for the list: #{activity(pid)}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
       sleep 0.02
     end
+  end
+
+  def activity(pid)
+    PayBand.connection.select_one(PayBand.sanitize_sql_array([ <<~SQL, pid ])).inspect
+      SELECT state, wait_event_type, wait_event, left(query, 200) AS query,
+             (SELECT string_agg(locktype || ':' || mode, ', ') FROM pg_locks WHERE pid = a.pid AND NOT granted) AS waiting_on
+      FROM pg_stat_activity a WHERE pid = ?
+    SQL
   end
 
   def insert_rate
