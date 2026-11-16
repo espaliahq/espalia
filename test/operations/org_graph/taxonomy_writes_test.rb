@@ -123,6 +123,12 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_equal [ [ @team ], true ], kind_rules(guild)
     end
 
+    should "keep the parents above it when given only the top" do
+      guild = call(Operations::OrgGraph::AddLevel, name: "Guild", top: false)[:level_id]
+
+      assert_equal [ [ @department, @team, @squad ], false ], kind_rules(guild)
+    end
+
     should "refuse a parent outside the taxonomy, adding nothing" do
       stranger = SecureRandom.uuid_v7
       error = assert_raises(Operations::Base::ParameterError) do
@@ -141,7 +147,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     end
 
     should "replace a type's parents and top, with the caller as actor" do
-      result = call(Operations::OrgGraph::SetKindParents, level_id: @guild, parent_ids: [ @team, @guild ], top: false)
+      result = call(Operations::OrgGraph::SetKindParents, level_id: @guild, parent_ids: [ @guild, @team, @guild ], top: false)
 
       assert_equal [ [ @team, @guild ], false ], kind_rules(@guild)
       assert_equal({ level_id: @guild, name: "Guild", parent_ids: [ @team, @guild ], top: false, effective_on: Date.current.iso8601 },
@@ -202,7 +208,8 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       should "keep the level while the plan is live, counting the plans" do
         error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @guild) }
 
-        assert_equal "Guild can't be removed, as 1 live plan places units of this type. Change or archive that plan first",
+        assert_equal "Guild can't be removed, as 1 live plan places units of this type. Change or archive that plan first, " \
+                     "or delete it if no one can edit it any more",
                      error.message
         assert_includes level_names, "Guild"
       end

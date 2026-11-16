@@ -6,9 +6,9 @@ class Operations::OrgGraph::AddLevel < Operations::Base
   include Operations::OrgGraph::TaxonomyWrite
 
   description "Add a level to the bottom of the Org Graph's taxonomy, from effective_on (today by default). " \
-              "Espalia holds the new level. parent_ids lists the level_ids it can sit under, and top whether " \
-              "it can sit at the top (by default, only when parent_ids is empty); without either, it can sit " \
-              "under every level above it or at the top. org_graph_set_kind_parents changes these later. " \
+              "Espalia holds the new level. parent_ids lists the level_ids it can sit under (by default, every " \
+              "level above it), and top whether it can sit at the top (by default, only when parent_ids is " \
+              "empty, or when neither is given). org_graph_set_kind_parents changes these later. " \
               "Level names are unique, ignoring case. Refused unless the caller is a tenant admin."
   approval :in_app
 
@@ -33,7 +33,7 @@ class Operations::OrgGraph::AddLevel < Operations::Base
   def stated_rules
     return {} if params[:parent_ids].nil? && params[:top].nil?
 
-    parent_ids = Array(params[:parent_ids]).map { |id| id.to_s.downcase }
-    { parent_ids:, top: params[:top].nil? ? parent_ids.empty? : params[:top] }
+    parent_ids = params[:parent_ids].nil? ? current_levels.map(&:id) : Array(params[:parent_ids]).map { |id| id.to_s.downcase }
+    { parent_ids:, top: params[:top] }
   end
 end

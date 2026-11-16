@@ -32,6 +32,7 @@ class Operations::OrgGraph::SetKindParents < Operations::Base
     refusing_as_parameter_errors do
       structure_handler.set_kind_parents(level_id, parent_ids:, top: params[:top], effective_on:)
     end
-    { level_id:, name: level&.name, parent_ids:, top: params[:top], effective_on:, levels: levels_payload }
+    { level_id:, name: level&.name, parent_ids: current_levels.map(&:id) & parent_ids, top: params[:top], effective_on:,
+      levels: levels_payload }
   end
 end

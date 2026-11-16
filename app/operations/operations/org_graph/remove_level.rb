@@ -40,8 +40,10 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
                                 .where("end_state ->> 'level_id' = ?", level.id).distinct.count(:plan_id)
     return if plans.zero?
 
+    advice = plans == 1 ? "Change or archive that plan first, or delete it if no one can edit it any more" :
+                          "Change or archive those plans first, or delete any no one can edit any more"
     raise Operations::Base::ParameterError,
-          "#{level.name} can't be removed, as #{plans} live #{'plan'.pluralize(plans)} #{plans == 1 ? 'places' : 'place'} " \
-          "units of this type. Change or archive #{plans == 1 ? 'that plan' : 'those plans'} first"
+          "#{level.name} can't be removed, as #{plans} live #{'plan'.pluralize(plans)} " \
+          "#{plans == 1 ? 'places' : 'place'} units of this type. #{advice}"
   end
 end
