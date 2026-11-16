@@ -6,7 +6,8 @@
 // or Escape, saves nothing.
 //
 // The columns are found by the pointer's x against each step's header, so
-// steps of any width behave alike.
+// steps of any width behave alike. A pointer above or below the grid is over
+// no column.
 //
 // Usage:
 //   <div data-controller="timeline-shift">
@@ -57,7 +58,7 @@ export default class extends BaseController {
   // private
 
   #move(event) {
-    const step = this.#stepAt(event.clientX)
+    const step = this.#stepAt(event.clientX, event.clientY)
     const over = this.reach.includes(step) ? step : null
     if (over === this.over) return
 
@@ -94,7 +95,10 @@ export default class extends BaseController {
     this.grip = null
   }
 
-  #stepAt(x) {
+  #stepAt(x, y) {
+    const { top, bottom } = this.element.getBoundingClientRect()
+    if (y < top || y >= bottom) return null
+
     const header = this.headers.find(cell => {
       const { left, right } = cell.getBoundingClientRect()
       return x >= left && x < right

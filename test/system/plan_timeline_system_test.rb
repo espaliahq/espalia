@@ -292,6 +292,22 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         assert_selector "body[data-shift-posts='1']"
       end
 
+      should "save nothing for a drop above the grid, over a lit column" do
+        hold_move_requests
+        step = find("[data-timeline-step='2']")
+        above = -((step.native.rect.height / 2) + 24).round
+        # One chain, since a later chain moves with the button up and Chrome then drops the capture.
+        page.driver.browser.action.move_to(leaver_end_grip.native).click_and_hold
+            .move_to(step.native).move_to(step.native, 10, above).perform
+        assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
+        assert_no_selector "[data-timeline-shift-column='2'][data-over]", visible: :all
+        release
+
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert_no_selector MOVE_FORM, visible: :all
+        assert_no_selector "body[data-shift-posts]"
+      end
+
       should "let go cleanly when the held grip leaves the page" do
         hold(leaver_end_grip, over: "[data-timeline-step='2']")
         assert_selector "[data-timeline-shift-hint='2']", visible: true
