@@ -30,8 +30,11 @@ module Operations::Tenants::PayBandSupport
 
   private
 
+  # A blank field counts, so a call can clear every field and widen a band to
+  # every role and level.
+  #
   # @return [Boolean] whether the call says what the band matches on
-  def matcher_given? = MATCHER_PARAMS.any? { params[it].present? }
+  def matcher_given? = MATCHER_PARAMS.any? { !params[it].nil? }
 
   # Sets what the band matches on from the call's matcher fields.
   #

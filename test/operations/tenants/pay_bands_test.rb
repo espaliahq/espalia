@@ -276,6 +276,15 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
       assert_equal 2, call(:PayBands, pay_band_id: later[:pay_band_id])[:pay_bands].sole[:position]
     end
 
+    should "widen a band to every role and level, keeping its location and place" do
+      added = add
+      later = add(location: "Testonia")
+      changed = call(:ChangePayBand, pay_band_id: added[:pay_band_id], role_id: "", currency: "AUD", period: "year", **FIGURES)
+
+      assert_equal [ 1, "Every role, Every level", { location: "Fixtureland" }, "Fixtureland" ], changed.values_at(:position, :level, :matcher, :location)
+      assert_equal 2, call(:PayBands, pay_band_id: later[:pay_band_id])[:pay_bands].sole[:position]
+    end
+
     should "refuse a matcher the framework can't hold" do
       {
         { role_id: @role.role_id, role_family_id: @family.role_family_id } => "A band matches on a role or a role family, not both: a role already names its family",

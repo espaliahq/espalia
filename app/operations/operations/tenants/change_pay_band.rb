@@ -6,7 +6,8 @@ class Operations::Tenants::ChangePayBand < Operations::Base
 
   description "Change a pay band, by pay_band_id from tenants_pay_bands. Currency, period and minimum, midpoint " \
               "and maximum are required, as the band reads afterwards. Give any of role_family_id, role_id, " \
-              "level_ordinal or level_id to change what it matches on: those given replace the whole matcher. " \
+              "level_ordinal or level_id to change what it matches on: those given replace the whole matcher, and " \
+              "role_id given blank on its own widens the band to every role and level. " \
               "Give location to move it, blank for any location. The band keeps its position; " \
               "tenants_reorder_pay_bands moves it. Every plan priced from it reprices. " \
               "#{Operations::Tenants::PayBandSupport::MATCHER_HELP} " \
