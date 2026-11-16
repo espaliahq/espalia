@@ -987,8 +987,9 @@ scenario the tab shows. `team_planning_undo_step` says what each would act on: t
 pick as an undo or redo with no event named, named by subject and facet ("Undo: Ada Quill
 · Level"), or by step for a date edit ("Undo: Q1 · Dates"). It never names a value. It
 skips a pay change for a member without the see-pay right, offering their latest other
-change or nothing. It offers nothing the operation would refuse, on scope or because a
-departure it brings back falls outside its step's dates. Viewers, Today, frozen plans and
+change or nothing. It offers nothing the operation would refuse: it tries each undo and
+redo on a copy of the plan that is never stored, so any refusal the plan would make removes
+the button. Viewers, Today, frozen plans and
 archived plans get neither. The name shows beside the arrow only when the tab strip has
 room for it, so the tabs never wrap; a screen reader always hears it in full. On a phone
 the buttons take a row of their own above the tabs. A button

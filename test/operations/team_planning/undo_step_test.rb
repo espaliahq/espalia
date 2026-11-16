@@ -222,6 +222,18 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: q2) }
   end
 
+  should "leave the plan's stream as it was, having tried both offers" do
+    set_level("4")
+    set_level("5")
+    call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
+    stream = EventStreamNaming.plan_stream(@plan_id, tenant: @tenant)
+    events = -> { as_tenant { Rails.configuration.event_store.read.stream(stream).map(&:event_id) } }
+    before = events.call
+
+    assert step.values_at(:undo, :redo).all?
+    assert_equal before, events.call
+  end
+
   should "refuse an unknown scenario, and someone not in the plan" do
     outsider = as_tenant { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
 
