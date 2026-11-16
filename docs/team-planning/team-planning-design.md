@@ -1466,9 +1466,14 @@ The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
   existing difference from Today.
 - **The reads carry it.** `team_planning_cost` and `team_planning_scenario_costs` give
   every total a `parts` of actual, planned and forecast. `team_planning_capacity` does the
-  same per model for the plan and each unit. `team_planning_forecast` lists the rows. No
-  screen shows the split yet: [#352](https://github.com/espaliahq/espalia/issues/352)
-  does.
+  same per model for the plan and each unit. `team_planning_forecast` lists the rows.
+- **The screens show it.** [#352](https://github.com/espaliahq/espalia/issues/352) puts a
+  quiet line under each total: the cost and capacity strips, each unit's figures on the
+  map, and the Scenarios table's Cost and Capacity cells. It reads "Actual · Planned ·
+  Forecast". Planned carries its sign, and forecast is left out while it is zero. Today's
+  run rate and capacity have no split, as Today is all actual. The line wraps part by part,
+  so a narrow card or cell never widens. Without the see-pay right, actual is priced at
+  band midpoints like every other figure, and the strip still says so.
 
 Two of these forecasts add a dependency this module did not have before.
 

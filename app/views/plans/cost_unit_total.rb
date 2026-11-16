@@ -24,6 +24,7 @@ class Views::Plans::CostUnitTotal < Views::Base
       span(class: "font-medium text-default") { @run_rate ? Format.yearly(figure) : figure }
       change = Format.sum_change(@row[:difference], @reference) if @row[:difference]
       span(class: "text-muted") { "(#{change} vs Today)" } if change
+      render Views::Plans::FigureParts.new(parts: Format.parts(@row[:parts], @reference)) unless @run_rate
     end
   end
 end
