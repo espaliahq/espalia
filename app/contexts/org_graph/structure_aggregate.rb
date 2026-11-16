@@ -781,9 +781,10 @@ class OrgGraph::StructureAggregate
     raise "Levels an HRIS provides must sit above every level Espalia holds"
   end
 
-  # A level an HRIS provides may sit only beneath the HRIS level directly above
-  # it, so handing a level over, or inserting an HRIS level above one, can
-  # leave a unit where its kind may no longer sit.
+  # A level an HRIS provides may sit only beneath the one HRIS level its list
+  # names (by default, the one directly above it), so handing a level over, or
+  # inserting an HRIS level above one, can leave a unit where its kind may no
+  # longer sit.
   def ensure_units_still_fit!(provider_changes, levels: with_stated_rules(@levels))
     prospective = OrgGraph::Taxonomy.new(levels, providers: @level_providers.merge(provider_changes))
     stranded = misplaced_units(prospective) - misplaced_units

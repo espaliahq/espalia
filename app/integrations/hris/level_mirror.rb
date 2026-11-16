@@ -125,7 +125,7 @@ class Hris::LevelMirror
     values = @readings.to_h { |person, mapper| [ person, mapper.field_value(field.id, kind: field.kind) ] }
     values.transform_values! { |value| value.value? && live_keys && !live_keys.key?(value.key) ? Hris::FieldValue.withheld : value }
 
-    LevelPlan.new(level:, field:, above_id: taxonomy.kind(level.id).parent_ids.first, values:,
+    LevelPlan.new(level:, field:, above_id: taxonomy.kind(level.id)&.parent_ids&.first, values:,
                   held: values.values.select(&:value?).group_by(&:key), withheld: values.values.any? { !it.value? && !it.blank? }, live_keys:)
   end
 

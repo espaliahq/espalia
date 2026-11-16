@@ -80,9 +80,8 @@ class OrgGraph::Projections::Structure
 
     levels.each.with_index do |level, position|
       row = OrgTaxonomyLevel.find_or_initialize_by(id: level[:level_id])
-      rules = level.key?(:parent_level_ids) ? { parent_level_ids: level[:parent_level_ids], top: level[:top] } : { parent_level_ids: nil, top: nil }
       unchanged = row.persisted? && row.name == level[:name] && row.position == -position - 1
-      row.assign_attributes(name: level[:name], position: position, **rules)
+      row.assign_attributes(name: level[:name], position:, parent_level_ids: level[:parent_level_ids], top: level[:top])
       row.effective_on = data[:effective_on] unless unchanged
       row.save!
     end
