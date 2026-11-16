@@ -201,7 +201,7 @@ Each component owns one radius step and one elevation role, so changing the look
 | 1 | `shadow-raised` | A card or bar on the page: `Kit::Card`, the navbar, the impersonation banner, a card-like row | Tailwind `xs` |
 | 2 | `shadow-lifted` | A card or chip under the pointer or focus: a focused capability card, a level chip | `sm` |
 | 3 | `shadow-overlay` | Menus, popovers, tooltips and toasts: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, the person pickers | `lg` |
-| 4 | `shadow-drawer` | A side pane over the page: the mobile activity and log panes | `xl` |
+| 4 | `shadow-drawer` | A side pane over the page: the mobile activity and log panes, `Kit::SidePanel`'s overlay | `xl` |
 | 5 | `shadow-modal` | `Kit::Modal` | `2xl` |
 
 Pick by job, never by the look you want: a card that needs to stand out is still `raised`, and a hover is always one level up from rest. A shadow reads the same in both schemes, so a role needs no dark value; one that did would go in `@variant dark` beside the colour roles.
@@ -216,6 +216,7 @@ Lookbook's **Design Tokens → Elevation and radius** shows each level on the pa
 | `Kit::Card` `variant: :inset` | `rounded-md` | none |
 | Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu and tooltip | `rounded-md` | `shadow-overlay` |
 | `Kit::Modal` | `rounded-lg` | `shadow-modal` |
+| `Kit::SidePanel` `narrow: :overlay` | `rounded-xl` on lg+ | `shadow-drawer` below lg |
 | `Kit::Button`, `Kit::Field`, `Kit::Alert` | `rounded-md` | none |
 | `Kit::Badge` | `rounded-sm` | none |
 | `Kit::Tag`, `Kit::Chip`, `Kit::SegmentedControl` | `rounded-full` | none |

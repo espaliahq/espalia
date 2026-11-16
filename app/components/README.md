@@ -118,10 +118,20 @@ end
 render Components::Kit::SectionHeading.new("Capabilities", subtitle: "36 across 25 roles") do |heading|
   heading.action { a(href: "#") { "View all" } }
 end
+
+render Components::Kit::SidePanel.new(id: "plan-side-panel", title: "About this plan", open: true,
+                                      cookie: "plan_side_panel_open", url_key: "panel", narrow: :stack) do |panel|
+  panel.main do
+    panel.toggle
+    render ScenarioTable.new(plan:)
+  end
+  panel.body { render RulesPanel.new(plan:) }
+end
 ```
 
 - **`Kit::Card`**: `variant: :flush` drops the body padding (for a table), `:inset` is a panel inside another surface. `density: :compact` tightens it. `href:` makes the whole card a link, so it can't hold other links.
 - **`Kit::SectionHeading`**: a heading with an optional subtitle and action. `tag: :h3` for a lower level.
+- **`Kit::SidePanel`**: a main column with a panel beside it the viewer can close, remembered in a cookie and the URL. The page reads the cookie to pass `open:`. Below lg the panel overlays the page (`narrow: :overlay`) or stacks under the main column (`:stack`).
 - **`Kit::DescriptionList`**: term and detail pairs in 1 to 4 columns.
 - **`Kit::Prose`**: anything a person wrote (feedback, comments, notes), with its Markdown rendered and escaped. `Prose.to_plain(text)` for an excerpt.
 

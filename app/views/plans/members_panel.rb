@@ -23,7 +23,7 @@ class Views::Plans::MembersPanel < Views::Base
   end
 
   def view_template
-    render Components::Kit::Card.new(title: "Members", density: :compact, heading_level: :h2) do |card|
+    render Components::Kit::Card.new(title: "Members", density: :compact, heading_level: :h3) do |card|
       card.body do
         locked_out_notice if @locked_out
         ul(class: "space-y-3 text-sm") { @members.each { member(it) } }
