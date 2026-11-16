@@ -111,7 +111,11 @@ class PayBandLockingTest < ActiveSupport::TestCase
     yield
   ensure
     finish << true
-    writer&.join(10) or writer&.kill
+    if writer && !writer.join(10)
+      writer.kill
+      # Leave an earlier failure as the one reported.
+      flunk "the writer never committed" unless $!
+    end
   end
 
   # Polls until the worker's backend waits on an advisory lock, so the test
