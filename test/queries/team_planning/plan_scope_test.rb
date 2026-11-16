@@ -336,6 +336,24 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       end
     end
 
+    should "judge a line the scenario holds as the scenario holds it, though the organisation since moved it outside" do
+      line = { plan_id: @plan_id, scenario_id: @h1, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Platform")
+      as_tenant { BudgetLine.where(id: @lines.values_at("Platform", "Core")).update_all(cost_centre: "Revenue") }
+      assert_includes resolve(@plan_id, @h1).budget_lines.map(&:id), @lines["Platform"]
+
+      seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
+                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]
+      call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: @h1, position_id: seat, draws: [ { budget_line_id: @lines["Platform"] } ])
+      call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Platform", amount: "6")
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Platform"])
+      call(Operations::TeamPlanning::SetBudgetLine, **line, budget_line_id: @lines["Platform"], cost_centre: "Platform")
+      assert_includes resolve(@plan_id, @h1).budget_lines.map(&:id), @lines["Platform"], "a cut line comes back at the cost centre the scenario gave it"
+
+      assert_includes resolve(@plan_id, @h1).outside_lines.map(&:id), @lines["Core"]
+      assert_equal NO_SUCH_LINE, refusal { call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Core"]) }
+    end
+
     should "refuse to narrow the scope while a change touches a line the narrower plan would drop, without naming it" do
       set_scope(@plan_id, [ @engineering, @sales ])
       call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: @lines["Revenue"])

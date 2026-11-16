@@ -49,15 +49,12 @@ module Operations::TeamPlanning::BudgetLineWrite
     raise Operations::Base::ParameterError, NO_SUCH_LINE
   end
 
-  # A cut line has left the map, so the line is also judged by its cost centre as the scenario last set it and as
-  # the organisation holds it, as {WithinScope#lines_within_scope!} judges it under the lock.
+  # Judged as {WithinScope#lines_within_scope!} judges it under the lock.
   def outside_line?(plan, line_id)
     record = TeamPlanningPlan.find(plan.plan_id)
     return false if record.scope_unit_ids.blank?
 
     map, = ::TeamPlanning::Resolution.new(context:, plan: record, scenario_id: scenario_id!(:scenario_id)).resolved(plan)
-    set = line_changes(line_id, plan).reverse.find { it.is_a?(::TeamPlanning::Events::BudgetLineSet) }
-    cost_centres = [ set&.data&.dig(:cost_centre), ::BudgetLine.find_by(id: line_id)&.cost_centre ]
-    map.outside_line?(line_id) || !cost_centres.all? { map.holds_cost_centre?(it) }
+    line_outside?(plan, map, scenario_id!(:scenario_id), line_id)
   end
 end
