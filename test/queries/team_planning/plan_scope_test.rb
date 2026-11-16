@@ -251,8 +251,8 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
 
     status = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)
     dee = status[:statuses].find { it[:subject_id] == @dee.id && it[:facet] == "level" }
-    assert_equal %i[scenario_id change_id subject_id facet status].sort, dee.keys.sort
-    assert_equal [ @h1, "level", "outside" ], dee.values_at(:scenario_id, :facet, :status)
+    assert_equal %i[scenario_id change_id subject_id facet status clearable].sort, dee.keys.sort
+    assert_equal [ @h1, "level", "outside", true ], dee.values_at(:scenario_id, :facet, :status, :clearable)
     assert_not_includes status[:names], @dee.id
     assert_equal [ @dee.id, @dee.id, @ada.id ], status[:statuses].map { it[:subject_id] }.select { [ @dee.id, @ada.id ].include?(it) }, "in the order the changes land"
     assert_equal "Ada Quill", status[:names][@ada.id]

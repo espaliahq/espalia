@@ -181,13 +181,11 @@ class Views::Plans::ChangesTab < Views::Base
        data: { planned_change: entry[:status] }) do
       div(class: "min-w-0 space-y-1") do
         p(class: "text-sm text-default break-words") do
-          strong(class: "font-medium") { no_longer_covered?(entry) ? NO_LONGER_COVERED : planned_subject(entry[:subject_id]) }
+          strong(class: "font-medium") { subject_label(entry) }
           plain " · #{entry[:staying] ? STAYING : facet_name(entry[:facet])}"
         end
         planned_in(entry[:scenario_id]) if entry[:scenario_id] != scenario_id
-        if no_longer_covered?(entry)
-          reverse(entry) if @can_edit
-        else
+        unless no_longer_covered?(entry)
           change_note(entry[:note])
           note_form(entry) if notable?(entry)
           settle(entry) if @can_edit && entry[:status].to_s == "conflicting"
@@ -196,9 +194,41 @@ class Views::Plans::ChangesTab < Views::Base
       div(class: "flex flex-wrap items-center gap-1.5 sm:justify-end") do
         status_badge(entry)
         sources(entry[:sources].to_a)
+        if @can_edit && entry[:clearable]
+          clear(entry)
+          undo(entry) if no_longer_covered?(entry)
+        end
       end
     end
   end
+
+  # The read decides which rows may be cleared, so a pay change a member may
+  # not touch never offers it. The dialog names the facet and never a value.
+  def clear(entry)
+    subject = subject_label(entry)
+    facet = entry[:staying] ? STAYING : facet_name(entry[:facet])
+    title = no_longer_covered?(entry) ? "Clear this #{facet.downcase} change?" : "Clear #{subject}'s #{facet.downcase}?"
+    render Components::Kit::Modal.new(id: "clear-#{entry[:change_id]}", title:, size: :md) do |modal|
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, compact: true, data: { action: "modal#open", clear_change: entry[:facet] },
+                                         aria_label: "Clear #{subject} · #{facet}") { "Clear" }
+      modal.body do
+        p(class: "text-sm text-default") do
+          "#{scenario_name(scenario_id)} will follow #{scenario_name(parent_of(scenario_id))} again here. " \
+            "The change stays in the history, and Undo brings it back."
+        end
+        form(action: plan_clears_path(plan_id), method: "post", class: "mt-6 flex flex-wrap items-center gap-3") do
+          input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+          { scenario_id:, subject_id: entry[:subject_id], facet: entry[:facet], tab: "changes" }.each do |name, value|
+            input(type: "hidden", name: name.to_s, value:)
+          end
+          render Components::Kit::Button.new(tone: :danger, type: :submit) { "Clear change" }
+          render Components::Kit::Button.new(variant: :outline, data: { action: "click->modal#close" }) { "Cancel" }
+        end
+      end
+    end
+  end
+
+  def parent_of(id) = @scenarios.find { it[:scenario_id] == id }&.dig(:parent_id) || plan_id
 
   def planned_in(id)
     p(class: "text-xs text-muted", data: { planned_in: id }) do
@@ -228,17 +258,17 @@ class Views::Plans::ChangesTab < Views::Base
 
   def no_longer_covered?(entry) = entry[:status].to_s == "outside"
 
+  def subject_label(entry) = no_longer_covered?(entry) ? NO_LONGER_COVERED : planned_subject(entry[:subject_id])
+
   # A scope keeps the plan's own record of a change about someone it no longer
-  # covers, so the plan can still take the change out, and nothing else.
-  def reverse(entry)
-    form(action: plan_change_reversals_path(plan_id), method: "post", class: "flex flex-wrap items-center gap-2 pt-1", data: { reverse_change: entry[:facet] }) do
+  # covers, so the plan can still take the change out, and nothing else. The
+  # plan page's Undo never offers it, so its row does.
+  def undo(entry)
+    form(action: plan_change_undos_path(plan_id), method: "post", class: "contents", data: { undo_change: entry[:facet] }) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      input(type: "hidden", name: "shown", value: scenario_param(scenario_id))
-      entry.slice(:scenario_id, :subject_id, :facet, :change_id).each do |field, value|
-        input(type: "hidden", name: "reversal[#{field}]", value:)
-      end
-      render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "reversal[choice]", value: "clear") { "Clear" }
-      render Components::Kit::Button.new(type: :submit, variant: :outline, size: :sm, compact: true, name: "reversal[choice]", value: "undo") { "Undo" }
+      { scenario_id:, event_id: entry[:change_id], tab: "changes" }.each { |name, value| input(type: "hidden", name: name.to_s, value:) }
+      render Components::Kit::Button.new(type: :submit, variant: :ghost, size: :sm, compact: true,
+                                         aria_label: "Undo #{NO_LONGER_COVERED} · #{facet_name(entry[:facet])}") { "Undo" }
     end
   end
 

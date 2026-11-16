@@ -9,6 +9,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
   GROWTH = "01a1da48-c64a-7529-af90-0f97e41cdc03"
   ADA = "01a1da48-c64a-7529-af90-0f97e41cdc04"
   BO = "01a1da48-c64a-7529-af90-0f97e41cdc05"
+  PLAN_B = "01a1da48-c64a-7529-af90-0f97e41cdc06"
 
   SCENARIOS = [
     { scenario_id: PLAN, parent_id: nil, relation: nil, name: "Pay review", starts_on: "2026-11-15", ends_on: nil },
@@ -21,7 +22,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       withdrawn: false, from_plan: false, meets: [], sources: %w[espalia], **fields }
   end
 
-  def render_tab(changes: [], statuses: [], items: [], scenario_id: Q1, can_edit: false)
+  def render_tab(changes: [], statuses: [], items: [], scenario_id: Q1, can_edit: false, scenarios: SCENARIOS)
     drift = { plan_id: PLAN, from: "2026-11-14", to: "2026-11-30", changes:,
               names: { ADA => "Ada Quill", BO => "Bo Reyes", PAYMENTS => "Payments", GROWTH => "Growth" } }
     status = { plan_id: PLAN, scenario_id:, on: "2026-11-30", statuses:, names: { BO => "Bo Reyes" } }
@@ -29,7 +30,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
     plan = { plan_id: PLAN, name: "Pay review", base_on: "2026-11-15" }
     controller = ApplicationController.new
     controller.request = ActionDispatch::TestRequest.create
-    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ChangesTab.new(plan:, scenarios: SCENARIOS, drift:, status:, attention:,
+    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ChangesTab.new(plan:, scenarios:, drift:, status:, attention:,
                                                                                                                 can_edit:)))
   end
 
@@ -37,6 +38,8 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
     { scenario_id:, change_id:, subject_id: BO, facet: "level", status: "pending", since: nil, sources: %w[espalia],
       **({ note: } if note) }
   end
+
+  def clearable(scenario_id: Q1, **fields) = noted(nil, scenario_id:).merge(status: "plan_only", clearable: true, **fields)
 
   def texts(html, selector) = html.css(selector).map { it.text.squish }
 
@@ -170,17 +173,21 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
     end
 
     should "offer an editor only Clear and Undo on a change about someone the plan no longer covers, and name no one" do
-      outside = { scenario_id: PLAN, change_id: "o1", subject_id: BO, facet: "level", status: "outside" }
-      html = render_tab(statuses: [ outside ], can_edit: true)
+      outside = { scenario_id: Q1, change_id: "o1", subject_id: BO, facet: "level", status: "outside", clearable: true }
+      html = render_tab(statuses: [ outside ], scenario_id: Q1, can_edit: true)
       row = html.at_css("[data-planned-change='outside']")
+      label = "#{Views::Plans::ChangesTab::NO_LONGER_COVERED} · Level"
 
-      assert_includes row.text.squish, "#{Views::Plans::ChangesTab::NO_LONGER_COVERED} · Level"
-      assert_not_includes row.text, "Bo Reyes"
-      assert_equal %w[Clear Undo], row.css("[data-reverse-change='level'] button").map { it.text.squish }
-      assert_equal({ "reversal[scenario_id]" => PLAN, "reversal[subject_id]" => BO, "reversal[facet]" => "level", "reversal[change_id]" => "o1" },
-                   row.css("input[name^='reversal']").to_h { [ it["name"], it["value"] ] })
+      assert_includes row.text.squish, label
+      assert_not_includes html.to_html, "Bo Reyes"
+      assert_equal [ "Clear #{label}" ], row.css("[data-clear-change]").map { it["aria-label"] }
+      assert_equal "Clear this level change?", row.at_css("[id^='clear-'][role='dialog'] h2").text.squish
+      assert_equal [ "Undo #{label}" ], row.css("[data-undo-change='level'] button").map { it["aria-label"] }
+      assert_equal({ "scenario_id" => Q1, "event_id" => "o1", "tab" => "changes" },
+                   row.css("form[action$='/change-undos'] input[type=hidden]").to_h { [ it["name"], it["value"] ] }.except("authenticity_token"))
       assert_empty row.css("[data-change-note-editor], [data-settle-conflict]")
-      assert_empty render_tab(statuses: [ outside ]).css("[data-reverse-change]"), "a viewer gets no buttons"
+      assert_empty render_tab(statuses: [ outside ], scenario_id: Q1).css("[data-clear-change], [data-undo-change]"), "a viewer gets no buttons"
+      assert_empty render_tab(statuses: [ outside.merge(clearable: false) ], scenario_id: Q1, can_edit: true).css("[data-undo-change]")
     end
 
     should "name a rule by its kind, a plan-wide rule by the plan, a plan value apart from a level change, and a hire only the plan holds" do
@@ -289,6 +296,24 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       empty = render_tab.at_css("[data-changes-section='attention']")
       assert_includes empty.text, "Everything in this scenario still fits."
       assert_nil empty.at_css("a")
+    end
+  end
+
+  context "clearing a change" do
+    should "offer Clear on a row an editor may clear, saying the scenario follows its own parent again" do
+      alternative = { scenario_id: PLAN_B, parent_id: Q1, relation: "instead", name: "Plan B", starts_on: "2027-01-01", ends_on: "2027-03-31" }
+      html = render_tab(statuses: [ clearable(scenario_id: PLAN_B) ], scenario_id: PLAN_B, can_edit: true, scenarios: SCENARIOS + [ alternative ])
+
+      assert_equal [ "Clear Bo Reyes · Level" ], html.css("[data-clear-change]").map { it["aria-label"] }
+      assert_includes html.at_css("[id^='clear-'][role='dialog']").text.squish,
+                      "Plan B will follow Q1 hires again here. The change stays in the history, and Undo brings it back."
+      assert_equal({ "scenario_id" => PLAN_B, "subject_id" => BO, "facet" => "level", "tab" => "changes" },
+                   html.css("form[action$='/clears'] input[type=hidden]").to_h { [ it["name"], it["value"] ] }.except("authenticity_token"))
+    end
+
+    should "offer no Clear on a row the read marks unclearable, nor to a viewer" do
+      assert_empty render_tab(statuses: [ clearable(clearable: false) ], can_edit: true).css("[data-clear-change]")
+      assert_empty render_tab(statuses: [ clearable ]).css("[data-clear-change]")
     end
   end
 end

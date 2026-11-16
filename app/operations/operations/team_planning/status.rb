@@ -37,7 +37,11 @@ class Operations::TeamPlanning::Status < Operations::Base
               "the person stays, and conflicting once the Org Graph has them leave. Subjects are named by id, and `names` maps each the Org Graph " \
               "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \
               "plan holds has none. A status whose change carries a note has it as note: { value }, or { removed: true } " \
-              "once erased. A note on a pay change reaches only a member with the see-pay right; anyone else gets no note on it. #{UNCHECKED} Refused, as an unknown plan, unless " \
+              "once erased. A note on a pay change reaches only a member with the see-pay right; anyone else gets no note on it. " \
+              "clearable is true on a status the caller may hand back to what the step before gives it with " \
+              "team_planning_clear_change: an editor's, on a change the scenario makes itself, never on the " \
+              "baseline, and never on a pay change without the see-pay right. A change about " \
+              "someone or something a scoped plan no longer covers is clearable like any other, so it can be removed. #{UNCHECKED} Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
   approval :none
@@ -58,12 +62,22 @@ class Operations::TeamPlanning::Status < Operations::Base
     report = refusing_bad_plans { ::TeamPlanning::Status.new(context:, plan:, scenario_id:).call }
     notes = notes_of(plan, report.statuses.map(&:change_id))
     see_pay = PlanPolicy.new(context, plan).see_pay?
+    clearable = clearable(plan, scenario_id, see_pay)
     { plan_id: plan.id, scenario_id:, **checked(plan), on: report.on.iso8601,
-      statuses: report.statuses.map { status_row(it, ::Operations::TeamPlanning::ChangeNote.payload(notes[it.change_id], facet: it.facet, see_pay:)) },
+      statuses: report.statuses.map do
+        status_row(it, ::Operations::TeamPlanning::ChangeNote.payload(notes[it.change_id], facet: it.facet, see_pay:), clearable.call(it))
+      end,
       names: report.names }
   end
 
   private
+
+  # @return [Proc] whether the caller may clear a status's change
+  def clearable(plan, scenario_id, see_pay)
+    return ->(_) { false } if scenario_id == plan.id || PlanPolicy.frozen?(plan) || !PlanPolicy.new(context, plan).update?
+
+    ->(entry) { entry.scenario_id == scenario_id && ::Operations::TeamPlanning::ChangeNote.visible?(entry.facet, see_pay:) }
+  end
 
   # A change's note is rewritten apart from it, so it is read off the override
   # the change projects, which holds the latest.
@@ -71,10 +85,10 @@ class Operations::TeamPlanning::Status < Operations::Base
     TeamPlanningOverride.where(plan_id: plan.id, event_id: change_ids).filter_map { [ it.event_id, it.note ] if it.note }.to_h
   end
 
-  def status_row(entry, note)
-    return entry.to_h.slice(:scenario_id, :change_id, :subject_id, :facet).merge(status: "outside") if entry.status == :outside
+  def status_row(entry, note, clearable)
+    return entry.to_h.slice(:scenario_id, :change_id, :subject_id, :facet).merge(status: "outside", clearable:) if entry.status == :outside
 
-    entry.to_h.except(:staying).merge(status: entry.status.to_s, since: entry.since&.iso8601,
+    entry.to_h.except(:staying).merge(status: entry.status.to_s, since: entry.since&.iso8601, clearable:,
                                       **({ staying: true } if entry.staying),
                                       **({ note: } if note))
   end

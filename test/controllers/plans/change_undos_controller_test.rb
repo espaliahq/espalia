@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class Plans::ChangeReversalsControllerTest < ActionDispatch::IntegrationTest
+class Plans::ChangeUndosControllerTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
   ESPALIA = { provider: "espalia", effective_on: "2026-11-01" }.freeze
@@ -38,49 +38,57 @@ class Plans::ChangeReversalsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  def reverse(choice, change_id: level_change[:change_id])
-    post plan_change_reversals_path(@plan_id), params: { shown: @lean, reversal: { scenario_id: @q1, subject_id: @dee.id, facet: "level", change_id:, choice: } }
+  def undo(change_id: level_change[:change_id])
+    post plan_change_undos_path(@plan_id), params: { scenario_id: @q1, event_id: change_id, tab: "changes" }
   end
 
   context "an editor" do
     setup { sign_in @editor.user }
 
-    should "see Clear and Undo on a change about someone the plan no longer covers, from a scenario that inherits it" do
-      get changes_plan_path(@plan_id, scenario: @lean)
+    should "see Clear and Undo on a change about someone the plan no longer covers, in the scenario that made it" do
+      get changes_plan_path(@plan_id, scenario: @q1)
 
       assert_select "[data-planned-change='outside']", text: /Someone this plan no longer covers/
-      assert_select "[data-planned-change='outside'] [data-reverse-change='level'] button", text: /\A(Clear|Undo)\z/, count: 2
+      assert_select "[data-planned-change='outside'] [data-clear-change='level']", count: 1
+      assert_select "[data-planned-change='outside'] [data-undo-change='level'] button", text: "Undo", count: 1
       assert_no_match "Dee Quill", response.body
     end
 
-    should "clear it in the scenario that made it, and go back to the scenario shown" do
-      reverse("clear")
+    should "see neither in a scenario that only inherits it" do
+      get changes_plan_path(@plan_id, scenario: @lean)
 
-      assert_redirected_to changes_plan_path(@plan_id, scenario: @lean)
-      assert_equal "Change cleared.", flash[:notice]
+      assert_select "[data-planned-change='outside']", text: /Someone this plan no longer covers/
+      assert_select "[data-planned-change='outside'] [data-clear-change], [data-planned-change='outside'] [data-undo-change]", count: 0
+    end
+
+    should "clear it through the plan page's Clear" do
+      post plan_clears_path(@plan_id), params: { scenario_id: @q1, subject_id: @dee.id, facet: "level", tab: "changes" }
+
+      assert_redirected_to changes_plan_path(@plan_id, scenario: @q1)
       assert_nil level_change
     end
 
-    should "undo it" do
-      reverse("undo")
+    should "undo it, and go back to the tab" do
+      undo
 
+      assert_redirected_to changes_plan_path(@plan_id, scenario: @q1)
       assert_equal "Change undone.", flash[:notice]
       assert_nil level_change
     end
 
-    should "say why a reversal was refused" do
+    should "say why an undo was refused" do
       change_id = level_change[:change_id]
-      reverse("undo", change_id:)
-      reverse("undo", change_id:)
+      undo(change_id:)
+      undo(change_id:)
 
-      assert_redirected_to changes_plan_path(@plan_id, scenario: @lean)
-      assert_match(/\ACouldn't undo the change: /, flash[:alert])
+      assert_redirected_to changes_plan_path(@plan_id, scenario: @q1)
+      assert_match(/\ACouldn't undo: /, flash[:alert])
     end
   end
 
   should "refuse a viewer" do
     sign_in @viewer.user
-    reverse("clear")
+    undo
 
     assert_redirected_to root_path
     assert level_change

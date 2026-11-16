@@ -457,8 +457,12 @@ Rails.application.routes.draw do
     # Note a planned change from the Changes tab ([#292](https://github.com/espaliahq/espalia/issues/292)); the id is the change's event_id.
     resources :notes, only: [ :update ], controller: "plans/notes"
     resources :settlements, only: [ :create ], controller: "plans/settlements"
-    # Clear or undo a change about someone the plan no longer covers ([#435](https://github.com/espaliahq/espalia/issues/435)).
-    resources :change_reversals, only: [ :create ], controller: "plans/change_reversals", path: "change-reversals"
+    # Undo, redo and clear a change from the plan page ([#424](https://github.com/espaliahq/espalia/issues/424)).
+    resources :undos, only: [ :create ], controller: "plans/undos"
+    resources :redos, only: [ :create ], controller: "plans/redos"
+    resources :clears, only: [ :create ], controller: "plans/clears"
+    # Undo a change about someone the plan no longer covers, from its own row ([#435](https://github.com/espaliahq/espalia/issues/435)).
+    resources :change_undos, only: [ :create ], controller: "plans/change_undos", path: "change-undos"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.

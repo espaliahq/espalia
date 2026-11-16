@@ -48,13 +48,15 @@ class PlanChangesOutsideSystemTest < ApplicationSystemTestCase
 
       within(ROW) do
         assert_text "Someone this plan no longer covers"
-        assert_selector "button", text: "Clear"
-        assert_selector "button", text: "Undo"
+        assert_selector "[data-clear-change='level']", text: "Clear"
+        assert_selector "[data-undo-change='level'] button", text: "Undo"
         assert_no_selector "[data-settle-conflict]"
       end
       assert_no_text "Dee Quill"
 
-      click_button_with_js_fallback("Clear", expect_text: "Change cleared.")
+      click_selector_with_js_fallback("[data-clear-change='level']", expect_selector: "[id^='clear-'][role='dialog']:not(.hidden)")
+      within("[id^='clear-'][role='dialog']") { assert_text "Clear this level change?" }
+      click_button_with_js_fallback("Clear change", expect_text: "Change cleared.")
       assert_no_selector ROW
     end
 
@@ -63,7 +65,7 @@ class PlanChangesOutsideSystemTest < ApplicationSystemTestCase
       visit changes_plan_path(@plan_id, scenario: @q1)
 
       assert_selector ROW, text: "Someone this plan no longer covers"
-      assert_no_selector "#{ROW} button"
+      assert_no_selector "#{ROW} [data-clear-change], #{ROW} [data-undo-change]"
       assert_no_text "Dee Quill"
     end
   end
@@ -75,10 +77,10 @@ class PlanChangesOutsideSystemTest < ApplicationSystemTestCase
       sign_in_as(@editor.user)
       visit changes_plan_path(@plan_id, scenario: @q1)
 
-      assert_selector "#{ROW} button", text: "Undo"
+      assert_selector "#{ROW} [data-undo-change='level'] button", text: "Undo"
       assert_no_sideways_overflow
 
-      click_button_with_js_fallback("Undo", expect_text: "Change undone.")
+      click_selector_with_js_fallback("#{ROW} [data-undo-change='level'] button", expect_text: "Change undone.")
       assert_no_selector ROW
     end
   end
