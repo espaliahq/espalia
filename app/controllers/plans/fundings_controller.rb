@@ -31,21 +31,25 @@ class Plans::FundingsController < ApplicationController
 
   def back_path = budget_plan_path(plan_id, scenario: scenario_id)
 
-  # A line left blank or at 0 isn't drawn on. A lone line takes the whole position.
+  # A line left blank or at 0 isn't drawn on. A lone line takes the whole
+  # position. The checks speak in percentages here so the operation's, which
+  # speak in shares, never reach the form.
   #
-  # @raise [Operations::Base::ParameterError] for a part that isn't a percentage
+  # @raise [Operations::Base::ParameterError] for a part that isn't a percentage, or parts that don't add up to 100
   def draws
     parts = params.fetch(:funding, {}).permit(parts: {}).fetch(:parts, {}).to_h.transform_values { it.to_s.strip.delete_suffix("%") }
-    chosen = parts.reject { |_, part| part.blank? || part.match?(/\A0+(\.0+)?\z/) }
+    chosen = parts.reject { |_, part| part.blank? || part.match?(/\A0+(\.0+)?\z/) }.transform_values { percent(it) }
     raise Operations::Base::ParameterError, "Give at least one line a part" if chosen.empty?
     return [ { budget_line_id: chosen.keys.sole } ] if chosen.one?
+    raise Operations::Base::ParameterError, "The parts add up to 100" unless chosen.values.sum == 100
 
-    chosen.map { |budget_line_id, part| { budget_line_id:, share: share(part) } }
+    chosen.map { |budget_line_id, part| { budget_line_id:, share: (part / 100).to_s("F") } }
   end
 
-  def share(part)
-    raise Operations::Base::ParameterError, "Each part is a percentage, such as 50" unless part.match?(/\A\d{1,3}(\.\d+)?\z/)
+  def percent(part)
+    figure = BigDecimal(part) if part.match?(/\A\d{1,3}(\.\d{1,4})?\z/)
+    raise Operations::Base::ParameterError, "Each part is a percentage above 0 and at most 100, such as 50" unless figure&.between?(0.0001, 100)
 
-    (BigDecimal(part) / 100).to_s("F")
+    figure
   end
 end

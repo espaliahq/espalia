@@ -72,10 +72,12 @@ class Plans::FundingsControllerTest < ActionDispatch::IntegrationTest
 
     should "say why it refused parts that don't add up, or that aren't percentages" do
       patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: { @platform => "60", @growth => "30" } } }
-      assert_match(/\ACouldn't set the funding: /, flash[:alert])
+      assert_equal "Couldn't set the funding: The parts add up to 100", flash[:alert]
 
-      patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: { @platform => "half", @growth => "50" } } }
-      assert_equal "Couldn't set the funding: Each part is a percentage, such as 50", flash[:alert]
+      [ { @platform => "half", @growth => "50" }, { @platform => "150", @growth => "50" }, { @platform => "lots" } ].each do |parts|
+        patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: } }
+        assert_equal "Couldn't set the funding: Each part is a percentage above 0 and at most 100, such as 50", flash[:alert]
+      end
 
       patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: { @platform => "", @growth => "0" } } }
       assert_equal "Couldn't set the funding: Give at least one line a part", flash[:alert]
