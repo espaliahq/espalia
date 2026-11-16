@@ -128,7 +128,7 @@ class TeamPlanning::Budget
   def call
     aggregate = @repository.load_plan(@plan.id)
     funding = TeamPlanning::Funding.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
-    cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call
+    cost = TeamPlanning::Cost.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, aggregate:).call(at_end: false)
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}

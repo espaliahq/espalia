@@ -273,10 +273,11 @@ class TeamPlanning::Cost
     end
   end
 
+  # @param at_end [Boolean] false skips the run rate at the scenario's end, for a caller that never reads it
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def call
+  def call(at_end: true)
     aggregate = prepare
     run_rate = @scenario_id == @plan.id
     earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
@@ -284,7 +285,7 @@ class TeamPlanning::Cost
     @steps[@scenario_id] ||= TeamPlanning::Forecast::Step.new(map: scenario.map, pricing: scenario.pricing) unless run_rate
     rows = TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows
     forecast = forecasted(rows)
-    at_end = at_end(scenario.map, rows) unless run_rate
+    at_end = (run_rate_at_end(scenario.map, rows) if at_end && !run_rate)
     baseline = priced(at_end ? at_end.baseline.map : resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
@@ -348,10 +349,9 @@ class TeamPlanning::Cost
 
   # Each seat held on the last day, for a full year: a one-day period of a
   # one-day year. The forecast is summed while the scenario's units hold.
-  def at_end(map, rows)
+  def run_rate_at_end(map, rows)
     on = @period.end
-    scenario = on_day(on) { priced(map) }
-    forecast = forecasted(rows, &:run_rate)
+    scenario, forecast = on_day(on) { [ priced(map), forecasted(rows, &:run_rate) ] }
     RunRate.new(on:, scenario:, forecast:, baseline: on_day(on) { priced(resolved(@plan.id)) })
   end
 

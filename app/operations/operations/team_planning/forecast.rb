@@ -32,7 +32,7 @@ class Operations::TeamPlanning::Forecast < Operations::Base
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     rows = refusing_bad_plans do
-      cost = ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call
+      cost = ::TeamPlanning::Cost.new(context:, plan:, scenario_id:).call(at_end: false)
       capacity = ::TeamPlanning::Capacity.split(context:, plan:, scenario_id:)
       names = cost.scenario.map.units.to_h { [ it.id, it.name ] }
       measured = capacity.forecast.index_by { key(it) }
