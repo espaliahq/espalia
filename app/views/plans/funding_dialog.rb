@@ -3,7 +3,7 @@
 # The Budget tab's "Funding" dialog ([#411](https://github.com/espaliahq/espalia/issues/411)),
 # one per tab, for an editor on a scenario. Each position's "Funding…" button
 # opens it, and the `funding-form` controller fills in the parts it draws now.
-# It lists each line by name and cost centre and shows no amount, so the tab
+# It lists each line by name and terms, cost centre included, and shows no amount, so the tab
 # stays the one place that shows money. It posts to {Plans::FundingsController}.
 class Views::Plans::FundingDialog < Views::Base
   include Views::Tenant::BudgetLines::LineText
@@ -70,13 +70,13 @@ class Views::Plans::FundingDialog < Views::Base
   def line_row(line)
     id = "funding-part-#{line[:budget_line_id]}"
     li(class: "flex items-center justify-between gap-3 p-3", data: { funding_line: line[:budget_line_id] }) do
-      label(for: id, class: "min-w-0 text-sm") do
+      label(for: id, class: "min-w-0 flex-1 text-sm") do
         span(class: "block font-medium text-default break-words") { line_name(line) }
-        span(class: "block text-xs text-muted break-words") { line[:cost_centre] ? "Cost centre #{line[:cost_centre]}" : "No cost centre" }
+        span(class: "block text-xs text-muted break-words") { terms_text(line) }
       end
-      div(class: "flex shrink-0 items-center gap-1") do
+      div(class: "flex w-24 shrink-0 items-center gap-1") do
         input(id:, name: "funding[parts][#{line[:budget_line_id]}]", type: "text", inputmode: "decimal", autocomplete: "off",
-              class: "#{Components::Kit::Field::INPUT} w-20 text-right", data: { funding_form_target: "part", line_id: line[:budget_line_id] })
+              class: "#{Components::Kit::Field::INPUT} text-right", data: { funding_form_target: "part", line_id: line[:budget_line_id] })
         span(class: "text-sm text-muted", aria: { hidden: "true" }) { "%" }
       end
     end
