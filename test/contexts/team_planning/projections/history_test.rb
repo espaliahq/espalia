@@ -103,6 +103,26 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_empty TeamPlanningHistoryEntry.all
   end
 
+  should "count the changes a removed scenario still held, as the plan's log does, and drop the count with the plan" do
+    set_cap(@lean, 5)
+    set_cap(@lean, 4)
+    set_level(@lean, "4")
+    @handler.clear_change(@plan_id, scenario_id: @lean, subject_id: @person.id, facet: "level")
+    place(@lean)
+    @handler.undo_change(@plan_id, scenario_id: @lean)
+    set_level(@lean, "5")
+    held = TeamPlanning::Repository.new.load_plan(@plan_id).changes_in(@lean).map(&:key).uniq.size
+
+    @handler.remove_scenario(@plan_id, @lean)
+
+    tally = TeamPlanningRemovedScenarioTally.find(@lean)
+    assert_equal [ 2, held, @plan_id ], [ tally.changes_held, held, tally.plan_id ]
+    assert_empty history(@lean)
+
+    @handler.delete_plan(@plan_id)
+    assert_empty TeamPlanningRemovedScenarioTally.all
+  end
+
   should "move every entry of a split's subjects and facets to the agreed part, undo included, in their order" do
     set_cap(@q1, 8)
     set_level(@q1, "4")
@@ -252,12 +272,15 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
       @handler.set_scenario_period(@plan_id, q2, ends_on: "2027-07-31")
       @handler.undo_change(@plan_id, scenario_id: q2)
       @handler.redo_change(@plan_id, scenario_id: q2)
+      set_cap(@lean, 5)
+      @handler.remove_scenario(@plan_id, @lean)
 
       before = snapshot_read_models(TeamPlanning::Projections::History, @tenant)
-      assert_equal 15, before[:history].size
+      assert_equal 14, before[:history].size
+      assert_equal [ 1 ], before[:tallies].pluck("changes_held")
 
       TeamPlanning::Projections::History.reset!(tenant: @tenant)
-      assert_equal 0, TeamPlanningHistoryEntry.count
+      assert_equal 0, TeamPlanningHistoryEntry.count + TeamPlanningRemovedScenarioTally.count
       Projections::Replayer.replay(projection_class: TeamPlanning::Projections::History, tenant: @tenant)
 
       assert_equal before, snapshot_read_models(TeamPlanning::Projections::History, @tenant)
