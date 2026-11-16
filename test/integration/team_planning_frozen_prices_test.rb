@@ -201,6 +201,14 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
     end
   end
 
+  should "read a column a stored copy predates as its default, and the copied rows as the plan's tenant's" do
+    copy = { "pay_bands" => [ { "id" => @band.id, "level_id" => @e5.level_id, "currency" => "EUR", "period" => "year",
+                                "minimum" => "0", "midpoint" => "100000", "maximum" => "200000" } ] }
+    band = TeamPlanning::PricingInputs.new(plan, priced_on: plan.archived_on, copy:).bands.sole
+
+    assert_equal [ "", @tenant.id ], [ band.location, band.tenant_id ]
+  end
+
   should "read a frozen copy only until the plan is restored, and take a fresh one when it is archived again" do
     as_tenant(&changes.fetch("a band's figures"))
     assert_equal 100_000, e5_midpoint

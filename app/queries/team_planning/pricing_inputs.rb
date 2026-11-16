@@ -55,7 +55,7 @@ class TeamPlanning::PricingInputs
   end
 
   # @return [Array<PayBand>] read only, in list order, as the last match wins
-  def bands = @bands ||= rows(:pay_bands).sort_by { [ it.position, it.id ] }
+  def bands = @bands ||= rows(:pay_bands).sort_by { [ it.position, it.id ] }.freeze
 
   # @return [Time, nil] when a band last changed, as the tenant recorded it
   def bands_changed_at
@@ -64,7 +64,11 @@ class TeamPlanning::PricingInputs
   end
 
   # @return [String, nil]
-  def reference_currency = rows(:reference_currencies).first&.currency
+  def reference_currency
+    return @reference_currency if defined?(@reference_currency)
+
+    @reference_currency = rows(:reference_currencies).first&.currency
+  end
 
   # @param from [String]
   # @param to [String]
@@ -78,10 +82,10 @@ class TeamPlanning::PricingInputs
   end
 
   # @return [Array<::BudgetLine>] read only, by start
-  def budget_lines = @budget_lines ||= rows(:budget_lines).sort_by { [ it.starts_on, it.id ] }
+  def budget_lines = @budget_lines ||= rows(:budget_lines).sort_by { [ it.starts_on, it.id ] }.freeze
 
   # @return [Hash{String => Hash}] each rule's value, the tenant's own over the built-in default
-  def rule_defaults = PlanningRuleDefault.values_over_defaults(rows(:planning_rule_defaults))
+  def rule_defaults = @rule_defaults ||= PlanningRuleDefault.values_over_defaults(rows(:planning_rule_defaults)).freeze
 
   private
 
@@ -89,6 +93,7 @@ class TeamPlanning::PricingInputs
     model = MODELS.fetch(name)
     return model.where(tenant_id: @plan.tenant_id).to_a unless @copy
 
-    @copy.fetch(name.to_s, []).map { model.instantiate(it.slice(*model.column_names)).tap(&:readonly!) }
+    blank = model.column_defaults.merge("tenant_id" => @plan.tenant_id)
+    @copy.fetch(name.to_s, []).map { model.instantiate(blank.merge(it.slice(*model.column_names))).tap(&:readonly!) }
   end
 end
