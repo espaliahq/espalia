@@ -598,6 +598,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       visit assessments_path
       assert_text "My Assessments"
       visit assessment_path(@assignment, activity: "open")
+      wait_for_stimulus "activity-pane"
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
 
       back_until_pane_closes
@@ -610,6 +611,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_text "My Assessments"
       page.driver.browser.manage.add_cookie(name: "assessment_activity_pane_open", value: "open")
       visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
 
       back_until_pane_closes
