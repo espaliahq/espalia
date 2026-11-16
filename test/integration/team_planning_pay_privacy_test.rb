@@ -377,6 +377,26 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     assert_includes statuses, "data:pay"
   end
 
+  should "offer an editor whose see-pay right is withdrawn no undo, redo or clear of the pay change they made" do
+    call(Operations::TeamPlanning::GrantSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
+    call(Operations::TeamPlanning::SetActualPay, @editor, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
+                                                          amount: AMOUNT, currency: "AUD", period: "year", basis: "full_time")
+    step = -> { call(Operations::TeamPlanning::UndoStep, @editor, plan_id: @plan_id, scenario_id: @q1) }
+    pay_clearable = -> { call(Operations::TeamPlanning::Status, @editor, plan_id: @plan_id, scenario_id: @q1)[:statuses].find { it[:facet] == "data:pay" }[:clearable] }
+    assert_equal "data:pay", step.call[:undo][:facet]
+    assert pay_clearable.call
+
+    call(Operations::TeamPlanning::WithdrawSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
+    assert_equal({ undo: nil, redo: nil }, step.call.slice(:undo, :redo))
+    assert_not pay_clearable.call
+
+    call(Operations::TeamPlanning::GrantSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
+    call(Operations::TeamPlanning::UndoChange, @editor, plan_id: @plan_id, scenario_id: @q1)
+    call(Operations::TeamPlanning::WithdrawSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
+    assert_equal({ undo: nil, redo: nil }, step.call.slice(:undo, :redo))
+    assert_not_includes step.call.to_json, AMOUNT
+  end
+
   should "read pay plan only to every member, never as Org Graph work still to do" do
     { "holder" => @holder, "viewer" => @viewer, "editor" => @editor }.each do |who, account|
       pay = call(Operations::TeamPlanning::Status, account, plan_id: @plan_id, scenario_id: @q1)[:statuses].find { it[:facet] == "data:pay" }
