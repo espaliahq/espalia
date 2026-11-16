@@ -71,8 +71,6 @@ class Views::Plans::UpdateToToday < Views::Base
     end
   end
 
-  # A first step starts on the base unless it was given a later start, so
-  # the update moves the start of one that begins before today.
   def moved_starts
     @preview.fetch(:starts, []).each do |start|
       p(class: "text-sm text-default", data: { update_start: start[:scenario_id] }) do
