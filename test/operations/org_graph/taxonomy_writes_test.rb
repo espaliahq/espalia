@@ -119,6 +119,30 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_equal @admin.person.id, event.data[:defined_by_id]
     end
 
+    context "that a plan places a unit at" do
+      setup do
+        @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: Date.current.iso8601)[:plan_id]
+        scenario_id = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1",
+                                                                   ends_on: (Date.current + 90).iso8601)[:scenario_id]
+        call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id:, name: "Ledger", top_level: true, level_id: @guild)
+      end
+
+      should "keep the level while the plan is live, counting the plans" do
+        error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @guild) }
+
+        assert_equal "Guild can't be removed, as 1 live plan places units of this type. Change or archive that plan first",
+                     error.message
+        assert_includes level_names, "Guild"
+      end
+
+      should "remove the level once the plan is archived" do
+        call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+        assert_not_includes level_names, "Guild"
+      end
+    end
+
     should "keep a level that holds units, naming them" do
       error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @team) }
 
