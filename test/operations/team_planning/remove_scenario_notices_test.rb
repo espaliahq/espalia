@@ -21,9 +21,13 @@ class Operations::TeamPlanning::RemoveScenarioNoticesTest < ActiveSupport::TestC
       @one = fork("One pay change", relation: "then")
       @two = fork("Two pay changes", parent_id: @one, relation: "instead")
       @none = fork("No pay changes", parent_id: @one, relation: "instead")
+      @priced = fork("A priced line", parent_id: @one, relation: "instead")
+      @heads = fork("A head count", parent_id: @one, relation: "instead")
       set_pay(@one, people.first)
       people.each { set_pay(@two, it) }
-      @scenario_ids = [ @plan_id, @one, @two, @none ]
+      set_line(@priced, amount: "480000", currency: "AUD", period: "year", head_count: "4")
+      set_line(@heads, head_count: "2")
+      @scenario_ids = [ @plan_id, @one, @two, @none, @priced, @heads ]
     end
   end
 
@@ -39,9 +43,19 @@ class Operations::TeamPlanning::RemoveScenarioNoticesTest < ActiveSupport::TestC
           assert_not batch.key?(scenario_id)
         end
       end
-      assert_equal "This scenario holds 1 change to pay you can't see. Removing it removes that too.", batch[@one]
-      assert_equal "This scenario holds 2 changes to pay you can't see. Removing it removes those too.", batch[@two]
+      assert_equal "This scenario holds 1 change to pay or budget amounts you can't see. Removing it removes that too.", batch[@one]
+      assert_equal "This scenario holds 2 changes to pay or budget amounts you can't see. Removing it removes those too.", batch[@two]
       assert_not batch.key?(@none)
+    end
+  end
+
+  # A budget line's amount is pay ([#441](https://github.com/espaliahq/espalia/pull/441)).
+  should "count a change to a line that carries an amount, and not one to a head count alone" do
+    ActsAsTenant.with_tenant(@tenant) do
+      batch = notices(@editor)
+
+      assert_equal "This scenario holds 1 change to pay or budget amounts you can't see. Removing it removes that too.", batch[@priced]
+      assert_not batch.key?(@heads)
     end
   end
 
@@ -73,6 +87,12 @@ class Operations::TeamPlanning::RemoveScenarioNoticesTest < ActiveSupport::TestC
   def set_pay(scenario_id, person)
     call(Operations::TeamPlanning::SetActualPay, @holder, plan_id: @plan_id, scenario_id:, person_id: person.id,
                                                           amount: "92417", currency: "AUD", period: "year", basis: "full_time")
+  end
+
+  def set_line(scenario_id, **fields)
+    starts = Date.current + 1
+    call(Operations::TeamPlanning::SetBudgetLine, @holder, plan_id: @plan_id, scenario_id:, origin: "new",
+                                                           starts_on: starts.iso8601, ends_on: (starts + 364).iso8601, **fields)
   end
 
   def context(account) = AuthorizationContext.new(user: account.user, tenant_user: account, person: account.person)

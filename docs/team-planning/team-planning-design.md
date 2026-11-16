@@ -1072,7 +1072,7 @@ removes a scenario from its row's menu on the Scenarios tab, or with Remove… b
 map. A dialog asks first. It says how many changes go with the scenario, counted by the rule the
 tally keeps, so the number matches the entry it leaves: `team_planning_scenarios` returns that
 count per scenario as `changes`. An editor who can't see pay also reads the operation's own
-`approval_notice`, which says, by count alone, what hidden pay goes too. A scenario others fork
+`approval_notice`, which says, by count alone, what hidden pay, budget amounts included, goes too. A scenario others fork
 from, or the agreed part of a split, can't be removed yet, so its dialog names the scenarios to
 remove first and offers no Remove. The baseline, and an archived or frozen plan, offer none at all.
 Once removed, the page opens on Removed scenarios with the entry in view.

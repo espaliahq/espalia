@@ -44,7 +44,7 @@ class PlanRemoveScenarioSystemTest < ApplicationSystemTestCase
 
         within("#remove-scenario-#{@q2}") do
           assert_text "Its 1 change goes with it. It can't be restored, and it will be listed under Removed scenarios."
-          assert_text "This scenario holds 1 change to pay you can't see. Removing it removes that too."
+          assert_text "This scenario holds 1 change to pay or budget amounts you can't see. Removing it removes that too."
         end
         assert_no_text AMOUNT
         assert_no_sideways_overflow
