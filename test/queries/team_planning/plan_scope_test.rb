@@ -251,11 +251,31 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
 
     status = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)
     dee = status[:statuses].find { it[:subject_id] == @dee.id && it[:facet] == "level" }
-    assert_equal %i[scenario_id change_id subject_id facet status clearable].sort, dee.keys.sort
-    assert_equal [ @h1, "level", "outside", true ], dee.values_at(:scenario_id, :facet, :status, :clearable)
+    assert_equal %i[scenario_id change_id subject_id facet status clearable undoable].sort, dee.keys.sort
+    assert_equal [ @h1, "level", "outside", true, true ], dee.values_at(:scenario_id, :facet, :status, :clearable, :undoable)
     assert_not_includes status[:names], @dee.id
     assert_equal [ @dee.id, @dee.id, @ada.id ], status[:statuses].map { it[:subject_id] }.select { [ @dee.id, @ada.id ].include?(it) }, "in the order the changes land"
     assert_equal "Ada Quill", status[:names][@ada.id]
+  end
+
+  should "offer Clear but not Undo on an outside change whose undo would bring an earlier one back" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "7")
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, manager_id: @ada.id)
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "assignment")
+
+    rows = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)[:statuses].select { it[:subject_id] == @dee.id }
+    assert_equal({ "level" => [ "outside", true, false ], "reporting_line" => [ "outside", true, true ] },
+                 rows.to_h { [ it[:facet], it.values_at(:status, :clearable, :undoable) ] })
+    viewer = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant))
+    as_tenant { call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: viewer.person.id, role: "viewer") }
+    as_viewer = as_tenant do
+      Operations::TeamPlanning::Status.call(context: AuthorizationContext.new(user: viewer.user, tenant_user: viewer, person: viewer.person),
+                                            params: { plan_id: @plan_id, scenario_id: @h1 })
+    end
+    assert(as_viewer[:statuses].select { it[:status] == "outside" }.none? { it[:undoable] }, "nothing is undoable that isn't clearable")
   end
 
   should "refuse to pin what a step inherits about someone the plan no longer covers" do

@@ -196,7 +196,7 @@ class Views::Plans::ChangesTab < Views::Base
         sources(entry[:sources].to_a)
         if @can_edit && entry[:clearable]
           clear(entry)
-          undo(entry) if no_longer_covered?(entry)
+          undo(entry) if entry[:undoable]
         end
       end
     end
@@ -262,7 +262,8 @@ class Views::Plans::ChangesTab < Views::Base
 
   # A scope keeps the plan's own record of a change about someone it no longer
   # covers, so the plan can still take the change out, and nothing else. The
-  # plan page's Undo never offers it, so its row does.
+  # plan page's Undo never offers it, so its row does, when the read says an
+  # undo would bring nothing back.
   def undo(entry)
     form(action: plan_change_undos_path(plan_id), method: "post", class: "contents", data: { undo_change: entry[:facet] }) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)

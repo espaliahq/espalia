@@ -1029,7 +1029,9 @@ its relation. A row is clearable when
 the scenario shown makes the change itself, the caller may edit, the facet isn't pay
 withheld from them. A change about someone a scoped plan no longer covers stays clearable,
 and its row adds an Undo of that change alone, since the plan page's Undo never offers it
-([#435](https://github.com/espaliahq/espalia/issues/435)). Undo, Redo and
+([#435](https://github.com/espaliahq/espalia/issues/435)). The Undo shows only when the
+status read marks the row `undoable`: when undoing it brings no earlier change about that
+subject and facet back, which the plan could no longer show. Clear stays either way. Undo, Redo and
 Clear each return to the tab and scenario they were pressed on, and a refusal shows the
 operation's own words.
 

@@ -191,7 +191,7 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
     end
 
     should "offer an editor only Clear and Undo on a change about someone the plan no longer covers, and name no one" do
-      outside = { scenario_id: Q1, change_id: "o1", subject_id: BO, facet: "level", status: "outside", clearable: true }
+      outside = { scenario_id: Q1, change_id: "o1", subject_id: BO, facet: "level", status: "outside", clearable: true, undoable: true }
       html = render_tab(statuses: [ outside ], scenario_id: Q1, can_edit: true)
       row = html.at_css("[data-planned-change='outside']")
       label = "#{Views::Plans::ChangesTab::NO_LONGER_COVERED} · Level"
@@ -206,6 +206,9 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_empty row.css("[data-change-note-editor], [data-settle-conflict]")
       assert_empty render_tab(statuses: [ outside ], scenario_id: Q1).css("[data-clear-change], [data-undo-change]"), "a viewer gets no buttons"
       assert_empty render_tab(statuses: [ outside.merge(clearable: false) ], scenario_id: Q1, can_edit: true).css("[data-undo-change]")
+      bringing_back = render_tab(statuses: [ outside.merge(undoable: false) ], scenario_id: Q1, can_edit: true)
+      assert_equal [ [ "Clear #{label}" ], [] ], [ bringing_back.css("[data-clear-change]").map { it["aria-label"] }, bringing_back.css("[data-undo-change]").to_a ],
+                   "an undo that would bring an earlier change back is not offered"
     end
 
     should "name a rule by its kind, a plan-wide rule by the plan, a plan value apart from a level change, and a hire only the plan holds" do
