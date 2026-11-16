@@ -89,6 +89,17 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_equal [ "Ada Quill's manager changed" ], html.css("[data-drift-change] .break-words").map { it.text.squish }
     end
 
+    should "give only the new value when the earlier one was set while its subject was outside the plan" do
+      html = render_tab(changes: [ drift_change("fact_changed", person_id: ADA, fact: "title", before: nil, after: { "title" => "Staff Engineer" },
+                                                                outside: [ "before" ]),
+                                   drift_change("fact_changed", person_id: ADA, fact: "manager", before: nil, after: { "manager_id" => BO },
+                                                                outside: [ "before" ]),
+                                   drift_change("unit_renamed", unit_id: PAYMENTS, before: nil, after: { "name" => "Platform" }, outside: [ "before" ]) ])
+
+      assert_equal [ "Ada Quill's title is now Staff Engineer", "Ada Quill's manager is now Bo Reyes", "Renamed Platform" ],
+                   html.css("[data-drift-change] .break-words").map { it.text.squish }
+    end
+
     should "mark a change from this plan, and link each scenario whose plan it meets" do
       html = render_tab(changes: [ drift_change("joined", person_id: ADA, from_plan: true,
                                                           meets: [ { scenario_id: PLAN }, { scenario_id: Q1 }, { scenario_id: Q1 } ]) ])

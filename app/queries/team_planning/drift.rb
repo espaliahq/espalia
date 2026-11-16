@@ -86,7 +86,7 @@ class TeamPlanning::Drift
 
     base = TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
     maps = aggregate.scenarios.keys.map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
-    TeamPlanning::DriftScope.new([ base, TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @plan.id, base:).structure(aggregate), *maps ]).call(changes)
+    TeamPlanning::DriftScope.new(base, [ TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @plan.id, base:).structure(aggregate), *maps ]).call(changes)
   end
 
   def planned_changes(plan)

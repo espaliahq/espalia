@@ -11,7 +11,7 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    @departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
+    @departments, @teams = Array.new(2) { SecureRandom.uuid_v7 }
     @engineering, @payments, @sales = Array.new(3) { SecureRandom.uuid_v7 }
 
     travel_to Time.utc(2025, 12, 15, 9)
@@ -20,9 +20,9 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       @engineer = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: @family.role_family_id)
       @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5, title: "Senior SWE")
 
-      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
+      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: @teams, name: "Team" } ], effective_on: "2025-01-01")
       structure.create_unit(@engineering, "Engineering", level_id: @departments, effective_on: "2025-01-01")
-      structure.create_unit(@payments, "Payments", level_id: teams, parent_id: @engineering, effective_on: "2025-01-01")
+      structure.create_unit(@payments, "Payments", level_id: @teams, parent_id: @engineering, effective_on: "2025-01-01")
       structure.create_unit(@sales, "Sales", level_id: @departments, effective_on: "2025-01-01")
 
       @ada, @brook, @cy, @dee = %w[Ada Brook Cy Dee].map { create(:person, tenant: @tenant, name: "#{it} Quill") }
@@ -310,6 +310,65 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     whole = call(Operations::TeamPlanning::Drift, plan_id: @whole_id)
     [ @sales, @dee.id, "Dee Quill", "Principal Engineer" ].each { assert_includes whole.to_json, it, "the control proves drift would carry it" }
     assert(whole[:changes].all? { it[:outside].empty? })
+  end
+
+  def drift_after(&)
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant { yield OrgGraph::CommandHandler.new(actor: SYSTEM), OrgGraph::StructureCommandHandler.new(actor: SYSTEM) }
+    call(Operations::TeamPlanning::Drift, plan_id: @plan_id)[:changes]
+  end
+
+  def on(day) = { provider: "espalia", effective_on: format("2026-01-%02d", day) }
+
+  def titles(changes, person) = changes.select { it[:person_id] == person.id && it[:fact] == "title" }.map { it.dig(:after, "title") }
+
+  should "count someone the window brings in from the move in, which doesn't say where from" do
+    changes = drift_after do |people, _|
+      people.change_title(@dee.id, "Sales Engineer", **on(10))
+      people.move_membership(@dee.id, @sales, @payments, effective_on: on(15)[:effective_on])
+      people.change_title(@dee.id, "Staff Engineer", **on(20))
+    end
+
+    moved = changes.find { it[:kind] == "moved" }
+    assert_equal [ @dee.id, @payments, nil, [ "from_unit_id" ] ], moved.values_at(:person_id, :unit_id, :from_unit_id, :outside)
+    assert_equal [ "Staff Engineer" ], titles(changes, @dee)
+    [ @sales, "Sales Engineer" ].each { assert_not_includes changes.to_json, it }
+  end
+
+  should "stop counting someone from the move out, and count them again once they come back" do
+    changes = drift_after do |people, _|
+      people.change_title(@ada.id, "Senior Engineer", **on(5))
+      people.move_membership(@ada.id, @payments, @sales, effective_on: on(10)[:effective_on])
+      people.change_title(@ada.id, "Sales Engineer", **on(12))
+      people.move_membership(@ada.id, @sales, @payments, effective_on: on(15)[:effective_on])
+      people.change_title(@ada.id, "Staff Engineer", **on(20))
+    end
+
+    moves = changes.select { it[:kind] == "moved" }.map { it.values_at(:unit_id, :from_unit_id, :outside) }
+    assert_equal [ [ nil, @payments, [ "unit_id" ] ], [ @payments, nil, [ "from_unit_id" ] ] ], moves
+    assert_equal [ "Senior Engineer", "Staff Engineer" ], titles(changes, @ada)
+    [ @sales, "Sales Engineer" ].each { assert_not_includes changes.to_json, it }
+  end
+
+  should "follow a unit out of the plan and back, and another into it, as it follows a person" do
+    field = SecureRandom.uuid_v7
+    as_tenant { OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(field, "Field", level_id: @teams, parent_id: @sales, effective_on: "2025-01-01") }
+    changes = drift_after do |_, structure|
+      structure.rename_unit(@payments, "Payments Core", **on(5))
+      structure.move_unit(@payments, @sales, **on(10))
+      structure.rename_unit(@payments, "Revenue Ops", **on(12))
+      structure.rename_unit(field, "Field Ops", **on(8))
+      structure.move_unit(field, @engineering, **on(15))
+      structure.rename_unit(field, "Platform", **on(20))
+      structure.move_unit(@payments, @engineering, **on(25))
+      structure.rename_unit(@payments, "Payments", **on(28))
+    end
+
+    moved = changes.select { it[:kind] == "unit_moved" }.map { [ it[:unit_id], it.dig(:before, "parent_id"), it.dig(:after, "parent_id"), it[:outside] ] }
+    assert_equal [ [ @payments, @engineering, nil, [ "after" ] ], [ field, nil, @engineering, [ "before" ] ], [ @payments, nil, @engineering, [ "before" ] ] ], moved
+    renames = changes.select { it[:kind] == "unit_renamed" }.map { [ it[:unit_id], it.dig(:before, "name"), it.dig(:after, "name") ] }
+    assert_equal [ [ @payments, "Payments", "Payments Core" ], [ field, nil, "Platform" ], [ @payments, nil, "Payments" ] ], renames
+    [ @sales, "Revenue Ops", "Field Ops" ].each { assert_not_includes changes.to_json, it }
   end
 
   # Platform is Ada's own; Core and Engineers come from entries a seat in

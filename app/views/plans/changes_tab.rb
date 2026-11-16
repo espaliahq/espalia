@@ -381,7 +381,9 @@ class Views::Plans::ChangesTab < Views::Base
     when "membership_changed" then "#{person}'s place in #{unit} changed"
     when "moved" then moved_line(person, change)
     when "unit_created" then "#{unit} was created"
-    when "unit_renamed" then "#{change.dig(:before, 'name') || unit} was renamed #{change.dig(:after, 'name') || unit}"
+    when "unit_renamed"
+      renamed = change.dig(:after, "name") || unit
+      outside?(change, "before") ? "Renamed #{renamed}" : "#{change.dig(:before, 'name') || unit} was renamed #{renamed}"
     when "unit_moved" then outside?(change, "after") ? "#{unit} left the units this plan covers" : "#{unit} moved"
     when "unit_retired" then "#{unit} was retired"
     when "unit_succeeded" then "A succession was recorded"
@@ -409,8 +411,8 @@ class Views::Plans::ChangesTab < Views::Base
   end
 
   def fact_value(fact, fields, outside:)
-    return OUTSIDE_MANAGER if outside
     return unless fields.is_a?(Hash)
+    return OUTSIDE_MANAGER if outside
     return name_of(fields["manager_id"]) if fact == "manager" && fields["manager_id"]
 
     fields.values.select { it.is_a?(String) || it.is_a?(Numeric) }.join(", ").presence

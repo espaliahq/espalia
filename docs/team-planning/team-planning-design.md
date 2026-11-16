@@ -1315,12 +1315,19 @@ pending or conflicting is 4.3's status, below.
 
 A plan covering some units sees only drift about the people and units it covers
 ([#435](https://github.com/espaliahq/espalia/issues/435)). `TeamPlanning::DriftScope`
-counts as covered whoever and whatever the baseline or any scenario holds, plus anyone
-or any unit placed in a covered unit since. A change about anything else is dropped,
-names and all. A covered person or unit moving out keeps its change, with the
-destination nulled: the reader learns they left the plan's units, not where they went.
-A covered person now reporting to someone the plan can't name reads the same way.
-`outside` lists the fields nulled, and the Changes tab words each one.
+follows the window in date order, judging each change by who and what the plan covers
+when it happens. Someone the baseline covers stops counting from the change that takes
+them out of the plan's units, and counts again if they come back. Someone the window
+brings in counts from that change on. Anyone a scenario holds that the baseline doesn't,
+and any unit a scenario created, count throughout. Units follow the same rule. A change
+about anything the plan doesn't cover at that point is dropped, names and all.
+
+The change that takes a person or unit out keeps the plan's side and nulls the
+destination: the reader learns they left the plan's units, not where they went. The
+change that brings them in nulls where they came from. A covered person now reporting
+to someone the plan can't name reads the same way, and so does the earlier value of a
+fact or name last set while its subject was outside. `outside` lists the fields nulled,
+and the Changes tab words each one.
 
 `team_planning_drift` gives the same report to MCP, with people by id and a `names` map
 beside them.
