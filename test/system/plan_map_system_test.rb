@@ -11,7 +11,7 @@ class PlanMapSystemTest < ApplicationSystemTestCase
     structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     since = (Date.current - 30).iso8601
     group = SecureRandom.uuid_v7
-    team = SecureRandom.uuid_v7
+    @team = team = SecureRandom.uuid_v7
     @product = SecureRandom.uuid_v7
     @payments = SecureRandom.uuid_v7
     @growth = SecureRandom.uuid_v7
@@ -85,6 +85,26 @@ class PlanMapSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
 
+      should "keep a full unit and a long role the width of every other card, with what was cut reachable" do
+        plan_id = plan_with_a_full_unit
+        sign_in_as(@planner.user)
+        visit map_plan_path(plan_id)
+
+        widths = page.evaluate_script("[...document.querySelectorAll('[data-map-unit]')].map((card) => card.getBoundingClientRect().width)")
+        assert_equal 1, widths.map(&:round).uniq.size, "a full unit's card is as wide as the rest: #{widths.inspect}"
+        assert_no_sideways_overflow
+
+        within(unit("Platform")) do
+          assert_selector "[data-map-person]", count: 12
+          find("summary", text: LONG_NAME).click
+          within("details[open]") do
+            assert_text LONG_ROLE
+            assert_text LONG_NAME
+          end
+        end
+        assert_no_sideways_overflow
+      end
+
       should "name a forgotten person as a former member" do
         ActsAsTenant.with_tenant(@tenant) do
           @ada.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
@@ -109,6 +129,26 @@ class PlanMapSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  LONG_ROLE = "Infrastructure-and-operations-reliability"
+  LONG_NAME = "Maximiliana Wolkenstein-Abernathy-Okonkwo"
+
+  # Twelve seats, one person with a long name, all under a role too long for its column.
+  def plan_with_a_full_unit
+    handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    since = (Date.current - 30).iso8601
+    platform = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      structure.create_unit(platform, "Platform", level_id: @team, parent_id: @product, effective_on: since)
+      12.times do |index|
+        person = create(:person, tenant: @tenant, name: index.zero? ? LONG_NAME : "Seat #{index + 1}")
+        handler.record_person(person.id, **ESPALIA, effective_on: since, employment_status: "employed")
+        handler.set_membership(person.id, platform, **ESPALIA, effective_on: since, allocation: 1.0, role: LONG_ROLE)
+      end
+    end
+    call(Operations::TeamPlanning::CreatePlan, @planner, name: "Full unit", base_on: (Date.current + 1).iso8601)[:plan_id]
+  end
 
   # Pills from `sm` up, a list on a phone (#271).
   def switch_to(name)

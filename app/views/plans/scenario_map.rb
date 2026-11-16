@@ -53,7 +53,7 @@ class Views::Plans::ScenarioMap < Views::Base
       p(class: "text-sm text-muted") { as_of_line }
       render @summary if @summary
       unresolved_notice if @map[:unresolved].any?
-      div(class: "grid gap-4 md:grid-cols-2 2xl:grid-cols-3", data: ({ controller: "map-move" } if @moving)) do
+      div(class: "grid #{GRID} gap-4", data: ({ controller: "map-move" } if @moving)) do
         ordered_units.each { |unit, path| unit_card(unit, path) }
         unassigned_card if @moving || unassigned.any? || unplaced_positions.any?
       end
@@ -153,6 +153,11 @@ class Views::Plans::ScenarioMap < Views::Base
 
   DROP_OVER = "data-[drop-over]:border-brand data-[drop-over]:bg-brand-subtle"
 
+  # Columns take their width from the map, never from a card's contents, so a
+  # long role or a full unit makes a card taller and the row stays put
+  # ([#406](https://github.com/espaliahq/espalia/issues/406)).
+  GRID = "grid-cols-[repeat(auto-fill,minmax(min(17rem,100%),1fr))]"
+
   def unresolved_notice
     render Components::Kit::Alert.new(tone: :warning, title: "Not on the map") do
       ul(class: "list-disc pl-5") do
@@ -164,11 +169,11 @@ class Views::Plans::ScenarioMap < Views::Base
   def unit_card(unit, path)
     people = members_of(unit[:id])
     section(aria: { labelledby: "map-unit-#{unit[:id]}" }, data: drop_target(unit[:id]),
-            class: "rounded-lg border border-default bg-default #{DROP_OVER}") do
+            class: "min-w-0 rounded-lg border border-default bg-default #{DROP_OVER}") do
       header(class: "border-b border-subtle px-4 py-3") do
         p(class: "text-xs text-muted break-words") { path.join(" › ") } if path.any?
         div(class: "flex flex-wrap items-center gap-2") do
-          h3(id: "map-unit-#{unit[:id]}", class: "text-base font-semibold text-default break-words") { unit[:name] }
+          h3(id: "map-unit-#{unit[:id]}", class: "min-w-0 text-base font-semibold text-default break-words") { unit[:name] }
           @unit_marks.call(unit).each { render it }
         end
         p(class: "mt-1 text-sm text-muted") { unit_summary(unit, people) }
@@ -179,7 +184,7 @@ class Views::Plans::ScenarioMap < Views::Base
 
   def unassigned_card
     section(aria: { labelledby: "map-unassigned" }, data: drop_target("unassigned"),
-            class: "rounded-lg border border-dashed border-default bg-default #{DROP_OVER}") do
+            class: "min-w-0 rounded-lg border border-dashed border-default bg-default #{DROP_OVER}") do
       header(class: "border-b border-subtle px-4 py-3") do
         h3(id: "map-unassigned", class: "text-base font-semibold text-default") { "Unassigned" }
         p(class: "mt-1 text-sm text-muted") { unassigned.any? || unplaced_positions.any? ? "#{unassigned_summary} in no unit" : "Drop someone here to take them out of a unit" }
@@ -216,28 +221,49 @@ class Views::Plans::ScenarioMap < Views::Base
     groups = people.group_by { |_, place| place[:role].presence }
     dl(class: "divide-y divide-subtle") do
       groups.keys.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.each do |role|
-        div(class: "flex gap-3 px-4 py-2") do
-          dt(class: "w-12 shrink-0 pt-1 text-xs font-semibold uppercase text-muted break-words") { role || "No role" }
+        div(class: "flex gap-2 px-2 py-1") do
+          dt(class: "w-12 shrink-0 pt-1.5 pl-2 text-xs font-semibold uppercase text-muted line-clamp-2") { role || "No role" }
           dd(class: "min-w-0 flex-1") do
-            ul(class: "space-y-1") { groups[role].sort_by { |person, _| name(person[:id]) }.each { |person, place| person_row(person, place) } }
+            ul { groups[role].sort_by { |person, _| name(person[:id]) }.each { |person, place| person_row(person, place) } }
           end
         end
       end
     end
   end
 
+  # One line a person: their name and title give way so every figure, mark
+  # and badge keeps its room. The name opens to show what was cut off, so it
+  # is reachable by keyboard and touch, not only on hover.
   def person_row(person, place)
     li(data: person_data(person, place), draggable: ("true" if @moving),
-       class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1 text-sm#{' cursor-grab' if @moving}") do
+       class: "flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded px-2 py-0.5 text-sm#{' cursor-grab' if @moving}") do
       span(class: "w-10 shrink-0 tabular-nums text-muted") { allocation(place) } if place
-      span(class: "min-w-0 font-medium text-default break-words") { name(person[:id]) }
+      person_details(person, place)
       @person_marks.call(person, place).each { render it }
-      span(class: "ml-auto flex items-center gap-2 text-muted") do
-        span(class: "hidden sm:inline") { person[:title] } if person[:title].present?
-        render Components::Kit::Badge.new(person[:level], size: :sm) if person[:level].present?
-        move_button(person, place) if @moving
+      render Components::Kit::Badge.new(person[:level], size: :sm) if person[:level].present?
+      move_button(person, place) if @moving
+    end
+  end
+
+  # Its width is never asked for, so a long name truncates in place rather
+  # than pushing the row's figures onto a second line.
+  def person_details(person, place)
+    details(data: { map_person_details: "" }, class: "group min-w-0 flex-1 basis-0") do
+      summary(class: "flex min-w-0 cursor-pointer list-none items-baseline gap-2 rounded py-1 hover:bg-subtle " \
+                     "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden") do
+        span(class: "max-w-full shrink-0 truncate font-medium text-default group-open:whitespace-normal group-open:break-words") { name(person[:id]) }
+        span(class: "hidden min-w-0 shrink-[4] truncate text-muted sm:block sm:group-open:hidden") { person[:title] } if person[:title].present?
+      end
+      dl(class: "mb-1 grid grid-cols-[auto_1fr] gap-x-2 text-xs text-muted") do
+        details_line("Title", person[:title]) if person[:title].present?
+        details_line("Role", place ? place[:role].presence || "No role" : "In no unit")
       end
     end
+  end
+
+  def details_line(term, value)
+    dt { term }
+    dd(class: "min-w-0 break-words text-default") { value }
   end
 
   def person_data(person, place)
