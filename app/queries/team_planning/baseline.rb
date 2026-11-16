@@ -507,7 +507,7 @@ class TeamPlanning::Baseline
     scope_ids = (@plan.scope_unit_ids.presence if scoped)
     map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people: scope_ids ? [] : people, outside: scope_ids ? people : [],
                   scope_ids:, unassigned_ids: [], positions: [], names: {}, step_ids: [ @plan.id ], budget_lines: approved_budget,
-                  rules: Rules.new(plan_id: @plan.id, defaults: PlanningRuleDefault.values_for(@plan.tenant_id), by_subject: {})).settled
+                  rules: Rules.new(plan_id: @plan.id, defaults: inputs.rule_defaults, by_subject: {})).settled
     return map unless history
 
     map.with(retired_units: snapshot.retired_units.map { Unit.new(**it.to_h.slice(*Unit.members)) },
@@ -528,8 +528,10 @@ class TeamPlanning::Baseline
 
   private
 
-  # Configuration, so every day a reader asks for reads the lines as they are now.
-  def approved_budget = @approved_budget ||= ::BudgetLine.where(tenant_id: @plan.tenant_id).order(:starts_on, :id).map { BudgetLine.approved(it) }
+  # Configuration, so every day a reader asks for reads the lines as the plan is priced with them.
+  def approved_budget = @approved_budget ||= inputs.budget_lines.map { BudgetLine.approved(it) }
+
+  def inputs = @inputs ||= TeamPlanning::PricingInputs.for(@plan)
 
   def named_positions(positions)
     return positions if positions.empty?

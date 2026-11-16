@@ -247,7 +247,7 @@ class TeamPlanning::Cost
     forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows)
     baseline = priced(resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
-               reference_currency: @reference, bands_changed_at: [ @plan.tenant.pay_bands_changed_at, *bands.values.flatten.map(&:updated_at) ].compact.max,
+               reference_currency: @reference, bands_changed_at: @inputs.bands_changed_at,
                scenario:, baseline:, forecast:)
   end
 
@@ -299,7 +299,8 @@ class TeamPlanning::Cost
 
     @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
     @year_days = run_rate ? @period.count : YEAR_DAYS
-    @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
+    @inputs = TeamPlanning::PricingInputs.for(@plan, repository: @repository)
+    @reference = @inputs.reference_currency
     @factors = {}
     @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
     @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
@@ -512,12 +513,12 @@ class TeamPlanning::Cost
   end
 
   def factor(currency)
-    @factors[currency] ||= ExchangeRate.factor(from: currency, to: @reference, on: @period.begin)
+    @factors[currency] ||= @inputs.factor(from: currency, to: @reference, on: @period.begin)
   rescue ExchangeRate::MissingRate => e
     @factors[currency] = e.message
   end
 
-  def bands = @bands ||= PayBand.where(tenant_id: @plan.tenant_id).to_a.group_by(&:level_id)
+  def bands = @bands ||= @inputs.bands.group_by(&:level_id)
 
   def titles = @titles ||= Integrations::HrisTitleResolution.new(@plan.tenant)
 

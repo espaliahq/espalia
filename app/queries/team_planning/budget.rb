@@ -305,7 +305,7 @@ class TeamPlanning::Budget
   end
 
   def factor(currency)
-    @factors[currency] ||= ExchangeRate.factor(from: currency, to: @reference, on: @period.begin)
+    @factors[currency] ||= TeamPlanning::PricingInputs.for(@plan, repository: @repository).factor(from: currency, to: @reference, on: @period.begin)
   rescue ExchangeRate::MissingRate => e
     @factors[currency] = e.message
   end
