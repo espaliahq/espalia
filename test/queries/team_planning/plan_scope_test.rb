@@ -206,6 +206,45 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "assignment")
   end
 
+  should "walk every read with a change about someone the plan no longer covers, and through an update to today, naming no one" do
+    plan_change_about_dee
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant do
+      at = { provider: "espalia", effective_on: "2026-01-15" }
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_title(@dee.id, "Principal Engineer", **at)
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_manager(@dee.id, @cy.id, **at)
+    end
+    record = %w[Attention History Overrides Status SplitNeeds].map { "Operations::TeamPlanning::#{it}" }
+    walk = lambda do
+      reads = JSON.parse(every_read(@plan_id, @h1))
+      [ @sales, @cy.id, "Cy Quill", "Dee Quill", "Principal Engineer" ].each { assert_not_includes reads.to_json, it }
+      assert_not_includes reads.except(*record).to_json, @dee.id
+      reads
+    end
+
+    preview = walk.call["Operations::TeamPlanning::RebasePreview"]
+    assert_empty preview["conflicts"]
+    assert_equal 0, preview["scenarios"].sum { it["conflicting"] }, "an outside change is no conflict to settle"
+    call(Operations::TeamPlanning::RebasePlan, plan_id: @plan_id, base_on: BASE_ON.iso8601)
+    reads = walk.call
+
+    statuses = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)[:statuses].select { it[:subject_id] == @dee.id }
+    assert_equal [ %w[level outside], %w[reporting_line outside] ], statuses.map { it.values_at(:facet, :status) }, "carried forward, untouched"
+    flagged = reads.dig("Operations::TeamPlanning::Attention", "items").select { it["subject_id"] == @dee.id }
+    assert_equal [ %w[uncovered level], %w[uncovered reporting_line] ], flagged.map { it.values_at("check", "facet") }
+  end
+
+  should "keep the same cut once the plan is archived" do
+    plan_change_about_dee
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant { handler.archive_plan(@plan_id) }
+
+    reads = JSON.parse(every_read(@plan_id, @h1))
+    assert reads.dig("Operations::TeamPlanning::Plan", "archived")
+    [ @sales, @cy.id, "Cy Quill", "Dee Quill" ].each { assert_not_includes reads.to_json, it }
+    assert_equal [ false, [] ], reads["Operations::TeamPlanning::Status"].values_at("checked", "statuses"), "an archived plan is checked against nothing"
+  end
+
   should "read a change about someone the plan no longer covers as outside, with only its ids" do
     plan_change_about_dee
     call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @ada.id, level: "6")
