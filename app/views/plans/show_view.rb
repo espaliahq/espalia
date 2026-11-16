@@ -249,7 +249,7 @@ class Views::Plans::ShowView < Views::Base
   def tab(tab)
     open = tab.key == @open_tab
     a(href: tab.href, aria: { current: ("page" if open) },
-      class: "shrink-0 whitespace-nowrap border-b-2 px-1.5 py-2 text-sm font-medium @3xl:px-3 " \
+      class: "shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-sm font-medium sm:px-1.5 @3xl:px-3 " \
              "#{open ? 'border-brand text-default' : 'border-transparent text-muted hover:text-default'}") { tab.label }
   end
 
