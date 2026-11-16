@@ -59,10 +59,7 @@ class Views::Plans::IndexView < Views::Base
         a(href: plan_path(plan[:plan_id]), class: "font-medium text-link underline break-words") { plan[:name] }
         p(class: "text-sm text-muted") { plan_dates(plan) }
       end
-      div(class: "flex items-center gap-2") do
-        render Components::Kit::Badge.new("Archived", tone: :neutral) if plan[:archived_on]
-        render Components::Kit::Badge.new(plan[:role] == "editor" ? "Editor" : "Viewer")
-      end
+      render Components::Kit::Badge.new(plan[:role] == "editor" ? "Editor" : "Viewer")
     end
   end
 
