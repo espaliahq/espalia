@@ -292,7 +292,7 @@ class Views::Plans::ScenarioMap < Views::Base
   def position_row(position)
     div(data: position_data(position), draggable: ("true" if movable?(position)), class: "px-4 py-2#{' cursor-grab' if movable?(position)}") do
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-dashed border-default px-2 py-1 text-sm #{DROP_OVER}") do
-        span(class: "font-medium text-default") { position_name(position) }
+        span(class: "min-w-0 break-words font-medium text-default") { position_name(position) }
         open_fte_note(position[:open_fte])
         @position_marks.call(position).each { render it }
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
