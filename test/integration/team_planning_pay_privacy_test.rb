@@ -109,6 +109,21 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  # The figures under each timeline column ([#452](https://github.com/espaliahq/espalia/issues/452)).
+  should "price the timeline's figures from held pay for a holder, as its cost read does, and never for anyone else" do
+    holder = call(Operations::TeamPlanning::TimelineFigures, @holder, plan_id: @plan_id, scenario_id: @q1)
+
+    assert_equal [ @plan_id, @q1 ], holder[:steps].pluck(:scenario_id)
+    assert_equal call(Operations::TeamPlanning::Cost, @holder, plan_id: @plan_id, scenario_id: @plan_id)[:total][:scenario], holder[:steps].first[:cost]
+    assert_includes holder.to_json, AMOUNT, "Today's run rate is a year of the held pay"
+    [ @editor, @viewer ].each do |account|
+      other = call(Operations::TeamPlanning::TimelineFigures, account, plan_id: @plan_id, scenario_id: @q1)
+
+      assert_equal [ "band_midpoints", false ], other.values_at(:pay_view, :money)
+      assert_not_includes other.to_json, AMOUNT
+    end
+  end
+
   context "the actual, planned and forecast split" do
     setup do
       @tenant.update!(hris_config: build(:tenant, :with_hibob_config).hris_config)
@@ -582,6 +597,30 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         assert_equal({ approved: "No head count", funded: "1 position, 1 FTE", remaining: "No head count", unfunded: "0 positions, 0 FTE" }, tiles)
         assert_includes html.text, "Budget amounts show only to members who may see pay."
         [ held, "500,000", "AUD", "No amount", *SCOPED.values ].each { assert_not_includes html.to_html, it }
+      end
+    end
+
+    should "give each member the timeline's budget figures as team_planning_budget gives them, with no budget money without the right" do
+      BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD", period: "year", cost_centre: "Platform")
+      BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 654_321, currency: "AUD", period: "year", cost_centre: "Field Sales")
+      position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
+                                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
+                                                                         cost_centre: "Platform")[:position_id]
+      call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
+                                                             placements: [ { position_id:, allocation: 1 } ])
+      held = call(Operations::TeamPlanning::Budget, @holder, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
+
+      [ @holder, @editor, @viewer ].each do |account|
+        who = account == @holder ? "holder" : "non-holder"
+        budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)[:total]
+        figures = call(Operations::TeamPlanning::TimelineFigures, account, plan_id: @plan_id, scenario_id: @q1)
+        assert_equal budget.slice(:approved, :funded, :unfunded, :over), figures[:steps].last[:budget], who
+        if account == @holder
+          assert_equal held, figures[:steps].last[:budget][:funded][:native]["AUD"]
+        else
+          text = figures.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+          [ held[0, 5], "500000", "654321", *SCOPED.values ].each { assert_not_includes text, it, who }
+        end
       end
     end
 
