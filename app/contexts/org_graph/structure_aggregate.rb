@@ -612,6 +612,10 @@ class OrgGraph::StructureAggregate
     end.sort_by(&:name)
   end
 
+  # @param unit_id [String]
+  # @return [Unit, nil] the unit, live or retired; nil for one the structure doesn't hold
+  def unit(unit_id) = @units[unit_id]
+
   # The date of a unit's last change, the one it can't retire before: its
   # own edits, its owners, and sub-units arriving beneath it or leaving.
   #
