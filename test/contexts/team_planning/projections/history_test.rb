@@ -123,6 +123,16 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_empty TeamPlanningRemovedScenarioTally.all
   end
 
+  should "keep a removed scenario's count when the removal arrives again" do
+    set_cap(@lean, 5)
+    @handler.remove_scenario(@plan_id, @lean)
+    removal = Rails.configuration.event_store.read.of_type([ TeamPlanning::Events::ScenarioRemoved ]).last
+
+    TeamPlanning::Projections::History.new.call(removal)
+
+    assert_equal 1, TeamPlanningRemovedScenarioTally.find(@lean).changes_held
+  end
+
   should "move every entry of a split's subjects and facets to the agreed part, undo included, in their order" do
     set_cap(@q1, 8)
     set_level(@q1, "4")

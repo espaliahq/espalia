@@ -78,10 +78,12 @@ class TeamPlanning::Projections::History
   private
 
   def remove(event)
+    return if TeamPlanningRemovedScenarioTally.exists?(id: event.data[:scenario_id])
+
     entries = TeamPlanningHistoryEntry.where(scenario_id: event.data[:scenario_id])
-    tally = TeamPlanningRemovedScenarioTally.find_or_initialize_by(id: event.data[:scenario_id])
-    tally.created_at ||= event.timestamp
-    tally.update!(plan_id: event.data[:plan_id], changes_held: held(entries.order(:position)), updated_at: event.timestamp)
+    TeamPlanningRemovedScenarioTally.create!(id: event.data[:scenario_id], plan_id: event.data[:plan_id],
+                                             changes_held: held(entries.order(:position)),
+                                             created_at: event.timestamp, updated_at: event.timestamp)
     entries.delete_all
   end
 
@@ -89,11 +91,10 @@ class TeamPlanning::Projections::History
   # works them out: a standing change or pin holds its key and a clear lets
   # it go; undone entries, undos, redos, notes, moves and dates hold nothing.
   def held(entries)
-    entries.reject(&:undone?).each_with_object(Set.new) do |entry, keys|
-      key = [ entry.subject_id, entry.facet ]
-      case entry.action
-      when "set", "pin" then keys << key
-      when "clear" then keys.delete(key)
+    entries.where(undone_at: nil).pluck(:subject_id, :facet, :action).each_with_object(Set.new) do |(subject_id, facet, action), keys|
+      case action
+      when "set", "pin" then keys << [ subject_id, facet ]
+      when "clear" then keys.delete([ subject_id, facet ])
       end
     end.size
   end
