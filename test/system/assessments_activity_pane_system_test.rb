@@ -91,6 +91,19 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     assert_current_path assessment_path(@assignment, activity: "closed")
   end
 
+  # Closing must step Back off the overlay's entry. Rewriting that entry in
+  # place would also end on a closed URL with no marker, but leave it in history.
+  def close_overlay_by_its_button
+    page.execute_script(<<~JS)
+      window.overlayPopped = false
+      window.addEventListener("popstate", () => { window.overlayPopped = true }, { once: true })
+      document.querySelector("#assessment-activity-pane button[aria-label='Close activity']").click()
+    JS
+    assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+    assert wait_until_js { page.evaluate_script("window.overlayPopped") }, "closing stepped Back off the overlay's entry"
+    assert_back_on_opening_entry
+  end
+
   def open_loaded_activity_pane
     visit assessment_path(@assignment)
     wait_for_stimulus "activity-pane"
@@ -437,9 +450,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       mark_history_entry
       toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
-      page.execute_script("document.querySelector(arguments[0]).click()", "#assessment-activity-pane button[aria-label='Close activity']")
-      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
-      assert_back_on_opening_entry
+      close_overlay_by_its_button
     end
 
     # Turbo restores a page only from an entry that carries its own state; the
@@ -457,6 +468,9 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_selector "turbo-frame#assessment-matrix", visible: :all
       assert_match(/[?&]activity=open/, page.current_url)
+
+      wait_for_stimulus "activity-pane"
+      close_overlay_by_its_button
     end
   end
 

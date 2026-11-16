@@ -212,8 +212,11 @@ export default class extends BaseController {
   // Turbo restores a page only from an entry it stamped. Leaving from the
   // overlay's own entry would bring Back to a page Turbo never restores, with
   // the next page still on screen, so stamp it the way Turbo stamps its own.
+  // Turbo's stamp replaces the whole state, so the marker goes back on after.
   #stampOwnEntry() {
-    if (this.#onOwnEntry()) window.Turbo?.session?.history?.replace(new URL(window.location.href))
+    if (!this.#onOwnEntry()) return
+    window.Turbo?.session?.history?.replace(new URL(window.location.href))
+    window.history.replaceState({ ...window.history.state, [HISTORY_KEY]: this.urlKeyValue }, "")
   }
 
   #actsAsScreen() {
