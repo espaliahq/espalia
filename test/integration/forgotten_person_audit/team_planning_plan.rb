@@ -1,3 +1,4 @@
 # frozen_string_literal: true
 
-ForgottenPersonAudit.walk("team_planning_plan") { { plan_id: @plan_id } }
+# The archived plan, so the walk reaches `archived.by_name` as well as the members.
+ForgottenPersonAudit.walk("team_planning_plan") { { plan_id: @archived_plan_id } }

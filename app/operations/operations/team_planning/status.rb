@@ -34,7 +34,7 @@ class Operations::TeamPlanning::Status < Operations::Base
               "the person stays, and conflicting once the Org Graph has them leave. Subjects are named by id, and `names` maps each the Org Graph " \
               "holds to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\", and a subject only the " \
               "plan holds has none. A status whose change carries a note has it as note: { value }, or { removed: true } " \
-              "once erased. Refused, as an unknown plan, unless " \
+              "once erased. #{UNCHECKED} Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
   approval :none
@@ -42,13 +42,19 @@ class Operations::TeamPlanning::Status < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
 
-  # @return [Hash] `{ plan_id, scenario_id, on, statuses, names }`
+  # @return [Hash] `{ plan_id, scenario_id, checked, on, statuses, names }`; an archived plan's has
+  #   `{ plan_id, scenario_id, checked, archived_on, note, statuses, names }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
+    if plan.archived?
+      known_scenario!(plan, scenario_id)
+      return { plan_id: plan.id, scenario_id:, **checked(plan), statuses: [], names: {} }
+    end
+
     report = refusing_bad_plans { ::TeamPlanning::Status.new(context:, plan:, scenario_id:).call }
     notes = notes_of(plan, report.statuses.map(&:change_id))
-    { plan_id: plan.id, scenario_id:, on: report.on.iso8601,
+    { plan_id: plan.id, scenario_id:, **checked(plan), on: report.on.iso8601,
       statuses: report.statuses.map { status_row(it, notes[it.change_id]) },
       names: report.names }
   end

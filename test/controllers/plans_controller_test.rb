@@ -325,7 +325,151 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "archiving a plan" do
+    setup { travel_to Time.utc(2026, 11, 20, 9) }
+
+    should "let an editor archive the plan from its page, and see it read only and set aside" do
+      sign_in @editor.user
+      get plan_path(@plan_id)
+      assert_select "button", text: "Archive plan"
+      assert_select "##{Views::Plans::ArchiveDialog::ID} form[action='#{archive_plan_path(@plan_id)}']", count: 1
+
+      post archive_plan_path(@plan_id)
+      assert_redirected_to plan_path(@plan_id)
+      assert_equal "Plan archived. Restore it whenever you want to work on it again.", flash[:notice]
+
+      get plan_path(@plan_id)
+      assert_includes response.body, "Archived on 20 November 2026 by Erin Editor"
+      assert_includes response.body, "still use today&#39;s pay bands, exchange rates and rules"
+      assert_select "form[action='#{restore_plan_path(@plan_id)}']", count: 1
+      assert_select "button", text: "New scenario", count: 0
+      assert_select "button", text: "Archive plan", count: 0
+
+      get plans_path
+      assert_not_includes response.body, "Pay review 2027"
+      get plans_path(state: "archived")
+      assert_includes response.body, "Pay review 2027"
+      assert_includes response.body, "Archived on 20 November 2026"
+    end
+
+    should "say an archived plan's changes and checks aren't checked, rather than show nothing wrong" do
+      archive!
+      sign_in @viewer.user
+
+      [ changes_plan_path(@plan_id), checks_plan_path(@plan_id, scenario: @q1) ].each do |path|
+        get path
+        assert_response :success
+        assert_includes response.body, "Not checked while this plan is archived"
+        assert_includes response.body, "stopped being checked against the organisation that day"
+      end
+    end
+
+    should "let an editor restore it, and refuse a second restore" do
+      archive!
+      sign_in @editor.user
+
+      post restore_plan_path(@plan_id)
+      assert_redirected_to plan_path(@plan_id)
+      assert_equal "Plan restored. It takes changes again, and its checks cover everything since its base date.", flash[:notice]
+      get plan_path(@plan_id)
+      assert_select "button", text: "New scenario"
+
+      post restore_plan_path(@plan_id)
+      assert_equal "Couldn't restore this plan: This plan isn't archived", flash[:alert]
+    end
+
+    should "offer a viewer neither action and refuse both, and give someone outside the plan a 404" do
+      sign_in @viewer.user
+      get plan_path(@plan_id)
+      assert_select "button", text: "Archive plan", count: 0
+      post archive_plan_path(@plan_id)
+      assert_redirected_to root_path
+      assert_not archived?
+
+      archive!
+      get plan_path(@plan_id)
+      assert_includes response.body, "Archived on 20 November 2026"
+      assert_select "form[action='#{restore_plan_path(@plan_id)}']", count: 0
+      post restore_plan_path(@plan_id)
+      assert_redirected_to root_path
+      assert archived?
+
+      sign_out @viewer.user
+      sign_in @admin.user
+      get plans_path
+      post restore_plan_path(@plan_id)
+      assert_response :not_found
+      post archive_plan_path(@plan_id)
+      assert_response :not_found
+    end
+  end
+
+  context "deleting a plan" do
+    should "let an editor delete the plan once they type its name, and land on the list" do
+      sign_in @editor.user
+      get plan_path(@plan_id)
+      assert_select "button", text: "Delete plan"
+      assert_select "form[action='#{plan_path(@plan_id)}'] input[name='_method'][value='delete']", count: 1
+      assert_select "##{Views::Plans::DeleteDialog::ID} form[action='#{archive_plan_path(@plan_id)}']", text: "Archive instead", count: 1
+
+      delete plan_path(@plan_id), params: { confirm_name: " Pay  review 2027 " }
+      assert_response :see_other
+      assert_redirected_to plans_path
+      assert_equal "Plan deleted.", flash[:notice]
+      assert_not plan_exists?
+    end
+
+    should "keep the plan when the typed name doesn't match" do
+      sign_in @editor.user
+      delete plan_path(@plan_id), params: { confirm_name: "pay review 2027" }
+      assert_response :see_other
+      assert_redirected_to plan_path(@plan_id)
+      assert_equal "The name you typed doesn't match, so the plan is still here.", flash[:alert]
+      assert plan_exists?
+    end
+
+    should "let an editor delete an archived plan, without offering to archive it again" do
+      archive!
+      sign_in @editor.user
+      get plan_path(@plan_id)
+      assert_select "button", text: "Delete plan"
+      assert_select "form[action='#{archive_plan_path(@plan_id)}']", count: 0
+
+      delete plan_path(@plan_id), params: { confirm_name: "Pay review 2027" }
+      assert_redirected_to plans_path(state: "archived")
+      assert_not plan_exists?
+    end
+
+    should "offer a viewer no delete and refuse one, and give someone outside the plan a 404" do
+      sign_in @viewer.user
+      get plan_path(@plan_id)
+      assert_select "button", text: "Delete plan", count: 0
+      assert_select "##{Views::Plans::DeleteDialog::ID}", count: 0
+      delete plan_path(@plan_id), params: { confirm_name: "Pay review 2027" }
+      assert_redirected_to root_path
+      assert plan_exists?
+
+      sign_out @viewer.user
+      sign_in @outsider.user
+      delete plan_path(@plan_id), params: { confirm_name: "Pay review 2027" }
+      assert_response :not_found
+      assert plan_exists?
+
+      sign_out @outsider.user
+      sign_in @admin.user
+      delete plan_path(@plan_id), params: { confirm_name: "Pay review 2027" }
+      assert_response :not_found
+      assert plan_exists?
+    end
+  end
+
   private
+
+  def plan_exists? = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.exists?(@plan_id) }
+
+  def archive! = ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id) }
+
+  def archived? = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find(@plan_id).archived? }
 
   def plan_base_on = ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find(@plan_id).base_on.iso8601 }
 

@@ -1,0 +1,22 @@
+{
+  "name": "team_planning_restore_plan",
+  "description": "Restore an archived Team Planning plan, so it takes changes and is checked against the organisation again. Refused unless the caller is one of its editors, or when the plan isn't archived.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
