@@ -89,7 +89,14 @@ class TeamPlanning::Drift
     whole = baseline.map_on(@plan.base_on, known_on: baseline.known_on, history: true, scoped: false)
     parents = (whole.units + whole.retired_units).to_h { [ it.id, it.parent_id ] }
     maps = [ @plan.id, *aggregate.scenarios.keys ].map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
-    TeamPlanning::DriftScope.new(base, maps, parents:).call(changes)
+    TeamPlanning::DriftScope.new(base, maps, parents:).call(changes, known: known_moves(baseline, changes))
+  end
+
+  # What the baseline knew would change after its day, which the window,
+  # reading only what was learned since, never holds.
+  def known_moves(baseline, changes)
+    to = [ @today, *changes.map(&:effective_on) ].max
+    OrgGraph::ChangesBetween.new(context: @context, from: @plan.base_on, to:, known_on: baseline.known_on).call.changes
   end
 
   def planned_changes(plan)

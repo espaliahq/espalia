@@ -20,7 +20,9 @@
 # or in it. Each cut field is listed in `outside`.
 #
 # Within a day, the changes that move someone or some unit are judged first,
-# so a title that changes on the day someone leaves goes with them.
+# so a title that changes on the day someone leaves goes with them. A move
+# the Org Graph knew before the window but that takes effect after the base
+# moves them too, on its own day, though the window never reports it.
 class TeamPlanning::DriftScope
   PERSON_KINDS = %i[joined left fact_changed].freeze
   MEMBERSHIP_KINDS = %i[membership_started membership_ended membership_changed moved].freeze
@@ -49,9 +51,13 @@ class TeamPlanning::DriftScope
   end
 
   # @param changes [Array<OrgGraph::ChangesBetween::Change>] in date order
+  # @param known [Array<OrgGraph::ChangesBetween::Change>] moves known before the window that take effect after
+  #   the base: each moves the window on, on its own day and ahead of that day's changes, and is never reported
   # @return [Array<Cut>] the changes the plan covers when they happen, in the order given
-  def call(changes)
+  def call(changes, known: [])
+    pending = known.select { MOVES.include?(it.kind) }.sort_by(&:effective_on)
     cuts = changes.group_by(&:effective_on).values.flat_map do |day|
+      advance(pending.shift) while pending.first && pending.first.effective_on <= day.first.effective_on
       moves, facts = day.partition { MOVES.include?(it.kind) }
       (moves + facts).map { |change| [ change, cut(change).tap { advance(change) unless change.withdrawn } ] }
     end.to_h

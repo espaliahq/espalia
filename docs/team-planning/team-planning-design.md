@@ -1324,7 +1324,9 @@ place ends stays, as the baseline keeps them unassigned. Someone the window brin
 counts from that change on, and so does anyone in a unit beneath one it brings in.
 Anyone a scenario holds, and any unit a scenario created, count throughout. Units
 follow the same rule. Within a day, the changes that move someone or some unit are
-judged first, so a title that changes on the day someone leaves goes with them. A
+judged first, so a title that changes on the day someone leaves goes with them. A move
+the Org Graph knew before the window but that takes effect after the base moves them
+too, on its own day and ahead of that day's changes, though drift never reports it. A
 change about anything the plan doesn't cover at that point is dropped, names and all.
 
 The change that takes a person or unit out keeps the plan's side and nulls the

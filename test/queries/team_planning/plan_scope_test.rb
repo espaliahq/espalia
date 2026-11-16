@@ -389,6 +389,24 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_equal [ "Software Engineer", "Staff Engineer", [] ], [ title.dig(:before, "title"), title.dig(:after, "title"), title[:outside] ]
   end
 
+  should "follow a move known before the base from the day it takes effect, out of the plan and into it" do
+    as_tenant do
+      people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+      people.move_membership(@ada.id, @payments, @sales, effective_on: on(10)[:effective_on])
+      people.move_membership(@dee.id, @sales, @payments, effective_on: on(10)[:effective_on])
+    end
+    changes = drift_after do |people, _|
+      [ @ada, @dee ].each do |person|
+        people.change_title(person.id, "Senior Engineer", **on(5))
+        people.change_title(person.id, "Staff Engineer", **on(20))
+      end
+    end
+
+    assert_equal [ [ "Senior Engineer" ], [ "Staff Engineer" ] ], [ titles(changes, @ada), titles(changes, @dee) ]
+    assert_equal [ [ nil, [ "before" ] ] ], changes.select { it[:person_id] == @dee.id }.map { it.values_at(:before, :outside) }
+    assert_empty changes.select { it[:kind] == "moved" }, "a move known before the base is never reported"
+  end
+
   should "stop counting someone from the move out, and count them again once they come back" do
     changes = drift_after do |people, _|
       people.change_title(@ada.id, "Senior Engineer", **on(5))
