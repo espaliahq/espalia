@@ -8,7 +8,9 @@
 # A scenario after a closed step stands on the Org Graph the day after that
 # step ends instead ({TeamPlanning::PlanAggregate#standing_after}). The
 # changes the closed steps made that the Org Graph then held drop away, and
-# the rest carry over, so it reads as a first step from that day would.
+# the rest carry over, so it reads as a first step from that day would. A
+# placement in a position always carries over: who fills a seat is the plan's
+# own fact, which the Org Graph never holds.
 #
 # Like the baseline, {#structure} is ids only and {#call} joins the names last.
 #

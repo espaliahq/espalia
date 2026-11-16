@@ -92,6 +92,18 @@ class TeamPlanning::ClosedStepTest < ActiveSupport::TestCase
     end
   end
 
+  # Ada, already in Payments, seated in a new Payments position in H1: the Org Graph holds the move, not the seat.
+  def seated_in_h1
+    as_tenant do
+      Operations::TeamPlanning::SetPosition.call(context:, params: { plan_id: @plan_id, scenario_id: @h1, role_id: @e5.role_id, level_id: @e5.level_id,
+                                                                     unit_id: @payments, fte: 1, basis: "new", cost_centre: "Platform" })[:position_id]
+        .tap do |seat|
+          handler.set_change(@plan_id, TeamPlanning::Events::AssignmentSet, scenario_id: @h1, subject_id: @ada.id,
+                                                                            end_state: { placements: [ { position_id: seat, allocation: 1.0 } ] })
+        end
+    end
+  end
+
   def close(scenario_id = @h1) = as_tenant { handler.close_step(@plan_id, scenario_id) }
 
   def reopen(scenario_id = @h1) = as_tenant { handler.reopen_step(@plan_id, scenario_id) }
@@ -234,20 +246,41 @@ class TeamPlanning::ClosedStepTest < ActiveSupport::TestCase
   end
 
   should "keep someone in the seat the closed step placed them in when the Org Graph made the placement happen" do
-    seat = as_tenant do
-      Operations::TeamPlanning::SetPosition.call(context:, params: { plan_id: @plan_id, scenario_id: @h1, role_id: @e5.role_id, level_id: @e5.level_id,
-                                                                     unit_id: @payments, fte: 1, basis: "new", cost_centre: "Platform" })[:position_id]
-    end
-    as_tenant do
-      handler.set_change(@plan_id, TeamPlanning::Events::AssignmentSet, scenario_id: @h1, subject_id: @ada.id,
-                                                                        end_state: { placements: [ { position_id: seat, allocation: 1.0 } ] })
-    end
+    seat = seated_in_h1
     close
 
     as_tenant do
       map = TeamPlanning::Resolution.new(context:, plan: TeamPlanningPlan.find(@plan_id), scenario_id: @h2).structure
       assert_equal [ seat ], map.people.find { it.id == @ada.id }.memberships.map(&:position_id)
       assert_equal 0, map.open_fte(map.positions_by_id.fetch(seat), map.occupants.fetch(seat, []))
+      lines = TeamPlanning::Cost.new(context:, plan: TeamPlanningPlan.find(@plan_id), scenario_id: @h2).call.scenario.lines
+      assert_equal [ [ @ada.id, "person", seat ] ], lines.select { it.seat_id == @ada.id }.map { it.to_h.values_at(:seat_id, :kind, :position_id) }.uniq
+      assert_empty lines.select { it.seat_id == seat }, "the seat costs nothing beside the person in it"
+    end
+  end
+
+  should "keep someone in the closed step's seat by the plan when the Org Graph moves them out after the close, and read it as drift" do
+    seat = seated_in_h1
+    close
+    on(Time.utc(2026, 7, 10, 9)) do
+      @org.end_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-07-08")
+      @org.set_membership(@ada.id, @growth, **ESPALIA, effective_on: "2026-07-08", allocation: 1.0)
+    end
+
+    on(Time.utc(2026, 7, 15, 9)) do
+      plan = TeamPlanningPlan.find(@plan_id)
+      map = TeamPlanning::Resolution.new(context:, plan:, scenario_id: @h2).structure
+      seating = TeamPlanning::Repository.new.load_plan(@plan_id).changes_in(@h1).select { it.data[:subject_id] == @ada.id && it.data[:placements] }.last
+      status = TeamPlanning::Status.new(context:, plan:, scenario_id: @h2).call.statuses.find { it.subject_id == @ada.id }.status
+      drift = TeamPlanning::Drift.new(context:, plan:).call.changes.select { it.change.person_id == @ada.id && it.change.effective_on >= Date.new(2026, 7, 8) }
+
+      assert_equal [ [ seat, @payments ] ], map.people.find { it.id == @ada.id }.memberships.map { [ it.position_id, it.unit_id ] },
+                   "H2 stands on 1 July, before the move, and the plan keeps her in its seat"
+      assert_equal :conflicting, status, "the Org Graph now holds her elsewhere"
+      assert_equal %i[membership_ended membership_started], drift.map { it.change.kind }.sort
+      assert drift.none?(&:from_plan)
+      assert_equal [ [ @h1, seating.event_id ] ], drift.flat_map(&:meets).map { [ it.scenario_id, it.change_id ] }.uniq,
+                   "the move meets the closed step's seating, which still stands"
     end
   end
 
