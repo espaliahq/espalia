@@ -404,7 +404,7 @@ Rails.application.routes.draw do
   end
 
   # Team Planning (#226): the plans a person is in, and one plan's page.
-  resources :plans, only: [ :index, :show, :create ], path: "planning" do
+  resources :plans, only: [ :index, :show, :create, :destroy ], path: "planning" do
     get :map, on: :member
     # One path along the calendar ([#298](https://github.com/espaliahq/espalia/issues/298)).
     get :timeline, on: :member
