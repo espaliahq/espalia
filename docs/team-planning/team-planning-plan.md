@@ -337,7 +337,7 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 | 8.5 | The change list Operation for an approved point, with a stable id per entry, and `ChangeRaised` with the upstream reference | 8.4 |
 | 8.6a | Split a scenario from the plan page: choose the agreed changes, see before submit which can't go across alone, name the part and split. Built in [#360](https://github.com/espaliahq/espalia/issues/360) | 8.2 |
 | 8.6b | Approve the agreed part and carry it out, on the 8.6a page ([#359](https://github.com/espaliahq/espalia/issues/359)) | 8.6a, 8.5 |
-| 8.7 | `StepClosed`: the next step stands on the Org Graph, pending changes show as carried over, and the closed step reads planned against actual through `AsOf` on its end date | 4.3 |
+| 8.7 | `StepClosed`: the next step stands on the Org Graph, pending changes carry over, and the closed step reads planned against actual on its end date. [Design: Planned against actual as built](team-planning-design.md#planned-against-actual-as-built). Built in [#466](https://github.com/espaliahq/espalia/issues/466); marking what carried over is [#478](https://github.com/espaliahq/espalia/issues/478) | 4.3 |
 
 **One transaction.** 8.4 builds the person and structure handlers with the approval's
 id as `cause_id`, and passes `plan_id` and `plan_change_id` on every command. Each kind
