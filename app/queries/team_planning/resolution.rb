@@ -181,7 +181,7 @@ class TeamPlanning::Resolution
   def done_at_close(closed_id, ends_on)
     CurrentPlanReads.fetch([ :done_at_close, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @plan.archived_on, closed_id, ends_on ]) do
       TeamPlanning::Status.new(context: @context, plan: @plan, scenario_id: closed_id, today: ends_on + 1, known_on: @plan.archived_on,
-                               repository: @repository)
+                               known_at: @plan.archived_known_at, repository: @repository)
                           .call.statuses.select { it.status == :done }.to_set(&:change_id)
     end
   end
@@ -193,7 +193,7 @@ class TeamPlanning::Resolution
   # @return [TeamPlanning::Baseline::Map]
   def standing_on(ends_on)
     CurrentPlanReads.fetch([ :standing, *CurrentPlanReads.viewer(@context), @plan.id, @plan.archived_on, ends_on ]) do
-      @baseline.map_on(ends_on + 1, known_on: @plan.archived_on)
+      @baseline.map_on(ends_on + 1, known_on: @plan.archived_on, known_at: @plan.archived_known_at)
     end
   end
 

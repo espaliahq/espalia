@@ -181,6 +181,34 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
       end
     end
 
+    should "hold a closed step's standing, what it finished and its outcome to the instant the archive day ended in Sydney" do
+      travel_to Time.utc(2026, 11, 2, 1)
+      plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-11-03")[:plan_id]
+      q1 = call(Operations::TeamPlanning::ForkScenario, plan_id:, relation: "then", name: "Q1", ends_on: "2026-11-10")[:scenario_id]
+      q2 = call(Operations::TeamPlanning::ForkScenario, plan_id:, parent_id: q1, relation: "then", name: "Q2", ends_on: "2026-11-30")[:scenario_id]
+      ActsAsTenant.with_tenant(@tenant) do
+        handler.set_change(plan_id, TeamPlanning::Events::AssignmentSet, scenario_id: q1, subject_id: @ada.id,
+                                                                          end_state: { placements: [ { unit_id: @platform, allocation: 1.0 } ] })
+      end
+      travel_to Time.utc(2026, 11, 11, 1)
+      ActsAsTenant.with_tenant(@tenant) do
+        handler.close_step(plan_id, q1)
+        handler.archive_plan(plan_id)
+      end
+      # Sydney's 11 November ended at 13:00 UTC, LA's at 08:00 on the 12th.
+      learn_move(at: Time.utc(2026, 11, 11, 18))
+
+      travel_to Time.utc(2026, 11, 20, 1)
+      before = closed_reads(plan_id, q1, q2)
+
+      assert_equal [ [ @payments ], 0 ], before.values_at(:standing, :done)
+
+      @tenant.update!(time_zone: "America/Los_Angeles")
+
+      after = closed_reads(plan_id, q1, q2)
+      assert_empty before.keys.reject { before[it] == after[it] }, "these moved with the zone"
+    end
+
     should "hold an archived plan to the instant its archive day ended in Sydney" do
       travel_to Time.utc(2026, 11, 2, 1)
       plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-12-01")[:plan_id]
@@ -249,6 +277,20 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         org.move_membership(@ada.id, @payments, @platform, effective_on: "2026-10-15")
       end
+    end
+  end
+
+  # What an archived plan reads of its closed step q1: where the step after
+  # it stands Ada, how many of q1's changes read done at close, and q1's outcome.
+  # The first two are private to Resolution, and its public reads can't tell
+  # them apart: a done change and a carried one land Ada in the same unit.
+  def closed_reads(plan_id, q1, q2)
+    ActsAsTenant.with_tenant(@tenant) do
+      row = plan(plan_id)
+      resolution = TeamPlanning::Resolution.new(context:, plan: row, scenario_id: q2)
+      { standing: resolution.send(:standing_on, Date.new(2026, 11, 10)).people.find { it.id == @ada.id }.memberships.map(&:unit_id),
+        done: resolution.send(:done_at_close, q1, Date.new(2026, 11, 10)).size,
+        outcome: TeamPlanning::StepOutcome.new(context:, plan: row, scenario_id: q1).call }
     end
   end
 
