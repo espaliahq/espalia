@@ -19,7 +19,8 @@
 # no amount approves none, never zero. Money keeps its currency: a line drawn
 # on in another currency is flagged and never converted, and its remaining is
 # in its own currency only. Only the grand totals convert, to the reference
-# currency at the period's start.
+# currency at the period's start. A head count counts toward a total only
+# when its line's period overlaps the scenario's, as its money does.
 #
 # Lines and cost centres carry all four numbers; a line's cost centre is the
 # one it was approved for. Units carry funded and unfunded only, as no line
@@ -261,7 +262,7 @@ class TeamPlanning::Budget
 
   def summed(lines, funded_heads, unfunded, unfunded_heads, scope:)
     priced = lines.select(&:approved)
-    counted = lines.select { it.line.head_count }
+    counted = lines.select { it.line.head_count && overlap(it.line).positive? }
     head_count = counted.sum(0r) { Rational(it.line.head_count.to_s) } if counted.any?
     approved = priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:approved) }
     Totals.new(approved: converted(approved), head_count:, funded: converted(lines.map(&:funded).reduce({}) { |sum, money| add(sum, money) }), funded_heads:,

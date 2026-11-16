@@ -248,6 +248,17 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal TeamPlanning::Budget::Over.new(money: nil, heads: false, mismatched: []), report.cost_centres["Elsewhere"].over
   end
 
+  should "count no head count from a line outside the scenario's period" do
+    line(head_count: 1, cost_centre: "Platform")
+    line(head_count: 100, cost_centre: "Platform", starts_on: "2027-01-01", ends_on: "2027-12-31")
+    2.times { open_position }
+    strictness(preset: "cost_centre")
+    report = budget
+
+    assert_equal [ 1r, 1r ], [ report.cost_centres["Platform"].head_count, report.totals.head_count ]
+    assert report.cost_centres["Platform"].over.heads, "next year's hundred heads don't cover this year's two"
+  end
+
   should "count a blank cost centre's unfunded money as no cost centre's" do
     before = budget.cost_centres
     as_tenant do
