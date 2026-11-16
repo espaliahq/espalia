@@ -143,6 +143,14 @@ export default class extends BaseController {
     this.#applyMetadata(state)
     this.#writeCookie(state)
     this.#pushBrowserUrl(state)
+    if (state === "open") this.#revealStackedPane()
+  }
+
+  // A pane that stacks under the page opens below the fold on a phone, where
+  // the tap that opened it would otherwise seem to do nothing.
+  #revealStackedPane() {
+    if (this.dismissOutsideValue || window.innerWidth >= MOBILE_BREAKPOINT) return
+    requestAnimationFrame(() => this.paneTarget.scrollIntoView({ block: "start" }))
   }
 
   // Browser back/forward changes the URL without remounting Stimulus

@@ -50,6 +50,11 @@ class PlanSidePanelSystemTest < ApplicationSystemTestCase
         assert_selector "#{TOGGLE}[aria-expanded='true']"
         assert_includes current_url, "panel=open"
         assert_operator map_width, :<, closed_width if label == "desktop"
+        if label == "phone"
+          assert_panel_in_view
+          tap_the_map
+          assert_selector PANEL, visible: true, text: "Members"
+        end
 
         visit map_plan_path(@plan_id)
         assert_selector "[data-map-unit]", text: "Payments"
@@ -92,6 +97,22 @@ class PlanSidePanelSystemTest < ApplicationSystemTestCase
   def toggle_side_panel
     wait_for_stimulus "activity-pane"
     page.execute_script("document.querySelector(arguments[0]).click()", TOGGLE)
+  end
+
+  def assert_panel_in_view
+    page.document.synchronize do
+      in_view = evaluate_script("(r => r.top >= 0 && r.top < innerHeight)(document.querySelector('#{PANEL}').getBoundingClientRect())")
+      raise Capybara::ExpectationNotMet, "the panel is out of view" unless in_view
+    end
+  end
+
+  # The stacked panel ignores a tap outside it, which on a phone is a tap on the page.
+  def tap_the_map
+    page.execute_script(<<~JS)
+      document.querySelector("[data-map-unit]").dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+      )
+    JS
   end
 
   def map_width
