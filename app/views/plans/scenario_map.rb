@@ -369,10 +369,11 @@ class Views::Plans::ScenarioMap < Views::Base
   # from the row's trigger when its menu opens.
   def position_menu_template
     render Components::Kit::DelegatedMenu.new(kind: MENU) do |menu|
+      path = "#{plan_positions_path(@map[:plan_id])}/{id}"
       values = { unit_id: "{unit}", level_id: "{level}", fte: "{fte}", basis: "{basis}", cost_centre: "{cost-centre}" }
-      menu.item(data: Views::Plans::PositionDialog.trigger(mode: :edit, url: "{path}", name: "{name}", values:)) { "Edit…" }
-      menu.item(data: Views::Plans::MovePositionDialog.trigger(url: "{move-path}", name: "{name}", from: "{unit}")) { "Move…" }
-      menu.item(tone: :danger, data: Views::Plans::ClosePositionDialog.trigger(url: "{path}", name: "{name}", occupants: [ "{occupants}" ])) { "Close…" }
+      menu.item(data: Views::Plans::PositionDialog.trigger(mode: :edit, url: path, name: "{name}", values:)) { "Edit…" }
+      menu.item(data: Views::Plans::MovePositionDialog.trigger(url: "#{path}/move", name: "{name}", from: "{unit}")) { "Move…" }
+      menu.item(tone: :danger, data: Views::Plans::ClosePositionDialog.trigger(url: path, name: "{name}", occupants: [ "{occupants}" ])) { "Close…" }
     end
   end
 
@@ -380,8 +381,7 @@ class Views::Plans::ScenarioMap < Views::Base
     label = position_name(position)
     render Components::Kit::DelegatedMenu::Trigger.new(
       label: "Actions for #{label} in #{units_by_id[position[:unit_id]][:name]}", kind: MENU,
-      values: { path: plan_position_path(@map[:plan_id], position[:position_id]),
-                move_path: move_plan_position_path(@map[:plan_id], position[:position_id]), name: label,
+      values: { id: position[:position_id], name: label,
                 unit: position[:unit_id], level: position[:level_id], fte: position[:fte], basis: position[:basis],
                 cost_centre: position[:cost_centre], occupants: position.fetch(:occupants, []).map { name(it[:person_id]) }.sort.to_sentence }
     )

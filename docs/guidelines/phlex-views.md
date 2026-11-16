@@ -255,7 +255,9 @@ invisible control. Where every row of a long list or grid has a ⋮, use
 `Kit::DelegatedMenu`: a bare `Trigger` per row and one menu, built on open by a
 controller mounted once on the container. A `Kit::Dropdown` per row ships every
 menu with the page: on a 2,000-position scenario map it cost 3.3 KB and 0.2 ms a
-row. The scenario map uses it as it is. The framework explorer's grid extends
+row, against 0.6 KB and 0.07 ms for a trigger. Give a trigger only what
+changes per row (an id, not a path), and spell the rest once in the template.
+The scenario map uses it as it is. The framework explorer's grid extends
 its controller, since its items depend on more than the trigger's values, and
 renders the trigger through
 `Views::Frameworks::Explorer::Concerns::MenuItems#render_menu_trigger` (see
