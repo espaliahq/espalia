@@ -13,7 +13,7 @@ class Operations::TeamPlanning::RedoChange < Operations::Base
               "position it no longer covers is refused unless it places them in one of its units. Refused when a " \
               "change to the same subject and facet was made since (the refusal names it), when it isn't undone, " \
               "when it brings back a last day outside the dates of the step they leave in, or unless the caller " \
-              "is an editor. An undone date edit of a step is redone too, under the same checks as a new date edit."
+              "is an editor, or, without the see-pay right, when it is a change to a budget line that carries an amount. An undone date edit of a step is redone too, under the same checks as a new date edit."
   category :write
   approval :mcp_client
 

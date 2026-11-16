@@ -733,10 +733,11 @@ class TeamPlanning::PlanAggregate
   # @param scenario_id [String] the root or a live scenario
   # @param person_id [String]
   # @param except_facets [Array<String>] facets the person may no longer touch
+  # @param except_keys [Set<Array(String, String)>] `[subject_id, facet]` keys the person may no longer touch
   # @return [String, nil] its event id
-  def last_undoable_by(scenario_id, person_id, except_facets: [])
+  def last_undoable_by(scenario_id, person_id, except_facets: [], except_keys: Set.new)
     ensure_open!
-    changes = changes_undoable_by(live_scenario!(scenario_id), person_id, except_facets)
+    changes = changes_undoable_by(live_scenario!(scenario_id), person_id, except_facets, except_keys)
     dates = last_dates_undoable_by(scenario_id, person_id)
     return changes.first unless dates && changes.none? { @sequence.fetch(it) > @sequence.fetch(dates) }
 
@@ -750,13 +751,15 @@ class TeamPlanning::PlanAggregate
   # @param scenario_id [String] the root or a live scenario
   # @param person_id [String]
   # @param except_facets [Array<String>] facets the person may no longer touch
+  # @param except_keys [Set<Array(String, String)>] `[subject_id, facet]` keys the person may no longer touch
   # @return [String, nil] the undone entry's event id
-  def last_redoable_by(scenario_id, person_id, except_facets: [])
+  def last_redoable_by(scenario_id, person_id, except_facets: [], except_keys: Set.new)
     ensure_open!
     log = @logs.fetch(live_scenario!(scenario_id), [])
     change = redo_stack(scenario_id, person_id).reverse.find do |event_id|
       entry = log.find { it.event_id == event_id }
-      undone?(event_id) && entry && !except_facets.include?(key_of(entry).last) && later_in_effect(log, entry).nil?
+      undone?(event_id) && entry && !except_facets.include?(key_of(entry).last) && !except_keys.include?(key_of(entry)) &&
+        later_in_effect(log, entry).nil?
     end
     [ change, last_dates_redoable_by(scenario_id, person_id) ].compact.max_by { @undone_at.fetch(it, -1) }
   end
@@ -1254,10 +1257,10 @@ class TeamPlanning::PlanAggregate
 
   # The person's changes an undo could take back, the one it takes first:
   # a move puts the changes it carries after those already in the step.
-  def changes_undoable_by(scenario_id, person_id, except_facets)
+  def changes_undoable_by(scenario_id, person_id, except_facets, except_keys)
     replaced = Set.new
     @logs.fetch(scenario_id, []).reverse_each.filter_map do |entry|
-      next if undone?(entry.event_id) || except_facets.include?(key_of(entry).last)
+      next if undone?(entry.event_id) || except_facets.include?(key_of(entry).last) || except_keys.include?(key_of(entry))
 
       eligible = actor_of(entry) == person_id && !replaced.include?(key_of(entry))
       replaced << key_of(entry) unless entry.is_a?(TeamPlanning::Events::ChangeMoved)

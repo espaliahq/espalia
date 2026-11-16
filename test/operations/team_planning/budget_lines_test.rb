@@ -173,6 +173,84 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_equal "No such plan", refusal { call(Operations::TeamPlanning::CutBudgetLine, as: @outsider, plan_id: @plan_id, scenario_id: @q1, budget_line_id: @engineers.id) }
   end
 
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)), so an editor
+  # without the see-pay right works on head counts alone.
+  context "an editor without the see-pay right" do
+    setup do
+      @planner = as_tenant { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
+      call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @planner.person_id, role: "editor")
+    end
+
+    should "add and change lines by head count, and set no amount, currency or period" do
+      added = set_as_planner(head_count: "2")[:budget_line_id]
+      set_as_planner(budget_line_id: added, head_count: "3")
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      assert_equal [ "3.00", "5.00" ], [ line(added)[:head_count], line(@support.id)[:head_count] ]
+
+      [ { amount: "100", currency: "AUD", period: "year" }, { currency: "AUD" }, { period: "year" } ].each do |money|
+        assert_equal "Setting a budget amount needs the see-pay right.", refusal { set_as_planner(head_count: "1", **money) }
+      end
+      cut_as_planner(@support.id)
+      assert_nil line(@support.id)
+    end
+
+    should "refuse to change or cut a line that carries an amount, the organisation's or the plan's" do
+      priced = set(amount: "9000", currency: "AUD", period: "month")[:budget_line_id]
+      [ @engineers.id, priced ].each do |id|
+        assert_equal PRICED, refusal { set_as_planner(budget_line_id: id, head_count: "1") }
+        assert_equal PRICED, refusal { cut_as_planner(id) }
+      end
+      assert_equal "This scenario has no such budget line", refusal { cut_as_planner(SecureRandom.uuid_v7) }
+    end
+
+    should "treat a line the plan once priced as priced, even after that change is undone" do
+      set(budget_line_id: @support.id, amount: "9000", currency: "AUD", period: "month", head_count: "2")
+      call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @q1)
+      assert_nil line(@support.id)[:amount]
+
+      assert_equal PRICED, refusal { set_as_planner(budget_line_id: @support.id, head_count: "1") }
+    end
+
+    should "undo their own change to a line with no amount" do
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      call(Operations::TeamPlanning::UndoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1)
+      assert_equal "tenant", line(@support.id)[:source]
+      call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1)
+      assert_equal "5.00", line(@support.id)[:head_count]
+    end
+
+    should "neither undo, redo, clear nor note a change to a line that carries an amount, and skip it by default" do
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      as_tenant { @support.update!(amount: 90_000, currency: "AUD", period: "year") }
+      event_id = change_of(@support.id)
+
+      assert_equal "You have nothing here to undo", refusal { undo_as_planner }
+      assert_equal PRICED, refusal { undo_as_planner(event_id:) }
+      assert_equal PRICED, refusal { call(Operations::TeamPlanning::ClearChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, subject_id: @support.id, facet: FACET) }
+      assert_equal "Noting a budget line change needs the see-pay right.",
+                   refusal { call(Operations::TeamPlanning::NoteChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, event_id:, note: "Fine") }
+
+      undo_as_holder = call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @q1, event_id:)
+      assert undo_as_holder[:undone]
+      assert_equal PRICED, refusal { call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, event_id:) }
+      assert_equal "You have nothing here to redo", refusal { call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1) }
+    end
+  end
+
+  PRICED = "Changing this budget line needs the see-pay right."
+
+  def set_as_planner(scenario_id: @q1, **params)
+    call(Operations::TeamPlanning::SetBudgetLine, as: @planner, plan_id: @plan_id, scenario_id:, **YEAR, origin: "new", **params)
+  end
+
+  def cut_as_planner(line_id) = call(Operations::TeamPlanning::CutBudgetLine, as: @planner, plan_id: @plan_id, scenario_id: @q1, budget_line_id: line_id)
+
+  def undo_as_planner(**params) = call(Operations::TeamPlanning::UndoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, **params)
+
+  def change_of(line_id, scenario_id = @q1)
+    call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id:)[:entries].find { it[:subject_id] == line_id && it[:facet] == FACET }[:event_id]
+  end
+
   should "shred a plan's own amount with the plan, leaving the organisation's line as it was" do
     added = set(amount: "70000", currency: "AUD", period: "year")[:budget_line_id]
     repository = TeamPlanning::Repository.new

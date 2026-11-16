@@ -9,7 +9,7 @@ class Operations::TeamPlanning::ClearChange < Operations::Base
   description "Stop a scenario of a Team Planning plan overriding one facet of one subject, so it follows its " \
               "parent there again: the 'follow reality' answer when reconciling. facet is as " \
               "team_planning_overrides lists it, such as 'rule:<name>'. The earlier change stays in the plan's history. Refused if the scenario doesn't change that facet, or " \
-              "unless the caller is an editor."
+              "unless the caller is an editor. Without the see-pay right, a budget line that carries an amount is refused too."
   category :write
   approval :mcp_client
 
