@@ -400,6 +400,15 @@ which is committed budget, or `new`, which is planned; the map reads it as the p
 budget. A position's unit is not checked at write: a position in a retired unit still
 resolves, and 3.8 marks it. The baseline has no positions, so every one starts in a plan.
 
+The map opens, edits, moves and closes a position
+([#461](https://github.com/espaliahq/espalia/issues/461)). Opening writes through
+`SetPosition` and closing through `ClosePosition`. An edit goes through `EditPosition`,
+which reads the position from the resolved map, merges in only the fields the editor
+changed and writes one `PositionSet`. The read and the write share the plan's lock, so
+two editors who change different fields of one position both keep their change. An
+omitted field keeps its value; an empty or null one clears it. `MovePosition` is an edit
+of the unit alone.
+
 ### Assignments as built
 
 `AssignmentSet` ([#229](https://github.com/espaliahq/espalia/issues/229)) has the facet
