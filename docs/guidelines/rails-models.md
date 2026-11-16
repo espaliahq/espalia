@@ -16,6 +16,10 @@
 - **UUID v7 primary keys** for all new models
 - Use `has_prefix_id` for API-facing models
 
+## Migrations over copied tables
+
+An archived plan keeps a sealed copy of the tenant's pay bands, exchange rates, budget lines, reference currencies and planning rule defaults (`TeamPlanning::PricingInputs::MODELS`). No upcaster can reach inside it, and old copies keep the columns they were taken with. A migration that renames or drops one of those columns must also read the old name in `TeamPlanning::PricingInputs#rows`, or an archived plan loses that value. Adding a column needs nothing: an old copy takes the column's default.
+
 ## UUID v7 Primary Keys
 
 All new models MUST use UUID v7 (RFC 9562) — time-ordered, better index performance than v4. v7 IDs land mostly-sequentially in the B-tree index; v4 inserts hit random leaf pages and bloat the working set.
