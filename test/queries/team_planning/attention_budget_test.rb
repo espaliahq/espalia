@@ -251,6 +251,7 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
 
       operation(Operations::TeamPlanning::SetPositionFunding, position_id: position, draws: [ { budget_line_id: growth } ])
       assert_equal [ [ @bo.id, "Costed in Platform, while their position draws on a budget line for Growth" ] ], reasons(:cost_centre_mismatches)
+      assert_match(/Funding/, found.find { it.check == :cost_centre_mismatches }.change.class.name, "the funding that draws on Growth explains it")
     end
 
     should "name the cost centre of the seat that disagrees when a person is costed in two" do
