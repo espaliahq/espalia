@@ -18,10 +18,14 @@ class Views::Plans::FundingDialog < Views::Base
   # @param clearable [Boolean] whether this scenario sets the position's funding itself
   # @return [Hash]
   def self.trigger(url:, name:, position:, clearable:)
-    draws = position[:draws].map { "#{it[:budget_line_id]}=#{(BigDecimal(it[:share]) * 100).to_s('F').delete_suffix('.0')}" }
+    draws = position[:draws].map { "#{it[:budget_line_id]}=#{percent(it[:share]).to_s('F').delete_suffix('.0')}" }
     { action: "click->modal#open", modal_target_id: ID, funding_action: url, funding_name: name,
       funding_draws: draws.join(","), funding_set: clearable.to_s }
   end
+
+  # @param share [String] a draw's share, such as "0.5"
+  # @return [BigDecimal] the share as a percentage
+  def self.percent(share) = BigDecimal(share.to_s) * 100
 
   # @param scenario_id [String]
   # @param scenario_name [String]

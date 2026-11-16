@@ -291,7 +291,7 @@ class Views::Plans::BudgetTab < Views::Base
 
   def lines_count(count) = "#{count} #{count == 1 ? 'line' : 'lines'}"
 
-  def share(figure) = "#{decimal(BigDecimal(figure) * 100)}%"
+  def share(figure) = "#{decimal(Views::Plans::FundingDialog.percent(figure))}%"
 
   def decimal(figure) = ActiveSupport::NumberHelper.number_to_rounded(BigDecimal(figure.to_s), precision: 2, strip_insignificant_zeros: true)
 end
