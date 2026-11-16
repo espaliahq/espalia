@@ -106,12 +106,20 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   end
 
   # Both entries carry the same path, so the URL alone can't show a Back has
-  # landed; a second Back sent too soon leaves the page behind as well. A Back
-  # that leaves for another document drops the flag, which counts as landed.
+  # landed; a second Back sent too soon leaves the page behind as well. Turbo
+  # starts its restore visit inside its own popstate listener, before ours, so
+  # a Back that starts one lands only at that visit's turbo:load. A Back that
+  # leaves for another document drops the flag, which counts as landed.
   def go_back_and_wait_until_landed
     page.execute_script(<<~JS)
       window.backLanded = false
-      window.addEventListener("popstate", () => { window.backLanded = true }, { once: true })
+      let restoring = false
+      const settle = () => { window.backLanded = true }
+      document.addEventListener("turbo:visit", () => { restoring = true }, { once: true })
+      window.addEventListener("popstate", () => {
+        if (restoring) document.addEventListener("turbo:load", settle, { once: true })
+        else settle()
+      }, { once: true })
     JS
     page.go_back
     assert wait_until_js { page.evaluate_script("window.backLanded !== false") }, "Back never landed"
