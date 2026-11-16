@@ -25,6 +25,20 @@ class Kit::SidePanelPreview < Lookbook::Preview
     side_panel(id: "open-stack-panel", open: true, narrow: :stack)
   end
 
+  # A shorter toggle label, with the title kept for screen readers
+  def short_toggle
+    render Components::Kit::SidePanel.new(id: "short-toggle-panel", title: "About this plan", open: false, narrow: :overlay,
+                                          cookie: "lookbook_short_toggle_panel_open", url_key: "short-toggle-panel") do |panel|
+      panel.main do
+        panel.toggle do
+          panel.plain "About"
+          panel.span(class: "sr-only") { " this plan" }
+        end
+      end
+      panel.body { panel.p(class: "text-sm text-muted") { "Every unit keeps one manager per eight people." } }
+    end
+  end
+
   # @!endgroup
 
   private
