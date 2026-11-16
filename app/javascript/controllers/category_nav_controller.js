@@ -43,9 +43,14 @@ export default class extends BaseController {
     this._onScroll = () => this.#scheduleActiveCategoryUpdate()
     window.addEventListener("scroll", this._onScroll, { passive: true })
 
-    // Defer the first highlight to after layout so the sticky header
-    // has its real measured height.
-    requestAnimationFrame(() => this.#scheduleActiveCategoryUpdate())
+    const linked = new URL(window.location).searchParams.get("category")
+    if (linked) {
+      this.#holdLinkedCategory(linked)
+    } else {
+      // Defer the first highlight to after layout so the sticky header
+      // has its real measured height.
+      requestAnimationFrame(() => this.#scheduleActiveCategoryUpdate())
+    }
   }
 
   disconnect() {
@@ -57,6 +62,7 @@ export default class extends BaseController {
       window.removeEventListener("scroll", this._onScroll)
       this._onScroll = null
     }
+    this.#releaseLinkedCategory()
     if (this._mql && this._onMqlChange) {
       this._mql.removeEventListener("change", this._onMqlChange)
       this._mql = null
@@ -109,6 +115,7 @@ export default class extends BaseController {
     // section as still below the threshold and marks the previous
     // section active — leaving the clicked chip mismatched with the
     // visible section.
+    this.#releaseLinkedCategory()
     this.#setActiveCategory(categoryId)
     this._suppressActiveUpdateUntil = Date.now() + 900
 
@@ -117,6 +124,7 @@ export default class extends BaseController {
 
   scrollToTop(event) {
     event.preventDefault()
+    this.#releaseLinkedCategory()
     window.scrollTo({ top: 0, behavior: "smooth" })
     this.#setActiveCategory(null)
     this._suppressActiveUpdateUntil = Date.now() + 900
@@ -183,6 +191,7 @@ export default class extends BaseController {
   // explicitly-clicked active state survives the smooth-scroll animation
   // (whose final scroll events fire before the layout fully settles).
   #scheduleActiveCategoryUpdate() {
+    if (this._linkedCategory) return
     if (this._rafId) return
     if (this._suppressActiveUpdateUntil &&
         Date.now() < this._suppressActiveUpdateUntil) return
@@ -190,6 +199,51 @@ export default class extends BaseController {
       this._rafId = null
       this.#updateActiveCategory()
     })
+  }
+
+  // A link naming a category (shared, or reached by Back and Forward)
+  // opens on it. A short page may never scroll a later section up to the
+  // threshold, so the link's chip holds until the person scrolls or picks
+  // another chip themselves.
+  #holdLinkedCategory(categoryId) {
+    this._linkedCategory = categoryId
+    this.#setActiveCategory(categoryId)
+    this._onUserScrollIntent = () => this.#releaseLinkedCategory()
+    for (const type of ["wheel", "touchmove", "keydown"]) {
+      window.addEventListener(type, this._onUserScrollIntent, { passive: true })
+    }
+    if (!this.#revealSection(categoryId)) {
+      this._onLinkedFrameLoad = () => {
+        if (this._linkedCategory && this.#revealSection(this._linkedCategory)) this.#stopAwaitingFrame()
+      }
+      document.addEventListener("turbo:frame-load", this._onLinkedFrameLoad)
+    }
+  }
+
+  #releaseLinkedCategory() {
+    this._linkedCategory = null
+    this.#stopAwaitingFrame()
+    if (!this._onUserScrollIntent) return
+    for (const type of ["wheel", "touchmove", "keydown"]) {
+      window.removeEventListener(type, this._onUserScrollIntent)
+    }
+    this._onUserScrollIntent = null
+  }
+
+  #stopAwaitingFrame() {
+    if (!this._onLinkedFrameLoad) return
+    document.removeEventListener("turbo:frame-load", this._onLinkedFrameLoad)
+    this._onLinkedFrameLoad = null
+  }
+
+  #revealSection(categoryId) {
+    const section = document.getElementById(`category-${categoryId}`)
+    if (!section) return false
+    requestAnimationFrame(() => {
+      const chrome = this.#headerIsSticky() ? Math.ceil(this.element.getBoundingClientRect().height) : 0
+      window.scrollTo({ top: Math.max(0, section.getBoundingClientRect().top + window.scrollY - chrome - 8), behavior: "instant" })
+    })
+    return true
   }
 
   #updateActiveCategory() {
