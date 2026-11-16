@@ -19,16 +19,21 @@
 # before a change if it was set while they were outside, before the window
 # or in it. Each cut field is listed in `outside`.
 #
-# Within a day, the changes that move someone or some unit are judged first,
-# so a title that changes on the day someone leaves goes with them. A move
-# the Org Graph knew before the window but that takes effect after the base
-# moves them too, on its own day, though the window never reports it.
+# Within a day, units move first, then people, then joiners, so a title that
+# changes on the day someone leaves goes with them and a joiner's manager who
+# arrives the same day can be named. A move the Org Graph knew before the
+# window but that takes effect after the base moves them too, on its own day,
+# though the window never reports it, unless the window withdraws it.
 class TeamPlanning::DriftScope
   PERSON_KINDS = %i[joined left fact_changed].freeze
   MEMBERSHIP_KINDS = %i[membership_started membership_ended membership_changed moved].freeze
   UNIT_KINDS = %i[unit_created unit_renamed unit_moved unit_retired owner_added owner_removed].freeze
   ENTERING = %i[membership_started moved].freeze
-  MOVES = %i[joined membership_started membership_ended membership_changed moved unit_created unit_moved unit_succeeded].freeze
+  ADVANCING = %i[joined membership_started membership_ended moved unit_created unit_moved].freeze
+  # A day's units move first, then the people in them, then those who join;
+  # every other change is judged after them.
+  RANK = { unit_created: 0, unit_moved: 0, unit_succeeded: 0,
+           membership_started: 1, membership_ended: 1, membership_changed: 1, moved: 1, joined: 2 }.freeze
 
   # @!attribute change [OrgGraph::ChangesBetween::Change] with outside fields cut
   # @!attribute outside [Array<String>] the fields cut: "unit_id", "from_unit_id", "before", "after" or "person_id"
@@ -45,7 +50,7 @@ class TeamPlanning::DriftScope
     @named = [ base, *maps ].flat_map(&:person_ids).to_set - based
     @roots = Set.new(base.scope_ids) | (maps.flat_map { it.known_unit_ids.to_a }.to_set - base.known_unit_ids)
     @parents = parents.merge([ base, *maps ].flat_map { it.units + it.retired_units }.to_h { [ it.id, it.parent_id ] })
-    @shown = based | @pinned | @unplaced | base.known_unit_ids | @roots
+    @shown = based | @pinned | base.known_unit_ids | @roots
     @unseen = Set.new
     @known = Set.new
   end
@@ -55,18 +60,37 @@ class TeamPlanning::DriftScope
   #   the base: each moves the window on, on its own day and ahead of that day's changes, and is never reported
   # @return [Array<Cut>] the changes the plan covers when they happen, in the order given
   def call(changes, known: [])
-    pending = known.select { MOVES.include?(it.kind) }.sort_by(&:effective_on)
-    cuts = changes.group_by(&:effective_on).values.flat_map do |day|
-      advance(pending.shift) while pending.first && pending.first.effective_on <= day.first.effective_on
-      moves, facts = day.partition { MOVES.include?(it.kind) }
-      (moves + facts).map { |change| [ change, cut(change).tap { advance(change) unless change.withdrawn } ] }
-    end.to_h
-    changes.filter_map { cuts[it] }
+    withdrawn = changes.select(&:withdrawn).to_set(&:event_id)
+    pending = known.select { ADVANCING.include?(it.kind) && !withdrawn.include?(it.event_id) }.sort_by(&:effective_on)
+    cuts = Array.new(changes.size)
+    changes.each_with_index.group_by { |change, _| change.effective_on }.each_value do |day|
+      known_until(pending, day.first.first.effective_on)
+      moves, rest = day.sort_by { |change, index| [ RANK.fetch(change.kind, 3), index ] }.partition { |change, _| RANK.fetch(change.kind, 3) < 2 }
+      joiners, facts = rest.partition { |change, _| change.kind == :joined }
+      moves.each { |change, index| cuts[index] = judge(change) }
+      joiners.each { |change, _| advance(change) unless change.withdrawn }
+      joiners.each { |change, index| cuts[index] = cut(change) }
+      facts.each { |change, index| cuts[index] = judge(change) }
+    end
+    cuts.compact
   end
 
   private
 
   def held_people(map) = map.people.to_set(&:id) | map.departed.to_set(&:person_id)
+
+  def judge(change) = cut(change).tap { advance(change) unless change.withdrawn }
+
+  # A move known before the window counts from its own day, unreported, and
+  # whatever it creates or brings in is shown from then on.
+  def known_until(pending, day)
+    while pending.first && pending.first.effective_on <= day
+      change = pending.shift
+      advance(change)
+      @shown << change.person_id if change.kind == :joined && covered?(change.person_id)
+      @shown << change.unit_id if change.kind == :unit_created && covered_unit?(change.unit_id)
+    end
+  end
 
   def covered?(person_id)
     @pinned.include?(person_id) || @unplaced.include?(person_id) || Array(@placed[person_id]).any? { covered_unit?(it) }

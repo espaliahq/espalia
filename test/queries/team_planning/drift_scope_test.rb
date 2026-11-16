@@ -70,4 +70,29 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
     assert_equal [ { "title" => "Staff Engineer", "manager_id" => nil, "memberships" => { @engineering => { "allocation" => 1 } }, "owned_unit_ids" => [ @engineering ] },
                    [ "after" ] ], [ cut.change.after, cut.outside ]
   end
+
+  should "name a joiner's manager who joins the same day, and count someone joining a unit created that day" do
+    @base = @base.with(outside: [])
+    joiner = ->(id, manager_id, unit_id) { change(:joined, 10, person_id: id, after: { "manager_id" => manager_id, "memberships" => { unit_id => {} } }) }
+    created = change(:unit_created, 10, person_id: nil, unit_id: "field", after: { "parent_id" => @engineering })
+    kept = cuts(joiner.call("cy", "dee", @engineering), joiner.call("dee", nil, @engineering), joiner.call("eve", nil, "field"), created)
+
+    assert_equal [ [ "cy", "dee" ], [ "dee", nil ], [ "eve", nil ] ], kept.filter_map { [ it.change.person_id, it.change.after["manager_id"] ] if it.change.kind == :joined }
+  end
+
+  should "follow a move known before the window from its day, and drop it once the window withdraws it" do
+    title = change(:fact_changed, 20, fact: "title", before: { "title" => "Engineer" }, after: { "title" => "Staff Engineer" })
+    known = change(:moved, 15, unit_id: @engineering, from_unit_id: @sales)
+    counted = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ title ], known: [ known ])
+    withdrawn = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ known.with(withdrawn: true), title ], known: [ known ])
+
+    assert_equal [ [ title.event_id ], [] ], [ counted, withdrawn ].map { |kept| kept.map(&:change).select { it.kind == :fact_changed }.map(&:event_id) }
+  end
+
+  should "show a unit known to be created inside the plan, so its first rename keeps the name it was given" do
+    created = change(:unit_created, 5, person_id: nil, unit_id: "field", after: { "parent_id" => @engineering, "name" => "Field" })
+    renamed = change(:unit_renamed, 20, person_id: nil, unit_id: "field", before: { "name" => "Field" }, after: { "name" => "Field Ops" })
+
+    assert_equal [ [ { "name" => "Field" }, [] ] ], TeamPlanning::DriftScope.new(@base, [ @base ]).call([ renamed ], known: [ created ]).map { [ it.change.before, it.outside ] }
+  end
 end
