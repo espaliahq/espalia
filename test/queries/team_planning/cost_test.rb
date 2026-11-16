@@ -169,6 +169,10 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     end
 
     assert_equal %w[level_left], cost.scenario.unpriced.select { it.position_id == position }.map(&:reason).uniq
+    assert_includes TeamPlanning::Cost::REASONS["level_left"], "or one for every role and level"
+
+    as_tenant { PayBand.new(currency: "NZD", period: "year", minimum: 1, midpoint: 2, maximum: 3).tap { it.match_on }.tap(&:save!) }
+    assert_empty cost.scenario.unpriced.select { it.position_id == position }
   end
 
   should "sum units, cost centres and the grand total to the same figure, with no unit and no cost centre counted" do
