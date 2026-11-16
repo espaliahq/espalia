@@ -108,12 +108,14 @@ class TeamPlanning::CommandHandler
   end
 
   # @param plan_id [String]
+  # @yield [plan] under the plan's lock, before it is restored, so a caller can refuse
   # @return [TeamPlanning::PlanAggregate] the plan as stored
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if it isn't archived
   # @see TeamPlanning::PlanAggregate#restore
   def restore_plan(plan_id)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
+      yield(plan) if block_given?
       plan.restore(restored_by_id: actor_id!)
     end
   end

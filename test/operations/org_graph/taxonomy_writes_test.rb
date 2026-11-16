@@ -220,6 +220,23 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
         assert_not_includes level_names, "Guild"
       end
+
+      should "keep the plan archived once its level is gone" do
+        call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+
+        error = assert_raises(Operations::Base::ParameterError) { call(Operations::TeamPlanning::RestorePlan, plan_id: @plan_id) }
+
+        assert_equal "This plan places 1 unit of a type that has been removed, so it can't be restored. " \
+                     "Delete it instead, or copy what you need into another plan", error.message
+        assert ActsAsTenant.with_tenant(@tenant) { TeamPlanningPlan.find(@plan_id).archived? }
+      end
+
+      should "restore the plan while its level stays" do
+        call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+
+        assert_equal false, call(Operations::TeamPlanning::RestorePlan, plan_id: @plan_id)[:archived]
+      end
     end
 
     should "keep a level that holds units, naming them" do
