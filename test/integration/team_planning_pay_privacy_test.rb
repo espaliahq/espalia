@@ -152,6 +152,35 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
 
+    # Q2 holds pay of its own, so a holder's run rate at its end is 2894 above
+    # Today's: a figure that is in no one else's read.
+    # Ids are stripped first, as a random one could hold any of these digits.
+    should "price the run rate at a step's end from held pay for a holder alone, in the reads, the strip and the table" do
+      q2 = call(Operations::TeamPlanning::ForkScenario, @holder, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2", ends_on: "2026-09-30")[:scenario_id]
+      hold_pay(q2, @ada, "95311", "full_time")
+
+      seen = { @holder => "95311", @editor => "100000", @viewer => "100000" }.to_h do |account, yearly|
+        who = account == @holder ? "holder" : "non-holder"
+        cost = call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: q2)
+        costs = call(Operations::TeamPlanning::ScenarioCosts, account, plan_id: @plan_id)
+        row = costs[:scenarios].find { it[:scenario_id] == q2 }
+        map = call(Operations::TeamPlanning::ScenarioMap, account, plan_id: @plan_id, scenario_id: q2)
+        strip = Views::Plans::CostStrip.new(marks: Views::Plans::CostMarks.new(cost:, map:)).call
+        cell = Views::Plans::CostCell.new(row:, reference: costs[:reference_currency]).call
+
+        assert_equal [ "2026-09-30", yearly ], cost[:run_rate_at_end].then { [ it[:on], it[:total][:scenario][:converted] ] }, who
+        assert_equal cost[:run_rate_at_end].slice(:on, :total), row[:run_rate_at_end], who
+        [ account, [ cost.to_json, costs.to_json, strip, cell ].map { it.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "") } ]
+      end
+
+      assert_equal [ "2894" ] * 2 + [ "+AUD 2.89k" ] * 2, seen[@holder].map { it[/\+AUD 2\.89k|2894/] }, "the holder sees the change on Today's"
+      [ @editor, @viewer ].each do |account|
+        seen[account].each do |output|
+          %w[95311 95.3k 2894 2.89k 7583 7.58k].each { assert_not_includes output, it }
+        end
+      end
+    end
+
     # Q2 sets no rate of its own, so its attrition is Q1's leavers alone: each
     # seat emptied in Q1's last 73 days stays empty into Q2, 0.1 / 365 × 73² / 2
     # = 266.45 / 365 FTE-days, priced as Q1 priced the seat for the caller.

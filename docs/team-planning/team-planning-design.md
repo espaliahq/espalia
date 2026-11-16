@@ -743,6 +743,36 @@ number and a country, and leaves the rest open; a band that sets none matches ev
   country it is unpriced with the reason `level_left`, and an admin adds a band or moves
   the seat to a current level.
 
+#### Run rate at the end
+
+A period total says what a step spends; it can't say what the plan costs a year once the
+step lands. So each scenario also has a run rate at its end
+([#334](https://github.com/espaliahq/espalia/issues/334)): every seat it holds on its last
+day, each priced for a full year, as if the period were that one day in a one-day year. A
+leaver whose last day is the day before is out; one who leaves on it is in, and their
+backfill starts the day after. Planned vacancies and placeholder hires count as held seats.
+
+- **It stands against Today's seats priced on that same day**, at that day's exchange
+  rates, so a move in a rate never reads as the plan's change. Its difference is "on
+  Today's run rate".
+- **Its parts** split as a period total's do: actual is Today's seats on that day, planned
+  what the plan's changes add or take away, and forecast a year of each forecast row's
+  headcount still changed on the step's last day, at the row's own average cost.
+- **For attrition, the forecast is a steady vacancy rate.** Once a step runs longer than
+  the time to hire T, a seat leaving at rate r a year sits empty r × T / 365 of the time.
+  With 10 filled FTE at EUR 100k, a 10% rate and 73 days to hire, 0.1 × 10 × 73 / 365 =
+  0.2 FTE is empty on any given day, so the run rate is EUR 20k a year lower. A step shorter
+  than T counts only the seats emptied so far, and the empty days carried from earlier
+  steps count too, as the attrition row's headcount already holds them.
+- **Pay** is the caller's own view: a holder of the see-pay right sees it priced from
+  actual pay where the plan holds it, and everyone else at midpoints.
+- **Where it shows.** `team_planning_cost` sends `run_rate_at_end` with its total, units and
+  cost centres; `team_planning_scenario_costs` sends its total per scenario. The Cost strip
+  and each Scenarios cell add one muted line that wraps, such as "Run rate on 31 Dec 2026:
+  EUR 1.2m a year, +EUR 80k on Today's". Unit totals on the map stay period totals. Today
+  has none, being a run rate already, and every step has an end date, so every scenario has
+  one.
+
 #### Cost on screen
 
 A scenario's map opens with a Cost strip: its total, the difference from Today over the
