@@ -161,6 +161,20 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal [ [ 2, "level" ] ], history(@q1).pluck(:position, :facet)
   end
 
+  should "move a date edit undone and redone before the split, with its undo and redo, in their order" do
+    set_cap(@q1, 8)
+    set_level(@q1, "4")
+    @handler.set_scenario_period(@plan_id, @q1, ends_on: "2027-04-30")
+    edit = @handler.undo_change(@plan_id, scenario_id: @q1)
+    @handler.redo_change(@plan_id, scenario_id: @q1)
+
+    agreed = split(@q1, history(@q1).first.id)
+
+    assert_equal [ [ "set", nil ], [ "dates", nil ], [ "undo", edit ], [ "redo", edit ] ],
+                 history(agreed).pluck(:action, :reverses_event_id)
+    assert_equal [ "level" ], history(@q1).pluck(:facet)
+  end
+
   should "leave an undo that names no subject with the step, unless it reverses a dates entry" do
     set_cap(@q1, 8)
     set_level(@q1, "4")
