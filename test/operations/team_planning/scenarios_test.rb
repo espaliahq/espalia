@@ -78,18 +78,20 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
     end
 
     should "list the baseline first, then each scenario with its parent, relation and period" do
-      call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28")
+      travel_to Time.utc(2027, 2, 1, 9) do
+        call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28")
 
-      open = ->(why) { { state: "open", closed_on: nil, closed_by: nil, not_closable_because: why } }
-      waiting = open.("This step ends on 2027-02-28: it can be closed from the day after")
-      assert_equal({ plan_id: @plan_id, scenarios: [
-        { scenario_id: @plan_id, parent_id: nil, relation: nil, name: "Baseline", description: nil, starts_on: "2027-01-01", ends_on: nil, changes: 0,
-          **open.("The baseline can't be closed") },
-        { scenario_id: @q1, parent_id: @plan_id, relation: "then", name: "Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28", changes: 0,
-          **waiting },
-        { scenario_id: @lean, parent_id: @q1, relation: "instead", name: "Lean Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28", changes: 0,
-          **waiting }
-      ] }, call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id))
+        open = ->(why) { { state: "open", closed_on: nil, closed_by: nil, not_closable_because: why } }
+        waiting = open.("This step ends on 2027-02-28: it can be closed from the day after")
+        assert_equal({ plan_id: @plan_id, scenarios: [
+          { scenario_id: @plan_id, parent_id: nil, relation: nil, name: "Baseline", description: nil, starts_on: "2027-01-01", ends_on: nil, changes: 0,
+            **open.("The baseline can't be closed") },
+          { scenario_id: @q1, parent_id: @plan_id, relation: "then", name: "Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28", changes: 0,
+            **waiting },
+          { scenario_id: @lean, parent_id: @q1, relation: "instead", name: "Lean Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28", changes: 0,
+            **waiting }
+        ] }, call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id))
+      end
     end
 
     should "say which step is ready to close, which closed and who closed it, and which wasn't taken" do
