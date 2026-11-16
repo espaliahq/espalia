@@ -214,7 +214,11 @@ class PlansController < ApplicationController
   # and never kept: its tempfile goes at the end of the request.
   def upload_pay
     plan = pay_uploader_plan
-    return redirect_to(plan_path(plan[:plan_id]), alert: TeamPlanning::PlanAggregate::ARCHIVED) if @plan_record.archived?
+    if @plan_record.archived?
+      return render_turbo_frame_recovery(TeamPlanning::PlanAggregate::ARCHIVED) if turbo_frame_request?
+
+      return redirect_to(plan_path(plan[:plan_id]), alert: TeamPlanning::PlanAggregate::ARCHIVED)
+    end
 
     upload = params.permit(:scenario_id, :basis, :signature, :intent)
     scenario_id = upload[:scenario_id].presence || plan[:plan_id]

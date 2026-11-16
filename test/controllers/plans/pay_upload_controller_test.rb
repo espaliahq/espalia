@@ -98,6 +98,16 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       assert_not held_pay?
     end
 
+    should "answer a preview into its frame once the plan is archived, so the upload area shows why" do
+      ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id) }
+
+      post pay_upload_plan_path(@plan_id), params: { scenario_id: @plan_id, basis: "full_time", file: file(CSV_TEXT), intent: "preview" },
+                                           headers: { "Turbo-Frame" => Views::Plans::PayUpload::FRAME_ID }
+      assert_response :success
+      assert_select "turbo-frame##{Views::Plans::PayUpload::FRAME_ID}", text: /#{Regexp.escape(TeamPlanning::PlanAggregate::ARCHIVED)}/
+      assert_not held_pay?
+    end
+
     should "preview the counts and names, never the amount, then hold the pay and return to the map" do
       upload
       assert_response :success
