@@ -1196,12 +1196,10 @@ class TeamPlanning::PlanAggregate
   end
 
   # A conflict the last update to today carried stands while a step resolves
-  # to the change it was read against. A move that ends that, in the step it
-  # leaves or a step after it that won't follow, would drop the warning unseen.
+  # to the change it was read against. The change can't leave a step where one
+  # stands, nor a later step that won't follow it, until it is settled.
   def ensure_no_conflict_left!(holder_id, dest_id, key)
-    return unless resolution_chain(dest_id).include?(holder_id)
-
-    leaving = [ holder_id, *descendants(holder_id) ] - [ dest_id, *descendants(dest_id) ]
+    leaving = [ holder_id, *(descendants(holder_id) - [ dest_id, *descendants(dest_id) ]) ]
     return unless leaving.any? { carried_conflicts(it).key?(key) }
 
     raise TeamPlanning::Error, "The last update to today found a conflict with this change that isn't settled: " \

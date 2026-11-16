@@ -296,6 +296,15 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     assert_equal placed, @plan.winning_changes(@q1)[key].event_id
   end
 
+  test "refuse to move a change earlier while its conflict from the last update to today is unsettled" do
+    placed = place(@q2, @eng_id)
+    @plan.rebase(base_on: "2027-02-10", expected_base_on: "2027-01-01", rebased_by_id: @ada_id,
+                 conflicts: [ { scenario_id: @q2, subject_id: @grace_id, facet: "assignment", change_id: placed } ])
+
+    assert_match "Changes tab", refusal { move(@q2, "earlier") }
+  end
+
+
   test "undo a second move back to the place the first one left the change in" do
     placed = place(@q1, @eng_id)
     there = place(@q2, @sales_id, person_id: @ada_id)
