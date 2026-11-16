@@ -62,8 +62,12 @@ class PayBand::Lookup
     return { **@levels.fetch(band.level_id, {}), **band.matcher.compact } if band.level_id
     return band.matcher unless band.role_id
 
-    band.matcher.merge(role_family_id: families[band.role_id])
+    # A band saved before its role had this level number has no level_id, yet matches only that level's seats.
+    level_id = band.level_ordinal && levels_by_role_and_number[[ band.role_id, band.level_ordinal ]]
+    band.matcher.merge(role_family_id: families[band.role_id], level_id:)
   end
+
+  def levels_by_role_and_number = @levels_by_role_and_number ||= @levels.to_h { |level_id, level| [ level.values_at(:role_id, :level_ordinal), level_id ] }
 
   def families = @families ||= FrameworkState::Role.where(tenant_id: @tenant_id, role_id: @bands.filter_map(&:role_id)).pluck(:role_id, :role_family_id).to_h
 end

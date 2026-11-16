@@ -178,6 +178,18 @@ class PayBandTest < ActiveSupport::TestCase
       assert_empty lookup.shadowed
     end
 
+    should "flag a role and level number band once a later band made from that level overrules it, and still save both" do
+      early = entry(role: @role, level_ordinal: 6)
+      published = create(:framework_level, tenant: @tenant, role_id: @role.role_id, ordinal: 6, code: "E6", title: "Principal")
+      made = band(level: published).tap(&:save!)
+
+      assert_nil early.level_id
+      assert_equal made, lookup.covering(published.level_id, "Fixtureland")
+      assert_equal [ early ], lookup.shadowed
+      PayBand.reorder!([ made.id, early.id ])
+      assert_equal [ made ], lookup.shadowed
+    end
+
     should "match on a role or a family, never both" do
       both = PayBand.new(role_id: @role.role_id, role_family_id: @family.role_family_id, role_name: "x", level_name: "y",
                          currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2)
