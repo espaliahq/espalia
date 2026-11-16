@@ -14,7 +14,7 @@ class Plans::PositionsController < ApplicationController
   include Plans::MapEditing
 
   TODAY = "Today can't be edited. Fork a scenario and edit that."
-  PERMITTED = %i[scenario_id unit_id level_id fte basis cost_centre hiring_status target_start].freeze
+  PERMITTED = %i[scenario_id unit_id level_id fte basis cost_centre].freeze
   NOTICES = { open: "Position opened.", edit: "Position saved." }.freeze
 
   # POST /planning/:plan_id/positions
