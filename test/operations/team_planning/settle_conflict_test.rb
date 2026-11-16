@@ -198,15 +198,42 @@ class Operations::TeamPlanning::SettleConflictTest < ActiveSupport::TestCase
                  refusal { call(:SettleConflict, plan_id: @plan_id, scenario_id: @q1, subject_id: succession, facet: "succession", choice: "reality") })
   end
 
-  should "refuse to follow a level the Org Graph cleared, saying why and that keeping the plan still works" do
+  should "follow a level the Org Graph cleared, which then reads as no level and done" do
     rebase
     travel_to(Time.utc(2026, 3, 26, 9)) { as_tenant { @org.change_level(@brook.id, nil, **ESPALIA, effective_on: "2026-03-26") } }
     travel_to Time.utc(2026, 3, 28, 9)
+    settle(@q1, "reality")
 
-    assert_equal "The Org Graph holds a value this plan can't hold yet, so this can't follow reality. You can still keep the plan",
-                 refusal { settle(@q1, "reality") }
-    settle(@q1, "plan")
-    assert_equal "plan", last_entry(@q1)[:settles]["choice"]
+    assert_equal [ "done", nil ], brook(@q1).values_at(:status, :since)
+    assert_equal({ "since" => "2026-03-25", "choice" => "reality" }, last_entry(@q1)[:settles])
+    people = call(:ScenarioMap, plan_id: @plan_id, scenario_id: @q1)[:people]
+    assert_equal({ value: nil }, people.find { it[:id] == @brook.id }[:planned_level])
+    assert_no_match(/"planned_level":\{"value":""\}/, map(@q1))
+
+    as_tenant { PlanKeyStore.new.destroy_person(@brook.id) }
+    assert_equal({ removed: true }, call(:ScenarioMap, plan_id: @plan_id, scenario_id: @q1)[:people].find { it[:id] == @brook.id }[:planned_level])
+    assert_equal "unknown", brook(@q1)[:status].to_s
+  end
+
+  should "follow a membership the Org Graph holds with no allocation, which the map and capacity read as unknown" do
+    squads, payments = Array.new(2) { SecureRandom.uuid_v7 }
+    as_tenant do
+      structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+      structure.define_taxonomy([ { level_id: squads, name: "Squad" } ], effective_on: "2026-01-01")
+      structure.create_unit(payments, "Payments", level_id: squads, effective_on: "2026-01-01")
+    end
+    call(:SetAssignment, plan_id: @plan_id, scenario_id: @q1, person_id: @brook.id, placements: [ { unit_id: payments, allocation: 1 } ])
+    travel_to(Time.utc(2026, 3, 26, 9)) { as_tenant { @org.set_membership(@brook.id, payments, **ESPALIA, effective_on: "2026-03-26") } }
+    travel_to Time.utc(2026, 3, 27, 9)
+    rebase
+    settle(@q1, "reality", facet: "assignment")
+
+    assignment = call(:Status, plan_id: @plan_id, scenario_id: @q1)[:statuses].find { it[:subject_id] == @brook.id && it[:facet] == "assignment" }
+    assert_equal [ "done", nil ], assignment.values_at(:status, :since)
+    person = call(:ScenarioMap, plan_id: @plan_id, scenario_id: @q1)[:people].find { it[:id] == @brook.id }
+    assert_equal [ [ payments, nil ] ], person[:memberships].map { it.values_at(:unit_id, :allocation) }
+    place = call(:Capacity, plan_id: @plan_id, scenario_id: @q1)[:seats].find { it[:seat_id] == @brook.id }[:places].sole
+    assert_equal [ payments, "1", false ], place.values_at(:unit_id, :allocation, :allocation_known)
   end
 
   should "keep the plan on a scenario's own pin as a pin of the same change, the overrides row still pinned" do

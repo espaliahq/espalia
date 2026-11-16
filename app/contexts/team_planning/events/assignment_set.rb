@@ -14,7 +14,8 @@
 #   @return [Hash] event data
 #   @option data [String] :subject_id the person's id
 #   @option data [Array<Hash>] :placements each with `position_id` or `unit_id` (the other nil),
-#     an `allocation` above 0 and at most 1, and a `role`, nil when none is named
+#     an `allocation` above 0 and at most 1, or nil when the Org Graph gives none, and a `role`,
+#     nil when none is named
 #   Plus {TeamPlanning::Events::Change::FIELDS}.
 #
 class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
@@ -33,7 +34,8 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   # @param end_state [Hash] `{ placements: [{ position_id or unit_id, allocation, role }] }`
   # @return [Hash] the ids downcased, each allocation a Float
   # @raise [TeamPlanning::Error] for a placement in both a position and a unit, or neither, an
-  #   allocation outside (0, 1], or a place held twice. A total over 1 is never refused.
+  #   allocation outside (0, 1], or a place held twice. A total over 1 is never refused, and a nil
+  #   allocation, unknown as the Org Graph can hold it, is kept as nil.
   def self.end_state(end_state)
     placements = end_state[:placements]
     raise TeamPlanning::Error, "An assignment lists its placements, or none to leave the person unassigned" unless placements.is_a?(Array)
@@ -132,6 +134,8 @@ class TeamPlanning::Events::AssignmentSet < TeamPlanning::Events::Change
   end
 
   def self.allocation!(value)
+    return nil if value.nil?
+
     allocation = Float(value, exception: false)
     return allocation if allocation&.positive? && allocation <= 1
 
