@@ -46,7 +46,7 @@ class Plans::FundingPayPrivacyTest < ActionDispatch::IntegrationTest
       call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: ada.id,
                                                              placements: [ { position_id: @position, allocation: 1 } ])
       funded = call(Operations::TeamPlanning::Budget, @holder, plan_id: @plan_id, scenario_id: @q1)[:total][:funded][:native]["AUD"]
-      @figures = [ HELD, Views::Plans::CostMarks::Format.amount(funded, "AUD"), funded[0, 5] ]
+      @figures = [ HELD, Views::Plans::CostMarks::Format.amount(funded, "AUD"), funded[0, 5], Views::Plans::CostMarks::Format.amount(HELD, "AUD") ]
     end
   end
 
