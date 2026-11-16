@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_16_194644) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_16_200129) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1181,6 +1181,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_194644) do
     t.uuid "scope_unit_ids", array: true
     t.date "archived_on"
     t.uuid "archived_by_id"
+    t.datetime "base_known_at"
+    t.datetime "archived_known_at"
     t.index ["tenant_id", "created_by_id"], name: "index_team_planning_plans_on_tenant_id_and_created_by_id"
   end
 

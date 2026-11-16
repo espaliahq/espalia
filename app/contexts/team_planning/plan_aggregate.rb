@@ -117,16 +117,18 @@ class TeamPlanning::PlanAggregate
   # @param name [String]
   # @param base_on [Date, String] the day the plan stands on
   # @param created_by_id [String] person_id of the creator
+  # @param time_zone [String] the tenant's zone, which fixes when the day before the base ended
   # @raise [TeamPlanning::Error] if the plan exists, or the name is blank or too long
   # @raise [Date::Error] unless base_on is a Date or a YYYY-MM-DD string
-  def create(plan_id, name:, base_on:, created_by_id:)
+  def create(plan_id, name:, base_on:, created_by_id:, time_zone:)
     raise TeamPlanning::Error, "This plan already exists" if @plan_id
 
     apply(TeamPlanning::Events::PlanCreated.new(data: {
       plan_id: plan_id,
       name: require_name(name),
       base_on: require_date(base_on).iso8601,
-      created_by_id: created_by_id
+      created_by_id: created_by_id,
+      time_zone:
     }))
   end
 
@@ -183,14 +185,15 @@ class TeamPlanning::PlanAggregate
   #
   # @param archived_by_id [String]
   # @param archived_on [Date] the tenant's today
+  # @param time_zone [String] the tenant's zone, which fixes when that day ended
   # @param prices [#call, nil] gives the inputs as {TeamPlanning::PricingInputs.capture}
   #   does, or nil; called only once the plan can be archived
   # @raise [TeamPlanning::Error] if the plan is gone or already archived
-  def archive(archived_by_id:, archived_on:, prices: nil)
+  def archive(archived_by_id:, archived_on:, time_zone:, prices: nil)
     ensure_exists!
     raise TeamPlanning::Error, "This plan is already archived" if archived?
 
-    apply(TeamPlanning::Events::PlanArchived.new(data: { plan_id: @plan_id, archived_by_id:, archived_on: archived_on.iso8601 }))
+    apply(TeamPlanning::Events::PlanArchived.new(data: { plan_id: @plan_id, archived_by_id:, archived_on: archived_on.iso8601, time_zone: }))
     inputs = prices&.call
     apply(TeamPlanning::Events::PlanPricesFrozen.new(data: { plan_id: @plan_id, inputs: })) if inputs
   end
@@ -217,11 +220,12 @@ class TeamPlanning::PlanAggregate
   #   for each change reading conflicting now: the scenario it was read in, and
   #   the change that scenario resolved to then
   # @param rebased_by_id [String]
+  # @param time_zone [String] the tenant's zone, which fixes when the day before the base ended
   # @raise [TeamPlanning::Error] if the plan is gone, moved since, already on
   #   that day or later, a first step would end before the new base, or a
   #   conflict names a scenario the plan doesn't have
   # @raise [Date::Error] for a date that isn't YYYY-MM-DD
-  def rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id:)
+  def rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id:, time_zone:)
     ensure_open!
     base_on = require_date(base_on)
     if require_date(expected_base_on) != @base_on
@@ -233,7 +237,7 @@ class TeamPlanning::PlanAggregate
     ensure_first_steps_reach!(base_on)
     apply(TeamPlanning::Events::PlanRebased.new(data: {
       plan_id: @plan_id, base_on: base_on.iso8601, previous_base_on: @base_on.iso8601,
-      conflicts: conflict_keys!(conflicts), rebased_by_id:
+      conflicts: conflict_keys!(conflicts), rebased_by_id:, time_zone:
     }))
   end
 

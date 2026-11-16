@@ -33,7 +33,7 @@ class TeamPlanning::CommandHandler
     authorize!(:create?, nil) { "Only a tenant admin or a planner can create a plan" }
     unit_ids = known_units!(unit_ids)
     @repository.with_plan(plan_id) do |plan|
-      plan.create(plan_id, name: name, base_on: base_on, created_by_id: created_by_id)
+      plan.create(plan_id, name: name, base_on: base_on, created_by_id: created_by_id, time_zone: tenant_zone)
       plan.set_scope(unit_ids:, set_by_id: created_by_id)
     end
   end
@@ -103,7 +103,7 @@ class TeamPlanning::CommandHandler
   def archive_plan(plan_id)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.archive(archived_by_id: actor_id!, archived_on: Tenant.today, prices: method(:frozen_prices))
+      plan.archive(archived_by_id: actor_id!, archived_on: Tenant.today, time_zone: tenant_zone, prices: method(:frozen_prices))
     end
   end
 
@@ -309,7 +309,7 @@ class TeamPlanning::CommandHandler
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
       conflicts = yield(plan) if block_given? && !plan.archived? && plan.base_on.to_s == expected_base_on.to_s
-      plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!)
+      plan.rebase(base_on:, expected_base_on:, conflicts:, rebased_by_id: actor_id!, time_zone: tenant_zone)
     end
   end
 
@@ -705,6 +705,8 @@ class TeamPlanning::CommandHandler
   # Without key material nothing can be sealed, so the plan archives with
   # today's prices, as one archived before the copy existed does.
   def frozen_prices = (TeamPlanning::PricingInputs.capture(ActsAsTenant.current_tenant) if PlanKeyStore.available?)
+
+  def tenant_zone = (ActsAsTenant.current_tenant || raise(ActsAsTenant::Errors::NoTenantSet)).time_zone
 
   def actor_id!
     @actor.person&.id or raise TeamPlanning::Error, "Link your account to a person to work on plans"

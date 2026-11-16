@@ -7,7 +7,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     @plan_id = SecureRandom.uuid_v7
     @editor_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id, time_zone: "UTC")
   end
 
   def fork(parent_id = @plan_id, relation: "then", name: "Q1", ends_on: nil, starts_on: nil)
@@ -178,7 +178,7 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
 
     should "refuse a start before the base date" do
       @plan = TeamPlanning::PlanAggregate.new
-      @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id)
+      @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id, time_zone: "UTC")
 
       assert_equal "A first step starts on or after the plan's base date, 2027-01-01",
                    refusal { fork(ends_on: "2027-03-31", starts_on: "2026-12-31") }
@@ -303,10 +303,10 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
     end
 
     should "start on the base date once an update to today passes the chosen start" do
-      @plan.rebase(base_on: "2027-01-10", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id)
+      @plan.rebase(base_on: "2027-01-10", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id, time_zone: "UTC")
       assert_equal %w[2027-01-14 2027-03-31], period(@q1)
 
-      @plan.rebase(base_on: "2027-02-01", expected_base_on: "2027-01-10", conflicts: [], rebased_by_id: @editor_id)
+      @plan.rebase(base_on: "2027-02-01", expected_base_on: "2027-01-10", conflicts: [], rebased_by_id: @editor_id, time_zone: "UTC")
       assert_equal %w[2027-02-01 2027-03-31], period(@q1)
       assert_equal @plan.period_of(@q1), replayed.period_of(@q1)
     end

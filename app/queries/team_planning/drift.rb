@@ -57,7 +57,7 @@ class TeamPlanning::Drift
     from = @plan.base_on - 1
     return Report.new(from:, to: @today, changes: [], names: {}) unless @today > from
 
-    changes = OrgGraph::ChangesBetween.new(context: @context, from:, to: @today, by: :learned).call.changes
+    changes = OrgGraph::ChangesBetween.new(context: @context, from:, to: @today, by: :learned, opened_at: @plan.base_known_at).call.changes
     return Report.new(from:, to: @today, changes: [], names: {}) if changes.empty?
 
     aggregate = @repository.load_plan(@plan.id)
@@ -86,7 +86,7 @@ class TeamPlanning::Drift
 
     baseline = TeamPlanning::Baseline.new(context: @context, plan: @plan)
     base = baseline.structure
-    whole = baseline.map_on(@plan.base_on, known_on: baseline.known_on, history: true, scoped: false)
+    whole = baseline.map_on(@plan.base_on, known_on: baseline.known_on, known_at: baseline.known_at, history: true, scoped: false)
     parents = (whole.units + whole.retired_units).to_h { [ it.id, it.parent_id ] }
     maps = [ @plan.id, *aggregate.scenarios.keys ].map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
     @scope = TeamPlanning::DriftScope.new(base, maps, parents:)
@@ -97,7 +97,7 @@ class TeamPlanning::Drift
   # reading only what was learned since, never holds.
   def known_moves(baseline, changes)
     to = [ @today, *changes.map(&:effective_on) ].max
-    OrgGraph::ChangesBetween.new(context: @context, from: @plan.base_on, to:, known_on: baseline.known_on).call.changes
+    OrgGraph::ChangesBetween.new(context: @context, from: @plan.base_on, to:, known_on: baseline.known_on, known_at: baseline.known_at).call.changes
   end
 
   def planned_changes(plan)

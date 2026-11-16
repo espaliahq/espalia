@@ -34,5 +34,7 @@ class OrgFactPeriod < ApplicationRecord
   # The rows the Org Graph believed at the end of a day in the tenant's time zone, or now.
   #
   # @param date [Date, nil] nil for what the Org Graph believes now
-  scope :known_on, ->(date) { date ? known_at(ActsAsTenant.current_tenant.end_of(date)) : current }
+  # @param at [Time, nil] the instant that day ended, when a reader fixed it
+  #   earlier, so a later change of zone doesn't move it
+  scope :known_on, ->(date, at: nil) { at ? known_at(at) : date ? known_at(ActsAsTenant.current_tenant.end_of(date)) : current }
 end

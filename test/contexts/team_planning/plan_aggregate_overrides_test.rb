@@ -18,7 +18,7 @@ class TeamPlanning::PlanAggregateOverridesTest < ActiveSupport::TestCase
     @plan_id = SecureRandom.uuid_v7
     @editor_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id, time_zone: "UTC")
     @q1 = fork(@plan_id, "then", ends_on: "2027-03-31")
     @lean = fork(@q1, "instead")
   end

@@ -142,7 +142,7 @@ class TeamPlanning::Status
     now = @baseline.map_on(@today, history: true, scoped: false)
     return [ now, now ] if @today < @plan.base_on
 
-    base = @baseline.map_on(@plan.base_on, known_on: @plan.base_on - 1, history: true, scoped: false)
+    base = @baseline.map_on(@plan.base_on, known_on: @plan.base_on - 1, known_at: @plan.base_known_at, history: true, scoped: false)
     [ now.with(successions: now.successions - base.successions), base.with(retired_units: [], successions: [], left_ids: []) ]
   end
 

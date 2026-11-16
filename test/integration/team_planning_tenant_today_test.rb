@@ -13,10 +13,11 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
     @tenant = create(:tenant, time_zone: "Australia/Sydney")
     travel_to Time.utc(2026, 11, 1, 9)
     ActsAsTenant.with_tenant(@tenant) do
-      squads = SecureRandom.uuid_v7
+      @squads = SecureRandom.uuid_v7
+      @payments = SecureRandom.uuid_v7
       structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-      structure.define_taxonomy([ { level_id: squads, name: "Squad" } ], effective_on: "2026-10-01")
-      structure.create_unit(SecureRandom.uuid_v7, "Payments", level_id: squads, effective_on: "2026-10-01")
+      structure.define_taxonomy([ { level_id: @squads, name: "Squad" } ], effective_on: "2026-10-01")
+      structure.create_unit(@payments, "Payments", level_id: @squads, effective_on: "2026-10-01")
       @editor = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
     end
   end
@@ -117,7 +118,105 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
     assert_includes learned.map(&:person_id), person.id
   end
 
+  context "a plan's knowledge cut-off" do
+    setup do
+      @platform = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(@platform, "Platform", level_id: @squads, effective_on: "2026-10-01")
+        @ada = create(:person, tenant: @tenant, name: "Ada Quill")
+        org.record_person(@ada.id, provider: "espalia", effective_on: "2026-10-01", employment_status: "employed", title: "Engineer")
+        org.set_membership(@ada.id, @payments, provider: "espalia", effective_on: "2026-10-01", allocation: 1.0)
+      end
+    end
+
+    should "stay where the plan fixed it in Sydney when the zone changes" do
+      travel_to Time.utc(2026, 11, 2, 1)
+      plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-11-03")[:plan_id]
+      ActsAsTenant.with_tenant(@tenant) do
+        handler.set_change(plan_id, TeamPlanning::Events::AssignmentSet, scenario_id: plan_id, subject_id: @ada.id,
+                                                                          end_state: { placements: [ { unit_id: @platform, allocation: 1.0 } ] })
+      end
+      # Sydney's 2 November ended at 13:00 UTC; UTC's ends at midnight, LA's at 08:00 on the 3rd.
+      learn_move(at: Time.utc(2026, 11, 2, 18))
+      travel_to Time.utc(2026, 11, 10, 1)
+      ActsAsTenant.with_tenant(@tenant) { handler.archive_plan(plan_id) }
+
+      travel_to Time.utc(2026, 11, 20, 1)
+      before = reads(plan_id)
+
+      assert_equal [ @payments ], before[:baseline]
+      assert_includes before[:drift], @ada.id
+
+      %w[UTC America/Los_Angeles].each do |zone|
+        @tenant.update!(time_zone: zone)
+
+        assert_equal before, reads(plan_id), "the cut-off moved when the zone became #{zone}"
+      end
+    end
+
+    should "hold an archived plan to the instant its archive day ended in Sydney" do
+      travel_to Time.utc(2026, 11, 2, 1)
+      plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-12-01")[:plan_id]
+      travel_to Time.utc(2026, 11, 10, 1)
+      ActsAsTenant.with_tenant(@tenant) { handler.archive_plan(plan_id) }
+      # Sydney's 10 November ended at 13:00 UTC, LA's at 08:00 on the 11th.
+      learn_move(at: Time.utc(2026, 11, 10, 18))
+
+      travel_to Time.utc(2026, 11, 20, 1)
+      before = reads(plan_id)
+
+      assert_equal [ @payments ], before[:baseline]
+
+      @tenant.update!(time_zone: "America/Los_Angeles")
+
+      assert_equal before, reads(plan_id)
+    end
+
+    should "end a day recorded before tenants had zones at midnight UTC" do
+      travel_to Time.utc(2026, 11, 2, 1)
+      plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-11-03")[:plan_id]
+      travel_to SYDNEY_9AM_17TH
+      old_shape = TeamPlanning::Events::PlanArchived.new(data: { plan_id:, archived_by_id: @editor.person_id })
+      ActsAsTenant.with_tenant(@tenant) do
+        event_store.with_metadata(tenant_id: @tenant.id) do
+          event_store.publish(old_shape, stream_name: EventStreamNaming.plan_stream(plan_id), expected_version: :any)
+        end
+        TeamPlanningPlan.where(id: plan_id).update_all(base_known_at: nil)
+      end
+
+      row = plan(plan_id)
+
+      assert_equal Time.utc(2026, 11, 2).end_of_day, row.base_known_at
+      assert_equal Time.utc(2026, 11, 16).end_of_day, row.archived_known_at
+    end
+  end
+
   private
+
+  def org = OrgGraph::CommandHandler.new(actor: SYSTEM)
+
+  def handler = TeamPlanning::CommandHandler.new(actor: context)
+
+  def learn_move(at:)
+    travel_to(at) do
+      ActsAsTenant.with_tenant(@tenant) do
+        org.move_membership(@ada.id, @payments, @platform, effective_on: "2026-10-15")
+      end
+    end
+  end
+
+  # What a reader sees of the archived plan: where its baseline puts Ada,
+  # who drifted, each change's status, and the plan's cost.
+  def reads(plan_id)
+    ActsAsTenant.with_tenant(@tenant) do
+      row = plan(plan_id)
+      baseline = TeamPlanning::Baseline.new(context:, plan: row).structure
+      { baseline: baseline.people.find { it.id == @ada.id }.memberships.map(&:unit_id),
+        drift: TeamPlanning::Drift.new(context:, plan: row).call.changes.map { it.change.person_id },
+        status: TeamPlanning::Status.new(context:, plan: row, scenario_id: plan_id).call.statuses.map(&:to_h),
+        cost: TeamPlanning::Cost.new(context:, plan: row, scenario_id: plan_id).call.to_h.except(:bands_changed_at) }
+    end
+  end
 
   def event_store = Rails.configuration.event_store
 

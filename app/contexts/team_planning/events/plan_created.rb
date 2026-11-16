@@ -9,6 +9,8 @@
 #   @option data [Shreddable::Value] :name under the plan's key
 #   @option data [String] :base_on ISO 8601 date the plan stands on
 #   @option data [String] :created_by_id person_id of the plan's creator
+#   @option data [String] :time_zone the tenant's zone, which fixes the instant the day before the base
+#     ended. Missing from events written before #469, whose day ended at midnight UTC
 #
 class TeamPlanning::Events::PlanCreated < RubyEventStore::Event
   extend Shreddable
