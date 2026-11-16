@@ -50,6 +50,19 @@ class PlanRemovedScenariosSystemTest < ApplicationSystemTestCase
     end
   end
 
+  should "wrap a long unbroken name on a phone rather than run off the side" do
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    long = ActsAsTenant.with_tenant(@tenant) { fork(name: "Q3" + "x" * 80, parent_id: @q1, relation: "instead") }
+    remove(long)
+    sign_in_as(@viewer.user)
+    visit plan_path(@plan_id)
+    assert_selector "h1", text: "Pay review 2027"
+    open_section
+
+    assert_selector "#{SECTION} [data-removed-scenario='#{long}']", text: "Q3xxx"
+    assert_no_sideways_overflow
+  end
+
   should "leave the section out while nothing has been removed" do
     sign_in_as(@viewer.user)
     visit plan_path(@plan_id)

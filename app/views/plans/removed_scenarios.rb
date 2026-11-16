@@ -28,7 +28,7 @@ class Views::Plans::RemovedScenarios < Views::Base
 
   def entry(row)
     li(data: { removed_scenario: row[:scenario_id] }, class: "py-1.5 text-muted") do
-      span(class: "text-default") { row[:name] || "A scenario whose name is gone" }
+      span(class: "text-default break-words") { row[:name] || "A scenario whose name is gone" }
       plain " · "
       period(row)
       plain " · #{row[:changes]} #{'change'.pluralize(row[:changes])} · removed by #{row[:removed_by][:name]} on "
