@@ -68,7 +68,7 @@ class TeamPlanning::TimelineFigures
     Step.new(scenario_id:, basis: cost.basis, period: cost.period, open_ended: cost.open_ended, horizon_months: cost.horizon_months,
              cost: today ? cost.scenario.total : TeamPlanning::Cost.plus(cost.scenario.total, cost.forecast.total),
              unpriced: cost.scenario.unpriced.uniq(&:seat_id).size,
-             budget: (TeamPlanning::Budget.new(**on).call.totals unless today),
+             budget: (TeamPlanning::Budget.new(**on, cost:).call.totals unless today),
              capacity: TeamPlanning::Capacity.split(**on, steps: reads[:capacity], baseline: false).total)
   end
 end

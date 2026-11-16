@@ -211,8 +211,9 @@ class TeamPlanning::Cost
   # @!attribute baseline [Priced, nil] nil for a run rate, which nothing stands against
   # @!attribute forecast [Forecasted]
   # @!attribute at_end [RunRate, nil] nil for Today, which is a run rate already
+  # @!attribute priced_for [Array] the viewer, plan and scenario it was priced for, as {TeamPlanning::Resolution::Shared.key} gives them
   Report = Data.define(:basis, :period, :open_ended, :horizon_months, :pay_view, :reference_currency, :bands_changed_at,
-                       :scenario, :baseline, :forecast, :at_end) do
+                       :scenario, :baseline, :forecast, :at_end, :priced_for) do
     # @return [Boolean]
     def run_rate? = basis == "run_rate"
 
@@ -306,7 +307,7 @@ class TeamPlanning::Cost
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, open_ended: @figured&.open_ended || false,
                horizon_months: @figured&.horizon_months, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
                reference_currency: @reference, bands_changed_at: @inputs.bands_changed_at,
-               scenario:, baseline:, forecast:, at_end:)
+               scenario:, baseline:, forecast:, at_end:, priced_for: TeamPlanning::Resolution::Shared.key(@context, @plan, @scenario_id))
   end
 
   # @param starts_on [Date]
