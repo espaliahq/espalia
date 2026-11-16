@@ -104,7 +104,7 @@ class Views::Plans::ScenarioDialogs < Views::Base
       end
       starts_on_field
       div(data: { scenario_fork_form_target: "endsOnField" }) do
-        field("fork-scenario-ends-on", "Ends on", hint: "It starts the day after the scenario it follows ends.") do
+        field("fork-scenario-ends-on", "Ends on", hint: "Its last day. A step after another starts the day after that one ends.") do
           input(id: "fork-scenario-ends-on", type: "date", name: "scenario[ends_on]", required: true,
                 aria: { describedby: "fork-scenario-ends-on-hint" }, class: Components::Kit::Field::INPUT,
                 data: { scenario_fork_form_target: "endsOn" })
