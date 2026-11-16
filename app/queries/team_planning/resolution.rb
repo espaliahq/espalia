@@ -170,6 +170,19 @@ class TeamPlanning::Resolution
     end
   end
 
+  # The organisation a map this resolution gave stands on: the plan's base,
+  # or the day after the closed step before it. A reader that asks whether the
+  # plan moved someone compares with this, so a move the Org Graph made
+  # before the close never reads as the plan's.
+  #
+  # @param map [TeamPlanning::Baseline::Map] from {#resolved}
+  # @return [TeamPlanning::Baseline::Map]
+  def standing_base(map)
+    return @base ||= @baseline.structure if map.base_on == @plan.base_on
+
+    standing_on(map.base_on - 1)
+  end
+
   private
 
   # The scenario and those it is an alternative of: the chain after the step

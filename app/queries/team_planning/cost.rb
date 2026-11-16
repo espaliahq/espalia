@@ -409,19 +409,15 @@ class TeamPlanning::Cost
     @live = map.units.to_set(&:id)
     @rules = {}
     @positions = map.positions.index_by(&:id)
-    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id, base: standing(map), titles:)
+    @cost_centres = TeamPlanning::PositionCostCentres.new(map, tenant_id: @plan.tenant_id, base: standing_base(map), titles:)
     people = map.people.flat_map { person_lines(it) }
     lines = people + open_lines(map)
     units = by(lines, &:unit_id)
     Priced.new(map:, lines:, total: sum(lines), units:, units_with_below: with_below(units), cost_centres: by(lines, &:cost_centre))
   end
 
-  # The organisation a map stands on, so a move the Org Graph made before a
-  # closed step ended never reads as one the plan made.
-  def standing(map)
-    return @base if map.base_on == @base.base_on
-
-    TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).standing_on(map.base_on - 1)
+  def standing_base(map)
+    TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base: @base).standing_base(map)
   end
 
   def person_lines(member)
