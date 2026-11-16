@@ -49,6 +49,19 @@ class Components::Kit::SidePanelTest < ActiveSupport::TestCase
       assert_equal "false", doc.at_css("[data-controller]")["data-activity-pane-dismiss-outside-value"]
       assert_not_includes doc.at_css("aside")["class"].split, "max-lg:fixed"
     end
+
+    context ".open?" do
+      should "take the URL's choice over the cookie's, and the cookie's over the default" do
+        assert Components::Kit::SidePanel.open?(url: "open", cookie: "closed", default: false)
+        assert_not Components::Kit::SidePanel.open?(url: nil, cookie: "closed", default: true)
+        assert Components::Kit::SidePanel.open?(url: nil, cookie: nil, default: true)
+      end
+
+      should "skip a value that is neither open nor closed, as the controller does" do
+        assert_not Components::Kit::SidePanel.open?(url: "OPEN", cookie: "closed", default: true)
+        assert_not Components::Kit::SidePanel.open?(url: "", cookie: nil, default: false)
+      end
+    end
   end
 
   private

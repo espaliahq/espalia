@@ -423,7 +423,7 @@ class PlansController < ApplicationController
       can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
       panel_open: Views::Plans::ShowView.panel_open?(
-        choice: params[Views::Plans::ShowView::PANEL_URL_KEY].presence || cookies[Views::Plans::ShowView::PANEL_COOKIE],
+        url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView::PANEL_COOKIE],
         open_tab:, scenarios:
       ),
       **layout

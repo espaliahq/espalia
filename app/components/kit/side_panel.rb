@@ -21,16 +21,32 @@
 #
 class Components::Kit::SidePanel < Components::Base
   NARROW = {
-    overlay: "bg-subtle border border-default max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
+    overlay: {
+      panel: "bg-subtle border border-default max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
              "max-lg:w-80 max-lg:overflow-y-auto max-lg:shadow-drawer lg:rounded-xl",
-    stack: nil
+      header: "px-4 pt-4",
+      body: "px-4 pb-4",
+      dismiss_outside: true
+    },
+    stack: { panel: nil, header: nil, body: nil, dismiss_outside: false }
   }.freeze
 
   PANEL = "w-full lg:w-80 shrink-0"
 
+  # Whether the panel opens, by the rule the controller applies on connect:
+  # the URL's choice, then the cookie's, then the page's default.
+  #
+  # @param url [String, nil] the query parameter's value
+  # @param cookie [String, nil] the cookie's value
+  # @param default [Boolean] whether it opens when neither has chosen
+  def self.open?(url:, cookie:, default:)
+    choice = [ url, cookie ].find { %w[open closed].include?(it) }
+    choice ? choice == "open" : default
+  end
+
   # @param id [String] the panel's id, which its toggle controls
   # @param title [String] names the panel, as its heading and its toggle
-  # @param open [Boolean] whether it renders open; the page works this out from the cookie
+  # @param open [Boolean] whether it renders open; work it out with `.open?`
   # @param cookie [String] the cookie that remembers the choice, one per surface
   # @param url_key [String] the query parameter that carries it, one per surface
   # @param narrow [Symbol] below lg: :overlay or :stack
@@ -40,7 +56,7 @@ class Components::Kit::SidePanel < Components::Base
     @open = open
     @cookie = cookie
     @url_key = url_key
-    @narrow = narrow
+    @narrow = NARROW.fetch(narrow)
   end
 
   def view_template(&)
@@ -50,7 +66,7 @@ class Components::Kit::SidePanel < Components::Base
                 activity_pane_cookie_value: @cookie,
                 activity_pane_url_key_value: @url_key,
                 activity_pane_default_state_value: state,
-                activity_pane_dismiss_outside_value: (@narrow == :overlay).to_s }) do
+                activity_pane_dismiss_outside_value: @narrow[:dismiss_outside].to_s }) do
       div(class: "flex-1 min-w-0") { @main_block&.call }
       panel
     end
@@ -70,7 +86,7 @@ class Components::Kit::SidePanel < Components::Base
     @body_block = block
   end
 
-  # The button that opens and closes the panel. Call it inside `main`, where it should sit.
+  # The button that opens and closes the panel. Call it once, inside `main`, where it should sit.
   #
   # @param label [String] defaults to the panel's title
   def toggle(label = @title)
@@ -86,15 +102,15 @@ class Components::Kit::SidePanel < Components::Base
   def state = @open ? "open" : "closed"
 
   def panel
-    aside(id: @id, class: [ PANEL, NARROW.fetch(@narrow), ("hidden" unless @open) ],
+    aside(id: @id, class: [ PANEL, @narrow[:panel], ("hidden" unless @open) ],
           aria: { labelledby: "#{@id}-title" },
           data: { activity_pane_target: "pane", pane_state: state }) do
-      div(class: [ "flex items-center justify-between gap-2", ("px-4 pt-4" if @narrow == :overlay) ]) do
+      div(class: [ "flex items-center justify-between gap-2", @narrow[:header] ]) do
         h2(id: "#{@id}-title", class: "text-base font-semibold text-default") { @title }
         render Components::Kit::Button.new(variant: :ghost, icon: true, aria_label: "Close #{@title.downcase}",
                                            data: { action: "activity-pane#close" }) { icon(:x, class: "size-5") }
       end
-      div(class: [ "mt-3 space-y-6", ("px-4 pb-4" if @narrow == :overlay) ]) { @body_block&.call }
+      div(class: [ "mt-3 space-y-6", @narrow[:body] ]) { @body_block&.call }
     end
   end
 end

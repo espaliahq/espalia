@@ -162,13 +162,12 @@ class Views::Plans::ShowView < Views::Base
   # the cookie; otherwise closed on the map of a plan with scenarios, where the
   # map wants the width, and open on a new plan, whose rules and members come next.
   #
-  # @param choice [String, nil] the URL's or the cookie's "open" or "closed"
+  # @param url [String, nil] the query parameter's value
+  # @param cookie [String, nil] the cookie's value
   # @param open_tab [Symbol]
   # @param scenarios [Array<Hash>] the baseline first
-  def self.panel_open?(choice:, open_tab:, scenarios:)
-    return choice == "open" if %w[open closed].include?(choice)
-
-    !(open_tab == :map && scenarios.size > 1)
+  def self.panel_open?(url:, cookie:, open_tab:, scenarios:)
+    Components::Kit::SidePanel.open?(url:, cookie:, default: !(open_tab == :map && scenarios.size > 1))
   end
 
   def tab_strip(panel)
