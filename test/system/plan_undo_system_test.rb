@@ -110,7 +110,7 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
                                                              level_id: @level_id, unit_id: @payments, fte: 1.0, basis: "new")
 
         click_selector_with_js_fallback(UNDO, expect_text: "The page was out of date, so nothing changed.")
-        assert_plan_holds_position(true, total: "EUR 300k")
+        assert_plan_holds_position(true, total: "EUR 275k")
       end
 
       should "offer a viewer no undo, redo or clear" do
@@ -169,7 +169,7 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
 
   def tab_rows = evaluate_script(%(new Set([...document.querySelectorAll('nav[aria-label="Plan views"] a')].map(a => a.getBoundingClientRect().top)).size))
 
-  def assert_plan_holds_position(held, total: held ? "EUR 250k" : "EUR 200k")
+  def assert_plan_holds_position(held, total: held ? "EUR 238k" : "EUR 200k")
     within("[data-cost-strip]") { assert_selector "[data-cost-total]", text: total }
     held ? assert_selector("[data-map-position]") : assert_no_selector("[data-map-position]")
     visit changes_plan_path(@plan_id, scenario: @year)

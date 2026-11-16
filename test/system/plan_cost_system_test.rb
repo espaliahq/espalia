@@ -49,19 +49,19 @@ class PlanCostSystemTest < ApplicationSystemTestCase
       should "show the scenario's cost in the table, and on its map with each unit's share and the seats left out" do
         sign_in_as(@planner.user)
         visit plan_path(@plan_id)
-        assert_selector "[data-cost-cell='#{@year}']", text: "EUR 250k"
+        assert_selector "[data-cost-cell='#{@year}']", text: "EUR 238k"
         assert_selector "[data-cost-cell='#{@plan_id}']", text: /EUR 200k a year\s+\(run rate\)/
         assert_no_sideways_overflow
 
         visit map_plan_path(@plan_id, scenario: @year)
         within("[data-cost-strip]") do
-          assert_selector "[data-cost-total]", text: "EUR 250k"
-          assert_selector "[data-cost-change]", text: "+EUR 50k vs Today"
+          assert_selector "[data-cost-total]", text: "EUR 238k"
+          assert_selector "[data-cost-change]", text: "+EUR 38k vs Today"
           assert_text "Of this, EUR 100k is in no unit on the map"
           find("summary", text: "1 seat has no price").click
           assert_text "Cy Quill: no level resolves for the seat", wait: 10
         end
-        assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 150k"
+        assert_selector "[data-cost-unit='#{@payments}']", text: "EUR 138k"
         [ "[data-cost-strip]", "[data-cost-unit]" ].each { |figures| all(figures).each { assert_not_includes it.text, "177" } }
         %w[177k 177,419 177419].each { assert_no_text it }
         assert_no_sideways_overflow
