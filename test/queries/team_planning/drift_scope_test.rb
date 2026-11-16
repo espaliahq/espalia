@@ -112,4 +112,38 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
 
     assert_equal [ [ { "name" => "Field" }, [] ] ], TeamPlanning::DriftScope.new(@base, [ @base ]).call([ renamed ], known: [ created ]).map { [ it.change.before, it.outside ] }
   end
+
+  should "keep unseen a fact known to change while someone was outside, once they come back" do
+    @base = @base.with(people: [ Someone.new("ada", [ Place.new(@engineering) ]) ])
+    out = change(:moved, 10, person_id: "ada", unit_id: @sales, from_unit_id: @engineering)
+    back = change(:moved, 20, person_id: "ada", unit_id: @engineering, from_unit_id: @sales)
+    known = change(:fact_changed, 15, person_id: "ada", fact: "title", after: { "title" => "Sales Engineer" })
+    title = change(:fact_changed, 25, person_id: "ada", fact: "title", before: { "title" => "Sales Engineer" }, after: { "title" => "Engineer" })
+
+    cut = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ out, back, title ], known: [ known ]).last
+
+    assert_equal [ title.event_id, nil, [ "before" ] ], [ cut.change.event_id, cut.change.before, cut.outside ]
+  end
+
+  should "keep unseen a name known to change while a unit was outside, once it comes back" do
+    @base = @base.with(units: [ Unit.new(@engineering, nil), Unit.new("field", @engineering) ])
+    out = change(:unit_moved, 10, person_id: nil, unit_id: "field", before: { "parent_id" => @engineering }, after: { "parent_id" => @sales })
+    back = change(:unit_moved, 20, person_id: nil, unit_id: "field", before: { "parent_id" => @sales }, after: { "parent_id" => @engineering })
+    known = change(:unit_renamed, 15, person_id: nil, unit_id: "field", before: { "name" => "Field" }, after: { "name" => "Sales Field" })
+    renamed = change(:unit_renamed, 25, person_id: nil, unit_id: "field", before: { "name" => "Sales Field" }, after: { "name" => "Field Ops" })
+
+    cut = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ out, back, renamed ], known: [ known ]).last
+
+    assert_equal [ renamed.event_id, nil, [ "before" ] ], [ cut.change.event_id, cut.change.before, cut.outside ]
+  end
+
+  should "keep a fact known to change while someone was covered" do
+    @base = @base.with(people: [ Someone.new("ada", [ Place.new(@engineering) ]) ])
+    known = change(:fact_changed, 15, person_id: "ada", fact: "title", after: { "title" => "Staff Engineer" })
+    title = change(:fact_changed, 25, person_id: "ada", fact: "title", before: { "title" => "Staff Engineer" }, after: { "title" => "Principal" })
+
+    cut = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ title ], known: [ known ]).sole
+
+    assert_equal [ { "title" => "Staff Engineer" }, [] ], [ cut.change.before, cut.outside ]
+  end
 end

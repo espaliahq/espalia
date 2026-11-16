@@ -31,6 +31,7 @@ class TeamPlanning::DriftScope
   UNIT_KINDS = %i[unit_created unit_renamed unit_moved unit_retired owner_added owner_removed].freeze
   ENTERING = %i[membership_started moved].freeze
   ADVANCING = %i[joined membership_started membership_ended moved unit_created unit_moved].freeze
+  NOTED = %i[fact_changed unit_renamed].freeze
   RANK = { unit_created: 0, unit_moved: 0, unit_succeeded: 0, joined: 1,
            membership_started: 2, membership_ended: 2, membership_changed: 2, moved: 2 }.freeze
 
@@ -55,12 +56,13 @@ class TeamPlanning::DriftScope
   end
 
   # @param changes [Array<OrgGraph::ChangesBetween::Change>] in date order
-  # @param known [Array<OrgGraph::ChangesBetween::Change>] moves known before the window that take effect after
-  #   the base: each moves the window on, on its own day and ahead of that day's changes, and is never reported
+  # @param known [Array<OrgGraph::ChangesBetween::Change>] changes known before the window that take effect after
+  #   the base: each moves the window on, or is noted, on its own day and ahead of that day's changes, and is never reported
   # @return [Array<Cut>] the changes the plan covers when they happen, in the order given
   def call(changes, known: [])
     withdrawn = changes.select(&:withdrawn).to_set { identity(it) }
-    pending = known.select { ADVANCING.include?(it.kind) && !withdrawn.include?(identity(it)) }.sort_by(&:effective_on)
+    pending = known.select { (ADVANCING + NOTED).include?(it.kind) && !withdrawn.include?(identity(it)) }
+                   .sort_by { [ it.effective_on, RANK.fetch(it.kind, 3) ] }
     cuts = Array.new(changes.size)
     changes.each_with_index.group_by { |change, _| change.effective_on }.each_value do |day|
       known_until(pending, day.first.first.effective_on)
@@ -90,10 +92,23 @@ class TeamPlanning::DriftScope
   def known_until(pending, day)
     while pending.first && pending.first.effective_on <= day
       change = pending.shift
+      next note(change) if NOTED.include?(change.kind)
+
       advance(change)
       @shown << change.person_id if change.kind == :joined && covered?(change.person_id)
       @shown << change.unit_id if change.kind == :unit_created && covered_unit?(change.unit_id)
     end
+  end
+
+  # A known fact or name about a subject outside the plan that day stays unseen;
+  # one about a subject it covers is known.
+  def note(change)
+    subject_id, inside = change.kind == :unit_renamed ? [ change.unit_id, covered_unit?(change.unit_id) ] : [ change.person_id, covered?(change.person_id) ]
+    key = marker(change, subject_id)
+    return @unseen << key unless inside
+
+    @unseen.delete(key)
+    @known << key
   end
 
   def covered?(person_id)
