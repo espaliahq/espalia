@@ -68,8 +68,9 @@ class TeamPlanning::DriftScope
   # @param known [Array<OrgGraph::ChangesBetween::Change>] changes known before the window that take effect after
   #   the base: each moves the window on, or is noted, on its own day, and is never reported. A move counts ahead of
   #   that day's changes; a fact or name is noted after its moves, as the window's own are judged
+  # @param through [Date, nil] the window's end: known moves up to it still count once the changes run out
   # @return [Array<Cut>] the changes the plan covers when they happen, in the order given
-  def call(changes, known: [])
+  def call(changes, known: [], through: nil)
     withdrawn = changes.select(&:withdrawn).to_set { identity(it) }
     pending = known.select { PENDING.include?(it.kind) && !withdrawn.include?(identity(it)) }
                    .sort_by { [ it.effective_on, RANK.fetch(it.kind, 3) ] }
@@ -84,6 +85,7 @@ class TeamPlanning::DriftScope
       joiners.each { |change, index| cuts[index] = cut(change) }
       facts.each { |change, index| cuts[index] = judge(change) }
     end
+    known_until(pending, through, facts: true) if through
     cuts.compact.map { backdated(it) }
   end
 

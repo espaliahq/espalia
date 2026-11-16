@@ -457,6 +457,21 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert_not_includes drift.to_json, "Revenue Ops"
   end
 
+  should "not name a unit a move known before the base takes out after the window's last change" do
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    as_tenant do
+      structure.move_unit(@payments, @sales, **on(10))
+      structure.rename_unit(@payments, "Revenue Ops", **on(12))
+    end
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant { structure.rename_unit(@payments, "Ledger", **on(5)) }
+    drift = call(Operations::TeamPlanning::Drift, plan_id: @plan_id)
+
+    assert_equal [ [ "unit_renamed", @payments ] ], drift[:changes].map { [ it[:kind], it[:unit_id] ] }
+    assert_not_includes drift[:names].keys, @payments
+    assert_not_includes drift.to_json, "Revenue Ops"
+  end
+
   # Platform is Ada's own; Core and Engineers come from entries a seat in
   # Engineering can match; Field Sales and Revenue belong to Sales alone.
   def budget_by_cost_centre

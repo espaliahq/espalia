@@ -90,7 +90,7 @@ class TeamPlanning::Drift
     parents = (whole.units + whole.retired_units).to_h { [ it.id, it.parent_id ] }
     maps = [ @plan.id, *aggregate.scenarios.keys ].map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
     @scope = TeamPlanning::DriftScope.new(base, maps, parents:)
-    @scope.call(changes, known: known_moves(baseline, changes))
+    @scope.call(changes, known: known_moves(baseline, changes), through: @today)
   end
 
   # What the baseline knew would change after its day, which the window,
