@@ -260,6 +260,34 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         assert_no_text "Moved to"
         within("[data-timeline-grid]") { assert_selector "[data-timeline-lane]", text: "leaves in Q1 hires" }
       end
+
+      should "post one move while the first drop's request is still on its way" do
+        page.execute_script(<<~JS)
+          window.shiftPosts = 0
+          document.addEventListener("turbo:before-fetch-request", (event) => {
+            if (event.detail.fetchOptions.method.toUpperCase() !== "POST") return
+            window.shiftPosts += 1
+            event.preventDefault()
+          })
+        JS
+        2.times do
+          hold(leaver_end_grip, over: "[data-timeline-step='2']")
+          release
+        end
+
+        assert_equal 1, page.evaluate_script("window.shiftPosts")
+      end
+
+      should "let go cleanly when the held grip leaves the page" do
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_selector "[data-timeline-shift-hint='2']", visible: true
+        page.execute_script("document.querySelectorAll('[data-shifting] > [data-timeline-shift-edge]').forEach(grip => grip.remove())")
+        release
+        press_escape
+
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert_no_text "Moved to"
+      end
     end
 
     should "move a change of place a step later on a phone, from the step that makes it" do

@@ -27,7 +27,8 @@ export default class extends BaseController {
   }
 
   start(event) {
-    if (event.button !== 0 || this.grip) return
+    if (event.button !== 0 || this.sent) return
+    if (this.grip) this.#finish()
 
     event.preventDefault()
     this.grip = event.currentTarget
@@ -69,7 +70,12 @@ export default class extends BaseController {
     const edge = this.grip.dataset.timelineShiftEdge
     const item = this.over === null ? null : this.grip.parentElement.querySelector(`[data-timeline-shift="${edge}:${this.over}"]`)
     this.#finish()
-    item?.click()
+    if (!item) return
+
+    // The page still shows the old step until Turbo's redirect lands, and a
+    // second drop from it would move the change twice.
+    this.sent = true
+    item.click()
   }
 
   #finish() {
@@ -77,7 +83,7 @@ export default class extends BaseController {
 
     Object.entries(this.listeners).forEach(([type, fn]) => this.grip.removeEventListener(type, fn))
     window.removeEventListener("keydown", this.escape)
-    delete this.grip.parentElement.dataset.shifting
+    if (this.grip.parentElement) delete this.grip.parentElement.dataset.shifting
     this.reach.forEach(step => {
       const column = this.#column(step)
       delete column.dataset.lit
