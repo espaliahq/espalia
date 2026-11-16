@@ -285,6 +285,16 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     assert_match "2027-03-14", refusal { undo(@q2, moved) }
   end
 
+  test "undo a departure's move though the step it moved to once held an undone departure dated outside the step it goes back to" do
+    undo(@q2, leave(@q2, leaves_on: "2027-05-10"))
+    leave(@q1)
+    moved = move(@q1, "later", facet: "departure")
+
+    undo(@q2, moved)
+
+    assert @plan.winning_changes(@q1).key?([ @grace_id, "departure" ])
+  end
+
   test "refuse a step named for a move earlier" do
     place(@q2, @eng_id)
 
