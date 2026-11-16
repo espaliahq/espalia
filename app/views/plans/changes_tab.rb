@@ -224,7 +224,10 @@ class Views::Plans::ChangesTab < Views::Base
     scenario = @scenarios.find { it[:scenario_id] == id }
     return plan_id unless scenario&.dig(:parent_id)
 
-    scenario[:relation] == "then" ? scenario[:parent_id] : followed(scenario[:parent_id])
+    case scenario[:relation]
+    in "then" then scenario[:parent_id]
+    in "instead" | "on" then followed(scenario[:parent_id])
+    end
   end
 
   def planned_in(id)
