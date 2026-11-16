@@ -45,7 +45,7 @@ class TeamPlanning::Attention
   Report = Data.define(:items, :names)
 
   CHECKS = %i[placements positions units unresolved uncovered successions capacity_overrides allocations leavers managers overloaded
-              unclassified budget_lines fundings unfunded ambiguous_funding unplaced budget_variance unused_budget_lines].freeze
+              unclassified budget_lines fundings unfunded ambiguous_funding unplaced cost_centre_mismatches budget_variance unused_budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
   UNIT = TeamPlanning::Events::UnitSet.facet
@@ -491,6 +491,32 @@ class TeamPlanning::Attention
         item(seat.position_id, POSITION, "Has no cost centre: no label, occupant or entry gives one")
       end
     end
+  end
+
+  # A person whose cost centre disagrees with something else that names one
+  # ([#421](https://github.com/espaliahq/espalia/issues/421)): the entries
+  # that match them, while they keep their real one; their position, by its
+  # label or the occupant who decides it; or a budget line their position
+  # draws on that names a third. The cost read keeps the value it gives, so
+  # this only names the disagreement, once each.
+  def cost_centre_mismatches
+    return [] unless @budget
+
+    positions = funded_positions.index_by { it.position.id }
+    lines = @budget.lines.to_h { [ it.line.id, it.line ] }
+    @budget.seats.select { it.kind == "person" && it.cost_centre.present? && it.days.positive? }.group_by(&:seat_id).flat_map do |person_id, seats|
+      seats.flat_map { mismatches_of(it, positions[it.position_id], lines) }.uniq.map do |other|
+        item(person_id, ASSIGNMENT, "Costed in #{seats.first.cost_centre}, while #{other}", units: seats.map(&:unit_id))
+      end
+    end
+  end
+
+  def mismatches_of(seat, funded, lines)
+    named = [ ("the cost centre entries give #{seat.rule_cost_centre}" if seat.rule_cost_centre) ]
+    own = funded&.cost_centre&.cost_centre
+    named << "their position is in #{own}" if own.present? && own != seat.cost_centre
+    drawn = funded ? funded.draws.select(&:held).filter_map { lines[it.budget_line_id]&.cost_centre.presence } : []
+    (named + (drawn - [ seat.cost_centre, own ]).map { "their position draws on a budget line for #{it}" }).compact
   end
 
   # A line, cost centre or the whole budget over what it approves, at the
