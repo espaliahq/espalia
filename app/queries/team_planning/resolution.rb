@@ -10,6 +10,29 @@
 # @example
 #   TeamPlanning::Resolution.new(context:, plan:, scenario_id: lean_q1).call
 class TeamPlanning::Resolution
+  # A scenario resolved for one viewer, with the baseline it rests on, so a
+  # reader in the same request can price it instead of resolving it again.
+  # Its key holds what the resolution depended on, as {#call}'s cache key does.
+  Shared = Data.define(:key, :base, :map) do
+    # @param context [AuthorizationContext]
+    # @param plan [TeamPlanningPlan]
+    # @param scenario_id [String]
+    # @return [Array]
+    def self.key(context, plan, scenario_id) = [ *CurrentPlanReads.viewer(context), plan.id, plan.base_on, plan.archived_on, scenario_id ]
+
+    # @return [Shared] self, when it was resolved for this viewer, plan and scenario
+    # @raise [ArgumentError] otherwise, as a map resolved for someone else could price what this viewer can't see
+    def for!(context, plan, scenario_id)
+      return self if key == Shared.key(context, plan, scenario_id)
+
+      raise ArgumentError, "This map was resolved for another viewer, plan or scenario"
+    end
+
+    # @param baseline [TeamPlanning::Baseline] the plan's, to join the names
+    # @return [TeamPlanning::Baseline::Map] the map with names, as {Resolution#call} gives and caches it
+    def named(baseline) = CurrentPlanReads.fetch([ :scenario, *key ]) { baseline.named(map) }
+  end
+
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] the plan's id for the root
@@ -30,7 +53,7 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call(aggregate = nil)
-    CurrentPlanReads.fetch([ :scenario, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, @plan.archived_on, @scenario_id ]) do
+    CurrentPlanReads.fetch([ :scenario, *Shared.key(@context, @plan, @scenario_id) ]) do
       @baseline.named(structure(aggregate || @repository.load_plan(@plan.id)))
     end
   end
@@ -58,6 +81,18 @@ class TeamPlanning::Resolution
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def structure(aggregate = @repository.load_plan(@plan.id)) = resolved(aggregate).first
+
+  # {#resolved}, kept with its baseline for another reader to price.
+  #
+  # @param aggregate [TeamPlanning::PlanAggregate]
+  # @return [Array(Shared, Hash{Array(String, String) => TeamPlanning::Events::Change})]
+  # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
+  # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
+  def shared(aggregate)
+    @base ||= @baseline.structure
+    map, winning = resolved(aggregate)
+    [ Shared.new(key: Shared.key(@context, @plan, @scenario_id), base: @base, map:), winning ]
+  end
 
   # @param map [TeamPlanning::Baseline::Map] from {#resolved}
   # @return [TeamPlanning::Baseline::Map] with names joined, as {#call} gives it
