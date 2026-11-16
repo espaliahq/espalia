@@ -75,6 +75,22 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    should "walk the heads under each step and in each unit's heading, without widening a column" do
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id)
+      assert_text "Showing the path to Q2 settle."
+
+      within("[data-timeline-grid]") do
+        assert_selector "[data-timeline-step='0'] [data-walk]", exact_text: "2 heads"
+        assert_selector "[data-timeline-step='1'] [data-walk]", text: /2\s*→\s*to\s*1 head · 1 left/
+        assert_selector "[data-timeline-walk='1']", text: /2\s*→\s*to\s*0 heads · 1 left, 1 moved out/
+        assert_selector "[data-timeline-walk='1']", text: /0\s*→\s*to\s*1 head · 1 moved in/
+      end
+      widths = page.evaluate_script("[...document.querySelectorAll('[data-timeline-step]')].map(el => el.offsetWidth)")
+      assert_equal 1, widths.uniq.size
+      assert_no_sideways_overflow
+    end
+
     should "follow an alternative to redraw the path" do
       sign_in_as(@viewer.user)
       visit timeline_plan_path(@plan_id)
@@ -116,6 +132,19 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
         assert_selector "[data-timeline-lane]", text: /from\s+Payments\s+Bo\s+Reyes/
         assert_selector "[data-timeline-lane]", text: /Ada\s+Quill\s+leaves\s+in\s+Q1\s+hires/
         assert_selector "[data-timeline-lane]", text: "Replaces Ada Quill"
+      end
+      assert_no_sideways_overflow
+    end
+
+    should "show the step's walk on its card and each unit's under its name" do
+      sign_in_as(@viewer.user)
+      visit timeline_plan_path(@plan_id, step: 1)
+      assert_text "Step 2 of 3"
+
+      within("[data-timeline-phone]") do
+        assert_selector "[data-walk]", text: /2\s*→\s*to\s*1 head · 1 left/
+        assert_selector "[data-walk]", text: /2\s*→\s*to\s*0 heads · 1 left, 1 moved out/
+        assert_selector "[data-walk]", text: /0\s*→\s*to\s*1 head · 1 moved in/
       end
       assert_no_sideways_overflow
     end
@@ -240,12 +269,13 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
           (() => {
             const column = document.querySelector("[data-timeline-shift-column='2']")
             column.style.pointerEvents = "auto"
-            const band = document.querySelector("[data-timeline-grid] h3").parentElement
+            const band = document.querySelector("[data-timeline-band]")
             const step = document.querySelector("[data-timeline-step='2']").getBoundingClientRect()
             const { top, height } = band.getBoundingClientRect()
             const hit = document.elementFromPoint(step.left + step.width / 2, top + height / 2)
             column.style.pointerEvents = ""
-            return hit === band
+            // A walk's cell is clear, so the band shows through it.
+            return hit === band || hit.closest("[data-timeline-walk]") !== null
           })()
         JS
         release

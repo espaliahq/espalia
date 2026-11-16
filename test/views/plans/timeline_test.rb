@@ -22,13 +22,15 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
   ].freeze
 
   # `movable` lists, per column, the changes that column's step makes itself.
-  def render_timeline(bars:, moves: [], departures: [], unassigned: false, step: 0, scenarios: SCENARIOS, movable: {}, can_edit: false)
+  def render_timeline(bars:, moves: [], departures: [], unassigned: false, step: 0, scenarios: SCENARIOS, movable: {}, can_edit: false,
+                      walk: steady_walk(scenarios.size), unit_walk: walk)
     timeline = {
+      walk:, unassigned_walk: steady_walk(scenarios.size, heads: 0),
       plan_id: PLAN, scenario_id: scenarios.last[:scenario_id], next_ids: [],
       columns: scenarios.each_with_index.map do |scenario, index|
         { scenario_id: scenario[:scenario_id], name: scenario[:name], alternative_ids: [], movable: movable.fetch(index, []) }
       end,
-      blocks: [ { block_id: PAYMENTS, units: [ { unit_id: PAYMENTS, name: "Payments" } ] * scenarios.size, continues_from_ids: [], lane_ids: [ ADA ] } ],
+      blocks: [ { block_id: PAYMENTS, units: [ { unit_id: PAYMENTS, name: "Payments" } ] * scenarios.size, continues_from_ids: [], lane_ids: [ ADA ], walk: unit_walk } ],
       unassigned_lane_ids: unassigned ? [ ADA ] : [],
       lanes: [ { lane_id: ADA, bars:, moves:, departures: } ],
       positions: {}, names: { ADA => "Ada Quill" }
@@ -36,6 +38,15 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
     controller = ApplicationController.new
     controller.request = ActionDispatch::TestRequest.create
     Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::Timeline.new(timeline:, scenarios:, step:, can_edit:)))
+  end
+
+  def steady_walk(size, heads: 1)
+    [ counts(nil, closing: heads), *Array.new(size - 1) { counts(heads, closing: heads) } ]
+  end
+
+  def counts(opening, closing:, hires: 0, transfers_in: 0, departures: 0, transfers_out: 0)
+    { opening:, hires: opening && hires, transfers_in: opening && transfers_in, departures: opening && departures,
+      transfers_out: opening && transfers_out, closing: }
   end
 
   def grip_targets(html, edge)
@@ -145,6 +156,28 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
       assert_empty html.css("[data-timeline-phone] [data-timeline-shift-edge]")
       assert_equal 1, html.css("[data-timeline-grid] [data-timeline-shift-edge]").size
+    end
+  end
+
+  context "the headcount walk" do
+    should "put the plan's walk under each step and each unit's in its heading row, naming only what changed" do
+      walk = [ counts(nil, closing: 3), counts(3, closing: 4, hires: 2, departures: 1) ]
+      unit_walk = [ counts(nil, closing: 2), counts(2, closing: 2, transfers_in: 1, transfers_out: 1) ]
+      html = render_timeline(bars: [ bar(0, 1) ], walk:, unit_walk:)
+      header = html.css("[data-timeline-step] [data-walk]").map { it.text.squish }
+      unit = html.css("[data-timeline-walk] [data-walk]").map { it.text.squish }
+
+      assert_equal [ "3 heads", "3 → to 4 heads · 2 hired, 1 left" ], header
+      assert_equal [ "2 heads", "2 → to 2 heads · 1 moved in, 1 moved out" ], unit
+      assert_equal "true", html.at_css("[data-timeline-step='1'] [data-walk] span[aria-hidden]")["aria-hidden"]
+    end
+
+    should "leave Unassigned's heading out until someone is in it, and show a phone the step's walk and each unit's" do
+      html = render_timeline(bars: [ bar(0, 1) ], step: 1, walk: [ counts(nil, closing: 1), counts(1, closing: 2, hires: 1) ], unit_walk: steady_walk(2))
+      phone = html.at_css("[data-timeline-phone]")
+
+      assert_equal [ "1 → to 2 heads · 1 hired", "1 head" ], phone.css("[data-walk]").map { it.text.squish }
+      assert_not html.text.include?(Views::Plans::Timeline::UNASSIGNED)
     end
   end
 end
