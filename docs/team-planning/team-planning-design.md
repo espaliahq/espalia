@@ -304,6 +304,16 @@ none of these rules:
   appear in, people before positions, then by name and id.
 - **Names.** Lanes and blocks carry ids, and names come from the map's own lookup, so a
   forgotten person keeps their lane under Person::FORMER_MEMBER.
+- **Walk** ([#451](https://github.com/espaliahq/espalia/issues/451)). Each column counts
+  heads for the plan, for each block and for Unassigned: opening, hires, transfers in,
+  departures, transfers out and closing. A person counts once in a unit however they split,
+  and once in the plan's total, so taking a second place moves a head into that unit and
+  leaves the first unit's count alone. Opening is the last column's closing; a leaver still counts
+  in the step they leave in and is gone from its closing. A hire is a head the last step
+  didn't hold at all; a head the plan held elsewhere, or outside a scoped plan's edge, moved
+  in. Today has a closing and nothing else. Each walk is a difference of sets, so opening
+  plus hires and transfers in, less departures and transfers out, is always closing. Forecast
+  attrition and open positions stay out: the walk counts people.
 
 The baseline is read once and every step resolves over it, so each column sees the same Org
 Graph and the read costs one Org Graph query whatever the path's length.
@@ -313,10 +323,12 @@ each step to a leaf, and the page says which path it shows and how many others r
 the plan. Each step lists its alternatives as "or instead" links, and the last step its
 `then` steps, so a viewer switches path by following one. A wide screen draws a grid: a
 column per step, a heading per block, and a row per lane, with each bar spanning the steps
-it holds. A phone shows one step at a time, picked from a row of steps that marks the
+it holds. A quiet line under each step's name walks the plan's heads, and each block's
+heading row walks its own under each column, including the step a unit retires in. A phone shows one step at a time, picked from a row of steps that marks the
 current one. Since the neighbouring steps are out of sight there, each bar says where its
 person came from when they arrive and where they go when they leave. A path with nobody on
-it still shows its steps, so its alternatives stay in reach.
+it still shows its steps, so its alternatives stay in reach. On a phone the step's walk sits on
+its card and each unit's under its name.
 
 An editor moves people from the tab too ([#309](https://github.com/espaliahq/espalia/issues/309)).
 Dragging a person's bar onto another block in a column moves them in that column's step, and
