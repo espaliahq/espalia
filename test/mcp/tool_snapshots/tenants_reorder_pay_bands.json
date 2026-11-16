@@ -1,6 +1,6 @@
 {
   "name": "tenants_reorder_pay_bands",
-  "description": "Change the order of the tenant's pay bands. pay_band_ids lists every band once, from tenants_pay_bands, position 1 first. Of the bands that match a seat, the last has the last word, so moving a band can change what a seat costs: every plan reprices. Refused unless the caller is a tenant admin.",
+  "description": "Change the order of the tenant's pay bands. pay_band_ids lists every band once, from tenants_pay_bands, position 1 first. Of the bands that match a seat, the last has the last word, so moving a band can change what a seat costs: every plan reprices. Refused unless the caller is a tenant admin. Pass from_pay_band_ids, the order you read, and the reorder is refused if another change has moved the list since.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -10,6 +10,13 @@
           "type": "string"
         },
         "description": "every pay_band_id, position 1 first"
+      },
+      "from_pay_band_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "the order you read from tenants_pay_bands"
       }
     },
     "required": [

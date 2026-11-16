@@ -81,12 +81,14 @@ class PayBand < ApplicationRecord
   # Puts the bands in this order, the first at position 1.
   #
   # @param ids [Array<String>] every band's id, once each
-  # @return [Boolean] false when ids aren't exactly the tenant's bands
-  def self.reorder!(ids)
+  # @param from [Array<String>, nil] the order the caller read, refused once another write has moved it
+  # @return [true, false, :stale] false when ids aren't exactly the tenant's bands, :stale when from no longer stands
+  def self.reorder!(ids, from: nil)
     transaction do
       Tenant.where(id: ActsAsTenant.current_tenant&.id).lock.pick(:id)
       bands = lock.order(:position).to_a
       return false unless ids.sort == bands.map(&:id).sort
+      return :stale if from && from != bands.map(&:id)
 
       ids.each_with_index { |id, index| where(id:).update_all(position: index + 1, updated_at: Time.current) }
       bands.first&.tenant&.update_column(:pay_bands_changed_at, Time.current)

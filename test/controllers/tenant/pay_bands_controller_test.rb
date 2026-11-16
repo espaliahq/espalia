@@ -157,7 +157,7 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       patch reorder_tenant_pay_bands_path, params: { pay_band_id: first.id, direction: "up" }
       assert_equal %w[Alpha Gamma Beta], positions
 
-      patch reorder_tenant_pay_bands_path, params: { pay_band_ids: [ second.id, third.id, first.id ] }
+      patch reorder_tenant_pay_bands_path, params: { pay_band_ids: [ second.id, third.id, first.id ], from_pay_band_ids: [ first.id, third.id, second.id ] }
       assert_equal "Saved the new order.", flash[:notice]
       assert_equal %w[Beta Gamma Alpha], positions
     end
@@ -174,6 +174,9 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
       assert_equal stale, flash[:alert]
 
       patch reorder_tenant_pay_bands_path, params: { pay_band_id: last.id, direction: "down" }
+      assert_equal stale, flash[:alert]
+
+      patch reorder_tenant_pay_bands_path, params: { pay_band_ids: [ last.id, first.id ], from_pay_band_ids: [ last.id, first.id ] }
       assert_equal stale, flash[:alert]
       assert_equal %w[Alpha Beta], positions
     end

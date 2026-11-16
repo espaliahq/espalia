@@ -2,7 +2,8 @@
 // on each row work without it, and are the way on a phone or a keyboard.
 //
 // While a band is dragged, the rows move under the pointer. When the drag
-// ends, the whole order goes to the server through the hidden form, so Turbo
+// ends, the whole order goes to the server through the hidden form, with the
+// order the page showed so a list moved since is refused. Turbo
 // follows the redirect and the positions and "Never used" flags come back fresh.
 //
 // Usage:
@@ -70,15 +71,20 @@ export default class extends BaseController {
     const order = this.#order()
     if (order.join() === this.before.map((row) => row.dataset.payBandId).join()) return
 
-    this.formTarget.querySelectorAll("[name='pay_band_ids[]']").forEach((input) => input.remove())
-    order.forEach((id) => {
+    this.formTarget.querySelectorAll("input[type='hidden'][name$='pay_band_ids[]']").forEach((input) => input.remove())
+    this.#fields("pay_band_ids[]", order)
+    this.#fields("from_pay_band_ids[]", this.before.map((row) => row.dataset.payBandId))
+    this.formTarget.requestSubmit()
+  }
+
+  #fields(name, ids) {
+    ids.forEach((id) => {
       const input = document.createElement("input")
       input.type = "hidden"
-      input.name = "pay_band_ids[]"
+      input.name = name
       input.value = id
       this.formTarget.append(input)
     })
-    this.formTarget.requestSubmit()
   }
 
   #order() {

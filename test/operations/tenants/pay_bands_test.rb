@@ -235,6 +235,21 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
       assert_equal positions, call(:PayBands)[:pay_bands].pluck(:position)
     end
 
+    should "refuse a reorder made from an order another change has moved since" do
+      first = add
+      second = add(location: "Testonia")
+      read = [ first, second ].pluck(:pay_band_id)
+      call(:ReorderPayBands, pay_band_ids: read.reverse)
+
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(:ReorderPayBands, pay_band_ids: read.reverse, from_pay_band_ids: read)
+      end
+      assert_equal "The list has changed since you read it: read tenants_pay_bands again", error.message
+
+      moved = call(:ReorderPayBands, pay_band_ids: read, from_pay_band_ids: read.reverse)[:pay_bands]
+      assert_equal read, moved.pluck(:pay_band_id)
+    end
+
     should "leave reordering to tenant admins" do
       added = add
 

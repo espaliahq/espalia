@@ -58,8 +58,10 @@ class Tenant::PayBandsController < ApplicationController
   # order, from a drag.
   def reorder
     authorize_pay_bands
-    ids = new_order or return list_changed
-    bands = Operations::Tenants::ReorderPayBands.call(context: pundit_user, params: { pay_band_ids: ids })[:pay_bands]
+    from, ids = new_order
+    return list_changed unless ids
+
+    bands = Operations::Tenants::ReorderPayBands.call(context: pundit_user, params: { pay_band_ids: ids, from_pay_band_ids: from })[:pay_bands]
     redirect_to tenant_pay_bands_path, notice: reorder_notice(bands), status: :see_other
   rescue Operations::Base::ParameterError
     list_changed
@@ -67,17 +69,22 @@ class Tenant::PayBandsController < ApplicationController
 
   private
 
-  # @return [Array<String>, nil] every band's id in the new order; nil when the band to move is gone or can't move that way
+  # A drag sends the order the page showed beside the new one, so a list
+  # another admin has moved since refuses rather than undoing their move.
+  #
+  # @return [Array(Array<String>, Array<String>)] the order read and every band's id in the new order;
+  #   the new order is nil when the band to move is gone or can't move that way
   def new_order
-    return Array(params[:pay_band_ids]).map(&:to_s) if params.key?(:pay_band_ids)
+    return [ params[:from_pay_band_ids]&.then { Array(it).map(&:to_s) }, Array(params[:pay_band_ids]).map(&:to_s) ] if params.key?(:pay_band_ids)
 
-    ids = PayBand.order(:position).pluck(:id)
-    index = ids.index(params[:pay_band_id]) or return
+    from = PayBand.order(:position).pluck(:id)
+    index = from.index(params[:pay_band_id]) or return [ from, nil ]
     other = params[:direction] == "up" ? index - 1 : index + 1
-    return unless other.between?(0, ids.size - 1)
+    return [ from, nil ] unless other.between?(0, from.size - 1)
 
+    ids = from.dup
     ids[index], ids[other] = ids[other], ids[index]
-    ids
+    [ from, ids ]
   end
 
   # The page was out of date: a band was added, removed or moved since it loaded.
