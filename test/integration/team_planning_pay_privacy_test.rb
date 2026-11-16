@@ -288,7 +288,9 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
                                                              placements: [ { position_id:, allocation: 1 } ])
       share = Rational(121, 365)
-      derived = BigDecimal(Integer(SCOPED[:in]) * share, 20).to_s("F")[0, 5]
+      held = BigDecimal(Integer(SCOPED[:in]) * share, Operations::TeamPlanning::CostFigures::SIGNIFICANT_DIGITS).to_s("F")
+      # A prefix, so a leak shows however it is rounded.
+      derived = held[0, 5]
 
       { @holder => Integer(SCOPED[:in]) * share, @editor => 100_000 * share, @viewer => 100_000 * share }.each do |account, funded|
         who = account == @holder ? "holder" : "non-holder"
@@ -297,7 +299,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
 
         assert_in_delta funded, BigDecimal(drawn[:funded][:native]["AUD"]), 1e-9, who
         assert_in_delta 500_000 * share - funded, BigDecimal(drawn[:remaining][:amount]), 1e-9, who
-        account == @holder ? assert_includes(budget.to_json, derived, who) : assert_not_includes(budget.to_json, derived, who)
+        account == @holder ? assert_equal(held, drawn[:funded][:native]["AUD"], who) : assert_not_includes(budget.to_json, derived, who)
       end
     end
 
