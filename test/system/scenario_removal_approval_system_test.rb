@@ -38,7 +38,7 @@ class ScenarioRemovalApprovalSystemTest < ApplicationSystemTestCase
 
         assert_text "This scenario holds 1 change to pay or budget amounts you can't see. Removing it removes that too."
         assert_text "team_planning_remove_scenario"
-        assert_no_text AMOUNT
+        assert_no_pay_figure page.text, AMOUNT
         assert_no_sideways_overflow
       end
     end
