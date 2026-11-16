@@ -124,6 +124,33 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     assert_equal [ [ @tribe ], false ], rules(guild)
   end
 
+  should "refuse a change dated after today, pointing to a plan" do
+    error = assert_raises(RuntimeError) do
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: @today + 1) }
+    end
+    assert_equal "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan",
+                 error.message
+  end
+
+  context "on a tenant that already holds a future-dated kinds change" do
+    setup do
+      @tenant = create(:tenant)
+      @tribe, @guild = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      publish_taxonomy([ { level_id: @tribe, name: "Tribe" } ], on: (@today - 10).iso8601)
+      publish_taxonomy([ { level_id: @tribe, name: "Tribe" }, { level_id: @guild, name: "Guild" } ], on: (@today + 30).iso8601)
+    end
+
+    should "compare a change only with the latest one dated today or earlier" do
+      as_tenant { @handler.set_kind_parents(@guild, parent_ids: [ @tribe ], top: false, effective_on: @today) }
+      assert_equal [ [ @tribe ], false ], rules(@guild)
+
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@guild, parent_ids: [ @tribe, @guild ], top: false, effective_on: @today - 11) }
+      end
+      assert_equal "The unit types last changed on #{@today.iso8601}, so a change can't be dated before it", error.message
+    end
+  end
+
   context "on a tenant whose kinds changed out of date order" do
     setup do
       @tenant = create(:tenant)

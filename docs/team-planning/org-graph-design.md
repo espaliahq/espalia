@@ -198,9 +198,12 @@ lists the people with no membership of a live unit, for the "in no team" tray.
   unit and where it sits. A kind an HRIS provides keeps the HRIS rule for now. Removing a
   kind drops it from every list that named it. Until the readers move to the lists, the
   unit settings and Team Planning still place units by level order.
-- **A kinds change can't be dated before the last one.** The aggregate keeps the latest
-  date across `TaxonomyDefined` and `LevelProviderSet`, not the last event's date, as
-  older streams hold them out of order. The refusal names that date.
+- **A kinds change is dated today or earlier, and not before the last one.** A future
+  structure belongs in a plan, so a later date is refused. The aggregate keeps every date
+  across `TaxonomyDefined` and `LevelProviderSet`, as older streams hold them out of
+  order, and compares a change with the latest one that isn't in the future. A
+  future-dated change an older stream already holds can't lock out today's changes. The
+  refusal names that date.
 - **A kind a live plan still places units of can't be removed.** The operation checks
   Team Planning's overrides, as the Org Graph context never reads Team Planning and the
   operation is the only way a kind is removed. Archived and deleted plans don't count.
@@ -536,8 +539,8 @@ The dates follow the events:
 - A kind of unit has one fact, `kind`: its name, its place in the list, its provider
   and, once stated, its rules. Removing the kind ends it. Older streams can date a change
   to the kinds before an earlier one; a kind's change then starts on its last change's
-  date, so the order of events decides. A new change dated before the latest one is
-  refused.
+  date, so the order of events decides. A new change dated after today, or before the
+  latest one dated today or earlier, is refused.
 
 Three rules hold across history, `AsOf`, `ChangesBetween` and the live tables
 (`org_memberships`, the `people` columns). First, a fact dated before one already held

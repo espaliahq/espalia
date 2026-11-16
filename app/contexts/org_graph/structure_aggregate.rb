@@ -44,7 +44,7 @@ class OrgGraph::StructureAggregate
     @fact_providers = {}
     @fact_fields = {}
     @successions = {}
-    @kinds_changed_on = nil
+    @kinds_change_dates = []
   end
 
   # Defines or redefines the tenant's taxonomy, top level first.
@@ -543,7 +543,7 @@ class OrgGraph::StructureAggregate
   on OrgGraph::Events::TaxonomyDefined do |event|
     levels = event.data[:levels].map { |level| level.to_h.symbolize_keys }
     @taxonomy = nil
-    @kinds_changed_on = [ @kinds_changed_on, event.data[:effective_on] ].compact.max
+    @kinds_change_dates << event.data[:effective_on] if event.data[:effective_on]
     @levels = levels.map { |level| level.slice(:level_id, :name) }
     @level_rules = levels.select { |level| level.key?(:parent_level_ids) }
                          .to_h { |level| [ level[:level_id], level.slice(:parent_level_ids, :top) ] }
@@ -553,7 +553,7 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::LevelProviderSet do |event|
     @taxonomy = nil
-    @kinds_changed_on = [ @kinds_changed_on, event.data[:effective_on] ].compact.max
+    @kinds_change_dates << event.data[:effective_on] if event.data[:effective_on]
     @level_providers[event.data[:level_id]] = event.data[:provider]
     @level_fields[event.data[:level_id]] = event.data[:field]
   end
@@ -934,10 +934,17 @@ class OrgGraph::StructureAggregate
 
   # The kinds' history dates each change no earlier than the last, so a
   # change dated before it would be recorded on a day it wasn't made.
+  # A structure that takes effect later belongs in a plan, so a change is
+  # dated today or earlier. A future-dated change an older stream holds is
+  # left out of the comparison, so it can't lock out today's changes.
   def ensure_not_before_last_change!(effective_on)
-    return unless @kinds_changed_on && iso_date(effective_on) < @kinds_changed_on
+    on, today = iso_date(effective_on), Date.current.iso8601
+    raise "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan" if on > today
 
-    raise "The unit types last changed on #{@kinds_changed_on}, so a change can't be dated before it"
+    last = @kinds_change_dates.select { it <= today }.max
+    return unless last && on < last
+
+    raise "The unit types last changed on #{last}, so a change can't be dated before it"
   end
 
   def normalise_levels(levels)

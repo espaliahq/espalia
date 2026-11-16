@@ -312,6 +312,7 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
 
     should "hold each kind of unit's name, place, provider and removal" do
       guild = SecureRandom.uuid_v7
+      travel_to Time.zone.parse("2026-04-02 09:00")
       as_tenant do
         @structure.add_level(guild, "Guild", effective_on: "2026-02-01")
         @structure.reorder_levels([ guild, @departments, @squads ], effective_on: "2026-03-01")
