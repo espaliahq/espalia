@@ -225,12 +225,14 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     should "refuse a reorder that leaves out a band or names one twice" do
       first = add
       second = add(location: "Testonia")
+      positions = call(:PayBands)[:pay_bands].pluck(:position)
 
       [ [ first[:pay_band_id] ], [ first[:pay_band_id], first[:pay_band_id] ], [ first[:pay_band_id], SecureRandom.uuid_v7 ] ].each do |ids|
         error = assert_raises(Operations::Base::ParameterError) { call(:ReorderPayBands, pay_band_ids: ids) }
         assert_equal "List every pay band once, as tenants_pay_bands lists them", error.message
       end
       assert_equal [ first, second ].pluck(:pay_band_id), call(:PayBands)[:pay_bands].pluck(:pay_band_id)
+      assert_equal positions, call(:PayBands)[:pay_bands].pluck(:position)
     end
 
     should "leave reordering to tenant admins" do
