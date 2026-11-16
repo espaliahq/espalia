@@ -111,6 +111,16 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Split 1 change off into Agreed moves.", flash[:notice]
     end
 
+    should "still land on the agreed part when the timeline can't be read after the split" do
+      Operations::TeamPlanning::Timeline.stub(:call, ->(**) { raise Operations::Base::ParameterError, "No such plan" }) do
+        post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @to_payments ], name: "Agreed moves" }
+      end
+
+      agreed = ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).order(:created_at).last.id }
+      assert_redirected_to timeline_plan_path(@plan_id, scenario: agreed)
+      assert_equal "Split 1 change off into Agreed moves.", flash[:notice]
+    end
+
     should "count the changes chosen in its notice, not the earlier ones that go across with them" do
       again = place(@ada, @platform)
 

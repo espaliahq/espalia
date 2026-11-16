@@ -178,10 +178,13 @@ class PlansController < ApplicationController
   private
 
   # The column a phone opens on: the agreed part shares one with the rest.
+  # The split has already happened, so a failed read lands on the timeline's first column rather than a 404.
   def split_step(result)
     halves = result.values_at(:agreed_id, :scenario_id)
     read(Operations::TeamPlanning::Timeline, scenario_id: result[:agreed_id])[:columns]
       .index { ([ it[:scenario_id] ] + it[:alternative_ids]).intersect?(halves) }
+  rescue ActiveRecord::RecordNotFound
+    nil
   end
 
   def split_page(plan, draft: {}, error: nil)
