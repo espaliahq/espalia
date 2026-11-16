@@ -18,7 +18,8 @@ class Operations::TeamPlanning::UndoChange < Operations::Base
               "previous dates under the same checks as a new date edit: refused when a later date edit of the step " \
               "replaced it, when the step forked after it closed its dates (a closing is never undone: set the dates " \
               "instead), or when a later step would end before it starts, naming that step. " \
-              "Nothing is deleted: the history keeps it, marked undone."
+              "Without the see-pay right, a change to a budget line that carries an amount is refused, and left out when " \
+              "event_id is. Nothing is deleted: the history keeps it, marked undone."
   category :write
   approval :mcp_client
 

@@ -43,6 +43,9 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError, &).message
   end
 
+  # An id can hold an amount's digits, as "…21d95001a426" holds 9500.
+  def without_ids(payload) = payload.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+
   def attention(scenario_id = @q2) = call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id:)[:items].select { it[:check] == "budget_lines" }
 
   should "give every scenario the organisation's lines, an amount in its own currency and a head count with no amount" do
@@ -50,6 +53,20 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
                  lines(@plan_id)[:budget_lines].map { it.values_at(:budget_line_id, :source, :amount, :currency, :period, :head_count) }
     assert_equal lines(@plan_id)[:budget_lines], lines[:budget_lines]
     assert_empty lines[:orphaned]
+  end
+
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)), and a period
+  # or currency is only there beside one, so all three hide alike.
+  should "give a member without the see-pay right every line and head count, and no amount, currency or period" do
+    held, seen = [ @editor, @viewer ].map { lines(@plan_id, as: it) }
+    fields = ->(read) { read[:budget_lines].map { it.values_at(:budget_line_id, :amount, :currency, :period, :head_count) } }
+
+    assert_equal [ true, false ], [ held[:money], seen[:money] ]
+    assert_equal [ [ @engineers.id, nil, nil, nil, "4.00" ], [ @support.id, nil, nil, nil, "2.00" ] ], fields.(seen)
+    assert_equal held[:budget_lines].map(&:keys), seen[:budget_lines].map(&:keys)
+    assert_equal seen[:budget_lines].first.except(:budget_line_id, :head_count, :origin), seen[:budget_lines].second.except(:budget_line_id, :head_count, :origin),
+                 "a line with a hidden amount reads exactly as one with none"
+    [ "480000", "AUD" ].each { assert_not_includes without_ids(seen), it }
   end
 
   should "change a tenant line by its id and add a plan line, each reaching the steps after and not before" do
@@ -157,6 +174,143 @@ class Operations::TeamPlanning::BudgetLinesTest < ActiveSupport::TestCase
     assert_equal "No such plan", refusal { lines(as: @outsider) }
     assert_equal "No such plan", refusal { call(Operations::TeamPlanning::SetBudgetLine, as: @viewer, plan_id: @plan_id, scenario_id: @q1, **YEAR, origin: "new", head_count: "1") }
     assert_equal "No such plan", refusal { call(Operations::TeamPlanning::CutBudgetLine, as: @outsider, plan_id: @plan_id, scenario_id: @q1, budget_line_id: @engineers.id) }
+  end
+
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)), so an editor
+  # without the see-pay right works on head counts alone.
+  context "an editor without the see-pay right" do
+    setup do
+      @planner = as_tenant { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
+      call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @planner.person_id, role: "editor")
+    end
+
+    should "add and change lines by head count, and set no amount, currency or period" do
+      added = set_as_planner(head_count: "2")[:budget_line_id]
+      set_as_planner(budget_line_id: added, head_count: "3")
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      assert_equal [ "3.00", "5.00" ], [ line(added)[:head_count], line(@support.id)[:head_count] ]
+
+      [ { amount: "100", currency: "AUD", period: "year" }, { currency: "AUD" }, { period: "year" } ].each do |money|
+        assert_equal "Setting a budget amount needs the see-pay right.", refusal { set_as_planner(head_count: "1", **money) }
+      end
+      cut_as_planner(@support.id)
+      assert_nil line(@support.id)
+    end
+
+    should "refuse to change or cut a line that carries an amount, the organisation's or the plan's" do
+      priced = set(amount: "9000", currency: "AUD", period: "month")[:budget_line_id]
+      [ @engineers.id, priced ].each do |id|
+        assert_equal PRICED, refusal { set_as_planner(budget_line_id: id, head_count: "1") }
+        assert_equal PRICED, refusal { cut_as_planner(id) }
+      end
+      assert_equal "This scenario has no such budget line", refusal { cut_as_planner(SecureRandom.uuid_v7) }
+    end
+
+    should "treat a line the plan once priced as priced, even after that change is undone" do
+      set(budget_line_id: @support.id, amount: "9000", currency: "AUD", period: "month", head_count: "2")
+      call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @q1)
+      assert_nil line(@support.id)[:amount]
+
+      assert_equal PRICED, refusal { set_as_planner(budget_line_id: @support.id, head_count: "1") }
+    end
+
+    should "undo their own change to a line with no amount" do
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      call(Operations::TeamPlanning::UndoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1)
+      assert_equal "tenant", line(@support.id)[:source]
+      call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1)
+      assert_equal "5.00", line(@support.id)[:head_count]
+    end
+
+    should "neither undo, redo, clear nor note a change to a line that carries an amount, and skip it by default" do
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      as_tenant { @support.update!(amount: 90_000, currency: "AUD", period: "year") }
+      event_id = change_of(@support.id)
+
+      assert_equal "You have nothing here to undo", refusal { undo_as_planner }
+      assert_equal PRICED, refusal { undo_as_planner(event_id:) }
+      assert_equal PRICED, refusal { call(Operations::TeamPlanning::ClearChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, subject_id: @support.id, facet: FACET) }
+      assert_equal "Noting a budget line change needs the see-pay right.",
+                   refusal { call(Operations::TeamPlanning::NoteChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, event_id:, note: "Fine") }
+
+      undo_as_holder = call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @q1, event_id:)
+      assert undo_as_holder[:undone]
+      assert_equal PRICED, refusal { call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, event_id:) }
+      assert_equal "You have nothing here to redo", refusal { call(Operations::TeamPlanning::RedoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1) }
+    end
+
+    should "be offered undo, redo and clear on a change to a line with no amount, and none on one that carries an amount" do
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      set_as_planner(budget_line_id: @support.id, head_count: "6")
+      latest, nothing_to_redo, clearable = offers
+      assert_equal [ true, nil, true ], [ latest.present?, nothing_to_redo, clearable ]
+
+      undo_as_planner
+      assert_equal latest, offers.second
+
+      as_tenant { @support.update!(amount: 90_000, currency: "AUD", period: "year") }
+      assert_equal [ nil, nil, false ], offers
+    end
+
+    # A budget line never conflicts with the Org Graph, so settle turns every line away alike, before the
+    # command handler's own check on a priced line is reached.
+    should "refuse to settle a priced line in the same words as a line with no amount" do
+      set_as_planner(budget_line_id: @support.id, head_count: "5")
+      priced = set(amount: "9000", currency: "AUD", period: "month", head_count: "3")[:budget_line_id]
+      settle = ->(id) { call(Operations::TeamPlanning::SettleConflict, as: @planner, plan_id: @plan_id, scenario_id: @q1, subject_id: id, facet: FACET, choice: "plan") }
+
+      assert_equal 1, [ priced, @support.id ].map { |id| refusal { settle.(id) } }.uniq.size
+    end
+
+    # A pin would copy a priced line's amount, so it needs a rule of its own before it may land.
+    should "refuse a pin on a priced line in the same words as one on a line with no amount" do
+      pin = ->(id) { call(Operations::TeamPlanning::PinChange, as: @planner, plan_id: @plan_id, scenario_id: @q2, subject_id: id, facet: FACET) }
+      priced = set(amount: "9000", currency: "AUD", period: "month", head_count: "3")[:budget_line_id]
+
+      assert_equal 1, [ @engineers.id, priced, @support.id ].map { |id| refusal { pin.(id) } }.uniq.size
+    end
+
+    should "read a priced line's history and override exactly as a line with a head count alone" do
+      priced = set(amount: "9000", currency: "AUD", period: "month", head_count: "3")[:budget_line_id]
+      plain = set(head_count: "3")[:budget_line_id]
+      set(budget_line_id: priced, amount: "9500", currency: "AUD", period: "month", head_count: "3", scenario_id: @q2)
+      set(budget_line_id: plain, head_count: "3", scenario_id: @q2)
+      set(budget_line_id: @engineers.id, amount: "480000", currency: "AUD", period: "year", head_count: "5", scenario_id: @q2)
+
+      history = ->(as) { call(Operations::TeamPlanning::History, as:, plan_id: @plan_id, scenario_id: @q1)[:entries].index_by { it[:subject_id] } }
+      overrides = ->(as) { call(Operations::TeamPlanning::Overrides, as:, plan_id: @plan_id, scenario_id: @q2)[:overrides].index_by { it[:subject_id] } }
+      held, seen = history.(@editor), history.(@planner)
+      held_q2, seen_q2 = overrides.(@editor), overrides.(@planner)
+
+      assert_equal [ "AUD", [ "amount" ] ], [ held[priced][:end_state]["currency"], held[priced][:sealed_fields] ]
+      assert_equal [ "AUD", "AUD" ], [ held_q2[priced], held_q2[@engineers.id] ].map { it[:inherits][:end_state]["currency"] }
+      assert_nil held_q2[@engineers.id][:inherits][:scenario_id], "read off the parent's map, not an override above"
+      assert_equal seen[plain].values_at(:end_state, :sealed_fields), seen[priced].values_at(:end_state, :sealed_fields)
+      assert_equal seen_q2[plain].values_at(:end_state, :inherits), seen_q2[priced].values_at(:end_state, :inherits)
+      assert_equal %w[head_count tenant_line], seen_q2[@engineers.id][:end_state].keys.grep(/head_count|tenant_line|currency|period|amount/).sort
+      [ "AUD", "9000", "9500", "480000", "month" ].each { assert_not_includes without_ids([ seen, seen_q2 ]), it }
+    end
+  end
+
+  PRICED = "Changing this budget line needs the see-pay right."
+
+  def set_as_planner(scenario_id: @q1, **params)
+    call(Operations::TeamPlanning::SetBudgetLine, as: @planner, plan_id: @plan_id, scenario_id:, **YEAR, origin: "new", **params)
+  end
+
+  def cut_as_planner(line_id) = call(Operations::TeamPlanning::CutBudgetLine, as: @planner, plan_id: @plan_id, scenario_id: @q1, budget_line_id: line_id)
+
+  def undo_as_planner(**params) = call(Operations::TeamPlanning::UndoChange, as: @planner, plan_id: @plan_id, scenario_id: @q1, **params)
+
+  # @return [Array] what the planner's Undo and Redo would step, and whether they may clear @support's change
+  def offers
+    step = call(Operations::TeamPlanning::UndoStep, as: @planner, plan_id: @plan_id, scenario_id: @q1)
+    status = call(Operations::TeamPlanning::Status, as: @planner, plan_id: @plan_id, scenario_id: @q1)[:statuses].find { it[:subject_id] == @support.id }
+    [ step[:undo]&.dig(:event_id), step[:redo]&.dig(:event_id), status[:clearable] ]
+  end
+
+  def change_of(line_id, scenario_id = @q1)
+    call(Operations::TeamPlanning::History, plan_id: @plan_id, scenario_id:)[:entries].find { it[:subject_id] == line_id && it[:facet] == FACET }[:event_id]
   end
 
   should "shred a plan's own amount with the plan, leaving the organisation's line as it was" do

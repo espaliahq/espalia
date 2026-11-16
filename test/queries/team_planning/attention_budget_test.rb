@@ -142,6 +142,16 @@ class TeamPlanning::AttentionBudgetTest < ActiveSupport::TestCase
     assert_no_match(/\d{3}/, reasons(:budget_variance).sole.last)
   end
 
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)), so a line past it is too.
+  should "flag a line past its amount only to a member with the see-pay right, and past its head count to every editor" do
+    editor = as_tenant { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
+    as_tenant { Operations::TeamPlanning::AddPlanMember.call(context: context_for(@planner), params: { plan_id: @plan_id, person_id: editor.person_id, role: "editor" }) }
+    priced = line(cost_centre: "Platform", amount: 150_000, head_count: 1)
+    2.times { open_position }
+
+    assert_equal [ [ :budget_variance, priced, "Spends over its head count by 1 FTE" ] ], as_viewer(editor).select { it.first == :budget_variance }
+  end
+
   should "mark a cost centre and the whole budget over under the strictness that judges them" do
     line(cost_centre: "Platform", amount: 150_000)
     2.times { open_position }

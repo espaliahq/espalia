@@ -18,7 +18,8 @@ class Views::Plans::BudgetLineForm < Views::Base
   # @param countries [Array<String>]
   # @param budget_line_id [String, nil] the line being changed; nil to add one
   # @param error [String, nil] the operation's refusal
-  def initialize(plan:, scenarios:, scenario_id:, values:, roles:, countries:, budget_line_id: nil, error: nil)
+  # @param money [Boolean] whether the caller may set an amount, as they may see pay
+  def initialize(plan:, scenarios:, scenario_id:, values:, roles:, countries:, budget_line_id: nil, error: nil, money: true)
     @plan = plan
     @scenarios = scenarios
     @scenario_id = scenario_id
@@ -27,6 +28,7 @@ class Views::Plans::BudgetLineForm < Views::Base
     @countries = countries
     @budget_line_id = budget_line_id
     @error = error
+    @money = money
   end
 
   def view_template
@@ -61,7 +63,7 @@ class Views::Plans::BudgetLineForm < Views::Base
     action = @budget_line_id ? update_budget_line_plan_path(plan_id, budget_line_id: @budget_line_id) : create_budget_line_plan_path(plan_id)
     form(action:, method: "post", class: "space-y-4", id: "budget-line-form") do
       hidden_fields(@budget_line_id && "patch")
-      line_fields(@values, roles: @roles, countries: @countries)
+      line_fields(@values, roles: @roles, countries: @countries, money: @money)
       div(class: "flex flex-wrap justify-end gap-2") do
         render Components::Kit::Button.new(variant: :outline, href: back_path) { "Cancel" }
         render Components::Kit::Button.new(tone: :brand, type: :submit, id: "budget-line-save") { @budget_line_id ? "Save the line" : "Add the line" }

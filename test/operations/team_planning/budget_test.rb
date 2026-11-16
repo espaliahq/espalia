@@ -36,12 +36,20 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
 
   def refusal(&) = assert_raises(Operations::Base::ParameterError, &).message
 
+  # Keys down to each figure; a currency map or a list of currencies is a figure.
+  def shape(value)
+    case value
+    when Hash then value.any? && value.keys.all?(Symbol) ? value.transform_values { shape(it) } : nil
+    when Array then value.any? && value.all?(Hash) ? value.map { shape(it) } : nil
+    end
+  end
+
   # Q1 holds 90 of the year's 365 days, so the line approves 36,000 and the
   # half-time seat costs 9,000.
-  should "give a member the four numbers per line, cost centre and unit, each on the stated basis" do
-    read = budget(as: @viewer)
+  should "give a member who may see pay the four numbers per line, cost centre and unit, each on the stated basis" do
+    read = budget
 
-    assert_equal [ @plan_id, @q1, "inclusive", "band_midpoints", "EUR" ], read.values_at(:plan_id, :scenario_id, :basis, :pay_view, :reference_currency)
+    assert_equal [ @plan_id, @q1, "inclusive", "band_ranges", "EUR", true ], read.values_at(:plan_id, :scenario_id, :basis, :pay_view, :reference_currency, :money)
     assert_equal({ budget_line_id: @platform.id, cost_centre: "Platform", currency: "EUR",
                    approved: { amount: "36000", head_count: "2" }, funded: { native: { "EUR" => "9000" }, positions: 1, fte: "0.5" },
                    remaining: { amount: "27000", head_count: "1.5" }, mismatched_currencies: [],
@@ -58,6 +66,26 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal({ native: {}, converted: "0", missing: [] }, read[:forecast], "the forecast is scenario-wide, so it converts")
     assert_equal [ [ nil, "9000", 1 ] ], read[:units].map { [ it[:unit_id], it[:funded][:native]["EUR"], it[:funded][:positions] ] }, "a unit the map doesn't hold is no unit, as in the cost read"
     assert_empty read[:unpriced]
+  end
+
+  # A budget amount is pay ([#367](https://github.com/espaliahq/espalia/issues/367)).
+  should "give a member without the see-pay right every head count and no money, in the same shape" do
+    read = budget(as: @viewer)
+    holder = budget
+
+    assert_equal false, read[:money]
+    assert_equal({ budget_line_id: @platform.id, cost_centre: "Platform", currency: nil,
+                   approved: { amount: nil, head_count: "2" }, funded: { native: nil, positions: 1, fte: "0.5" },
+                   remaining: { amount: nil, head_count: "1.5" }, mismatched_currencies: [],
+                   over: { money: nil, heads: false, mismatched_currencies: [] } }, read[:budget_lines].sole)
+    assert_equal({ native: nil, converted: nil, missing: nil, positions: 1, fte: "0.5" }, read[:total][:funded])
+    assert_equal({ native: nil, converted: nil, missing: nil, head_count: "1.5", left_out: { mismatched_currencies: [] } }, read[:total][:remaining])
+    assert_equal({ native: nil, positions: 1, fte: "0.5" }, read[:cost_centres].sole[:funded])
+    assert_equal({ native: nil, positions: 1, fte: "0.5" }, read[:units].sole[:funded])
+    assert_equal({ native: nil, converted: nil, missing: nil }, read[:forecast])
+    assert_equal shape(holder), shape(read), "only values differ, never keys"
+    figures = read.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+    [ "36000", "27000", "9000" ].each { assert_not_includes figures, it }
   end
 
   should "follow the budget_basis rule" do
