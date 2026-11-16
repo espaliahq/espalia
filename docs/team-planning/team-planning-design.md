@@ -739,6 +739,41 @@ on-cost on top.
   walks every plan read as a viewer and as an editor without the right, then checks the
   log, the read models and the event store for the amount in clear.
 
+### Uploading actual pay as built
+
+An editor with the see-pay right can hold pay for many people at once from a CSV file
+([#323](https://github.com/espaliahq/espalia/issues/323)), from "Upload pay…" on the map.
+`Operations::TeamPlanning::UploadActualPay` takes the file's text, one basis for every row,
+and a scenario. `TeamPlanning::PayUpload` reads and matches the file in memory.
+
+- **Columns.** `person`, `amount`, `currency` and `period`, in any order and any case.
+  Other columns are ignored. A person is tried as their Espalia id, then their HRIS
+  employee id, then their work email or their account's email, case-insensitively. Up to
+  5,000 rows and 1 MB.
+- **Preview, then confirm.** Without a signature the operation previews. It counts the
+  rows, the people matched, the seats moving from midpoints to actual pay, the seats whose
+  pay changes, those already held as the file has it, and the people on the map the file
+  leaves out. It returns an HMAC over the file, basis, scenario and the person each row
+  named, keyed per plan. The confirm sends the same file again with that signature, and
+  any changed byte refuses it. The confirm checks the file again against the scenario and
+  the plan's scope as they stand once the plan is locked. It refuses the file if a row no
+  longer names one person on the map, or names someone other than the preview showed.
+  Nothing is stored between the two calls.
+- **All rows or none.** One bad row holds nothing. Each bad row is reported as its line
+  number and reason codes, never its values, since the uploader has the file. The number is
+  the line the row starts on, so a quoted field across lines shifts nothing after it. Each good row
+  is one `data:pay` change with the note "From an upload". A row matching what the scenario
+  already holds writes nothing, so confirming twice writes once.
+- **Refusals.** A non-holder, a viewer and someone outside the plan all get "No such plan".
+  The page and both posts answer them with the same 404.
+- **Where the file never goes.** `file` and `csv` are filtered from the log.
+  The preview carries counts and names, never an amount. A parse failure gives a line
+  number, never the line: the line its record starts on, counting `\r`, `\n` and `\r\n`
+  alike.
+- **Web only.** The operation declares `mcp false`. An MCP client would hand the file's
+  pay to a model in clear, so a tool waits for its own design. `team_planning_set_actual_pay`
+  still holds one person's pay over MCP.
+
 ### Clearing and pinning
 
 `ChangeCleared` hands one facet of one subject back to the scenario's parent. The aggregate
