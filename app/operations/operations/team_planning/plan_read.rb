@@ -29,7 +29,7 @@ module Operations::TeamPlanning::PlanRead
     return { checked: true } unless plan.archived?
 
     { checked: false, archived_on: plan.archived_on.iso8601,
-      note: "This plan was archived on #{plan.archived_on.iso8601}, so it stopped being checked against the " \
+      note: "This plan was archived on #{plan.archived_on.strftime("%-d %B %Y")}, so it stopped being checked against the " \
             "organisation that day. Restore it to check it again." }
   end
 
@@ -39,7 +39,7 @@ module Operations::TeamPlanning::PlanRead
     return {} unless plan.archived?
 
     { archived_on: plan.archived_on.iso8601,
-      note: "This plan was archived on #{plan.archived_on.iso8601}. Its figures still use today's pay bands, " \
+      note: "This plan was archived on #{plan.archived_on.strftime("%-d %B %Y")}. Its figures still use today's pay bands, " \
             "exchange rates, budget lines and rules." }
   end
 

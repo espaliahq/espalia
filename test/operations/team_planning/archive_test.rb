@@ -46,7 +46,7 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
 
   should "say it was not checked rather than list nothing" do
     unchecked = { checked: false, archived_on: "2026-03-12",
-                  note: "This plan was archived on 2026-03-12, so it stopped being checked against the organisation that day. " \
+                  note: "This plan was archived on 12 March 2026, so it stopped being checked against the organisation that day. " \
                         "Restore it to check it again." }
 
     assert_equal({ plan_id: @plan_id, **unchecked, changes: [], names: {} }, call(Operations::TeamPlanning::Drift, plan_id: @plan_id))
@@ -58,7 +58,7 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
   end
 
   should "say its figures still use today's bands, rates and rules" do
-    note = "This plan was archived on 2026-03-12. Its figures still use today's pay bands, exchange rates, budget lines and rules."
+    note = "This plan was archived on 12 March 2026. Its figures still use today's pay bands, exchange rates, budget lines and rules."
 
     [ [ Operations::TeamPlanning::Cost, @q1 ], [ Operations::TeamPlanning::Capacity, @q1 ], [ Operations::TeamPlanning::Forecast, @q1 ],
       [ Operations::TeamPlanning::Budget, @q1 ], [ Operations::TeamPlanning::Funding, @q1 ], [ Operations::TeamPlanning::BudgetLines, @q1 ],
