@@ -133,6 +133,17 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
                                      "or add its table to STRUCTURE if it says who is where rather than what anything costs"
   end
 
+  should "reveal the frozen copy once per read, however many scenarios and currencies it prices" do
+    key_reads = 0
+    watch = ->(*, payload) { key_reads += 1 if payload[:sql].include?("plan_encryption_keys") }
+    ActiveSupport::Notifications.subscribed(watch, "sql.active_record") do
+      operation(Operations::TeamPlanning::ScenarioCosts, scenario_id: nil)
+      operation(Operations::TeamPlanning::Budget)
+    end
+
+    assert_equal 1, key_reads
+  end
+
   should "read a frozen copy only until the plan is restored, and take a fresh one when it is archived again" do
     as_tenant(&changes.fetch("a band's figures"))
     assert_equal 100_000, e5_midpoint

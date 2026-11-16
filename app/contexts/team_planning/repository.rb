@@ -62,8 +62,12 @@ class TeamPlanning::Repository
   def prices_frozen(plan_id)
     last = @event_store.read.stream(EventStreamNaming.plan_stream(plan_id)).backward
                        .of_type([ TeamPlanning::Events::PlanPricesFrozen, TeamPlanning::Events::PlanRestored ]).first
-    inputs = last.data[:inputs] if last.is_a?(TeamPlanning::Events::PlanPricesFrozen)
-    inputs.reveal unless inputs.nil? || inputs.removed?
+    return unless last.is_a?(TeamPlanning::Events::PlanPricesFrozen)
+
+    CurrentPlanReads.copy(last.event_id) do
+      inputs = last.data[:inputs]
+      inputs.reveal unless inputs.nil? || inputs.removed?
+    end
   end
 
   # The aggregate never holds a shreddable value, so its changes come

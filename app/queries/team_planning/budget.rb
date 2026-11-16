@@ -132,6 +132,7 @@ class TeamPlanning::Budget
     @period = funding.period
     @reference = cost.reference_currency
     @factors = {}
+    @inputs = TeamPlanning::PricingInputs.for(@plan, repository: @repository)
     @inclusive = TeamPlanning::RuleKinds::BudgetBasis.inclusive?(funding.map.rule(TeamPlanning::RuleKinds::BudgetBasis.rule_name))
     @strictness = funding.strictness
     @funded = funding.positions.index_by { it.position.id }
@@ -305,7 +306,7 @@ class TeamPlanning::Budget
   end
 
   def factor(currency)
-    @factors[currency] ||= TeamPlanning::PricingInputs.for(@plan, repository: @repository).factor(from: currency, to: @reference, on: @period.begin)
+    @factors[currency] ||= @inputs.factor(from: currency, to: @reference, on: @period.begin)
   rescue ExchangeRate::MissingRate => e
     @factors[currency] = e.message
   end
