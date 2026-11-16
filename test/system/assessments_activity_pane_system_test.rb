@@ -595,14 +595,16 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
 
     should "close the overlay on Back when the page opens with it up from the URL" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      visit assessments_path
-      assert_text "My Assessments"
-      visit assessment_path(@assignment, activity: "open")
-      wait_for_stimulus "activity-pane"
-      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      in_a_fresh_tab do
+        visit assessments_path
+        assert_text "My Assessments"
+        visit assessment_path(@assignment, activity: "open")
+        wait_for_stimulus "activity-pane"
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
 
-      back_until_pane_closes
-      assert_back_on_opening_entry
+        back_until_pane_closes
+        assert_back_on_opening_entry
+      end
     end
 
     should "close the overlay on Back when the page opens with it up from the cookie" do
