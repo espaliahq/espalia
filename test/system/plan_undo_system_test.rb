@@ -102,14 +102,14 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
         assert_plan_holds_position(false)
       end
 
-      should "show the operation's own words when an undo is refused" do
+      should "change nothing when someone else changed the plan after the page loaded" do
         sign_in_as(@planner.user)
         visit map_plan_path(@plan_id, scenario: @year)
         assert_selector UNDO
         call(Operations::TeamPlanning::SetPosition, @editor, plan_id: @plan_id, scenario_id: @year, position_id: @position_id, role_id: @role_id,
                                                              level_id: @level_id, unit_id: @payments, fte: 1.0, basis: "new")
 
-        click_selector_with_js_fallback(UNDO, expect_text: "Couldn't undo:")
+        click_selector_with_js_fallback(UNDO, expect_text: "The page was out of date, so nothing changed.")
         assert_plan_holds_position(true, total: "EUR 300k")
       end
 
@@ -138,13 +138,13 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
     end
   end
 
-  should "never push the tabs onto another line, at 1024 and 1280 pixels" do
+  should "never push the tabs onto another line, on a phone or at 1024 and 1280 pixels" do
     call(Operations::TeamPlanning::SetPlannedLevel, @planner, plan_id: @plan_id, scenario_id: @year, person_id: @bo.id, level: "6")
     call(Operations::TeamPlanning::UndoChange, @planner, plan_id: @plan_id, scenario_id: @year)
     sign_in_as(@planner.user)
 
-    [ 1024, 1280 ].product([ map_plan_path(@plan_id, scenario: @year), changes_plan_path(@plan_id, scenario: @year) ]).each do |width, path|
-      page.driver.browser.manage.window.resize_to(width, 900)
+    [ MOBILE_SIZE, [ 1024, 900 ], [ 1280, 900 ] ].product([ map_plan_path(@plan_id, scenario: @year), changes_plan_path(@plan_id, scenario: @year) ]).each do |(width, height), path|
+      page.driver.browser.manage.window.resize_to(width, height)
       visit path
       assert_selector "#{REDO}[aria-label='Redo: Bo Quill · Level']"
       assert_selector "#{UNDO}[aria-label='Undo: Position']"

@@ -983,7 +983,8 @@ skips a pay change for a member without the see-pay right, offering their latest
 change or nothing. It offers nothing the operation would refuse, on scope or because a
 departure it brings back falls outside its step's dates. Viewers, Today, frozen plans and
 archived plans get neither. The name shows beside the arrow only when the tab strip has
-room for it, so the tabs never wrap; a screen reader always hears it in full. A button
+room for it, so the tabs never wrap; a screen reader always hears it in full. On a phone
+the buttons take a row of their own above the tabs. A button
 pressed on a page that has fallen out of date changes nothing and reloads the page.
 
 Each row of the Changes tab that `team_planning_status` marks `clearable` carries Clear,

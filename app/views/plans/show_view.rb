@@ -186,11 +186,12 @@ class Views::Plans::ShowView < Views::Base
 
   def tab_strip(panel)
     if tabs.size > 1
-      div(class: "@container mb-4 flex items-end gap-3 border-b border-default") do
+      div(class: "@container mb-4 flex flex-wrap items-end gap-x-3 border-b border-default") do
         nav(aria: { label: "Plan views" }, class: "min-w-0 flex-1") do
           div(class: "-mb-px flex flex-wrap gap-x-1") { tabs.each { tab(it) } }
         end
-        div(class: "flex shrink-0 items-center gap-1 pb-1.5") do
+        # On a phone the controls take a row above the tabs, so they never push a tab onto another line.
+        div(class: "order-first flex w-full shrink-0 items-center justify-end gap-1 sm:order-none sm:w-auto sm:pb-1.5") do
           undo_controls
           panel.toggle
         end
