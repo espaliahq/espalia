@@ -188,7 +188,7 @@ class PlansController < ApplicationController
   end
 
   def split_page(plan, draft: {}, error: nil)
-    scenario_id = params.expect(:scenario_id)
+    scenario_id = params.expect(:scenario_id).downcase
     needs = Operations::TeamPlanning::SplitNeeds.call(context: pundit_user, params: { plan_id: plan[:plan_id], scenario_id: })
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     scenario = scenarios.find { it[:scenario_id] == scenario_id }

@@ -156,6 +156,13 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_select "button[type='submit']", text: "Split off 1 change"
     end
 
+    should "open the page from a link that names the scenario in capitals" do
+      get split_plan_path(@plan_id, scenario_id: @q1.upcase)
+
+      assert_response :success
+      assert_select "h3", text: "Split Q1 hires"
+    end
+
     should "refuse a change that is no longer in the scenario, keep the choice and split nothing" do
       stale = SecureRandom.uuid_v7
       scenarios = -> { ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).count } }
