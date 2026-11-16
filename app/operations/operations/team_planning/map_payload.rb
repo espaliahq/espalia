@@ -89,7 +89,8 @@ module Operations::TeamPlanning::MapPayload
     map.positions.map do |position|
       held = by_position.fetch(position.id, [])
       occupants = held.map { |person, place| { person_id: person.id, allocation: place.allocation, role: place.role } }
-      { position_id: position.id, **position.to_h.except(:id), budget: position.budget, occupants:, open_fte: map.open_fte(position, held),
+      { position_id: position.id, **position.to_h.except(:id, :target_start, :opened_on, :vacated), target_start: position.target_start&.iso8601,
+        opens_on: position.opened_on&.iso8601, budget: position.budget, occupants:, open_fte: map.open_fte(position, held),
         backfill_for_ids: backfills.fetch(position.id, []) }
     end
   end

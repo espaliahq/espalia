@@ -108,7 +108,26 @@ class TeamPlanning::Resolution
     base = (@base || @baseline.structure).with(step_ids: step_of(aggregate))
     hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
     map = (hires + others).reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
-    [ explained(map.settled), winning ]
+    [ explained(stepped(opened(map.settled, aggregate), aggregate)), winning ]
+  end
+
+  # Each position's open date: the first day of the earliest step in the
+  # chain that sets it since it last closed, or the base date when the plan's
+  # Today sets it. A seat open since before the plan began is never taken as
+  # already filled ([#458](https://github.com/espaliahq/espalia/issues/458)).
+  #
+  # @param aggregate [TeamPlanning::PlanAggregate]
+  # @param scenario_id [String] a scenario, or the plan's id for Today
+  # @return [Hash{String => Date}] by position id
+  def self.opened_on(aggregate, scenario_id)
+    aggregate.resolution_chain(scenario_id).each_with_object({}) do |id, opened|
+      aggregate.changes_in(id).each do |change|
+        case change
+        when TeamPlanning::Events::PositionSet then opened[change.data[:subject_id]] ||= aggregate.period_of(id)&.begin || aggregate.base_on
+        when TeamPlanning::Events::PositionClosed then opened.delete(change.data[:subject_id])
+        end
+      end
+    end
   end
 
   # @param map [TeamPlanning::Baseline::Map]
@@ -142,6 +161,32 @@ class TeamPlanning::Resolution
     before = aggregate.timeline_path(@scenario_id)[-2]
     step = before ? chain.drop(chain.index(before) + 1) : chain
     (step + aggregate.resting_on(@scenario_id)).uniq
+  end
+
+  # A leaver gone in an earlier step leaves their share of the backfill open
+  # from the day after they left, or the first day of the step they left in
+  # when the plan gave no date, never before the position opened. The rest
+  # of the position opens with it. A leaver still on this step's map holds
+  # their own seat, and cost opens it the day after they go.
+  def opened(map, aggregate)
+    return map if map.positions.empty?
+
+    dates = self.class.opened_on(aggregate, @scenario_id)
+    gone = map.departed.select(&:position_id).group_by(&:position_id)
+    map.with(positions: map.positions.map do |position|
+      opened_on = dates.fetch(position.id, aggregate.base_on)
+      vacated = gone.fetch(position.id, []).map do |leaver|
+        left = TeamPlanning::Events::DepartureSet.leaving_date(leaver.leaves_on)&.next_day || aggregate.period_of(leaver.leaves_in_id)&.begin
+        TeamPlanning::Baseline::Vacated.new(fte: leaver.fte, opens_on: [ left, opened_on ].compact.max)
+      end
+      position.with(opened_on:, vacated:)
+    end)
+  end
+
+  # Today runs for a year from the base date, as its run rate does.
+  def stepped(map, aggregate)
+    period = TeamPlanning::FiguredPeriod.for(aggregate, @scenario_id, map)&.period || TeamPlanning::Cost.year_from(aggregate.base_on)
+    map.with(step: period)
   end
 
   # A person off the map either left by the base date, or was forgotten, or

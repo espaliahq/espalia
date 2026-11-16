@@ -45,7 +45,7 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
     @year = operation(Operations::TeamPlanning::ForkScenario, parent_id: @plan_id, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
     operation(Operations::TeamPlanning::SetDeparture, scenario_id: @year, person_id: @brook.id)
     operation(Operations::TeamPlanning::SetPosition, scenario_id: @year, role_id: @e5.role_id, level_id: @e5.level_id,
-                                                     unit_id: @engineering, fte: 1, basis: "new")
+                                                     unit_id: @engineering, fte: 1, basis: "new", target_start: "2026-01-01")
   end
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
@@ -68,7 +68,7 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
 
   def position(unit_id, level: @e5)
     operation(Operations::TeamPlanning::SetPosition, scenario_id: @year, role_id: level.role_id, level_id: level.level_id,
-                                                     unit_id:, fte: 1, basis: "new")[:position_id]
+                                                     unit_id:, fte: 1, basis: "new", target_start: "2026-01-01")[:position_id]
   end
 
   def plan = TeamPlanningPlan.find(@plan_id)
