@@ -146,6 +146,26 @@ class Operations::TeamPlanning::CapacityTest < ActiveSupport::TestCase
     assert_equal TeamPlanning::Capacity::REASONS["no_model"], result[:unclassified].first[:reason_text]
   end
 
+  should "show a level the plan cleared to follow the Org Graph as unresolved, while the baseline still counts it" do
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "capacity_model",
+                                            value: { families: { @family.role_family_id => { model: "units" } } })
+    year = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+    people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: year, person_id: @ada.id, level: "4")
+    travel_to Time.utc(2026, 3, 10, 9)
+    ActsAsTenant.with_tenant(@tenant) { people.change_level(@ada.id, "6", provider: "espalia", effective_on: "2026-03-10") }
+    call(Operations::TeamPlanning::RebasePlan, plan_id: @plan_id, base_on: "2026-03-02")
+    travel_to Time.utc(2026, 3, 11, 9)
+    ActsAsTenant.with_tenant(@tenant) { people.change_level(@ada.id, nil, provider: "espalia", effective_on: "2026-03-11") }
+    call(Operations::TeamPlanning::SettleConflict, plan_id: @plan_id, scenario_id: year, subject_id: @ada.id, facet: "level", choice: "reality")
+
+    place = ->(scenario_id) { call(Operations::TeamPlanning::Capacity, plan_id: @plan_id, scenario_id:)[:seats].find { it[:seat_id] == @ada.id }[:places].first }
+    assert_equal [ @engineer.role_id, nil, "units", "no_level" ], place.call(year).values_at(:role_id, :level_id, :model, :reason)
+    assert_equal [ @e5.level_id, nil ], place.call(@plan_id).values_at(:level_id, :reason)
+    assert_equal [ [ @ada.id, "no_level" ] ],
+                 call(Operations::TeamPlanning::Capacity, plan_id: @plan_id, scenario_id: year)[:unclassified].map { it.values_at(:seat_id, :reason) }
+  end
+
   should "refuse a scenario the plan doesn't have, and a caller who isn't in the plan, as the web and MCP both see it" do
     assert_raises(Operations::Base::ParameterError) do
       call(Operations::TeamPlanning::Capacity, plan_id: @plan_id, scenario_id: SecureRandom.uuid_v7)

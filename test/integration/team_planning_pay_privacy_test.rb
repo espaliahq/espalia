@@ -119,6 +119,35 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         end
       end
     end
+
+    # Attrition at 10% a year with 73 days to hire leaves 616.85/365 empty
+    # FTE-days in Q1's 121, priced at the caller's average for the seat.
+    should "price attrition at the midpoint without the right and from actual pay with it, still adding up to each member's total" do
+      call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @plan_id, rule: "attrition", value: { "yearly_rate" => "0.1" })
+      call(Operations::TeamPlanning::SetRule, @holder, plan_id: @plan_id, scenario_id: @plan_id, rule: "time_to_hire", value: { "days" => "73" })
+      empty = Rational(61_685, 100 * 365) / 365
+      derived = BigDecimal(Integer(AMOUNT) * empty, 20).to_s("F")[0, 5]
+
+      { @plan_id => Rational(1), @q1 => Rational(121, 365) }.each do |scenario_id, share|
+        { @editor => 100_000, @viewer => 100_000, @holder => Integer(AMOUNT) }.each do |account, yearly|
+          who = "#{account == @holder ? 'holder' : 'non-holder'} in #{scenario_id == @plan_id ? 'Today' : 'Q1'}"
+          attrition = scenario_id == @q1 ? -yearly * empty : 0
+          cost = call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id:)
+          forecast = call(Operations::TeamPlanning::Forecast, account, plan_id: @plan_id, scenario_id:)
+          hiring = scenario_id == @q1 ? 1000 : 0
+
+          assert_split(cost[:total], (yearly * share) + hiring + attrition, who)
+          assert_in_delta hiring + attrition, forecast[:rows].sum { BigDecimal(it[:cost]["AUD"]) }, 1e-6, who
+          next unless scenario_id == @q1
+
+          if account == @holder
+            assert_includes forecast.to_json, derived, who
+          else
+            [ cost, forecast ].each { assert_not_includes it.to_json, derived, who }
+          end
+        end
+      end
+    end
   end
 
   should "move a pay change across a split with its value still sealed and read by holders alone" do
@@ -133,6 +162,29 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     [ agreed, @q1 ].each { assert_no_pay_read(it) }
     assert_not_includes @log.string, AMOUNT
     assert_not_includes event_store_text, AMOUNT
+  end
+
+  should "list a pay change to an editor without the right by its facet alone, and let them split it across sealed" do
+    q1_amount = "57203"
+    hold_pay(@q1, @ada, q1_amount, "full_time")
+    moved = call(Operations::TeamPlanning::History, @holder, plan_id: @plan_id, scenario_id: @q1)[:entries].select { it[:facet] == "data:pay" }.last[:event_id]
+    call(Operations::TeamPlanning::SetPlannedLevel, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "4")
+    needs = call(Operations::TeamPlanning::SplitNeeds, @editor, plan_id: @plan_id, scenario_id: @q1)
+    pay = needs[:changes].find { it[:facet] == "data:pay" }
+
+    assert_equal({ event_id: moved, subject_id: @ada.id, facet: "data:pay", needs: [] }, pay)
+    assert_not_includes needs.to_json, q1_amount
+
+    split = call(Operations::TeamPlanning::SplitScenario, @editor, plan_id: @plan_id, scenario_id: @q1, event_ids: [ moved ], name: "Agreed")
+
+    assert_includes split[:moved_event_ids], moved
+    assert_not_includes split.to_json, q1_amount
+    agreed = call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: split[:agreed_id]).to_json
+    assert_includes agreed, q1_amount
+    assert_not_includes agreed, AMOUNT
+    assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: @plan_id).to_json, AMOUNT
+    [ split[:agreed_id], @q1, @plan_id ].each { assert_no_pay_read(it, amounts: [ AMOUNT, q1_amount ]) }
+    assert_not_includes @log.string, q1_amount
   end
 
   should "read pay as its field alone where an override inherits it off the parent's map, to a holder too" do

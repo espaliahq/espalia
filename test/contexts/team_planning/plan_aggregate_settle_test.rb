@@ -80,6 +80,29 @@ class TeamPlanning::PlanAggregateSettleTest < ActiveSupport::TestCase
     assert_empty @plan.carried_conflicts(@lean)
   end
 
+  should "keep a scenario's own pin as a pin, still naming the change the first pin kept" do
+    set(@q1, "Staff")
+    kept = [ @q1, winning(@q1).event_id ]
+    @plan.pin_change(TitleSet, scenario_id: @lean, subject_id: "lin", facet: "title", end_state: { title: "Staff" },
+                               pinned_by_id: @ada_id, pinned_from: kept)
+    carry(@lean)
+    settle(@lean, "plan", "Staff", pinned_from: [ @q1, winning(@lean).event_id ])
+
+    assert_kind_of TeamPlanning::Events::ChangePinned, last_event
+    assert_equal kept, last_event.data.values_at(:pinned_from_scenario_id, :pinned_from_event_id)
+    assert_equal({ since: "2027-02-01", choice: "plan" }, last_event.data[:settles])
+    assert_empty @plan.carried_conflicts(@lean)
+  end
+
+  should "keep a scenario's own pin of the baseline as a pin of the baseline" do
+    @plan.pin_change(TitleSet, scenario_id: @q1, subject_id: "lin", facet: "title", end_state: { title: "Staff" }, pinned_by_id: @ada_id)
+    carry(@q1)
+    settle(@q1, "plan", "Staff")
+
+    assert_kind_of TeamPlanning::Events::ChangePinned, last_event
+    assert_equal [ nil, nil ], last_event.data.values_at(:pinned_from_scenario_id, :pinned_from_event_id)
+  end
+
   should "follow reality in the scenario alone, leaving the one that made the change and its siblings as they were" do
     set(@q1, "Staff")
     carry(@lean, @bold)

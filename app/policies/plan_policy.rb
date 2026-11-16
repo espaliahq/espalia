@@ -75,6 +75,11 @@ class PlanPolicy < ApplicationPolicy
   # @return [Boolean]
   def manage_see_pay? = see_pay?
 
+  # Whether the caller may hold actual pay from a file
+  # ([#323](https://github.com/espaliahq/espalia/issues/323)): an editor with the see-pay right.
+  # @return [Boolean]
+  def upload_pay? = editor? && see_pay?
+
   # Whether this plan is locked out of pay and the caller may restore it
   # unread. A frozen plan has no editor to restore it to.
   # @return [Boolean]

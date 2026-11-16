@@ -59,6 +59,7 @@ class PlansController < ApplicationController
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
     render plan_page(plan, scenarios:, open_tab: :map,
                            body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
+                                                               can_upload_pay: policy_for(@plan_record).upload_pay?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
 
@@ -139,7 +140,115 @@ class PlansController < ApplicationController
     redirect_to changes_plan_path(plan[:plan_id]), alert: "Couldn't update to today: #{e.message}"
   end
 
+  # GET /planning/:id/scenarios/:scenario_id/split
+  #
+  # The changes a scenario makes, to choose the agreed part from, with what
+  # each can't go across without ([#360](https://github.com/espaliahq/espalia/issues/360)).
+  def split
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
+    render split_page(plan)
+  rescue Operations::Base::ParameterError => e
+    redirect_to plan_path(plan[:plan_id]), alert: "Can't split this scenario: #{e.message}"
+  end
+
+  # POST /planning/:id/scenarios/:scenario_id/split
+  #
+  # A refusal shows the page again with the choice kept and the operation's
+  # reason, so the editor can add what a change needs.
+  def split_scenario
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    draft = { event_ids: Array(params[:event_ids]).compact_blank, name: params[:name].to_s }
+    result = Operations::TeamPlanning::SplitScenario.call(context: pundit_user,
+                                                          params: { plan_id: plan[:plan_id], scenario_id: params.expect(:scenario_id), **draft })
+    count = (draft[:event_ids] & result[:moved_event_ids]).size
+    redirect_to timeline_plan_path(plan[:plan_id], scenario: result[:agreed_id], step: split_step(result)),
+                notice: "Split #{count} #{'change'.pluralize(count)} off into #{result[:name]}."
+  rescue Operations::Base::ParameterError => e
+    refused = -> { redirect_to plan_path(plan[:plan_id]), alert: "Couldn't split the scenario: #{e.message}" }
+    return refused.call unless can_edit?
+
+    begin
+      render split_page(plan, draft:, error: e.message), status: :unprocessable_content
+    rescue Operations::Base::ParameterError
+      refused.call
+    end
+  end
+
+  # GET /planning/:id/pay-upload?scenario=:scenario_id
+  #
+  # A file of actual pay to preview, then hold ([#323](https://github.com/espaliahq/espalia/issues/323)).
+  # Anyone but an editor with the see-pay right gets the same 404 as someone outside the plan.
+  def pay_upload
+    plan = pay_uploader_plan
+    render pay_upload_page(plan, scenario_id: params[:scenario].presence || plan[:plan_id])
+  end
+
+  # POST /planning/:id/pay-upload
+  #
+  # Previews into the page's frame, or, with the preview's signature and the
+  # same file, holds the pay and returns to the map. The file is read here
+  # and never kept: its tempfile goes at the end of the request.
+  def upload_pay
+    plan = pay_uploader_plan
+    upload = params.permit(:scenario_id, :basis, :signature, :intent)
+    scenario_id = upload[:scenario_id].presence || plan[:plan_id]
+    return render(pay_upload_page(plan, scenario_id:, basis: upload[:basis], error: "Choose a file to upload."), status: :unprocessable_content) unless params[:file].respond_to?(:read)
+    return render(pay_upload_page(plan, scenario_id:, error: "Say what the amounts are, actual or full-time pay."), status: :unprocessable_content) if upload[:basis].blank?
+
+    csv = params[:file].read(TeamPlanning::PayUpload::MAX_BYTES + 1).to_s
+    signature = upload[:signature].presence if upload[:intent] == "confirm"
+    result = Operations::TeamPlanning::UploadActualPay.call(context: pundit_user, params: { plan_id: plan[:plan_id], scenario_id:, basis: upload[:basis], csv:, signature: }.compact)
+    return render(pay_upload_page(plan, scenario_id:, basis: upload[:basis], preview: result)) unless signature
+
+    redirect_to map_plan_path(plan[:plan_id], scenario: (scenario_id unless scenario_id == plan[:plan_id])), notice: pay_held(result)
+  rescue Operations::Base::ParameterError => e
+    render pay_upload_page(plan, scenario_id:, basis: upload[:basis], error: "Couldn't hold the pay: #{e.message}."), status: :unprocessable_content
+  end
+
   private
+
+  # The column a phone opens on: the agreed part shares one with the rest.
+  # The split has already happened, so a failed read lands on the timeline's first column rather than a 404.
+  def split_step(result)
+    halves = result.values_at(:agreed_id, :scenario_id)
+    read(Operations::TeamPlanning::Timeline, scenario_id: result[:agreed_id])[:columns]
+      .index { ([ it[:scenario_id] ] + it[:alternative_ids]).intersect?(halves) }
+  rescue ActiveRecord::RecordNotFound
+    nil
+  end
+
+  def split_page(plan, draft: {}, error: nil)
+    scenario_id = params.expect(:scenario_id).downcase
+    needs = Operations::TeamPlanning::SplitNeeds.call(context: pundit_user, params: { plan_id: plan[:plan_id], scenario_id: })
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario = scenarios.find { it[:scenario_id] == scenario_id }
+    plan_page(plan, scenarios:, open_tab: :scenarios,
+                    body: Views::Plans::SplitScenario.new(plan:, scenario:, needs:, draft:, error:))
+  end
+
+  def pay_uploader_plan
+    plan = read(Operations::TeamPlanning::Plan)
+    @plan_record = TeamPlanningPlan.find(plan[:plan_id])
+    raise ActiveRecord::RecordNotFound, "No such plan" unless policy_for(@plan_record).upload_pay?
+
+    authorize @plan_record, :upload_pay?, policy_class: PlanPolicy
+    plan
+  end
+
+  def pay_upload_page(plan, scenario_id:, basis: nil, preview: nil, error: nil)
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    plan_page(plan, scenarios:, open_tab: :map,
+                    body: Views::Plans::PayUpload.new(plan:, scenarios:, scenario_id:, basis:, preview:, error:))
+  end
+
+  def pay_held(result)
+    written = result[:written]
+    return "Nothing to change: the plan already holds this pay." if written.zero?
+
+    "Held actual pay for #{written} #{written == 1 ? 'person' : 'people'}."
+  end
 
   # "Chosen units" with none ticked is a slip, not the whole organisation.
   def chosen_units(draft)
