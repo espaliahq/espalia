@@ -256,17 +256,15 @@ not a single arithmetic chain:
 | Step | What it removed | Edit-matrix frame |
 |---|---|---|
 | baseline (pre-#378) | — | **7,615,168 B** (gzip 311 KB) · 3,338 controller mounts · 3,206 `<form>` · 2,356 `<textarea>` · 888 `Kit::Dropdown` · 50,146 DOM nodes; one role toggle ≈8 s click→idle |
-| [#378](https://github.com/mr-yum/growth-os/pull/386) — expanded rows fetched on demand (Lesson 25) | the hidden expanded rows: **81%** of the payload | 1,460,574 B (gzip 95 KB) · 485 mounts · ≈1.2 s |
-| [#379](https://github.com/mr-yum/growth-os/pull/387) — one shared inline editor (Lessons 26–28) | 374 `<form>` + 374 `<textarea>` + their mounts | 1,222,619 B · 111 mounts |
-| [#380](https://github.com/mr-yum/growth-os/pull/388) — delegated kebabs, one hover cluster, an icon sprite (Lessons 29–31) | 38 dropdowns, 758 inline `<svg>` glyph definitions | ≈947,000 B · **0 mounts** |
-| [#381](https://github.com/mr-yum/growth-os/pull/389) — one write-response contract (§11b) | full-page reloads and whole-matrix re-fetches per write | frame unchanged; a write costs ~11 KB of stream instead of a 1,161,871 B reload |
-| [#383](https://github.com/mr-yum/growth-os/pull/393) — one fetch per burst, a 304 for a repeat, component classes (Lesson 33) | 52% of the `class` bytes; 4 of every 5 fetches in a filter burst | **907,516 B**, **54,656 B gzipped** · a repeat filter state is a 304 |
+| #378 — expanded rows fetched on demand (Lesson 25) | the hidden expanded rows: **81%** of the payload | 1,460,574 B (gzip 95 KB) · 485 mounts · ≈1.2 s |
+| #379 — one shared inline editor (Lessons 26–28) | 374 `<form>` + 374 `<textarea>` + their mounts | 1,222,619 B · 111 mounts |
+| #380 — delegated kebabs, one hover cluster, an icon sprite (Lessons 29–31) | 38 dropdowns, 758 inline `<svg>` glyph definitions | ≈947,000 B · **0 mounts** |
+| #381 — one write-response contract (§11b) | full-page reloads and whole-matrix re-fetches per write | frame unchanged; a write costs ~11 KB of stream instead of a 1,161,871 B reload |
+| #383 — one fetch per burst, a 304 for a repeat, component classes (Lesson 33) | 52% of the `class` bytes; 4 of every 5 fetches in a filter burst | **907,516 B**, **54,656 B gzipped** · a repeat filter state is a 304 |
 
 End to end: **7.6 MB → 907 KB uncompressed, 311 KB → 55 KB on the wire, 3,338
-Stimulus mounts → 0.** ([#382](https://github.com/mr-yum/growth-os/pull/398)
-and [#384](https://github.com/mr-yum/growth-os/pull/400) close the same review
-set — measured sticky offsets / on-grid focus, and the phone layout — and
-change no payload.)
+Stimulus mounts → 0.** (#382 and #384 close the same review set, measured sticky
+offsets / on-grid focus and the phone layout, and change no payload.)
 
 The remaining bulk is the content itself plus the shared editor's per-host
 `data-editor-*` contract (~175 KB), which buys the zero pre-rendered forms and
@@ -758,7 +756,7 @@ Removing a role binding through **Edit roles…** opens a draft, but the
 binding editor answers only its own frame, so the header showed no draft and
 no Publish button until a reload. An admin removed three bindings, saw them
 applied in the editor, and never published; the assessments kept showing the
-capabilities ([#496](https://github.com/mr-yum/growth-os/issues/496)). The
+capabilities. The
 levels editor's add row, a shape-changing approval and every MCP write had the
 same gap, and every *other* viewer's header was stale on all of them.
 

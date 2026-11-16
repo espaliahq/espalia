@@ -66,9 +66,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   end
 
   # One card, unrendered, built exactly as the matrix builds it: the
-  # level-chip swap renders all of it
-  # ([#488](https://github.com/mr-yum/growth-os/issues/488)), a cell comment
-  # only its thread and chip ([#625](https://github.com/mr-yum/growth-os/issues/625)).
+  # level-chip swap renders all of it, a cell comment only its thread and chip.
   #
   # @param stable_id [String]
   # @return [Views::Assessments::CapabilityCard, nil] nil when the matrix

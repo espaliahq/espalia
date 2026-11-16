@@ -3,8 +3,7 @@
 # The line under the header on a past cycle's page: which cycle this is, that
 # it ended, how far the alignment got, that the page is read-only, and the
 # way back to the open cycle. It stands in for the status pill, whose calls
-# to action belong to a cycle still running
-# (https://github.com/mr-yum/growth-os/issues/669).
+# to action belong to a cycle still running.
 class Views::Assessments::PastCycleBanner < Views::Base
   ID = "assessment-past-cycle-banner"
 

@@ -57,7 +57,7 @@ module Views::Assessments::Concerns::DefinedTerms
   end
 
   # Grey, never a state colour: a binding fact is a property of the
-  # framework, not a verdict on the person ([#431](https://github.com/mr-yum/growth-os/issues/431)).
+  # framework, not a verdict on the person.
   EMPHASIS_CHIP = Components::Kit::Badge.classes
 
   # @param weight [Numeric, nil]

@@ -172,8 +172,7 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
     message for this draft. Edits made to the draft between the request and
     the job running are published with it — the job re-checks the gate, so a
     newly retired capability without a mapping fails the publish and says so.
-  - **The review page says what the version changes**
-    ([#497](https://github.com/mr-yum/growth-os/issues/497)). "What changes
+  - **The review page says what the version changes.** "What changes
     in vN" lists every shape-changing difference between the draft and the
     published framework — capabilities and categories added or archived,
     roles a capability gains or loses, levels added or moved, expectations

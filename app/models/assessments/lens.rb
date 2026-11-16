@@ -14,8 +14,7 @@
 # the MCP payloads all read the same pair.
 #
 # A lens reads one cycle: the open one, or a past one named by `cycle_id`,
-# whose home is that cycle's enrollment snapshot. A past cycle is read-only
-# (https://github.com/mr-yum/growth-os/issues/669).
+# whose home is that cycle's enrollment snapshot. A past cycle is read-only.
 #
 # @example
 #   lens = Assessments::Lens.resolve(assignment: assignment, as_role: pm.role_id, as_level: 3)

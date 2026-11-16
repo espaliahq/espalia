@@ -4,8 +4,7 @@ require "test_helper"
 
 # `cycle_id` on the assessment read tools reads a past cycle as the web's
 # read-only page does: that cycle's ratings and score at its own role and
-# level, disclosed to the assessee only where alignment had started
-# (https://github.com/mr-yum/growth-os/issues/669).
+# level, disclosed to the assessee only where alignment had started.
 class Operations::Assessments::PastCycleReadTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
