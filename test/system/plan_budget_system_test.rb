@@ -59,6 +59,10 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       read_without_money
     end
 
+    should "let an editor without the see-pay right add and change lines by head count, and keep a priced line's form shut" do
+      edit_without_money
+    end
+
     should "tell a scoped plan's reader the totals cover only its lines, and show no other" do
       payments = SecureRandom.uuid_v7
       field_sales = nil
@@ -112,6 +116,10 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
       read_without_money
     end
 
+    should "let an editor without the see-pay right add and change lines by head count, and keep a priced line's form shut" do
+      edit_without_money
+    end
+
     should "add and change a line, split a position's funding, send it back to the derived line, then cut the line" do
       sign_in_as(@planner.user)
       visit budget_plan_path(@plan_id, scenario: @q1)
@@ -143,6 +151,36 @@ class PlanBudgetSystemTest < ApplicationSystemTestCase
     assert_equal [ "Head count 1", "2 positions, 2 FTE", "Head count -1", "0 positions, 0 FTE" ], all("[data-budget-total] dd").map(&:text)
     [ "EUR", "73,000", "No amount" ].each { assert_no_text it }
     assert_no_sideways_overflow
+  end
+
+  def edit_without_money
+    editor = ActsAsTenant.with_tenant(@tenant) { account(name: "Eli Editor") }
+    call(Operations::TeamPlanning::AddPlanMember, @planner, plan_id: @plan_id, person_id: editor.person_id, role: "editor")
+
+    sign_in_as(editor.user)
+    visit budget_plan_path(@plan_id, scenario: @q1)
+    assert_text "Budget on Q1 hires"
+    click_link_with_js_fallback("Add a line", expect_text: "Add a budget line to Q1 hires")
+    [ "budget-line-amount", "budget-line-currency", "budget-line-period" ].each { assert_no_field it }
+    js_fill_in "budget-line-starts-on", with: @line.starts_on.iso8601
+    js_fill_in "budget-line-ends-on", with: @line.ends_on.iso8601
+    js_fill_in "budget-line-head-count", with: "3"
+    js_fill_in "budget-line-cost-centre", with: "Support"
+    assert_no_sideways_overflow
+    click_button_with_js_fallback("Add the line", expect_text: "Budget line added.")
+    added = find("[data-budget-line]", text: "Cost centre Support")["data-budget-line"]
+
+    click_selector_with_js_fallback("a[href='#{edit_budget_line_plan_path(@plan_id, budget_line_id: @line.id, scenario: @q1)}']",
+                                    expect_text: "Changing this budget line needs the see-pay right.")
+    assert_no_selector "[data-budget-line-form]"
+
+    click_selector_with_js_fallback("a[href='#{edit_budget_line_plan_path(@plan_id, budget_line_id: added, scenario: @q1)}']",
+                                    expect_selector: "[data-budget-line-form='#{added}']")
+    assert_no_field "budget-line-amount"
+    js_fill_in "budget-line-head-count", with: "4"
+    click_button_with_js_fallback("Save the line", expect_text: "Budget line changed.")
+    within("[data-budget-line='#{added}']") { assert_text "Head count 4" }
+    [ "EUR", "73,000" ].each { assert_no_text it }
   end
 
   def add_and_change_lines

@@ -9,7 +9,9 @@ module Views::Tenant::BudgetLines::LineFields
   # @param values [Hash] what the form shows: a line's payload, or what was typed
   # @param roles [Array<FrameworkState::Role>] with their levels
   # @param countries [Array<String>]
-  def line_fields(values, roles:, countries:)
+  # @param money [Boolean] false leaves out amount, currency and period, which a member without the see-pay right
+  #   may not set ([#367](https://github.com/espaliahq/espalia/issues/367))
+  def line_fields(values, roles:, countries:, money: true)
     div(class: "grid gap-4 sm:grid-cols-2") do
       date_field(:starts_on, "Starts on", values)
       date_field(:ends_on, "Ends on", values)
@@ -24,7 +26,7 @@ module Views::Tenant::BudgetLines::LineFields
       end
       date_field(:approved_on, "Approved on", values, required: false, hint: "For a new position. Leave it blank if you don't know.")
     end
-    money_fields(values)
+    money ? money_fields(values) : div(class: "grid gap-4 sm:grid-cols-4") { text_field(:head_count, "Head count", values, inputmode: "decimal") }
     div(class: "grid gap-4 sm:grid-cols-2") do
       field("budget-line-position", "Role and level", hint: "Leave it as any role for a line not tied to one.") do
         position_select(values, roles)
