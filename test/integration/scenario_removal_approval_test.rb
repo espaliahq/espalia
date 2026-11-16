@@ -39,13 +39,13 @@ class ScenarioRemovalApprovalTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_includes response.body, "This scenario holds 1 change to pay or budget amounts you can&#39;t see."
-    assert_not_includes response.body, AMOUNT
+    assert_no_pay_figure response.body, AMOUNT
 
     post approve_mcp_approval_path(approval)
     assert_equal "approved", approval.reload.status
-    assert_not_includes approval.result_payload.to_json, AMOUNT
+    assert_no_pay_figure approval.result_payload, AMOUNT
     ActsAsTenant.with_tenant(@tenant) do
-      assert_includes call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: @plan_id).to_json, AMOUNT
+      assert_pay_figure call(Operations::TeamPlanning::ScenarioMap, @holder, plan_id: @plan_id, scenario_id: @plan_id), AMOUNT
     end
   end
 

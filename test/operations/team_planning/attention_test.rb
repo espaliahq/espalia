@@ -274,7 +274,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
 
     assert_equal [ idle, "budget_line", "Nothing in this scenario draws on it" ], row.values_at(:subject_id, :facet, :reason)
     assert_equal "Any role · Growth", read[:names][idle]
-    assert_not_includes read.to_json, "90000"
+    assert_no_pay_figure read, "90000"
   end
 
   should "refuse someone outside the plan, and a plan in another tenant" do
