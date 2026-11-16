@@ -49,8 +49,8 @@ class Plans::FundingsController < ApplicationController
   end
 
   def percent(part)
-    figure = BigDecimal(part) if part.match?(/\A\d{1,3}(\.\d{1,4})?\z/)
-    raise Operations::Base::ParameterError, "Each part is a percentage above 0 and at most 100, such as 50" unless figure&.between?(0.0001, 100)
+    figure = BigDecimal(part) if part.match?(/\A\d{1,3}(\.\d+)?\z/)
+    raise Operations::Base::ParameterError, "Each part is a percentage above 0 and at most 100, such as 50" unless figure&.positive? && figure <= 100
 
     figure
   end

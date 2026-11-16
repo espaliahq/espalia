@@ -61,6 +61,13 @@ class Plans::FundingsControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ [ @growth, "0.4" ], [ @platform, "0.6" ] ].sort, draws.sort
     end
 
+    should "save an unchanged share at its full precision" do
+      patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: { @platform => "33.333333", @growth => "66.666667" } } }
+
+      assert_equal "Funding set.", flash[:notice]
+      assert_equal [ [ @growth, "0.66666667" ], [ @platform, "0.33333333" ] ].sort, draws.sort
+    end
+
     should "hand the funding back to the line the plan finds" do
       patch plan_funding_path(@plan_id, @position), params: { scenario_id: @q1, funding: { parts: { @growth => "100" } } }
       delete plan_funding_path(@plan_id, @position), params: { scenario_id: @q1 }
