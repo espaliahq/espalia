@@ -443,7 +443,7 @@ class TeamPlanning::CommandHandler
   # @param scenario_id [String]
   # @param event_id [String, nil] the change's event id, from the scenario's history
   # @yieldparam plan [TeamPlanning::PlanAggregate] under the lock, once the actor may edit it
-  # @yieldparam restored [TeamPlanning::Events::Change, nil] the change undoing a clear brings back, nil for any other entry
+  # @yieldparam restored [TeamPlanning::Events::Change, nil] the scenario's own change in effect once the entry is undone
   # @return [String] the event id undone
   # @raise [TeamPlanning::Error] "No such plan" unless the actor is an editor; or if there is nothing to undo
   # @see TeamPlanning::PlanAggregate#undo_change
