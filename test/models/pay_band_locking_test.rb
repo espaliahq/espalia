@@ -36,7 +36,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
   should "stamp the tenant in the same transaction as the new order" do
     statements = []
     record = ->(*, payload) { statements << payload[:sql] }
-    ActiveSupport::Notifications.subscribed(record, "sql.active_record") { assert PayBand.reorder!(@bands.reverse.map(&:id)) }
+    ActiveSupport::Notifications.subscribed(record, "sql.active_record") { assert_equal true, PayBand.reorder!(@bands.reverse.map(&:id)) }
 
     stamped = statements.index { it.start_with?('UPDATE "tenants"') }
     assert_operator stamped, :<, statements.index { it.start_with?("COMMIT") }

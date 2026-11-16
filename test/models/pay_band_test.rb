@@ -136,7 +136,7 @@ class PayBandTest < ActiveSupport::TestCase
       role = band.tap(&:save!)
       assert_equal role, lookup.covering(@level.level_id, "Fixtureland")
 
-      assert PayBand.reorder!([ role.id, family.id ])
+      assert_equal true, PayBand.reorder!([ role.id, family.id ])
       assert_equal family, lookup.covering(@level.level_id, "Fixtureland")
       assert_equal role, lookup.covering(@level.level_id, "Testonia")
       assert_not PayBand.reorder!([ role.id ])
@@ -148,7 +148,7 @@ class PayBandTest < ActiveSupport::TestCase
       stamps = PayBand.order(:id).pluck(:updated_at)
 
       travel 1.day do
-        assert PayBand.reorder!([ role.id, family.id ])
+        assert_equal true, PayBand.reorder!([ role.id, family.id ])
         assert_equal stamps, PayBand.order(:id).pluck(:updated_at)
         assert_equal [ role, family ], PayBand.order(:position).to_a
         assert_in_delta Time.current, @tenant.reload.pay_bands_changed_at, 1.second
