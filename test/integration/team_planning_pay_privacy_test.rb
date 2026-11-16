@@ -183,7 +183,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
         cell = Views::Plans::CostCell.new(row:, reference: costs[:reference_currency]).call
 
         assert_equal [ "2026-09-30", yearly ], cost[:run_rate_at_end].then { [ it[:on], it[:total][:scenario][:converted] ] }, who
-        assert_equal cost[:run_rate_at_end].slice(:on, :total), row[:run_rate_at_end], who
+        assert_equal cost[:run_rate_at_end].slice(:on, :open_ended, :horizon_months, :total), row[:run_rate_at_end], who
         [ account, [ cost.to_json, costs.to_json, strip, cell ].map { it.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "") } ]
       end
 

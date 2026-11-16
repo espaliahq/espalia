@@ -89,6 +89,7 @@ class PlanDatesSystemTest < ApplicationSystemTestCase
 
       visit map_plan_path(@plan_id, scenario: @q2)
       assert_selector "[data-cost-strip]", text: "For 1 Apr 2027 to 31 Mar 2028, the first 12 months of a step with no end date"
+      assert_selector "[data-cost-strip] [data-run-rate-at-end]", text: "Run rate on 31 Mar 2028, the end of the 12 months shown:"
       assert_no_sideways_overflow
       visit plan_path(@plan_id)
       assert_selector "tr[data-scenario-id='#{@q2}']", text: "From 1 Apr 2027 · no end date"

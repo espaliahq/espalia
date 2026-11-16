@@ -9,11 +9,15 @@ module Operations::TeamPlanning::CostFigures
                     "exchange rates is never a planned change. Its difference is on Today's run rate. Its parts: actual is " \
                     "the baseline on that day, planned what the plan's changes add or take away, and forecast a year of " \
                     "each forecast row's headcount still changed that day, at the row's average cost (for attrition, the " \
-                    "steady share of seats waiting to be filled). Today has none, as it is a run rate already."
+                    "steady share of seats waiting to be filled). For a step with no end date, `on` is the last day of the " \
+                    "months shown, and open_ended and horizon_months say so. Today has none, as it is a run rate already."
 
   private
 
-  def at_end_total(report) = { on: report.at_end.on.iso8601, total: compared(report.at_end_parts, report) }
+  def at_end_total(report)
+    { on: report.at_end.on.iso8601, open_ended: report.open_ended, horizon_months: report.horizon_months,
+      total: compared(report.at_end_parts, report) }
+  end
 
   # The total, beside the baseline with the difference unless it is a run
   # rate, and its parts: actual, planned and forecast, which add up to it.

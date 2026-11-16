@@ -387,6 +387,17 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal [ Date.new(2027, 1, 1)..Date.new(2027, 3, 31), false, nil ], [ report.period, report.open_ended, report.horizon_months ]
     end
 
+    should "take the run rate at its end on the last day of the months shown, as the same step ending there would" do
+      open = cost(@open).at_end
+      assert_equal Date.new(2027, 12, 31), open.on
+
+      as_tenant { handler.set_scenario_period(@plan_id, @open, ends_on: "2027-12-31") }
+      ended = cost(@open).at_end
+
+      assert_equal [ ended.scenario.total, ended.baseline.total, ended.forecast.total ],
+                   [ open.scenario.total, open.baseline.total, open.forecast.total ]
+    end
+
     should "price an alternative sharing the open period over the same horizon" do
       lean = SecureRandom.uuid_v7
       as_tenant { handler.fork_scenario(@plan_id, lean, parent_id: @open, relation: "instead", name: "Lean 2027") }

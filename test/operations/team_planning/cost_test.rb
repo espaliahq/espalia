@@ -317,6 +317,13 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
                  at_end[:units].map { [ it[:unit_id], it[:name], it[:scenario][:converted], it[:with_below][:scenario][:converted] ] }
     assert_equal [ [ "CC-1", "100000" ], [ nil, "50000" ] ], at_end[:cost_centres].map { [ it[:cost_centre], it[:scenario][:converted] ] }
     assert_not cost(scenario_id: @plan_id).key?(:run_rate_at_end), "Today is a run rate already"
+    assert_equal [ false, nil ], at_end.values_at(:open_ended, :horizon_months)
+  end
+
+  should "say a step with no end date takes its run rate on the last of the months shown" do
+    open = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @year, relation: "then", name: "2027")[:scenario_id]
+
+    assert_equal [ "2027-12-31", true, 12 ], cost(scenario_id: open)[:run_rate_at_end].values_at(:on, :open_ended, :horizon_months)
   end
 
   should "give Today's run rate for the plan's id, with no baseline or difference anywhere in it" do
