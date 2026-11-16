@@ -146,6 +146,20 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
     assert_equal 1, key_reads
   end
 
+  should "rebuild a frozen band as copied, without asking today's Org Graph how to spell its country" do
+    operation(Operations::TeamPlanning::RestorePlan, scenario_id: nil)
+    as_tenant(&changes.fetch("a new band"))
+    operation(Operations::TeamPlanning::ArchivePlan, scenario_id: nil)
+    inputs = as_tenant { TeamPlanning::PricingInputs.for(plan) }
+
+    queries = []
+    watch = ->(*, payload) { queries << payload[:sql] }
+    locations = ActiveSupport::Notifications.subscribed(watch, "sql.active_record") { as_tenant { inputs.bands.map(&:location) } }
+
+    assert_includes locations, "Mu"
+    assert_empty queries
+  end
+
   should "read a frozen copy only until the plan is restored, and take a fresh one when it is archived again" do
     as_tenant(&changes.fetch("a band's figures"))
     assert_equal 100_000, e5_midpoint

@@ -91,6 +91,6 @@ class TeamPlanning::PricingInputs
     model = MODELS.fetch(name)
     return model.where(tenant_id: @plan.tenant_id).to_a unless @copy
 
-    @copy.fetch(name.to_s, []).map { model.new(it.slice(*model.column_names)).tap(&:readonly!) }
+    @copy.fetch(name.to_s, []).map { model.instantiate(it.slice(*model.column_names)).tap(&:readonly!) }
   end
 end
