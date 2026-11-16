@@ -19,13 +19,13 @@ module Operations::TeamPlanning::LineFigures
     end_state.except(*MONEY, *MONEY.map(&:to_sym))
   end
 
-  # @param fields [Array<String>] the names of the sealed fields
+  # @param fields [Array<String>, nil] the names of the sealed fields
   # @param facet [String, nil]
   # @param see_pay [Boolean]
-  # @return [Array<String>]
+  # @return [Array<String>, nil]
   def self.sealed_fields(fields, facet:, see_pay:)
-    return fields if see_pay || facet != FACET
+    return fields if see_pay || facet != FACET || fields.nil?
 
-    fields.to_a - MONEY
+    fields - MONEY
   end
 end
