@@ -92,6 +92,15 @@ class Operations::TeamPlanning::EditPositionTest < ActiveSupport::TestCase
     assert_equal [ "offer_accepted", "2026-05-04", 0.8, @growth ], position.values_at(:hiring_status, :target_start, :fte, :unit_id)
   end
 
+  should "clear a target start and hiring status given as null" do
+    edit(hiring_status: "recruiting", target_start: "2026-05-04")
+    edit(target_start: nil)
+    assert_equal [ "recruiting", nil ], position.values_at(:hiring_status, :target_start)
+
+    edit(hiring_status: nil)
+    assert_equal "not_started", position[:hiring_status]
+  end
+
   should "refuse an accepted offer with no target start, given or kept" do
     assert_equal "An accepted offer needs a target start", refusal(hiring_status: "offer_accepted")
 

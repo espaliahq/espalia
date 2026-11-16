@@ -13,11 +13,19 @@ class Operations::TeamPlanning::EditPosition < Operations::Base
   include Operations::TeamPlanning::PlanWrite
 
   OWN = %i[plan_id scenario_id position_id].freeze
+
+  # A null is how a caller clears a field it sends, so the schema admits one.
+  def self.nullable(field)
+    type = Mcp::OperationToTool::TYPE_MAPPING.fetch(field.type, "string")
+    schema = (field.schema || {}).merge(type: [ type, "null" ])
+    enum = schema[:enum] || field.allowed
+    enum ? schema.merge(enum: [ *enum, nil ]) : schema
+  end
   FIELDS = (Operations::TeamPlanning::SetPosition.parameters.keys - OWN - [ :note ]).freeze
 
   description "Change some fields of a position in a scenario of a Team Planning plan and keep the rest. Give " \
-              "position_id and only the fields to change: an omitted field keeps its value, and an empty string or null clears an " \
-              "optional one, such as cost_centre. Written as one PositionSet, with the same checks as " \
+              "position_id and only the fields to change: an omitted field keeps its value, and null clears an optional one, such as " \
+              "cost_centre or target_start. Written as one PositionSet, with the same checks as " \
               "team_planning_set_position. Refused unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
@@ -26,7 +34,8 @@ class Operations::TeamPlanning::EditPosition < Operations::Base
   parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
   parameter :position_id, String, required: true
   Operations::TeamPlanning::SetPosition.parameters.except(*OWN).each_value do |field|
-    parameter field.name, field.type, allowed: field.allowed, schema: field.schema, allow_blank: field.allow_blank
+    parameter field.name, field.type, allowed: field.allowed, schema: field.required ? field.schema : nullable(field),
+                                      allow_blank: field.allow_blank
   end
   prose_fields :note
 
