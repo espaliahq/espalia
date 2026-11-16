@@ -46,6 +46,18 @@ class Plans::UndosControllerTest < ActionDispatch::IntegrationTest
       assert_equal "dates", step[:redo][:action]
     end
 
+    should "offer no Clear, Undo or Redo on an archived plan's Changes tab" do
+      get changes_plan_path(@plan_id, scenario: @q1)
+      assert_select "[data-clear-change]"
+      assert_select "[data-undo-control]"
+
+      call_as_editor(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+      get changes_plan_path(@plan_id, scenario: @q1)
+
+      assert_select "[data-clear-change]", count: 0
+      assert_select "[data-undo-control]", count: 0
+    end
+
     should "redo what they undid" do
       event_id = step[:undo][:event_id]
       post plan_undos_path(@plan_id), params: { event_id:, scenario_id: @q1, tab: "map" }

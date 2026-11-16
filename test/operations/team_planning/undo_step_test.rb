@@ -228,6 +228,13 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
       assert_equal [ false ], clearable(scenario_id: q2).values.uniq
     end
 
+    should "mark nothing on an archived plan, which has no statuses to clear" do
+      call(:ArchivePlan, plan_id: @plan_id)
+
+      assert_empty clearable
+      assert_empty clearable(as: @holder)
+    end
+
     should "not mark a pay change once the see-pay right is withdrawn" do
       withdraw_see_pay
 
