@@ -103,10 +103,11 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     division = SecureRandom.uuid_v7
     as_tenant { @handler.add_level(division, "Division", parent_ids: [ division ], top: true, effective_on: @today) }
 
-    error = assert_raises(RuntimeError) do
-      as_tenant { @handler.set_level_provider(division, "hibob", effective_on: @today, field: "department") }
+    [ -> { @handler.set_level_provider(division, "hibob", effective_on: @today, field: "department") },
+      -> { @handler.hand_over_level(division, "hibob", field: "department", matches: {}, effective_on: @today) } ].each do |hand|
+      error = assert_raises(RuntimeError) { as_tenant { hand.call } }
+      assert_equal "Division has its own rules for where it can sit, so it can't come from hibob yet", error.message
     end
-    assert_equal "Division has its own rules for where it can sit, so it can't come from hibob yet", error.message
   end
 
   should "write nothing when the same rules are restated in another order" do

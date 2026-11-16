@@ -235,6 +235,7 @@ class OrgGraph::StructureAggregate
     raise "Two units can't become the same value" unless matches.values.uniq.size == matches.size
 
     effective_on = iso_date(effective_on)
+    ensure_no_stated_rules!(level_id, provider)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
     ensure_units_still_fit!({ level_id => provider })
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
