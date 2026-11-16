@@ -51,11 +51,12 @@ class TeamPlanning::PayUpload
   # @param scenario_id [String]
   # @param basis [String]
   # @param csv [String] the file's bytes as sent
-  # @return [String] an HMAC over all three, under a key only this plan's uploads use
-  def self.signature(plan_id:, scenario_id:, basis:, csv:)
+  # @param matches [Array<Match>] whom each row names, so a confirm can't write a row to someone else
+  # @return [String] an HMAC over all of them, under a key only this plan's uploads use
+  def self.signature(plan_id:, scenario_id:, basis:, csv:, matches:)
     key = Rails.application.key_generator.generate_key("team_planning/pay_upload/#{plan_id}", 32)
     hmac = OpenSSL::HMAC.new(key, "SHA256")
-    [ scenario_id, basis ].each { hmac << it.to_s << "\0" }
+    [ scenario_id, basis, matches.size, *matches.flat_map { [ it.line, it.person_id ] } ].each { hmac << it.to_s << "\0" }
     hmac << csv.to_s.b
     hmac.hexdigest
   end

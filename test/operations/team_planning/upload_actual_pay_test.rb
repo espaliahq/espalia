@@ -180,7 +180,7 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
   should "refuse a confirm whose file, basis or scenario changed by so much as a byte" do
     csv = "#{HEADER}E-100,90413,EUR,year\n"
     signature = upload(csv).fetch(:signature)
-    changed = "The file, basis or scenario changed since the preview"
+    changed = "The file, basis, scenario or the people it names changed since the preview"
 
     assert_equal changed, refusal { upload(csv.sub("90413", "90414"), signature:) }
     assert_equal changed, refusal { upload(csv, basis: "actual", signature:) }
@@ -215,6 +215,19 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
 
     before = event_count
     assert_equal "The scenario changed since the preview, so check the file again", refusal { upload(csv, signature:) }
+    assert_equal before, event_count
+  end
+
+  should "refuse a confirm once a line names someone else, and write nothing" do
+    csv = "#{HEADER}ada.quill@example.com,90413,EUR,year\n"
+    signature = upload(csv).fetch(:signature)
+    ActsAsTenant.with_tenant(@tenant) do
+      @ada.update!(email: "ada.moved@example.com")
+      @cy.update!(email: "ada.quill@example.com")
+    end
+
+    before = event_count
+    assert_equal "The file, basis, scenario or the people it names changed since the preview", refusal { upload(csv, signature:) }
     assert_equal before, event_count
   end
 

@@ -3,7 +3,7 @@
 # Holds actual pay for many people in a scenario from one CSV file
 # ([#323](https://github.com/espaliahq/espalia/issues/323)). Called without a
 # signature it previews: it reads and matches the file and signs exactly what
-# it read. Called again with that signature and the same file, basis and
+# it read and whom each row named. Called again with that signature and the same file, basis and
 # scenario, it writes one `data:pay` change per row, all or none.
 #
 # Web only for now. The csv is pay, and an MCP client would hand it to a model
@@ -16,6 +16,7 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
   NOTE = "From an upload"
+  CHANGED = "The file, basis, scenario or the people it names changed since the preview"
 
   description "Preview, then hold, actual pay for many people in a scenario of a Team Planning plan from a CSV file " \
               "with columns person, amount, currency and period. Without signature it previews and returns one; " \
@@ -49,14 +50,11 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).call }
     report = upload.against(map)
     payload(plan, scenario_id, report, held(map), names: map.names)
-      .merge(signature: (::TeamPlanning::PayUpload.signature(**inputs) if report.ok?))
+      .merge(signature: (::TeamPlanning::PayUpload.signature(**inputs, matches: report.matches) if report.ok?))
   end
 
   def confirm(plan, scenario_id, upload, inputs)
-    raise Operations::Base::ParameterError, "The file, basis or scenario changed since the preview" unless
-      ::TeamPlanning::PayUpload.signed?(params[:signature], **inputs)
-
-    report = held_now = nil
+    report = held_now = signed = nil
     written = 0
     refusing_bad_plans do
       handler.set_changes(plan.id) do |aggregate|
@@ -65,6 +63,9 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
         report = upload.against(map)
         held_now = held(map)
         next [] unless report.ok?
+
+        signed = ::TeamPlanning::PayUpload.signed?(params[:signature], **inputs, matches: report.matches)
+        next [] unless signed
 
         changes = report.matches.reject { held_now[it.person_id] == it.pay }.map do |match|
           { kind: ::TeamPlanning::Events::PlanDataSet, scenario_id:, subject_id: match.person_id,
@@ -75,6 +76,7 @@ class Operations::TeamPlanning::UploadActualPay < Operations::Base
       end
     end
     raise Operations::Base::ParameterError, "The scenario changed since the preview, so check the file again" unless report.ok?
+    raise Operations::Base::ParameterError, CHANGED unless signed
 
     payload(plan, scenario_id, report, held_now, names: {}).merge(written:)
   end

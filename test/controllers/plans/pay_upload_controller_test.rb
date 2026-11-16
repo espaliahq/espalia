@@ -105,7 +105,7 @@ class Plans::PayUploadControllerTest < ActionDispatch::IntegrationTest
       upload(intent: "confirm", signature:, text: CSV_TEXT.sub("91234.56", "91235.56"))
 
       assert_response :unprocessable_content
-      assert_select "turbo-frame#pay-upload-preview [role='alert']", text: /The file, basis or scenario changed since the preview/
+      assert_select "turbo-frame#pay-upload-preview [role='alert']", text: /The file, basis, scenario or the people it names changed since the preview/
       assert_not_includes response.body, "91235.56"
       assert_not held_pay?
     end
