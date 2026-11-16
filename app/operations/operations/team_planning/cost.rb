@@ -27,8 +27,8 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "Totals are per currency in `native`, and `converted` is the same in the reference currency at the " \
               "period's start, null with `missing` saying why when a rate is missing. Units count their own places, " \
               "with null for no unit; `with_below` adds the units below. Cost centres use null for no cost centre. " \
-              "A person keeps their own cost centre unless the plan changes their unit, role, level or location (an FTE change " \
-              "alone doesn't). A changed person, or a real person with none, takes their position's own cost centre, else the " \
+              "A person keeps their own cost centre unless the plan changes their unit or the units above it, role, level or location " \
+              "(an FTE change alone doesn't). A changed person, or a real person with none, takes their position's own cost centre, else the " \
               "last entry of the cost_centre rule at their unit that matches their planned unit, role or role family, level " \
               "number and location, else their own, else none. An open seat takes its position's own cost centre, else an " \
               "unchanged occupant's, else the last matching entry (it has no location), else none; a placeholder hire in a position " \

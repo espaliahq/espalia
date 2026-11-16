@@ -11,7 +11,7 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
     @tenant = create(:tenant, :with_hibob_config)
     people = OrgGraph::CommandHandler.new(actor: SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
-    departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
+    @departments, teams = Array.new(2) { SecureRandom.uuid_v7 }
     @engineering, @payments = Array.new(2) { SecureRandom.uuid_v7 }
 
     travel_to Time.utc(2025, 12, 15, 9)
@@ -20,8 +20,8 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
       @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5, title: "Senior SWE")
       @e6 = create(:framework_level, role_id: @engineer.role_id, ordinal: 6, title: "Staff SWE")
 
-      structure.define_taxonomy([ { level_id: departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
-      structure.create_unit(@engineering, "Engineering", level_id: departments, effective_on: "2025-01-01")
+      structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: teams, name: "Team" } ], effective_on: "2025-01-01")
+      structure.create_unit(@engineering, "Engineering", level_id: @departments, effective_on: "2025-01-01")
       structure.create_unit(@payments, "Payments", level_id: teams, parent_id: @engineering, effective_on: "2025-01-01")
 
       @ada, @brook, @cy = %w[Ada Brook Cy].map { create(:person, tenant: @tenant, name: "#{it} Quill") }
@@ -123,6 +123,21 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
       assert_equal [ "Payments" ], cost_centre_of(cost, @ada), "Today holds Ada outside, so the plan moved her"
       assert_equal "Payments", of(funding, seat).cost_centre.cost_centre
       assert_equal [ [ @lines["Payments"] ], nil ], drawn_on(funding, seat)
+    end
+
+    should "count a team the plan moves under another unit as a change for the people in it" do
+      sales, eve = SecureRandom.uuid_v7, create(:person, tenant: @tenant, name: "Eve Quill")
+      as_tenant do
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(sales, "Sales", level_id: @departments, effective_on: "2025-01-01")
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0, cost_centre: "CC-2")
+        people.set_membership(eve.id, @payments, **ESPALIA, allocation: 1.0)
+      end
+      cost_centre_entries({ unit_id: @payments, cost_centre: "Payments" }, { unit_id: sales, cost_centre: "Sales" })
+      assert_equal [ "CC-2" ], cost_centre_of(cost, eve), "Eve keeps her own while Payments sits in Engineering"
+
+      operation(Operations::TeamPlanning::SetUnit, unit_id: @payments, parent_id: sales)
+      assert_equal [ "Sales" ], cost_centre_of(cost, eve), "her team now sits under Sales, though her own unit is the same"
     end
 
     should "fund a half-filled position from its untouched occupant, while a moved one's cost line follows the entries" do

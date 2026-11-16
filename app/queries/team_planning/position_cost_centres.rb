@@ -77,8 +77,8 @@ class TeamPlanning::PositionCostCentres
   end
 
   # Whether the plan changes what a cost centre entry can see of them: their
-  # units, the role they hold in each, the level they are priced at there or
-  # their location. A changed FTE alone does not count, and neither does a
+  # units and the units above them, the role they hold in each, the level they
+  # are priced at there or their location. A changed FTE alone does not count, and neither does a
   # placeholder hire, which Today never holds.
   #
   # @param member [TeamPlanning::Baseline::Person]
@@ -109,10 +109,12 @@ class TeamPlanning::PositionCostCentres
     own_level_id = member.own_target(@titles).level&.level_id
     places = member.memberships.to_set do
       position = positions[it.position_id]
-      [ (it.unit_id if live.include?(it.unit_id)), role_at(member, position), own_level_id || position&.level_id ]
+      [ (unit_chain(map, it.unit_id) if live.include?(it.unit_id)), role_at(member, position), own_level_id || position&.level_id ]
     end
     [ places, own_level_id ]
   end
+
+  def unit_chain(map, unit_id) = ((@unit_chains ||= {})[map.object_id] ||= {})[unit_id] ||= map.units_up_from(unit_id)
 
   def live = @live ||= @map.units.to_set(&:id)
 
