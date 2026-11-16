@@ -24,6 +24,7 @@ module Operations::TeamPlanning::UnitChange
   def set_unit_changes!(scenario_id)
     refusing_bad_plans do
       handler.set_changes(plan_id!) do
+        ::OrgGraph::Repository.new.lock_structure # so a level can't be removed between this check and the write
         map = ::TeamPlanning::Resolution.new(context:, plan: plan!, scenario_id:).structure
         changes = yield(map)
         changes.each { place_within_scope!(map, it[:kind], it[:subject_id], it[:end_state]) } if map.scope_ids

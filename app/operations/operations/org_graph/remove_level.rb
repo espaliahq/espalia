@@ -23,8 +23,11 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
             "#{level.name} comes from #{HrisConfig.provider_label(level.provider)}; hand it back to Espalia before removing it"
     end
 
-    ensure_no_live_plan_holds!(level)
-    refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:) }
+    ActiveRecord::Base.transaction do
+      ::OrgGraph::Repository.new.lock_structure # a plan places units under it too, so the count holds
+      ensure_no_live_plan_holds!(level)
+      refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:) }
+    end
     { level_id: params[:level_id].to_s.downcase, name: level&.name, effective_on:, levels: levels_payload }
   end
 
