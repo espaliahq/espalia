@@ -1372,13 +1372,19 @@ values, under the plan's key and deleted with it
   is, so only a scenario changes it. Removing a tenant line a plan has changed or cut
   leaves the plan's change orphaned: `team_planning_budget_lines` lists it under `orphaned`,
   and Attention flags it rather than dropping it.
-- **The Budget tab shows the reads, read-only.** On Today it lists the lines as approved,
-  since Today has no period to fund against, and links each scenario's budget. On a scenario
-  it shows `team_planning_budget`'s four totals, each line's approved, funded and remaining
-  figures, the positions `team_planning_funding` draws on each line (open when the line is
-  over or a position is short), and the unfunded positions. Every figure is the read's,
-  under the viewer's pay view, so the tab and an agent never disagree. Editing lines on the
-  tab comes later.
+- **The Budget tab shows the reads, and an editor changes a scenario's from it.** On Today
+  it lists the lines as approved, since Today has no period to fund against, and links each
+  scenario's budget. On a scenario it shows `team_planning_budget`'s four totals, each line's
+  approved, funded and remaining figures, the positions `team_planning_funding` draws on each
+  line (open when the line is over or a position is short), and the unfunded positions. Every
+  figure is the read's, under the viewer's pay view, so the tab and an agent never disagree.
+  An editor adds, changes or cuts a scenario's line on a page of its own, with the tenant
+  budget page's fields, through `team_planning_set_budget_line` and
+  `team_planning_cut_budget_line` ([#411](https://github.com/espaliahq/espalia/issues/411)).
+  Each position's Funding… opens one dialog that lists the scenario's lines by name and
+  terms and takes each line's part as a percentage, for `team_planning_set_position_funding`;
+  Clear hands a set funding back to `team_planning_clear_change`. The dialog shows no
+  amount, so the tab stays the one place that shows money. Today stays read-only.
 - **Money keeps its currency.** An amount keeps its own currency and period, a year or a
   month, as a pay band's does, and is never converted. A line with a head count and no amount
   has no amount, never zero.
