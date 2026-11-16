@@ -20,8 +20,8 @@ module Operations::TeamPlanning::PlanRead
   # What a read that prices a plan says once the plan is archived, in its description.
   PRICED_AS_ARCHIVED = "An archived plan carries archived_on, priced_on and a note: its figures use the pay bands, exchange " \
                        "rates, budget lines and rules as they stood on priced_on, its archive day, while framework roles and " \
-                       "levels are read as they are now. A plan archived before that copy was kept has no priced_on, and its " \
-                       "figures use today's. Restoring a plan prices it with today's again."
+                       "levels are read as they are now. A plan archived before that copy was kept, or read where its copy " \
+                       "can't be opened, has no priced_on, and its figures use today's. Restoring a plan prices it with today's again."
 
   private
 

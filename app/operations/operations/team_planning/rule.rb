@@ -11,7 +11,7 @@ class Operations::TeamPlanning::Rule < Operations::Base
               "unit, where the unit and each unit above it beat the plan-wide value, which beats the tenant's " \
               "default, which beats the rule's own. A unit gone from the scenario takes its rules with it, so it " \
               "reads the plan-wide value; an id the scenario never held is refused. team_planning_overrides lists which scenario set it. " \
-              "An archived plan reads the tenant's defaults as its archive copied them. #{PRICED_AS_ARCHIVED} Refused, as an unknown plan, unless the caller is a member."
+              "#{PRICED_AS_ARCHIVED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
