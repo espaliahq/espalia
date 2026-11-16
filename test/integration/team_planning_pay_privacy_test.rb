@@ -392,7 +392,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     BudgetLine.find(line).update!(amount: 90_000)
 
     upstream = call(Operations::Tenants::BudgetLines, @holder, budget_line_id: line).to_json
-    assert_includes upstream, "90000", "the line moved upstream, so the walk below has a change to miss"
+    assert_pay_figure upstream, "90000", "the line moved upstream, so the walk below has a change to miss"
     statuses = [ @holder, @editor, @viewer ].map do |account|
       call(Operations::TeamPlanning::Status, account, plan_id: @plan_id, scenario_id: @q1)[:statuses].select { it[:subject_id] == line }.pluck(:status)
     end
