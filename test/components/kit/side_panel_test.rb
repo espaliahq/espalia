@@ -39,7 +39,7 @@ class Components::Kit::SidePanelTest < ActiveSupport::TestCase
       assert_equal "plan-side-panel", toggle["aria-controls"]
     end
 
-        should "render closed, hidden until the controller opens it" do
+    should "render closed, hidden until the controller opens it" do
       doc = render_panel(open: false)
 
       assert_equal "closed", doc.at_css("[data-controller='activity-pane']")["data-activity-pane-default-state-value"]
