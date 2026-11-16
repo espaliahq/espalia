@@ -111,9 +111,9 @@ class Views::Plans::SplitScenario < Views::Base
   # Every change this one needs to go across with it, and what those need in turn.
   def needed(change, seen = Set[change[:event_id]])
     change[:needs].flat_map do |need|
-      next [] if need[:event_id] && seen.include?(need[:event_id])
+      key = need[:event_id] || need.values_at(:subject_id, :facet)
+      next [] unless seen.add?(key)
 
-      seen << need[:event_id] if need[:event_id]
       further = @by_event[need[:event_id]]
       [ need, *(further ? needed(further, seen) : []) ]
     end
