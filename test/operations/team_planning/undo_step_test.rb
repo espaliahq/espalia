@@ -201,6 +201,27 @@ class Operations::TeamPlanning::UndoStepTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
   end
 
+  should "offer no undo of a date edit whose old dates would leave out a later departure" do
+    call(:SetScenarioPeriod, as: @editor, plan_id: @plan_id, scenario_id: @q1, ends_on: "2026-09-30")
+    call(:SetDeparture, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, leaves_on: "2026-08-15")
+    call(:SetDeparture, as: @editor, plan_id: @plan_id, scenario_id: @q1, person_id: @cy.id, leaves_on: "2026-05-01")
+    call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1)
+
+    assert_nil step[:undo]
+    assert_raises(Operations::Base::ParameterError) { call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: @q1) }
+  end
+
+  should "offer no redo of a move once someone else changes the same thing where it came from" do
+    q2 = call(:ForkScenario, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2", ends_on: "2026-09-30")[:scenario_id]
+    call(:SetDeparture, as: @editor, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id)
+    call(:MoveChange, as: @editor, plan_id: @plan_id, scenario_id: @q1, subject_id: @ada.id, facet: "departure", direction: "later")
+    call(:UndoChange, as: @editor, plan_id: @plan_id, scenario_id: q2)
+    call(:SetDeparture, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id)
+
+    assert_nil step(scenario_id: q2)[:redo]
+    assert_raises(Operations::Base::ParameterError) { call(:RedoChange, as: @editor, plan_id: @plan_id, scenario_id: q2) }
+  end
+
   should "refuse an unknown scenario, and someone not in the plan" do
     outsider = as_tenant { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
 

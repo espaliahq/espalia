@@ -42,9 +42,11 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
     actor_id = context.person.id
     undo_id = aggregate.last_undoable_by(scenario_id, actor_id, except_facets:)
     redo_id = aggregate.last_redoable_by(scenario_id, actor_id, except_facets:)
+    undo_offer = step(aggregate, scenario_id, undo_id) { aggregate.restored_by_undo(scenario_id, undo_id) }
+    redo_offer = step(aggregate, scenario_id, redo_id) { |entry| entry if entry.is_a?(::TeamPlanning::Events::Change) }
     { plan_id: plan.id, scenario_id:,
-      undo: step(aggregate, scenario_id, undo_id) { aggregate.restored_by_undo(scenario_id, undo_id) },
-      redo: step(aggregate, scenario_id, redo_id) { |entry| entry if entry.is_a?(::TeamPlanning::Events::Change) } }
+      undo: accepted(plan, undo_offer) { it.undo_change(scenario_id:, event_id: undo_id, undone_by_id: actor_id) },
+      redo: accepted(plan, redo_offer) { it.redo_change(scenario_id:, event_id: redo_id, redone_by_id: actor_id) } }
   end
 
   private
@@ -63,11 +65,23 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
 
     restored = yield(entry)
     within_scope!(aggregate, restored.class, restored.data[:subject_id], restored.data) if restored
-    return nil unless entry.is_a?(::TeamPlanning::Events::ChangeMoved) || aggregate.leaves_in_period?(scenario_id, restored)
 
     subject_id = entry.data[:subject_id]
     { event_id:, action: action_of(entry), subject_id:, subject: name_of(subject_id), facet: aggregate.facet_of(scenario_id, event_id), scenario_id: }
   rescue Operations::Base::ParameterError
+    nil
+  end
+
+  # The plan refuses an undo or redo that a later change has made impossible:
+  # a departure outside dates an undo brings back, a move whose source step now
+  # changes the same thing. Trying it on a copy that is never stored asks the
+  # plan itself, so the offer can't drift from what it accepts.
+  def accepted(plan, offer)
+    return nil unless offer
+
+    yield ::TeamPlanning::Repository.new.load_plan(plan.id)
+    offer
+  rescue ::TeamPlanning::Error
     nil
   end
 
