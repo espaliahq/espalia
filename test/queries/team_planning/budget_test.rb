@@ -235,6 +235,19 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_nil report.cost_centres["Platform"].over
   end
 
+  should "spend a cost centre's unfunded money against its budget, and hold no money where no line approves any" do
+    platform = euros(150_000, cost_centre: "Platform")
+    line(head_count: 1, cost_centre: "Elsewhere")
+    open_position
+    open_position(cost_centre: "Elsewhere")
+    strictness(preset: "cost_centre")
+    report = budget
+
+    assert_equal 50_000r, of(report, platform).remaining
+    assert_equal [ "EUR" ], report.cost_centres["Platform"].over.money, "Brook holds no position, and is paid from Platform all the same"
+    assert_equal TeamPlanning::Budget::Over.new(money: nil, heads: false, mismatched: []), report.cost_centres["Elsewhere"].over
+  end
+
   should "flag a line drawn on in another currency, never judging it on that money" do
     dollars = line(amount: 50_000, currency: "USD", period: "year", cost_centre: "Platform")
     open_position

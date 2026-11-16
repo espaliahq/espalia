@@ -1269,11 +1269,13 @@ other difference is the record of a trade. 6.6 turns both into checks.
 
 `team_planning_budget` returns the rule and marks where it holds the budget. Each line, each
 cost centre or the organisation's total, as `scope` says, carries `over`; the others carry
-null. `over.money` lists the currencies whose remaining, summed over the lines in that currency,
-is below zero, and `over.heads` says whether the remaining head count is. Neither is converted
-to judge it: dollars left over never cover euros spent, and a currency a line is drawn on
-besides its own goes in `over.mismatched_currencies`, never counted for or against. Under the
-default only lines carry `over`, and every other number is as it was.
+null. `over.money` lists the currencies a figure spends more of than its lines approve, and
+`over.heads` says whether it holds more FTE than they count. A cost centre or the organisation
+spends its unfunded money and heads too, since nothing inside it is outside its budget. A figure
+whose lines approve no amount, or count no heads, isn't held on it. Nothing is converted to
+judge it: dollars left over never cover euros spent, and a currency no line approves goes in
+`over.mismatched_currencies`, never counted for or against. Under the default only lines carry
+`over`, and every other number is as it was.
 
 As built in 6.4 ([#369](https://github.com/espaliahq/espalia/issues/369)): `team_planning_budget`
 gives the four numbers for a scenario, never the baseline.

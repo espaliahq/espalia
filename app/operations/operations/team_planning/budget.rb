@@ -31,11 +31,11 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "unpriced with no money; so is one whose on-cost is refused, unless the basis is base_only, which funds its base. Figures are decimal strings. The baseline has no period, so it can't be the " \
               "scenario. strictness is the budget_strictness rule, with the preset it equals or null, and its scope " \
               "decides where the budget is held: each budget line, each cost centre or the total (organisation) carries " \
-              "over, and the rest carry null. over.money lists the currencies whose remaining, summed over the lines in " \
-              "that currency, is below zero (null when the limit is heads); over.heads says whether the remaining head " \
-              "count is below zero (null when the limit is money or no line states a head count). Nothing is converted " \
-              "to judge it: a currency a line is drawn on besides its own goes in over.mismatched_currencies, never " \
-              "counted. Refused, as an unknown plan, unless the caller is a member."
+              "over, and the rest carry null. over.money lists the currencies it spends more of than its lines approve " \
+              "(null when the limit is heads or no line approves an amount); over.heads says whether it holds more FTE " \
+              "than its lines count (null when the limit is money or no line states a head count). A cost centre or the " \
+              "total spends its unfunded money and heads too. Nothing is converted to judge it: a currency no line " \
+              "approves goes in over.mismatched_currencies, never counted. Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 

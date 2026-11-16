@@ -32,10 +32,11 @@
 # The {TeamPlanning::RuleKinds::BudgetStrictness} rule says where the budget
 # is held ([#384](https://github.com/espaliahq/espalia/issues/384)): each
 # line, each cost centre or the organisation's total carries `over`, and the
-# others carry none. A figure is over in a currency whose remaining, summed
-# over its lines, is below zero, and over on heads when its remaining head
-# count is. Money is never converted to judge it: a line drawn on in another
-# currency is listed as mismatched, not counted for or against.
+# others carry none. A figure is over in a currency it spends more of than
+# its lines approve, and over on heads when it holds more FTE than they
+# count. A cost centre or the organisation spends its unfunded money and
+# heads too. Money is never converted to judge it: a currency no line
+# approves is listed as mismatched, not counted for or against.
 #
 # @example
 #   TeamPlanning::Budget.new(context:, plan:, scenario_id:).call.totals
@@ -51,10 +52,11 @@ class TeamPlanning::Budget
 
   # Whether a figure at the strictness rule's scope spends more than its budget.
   #
-  # @!attribute money [Array<String>, nil] the currencies it is over in; nil when money isn't limited
-  # @!attribute heads [Boolean, nil] whether its FTE drawn passes its head count; nil when heads aren't
+  # @!attribute money [Array<String>, nil] the currencies it is over in; nil when money isn't limited or
+  #   no line approves an amount
+  # @!attribute heads [Boolean, nil] whether its FTE passes its head count; nil when heads aren't
   #   limited or no line states a head count
-  # @!attribute mismatched [Array<String>] currencies its lines are drawn on in besides their own, never judged
+  # @!attribute mismatched [Array<String>] currencies it spends in that no line approves, never judged
   Over = Data.define(:money, :heads, :mismatched)
 
   # One budget line's four numbers.
@@ -189,19 +191,21 @@ class TeamPlanning::Budget
                     remaining: approved && approved - funded.fetch(budget_line.currency, 0r),
                     remaining_head_count: head_count && head_count - heads.fte,
                     mismatched: approved ? funded.keys - [ budget_line.currency ] : [], over: nil)
-    line.with(over: over([ line ], "line"))
+    line.with(over: over("line", approved: approved ? { budget_line.currency => approved } : {}, spent: funded,
+                                 head_count:, fte: heads.fte))
   end
 
-  # Judged from the lines' own remaining, so it agrees with what the read shows.
-  def over(lines, scope)
+  # Spent is everything the figure pays for, unfunded included, as nothing
+  # inside a cost centre or the organisation is outside its budget. A
+  # currency no line approves is mismatched, never judged, and a figure with
+  # no amount or head count approved isn't held on it.
+  def over(scope, approved:, spent:, head_count:, fte:)
     return unless @strictness.fetch("scope") == scope
 
     strictness = TeamPlanning::RuleKinds::BudgetStrictness
-    counted = lines.select(&:remaining_head_count)
-    remaining = lines.select(&:remaining).group_by { it.line.currency }.transform_values { it.sum(0r, &:remaining) }
-    Over.new(money: (remaining.select { |_, left| left.negative? }.keys.sort if strictness.money?(@strictness)),
-             heads: (counted.sum(0r, &:remaining_head_count).negative? if strictness.heads?(@strictness) && counted.any?),
-             mismatched: lines.flat_map(&:mismatched).uniq.sort)
+    money = approved.select { |currency, amount| amount < spent.fetch(currency, 0r) }.keys.sort if strictness.money?(@strictness) && approved.any?
+    Over.new(money:, heads: (head_count < fte if strictness.heads?(@strictness) && head_count),
+             mismatched: approved.any? ? (spent.keys - approved.keys).sort : [])
   end
 
   def heads_of(draws) = Heads.new(positions: draws.map { it.first.position.id }.uniq.size, fte: draws.sum(0r) { |funded, draw| funded.fte * draw.share })
@@ -258,11 +262,13 @@ class TeamPlanning::Budget
     priced = lines.select(&:approved)
     counted = lines.select { it.line.head_count }
     head_count = counted.sum(0r) { Rational(it.line.head_count.to_s) } if counted.any?
-    Totals.new(approved: converted(priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:approved) }),
-               head_count:, funded: converted(lines.map(&:funded).reduce({}) { |sum, money| add(sum, money) }), funded_heads:,
+    approved = priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:approved) }
+    funded = lines.map(&:funded).reduce({}) { |sum, money| add(sum, money) }
+    Totals.new(approved: converted(approved), head_count:, funded: converted(funded), funded_heads:,
                remaining: converted(priced.group_by { it.line.currency }.transform_values { it.sum(0r, &:remaining) }),
                remaining_head_count: head_count && counted.sum(0r, &:remaining_head_count),
-               unfunded: converted(unfunded), unfunded_heads:, over: over(lines, scope))
+               unfunded: converted(unfunded), unfunded_heads:,
+               over: over(scope, approved:, spent: add(funded, unfunded), head_count:, fte: funded_heads.fte + unfunded_heads.fte))
   end
 
   def unpriced(seats)
