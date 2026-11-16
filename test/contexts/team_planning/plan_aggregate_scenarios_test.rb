@@ -22,6 +22,12 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
 
   def last_event = @plan.unpublished_events.to_a.last
 
+  def moves(id, ends_on)
+    step, period, moved = @plan.period_moves(id, ends_on:)
+    days = ->(range) { [ range.begin.iso8601, range.end.iso8601 ] }
+    [ step, days.(period), moved.to_h { |sid, before, after| [ sid, [ days.(before), days.(after) ] ] } ]
+  end
+
   context "#fork_scenario" do
     should "start the first step on the base date, and record who forked it" do
       q1 = fork(name: "  Q1   plan ", ends_on: "2027-03-31")
@@ -147,6 +153,39 @@ class TeamPlanning::PlanAggregateScenariosTest < ActiveSupport::TestCase
                    refusal { @plan.set_scenario_period(@lean, ends_on: "2027-03-31", set_by_id: @editor_id) }
       assert_equal "This plan has no such scenario",
                    refusal { @plan.set_scenario_period(SecureRandom.uuid_v7, ends_on: "2027-03-31", set_by_id: @editor_id) }
+    end
+  end
+
+  context "#period_moves" do
+    setup do
+      @q1 = fork(ends_on: "2027-03-31")
+      @lean = fork(@q1, relation: "instead", name: "Lean Q1")
+      @q2 = fork(@q1, name: "Q2", ends_on: "2027-06-30")
+    end
+
+    should "name each scenario whose period would change, before and after, and write nothing" do
+      before = @plan.unpublished_events.count
+
+      assert_equal [ @q1, %w[2027-01-01 2027-02-28],
+                     { @lean => [ %w[2027-01-01 2027-03-31], %w[2027-01-01 2027-02-28] ],
+                       @q2 => [ %w[2027-04-01 2027-06-30], %w[2027-03-01 2027-06-30] ] } ],
+                   moves(@q1, "2027-02-28")
+      assert_equal before, @plan.unpublished_events.count
+      assert_equal %w[2027-01-01 2027-03-31], period(@q1)
+    end
+
+    should "move nothing else when the last step's end moves, or the end stays" do
+      assert_equal [ @q2, %w[2027-04-01 2027-07-31], {} ], moves(@q2, "2027-07-31")
+      assert_equal [ @q1, %w[2027-01-01 2027-03-31], {} ], moves(@q1, "2027-03-31")
+    end
+
+    should "refuse what setting the period would refuse" do
+      assert_equal "A scenario after it would end on 2027-06-30, before it starts on 2027-07-01",
+                   refusal { @plan.period_moves(@q1, ends_on: "2027-06-30") }
+      assert_equal "The baseline stands on the base date and has no period",
+                   refusal { @plan.period_moves(@plan_id, ends_on: "2027-03-31") }
+      assert_equal "This scenario is an alternative: it takes its period from its parent",
+                   refusal { @plan.period_moves(@lean, ends_on: "2027-03-31") }
     end
   end
 

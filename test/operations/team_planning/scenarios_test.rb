@@ -77,6 +77,22 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
                    refusal(Operations::TeamPlanning::SetScenarioPeriod, scenario_id: @lean, ends_on: "2027-04-30")
     end
 
+    should "preview what moving a step's end would move, and move nothing" do
+      q2 = fork(parent_id: @q1, relation: "then", name: "Q2", ends_on: "2027-06-30")[:scenario_id]
+
+      assert_equal({ plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-02-28", previous_ends_on: "2027-03-31",
+                     moves: [
+                       { scenario_id: @lean, starts_on: "2027-01-01", ends_on: "2027-02-28", previous_starts_on: "2027-01-01", previous_ends_on: "2027-03-31" },
+                       { scenario_id: q2, starts_on: "2027-03-01", ends_on: "2027-06-30", previous_starts_on: "2027-04-01", previous_ends_on: "2027-06-30" }
+                     ] },
+                   call(Operations::TeamPlanning::PeriodPreview, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28"))
+      assert_equal "2027-03-31", call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].second[:ends_on]
+      assert_equal "A scenario after it would end on 2027-06-30, before it starts on 2027-07-01",
+                   refusal(Operations::TeamPlanning::PeriodPreview, scenario_id: @q1, ends_on: "2027-06-30")
+      assert_equal "This scenario is an alternative: it takes its period from its parent",
+                   refusal(Operations::TeamPlanning::PeriodPreview, scenario_id: @lean, ends_on: "2027-04-30")
+    end
+
     should "rename a scenario, and refuse the baseline" do
       assert_equal({ plan_id: @plan_id, scenario_id: @q1, name: "First quarter" },
                    call(Operations::TeamPlanning::RenameScenario, plan_id: @plan_id, scenario_id: @q1, name: " First quarter "))
@@ -148,6 +164,7 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
         [ Operations::TeamPlanning::RenameScenario, { scenario_id: @q1, name: "Mine" } ],
         [ Operations::TeamPlanning::DescribeScenario, { scenario_id: @q1, description: "Mine" } ],
         [ Operations::TeamPlanning::SetScenarioPeriod, { scenario_id: @q1, ends_on: "2027-04-30" } ],
+        [ Operations::TeamPlanning::PeriodPreview, { scenario_id: @q1, ends_on: "2027-04-30" } ],
         [ Operations::TeamPlanning::RemoveScenario, { scenario_id: @lean } ] ].each do |operation, params|
         assert_equal "No such plan", refusal(operation, as: @other_admin, **params), operation.name
       end

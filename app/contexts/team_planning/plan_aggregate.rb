@@ -395,15 +395,8 @@ class TeamPlanning::PlanAggregate
   # @raise [Date::Error] for a date that isn't YYYY-MM-DD
   def set_scenario_period(scenario_id, ends_on:, set_by_id:)
     ensure_open!
-    scenario = @scenarios[live_scenario!(scenario_id)]
-    raise TeamPlanning::Error, "The baseline stands on the base date and has no period" unless scenario
-
-    case scenario.relation
-    in "instead" then raise TeamPlanning::Error, "This scenario is an alternative: it takes its period from #{parent_of(scenario.parent_id)}"
-    in "on" then return set_scenario_period(scenario.parent_id, ends_on:, set_by_id:)
-    in "then"
-    end
-
+    scenario_id = step_with_period!(scenario_id)
+    scenario = @scenarios[scenario_id]
     ends_on = require_date(ends_on)
     return if ends_on == scenario.ends_on
 
@@ -412,6 +405,28 @@ class TeamPlanning::PlanAggregate
       plan_id: @plan_id, scenario_id: scenario_id, starts_on: period_of(scenario_id).begin.iso8601,
       ends_on: ends_on.iso8601, previous_ends_on: scenario.ends_on.iso8601, set_by_id: set_by_id
     }))
+  end
+
+  # What moving a step's end would do, without doing it: every other live
+  # scenario whose period changes, with its period before and after. Refused
+  # as {#set_scenario_period} would refuse it.
+  #
+  # @param scenario_id [String] a `then` scenario, or the rest of a split, which moves its agreed part
+  # @param ends_on [Date, String]
+  # @return [Array(String, Range<Date>, Array<Array(String, Range<Date>, Range<Date>)>)]
+  #   the step whose end moves, its new period, and each scenario that moves with it
+  # @raise [TeamPlanning::Error] as {#set_scenario_period}
+  def period_moves(scenario_id, ends_on:)
+    ensure_open!
+    scenario_id = step_with_period!(scenario_id)
+    ends = { scenario_id => require_date(ends_on) }
+    ensure_periods_fit!(ends)
+    moves = @scenarios.keys.excluding(scenario_id).filter_map do |id|
+      before = period_of(id)
+      after = period_of(id, ends)
+      [ id, before, after ] unless before == after
+    end
+    [ scenario_id, period_of(scenario_id, ends), moves ]
   end
 
   # Removes a scenario nothing forks from.
@@ -1511,6 +1526,19 @@ class TeamPlanning::PlanAggregate
       end
 
       live_scenario!(conflict[:scenario_id])
+    end
+  end
+
+  # The `then` step whose end a period edit moves: the scenario itself, or the
+  # agreed part the rest of a split sits on.
+  def step_with_period!(scenario_id)
+    scenario = @scenarios[live_scenario!(scenario_id)]
+    raise TeamPlanning::Error, "The baseline stands on the base date and has no period" unless scenario
+
+    case scenario.relation
+    in "instead" then raise TeamPlanning::Error, "This scenario is an alternative: it takes its period from #{parent_of(scenario.parent_id)}"
+    in "on" then step_with_period!(scenario.parent_id)
+    in "then" then scenario_id
     end
   end
 
