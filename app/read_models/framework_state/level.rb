@@ -20,4 +20,10 @@ class FrameworkState::Level < ApplicationRecord
   validates :ordinal, presence: true
   validates :title, presence: true
   validates :code, presence: true
+
+  # A band made from this level keeps its number, so once the level leaves the
+  # framework its seats still price at the number it last had ([#368](https://github.com/espaliahq/espalia/issues/368)).
+  after_update if: :saved_change_to_ordinal? do
+    ActsAsTenant.without_tenant { PayBand.where(tenant_id:, level_id:).update_all(level_ordinal: ordinal) }
+  end
 end

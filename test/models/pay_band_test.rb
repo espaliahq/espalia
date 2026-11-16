@@ -214,5 +214,21 @@ class PayBandTest < ActiveSupport::TestCase
       assert_equal role_wide, lookup.covering(left, "Australia")
       assert_not_includes lookup.shadowed, role_wide
     end
+
+    should "price a seat at a level gone from the framework at the number the level last had, whichever bands remain" do
+      new_zealand = band(location: "New Zealand").tap(&:save!)
+      @level.update!(ordinal: 5)
+      united_states = band(location: "United States").tap(&:save!)
+      level_two = entry(level_ordinal: 2, midpoint: 2)
+      level_five = entry(level_ordinal: 5, midpoint: 5)
+      left = @level.level_id
+      @level.destroy!
+
+      assert_equal [ 5, 5 ], [ new_zealand.reload.level_ordinal, united_states.reload.level_ordinal ]
+      assert_equal level_five, lookup.covering(left, "Australia")
+      united_states.destroy!
+      assert_equal level_five, lookup.covering(left, "Australia")
+      assert_not_equal level_two, lookup.covering(left, "Australia")
+    end
   end
 end
