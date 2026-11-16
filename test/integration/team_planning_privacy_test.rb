@@ -83,6 +83,12 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
           assert_raises(Operations::Base::ParameterError) { operation.call(context: context_for(member), params: params_for(operation)) }
           next
         end
+        # The walk's step is open, and a step's outcome reads only once it closes.
+        if operation == Operations::TeamPlanning::StepOutcome
+          error = assert_raises(Operations::Base::ParameterError) { operation.call(context: context_for(member), params: params_for(operation)) }
+          assert_equal TeamPlanning::StepOutcome::NOT_CLOSED, error.message
+          next
+        end
 
         assert_includes operation.call(context: context_for(member), params: params_for(operation)).to_json, @plan_id
       end
