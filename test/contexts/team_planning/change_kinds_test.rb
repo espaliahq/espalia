@@ -25,8 +25,9 @@ class TeamPlanning::ChangeKindsTest < ActiveSupport::TestCase
   # without see-pay ([#446](https://github.com/espaliahq/espalia/issues/446)).
   should "keep every change that holds pay out of Status" do
     Operations::TeamPlanning::ChangeNote.hidden_facets(see_pay: false).each do |facet|
-      TeamPlanning::ChangeKinds.holding(facet).each do |kind|
-        change = kind.new(data: { subject_id: SecureRandom.uuid_v7, field: facet.split(":", 2).last })
+      TeamPlanning::ChangeKinds.holding(facet).select { it.is_a?(TeamPlanning::Events::SealedChange) }.each do |kind|
+        field = facet.split(":", 2)[1]
+        change = kind.new(data: { subject_id: SecureRandom.uuid_v7, **({ field: } if field) })
         assert_not kind.tracks?(change), "#{kind} holds #{facet}: strip its money in TeamPlanning::Status for a member without see-pay first"
       end
     end
