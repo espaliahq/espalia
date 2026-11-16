@@ -284,4 +284,13 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
 
     assert_match "name no step", refusal { move(@q2, "earlier", to_scenario_id: @q3) }
   end
+
+  test "refuse to move a change with an unsettled conflict from the last update to today, pointing at the Changes tab" do
+    placed = place(@q1, @eng_id)
+    @plan.rebase(base_on: "2027-02-10", expected_base_on: "2027-01-01", rebased_by_id: @ada_id,
+                 conflicts: [ { scenario_id: @q1, subject_id: @grace_id, facet: "assignment", change_id: placed } ])
+
+    assert_match "Changes tab", refusal { move(@q1, "later") }
+    assert_equal placed, @plan.winning_changes(@q1)[key].event_id
+  end
 end

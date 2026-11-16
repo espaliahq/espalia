@@ -683,6 +683,7 @@ class TeamPlanning::PlanAggregate
     moved_event_ids = @logs.fetch(scenario_id).select { key_of(it) == key }.map(&:event_id)
     ensure_movable!(scenario_id, target_id, key)
     ensure_references_kept!(scenario_id, target_id, moved_event_ids)
+    ensure_no_conflict_left!(scenario_id, target_id, key)
     apply(TeamPlanning::Events::ChangeMoved.new(data: {
       plan_id: @plan_id, scenario_id:, to_scenario_id: target_id, subject_id:, facet:, direction:, moved_event_ids:, moved_by_id:
     }))
@@ -1143,6 +1144,19 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "They leave on #{leaves_on}, outside the step it would move to (#{period.begin.iso8601} to #{period.end.iso8601}): change the date first"
   end
 
+  # A conflict the last update to today carried stands while a step resolves
+  # to the change it was read against. A move that ends that, in the step it
+  # leaves or a step after it that won't follow, would drop the warning unseen.
+  def ensure_no_conflict_left!(holder_id, dest_id, key)
+    return unless resolution_chain(dest_id).include?(holder_id)
+
+    leaving = [ holder_id, *descendants(holder_id) ] - [ dest_id, *descendants(dest_id) ]
+    return unless leaving.any? { carried_conflicts(it).key?(key) }
+
+    raise TeamPlanning::Error, "The last update to today found a conflict with this change that isn't settled: " \
+                               "settle it on the Changes tab first, then move it"
+  end
+
   # The scenarios strictly between two steps on the deeper one's resolution chain.
   def steps_between(one_id, other_id)
     chain = resolution_chain(other_id)
@@ -1198,6 +1212,7 @@ class TeamPlanning::PlanAggregate
     ensure_not_split!(from_id, marker.data[:to_scenario_id])
     ensure_leaves_within!(in_effect(marker.data[:to_scenario_id], @undone).reverse_each.find { it.key == key }, from_id)
     ensure_references_kept!(marker.data[:to_scenario_id], from_id, marker.data[:moved_event_ids])
+    ensure_no_conflict_left!(marker.data[:to_scenario_id], from_id, key)
 
     { moves_to_id: from_id, moved_event_ids: marker.data[:moved_event_ids], moves_before_id: back_before(marker) }
   end
@@ -1215,6 +1230,7 @@ class TeamPlanning::PlanAggregate
     ensure_not_split!(from_id, to_id)
     ensure_leaves_within!(in_effect(from_id, @undone).reverse_each.find { it.key == key }, to_id)
     ensure_references_kept!(from_id, to_id, marker.data[:moved_event_ids])
+    ensure_no_conflict_left!(from_id, to_id, key)
 
     { moves_from_id: from_id, moves_to_id: to_id, moved_event_ids: marker.data[:moved_event_ids] }
   end
