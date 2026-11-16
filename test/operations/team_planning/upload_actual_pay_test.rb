@@ -67,8 +67,6 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
 
   def event_count = Rails.configuration.event_store.read.count
 
-  # Ids and the signature are hex, so a short amount can turn up inside one.
-
   should "match people by id, HRIS id or either email, and preview what the file would change" do
     csv = "Amount,PERIOD,ignored,Person,Currency\n" \
           "90413,year,x,E-100,eur\n" \

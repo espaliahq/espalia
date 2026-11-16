@@ -286,8 +286,6 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
 
   def band_of(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }[:band]
 
-  # Ids are hex, so a short run of digits can turn up inside one.
-
   should "show a level the plan cleared to follow the Org Graph as an unpriced seat with no level, while the baseline still prices it" do
     follow_cleared_level(@ada)
     result = cost
