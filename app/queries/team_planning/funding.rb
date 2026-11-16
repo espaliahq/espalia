@@ -132,10 +132,12 @@ class TeamPlanning::Funding
     raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
     raise TeamPlanning::Error, "The baseline has no period to fund, so read one of the plan's scenarios" if @scenario_id == @plan.id
 
-    @map = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).structure(aggregate)
+    base = TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    @map = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository, base:).structure(aggregate)
     figured = TeamPlanning::FiguredPeriod.for(aggregate, @scenario_id, @map)
     @period = figured.period
-    @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id)
+    @cost_centres = TeamPlanning::PositionCostCentres.new(@map, tenant_id: @plan.tenant_id, base:,
+                                                                titles: Integrations::HrisTitleResolution.new(@plan.tenant))
     @lines = @map.budget_lines.index_by(&:id)
     @strictness = @map.rule(TeamPlanning::RuleKinds::BudgetStrictness.rule_name)
     @held = @strictness.fetch("match")

@@ -44,6 +44,15 @@ class Operations::TeamPlanning::RuleTest < ActiveSupport::TestCase
     assert_equal [ FLAT, BY_COUNTRY ], [ on_cost(@plan_id), on_cost ]
   end
 
+  should "read a cost_centre value stored as a first-match rules list as its entries, in the order that gives the same answers" do
+    rules = [ { "unit_id" => @payments, "cost_centre" => "Payments" }, { "unit_id" => @engineering, "cost_centre" => "Engineering" } ]
+    as_tenant { PlanningRuleDefault.create!(rule: "cost_centre", value: { "rules" => rules }) }
+
+    value = call(Operations::TeamPlanning::Rule, plan_id: @plan_id, scenario_id: @q1, rule: "cost_centre")[:value]
+
+    assert_equal({ "entries" => rules.reverse }, value)
+  end
+
   should "read a unit's rule over the plan-wide one, for the units below it too" do
     call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @q1, unit_id: @engineering, rule: "on_cost", value: FLAT)
 
