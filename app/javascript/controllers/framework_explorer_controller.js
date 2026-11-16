@@ -29,6 +29,7 @@
 
 import BaseController from "controllers/base_controller"
 import { useClickOutside } from "stimulus-use"
+import { somethingElseIsOpen } from "controllers/overlay_guard"
 
 // The `lg` breakpoint, in one place — the panes' `max-lg:hidden` and this
 // controller's overlay behaviour have to agree or a pane gets inline styles
@@ -126,7 +127,7 @@ export default class extends BaseController {
   // owns Esc while it is open — closing the pane underneath one would pull the
   // rug out from a dialog the user is still in.
   closeOverlayPanes() {
-    if (!this.isMobile || this.#somethingElseIsOpen()) return
+    if (!this.isMobile || somethingElseIsOpen()) return
 
     if (this.rolePaneOpen && this.hasRolePaneTarget) {
       this.#closeRolePane()
@@ -197,18 +198,6 @@ export default class extends BaseController {
 
   // private
 
-  // Is a modal or a menu currently open on top of the panes? Both own their
-  // own dismissal, so a pane must not act on an Esc or an outside click while
-  // one is up. `:not([hidden])` matters for the menu: a `Kit::Dropdown` renders
-  // its menu closed-but-present, so a bare `[role='menu']` matches on every
-  // edit-mode page and disarms the guard entirely (Hard-Won Lesson 37).
-  #somethingElseIsOpen() {
-    return Boolean(
-      document.querySelector("[data-modal-target='overlay']:not(.hidden)") ||
-      document.querySelector("[role='menu']:not([hidden])")
-    )
-  }
-
   #observeChrome() {
     if (!this.hasChromeTarget || typeof ResizeObserver === "undefined") return
 
@@ -231,7 +220,7 @@ export default class extends BaseController {
     // inside the pane, so without this the first tap inside a Reject / Resolve
     // / Add-level dialog reads as "outside the pane" and quietly closes the
     // feed the reviewer opened it from.
-    if (this.#somethingElseIsOpen()) return
+    if (somethingElseIsOpen()) return
 
     // The dismissal consumes the tap. `useClickOutside` listens on `window` in
     // the CAPTURE phase and does not stop the event, so without this the tap
