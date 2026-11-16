@@ -36,18 +36,19 @@ class Components::Shared::FrameLoadError < Components::Base
   # @param id [String] element id (stable, for tests and deep links)
   # @param subject [String] what failed to load, as a noun phrase ("the form")
   # @param closeable [Boolean] render a Close (dispatches `modal#close`)
-  # @param classes [String] layout utilities for the host surface
+  # @param classes [String, nil] layout utilities for the host surface; padded and spaced by default,
+  #   bare for an inline line
   # @param retry_action [String] Stimulus action the Retry dispatches — the
   #   `frame-error` controller's by default; a host that reloads by other
   #   means (the matrix's on-demand expanded row) names its own
   # @param inline [Boolean] one quiet line, message then Retry, for a frame
   #   that only adds to a page that works without it
-  def initialize(id:, subject: DEFAULT_SUBJECT, closeable: false, classes: "p-6 space-y-3", # rubocop:disable Metrics/ParameterLists
+  def initialize(id:, subject: DEFAULT_SUBJECT, closeable: false, classes: nil, # rubocop:disable Metrics/ParameterLists
                  retry_action: "frame-error#retry", inline: false)
     @id = id
     @subject = subject
     @closeable = closeable
-    @classes = classes
+    @classes = classes || (inline ? "" : "p-6 space-y-3")
     @retry_action = retry_action
     @inline = inline
   end

@@ -22,5 +22,6 @@ class Components::Shared::FrameLoadErrorTest < ActiveSupport::TestCase
     assert_equal "Couldn't load the figures.Retry", error.text
     assert_equal "frame-error#retry", error.at_css("button")["data-action"]
     assert_nil error.at_css("div")
+    assert_not_includes error["class"].split, "p-6"
   end
 end
