@@ -27,8 +27,8 @@
 # open ones replacing a leaver, as that budget is already committed, then
 # other open ones, each group by the day it is first held, then by id.
 #
-# Positions are the resolved map's, the same ones {TeamPlanning::Cost} reads,
-# each at its whole FTE, so funded and unfunded always add up to its
+# Positions are the resolved map's held in the period, the same ones
+# {TeamPlanning::Cost} prices, each at its whole FTE, so funded and unfunded always add up to its
 # positions and their FTE.
 #
 # @example
@@ -139,14 +139,20 @@ class TeamPlanning::Funding
     @lines = @map.budget_lines.index_by(&:id)
     @strictness = @map.rule(TeamPlanning::RuleKinds::BudgetStrictness.rule_name)
     @held = @strictness.fetch("match")
-    Report.new(period: @period, **figured.payload, map: @map, strictness: @strictness, positions: @map.positions.sort_by(&:id).map { fund(it) })
+    Report.new(period: @period, **figured.payload, map: @map, strictness: @strictness, positions: @map.positions.sort_by(&:id).filter_map { fund(it) })
   end
 
   private
 
+  # A backfill whose leaver goes after the period isn't held in it, so it has
+  # nothing to fund, as it has nothing to cost.
   def fund(position)
+    first_held = first_held(position)
+    return if first_held > @period.end
+
     funded = Funded.new(position:, fte: Rational(position.fte.to_s), cost_centre: @cost_centres.of(position), location: location_of(position),
-                        draw_reason: draw_reason(position), starts_on: starts_on(position), source: "derived", draws: [], matching_ids: [], reason: nil)
+                        draw_reason: draw_reason(position), starts_on: first_held.clamp(@period.begin, @period.end), source: "derived",
+                        draws: [], matching_ids: [], reason: nil)
     set = @map.fundings[position.id]
     set ? funded_as_set(funded, set) : derived(funded)
   end
@@ -213,7 +219,7 @@ class TeamPlanning::Funding
   # The first day any part of it is held, as {TeamPlanning::Cost} opens it:
   # each leaver it replaces opens their FTE the day after they go, or all
   # step without a date, and FTE no leaver here opens is held all step.
-  def starts_on(position)
+  def first_held(position)
     return @period.begin if occupants.key?(position.id)
 
     open = Rational(position.fte.to_s)
@@ -227,7 +233,7 @@ class TeamPlanning::Funding
       last ? last + 1 : @period.begin
     end
     starts << @period.begin if open.positive?
-    starts.min.clamp(@period.begin, @period.end)
+    starts.min
   end
 
   def fte_of(member)
