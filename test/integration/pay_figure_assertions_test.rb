@@ -19,7 +19,7 @@ class PayFigureAssertionsTest < ActiveSupport::TestCase
   end
 
   should "find a figure written right beside an id" do
-    [ "#{FIGURE}#{ID}", "#{ID}#{FIGURE}", "#{FIGURE} #{ID}" ].each do |output|
+    [ "#{FIGURE}#{ID}", "#{ID}#{FIGURE}", "#{FIGURE} #{ID}", "#{FIGURE}#{'b' * 64}", "#{'b' * 64}#{FIGURE}" ].each do |output|
       assert_raises(Minitest::Assertion) { assert_no_pay_figure output, FIGURE }
     end
   end
