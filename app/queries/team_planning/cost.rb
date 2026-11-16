@@ -57,6 +57,7 @@ class TeamPlanning::Cost
     "fte_unknown" => "The plan's FTE for the person was lost with their key",
     "no_level" => "No level resolves for the seat",
     "no_band" => "No pay band covers the seat's level and country",
+    "level_left" => "The seat's level is no longer in the framework, and no band made from it covers the seat's country",
     "on_cost_refused" => "The on-cost rule at the seat's unit can't price it, such as a fixed amount in another currency"
   }.freeze
 
@@ -366,7 +367,7 @@ class TeamPlanning::Cost
   def line(country:, reason:, pay: nil, **seat)
     seat[:year_days] = @year_days
     band = bands.covering(seat[:level_id], country) if seat[:level_id] && !pay
-    reason ||= seat[:level_id] ? ("no_band" unless band) : "no_level" unless pay
+    reason ||= seat[:level_id] ? (unbanded_reason(seat[:level_id]) unless band) : "no_level" unless pay
     return Line.new(**seat, **UNPRICED, reason:) if reason
 
     line = pay ? paid(pay, seat) : banded(band, seat)
@@ -492,6 +493,8 @@ class TeamPlanning::Cost
   end
 
   def band_list = @band_list ||= PayBand.where(tenant_id: @plan.tenant_id).order(:position).to_a
+
+  def unbanded_reason(level_id) = bands.left?(level_id) ? "level_left" : "no_band"
 
   def bands = @bands ||= PayBand::Lookup.new(band_list, tenant_id: @plan.tenant_id)
 
