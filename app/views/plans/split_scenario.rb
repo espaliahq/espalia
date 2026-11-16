@@ -19,6 +19,7 @@ class Views::Plans::SplitScenario < Views::Base
     @chosen = draft.fetch(:event_ids, []).to_set
     @name = draft[:name].presence || "#{scenario[:name]}, agreed part"
     @error = error
+    @by_event = needs[:changes].index_by { it[:event_id] }
   end
 
   def view_template
@@ -31,7 +32,7 @@ class Views::Plans::SplitScenario < Views::Base
         end
       end
       render(Components::Kit::Alert.new(tone: :danger, role: "alert", title: "Couldn't split it")) { refusal } if @error
-      changes.size < 2 ? nothing_to_split : choose
+      splittable? ? choose : nothing_to_split
     end
   end
 
@@ -45,8 +46,11 @@ class Views::Plans::SplitScenario < Views::Base
     p(class: "text-sm text-default") do
       if changes.empty?
         "#{@scenario[:name]} changes nothing yet, so there is nothing to split off."
-      else
+      elsif changes.one?
         "#{@scenario[:name]} makes one change, so there is nothing to split off. If it is agreed, approve it whole."
+      else
+        "Every part of #{@scenario[:name]} you could split off would take all its changes with it, or leave behind " \
+          "something it needs. If it is agreed, approve it whole."
       end
     end
     render Components::Kit::Button.new(variant: :ghost, href: plan_path(plan_id)) { "Back to the scenarios" }
@@ -78,36 +82,57 @@ class Views::Plans::SplitScenario < Views::Base
 
   def change_row(change)
     id = "split-change-#{change[:event_id]}"
-    stuck = change[:needs].any? { it[:event_id].nil? }
+    wanted = needed(change)
+    stuck = stuck?(change)
     li(class: "flex gap-3 p-3", data: { split_change: change[:event_id] }) do
       input(type: "checkbox", id:, name: "event_ids[]", value: change[:event_id], checked: @chosen.include?(change[:event_id]),
-            disabled: stuck, aria: { describedby: ("#{id}-needs" if change[:needs].any?) },
+            disabled: stuck, aria: { describedby: ("#{id}-needs" if wanted.any?) },
             class: "#{Components::Kit::Field::CHECKBOX} mt-0.5 shrink-0")
       div(class: "min-w-0 text-sm") do
         label(for: id, class: "block text-default break-words") { describe(change) }
-        needs(change, "#{id}-needs", stuck) if change[:needs].any?
+        needs(wanted, "#{id}-needs", stuck) if wanted.any?
       end
     end
   end
 
-  def needs(change, id, stuck)
-    p(id:, class: "mt-0.5 text-muted break-words", data: { split_needs: change[:needs].size }) do
+  def needs(wanted, id, stuck)
+    p(id:, class: "mt-0.5 text-muted break-words", data: { split_needs: wanted.size }) do
       strong(class: "font-medium text-danger") { stuck ? "Can't go across. " : "Can't go across alone. " }
-      wanted = change[:needs].map { describe(it) }.to_sentence
+      named = wanted.map { describe(it) }.to_sentence
       if stuck
-        plain "It needs #{wanted}, and no change in this scenario makes that any more."
+        plain "It needs #{named}, and no change in this scenario makes that any more."
       else
-        plain "It needs #{wanted}, so choose #{change[:needs].one? ? 'that change' : 'those changes'} too, or neither."
+        plain "It needs #{named}, so choose #{wanted.one? ? 'that change' : 'those changes'} too, or neither."
       end
     end
+  end
+
+  # Every change this one needs to go across with it, and what those need in turn.
+  def needed(change, seen = Set[change[:event_id]])
+    change[:needs].flat_map do |need|
+      next [] if need[:event_id] && seen.include?(need[:event_id])
+
+      seen << need[:event_id] if need[:event_id]
+      further = @by_event[need[:event_id]]
+      [ need, *(further ? needed(further, seen) : []) ]
+    end
+  end
+
+  def stuck?(change) = needed(change).any? { it[:event_id].nil? }
+
+  # Some change can go across with what it needs and still leave a change behind.
+  def splittable?
+    changes.size > 1 && changes.any? { !stuck?(it) && needed(it).size + 1 < changes.size }
   end
 
   # The operation names what was left behind by id; the page knows each change's
   # needs, so it says the same in names and keeps the operation's words for
   # any other refusal.
   def refusal
+    return @error unless @error.start_with?("The agreed part can't stand without")
+
     left_behind = changes.select { @chosen.include?(it[:event_id]) }.flat_map do |change|
-      change[:needs].select { it[:event_id] && !@chosen.include?(it[:event_id]) }.map { [ describe(change), describe(it) ] }
+      needed(change).select { it[:event_id] && !@chosen.include?(it[:event_id]) }.map { [ describe(change), describe(it) ] }
     end
     return @error if left_behind.empty?
 
@@ -125,7 +150,11 @@ class Views::Plans::SplitScenario < Views::Base
   end
 
   def describe(change)
-    "#{@needs[:names].fetch(change[:subject_id], Views::Plans::ChangesTab::PLAN_ONLY)}: #{facet_name(change[:facet])}"
+    "#{subject_name(change[:subject_id])}: #{facet_name(change[:facet])}"
+  end
+
+  def subject_name(id)
+    @needs[:names][id] || (id == plan_id ? Views::Plans::ChangesTab::WHOLE_PLAN : Views::Plans::ChangesTab::PLAN_ONLY)
   end
 
   def facet_name(facet)

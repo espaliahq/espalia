@@ -47,14 +47,14 @@ class PlanSplitSystemTest < ApplicationSystemTestCase
         open_dropdown(scope: row)
         click_link_with_js_fallback("Split off the agreed part…", expect_text: "Split Q1 hires")
 
-        assert_text "Can't go across alone. It needs Only in this plan: Unit"
+        assert_text "Can't go across alone. It needs Platform: Unit"
         assert_no_sideways_overflow
         js_set_checkbox "Brook Tamsin: Placement", checked: true
         click_button_with_js_fallback("Split off the chosen changes", expect_text: "Couldn't split it")
-        assert_text "Brook Tamsin: Placement needs Only in this plan: Unit, which you left behind."
+        assert_text "Brook Tamsin: Placement needs Platform: Unit, which you left behind."
         assert_field "Brook Tamsin: Placement", checked: true
 
-        js_set_checkbox "Only in this plan: Unit", checked: true
+        js_set_checkbox "Platform: Unit", checked: true
         js_fill_in "Name the agreed part", with: "Platform agreed"
         click_button_with_js_fallback("Split off the chosen changes", expect_text: "Split 2 changes off into Platform agreed.")
         assert_text "Platform agreed"

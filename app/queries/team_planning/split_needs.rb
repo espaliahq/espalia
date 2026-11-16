@@ -10,7 +10,8 @@
 #   TeamPlanning::SplitNeeds.new(context:, plan:, scenario_id:).call.changes
 class TeamPlanning::SplitNeeds
   # @!attribute changes [Array<Change>] the latest change per subject and facet, oldest first
-  # @!attribute names [Hash{String => String}] subject id => name, as status names them
+  # @!attribute names [Hash{String => String}] subject id => name: as status names them, then the units and
+  #   positions only this plan creates, as the scenario names them
   Report = Data.define(:changes, :names)
 
   # @!attribute event_id [String] the change to name when splitting
@@ -60,15 +61,24 @@ class TeamPlanning::SplitNeeds
         Need.new(event_id: in_effect[[ it.subject_id, it.facet ]], subject_id: it.subject_id, facet: it.facet)
       end)
     end
-    Report.new(changes:, names: names_of(changes))
+    Report.new(changes:, names: names_of(changes, aggregate))
   end
 
   private
 
-  def names_of(changes)
+  def names_of(changes, aggregate)
     return {} if changes.empty?
 
-    ids = changes.flat_map { [ it.subject_id, *it.needs.map(&:subject_id) ] }
-    TeamPlanning::Status.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).call.names.slice(*ids)
+    ids = changes.flat_map { [ it.subject_id, *it.needs.map(&:subject_id) ] }.uniq
+    named = TeamPlanning::Status.new(context: @context, plan: @plan, scenario_id: @scenario_id, repository: @repository).call.names.slice(*ids)
+    return named if (ids - named.keys).empty?
+
+    named.reverse_merge(planned_names(aggregate).slice(*ids))
+  end
+
+  def planned_names(aggregate)
+    map = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: @scenario_id).structure(aggregate)
+    positions = map.positions.to_h { [ it.id, [ it.level_name, it.role_name ].compact_blank.join(" ").presence || "A new position" ] }
+    positions.merge(map.units.to_h { [ it.id, it.name ] })
   end
 end

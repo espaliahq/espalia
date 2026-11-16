@@ -162,7 +162,7 @@ class PlansController < ApplicationController
     result = Operations::TeamPlanning::SplitScenario.call(context: pundit_user,
                                                           params: { plan_id: plan[:plan_id], scenario_id: params.expect(:scenario_id), **draft })
     count = result[:moved_event_ids].size
-    redirect_to timeline_plan_path(plan[:plan_id], scenario: result[:scenario_id]),
+    redirect_to timeline_plan_path(plan[:plan_id], scenario: result[:agreed_id]),
                 notice: "Split #{count} #{count == 1 ? 'change' : 'changes'} off into #{result[:name]}."
   rescue Operations::Base::ParameterError => e
     refused = -> { redirect_to plan_path(plan[:plan_id]), alert: "Couldn't split the scenario: #{e.message}" }
