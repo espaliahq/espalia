@@ -89,6 +89,23 @@ class Tenant::CostCentreRulesControllerTest < ActionDispatch::IntegrationTest
       assert_equal %w[Payments], labels
     end
 
+    should "keep a unit, role and level the pickers no longer offer when only the label changes" do
+      gone_unit, gone_role = Array.new(2) { SecureRandom.uuid_v7 }
+      saved = { "unit_id" => gone_unit, "role_id" => gone_role, "level_ordinal" => 9, "location" => "Alpha", "cost_centre" => "Old" }
+      ActsAsTenant.with_tenant(@tenant) { PlanningRuleDefault.create!(rule: "cost_centre", value: { "entries" => [ saved ] }) }
+
+      get edit_tenant_cost_centre_rule_path(1, version:)
+      assert_select "#cost-centre-entry-unit option[selected]", count: 1 do
+        assert_select "[value=?]", gone_unit
+      end
+      assert_select "#cost-centre-entry-reach option[selected][value=?]", "role:#{gone_role}"
+      assert_select "#cost-centre-entry-level option[selected][value=?]", "9"
+
+      patch tenant_cost_centre_rule_path(1), params: { version:, entry: { unit_id: gone_unit, reach: "role:#{gone_role}", level_ordinal: "9",
+                                                                          location: "Alpha", cost_centre: "New" } }
+      assert_equal [ saved.merge("cost_centre" => "New") ], entries
+    end
+
     should "flag an entry a later one always overrides" do
       add "Payments", unit_id: @org[:payments]
       add "Checkout", unit_id: @org[:checkout]

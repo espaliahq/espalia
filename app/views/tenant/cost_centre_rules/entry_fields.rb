@@ -85,13 +85,16 @@ module Views::Tenant::CostCentreRules::EntryFields
     select(id: "cost-centre-entry-unit", name: "entry[unit_id]", class: Components::Kit::Field::SELECT,
            aria: { describedby: "cost-centre-entry-unit-hint" }) do
       option(value: "", selected: values[:unit_id].blank?) { ANY_UNIT }
-      @choices.units.reject(&:retired?).each { |unit| option(value: unit.id, selected: values[:unit_id] == unit.id) { unit.name } }
+      offered = @choices.units.reject(&:retired?)
+      kept_option(values[:unit_id], offered.map(&:id)) { unit_name(values[:unit_id]) }
+      offered.each { |unit| option(value: unit.id, selected: values[:unit_id] == unit.id) { unit.name } }
     end
   end
 
   def reach_select(values)
     select(id: "cost-centre-entry-reach", name: "entry[reach]", class: Components::Kit::Field::SELECT) do
       option(value: "", selected: values[:reach].blank?) { EVERY_ROLE }
+      kept_option(values[:reach], reaches) { values[:reach].start_with?("role:") ? role_name(nil) : family_name(nil) }
       @choices.roles.group_by(&:role_family).sort_by { |family, _| [ family ? 0 : 1, family&.name.to_s ] }.each do |family, roles|
         optgroup(label: family&.name.presence || "Roles in no family") do
           reach_option(values, "family:#{family.role_family_id}", "Every role in #{family.name}") if family
@@ -103,11 +106,22 @@ module Views::Tenant::CostCentreRules::EntryFields
 
   def reach_option(values, value, text) = option(value:, selected: values[:reach] == value) { text }
 
+  def reaches
+    @choices.roles.flat_map { |role| [ "role:#{role.role_id}", ("family:#{role.role_family.role_family_id}" if role.role_family) ] }.compact
+  end
+
+  # Keeps a saved value the picker no longer offers, so saving another field
+  # can't quietly widen the entry to match everything.
+  def kept_option(value, offered, &)
+    option(value:, selected: true, &) if value.present? && !offered.include?(value)
+  end
+
   def level_select(values)
     top = @choices.roles.flat_map(&:levels).map(&:ordinal).max.to_i
     select(id: "cost-centre-entry-level", name: "entry[level_ordinal]", class: Components::Kit::Field::SELECT,
            aria: { describedby: "cost-centre-entry-level-hint" }) do
       option(value: "", selected: values[:level_ordinal].blank?) { EVERY_LEVEL }
+      kept_option(values[:level_ordinal].to_s, (1..top).map(&:to_s)) { "Level #{values[:level_ordinal]}" }
       (1..top).each { |ordinal| option(value: ordinal, selected: values[:level_ordinal].to_s == ordinal.to_s) { "Level #{ordinal}" } }
     end
   end
