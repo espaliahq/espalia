@@ -248,6 +248,18 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal TeamPlanning::Budget::Over.new(money: nil, heads: false, mismatched: []), report.cost_centres["Elsewhere"].over
   end
 
+  should "count a blank cost centre's unfunded money as no cost centre's" do
+    before = budget.cost_centres
+    as_tenant do
+      OrgGraph::CommandHandler.new(actor: SYSTEM).change_cost_centre(@brook.id, "", **ESPALIA)
+    end
+    after = budget.cost_centres
+
+    assert_equal [ "CC-1", "Platform" ], before.keys
+    assert_equal [ "CC-1", nil ], after.keys, "a blank cost centre is none, not a cost centre of its own"
+    assert_equal before["Platform"].unfunded.native, after[nil].unfunded.native
+  end
+
   should "hold a cost centre only on the lines that state each limit" do
     money = euros(150_000, cost_centre: "Data")
     heads = line(head_count: 2, cost_centre: "Data")
