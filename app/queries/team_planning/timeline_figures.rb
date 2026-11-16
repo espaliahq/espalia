@@ -24,7 +24,16 @@ class TeamPlanning::TimelineFigures
   # @!attribute unpriced [Integer] the seats no band prices, left out of cost
   # @!attribute budget [TeamPlanning::Budget::Totals, nil] nil for Today; money nil without the see-pay right
   # @!attribute capacity [Hash{String => Rational}] model => the step's own capacity and its forecast
-  Step = Data.define(:scenario_id, :basis, :period, :open_ended, :horizon_months, :cost, :unpriced, :budget, :capacity)
+  # @!attribute over [Over, nil] nil for Today, and when nothing the budget's strictness judges is over
+  Step = Data.define(:scenario_id, :basis, :period, :open_ended, :horizon_months, :cost, :unpriced, :budget, :capacity, :over)
+
+  # Over across every figure the plan's budget strictness judges: each line, each
+  # cost centre or the total, as the rule's scope says.
+  #
+  # @!attribute money [Array<String>, nil] the currencies any is over in; nil when money isn't limited or shown
+  # @!attribute heads [Boolean, nil] whether any holds more FTE than its head count
+  # @!attribute mismatched [Array<String>]
+  Over = Data.define(:money, :heads, :mismatched)
 
   # @!attribute pay_view [String] the cost read's
   # @!attribute money [Boolean] whether the viewer may see budget money
@@ -66,10 +75,21 @@ class TeamPlanning::TimelineFigures
     cost = TeamPlanning::Cost.new(**on, steps: reads[:cost]).call(at_end: false, baseline: false)
     @pay_view, @reference = cost.pay_view, cost.reference_currency
     today = cost.run_rate?
+    budget = TeamPlanning::Budget.new(**on, cost:).call unless today
     Step.new(scenario_id:, basis: cost.basis, period: cost.period, open_ended: cost.open_ended, horizon_months: cost.horizon_months,
              cost: today ? cost.scenario.total : TeamPlanning::Cost.plus(cost.scenario.total, cost.forecast.total),
              unpriced: cost.scenario.unpriced.uniq(&:seat_id).size,
-             budget: (TeamPlanning::Budget.new(**on, cost:).call.totals unless today),
+             budget: budget&.totals, over: budget && over(budget),
              capacity: TeamPlanning::Capacity.split(**on, steps: reads[:capacity], baseline: false).total)
+  end
+
+  # Read from the report the viewer is given, so without the see-pay right it holds heads alone.
+  def over(report)
+    judged = [ *report.lines.map(&:over), *report.cost_centres.values.map(&:over), report.totals.over ].compact
+    over = judged.select { it.money.present? || it.heads }
+    return if over.empty?
+
+    money = judged.filter_map(&:money)
+    Over.new(money: (money.flatten.uniq.sort if money.any?), heads: over.any?(&:heads), mismatched: judged.flat_map(&:mismatched).uniq.sort)
   end
 end

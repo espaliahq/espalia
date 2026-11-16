@@ -326,7 +326,9 @@ read reuses the cost read's pricing.
   period, and an open last step over the months its period shows, labelled so. Seats no band
   prices are counted beside it, never priced at nothing.
 - **Budget.** Approved and unfunded for a step; Today has no period, so no budget. A step over
-  its budget says so.
+  its budget says so wherever the plan's budget strictness judges it: a line, a cost centre or
+  the total, as the Budget tab and the variance check do. Without the see-pay right only heads
+  can put a step over, as money stays hidden.
 - **Capacity.** The total per capacity model, the step's own and its forecast.
 - **Pay.** Without the see-pay right a viewer gets band midpoints in cost and a budget in
   positions, with every budget amount left out. A scoped plan counts only its units.

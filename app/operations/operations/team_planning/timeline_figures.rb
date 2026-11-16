@@ -14,7 +14,9 @@ class Operations::TeamPlanning::TimelineFigures < Operations::Base
               "team_planning_cost's: for Today (basis run_rate) the yearly run rate of its seats, for a step (basis " \
               "period) its seats and forecast over its period. unpriced counts the seats left out of cost, for any " \
               "reason; team_planning_cost lists each with its reason. budget is team_planning_budget's total: approved, " \
-              "funded and unfunded, each with its money and head count, and over; Today has none, as it has no period. " \
+              "funded and unfunded, each with its money and head count. Its over is set when any figure the plan's budget " \
+              "strictness judges is over, a line, a cost centre or the total as the rule's scope says, with the currencies " \
+              "and heads any is over in, and null otherwise. Today has no budget, as it has no period. " \
               "capacity is team_planning_capacity's total per capacity model, the step's own and its forecast. Figures " \
               "are decimal strings. A budget line's amount is pay: money is false for a caller without the plan's " \
               "see-pay right, who gets band midpoints in cost, every head count, and null for every budget amount, " \
@@ -42,9 +44,9 @@ class Operations::TeamPlanning::TimelineFigures < Operations::Base
     { scenario_id: step.scenario_id, basis: step.basis,
       period: { starts_on: step.period.begin.iso8601, ends_on: step.period.end.iso8601, open_ended: step.open_ended,
                 horizon_months: step.horizon_months },
-      cost: sum(step.cost), unpriced: step.unpriced, budget: step.budget && budget(step.budget),
+      cost: sum(step.cost), unpriced: step.unpriced, budget: step.budget && { **budget(step.budget), over: over(step.over) },
       capacity: step.capacity.transform_values { decimal(it) } }
   end
 
-  def budget(totals) = totals(totals).slice(:approved, :funded, :unfunded, :over)
+  def budget(totals) = totals(totals).slice(:approved, :funded, :unfunded)
 end

@@ -632,6 +632,36 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
 
+    # A line held to a head count is over on heads for everyone, and on money only for a holder.
+    should "mark a timeline step over as each member's Budget tab and variance check do, with no currency without the right" do
+      line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 1_000, currency: "AUD",
+                                period: "year", cost_centre: "Platform", head_count: 1)
+      position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,
+                                                                         level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new",
+                                                                         cost_centre: "Platform")[:position_id]
+      call(Operations::TeamPlanning::SetAssignment, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @in.id,
+                                                             placements: [ { position_id:, allocation: 1 } ])
+      over = lambda do |account|
+        budget = call(Operations::TeamPlanning::Budget, account, plan_id: @plan_id, scenario_id: @q1)
+        variance = call(Operations::TeamPlanning::Attention, account, plan_id: @plan_id, scenario_id: @q1)[:items].select { it[:check] == "budget_variance" }
+        mark = call(Operations::TeamPlanning::TimelineFigures, account, plan_id: @plan_id, scenario_id: @q1)[:steps].last[:budget][:over]
+        [ budget[:budget_lines].find { it[:budget_line_id] == line.id }[:over], variance.size, mark ]
+      end
+
+      assert_equal [ { money: [ "AUD" ], heads: false, mismatched_currencies: [] }, 1, { money: [ "AUD" ], heads: false, mismatched_currencies: [] } ],
+                   over.(@holder), "over on money alone"
+      [ @editor, @viewer ].each do |account|
+        assert_equal [ { money: nil, heads: false, mismatched_currencies: [] }, 0, nil ], over.(account), "no mark without the right"
+      end
+
+      line.update!(amount: 1_000_000, head_count: 0.5)
+      [ @holder, @editor, @viewer ].each do |account|
+        money = ([] if account == @holder)
+        expected = { money:, heads: true, mismatched_currencies: [] }
+        assert_equal [ expected, 1, expected ], over.(account), "over on heads"
+      end
+    end
+
     should "show each member the Budget tab's totals exactly as team_planning_budget gives them, with no figure from held pay without the right" do
       BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "AUD", period: "year", cost_centre: "Platform")
       position_id = call(Operations::TeamPlanning::SetPosition, @holder, plan_id: @plan_id, scenario_id: @q1, role_id: @e5.role_id,

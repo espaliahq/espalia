@@ -96,6 +96,23 @@ class TeamPlanning::TimelineFiguresTest < ActiveSupport::TestCase
     assert_equal held.budget.unfunded_heads, step.budget.unfunded_heads
   end
 
+  # Each preset judges a different figure: the line, the cost centre or the total.
+  { "position_control" => [ -> { BudgetLine.update_all(amount: 1_000) }, ->(budget) { budget.lines.first.over } ],
+    "cost_centre" => [ -> {}, ->(budget) { budget.cost_centres.fetch("Platform").over } ],
+    "envelope" => [ -> {}, ->(budget) { budget.totals.over } ] }.each do |preset, (overspend, judged)|
+    should "mark a step over where the Budget tab does under #{preset}" do
+      as_tenant do
+        overspend.call
+        handler.set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id: @plan_id, subject_id: @plan_id,
+                                                                    end_state: { rule: "budget_strictness", value: { "preset" => preset } })
+      end
+
+      assert_equal [ "EUR" ], judged.(alone(TeamPlanning::Budget, @h2)).money
+      assert_nil judged.(alone(TeamPlanning::Budget, @h1))&.money.presence
+      assert_equal [ nil, nil, [ "EUR" ] ], figures.steps.map { it.over&.money }
+    end
+  end
+
   should "resolve each step once" do
     calls = Hash.new(0)
     original = TeamPlanning::Resolution.instance_method(:resolved)
