@@ -88,7 +88,7 @@ class Plans::AssignmentsControllerTest < ActionDispatch::IntegrationTest
       choices.each_with_index do |choice, index|
         position = choice["value"].delete_prefix(Views::Plans::MoveDialog::POSITION)
         assert_select "[data-map-position='#{position}'] span.font-medium", text: "New position: Software Engineer (#{index + 1})"
-        assert_select "[data-map-position='#{position}'] button[aria-label='Move New position: Software Engineer (#{index + 1}) in Growth']"
+        assert_select "[data-map-position='#{position}'] button[aria-haspopup=menu][aria-label='Actions for New position: Software Engineer (#{index + 1}) in Growth']"
       end
     end
 

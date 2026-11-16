@@ -159,17 +159,27 @@ module StimulusHelpers
 
   # Opens one of the framework explorer's delegated kebab menus (#380).
   #
-  # The trigger is hover-revealed (`opacity: 0`), which Selenium reports as not
-  # displayed and drops pointer clicks on, so the click is JS-dispatched. The
-  # menu itself does not exist until then — it is built from the trigger's
-  # dataset by `explorer_menu_controller.js`.
-  #
   # @param label [String] the trigger's aria-label ("Capability actions", …)
   # @param scope [String, nil] CSS selector narrowing which trigger to open
   # @param index [Integer] which matching trigger, in document order
   def open_explorer_menu(label, scope: nil, index: 0)
-    wait_for_stimulus "explorer-menu"
-    selector = [ scope, "button[aria-label='#{label}']" ].compact.join(" ")
+    open_delegated_menu(label, scope:, index:, controller: "explorer-menu")
+    assert_selector "[data-explorer-menu]", visible: true
+  end
+
+  # Opens a `Kit::DelegatedMenu` by its trigger's aria-label. The menu does
+  # not exist until then: the controller builds it on open.
+  #
+  # The click is JS-dispatched, since the explorer's triggers are
+  # hover-revealed (`opacity: 0`) and Selenium drops pointer clicks on them.
+  #
+  # @param label [String] the trigger's aria-label
+  # @param scope [String, nil] CSS selector narrowing which trigger to open
+  # @param index [Integer] which matching trigger, in document order
+  # @param controller [String] the controller mounted on the container
+  def open_delegated_menu(label, scope: nil, index: 0, controller: Components::Kit::DelegatedMenu::CONTROLLER)
+    wait_for_stimulus controller
+    selector = [ scope, "button[aria-label=\"#{label.gsub(/["\\]/) { "\\#{it}" }}\"]" ].compact.join(" ")
     assert_selector selector, visible: :all, minimum: index + 1
     # Scroll it into view first: the menu is `position: fixed` at the trigger,
     # so a trigger below the fold would open its menu off-screen. The script
@@ -177,23 +187,32 @@ module StimulusHelpers
     # dropped click reports nil rather than letting a menu left open by an
     # earlier step satisfy the assertion below (testing.md: an assertion a
     # dropped click would also satisfy is not a test).
-    opened_id = page.evaluate_script(<<~JS, selector, index)
-      (() => {
-        const trigger = document.querySelectorAll(arguments[0])[arguments[1]];
-        if (!trigger) return null;
-        trigger.scrollIntoView({ block: "center" });
-        trigger.click();
-        return trigger.getAttribute("aria-expanded") === "true" ? trigger.id : null;
-      })()
-    JS
+    script = lambda do |click|
+      page.evaluate_script(<<~JS, selector, index, click)
+        (() => {
+          const trigger = document.querySelectorAll(arguments[0])[arguments[1]];
+          if (!trigger) return null;
+          if (arguments[2]) {
+            trigger.scrollIntoView({ block: "center" });
+            trigger.click();
+          }
+          return trigger.getAttribute("aria-expanded") === "true" ? trigger.id : null;
+        })()
+      JS
+    end
+    # As in stimulus_toggle: a frame landing around the click can replace the
+    # row, and the menu built into it with it. One more click, only while the
+    # trigger is still closed, since a second click on an open one shuts it.
+    wait_for_turbo_idle(wait: 5)
+    script.call(true)
+    wait_for_turbo_idle(wait: 3)
+    opened_id = script.call(false) || script.call(true)
     assert opened_id.present?, "the click on #{selector}[#{index}] did not open its menu"
-    # visible: :all — `aria-expanded` is a STATE fact, and the trigger is a
-    # hover-revealed control that Selenium reports as not shown at `opacity: 0`.
-    # It happens to be opaque while its menu is open, but leaning on that would
-    # make every caller of this helper depend on a styling rule. The visibility
-    # that matters is the menu's, asserted next.
+    # visible: :all — `aria-expanded` is a state fact, and a hover-revealed
+    # trigger reads as not shown at `opacity: 0`. The visibility that matters
+    # is the menu's, asserted next.
     assert_selector "##{opened_id}[aria-expanded='true']", visible: :all
-    assert_selector "[data-explorer-menu]", visible: true
+    assert_selector "##{opened_id} + [data-delegated-menu]", visible: true
   end
 
   # Clicks an item of the OPEN explorer menu by its leading text.
