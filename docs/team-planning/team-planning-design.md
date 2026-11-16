@@ -225,7 +225,10 @@ plans projection keeps the list in `scope_unit_ids`.
   An undone bring-in, or an Org Graph move out of the plan's units, leaves the person's
   other changes in the plan. Attention lists each one under "A change about someone this
   plan no longer covers", with the change, so a planner can clear it or bring the person
-  back. History, status and overrides keep naming the subject by id, unnamed.
+  back. History, status and overrides keep naming the subject by id, unnamed. The changes
+  tab names the row "Someone this plan no longer covers" and offers Clear and Undo only:
+  a removing write stays allowed, while a pin or a settle about the subject is refused
+  ([#435](https://github.com/espaliahq/espalia/issues/435)).
 - **The scope cut runs before the pay filter.** The cut runs first, in `Map#settled`, so
   people outside never reach `map.people`. The see-pay filter runs after it, per person, in
   `map_payload`. Cost drops places outside before pricing, and reads actual pay only for
@@ -1225,7 +1228,9 @@ reads. `team_planning_settle_conflict` takes one of two choices, in one scenario
   retirements written with it wouldn't follow, so the editor changes it on the map.
 
 Settling is refused once status no longer reads the row as conflicting: the Org Graph
-has caught up with the plan, or the person was forgotten.
+has caught up with the plan, or the person was forgotten. It is refused, with the same
+answer as an unknown subject, for someone the plan no longer covers: the changes tab
+offers Clear there instead.
 
 No new event records the choice. The write carries a `settles` marker, the day the
 conflict was found and the choice, and the conflict ends by the rule above: a newer
@@ -1323,6 +1328,9 @@ reads its end state off both with `read_from`.
 - **Plan only**: the Org Graph never holds what the change plans, so it is never compared
   and counts as no Org Graph work: a rule, a position, a capacity, a budget line, a hire
   the plan adds, or a person's pay. It still shows, so an editor sees the change exists.
+- **Outside**: a scoped plan no longer covers the subject, in the scenario's map or the
+  baseline. The entry carries only the scenario, the change, the subject's id and the
+  facet: no name, no `since` and no sources.
 
 A plan whose base is still to come holds every change against today, so nothing reads
 conflicting before the plan starts.
