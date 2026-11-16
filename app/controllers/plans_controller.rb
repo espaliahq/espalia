@@ -4,7 +4,7 @@
 # the Team Planning Operations, as the MCP tools do, so a plan someone isn't
 # in is a 404 here and "No such plan" there.
 class PlansController < ApplicationController
-  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map]
+  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map budget]
 
   # GET /planning
   def index
