@@ -1,0 +1,26 @@
+{
+  "name": "team_planning_reopen_step",
+  "description": "Reopen the last step closed in a Team Planning plan. The step and the alternatives it was taken over can change again, and the steps after it stand on the plan's own base as before the close. Refused, naming why, for a step that isn't closed or that isn't the last one closed, or unless the caller is an editor.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string"
+      },
+      "scenario_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plan_id",
+      "scenario_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "mcp_client"
+}
