@@ -112,6 +112,23 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
       end
     end
 
+    should "read a split step's agreed part closed once the rest closes, and the alternative it passed over not taken" do
+      set(TeamPlanning::Events::LevelSet, @admin.person_id, level: "4")
+      moving = set(TeamPlanning::Events::LevelSet, @other_admin.person_id, level: "5")
+      agreed = call(Operations::TeamPlanning::SplitScenario, plan_id: @plan_id, scenario_id: @q1, event_ids: [ moving ], name: "Agreed Q1")[:agreed_id]
+      states = -> { call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].to_h { [ it[:name], it.slice(:state, :closed_on, :closed_by) ] } }
+
+      travel_to Time.utc(2027, 4, 2, 9) do
+        call(Operations::TeamPlanning::CloseStep, plan_id: @plan_id, scenario_id: @q1)
+        closed = { state: "closed", closed_on: "2027-04-02", closed_by: { person_id: @admin.person_id, name: @admin.person.name } }
+
+        assert_equal({ "Baseline" => "open", "Agreed Q1" => "closed", "Q1" => "closed", "Lean Q1" => "not_taken" }, states.().transform_values { it[:state] })
+        assert_equal closed, states.()["Agreed Q1"]
+        assert_equal closed, states.()["Q1"]
+        assert_equal agreed, call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].find { it[:name] == "Q1" }[:parent_id]
+      end
+    end
+
     should "move a step's end and say the period it now has" do
       assert_equal({ plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-04-30" },
                    call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-04-30"))

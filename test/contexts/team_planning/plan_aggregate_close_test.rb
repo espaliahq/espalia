@@ -73,6 +73,19 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
       assert_equal [ @lean, @lean_q2 ], @plan.closed_steps.map(&:first)
     end
 
+    should "say which closed step a scenario closed as, following a split's agreed part and nothing passed over" do
+      agreed = SecureRandom.uuid_v7
+      set(@q1)
+      @plan.set_change(TitleSet, scenario_id: @q1, subject_id: "brook", set_by_id: @editor_id, end_state: { title: "Lead" })
+      moving = @plan.changes_in(@q1).find { it.data[:subject_id] == "brook" }.event_id
+      @plan.split_scenario(@q1, agreed_id: agreed, name: "Agreed", event_ids: [ moving ], split_by_id: @editor_id)
+      close(@q1)
+
+      assert_equal [ @q1, @q1, nil, nil ], [ @q1, agreed, @lean, @plan_id ].map { @plan.closed_as(it) }
+      close(@q2)
+      assert_equal [ @q1, @q2 ], [ @q1, @q2 ].map { @plan.closed_as(it) }
+    end
+
     should "refuse a closed step and an archived plan" do
       close(@q1)
       assert_equal "This step is closed: reopen it to change it", refusal { close(@q1) }

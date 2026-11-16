@@ -34,29 +34,31 @@ class Operations::TeamPlanning::Scenarios < Operations::Base
     held = TeamPlanningHistoryEntry.changes_held(rows.map(&:id))
     aggregate = ::TeamPlanning::Repository.new.load_plan(plan.id)
     names = Person.where(id: rows.filter_map(&:closed_by_id).uniq).pluck(:id, :name).to_h
+    by_id = rows.index_by(&:id)
     scenarios = rows.map do |row|
+      closed_as = by_id[aggregate.closed_as(row.id)] unless row.baseline?
       { scenario_id: row.id, parent_id: row.parent_id, relation: row.relation, name: row.name&.reveal, description: row.description&.reveal,
         starts_on: row.starts_on.iso8601, ends_on: row.ends_on&.iso8601, changes: held.fetch(row.id, 0),
-        **standing(plan, aggregate, row, names) }
+        **standing(plan, aggregate, row, closed_as, names) }
     end
     { plan_id: plan.id, scenarios: }
   end
 
   private
 
-  def standing(plan, aggregate, row, names)
+  # The agreed part of a split step reads closed with the rest, on its day and by its closer.
+  def standing(plan, aggregate, row, closed_as, names)
     why = if row.baseline? then "The baseline can't be closed"
     elsif plan.archived? then ::TeamPlanning::PlanAggregate::ARCHIVED
     else aggregate.not_closable_because(row.id, Time.now.utc.to_date)
     end
-    closed = !row.baseline? && aggregate.closed?(row.id)
-    state = if closed then "closed"
+    state = if closed_as then "closed"
     elsif !row.baseline? && aggregate.frozen?(row.id) then "not_taken"
     else why ? "open" : "ready_to_close"
     end
     why = NOT_TAKEN if state == "not_taken"
-    by = row.closed_by_id if closed
-    { state:, closed_on: (row.closed_on&.iso8601 if closed), not_closable_because: why,
+    by = closed_as&.closed_by_id
+    { state:, closed_on: closed_as&.closed_on&.iso8601, not_closable_because: why,
       closed_by: by && { person_id: by, name: names.fetch(by, Person::FORMER_MEMBER) } }
   end
 end

@@ -511,6 +511,17 @@ class TeamPlanning::PlanAggregate
   # @return [Boolean] whether the scenario is a step closed on the timeline
   def closed?(scenario_id) = @closed.any? { |id, _| id == scenario_id }
 
+  # The closed step a scenario closed as: itself, or the step whose agreed
+  # part it is once the rest of a split step closed. An alternative a close
+  # passed over closed as nothing. It follows "on" links only, so every layer
+  # a closed step sits on reads closed with it, as the aggregate freezes them.
+  #
+  # @param scenario_id [String] a live scenario or the root
+  # @return [String, nil] the closed step's id
+  def closed_as(scenario_id)
+    @closed.map(&:first).find { |closed_id| split_parts(closed_id).include?(scenario_id) }
+  end
+
   # Whether a scenario takes no more changes: a step closed, a step before
   # one, or an alternative not taken, which leaves the timeline at a closed
   # step. The root stays open, as it holds the plan's own inputs.
@@ -1806,6 +1817,11 @@ class TeamPlanning::PlanAggregate
     return scenario_id if scenario?(scenario_id)
 
     raise TeamPlanning::Error, "This plan has no such scenario"
+  end
+
+  def split_parts(scenario_id)
+    scenario = @scenarios[scenario_id]
+    scenario&.relation == "on" ? [ scenario_id, *split_parts(scenario.parent_id) ] : [ scenario_id ]
   end
 
   # A path ends frozen unless it runs through every step closed and on past the last.
