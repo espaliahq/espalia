@@ -70,6 +70,17 @@ class Operations::TeamPlanning::RemovedScenariosTest < ActiveSupport::TestCase
     ], result[:removed]
   end
 
+  should "keep the count the plan page read for a scenario before it was removed" do
+    set_cap(@lean, 8)
+    set_cap(@lean, 6)
+    before = as_tenant { Operations::TeamPlanning::Scenarios.call(context: context_for(@viewer), params: { plan_id: @plan_id }) }
+    held = before[:scenarios].find { it[:scenario_id] == @lean }[:changes]
+    remove(@lean)
+
+    assert_equal 1, held
+    assert_equal held, call(as: @viewer)[:removed].sole[:changes]
+  end
+
   should "list nothing for a plan with no removed scenario, and refuse anyone outside the plan as an unknown plan" do
     assert_empty call[:removed]
 
