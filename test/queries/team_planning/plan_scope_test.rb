@@ -196,12 +196,13 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert person(scenario_map(@plan_id, @h1), @ada)[:manager_outside]
   end
 
-  # A level the plan gave Dee once it brought them in, left behind when the
-  # change that brought them in was cleared.
+  # A level and a manager the plan gave Dee once it brought them in, left
+  # behind when the change that brought them in was cleared.
   def plan_change_about_dee
     call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
                                                   placements: [ { unit_id: @payments, allocation: 1 } ])
     call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, level: "6")
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, manager_id: @ada.id)
     call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "assignment")
   end
 
@@ -210,12 +211,25 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @h1, person_id: @ada.id, level: "6")
 
     status = call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)
-    dee = status[:statuses].find { it[:subject_id] == @dee.id }
+    dee = status[:statuses].find { it[:subject_id] == @dee.id && it[:facet] == "level" }
     assert_equal %i[scenario_id change_id subject_id facet status].sort, dee.keys.sort
     assert_equal [ @h1, "level", "outside" ], dee.values_at(:scenario_id, :facet, :status)
     assert_not_includes status[:names], @dee.id
-    assert_equal [ @dee.id, @ada.id ], status[:statuses].map { it[:subject_id] } & [ @dee.id, @ada.id ], "in the order the changes land"
+    assert_equal [ @dee.id, @dee.id, @ada.id ], status[:statuses].map { it[:subject_id] }.select { [ @dee.id, @ada.id ].include?(it) }, "in the order the changes land"
     assert_equal "Ada Quill", status[:names][@ada.id]
+  end
+
+  should "refuse to pin what a step inherits about someone the plan no longer covers" do
+    plan_change_about_dee
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @brook.id, manager_id: @ada.id)
+
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @h2, subject_id: @dee.id, facet: "reporting_line")
+    end
+    assert_equal "This person is outside the units this plan covers. Place them in one of its units first.", error.message
+    assert_empty as_tenant { TeamPlanning::Repository.new.load_plan(@plan_id) }.changes_in(@h2)
+
+    assert call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @h2, subject_id: @brook.id, facet: "reporting_line")[:pinned]
   end
 
   should "keep drift to what the plan covers, saying a covered person left without saying where to" do
