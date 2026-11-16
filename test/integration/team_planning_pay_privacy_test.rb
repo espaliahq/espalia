@@ -271,6 +271,76 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  context "a change's note" do
+    setup do
+      @pay_note = "Zephyr settled on 61873 a year"
+      @level_note = "Zephyr earned the step, 61874 in band"
+      call(Operations::TeamPlanning::NoteChange, @holder, plan_id: @plan_id, scenario_id: @q1, event_id: @event_id, note: @pay_note)
+      call(Operations::TeamPlanning::SetPlannedLevel, @holder, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id, level: "4")
+      level = call(Operations::TeamPlanning::History, @holder, plan_id: @plan_id, scenario_id: @q1)[:entries]
+              .find { it[:subject_id] == @ada.id && it[:action] == "set" && it[:facet] != "data:pay" }
+      call(Operations::TeamPlanning::NoteChange, @holder, plan_id: @plan_id, scenario_id: @q1, event_id: level[:event_id], note: @level_note)
+    end
+
+    should "reach a holder on a pay change and on any other, and the rest on the other alone, in every read and on the Changes tab" do
+      { "holder" => @holder, "editor" => @editor, "viewer" => @viewer }.each do |who, account|
+        changes = changes_tab(account)
+
+        assert_note_read(account, @level_note, who)
+        assert_includes changes, @level_note, who
+        if account == @holder
+          assert_note_read(account, @pay_note, who)
+          assert_includes changes, @pay_note
+        else
+          refute_note_read(account, @pay_note, who)
+          assert_not_includes changes, @pay_note, who
+          assert_no_pay_note_read(account, who)
+        end
+      end
+    end
+
+    should "give no sign of a note on a pay change to anyone without the right" do
+      [ @editor, @viewer ].each do |account|
+        history = call(Operations::TeamPlanning::History, account, plan_id: @plan_id, scenario_id: @q1)[:entries]
+        pay = history.select { it[:facet] == "data:pay" }
+
+        assert pay.any?
+        assert pay.none? { it.key?(:note) || it[:action] == "note" }
+        [ Operations::TeamPlanning::Status, Operations::TeamPlanning::Overrides ].each do |operation|
+          rows = call(operation, account, plan_id: @plan_id, scenario_id: @q1).values_at(:statuses, :overrides).compact.flatten
+          assert rows.select { it[:facet] == "data:pay" }.none? { it.key?(:note) }, operation.name
+        end
+      end
+    end
+
+    should "offer the note form on a pay change to an editor with the right alone" do
+      assert_equal 2, changes_tab_html(@holder).css("[data-change-note-editor]").size
+      assert_equal 1, changes_tab_html(@editor).css("[data-change-note-editor]").size
+      assert_empty changes_tab_html(@viewer).css("[data-change-note-editor]")
+    end
+
+    should "hide a pay change's note from a member at once when their see-pay right is withdrawn" do
+      call(Operations::TeamPlanning::GrantSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
+      assert_note_read(@editor, @pay_note, "editor")
+      assert_includes changes_tab(@editor), @pay_note
+
+      call(Operations::TeamPlanning::WithdrawSeePay, @holder, plan_id: @plan_id, person_id: @editor.person_id)
+
+      refute_note_read(@editor, @pay_note, "editor")
+      assert_not_includes changes_tab(@editor), @pay_note
+      assert_no_pay_note_read(@editor, "editor")
+      assert_note_read(@editor, @level_note, "editor")
+    end
+
+    should "keep a pay change's note from the rest when it moves across a split" do
+      split = call(Operations::TeamPlanning::SplitScenario, @holder, plan_id: @plan_id, scenario_id: @q1, event_ids: [ @event_id ], name: "Agreed")
+
+      assert_not_includes split.to_json, @pay_note
+      assert_note_read(@holder, @pay_note, "holder", split[:agreed_id])
+      [ @editor, @viewer ].each { assert_no_pay_note_read(it, it == @editor ? "editor" : "viewer", split[:agreed_id]) }
+    end
+  end
+
   should "capture the log the leak check reads" do
     Rails.logger.info("probe #{AMOUNT}")
 
@@ -591,6 +661,47 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       end
     end
   end
+
+  def note_reads(account, scenario_id = @q1)
+    [ Operations::TeamPlanning::Status, Operations::TeamPlanning::Overrides, Operations::TeamPlanning::History ]
+      .to_h { [ it.name.demodulize, call(it, account, plan_id: @plan_id, scenario_id:).to_json ] }
+  end
+
+  def assert_note_read(account, note, who, scenario_id = @q1)
+    note_reads(account, scenario_id).each { |read, output| assert_includes output, note, "#{read} as #{who}" }
+  end
+
+  def refute_note_read(account, note, who, scenario_id = @q1)
+    note_reads(account, scenario_id).each { |read, output| assert_not_includes output, note, "#{read} as #{who}" }
+  end
+
+  def assert_no_pay_note_read(account, who, scenario_id = @q1)
+    [ scenario_id, @plan_id ].each do |id|
+      READS.call.each do |operation|
+        output = begin
+          call(operation, account, **params_for(operation, scenario_id: id)).to_json
+        rescue Operations::Base::ParameterError => e
+          e.message
+        end
+        [ @pay_note, "Zephyr settled" ].each { assert_not_includes output, it, "#{Operations::Registry.tool_name_for(operation)} as #{who}" }
+      end
+    end
+  end
+
+  def changes_tab_html(account, scenario_id = @q1)
+    plan = call(Operations::TeamPlanning::Plan, account, plan_id: @plan_id)
+    scenarios = call(Operations::TeamPlanning::Scenarios, account, plan_id: @plan_id)[:scenarios]
+    reads = { drift: Operations::TeamPlanning::Drift, status: Operations::TeamPlanning::Status, attention: Operations::TeamPlanning::Attention }
+            .to_h { |key, operation| [ key, call(operation, account, **params_for(operation, scenario_id:)) ] }
+    record = TeamPlanningPlan.find(@plan_id)
+    policy = PlanPolicy.new(context_for(account), record)
+    controller = ApplicationController.new
+    controller.request = ActionDispatch::TestRequest.create
+    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ChangesTab.new(plan:, scenarios:, **reads, can_edit: policy.update?,
+                                                                                        see_pay: policy.see_pay?)))
+  end
+
+  def changes_tab(account) = changes_tab_html(account).to_html
 
   def frozen_reads(account)
     { cost: call(Operations::TeamPlanning::Cost, account, plan_id: @plan_id, scenario_id: @q1),
