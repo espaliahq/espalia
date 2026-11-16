@@ -37,6 +37,14 @@ class TeamPlanning::Events::Change < RubyEventStore::Event
   # @raise [TeamPlanning::Error] when the end state is not one this kind can hold
   def self.end_state(end_state) = end_state
 
+  # What settling a conflict writes, from the Org Graph or from a change that
+  # came from it, which may hold a value no editor can set.
+  #
+  # @param end_state [Hash]
+  # @return [Hash]
+  # @raise [TeamPlanning::Error] when the kind can't hold it
+  def self.followed_end_state(end_state) = end_state(end_state)
+
   # Kinds land in the order they were made, not by kind, so this must not
   # depend on another kind having landed first. Checks across kinds, such as
   # a misfit, run on the resolved map instead.

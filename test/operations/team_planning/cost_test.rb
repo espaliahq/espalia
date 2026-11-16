@@ -45,6 +45,17 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
 
   def cost(as: @admin, **params) = call(Operations::TeamPlanning::Cost, as:, plan_id: @plan_id, scenario_id: @year, **params)
 
+  def follow_cleared_level(person)
+    people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+    call(Operations::TeamPlanning::SetPlannedLevel, plan_id: @plan_id, scenario_id: @year, person_id: person.id, level: "4")
+    travel_to Time.utc(2026, 1, 10, 9)
+    ActsAsTenant.with_tenant(@tenant) { people.change_level(person.id, "6", provider: "espalia", effective_on: "2026-01-10") }
+    call(Operations::TeamPlanning::RebasePlan, plan_id: @plan_id, base_on: "2026-01-01")
+    travel_to Time.utc(2026, 1, 11, 9)
+    ActsAsTenant.with_tenant(@tenant) { people.change_level(person.id, nil, provider: "espalia", effective_on: "2026-01-11") }
+    call(Operations::TeamPlanning::SettleConflict, plan_id: @plan_id, scenario_id: @year, subject_id: person.id, facet: "level", choice: "reality")
+  end
+
   should "give totals, units and cost centres as decimal strings beside the baseline, without any seat's working" do
     position_id = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @year, role_id: @engineer.role_id,
                                                                level_id: @e5.level_id, unit_id: @payments, fte: 0.5, basis: "new")[:position_id]
@@ -203,6 +214,17 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
 
   # Ids are hex, so a short run of digits can turn up inside one.
   def without_ids(result) = result.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
+
+  should "show a level the plan cleared to follow the Org Graph as an unpriced seat with no level, while the baseline still prices it" do
+    follow_cleared_level(@ada)
+    result = cost
+
+    assert_equal [ [ @ada.id, "person", nil, "no_level" ], [ @cy.id, "person", nil, "no_level" ] ],
+                 result[:unpriced].map { it.values_at(:seat_id, :kind, :level_id, :reason) }.sort_by { it.first == @ada.id ? 0 : 1 }
+    baseline, scenario = result[:total].values_at(:baseline, :scenario).map { BigDecimal(it[:converted]) }
+    assert_predicate baseline, :positive?
+    assert_predicate scenario, :zero?
+  end
 
   should "refuse a unit on neither map and a caller outside the plan" do
     assert_equal "No such unit", assert_raises(Operations::Base::ParameterError) { cost(unit_id: SecureRandom.uuid_v7) }.message
