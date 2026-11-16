@@ -1,6 +1,6 @@
 {
   "name": "team_planning_fork_scenario",
-  "description": "Fork a scenario in a Team Planning plan. relation 'then' adds the step after parent_id: it starts the day after its parent ends and needs ends_on. After the baseline it starts on starts_on, on or after the plan's base date and defaulting to it; the days before it read as today. relation 'instead' adds an alternative to parent_id over the same period. parent_id defaults to the baseline, whose id is the plan's. A parent has at most one 'then' step. Refused unless the caller is one of the plan's editors.",
+  "description": "Fork a scenario in a Team Planning plan. relation 'then' adds the step after parent_id: it starts the day after its parent ends, and ends on ends_on or, without one, runs with no end date. After the baseline it starts on starts_on, on or after the plan's base date and defaulting to it; the days before it read as today. After a parent with no end date it starts on starts_on, which is required, and the parent ends the day before. relation 'instead' adds an alternative to parent_id over the same period. parent_id defaults to the baseline, whose id is the plan's. A parent has at most one 'then' step. Refused unless the caller is one of the plan's editors.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -41,28 +41,7 @@
       "relation",
       "name"
     ],
-    "additionalProperties": false,
-    "if": {
-      "properties": {
-        "relation": {
-          "const": "then"
-        }
-      },
-      "required": [
-        "relation"
-      ]
-    },
-    "then": {
-      "required": [
-        "ends_on"
-      ],
-      "properties": {
-        "ends_on": {
-          "minLength": 1,
-          "pattern": "\\S"
-        }
-      }
-    }
+    "additionalProperties": false
   },
   "annotations": {
     "readOnlyHint": false,

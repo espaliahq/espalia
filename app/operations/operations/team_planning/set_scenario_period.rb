@@ -7,7 +7,7 @@ class Operations::TeamPlanning::SetScenarioPeriod < Operations::Base
   include Operations::OrgGraph::DateParameter
 
   description "Move the end of a 'then' scenario in a Team Planning plan. Every step after it starts the day after " \
-              "the new end, and its alternatives take the new period. The first step after the baseline may also " \
+              "the new end, and its alternatives take the new period. The last step on a line may have no end date. The first step after the baseline may also " \
               "move its start with starts_on, on or after the plan's base date; the days before it read as today. " \
               "A later step's start follows the step before it, so starts_on is refused for one unless it repeats that start. Refused if a " \
               "later step would end before it starts, naming that step, if someone's last day would fall outside " \
@@ -17,10 +17,12 @@ class Operations::TeamPlanning::SetScenarioPeriod < Operations::Base
 
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true
-  parameter :ends_on, String, required: true, allow_blank: false, schema: DATE_SCHEMA
+  parameter :ends_on, String, required: true, schema: DATE_OR_BLANK_SCHEMA.merge(
+    description: "The step's last day, YYYY-MM-DD, or an empty string for no end date, which only the last step on a line may have."
+  )
   parameter :starts_on, String, allow_blank: false, schema: DATE_SCHEMA
 
-  # @return [Hash] `{ plan_id, scenario_id, starts_on, ends_on }`
+  # @return [Hash] `{ plan_id, scenario_id, starts_on, ends_on }`, ends_on nil for no end date
   def perform
     plan_id = plan_id!
     scenario_id = scenario_id!(:scenario_id)
@@ -28,6 +30,6 @@ class Operations::TeamPlanning::SetScenarioPeriod < Operations::Base
       handler.set_scenario_period(plan_id, scenario_id, ends_on: parse_date(:ends_on), starts_on: parse_date(:starts_on))
     end
     period = plan.period_of(scenario_id)
-    { plan_id:, scenario_id:, starts_on: period.begin.iso8601, ends_on: period.end.iso8601 }
+    { plan_id:, scenario_id:, starts_on: period.begin.iso8601, ends_on: period.end&.iso8601 }
   end
 end
