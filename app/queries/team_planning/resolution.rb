@@ -218,14 +218,16 @@ class TeamPlanning::Resolution
   # from the day after they left, or the first day of the step they left in
   # when the plan gave no date, never before the position opened. The rest
   # of the position opens with it. A leaver still on this step's map holds
-  # their own seat, and cost opens it the day after they go.
+  # their own seat, and cost opens it the day after they go. A step after a
+  # closed one stands on the day after the close, so a seat still open then
+  # opens that day, as in a fresh plan from it.
   def opened(map, aggregate)
     return map if map.positions.empty?
 
     dates = self.class.opened_on(aggregate, @scenario_id)
     gone = map.departed.select(&:position_id).group_by(&:position_id)
     map.with(positions: map.positions.map do |position|
-      opened_on = dates.fetch(position.id, aggregate.base_on)
+      opened_on = [ dates.fetch(position.id, aggregate.base_on), map.base_on ].compact.max
       vacated = gone.fetch(position.id, []).map do |leaver|
         left = TeamPlanning::Events::DepartureSet.leaving_date(leaver.leaves_on)&.next_day || aggregate.period_of(leaver.leaves_in_id)&.begin
         TeamPlanning::Baseline::Vacated.new(fte: leaver.fte, opens_on: [ left, opened_on ].compact.max)
