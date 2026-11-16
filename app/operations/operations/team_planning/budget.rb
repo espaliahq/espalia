@@ -29,20 +29,26 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "each position drawing on it once, at the FTE it draws, while units and the total count the positions " \
               "funded whole, as team_planning_funding does, so funded and unfunded add up to every position. A position with a seat no pay band prices still counts in head count and is listed under " \
               "unpriced with no money; so is one whose on-cost is refused, unless the basis is base_only, which funds its base. Figures are decimal strings. The baseline has no period, so it can't be the " \
-              "scenario. Refused, as an unknown plan, unless the caller is a member."
+              "scenario. strictness is the budget_strictness rule, with the preset it equals or null, and its scope " \
+              "decides where the budget is held: each budget line, each cost centre or the total (organisation) carries " \
+              "over, and the rest carry null. over.money lists the currencies whose remaining, summed over the lines in " \
+              "that currency, is below zero (null when the limit is heads); over.heads says whether the remaining head " \
+              "count is below zero (null when the limit is money or no line states a head count). Nothing is converted " \
+              "to judge it: a currency a line is drawn on besides its own goes in over.mismatched_currencies, never " \
+              "counted. Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "A scenario of the plan; not the plan's id, as the baseline has no period." }
 
-  # @return [Hash] `{ plan_id, scenario_id, basis, period, pay_view, reference_currency, total, forecast,
+  # @return [Hash] `{ plan_id, scenario_id, basis, strictness, period, pay_view, reference_currency, total, forecast,
   #   budget_lines, cost_centres, units, unpriced }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     report = refusing_bad_plans { ::TeamPlanning::Budget.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, scenario_id:, basis: report.basis, period: period(report), pay_view: report.pay_view,
+    { plan_id: plan.id, scenario_id:, basis: report.basis, strictness: strictness(report.strictness), period: period(report), pay_view: report.pay_view,
       reference_currency: report.reference_currency, total: totals(report.totals), forecast: sum(report.forecast),
       budget_lines: report.lines.map { line(it) },
       cost_centres: report.cost_centres.map { |cost_centre, totals| { cost_centre:, **totals(totals, money: method(:native)) } },
@@ -58,15 +64,19 @@ class Operations::TeamPlanning::Budget < Operations::Base
       approved: { amount: figure(line.approved), head_count: figure(budget_line.head_count) },
       funded: { native: line.funded.transform_values { decimal(it) }, **heads(line.funded_heads) },
       remaining: { amount: figure(line.remaining), head_count: figure(line.remaining_head_count) },
-      mismatched_currencies: line.mismatched }
+      mismatched_currencies: line.mismatched, over: over(line.over) }
   end
 
   def totals(totals, money: method(:sum))
     { approved: { **money.(totals.approved), head_count: figure(totals.head_count) },
       funded: { **money.(totals.funded), **heads(totals.funded_heads) },
       remaining: { **money.(totals.remaining), head_count: figure(totals.remaining_head_count) },
-      unfunded: { **money.(totals.unfunded), **heads(totals.unfunded_heads) } }
+      unfunded: { **money.(totals.unfunded), **heads(totals.unfunded_heads) }, over: over(totals.over) }
   end
+
+  def strictness(value) = { preset: ::TeamPlanning::RuleKinds::BudgetStrictness.preset_of(value), **value.symbolize_keys }
+
+  def over(over) = over && { money: over.money, heads: over.heads, mismatched_currencies: over.mismatched }
 
   def unit(totals)
     { funded: { **native(totals.funded), **heads(totals.funded_heads) }, unfunded: { **native(totals.unfunded), **heads(totals.unfunded_heads) } }
