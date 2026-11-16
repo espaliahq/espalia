@@ -14,8 +14,10 @@ class Views::Plans::FigureParts < Views::Base
 
     span(data: { figure_parts: "" }, class: "flex basis-full flex-wrap items-baseline gap-x-2 text-xs tabular-nums text-muted") do
       @parts.each_with_index do |(label, figure), index|
-        span(aria: { hidden: true }) { "·" } if index.positive?
-        span(data: { part: label.downcase }) { "#{label} #{figure}" }
+        span(class: "inline-flex items-baseline gap-x-2") do
+          span(aria: { hidden: true }) { "·" } if index.positive?
+          span(data: { part: label.downcase }) { "#{label} #{figure}" }
+        end
       end
     end
   end
