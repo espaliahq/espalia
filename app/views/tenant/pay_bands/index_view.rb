@@ -72,13 +72,13 @@ class Views::Tenant::PayBands::IndexView < Views::Base
           plain "A seat takes its pay from the last band in this list that matches it, so put wide bands first " \
                 "and narrow ones after. A new band lands below the bands wider than it."
         end
-        div(data: { controller: "pay-band-order" }) do
+        div(data: { controller: "drag-order", drag_order_field_value: "pay_band_ids" }) do
           settings_form(reorder_tenant_pay_bands_path, method: :patch, id: "pay-bands-reorder-form", hidden: true,
-                                                       data: { pay_band_order_target: "form" }) { }
+                                                       data: { drag_order_target: "form" }) { }
           settings_form(reorder_tenant_pay_bands_path, method: :patch, id: MOVE_FORM, hidden: true) do
             @bands.each { input(type: "hidden", name: "from_pay_band_ids[]", value: it[:pay_band_id]) }
           end
-          ol(class: "mt-4 divide-y divide-default", data: { pay_band_order_target: "list" }) do
+          ol(class: "mt-4 divide-y divide-default", data: { drag_order_target: "list" }) do
             @bands.each_with_index { |band, index| band_row(band, index) }
           end
         end
@@ -90,9 +90,9 @@ class Views::Tenant::PayBands::IndexView < Views::Base
     id = band[:pay_band_id]
     li(id: "pay-band-#{id}", class: "py-3 first:pt-0 last:pb-0 pointer-fine:cursor-grab data-[drag-source]:opacity-50",
        draggable: "true",
-       data: { pay_band_id: id,
-               action: "pointerdown->pay-band-order#press dragstart->pay-band-order#start dragover->pay-band-order#over " \
-                       "drop->pay-band-order#drop dragend->pay-band-order#end" }) do
+       data: { order_id: id,
+               action: "pointerdown->drag-order#press dragstart->drag-order#start dragover->drag-order#over " \
+                       "drop->drag-order#drop dragend->drag-order#end" }) do
       div(class: "flex items-start gap-3") do
         span(class: "mt-0.5 w-6 shrink-0 text-right text-sm font-medium tabular-nums text-muted") { "#{band[:position]}." }
         div(class: "flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4") do
