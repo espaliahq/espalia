@@ -34,6 +34,7 @@ class Operations::TeamPlanning::SetBudgetLine < Operations::Base
     scenario_id = scenario!
     line_id = params[:budget_line_id].nil? ? SecureRandom.uuid_v7 : uuid!(:budget_line_id)
     changes = params[:budget_line_id].nil? ? [] : line_changes(line_id)
+    held!(loaded_plan, line_id) unless params[:budget_line_id].nil?
     tenant_line = !params[:budget_line_id].nil? && tenant_line?(line_id, changes.last)
     line = assign_line(held_line(line_id, changes))
     set_change!(KIND, subject_id: line_id, end_state: figures(line).merge(tenant_line:)) do |plan|

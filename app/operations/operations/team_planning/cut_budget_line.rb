@@ -24,6 +24,7 @@ class Operations::TeamPlanning::CutBudgetLine < Operations::Base
   def perform
     scenario_id = scenario!
     line_id = uuid!(:budget_line_id)
+    held!(loaded_plan, line_id)
     set_change!(KIND, subject_id: line_id, end_state: { tenant_line: tenant_line?(line_id, line_changes(line_id).last) }) { |plan| held!(plan, line_id) }
 
     { plan_id: plan_id!, scenario_id:, budget_line_id: line_id }

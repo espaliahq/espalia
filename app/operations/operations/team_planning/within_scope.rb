@@ -46,18 +46,18 @@ module Operations::TeamPlanning::WithinScope
 
   # A scoped plan holds only the budget lines its seats can draw on
   # ([#378](https://github.com/espaliahq/espalia/issues/378)), so no change
-  # may name, add or draw on one outside them. The refusal names no line.
+  # may name, add or draw on one outside them. A line outside reads as one that
+  # doesn't exist; only a cost centre the caller gave is refused as outside.
   def lines_within_scope!(map, kind, subject_id, end_state)
     end_state = end_state.to_h.symbolize_keys
-    outside = if kind == ::TeamPlanning::Events::BudgetLineSet
-                map.outside_line?(subject_id) || !map.holds_cost_centre?(end_state[:cost_centre]) ||
-            !map.holds_cost_centre?(::BudgetLine.find_by(id: subject_id)&.cost_centre)
-    elsif kind == ::TeamPlanning::Events::BudgetLineCut
-                map.outside_line?(subject_id)
-    elsif kind == ::TeamPlanning::Events::PositionFundingSet
-                Array(end_state[:draws]).any? { map.outside_line?(it.to_h.symbolize_keys[:budget_line_id]) }
+    ids = if kind.in?([ ::TeamPlanning::Events::BudgetLineSet, ::TeamPlanning::Events::BudgetLineCut ]) then [ subject_id ]
+    elsif kind == ::TeamPlanning::Events::PositionFundingSet then Array(end_state[:draws]).map { it.to_h.symbolize_keys[:budget_line_id] }
+    else return
     end
-    return unless outside
+    if ids.any? { map.outside_line?(it) || !map.holds_cost_centre?(::BudgetLine.find_by(id: it)&.cost_centre) }
+      raise Operations::Base::ParameterError, Operations::TeamPlanning::BudgetLineWrite::NO_SUCH_LINE
+    end
+    return unless kind == ::TeamPlanning::Events::BudgetLineSet && !map.holds_cost_centre?(end_state[:cost_centre])
 
     raise Operations::Base::ParameterError, "This budget line is outside the cost centres this plan covers. Widen the plan's units first."
   end

@@ -197,7 +197,9 @@ plans projection keeps the list in `scope_unit_ids`.
     or a frozen copy. The Budget tab says "Totals cover the budget lines this plan's seats
     can draw on."
   - Changing, cutting or adding a line outside the set is refused, and so is funding a seat
-    from one. The refusal names no line.
+    from one. A write on an outside line gets the refusal an unknown id gets, "This scenario
+    has no such budget line", so a member can't use a write to learn that a line exists. Only
+    a cost centre the editor gives is refused as outside the set.
   - The cost: a seat a scenario moves into a cost centre outside the set finds no line and
     reads as unfunded. That is true from where the plan stands. Widen the plan's units to
     bring the line in.
