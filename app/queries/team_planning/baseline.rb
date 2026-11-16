@@ -316,7 +316,7 @@ class TeamPlanning::Baseline
       value.removed? ? UNKNOWN : value.reveal
     end
 
-    # @return [Boolean] whether the plan holds a level for them
+    # @return [Boolean] whether the plan holds a level for them, or holds that they have none
     def planned_level? = !(planned_level || plan_data[:level]).nil?
 
     # Their role and level through the tenant's title mapping. A level the
