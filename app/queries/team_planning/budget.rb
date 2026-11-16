@@ -36,8 +36,9 @@
 # others carry none. A figure is over in a currency it spends more of than
 # its lines approve, and over on heads when it holds more FTE than they
 # count. A cost centre or the organisation spends its unfunded money and
-# heads too. Money is never converted to judge it: a currency no line
-# approves is listed as mismatched, not counted for or against.
+# heads too, forecast rows' headcount among them. Money is never converted
+# to judge it: a currency no line approves is listed as mismatched, not
+# counted for or against.
 #
 # @example
 #   TeamPlanning::Budget.new(context:, plan:, scenario_id:).call.totals
@@ -141,7 +142,7 @@ class TeamPlanning::Budget
     forecast = cost.forecast.total
     Report.new(basis: @inclusive ? "inclusive" : "base_only", strictness: @strictness, period: @period, pay_view: cost.pay_view, reference_currency: @reference,
                lines:, cost_centres: cost_centres(lines, funding, cost.forecast), units: units(funding, cost.forecast),
-               totals: totals(lines, funding, forecast),
+               totals: totals(lines, funding, cost.forecast),
                forecast:, unpriced: unpriced(cost.scenario.lines))
   end
 
@@ -222,11 +223,13 @@ class TeamPlanning::Budget
     by_line = lines.group_by { it.line.cost_centre.presence }
     unfunded = with_forecast(@unfunded_by_cost_centre, forecast.cost_centres)
     unfunded_heads = unfunded_heads_by(funding) { it.cost_centre.cost_centre }
+    forecast_fte = forecast.rows.group_by(&:cost_centre).transform_values { |rows| rows.sum(0r, &:headcount) }
     keys = (by_line.keys | unfunded.keys | unfunded_heads.keys).sort_by { [ it.nil? ? 1 : 0, it.to_s ] }
     keys.index_with do |cost_centre|
       lines = by_line.fetch(cost_centre, [])
       drawn = lines.flat_map { @by_line.fetch(it.line.id, []) }
-      summed(lines, heads_of(drawn), unfunded.fetch(cost_centre, {}), unfunded_heads.fetch(cost_centre, NO_HEADS), scope: "cost_centre")
+      summed(lines, heads_of(drawn), unfunded.fetch(cost_centre, {}), unfunded_heads.fetch(cost_centre, NO_HEADS),
+             forecast_fte: forecast_fte.fetch(cost_centre, 0r), scope: "cost_centre")
     end
   end
 
@@ -255,12 +258,12 @@ class TeamPlanning::Budget
   end
 
   def totals(lines, funding, forecast)
-    unfunded = @unfunded_by_cost_centre.values.reduce(forecast.native) { |sum, money| add(sum, money) }
+    unfunded = @unfunded_by_cost_centre.values.reduce(forecast.total.native) { |sum, money| add(sum, money) }
     summed(lines, Heads.new(positions: funding.funded.positions, fte: funding.funded.fte), unfunded,
-           Heads.new(positions: funding.unfunded.positions, fte: funding.unfunded.fte), scope: "organisation")
+           Heads.new(positions: funding.unfunded.positions, fte: funding.unfunded.fte), forecast_fte: forecast.rows.sum(0r, &:headcount), scope: "organisation")
   end
 
-  def summed(lines, funded_heads, unfunded, unfunded_heads, scope:)
+  def summed(lines, funded_heads, unfunded, unfunded_heads, forecast_fte:, scope:)
     priced = lines.select(&:approved)
     counted = lines.select { it.line.head_count && overlap(it.line).positive? }
     head_count = counted.sum(0r) { Rational(it.line.head_count.to_s) } if counted.any?
@@ -270,7 +273,7 @@ class TeamPlanning::Budget
                remaining_head_count: head_count && counted.sum(0r, &:remaining_head_count),
                unfunded: converted(unfunded), unfunded_heads:,
                over: over(scope, approved:, spent: add(priced.map(&:funded).reduce({}) { |sum, money| add(sum, money) }, unfunded),
-                                 head_count:, fte: counted.sum(0r) { it.funded_heads.fte } + unfunded_heads.fte))
+                                 head_count:, fte: counted.sum(0r) { it.funded_heads.fte } + unfunded_heads.fte + forecast_fte))
   end
 
   def unpriced(seats)

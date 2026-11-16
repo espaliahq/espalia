@@ -259,6 +259,20 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert report.cost_centres["Platform"].over.heads, "next year's hundred heads don't cover this year's two"
   end
 
+  should "spend a forecast's headcount against a cost centre's and the organisation's head count" do
+    with_kinds(Hiring) do
+      line(head_count: 1, cost_centre: "CC-F")
+      operation(Operations::TeamPlanning::SetRule, rule: "test_budget_hiring", value: { per_unit: "1000" })
+      strictness(preset: "cost_centre")
+
+      assert budget.cost_centres["CC-F"].over.heads, "a hire forecast in each of the two units takes two heads"
+
+      strictness(match: [], limit: "heads", scope: "organisation")
+
+      assert budget.totals.over.heads
+    end
+  end
+
   should "count a blank cost centre's unfunded money as no cost centre's" do
     before = budget.cost_centres
     as_tenant do
