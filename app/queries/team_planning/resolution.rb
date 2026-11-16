@@ -111,7 +111,10 @@ class TeamPlanning::Resolution
   def resolved(aggregate = @repository.load_plan(@plan.id))
     standing = aggregate.standing_after(@scenario_id)
     winning = @repository.sealed(aggregate.winning_changes(@scenario_id))
-    winning = winning.reject { |_, change| done_at_close(*standing).include?(change.event_id) } if standing
+    if standing
+      done = done_at_close(*standing)
+      winning = winning.reject { |_, change| done.include?(change.event_id) }
+    end
     base = (standing ? standing_on(standing.last) : @base || @baseline.structure).with(step_ids: step_of(aggregate))
     hires, others = winning.values.partition { it.is_a?(TeamPlanning::Events::PlaceholderSet) }
     map = (hires + others).reduce(base) { |resolved, change| change.class.apply_to(resolved, change.data) }
