@@ -83,7 +83,8 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
           assert_raises(Operations::Base::ParameterError) { operation.call(context: context_for(member), params: params_for(operation)) }
           next
         end
-        # The walk's step is open, and a step's outcome reads only once it closes.
+        # The walk's step is open, and a step's outcome reads only once it closes:
+        # "walk a closed step's outcome as every other read" below covers it.
         if operation == Operations::TeamPlanning::StepOutcome
           error = assert_raises(Operations::Base::ParameterError) { operation.call(context: context_for(member), params: params_for(operation)) }
           assert_equal TeamPlanning::StepOutcome::NOT_CLOSED, error.message
@@ -92,6 +93,28 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
 
         assert_includes operation.call(context: context_for(member), params: params_for(operation)).to_json, @plan_id
       end
+    end
+  end
+
+  should "walk a closed step's outcome as every other read, on a plan scoped to a unit and on the whole organisation" do
+    operation = Operations::TeamPlanning::StepOutcome
+    travel_to Time.utc(2027, 4, 2, 9)
+    call(Operations::TeamPlanning::CloseStep, @editor, plan_id: @plan_id, scenario_id: @scenario_id)
+
+    [ nil, scoped_unit ].each do |unit_id|
+      call(Operations::TeamPlanning::SetPlanScope, @editor, plan_id: @plan_id, unit_ids: [ unit_id ].compact)
+      before = stream_size
+
+      outsiders.each do |who, context|
+        error = assert_raises(Operations::Base::ParameterError, who) { operation.call(context:, params: params_for(operation)) }
+        assert_equal "No such plan", error.message, who
+      end
+      [ @editor, @viewer ].each do |member|
+        output = operation.call(context: context_for(member), params: params_for(operation))
+        assert_includes output.to_json, @plan_id
+        assert_equal [ unit_id ].compact, output[:units].pluck(:unit_id) if unit_id
+      end
+      assert_equal before, stream_size
     end
   end
 
@@ -113,6 +136,14 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
       Operations::TeamPlanning::PlanMembers.call(context: context_for(account), params: { plan_id: @plan_id })
     end
     assert_empty Operations::TeamPlanning::Plans.call(context: context_for(account), params: {})[:plans]
+  end
+
+  def scoped_unit
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    level_id, unit_id = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    structure.define_taxonomy([ { level_id:, name: "Department" } ], effective_on: "2026-01-01")
+    structure.create_unit(unit_id, "Payments", level_id:, effective_on: "2026-01-01")
+    unit_id
   end
 
   def outsiders
