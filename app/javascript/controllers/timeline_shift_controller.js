@@ -1,8 +1,9 @@
 // Drag a timeline bar's edge one step earlier or later to move the change it
-// starts or ends with (#393). Each grip lists the steps it can reach. While a
-// grip is held, those columns are lit and say "Move here"; letting go over one
-// clicks the bar's "When…" item for that edge and step, so Turbo posts it as
-// the menu would. Anywhere else, or Escape, saves nothing.
+// starts or ends with (https://github.com/espaliahq/espalia/issues/393). Each
+// grip lists the steps it can reach. While a grip is held, those columns are
+// lit and say "Move here"; letting go over one clicks the bar's "When…" item
+// for that edge and step, so Turbo posts it as the menu would. Anywhere else,
+// or Escape, saves nothing.
 //
 // The columns are found by the pointer's x against each step's header, so
 // steps of any width behave alike.

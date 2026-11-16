@@ -407,9 +407,12 @@ class Views::Plans::Timeline < Views::Base
 
   GRIP_SIDE = { "start" => "left-0", "end" => "right-0" }.freeze
 
-  # Sits in the bar's outer padding, outside the draggable box, so it neither
-  # widens the bar nor starts #309's drag to another unit. It is pointer-only:
-  # the "When…" menu beside it is the same move for keyboards and screen readers.
+  # Sits over the bar's padding and the box's outer edge, so it doesn't widen
+  # the bar; a press there drags the edge, and anywhere else on the box still
+  # starts the drag to another unit
+  # ([#309](https://github.com/espaliahq/espalia/issues/309)). It is
+  # pointer-only: the "When…" menu beside it is the same move for keyboards,
+  # screen readers and phones, and the target that meets the 24px floor.
   def edge_grip(edge, steps)
     return if steps.empty?
 
