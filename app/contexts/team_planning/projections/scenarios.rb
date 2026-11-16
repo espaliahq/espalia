@@ -12,13 +12,19 @@
 # worked out again. Names and descriptions are held sealed, as the events hold
 # them.
 #
+# A removed scenario's row moves to `team_planning_removed_scenarios`, which
+# it also writes alone, with its name still sealed and its period as it stood
+# ([#340](https://github.com/espaliahq/espalia/issues/340)). Version 3 adds
+# that table, which past removals fill, so its deploy needs
+# `REBUILD_ON_DEPLOY=team_planning/scenarios`.
+#
 class TeamPlanning::Projections::Scenarios
   # Stable identifier used as the natural key in `projection_versions.name`.
   PROJECTION_NAME = "team_planning/scenarios"
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 2
+  CODE_VERSION = 3
 
   # @return [Array<Class>]
   def self.handled_events
@@ -32,7 +38,10 @@ class TeamPlanning::Projections::Scenarios
   #
   # @param tenant [Tenant]
   def self.reset!(tenant:)
-    ActsAsTenant.with_tenant(tenant) { TeamPlanningScenario.where(tenant_id: tenant.id).delete_all }
+    ActsAsTenant.with_tenant(tenant) do
+      TeamPlanningScenario.where(tenant_id: tenant.id).delete_all
+      TeamPlanningRemovedScenario.where(tenant_id: tenant.id).delete_all
+    end
   end
 
   # @param event [RubyEventStore::Event]
@@ -42,7 +51,9 @@ class TeamPlanning::Projections::Scenarios
       case event
       when TeamPlanning::Events::PlanCreated
         write(data[:plan_id], event, plan_id: data[:plan_id], starts_on: data[:base_on])
-      when TeamPlanning::Events::PlanDeleted then TeamPlanningScenario.where(plan_id: data[:plan_id]).delete_all
+      when TeamPlanning::Events::PlanDeleted
+        TeamPlanningScenario.where(plan_id: data[:plan_id]).delete_all
+        TeamPlanningRemovedScenario.where(plan_id: data[:plan_id]).delete_all
       when TeamPlanning::Events::ScenarioForked
         if data[:closes_scenario_id]
           follow_tree(data[:plan_id], event) { it[data[:closes_scenario_id]]&.ends_on = Date.iso8601(data[:closes_on]) }
@@ -58,12 +69,23 @@ class TeamPlanning::Projections::Scenarios
         write(data[:plan_id], event, plan_id: data[:plan_id], starts_on: data[:base_on])
         follow_tree(data[:plan_id], event) { it[data[:plan_id]].starts_on = Date.iso8601(data[:base_on]) }
       when TeamPlanning::Events::ScenarioSplit then split(event)
-      when TeamPlanning::Events::ScenarioRemoved then TeamPlanningScenario.where(id: data[:scenario_id]).delete_all
+      when TeamPlanning::Events::ScenarioRemoved then remove(event)
       end
     end
   end
 
   private
+
+  def remove(event)
+    data = event.data
+    row = TeamPlanningScenario.find_by(id: data[:scenario_id]) or return
+
+    removed = TeamPlanningRemovedScenario.find_or_initialize_by(id: row.id)
+    removed.created_at ||= event.timestamp
+    removed.update!(**row.slice(:plan_id, :name, :relation, :starts_on, :ends_on).symbolize_keys,
+                    removed_by_id: data[:removed_by_id], removed_at: event.timestamp, updated_at: event.timestamp)
+    row.delete
+  end
 
   def split(event)
     data = event.data

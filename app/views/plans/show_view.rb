@@ -31,9 +31,11 @@ class Views::Plans::ShowView < Views::Base
   # @param coverable_units [Array<Hash>, nil] from `team_planning_coverable_units`, for an editor to change the scope
   # @param panel_open [Boolean] whether the side panel renders open; see `.panel_open?`
   # @param undo_step [Hash, nil] from `team_planning_undo_step`, for the scenario the open tab shows
+  # @param removed [Views::Plans::RemovedScenarios, nil] the removed scenarios, under the open tab's body
   def initialize(plan:, scenarios:, members:, user:, current_tenant:, tenants: [], tabs: nil, open_tab: :scenarios,
                  body: nil, actions: [], panels: nil, drawer: nil, can_edit: false, can_archive: false, can_restore: false, can_delete: false,
-                 see_pay: {}, coverable_units: nil, panel_open: true, undo_step: nil)
+                 see_pay: {}, coverable_units: nil, panel_open: true, undo_step: nil, removed: nil)
+    @removed = removed
     @panel_open = panel_open
     @undo_step = undo_step
     @plan = plan
@@ -69,6 +71,7 @@ class Views::Plans::ShowView < Views::Base
               section(aria: { labelledby: "plan-main-heading" }) do
                 tab_strip(panel)
                 render(@body || Views::Plans::ScenarioTable.new(plan_id: @plan[:plan_id], scenarios: @scenarios, can_edit: @can_edit))
+                render @removed if @removed
               end
             end
             panel.body { (@panels || default_panels).each { render it } }

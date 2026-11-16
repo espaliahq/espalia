@@ -103,6 +103,37 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_empty TeamPlanningHistoryEntry.all
   end
 
+  should "count the changes a removed scenario still held, as the plan's log does, and drop the count with the plan" do
+    set_cap(@lean, 5)
+    set_cap(@lean, 4)
+    set_level(@lean, "4")
+    @handler.clear_change(@plan_id, scenario_id: @lean, subject_id: @person.id, facet: "level")
+    place(@lean)
+    @handler.undo_change(@plan_id, scenario_id: @lean)
+    set_level(@lean, "5")
+    held = TeamPlanning::Repository.new.load_plan(@plan_id).changes_in(@lean).map(&:key).uniq.size
+
+    @handler.remove_scenario(@plan_id, @lean)
+
+    tally = TeamPlanningRemovedScenarioTally.find(@lean)
+    assert_equal 2, held
+    assert_equal [ held, @plan_id ], [ tally.changes_held, tally.plan_id ]
+    assert_empty history(@lean)
+
+    @handler.delete_plan(@plan_id)
+    assert_empty TeamPlanningRemovedScenarioTally.all
+  end
+
+  should "keep a removed scenario's count when the removal arrives again" do
+    set_cap(@lean, 5)
+    @handler.remove_scenario(@plan_id, @lean)
+    removal = Rails.configuration.event_store.read.of_type([ TeamPlanning::Events::ScenarioRemoved ]).last
+
+    TeamPlanning::Projections::History.new.call(removal)
+
+    assert_equal 1, TeamPlanningRemovedScenarioTally.find(@lean).changes_held
+  end
+
   should "move every entry of a split's subjects and facets to the agreed part, undo included, in their order" do
     set_cap(@q1, 8)
     set_level(@q1, "4")
@@ -115,6 +146,46 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal [ [ 1, "set", capped ], [ 2, "set", nil ], [ 3, "undo", nil ] ],
                  history(agreed).pluck(:position, :action, :id).map { |position, action, id| [ position, action, (id if id == capped) ] }
     assert_equal [ [ 2, "level" ] ], history(@q1).pluck(:position, :facet)
+  end
+
+  should "move a split step's dates entries to the agreed part, with the undo that reverses one" do
+    set_cap(@q1, 8)
+    set_level(@q1, "4")
+    @handler.set_scenario_period(@plan_id, @q1, ends_on: "2027-04-30")
+    edit = history(@q1).last.id
+
+    agreed = split(@q1, history(@q1).first.id)
+    @handler.undo_change(@plan_id, scenario_id: agreed)
+
+    assert_equal [ [ 1, "set", nil ], [ 2, "dates", nil ], [ 3, "undo", edit ] ], history(agreed).pluck(:position, :action, :reverses_event_id)
+    assert history(agreed).find_by(id: edit).undone?
+    assert_equal [ [ 2, "level" ] ], history(@q1).pluck(:position, :facet)
+  end
+
+  should "move a date edit undone and redone before the split, with its undo and redo, in their order" do
+    set_cap(@q1, 8)
+    set_level(@q1, "4")
+    @handler.set_scenario_period(@plan_id, @q1, ends_on: "2027-04-30")
+    edit = @handler.undo_change(@plan_id, scenario_id: @q1)
+    @handler.redo_change(@plan_id, scenario_id: @q1)
+
+    agreed = split(@q1, history(@q1).first.id)
+
+    assert_equal [ [ "set", nil ], [ "dates", nil ], [ "undo", edit ], [ "redo", edit ] ],
+                 history(agreed).pluck(:action, :reverses_event_id)
+    assert_equal [ "level" ], history(@q1).pluck(:facet)
+  end
+
+  should "leave an undo that names no subject with the step, unless it reverses a dates entry" do
+    set_cap(@q1, 8)
+    set_level(@q1, "4")
+    @handler.undo_change(@plan_id, scenario_id: @q1)
+    history(@q1).last.update!(subject_id: nil)
+    set_level(@q1, "5")
+
+    split(@q1, history(@q1).first.id)
+
+    assert_equal [ [ 2, "set" ], [ 3, "undo" ], [ 4, "set" ] ], history(@q1).pluck(:position, :action)
   end
 
   def place(scenario_id)
@@ -238,12 +309,15 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
       @handler.set_scenario_period(@plan_id, q2, ends_on: "2027-07-31")
       @handler.undo_change(@plan_id, scenario_id: q2)
       @handler.redo_change(@plan_id, scenario_id: q2)
+      set_cap(@lean, 5)
+      @handler.remove_scenario(@plan_id, @lean)
 
       before = snapshot_read_models(TeamPlanning::Projections::History, @tenant)
-      assert_equal 15, before[:history].size
+      assert_equal 14, before[:history].size
+      assert_equal [ 1 ], before[:tallies].pluck("changes_held")
 
       TeamPlanning::Projections::History.reset!(tenant: @tenant)
-      assert_equal 0, TeamPlanningHistoryEntry.count
+      assert_equal 0, TeamPlanningHistoryEntry.count + TeamPlanningRemovedScenarioTally.count
       Projections::Replayer.replay(projection_class: TeamPlanning::Projections::History, tenant: @tenant)
 
       assert_equal before, snapshot_read_models(TeamPlanning::Projections::History, @tenant)
