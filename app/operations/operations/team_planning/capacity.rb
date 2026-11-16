@@ -33,7 +33,7 @@ class Operations::TeamPlanning::Capacity < Operations::Base
               "assumptions add, zero until a forecast rule is set. The baseline is all actual. `units` lists each unit " \
               "on the scenario's map that counts in any part, so a unit everyone left still shows its negative planned; " \
               "a unit gone from the scenario's map counts in the scenario's parts only. `models` maps each model a place or a figure uses to its symbol, what follows its figures on " \
-              "screen, and its description. People are named by id, and `names` maps each to a name. Refused, as an unknown plan, " \
+              "screen, and its description. People are named by id, and `names` maps each to a name. #{PRICED_TODAY} Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
   approval :none
@@ -47,7 +47,7 @@ class Operations::TeamPlanning::Capacity < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     split = refusing_bad_plans { ::TeamPlanning::Capacity.split(context:, plan:, scenario_id:) }
     report = split.report
-    { plan_id: plan.id, scenario_id:, **totals(split.parts), units: units(split),
+    { plan_id: plan.id, **priced_today(plan), scenario_id:, **totals(split.parts), units: units(split),
       seats: report.seats.map { seat(it) }, unclassified: report.unclassified.map { |seat, place| unclassified(seat, place) },
       models: models(split), names: names(report) }
   end

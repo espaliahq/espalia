@@ -5,12 +5,14 @@
 # plans and no others.
 class Views::Plans::IndexView < Views::Base
   # @param plans [Array<Hash>] from `team_planning_plans`
+  # @param archived [Boolean] whether the list holds the archived plans rather than the live ones
   # @param can_create [Boolean] whether the caller may start a plan
   # @param error [String, nil] why the last plan could not be created
   # @param draft [Hash] the name, base date and scope the caller last chose, kept when the create was refused
   # @param units [Array<Hash>] from `team_planning_coverable_units`, the units a new plan may cover
-  def initialize(plans:, can_create:, user:, current_tenant:, tenants: [], error: nil, draft: {}, units: [])
+  def initialize(plans:, can_create:, user:, current_tenant:, tenants: [], archived: false, error: nil, draft: {}, units: [])
     @plans = plans
+    @archived = archived
     @units = units
     @can_create = can_create
     @error = error
@@ -30,7 +32,7 @@ class Views::Plans::IndexView < Views::Base
           end
         end
         @plans.any? ? plan_list : empty
-        new_plan_form if @can_create
+        new_plan_form if @can_create && !@archived
       end
     end
   end
@@ -39,7 +41,10 @@ class Views::Plans::IndexView < Views::Base
 
   def plan_list
     section(aria: { labelledby: "your-plans" }) do
-      h2(id: "your-plans", class: "mb-3 text-base font-semibold text-default") { "Your plans" }
+      div(class: "mb-3 flex flex-wrap items-center justify-between gap-2") do
+        h2(id: "your-plans", class: "text-base font-semibold text-default") { @archived ? "Your archived plans" : "Your plans" }
+        state_switch
+      end
       render Components::Kit::Card.new(variant: :flush) do |card|
         card.body do
           ul(class: "divide-y divide-subtle") { @plans.each { plan_row(it) } }
@@ -52,16 +57,38 @@ class Views::Plans::IndexView < Views::Base
     li(class: "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3") do
       div(class: "min-w-0") do
         a(href: plan_path(plan[:plan_id]), class: "font-medium text-link underline break-words") { plan[:name] }
-        p(class: "text-sm text-muted") { "Based on #{Date.iso8601(plan[:base_on]).strftime("%-d %B %Y")}" }
+        p(class: "text-sm text-muted") { plan_dates(plan) }
       end
       render Components::Kit::Badge.new(plan[:role] == "editor" ? "Editor" : "Viewer")
     end
   end
 
+  def plan_dates(plan)
+    based = "Based on #{day(plan[:base_on])}"
+    plan[:archived_on] ? "#{based}. Archived on #{day(plan[:archived_on])}" : based
+  end
+
+  def day(iso) = Date.iso8601(iso).strftime("%-d %B %Y")
+
+  def state_switch
+    render Components::Kit::SegmentedControl.new(label: "Which plans", size: :sm, touch: true) do |control|
+      control.segment("Live", href: plans_path, selected: !@archived)
+      control.segment("Archived", href: plans_path(state: "archived"), selected: @archived)
+    end
+  end
+
   def empty
-    render Components::Kit::EmptyState.new(title: "You're not in any plans yet", size: :page) do
-      p(class: "text-sm text-muted") do
-        @can_create ? "Start one below, then add the people you want to plan with." : "When someone adds you to a plan, it appears here."
+    if @archived
+      render Components::Kit::EmptyState.new(title: "No archived plans", size: :page) do
+        p(class: "text-sm text-muted") { "An editor can archive a plan from its page to set it aside without deleting it." }
+        div(class: "mt-4") { state_switch }
+      end
+    else
+      render Components::Kit::EmptyState.new(title: "You're not in any plans yet", size: :page) do
+        p(class: "text-sm text-muted") do
+          @can_create ? "Start one below, then add the people you want to plan with." : "When someone adds you to a plan, it appears here."
+        end
+        div(class: "mt-4") { state_switch }
       end
     end
   end

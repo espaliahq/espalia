@@ -7,18 +7,20 @@ class Operations::TeamPlanning::Plan < Operations::Base
   description "Get one Team Planning plan the caller is a member of: its name, base date, the caller's role " \
               "in it (editor or viewer), the units it covers (scope: the whole organisation, or chosen units, each with " \
               "everything under it), and whether it is frozen, which means no editor can still reach it, " \
-              "so its viewers read it and nobody changes it. Refused, as an unknown plan, unless the caller " \
+              "so its viewers read it and nobody changes it. archived is null for a live plan, else the day it was archived " \
+              "and who archived it (a forgotten person reads as \"#{Person::FORMER_MEMBER}\"): an archived plan takes no changes until an editor restores it, and its members can " \
+              "still leave. Refused, as an unknown plan, unless the caller " \
               "is a member."
   category :read
   approval :none
 
   parameter :plan_id, String, required: true
 
-  # @return [Hash] `{ plan_id, name, base_on, role, scope, frozen }`
+  # @return [Hash] `{ plan_id, name, base_on, role, scope, frozen, archived }`
   def perform
     plan = plan!
     { plan_id: plan.id, name: plan.name&.reveal, base_on: plan.base_on.iso8601, role: plan.role_of(context.person.id),
-      scope: self.class.scope_of(plan), frozen: PlanPolicy.frozen?(plan) }
+      scope: self.class.scope_of(plan), frozen: PlanPolicy.frozen?(plan), archived: archived(plan) }
   end
 
   # @param plan [TeamPlanningPlan]
@@ -28,5 +30,14 @@ class Operations::TeamPlanning::Plan < Operations::Base
     names = OrgUnit.where(id: ids).pluck(:id, :name).to_h
     units = ids.map { { unit_id: it, name: names[it] } }.sort_by { [ it[:name] ? 0 : 1, it[:name].to_s, it[:unit_id] ] }
     { whole_organisation: ids.empty?, units: }
+  end
+
+  private
+
+  # @return [Hash, nil] `{ on, by_id, by_name }`
+  def archived(plan)
+    return unless plan.archived?
+
+    { on: plan.archived_on.iso8601, by_id: plan.archived_by_id, by_name: Person.find_by(id: plan.archived_by_id)&.name }
   end
 end

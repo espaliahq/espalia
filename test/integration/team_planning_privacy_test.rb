@@ -54,6 +54,17 @@ class TeamPlanningPrivacyTest < ActiveSupport::TestCase
     end
   end
 
+  should "keep an archived plan out of every outsider's list, whichever plans they ask for" do
+    call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id)
+
+    outsiders.each do |who, context|
+      %w[live archived all].each do |state|
+        plans = Operations::TeamPlanning::Plans.call(context:, params: { state: })[:plans]
+        assert_not_includes plans.pluck(:plan_id), @plan_id, "#{who} asking for #{state}"
+      end
+    end
+  end
+
   should "read as an unknown id to a viewer for every change but leaving" do
     context = context_for(@viewer)
     OPERATIONS.call.select { it.parameters.key?(:plan_id) && it.category != :read }.each do |operation|
