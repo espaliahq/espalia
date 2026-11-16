@@ -13,7 +13,7 @@
   per-element callback name — so it re-checks containment itself rather than
   trusting which one fired, and registers each element only once.
 - **Esc close** (`closeOverlayPanes`) — narrow viewports only. Both it and the
-  outside-tap path gate on `#somethingElseIsOpen` (no open modal overlay, no
+  outside-tap path gate on `somethingElseIsOpen` (`controllers/overlay_guard.js`, shared with `activity-pane`: no open modal overlay, no
   open `[role="menu"]`)
 - **Focus hand-off** for the activity overlay — into the pane on open, back to
   the Activity toggle on every close

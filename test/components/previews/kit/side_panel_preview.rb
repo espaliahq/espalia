@@ -4,8 +4,11 @@
 class Kit::SidePanelPreview < Lookbook::Preview
   # @param open toggle
   # @param narrow select { choices: [overlay, stack] }
-  def playground(open: true, narrow: :overlay)
-    side_panel(id: "playground-panel", open:, narrow: narrow.to_sym)
+  # @param heading toggle
+  # @param sticky toggle
+  # @param fit_viewport toggle
+  def playground(open: true, narrow: :overlay, heading: true, sticky: false, fit_viewport: false)
+    side_panel(id: "playground-panel", open:, narrow: narrow.to_sym, heading:, sticky:, fit_viewport:)
   end
 
   # @!group States
@@ -25,6 +28,36 @@ class Kit::SidePanelPreview < Lookbook::Preview
     side_panel(id: "open-stack-panel", open: true, narrow: :stack)
   end
 
+  # A toggle in a header above the row, and a body that draws its own heading and close button
+  def wrapped_with_own_heading
+    render Components::Kit::SidePanel.new(id: "wrapped-panel", title: "Activity", open: true, cookie: "lookbook_wrapped_panel_open",
+                                          url_key: "wrapped-panel", heading: false, sticky: true) do |panel|
+      panel.main do
+        panel.div(class: "rounded-lg border border-dashed border-emphasized p-10 text-sm text-muted") do
+          "The matrix takes this column. Its header, with the toggle, sits above the row."
+        end
+      end
+      panel.body do
+        panel.div(class: "p-4") do
+          panel.div(class: "mb-3 flex items-center justify-between gap-2") do
+            panel.h2(class: "text-sm font-semibold text-default") { "Activity" }
+            panel.render Components::Kit::SidePanel::Close.new(label: "Close activity", size: :xs, touch: true) { "×" }
+          end
+          panel.p(class: "text-sm text-muted") { "Alice rated Critical thinking: Most of the time." }
+        end
+      end
+      panel.wrap do
+        panel.div(class: "mb-4 flex items-center justify-between gap-3") do
+          panel.h2(class: "text-base font-semibold text-default") { "Alice's assessment" }
+          panel.render Components::Kit::SidePanel::Toggle.new(controls: "wrapped-panel", open: true, variant: :subtle, compact: true) do
+            "Activity"
+          end
+        end
+        panel.columns
+      end
+    end
+  end
+
   # A shorter toggle label, with the title kept for screen readers
   def short_toggle
     side_panel(id: "short-toggle-panel", open: false, narrow: :overlay, short_label: true)
@@ -34,9 +67,9 @@ class Kit::SidePanelPreview < Lookbook::Preview
 
   private
 
-  def side_panel(id:, open:, narrow:, short_label: false)
+  def side_panel(id:, open:, narrow:, short_label: false, **)
     render Components::Kit::SidePanel.new(id:, title: "About this plan", open:, narrow:,
-                                          cookie: "lookbook_#{id.underscore}_open", url_key: id) do |panel|
+                                          cookie: "lookbook_#{id.underscore}_open", url_key: id, **) do |panel|
       panel.main do
         panel.div(class: "mb-4 flex items-center justify-between gap-3") do
           panel.h2(class: "text-base font-semibold text-default") { "Scenarios" }

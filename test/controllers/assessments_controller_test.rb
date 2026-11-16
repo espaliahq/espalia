@@ -189,6 +189,21 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Consistently"
     end
 
+    should "render the activity pane open when the URL or the cookie chose it, and closed on a first visit" do
+      sign_in @user
+      get assessment_path(@assignment)
+      assert_select "aside#assessment-activity-pane.hidden[data-pane-state='closed']"
+      assert_select "button[aria-controls='assessment-activity-pane'][aria-expanded='false']"
+
+      cookies[Views::Assessments::Activity::PaneToggle::COOKIE] = "open"
+      get assessment_path(@assignment)
+      assert_select "aside#assessment-activity-pane:not(.hidden)[data-pane-state='open']"
+      assert_select "button[aria-controls='assessment-activity-pane'][aria-expanded='true']"
+
+      get assessment_path(@assignment, activity: "closed")
+      assert_select "aside#assessment-activity-pane.hidden[data-pane-state='closed']"
+    end
+
     should "redirect if person not assigned to framework" do
       sign_in @user
       get assessment_path("nonexistent-id")
