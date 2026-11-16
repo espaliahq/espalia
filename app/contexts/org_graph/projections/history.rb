@@ -18,17 +18,23 @@
 # change, as though it never took effect. `PersonForgotten` needs nothing here: the rows hold ids, and the
 # history stays.
 #
+# Each kind of unit (a taxonomy level) has one timeline: its name, place in
+# the list, provider and, once stated, its rules, which {OrgGraph::Taxonomy}
+# reads. A taxonomy's dates may run backwards in older streams, so a kind's
+# change never starts before its last one: the order of events decides.
+#
 class OrgGraph::Projections::History
   # Stable identifier used as the natural key in `projection_versions.name`.
   PROJECTION_NAME = "org_graph/history"
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   PERSON = "person"
   UNIT = "unit"
   SUCCESSION = "succession"
+  LEVEL = "level"
 
   # The person fact each change event writes, with the fields it holds.
   PERSON_FACTS = {
@@ -51,7 +57,8 @@ class OrgGraph::Projections::History
       OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipMoved,
       OrgGraph::Events::UnitCreated, OrgGraph::Events::UnitRenamed, OrgGraph::Events::UnitMoved,
       OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded,
-      OrgGraph::Events::UnitOwnerAdded, OrgGraph::Events::UnitOwnerRemoved
+      OrgGraph::Events::UnitOwnerAdded, OrgGraph::Events::UnitOwnerRemoved,
+      OrgGraph::Events::TaxonomyDefined, OrgGraph::Events::LevelProviderSet
     ]
   end
 
@@ -100,6 +107,8 @@ class OrgGraph::Projections::History
     when OrgGraph::Events::UnitSucceeded then succession
     when OrgGraph::Events::UnitOwnerAdded then owner(effective_on, { owner: true })
     when OrgGraph::Events::UnitOwnerRemoved then owner(effective_on + 1, nil)
+    when OrgGraph::Events::TaxonomyDefined then taxonomy_defined
+    when OrgGraph::Events::LevelProviderSet then kind(@data[:level_id]) { |value| value&.merge("provider" => @data[:provider]) }
     end
   end
 
@@ -204,6 +213,34 @@ class OrgGraph::Projections::History
   def succession
     revise(SUCCESSION, @data[:succession_id], "succession") do |points|
       put(points, effective_on, @data.slice(:predecessor_ids, :successor_ids))
+    end
+  end
+
+  # ── Kinds of unit ──
+
+  def taxonomy_defined
+    levels = @data[:levels].map { |level| level.to_h.symbolize_keys }
+    levels.each_with_index do |level, position|
+      kind(level[:level_id]) do |value|
+        { "name" => level[:name], "position" => position, "provider" => value&.fetch("provider") || OrgGraph::Taxonomy::ESPALIA,
+          **level.slice(:parent_level_ids, :top).stringify_keys }
+      end
+    end
+    removed = @data[:previous_levels].map { |level| level.to_h.symbolize_keys[:level_id] } - levels.pluck(:level_id)
+    removed.each { |level_id| kind(level_id) { nil } }
+  end
+
+  # Yields the kind's latest value and records what the block returns, unless
+  # it is unchanged.
+  def kind(level_id)
+    revise(LEVEL, level_id, "kind") do |points|
+      latest = points.last
+      value = yield(latest&.value)&.deep_stringify_keys
+      next if value == latest&.value
+
+      from = [ effective_on, latest&.from ].compact.max
+      points.reject! { |point| point.from == from }
+      points << Point.new(from, value, value&.fetch("provider"), @event.event_id)
     end
   end
 

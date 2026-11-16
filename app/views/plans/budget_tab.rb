@@ -18,13 +18,17 @@ class Views::Plans::BudgetTab < Views::Base
   # @param budget [Hash, nil] from `team_planning_budget`; nil on Today
   # @param funding [Hash, nil] from `team_planning_funding`; nil on Today
   # @param map [Hash, nil] from `team_planning_scenario_map`, for position and unit names; nil on Today
-  def initialize(plan:, scenarios:, lines:, budget: nil, funding: nil, map: nil)
+  # @param can_edit [Boolean] whether the viewer may change this scenario's lines and funding
+  # @param funded_here [Set<String>] the positions whose funding this scenario sets itself
+  def initialize(plan:, scenarios:, lines:, budget: nil, funding: nil, map: nil, can_edit: false, funded_here: Set.new)
     @plan = plan
     @scenarios = scenarios
     @lines = lines
     @budget = budget
     @funding = funding
     @map = map
+    @can_edit = can_edit
+    @funded_here = funded_here
   end
 
   def view_template
@@ -84,7 +88,7 @@ class Views::Plans::BudgetTab < Views::Base
     period = @budget[:period]
     on = @budget[:basis] == "inclusive" ? "base pay plus on-cost" : "base pay alone"
     priced = @budget[:pay_view] == "band_midpoints" ? "Priced at pay band midpoints" : "Priced from the actual pay the plan holds, and at pay band midpoints for the rest"
-    "For #{day_text(period[:starts_on])} to #{day_text(period[:ends_on])}, on #{on}. #{priced}. " \
+    "For #{Views::Plans::ScenarioTable.figured(period)}, on #{on}. #{priced}. " \
       "Each line keeps its own currency; only the totals convert#{" to #{reference}" if reference}."
   end
 
@@ -93,6 +97,7 @@ class Views::Plans::BudgetTab < Views::Base
     lines_section
     unfunded_positions
     unpriced
+    render Views::Plans::FundingDialog.new(scenario_id:, scenario_name: scenario_name(scenario_id), lines: @lines[:budget_lines]) if @can_edit
   end
 
   def totals
@@ -120,7 +125,13 @@ class Views::Plans::BudgetTab < Views::Base
 
   def lines_section
     section(aria: { labelledby: "budget-lines-heading" }) do
-      h4(id: "budget-lines-heading", class: "text-sm font-semibold text-default") { "Budget lines" }
+      div(class: "flex flex-wrap items-center justify-between gap-2") do
+        h4(id: "budget-lines-heading", class: "text-sm font-semibold text-default") { "Budget lines" }
+        if @can_edit
+          render Components::Kit::Button.new(variant: :outline, size: :sm, href: new_budget_line_plan_path(plan_id, scenario: scenario_id),
+                                             id: "budget-line-add") { "Add a line" }
+        end
+      end
       if @budget[:budget_lines].empty?
         div(class: "mt-3") { render Components::Kit::EmptyState.new(title: "This scenario holds no budget lines.", size: :panel) }
       else
@@ -139,6 +150,7 @@ class Views::Plans::BudgetTab < Views::Base
         if line[:mismatched_currencies].any?
           render Components::Kit::Badge.new("Drawn on in #{line[:mismatched_currencies].join(', ')}", tone: :warning, data: { budget_mismatch: "" })
         end
+        change_link(id, described) if @can_edit && described
       end
       p(class: "text-xs text-muted break-words") { terms_text(described) } if described
       dl(class: "grid grid-cols-1 gap-1 text-sm sm:grid-cols-3") do
@@ -148,6 +160,19 @@ class Views::Plans::BudgetTab < Views::Base
       end
       draws(line)
     end
+  end
+
+  def change_link(id, described)
+    render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true, class: "ml-auto",
+                                       href: edit_budget_line_plan_path(plan_id, budget_line_id: id, scenario: scenario_id),
+                                       aria_label: "Change #{line_name(described)}") { "Change" }
+  end
+
+  def funding_button(position_id, **)
+    name = position_name(position_id)
+    trigger = Views::Plans::FundingDialog.trigger(url: plan_funding_path(plan_id, position_id), name:, position: funding_by_position.fetch(position_id),
+                                                   clearable: @funded_here.include?(position_id))
+    render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true, aria_label: "Change the funding of #{name}", data: trigger, **) { "Funding…" }
   end
 
   def figure(label, text, heads, data: {})
@@ -180,6 +205,7 @@ class Views::Plans::BudgetTab < Views::Base
             span(class: "text-default break-words") { position_name(draw[:position_id]) }
             span(class: "text-xs text-muted") { "#{DRAWS.fetch(draw[:draw_reason], draw[:draw_reason])} · #{share(draw[:share])} of it · #{decimal(draw[:fte])} FTE" }
             render Components::Kit::Badge.new("Partly unfunded", tone: :warning) if short.include?(draw)
+            funding_button(draw[:position_id]) if @can_edit
           end
         end
       end
@@ -196,7 +222,10 @@ class Views::Plans::BudgetTab < Views::Base
         ul(class: "mt-3 divide-y divide-default rounded-lg border border-default bg-default") do
           positions.each do |position|
             li(class: "space-y-1 p-3", data: { budget_unfunded: position[:position_id] }) do
-              p(class: "text-sm font-medium text-default break-words") { position_name(position[:position_id]) }
+              div(class: "flex flex-wrap items-center gap-2") do
+                p(class: "text-sm font-medium text-default break-words") { position_name(position[:position_id]) }
+                funding_button(position[:position_id], class: "ml-auto") if @can_edit
+              end
               p(class: "text-sm text-muted") { position[:reason_text] || "Part of it draws on no budget line" }
               tied(position[:matching_ids])
             end
@@ -227,6 +256,8 @@ class Views::Plans::BudgetTab < Views::Base
 
   # Over is the read's judgement under budget_strictness; nil where its scope doesn't hold this figure.
   def over?(figure) = (over = figure[:over]).present? && (over[:money].present? || over[:heads] == true)
+
+  def funding_by_position = @funding_by_position ||= @funding[:positions].index_by { it[:position_id] }
 
   def described_lines = @described_lines ||= @lines[:budget_lines].index_by { it[:budget_line_id] }
 
@@ -260,7 +291,7 @@ class Views::Plans::BudgetTab < Views::Base
 
   def lines_count(count) = "#{count} #{count == 1 ? 'line' : 'lines'}"
 
-  def share(figure) = "#{decimal(BigDecimal(figure) * 100)}%"
+  def share(figure) = "#{decimal(Views::Plans::FundingDialog.percent(figure))}%"
 
   def decimal(figure) = ActiveSupport::NumberHelper.number_to_rounded(BigDecimal(figure.to_s), precision: 2, strip_insignificant_zeros: true)
 end

@@ -14,7 +14,9 @@
 # every kind in {TeamPlanning::ChangeKinds}.
 #
 # Production already holds changes, pins and clears, so the deploy that ships
-# it needs `REBUILD_ON_DEPLOY=team_planning/history`.
+# it needs `REBUILD_ON_DEPLOY=team_planning/history`. Version 2 adds each
+# step's new dates, which production already holds, so it needs the same. A
+# fork that closes a step with no end date is new, so it needs no rebuild.
 #
 class TeamPlanning::Projections::History
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -22,14 +24,14 @@ class TeamPlanning::Projections::History
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   # @return [Array<Class>]
   def self.handled_events
     TeamPlanning::ChangeKinds.all + [
       TeamPlanning::Events::ChangePinned, TeamPlanning::Events::ChangeCleared, TeamPlanning::Events::ChangeUndone,
       TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::PlanRebased,
-      TeamPlanning::Events::ChangeMoved,
+      TeamPlanning::Events::ChangeMoved, TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioForked,
       TeamPlanning::Events::PlanArchived, TeamPlanning::Events::PlanRestored, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::ScenarioSplit,
       TeamPlanning::Events::PlanDeleted
     ]
@@ -93,7 +95,7 @@ class TeamPlanning::Projections::History
   end
 
   def record(entry)
-    return if TeamPlanningHistoryEntry.exists?(id: entry.event_id)
+    return if entry.nil? || TeamPlanningHistoryEntry.exists?(id: entry.event_id)
 
     reversed = TeamPlanningHistoryEntry.find_by(id: entry.reverses_event_id) if entry.reverses?
     reversed&.update!(entry.action == "undo" ? { undone_by_id: entry.actor_id, undone_at: entry.at } : { undone_by_id: nil, undone_at: nil })

@@ -42,13 +42,13 @@ class Operations::TeamPlanning::Cost < Operations::Base
               "has the last word. Each seat's band names its position in the list and its matcher. Pass the plan's id as scenario_id for Today's run rate: " \
               "basis is run_rate, period is the year from the base date to the day before the same date a year later, " \
               "each seat is priced for that whole year, and totals carry only `scenario`, with no baseline or difference, " \
-              "as a run rate is never compared with a period total. A scenario has basis period. pay_view is band_ranges for a member with the see-pay " \
+              "as a run rate is never compared with a period total. A scenario has basis period. #{RUN_RATE_AT_END} pay_view is band_ranges for a member with the see-pay " \
               "right, whose working shows each band's minimum and maximum, and band_midpoints for everyone else. " \
               "For a holder, a person whose actual pay the plan holds is priced from it instead (made yearly, scaled " \
               "by FTE only when its basis is full_time, by the days held, plus on-cost), in a run rate as in a scenario: each seat's pay_source " \
               "says actual or band_midpoint, and actual_pay_seats counts the seats priced from actual pay. Held pay " \
               "the plan lost with the person's key leaves the seat unpriced as pay_unknown. Everyone else is priced " \
-              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. #{PRICED_TODAY} Refused, as an unknown " \
+              "at midpoints throughout, so the two views total differently. Figures are decimal strings; people are named by id in `names`. #{PRICED_TODAY} #{OPEN_ENDED} Refused, as an unknown " \
               "plan, unless the caller is a member."
   category :read
   approval :none
@@ -59,7 +59,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
 
   # @return [Hash] `{ plan_id, scenario_id, basis, period, reference_currency, bands_changed_at, pay_view, total,
   #   actual_pay_seats (for a see-pay holder),
-  #   units, cost_centres, unpriced, names }`, and `seats` for a unit
+  #   units, cost_centres, run_rate_at_end (for a scenario), unpriced, names }`, and `seats` for a unit
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
@@ -71,7 +71,7 @@ class Operations::TeamPlanning::Cost < Operations::Base
     { plan_id: plan.id, **priced_today(plan), scenario_id:, basis: report.basis, period: period(report),
       reference_currency: report.reference_currency, bands_changed_at: report.bands_changed_at&.iso8601,
       pay_view: report.pay_view, **actual_pay_seats(report),
-      total: compared(report.parts, report), units: units(report), cost_centres: cost_centres(report),
+      total: compared(report.parts, report), units: units(report), cost_centres: cost_centres(report), **run_rate_at_end(report),
       unpriced: unpriced.map { unpriced(it) }, **({ unit_id:, seats: } if unit_id), names: names(report, unpriced, seats) }
   end
 
@@ -94,21 +94,28 @@ class Operations::TeamPlanning::Cost < Operations::Base
 
   def priced(report) = [ report.scenario, report.baseline ].compact
 
-  def units(report)
+  def units(report, figures = [ *priced(report), report.forecast ], parts = report.method(:parts))
     names = priced(report).reverse.flat_map { it.map.units }.to_h { [ it.id, it.name ] }
-    ids = ([ *priced(report), report.forecast ].flat_map { it.units.keys }.uniq | names.keys)
+    ids = (figures.flat_map { it.units.keys }.uniq | names.keys)
     ids.sort_by { [ it.nil? ? 1 : 0, names[it].to_s, it.to_s ] }.map do |unit_id|
-      row = { unit_id:, name: names[unit_id], **compared(report.parts(:units, unit_id), report) }
+      row = { unit_id:, name: names[unit_id], **compared(parts.(:units, unit_id), report) }
       next row unless unit_id
 
-      row.merge(with_below: compared(report.parts(:units_with_below, unit_id), report))
+      row.merge(with_below: compared(parts.(:units_with_below, unit_id), report))
     end
   end
 
-  def cost_centres(report)
-    [ *priced(report), report.forecast ].flat_map { it.cost_centres.keys }.uniq.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.map do |cost_centre|
-      { cost_centre:, **compared(report.parts(:cost_centres, cost_centre), report) }
+  def cost_centres(report, figures = [ *priced(report), report.forecast ], parts = report.method(:parts))
+    figures.flat_map { it.cost_centres.keys }.uniq.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.map do |cost_centre|
+      { cost_centre:, **compared(parts.(:cost_centres, cost_centre), report) }
     end
+  end
+
+  def run_rate_at_end(report)
+    at_end = report.at_end or return {}
+    figures = [ at_end.scenario, at_end.baseline, at_end.forecast ]
+    parts = report.method(:at_end_parts)
+    { run_rate_at_end: { **at_end_total(report), units: units(report, figures, parts), cost_centres: cost_centres(report, figures, parts) } }
   end
 
   def lines_in(priced, unit_id) = priced.lines.select { it.unit_id == unit_id }.map { line(it) }

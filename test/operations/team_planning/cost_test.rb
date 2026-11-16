@@ -61,7 +61,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
                                                                level_id: @e5.level_id, unit_id: @payments, fte: 0.5, basis: "new")[:position_id]
     result = cost
 
-    assert_equal({ starts_on: "2026-01-01", ends_on: "2026-12-31" }, result[:period])
+    assert_equal({ starts_on: "2026-01-01", ends_on: "2026-12-31", open_ended: false, horizon_months: nil }, result[:period])
     assert_equal [ "EUR", "2025-12-15T09:00:00Z" ], result.values_at(:reference_currency, :bands_changed_at)
     assert_equal({ scenario: { native: { "EUR" => "150000" }, converted: "150000", missing: [] },
                    baseline: { native: { "EUR" => "100000" }, converted: "100000", missing: [] },
@@ -305,10 +305,31 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { cost(as: @outsider) }
   end
 
+  should "give the run rate on the scenario's last day, with its units and cost centres adding up to it" do
+    call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @year, role_id: @engineer.role_id,
+                                                 level_id: @e5.level_id, unit_id: @payments, fte: 0.5, basis: "new")
+    at_end = cost[:run_rate_at_end]
+
+    assert_equal "2026-12-31", at_end[:on]
+    assert_equal %w[150000 100000 50000], at_end[:total].values_at(:scenario, :baseline, :difference).pluck(:converted)
+    assert_equal %w[100000 50000 0], at_end[:total][:parts].values.pluck(:converted)
+    assert_equal [ [ @payments, "Payments", "150000", "150000" ] ],
+                 at_end[:units].map { [ it[:unit_id], it[:name], it[:scenario][:converted], it[:with_below][:scenario][:converted] ] }
+    assert_equal [ [ "CC-1", "100000" ], [ nil, "50000" ] ], at_end[:cost_centres].map { [ it[:cost_centre], it[:scenario][:converted] ] }
+    assert_not cost(scenario_id: @plan_id).key?(:run_rate_at_end), "Today is a run rate already"
+    assert_equal [ false, nil ], at_end.values_at(:open_ended, :horizon_months)
+  end
+
+  should "say a step with no end date takes its run rate on the last of the months shown" do
+    open = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @year, relation: "then", name: "2027")[:scenario_id]
+
+    assert_equal [ "2027-12-31", true, 12 ], cost(scenario_id: open)[:run_rate_at_end].values_at(:on, :open_ended, :horizon_months)
+  end
+
   should "give Today's run rate for the plan's id, with no baseline or difference anywhere in it" do
     result = cost(scenario_id: @plan_id, unit_id: @payments)
 
-    assert_equal [ "run_rate", { starts_on: "2026-01-01", ends_on: "2026-12-31" } ], result.values_at(:basis, :period)
+    assert_equal [ "run_rate", { starts_on: "2026-01-01", ends_on: "2026-12-31", open_ended: false, horizon_months: nil } ], result.values_at(:basis, :period)
     totals = [ result[:total], *result[:units], *result[:units].filter_map { it[:with_below] }, *result[:cost_centres] ]
     assert totals.all? { it.keys.intersect?(%i[baseline difference]).! }, "a run rate is never compared"
     assert_equal [ :scenario ], result[:seats].keys

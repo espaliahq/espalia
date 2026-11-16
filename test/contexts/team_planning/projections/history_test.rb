@@ -161,6 +161,39 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
                  history(@q1).pluck(:id, :action, :noted_event_id, :reverses_event_id).map { |id, action, noted, reverses| [ [ id, noted, reverses ].include?(placed) ? placed : nil, action ] }
   end
 
+  should "record a step's new dates in its history, with its period before and after" do
+    @handler.set_scenario_period(@plan_id, @q1, starts_on: "2027-02-01", ends_on: "2027-04-30")
+
+    entry = history(@q1).sole
+    assert_equal [ "dates", @person.id ], [ entry.action, entry.actor_id ]
+    assert_equal({ "starts_on" => "2027-02-01", "ends_on" => "2027-04-30", "previous_starts_on" => "2027-01-01",
+                   "previous_ends_on" => "2027-03-31" }, entry.end_state)
+  end
+
+  should "record a step with no end date closed by the step forked after it, and nothing for a fork that closes none" do
+    q2 = fork(@q1, "then", "Q2")
+    assert_empty history(q2)
+
+    q3 = SecureRandom.uuid_v7
+    @handler.fork_scenario(@plan_id, q3, parent_id: q2, relation: "then", name: "Q3", starts_on: "2027-07-01")
+
+    entry = history(q2).sole
+    assert_equal [ "dates", @person.id ], [ entry.action, entry.actor_id ]
+    assert_equal({ "ends_on" => "2027-06-30", "previous_ends_on" => nil }, entry.end_state)
+    assert_empty history(q3)
+  end
+
+  should "record dates written before a first step could move its start, without a previous start" do
+    event = TeamPlanning::Events::ScenarioPeriodSet.new(
+      data: { plan_id: @plan_id, scenario_id: @q1, starts_on: "2027-01-01", ends_on: "2027-04-30", previous_ends_on: "2027-03-31",
+              set_by_id: @person.id },
+      metadata: { tenant_id: @tenant.id, timestamp: Time.current }
+    )
+    TeamPlanning::Projections::History.new.call(event)
+
+    assert_equal({ "starts_on" => "2027-01-01", "ends_on" => "2027-04-30", "previous_ends_on" => "2027-03-31" }, history(@q1).sole.end_state)
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       q2 = fork(@q1, "then", "Q2", ends_on: "2027-06-30")
@@ -178,9 +211,10 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
                                                                     end_state: { level: "4" }, note: "Ready since the launch")
       @handler.note_change(@plan_id, scenario_id: @q1, event_id: history(@q1).last.id, note: "Ready, and asked for it")
       split(@q1, history(@q1).last.noted_event_id)
+      @handler.set_scenario_period(@plan_id, q2, ends_on: "2027-07-31")
 
       before = snapshot_read_models(TeamPlanning::Projections::History, @tenant)
-      assert_equal 12, before[:history].size
+      assert_equal 13, before[:history].size
 
       TeamPlanning::Projections::History.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningHistoryEntry.count

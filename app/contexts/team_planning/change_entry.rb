@@ -15,7 +15,9 @@
 # An update to today changes no facet, but the history keeps it as a
 # baseline entry, `rebase`, with the old and new base and the keys of the
 # conflicts it carried forward. Archiving and restoring the plan are
-# baseline entries too, `archive` and `restore`. A set or pin that settled one of those
+# baseline entries too, `archive` and `restore`. A step's new dates are a
+# `dates` entry of that step, with its period before and after; a fork that
+# closes a step with no end date is a `dates` entry of the step it closes. A set or pin that settled one of those
 # conflicts holds {#settles}: the conflict's since and the choice made.
 TeamPlanning::ChangeEntry = Data.define(
   :event_id, :plan_id, :scenario_id, :subject_id, :facet, :action, :kind, :end_state, :sealed_fields,
@@ -54,6 +56,12 @@ TeamPlanning::ChangeEntry = Data.define(
     when TeamPlanning::Events::ChangeMoved
       { action: "move", **data.slice(:subject_id, :facet), scenario_id: data[:to_scenario_id], actor_id: data[:moved_by_id],
         end_state: { "from_scenario_id" => data[:scenario_id], "direction" => data[:direction] } }
+    when TeamPlanning::Events::ScenarioForked
+      data[:closes_scenario_id] &&
+        { action: "dates", scenario_id: data[:closes_scenario_id], actor_id: data[:forked_by_id],
+          end_state: { "ends_on" => data[:closes_on], "previous_ends_on" => nil } }
+    when TeamPlanning::Events::ScenarioPeriodSet
+      { action: "dates", end_state: data.slice(:starts_on, :ends_on, :previous_starts_on, :previous_ends_on).stringify_keys, actor_id: data[:set_by_id] }
     when TeamPlanning::Events::PlanArchived
       { action: "archive", actor_id: data[:archived_by_id] }
     when TeamPlanning::Events::PlanRestored

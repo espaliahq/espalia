@@ -37,7 +37,7 @@ class Operations::TeamPlanning::Budget < Operations::Base
               "(null when the limit is heads or no line approves an amount); over.heads says whether it holds more FTE " \
               "than its lines count (null when the limit is money or no line states a head count). A cost centre or the " \
               "total spends its unfunded money and heads too. Nothing is converted to judge it: a currency no line " \
-              "approves goes in over.mismatched_currencies, never counted. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
+              "approves goes in over.mismatched_currencies, never counted. #{PRICED_TODAY} #{OPEN_ENDED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 

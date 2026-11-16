@@ -19,13 +19,13 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
               "in `native`, and `converted` is the same in the reference currency at each period's start, null with " \
               "`missing` saying why. `unpriced` counts the seats that can't be priced and so are left out, never " \
               "counted as zero; team_planning_cost names them. A scenario that can't be priced has `error` instead " \
-              "of figures. Figures are decimal strings. #{PRICED_TODAY} Refused, as an unknown plan, unless the caller is a member."
+              "of figures. #{RUN_RATE_AT_END} team_planning_cost splits it by unit and cost centre. Figures are decimal strings. #{PRICED_TODAY} #{OPEN_ENDED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 
   parameter :plan_id, String, required: true
 
-  # @return [Hash] `{ plan_id, reference_currency, bands_changed_at, scenarios: [{ scenario_id, basis, period, total, unpriced }
+  # @return [Hash] `{ plan_id, reference_currency, bands_changed_at, scenarios: [{ scenario_id, basis, period, total, run_rate_at_end (for a scenario), unpriced }
   #   or { scenario_id, error }] }`
   def perform
     plan = plan!
@@ -42,6 +42,7 @@ class Operations::TeamPlanning::ScenarioCosts < Operations::Base
     return { scenario_id:, error: report.message } unless report.is_a?(::TeamPlanning::Cost::Report)
 
     { scenario_id:, basis: report.basis, period: period(report),
-      total: compared(report.parts, report), unpriced: unpriced_lines(report).size }
+      total: compared(report.parts, report), **({ run_rate_at_end: at_end_total(report) } if report.at_end),
+      unpriced: unpriced_lines(report).size }
   end
 end

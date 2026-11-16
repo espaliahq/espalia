@@ -9,7 +9,13 @@ class Views::Plans::ScenarioDialogsTest < ActiveSupport::TestCase
   SLOW = "01a1da48-c64a-7529-af90-0f97e41cdaa2"
   AGREED = "01a1da48-c64a-7529-af90-0f97e41cdaa3"
 
-  def scenario(id, parent_id, relation, name) = { scenario_id: id, parent_id:, relation:, name: }
+  def scenario(id, parent_id, relation, name, ends_on: "2027-03-31") = { scenario_id: id, parent_id:, relation:, name:, starts_on: "2027-01-01", ends_on: }
+
+  def render_dialogs(scenarios)
+    controller = ApplicationController.new
+    controller.request = ActionDispatch::TestRequest.create
+    Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ScenarioDialogs.new(plan_id: PLAN, scenarios:)))
+  end
 
   context ".default_parent" do
     should "start from today in a plan with no scenarios yet" do
@@ -42,5 +48,22 @@ class Views::Plans::ScenarioDialogsTest < ActiveSupport::TestCase
     options = html.css("#fork-scenario-parent option").map { [ it.text, it["data-followed"] ] }
     assert_equal [ [ "Today", "true" ], [ "· Agreed hires", "true" ], [ "· · Q1 hires", "false" ], [ "· · · Slower hiring", "false" ] ],
                  options
+  end
+
+  should "mark each scenario whose period has no end, with the earliest start a step after it can take" do
+    scenarios = [ scenario(PLAN, nil, nil, "Pay review", ends_on: nil), scenario(Q1, PLAN, "then", "Q1 hires", ends_on: nil),
+                  scenario(SLOW, Q1, "instead", "Slower hiring", ends_on: nil) ]
+
+    options = render_dialogs(scenarios).css("#fork-scenario-parent option").map { [ it.text, it["data-open"], it["data-earliest-start"] ] }
+    assert_equal [ [ "Today", nil, nil ], [ "· Q1 hires", "true", "2027-01-02" ], [ "· · Slower hiring", "true", "2027-01-02" ] ], options
+    assert_includes render_dialogs(scenarios).at_css("#fork-scenario-no-end-hint").text, "Cost and budget show a set number of months"
+  end
+
+  should "describe the end as a step's last day, true whether or not the step has a start of its own" do
+    controller = ApplicationController.new
+    controller.request = ActionDispatch::TestRequest.create
+    html = Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::ScenarioDialogs.new(plan_id: PLAN, scenarios: [ scenario(PLAN, nil, nil, "Pay review") ])))
+
+    assert_equal "Its last day. A step after another starts the day after that one ends.", html.at_css("#fork-scenario-ends-on-hint").text
   end
 end

@@ -69,6 +69,28 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
     assert_equal [ "Can't be priced", "No period" ], [ broken.text, broken.at_css("span")["title"] ]
   end
 
+  should "say the run rate on the last day in one quiet line under a scenario's cell, against Today's" do
+    figures = ->(scenario, difference) { { scenario: sum({ "EUR" => scenario }, scenario), difference: sum({ "EUR" => difference }, difference) } }
+    parts = { actual: sum({ "EUR" => "100000" }, "100000"), planned: sum({ "EUR" => "-15000" }, "-15000"), forecast: sum({}, "0") }
+    row = ->(run_rate) { { scenario_id: "s", total: { **figures.("85000", "-15000"), parts: }, unpriced: 0, run_rate_at_end: run_rate } }
+    cell = ->(run_rate) { Nokogiri::HTML5.fragment(Views::Plans::CostCell.new(row: row.(run_rate), reference: "EUR").call).at_css("[data-run-rate-at-end]") }
+
+    line = cell.({ on: "2026-12-31", total: figures.("1200000", "80000") })
+    assert_equal "Run rate on 31 Dec 2026: EUR 1.2m a year, +EUR 80k on Today's", line.text
+    assert_empty %w[block basis-full] - line["class"].split, "it takes a line of its own and wraps there"
+    assert_not_includes line["class"], "nowrap"
+    assert_equal "Run rate on 31 Dec 2026: EUR 1.2m a year, same as Today's", cell.({ on: "2026-12-31", total: figures.("1200000", "0") }).text
+    assert_nil cell.(nil), "Today has no run rate at its end"
+  end
+
+  should "say when the run rate's day is the end of the months shown for a step with no end date" do
+    figures = { scenario: sum({ "EUR" => "1200000" }, "1200000"), difference: sum({ "EUR" => "0" }, "0") }
+    run_rate = { on: "2028-03-31", open_ended: true, horizon_months: 12, total: figures }
+    line = Nokogiri::HTML5.fragment(Views::Plans::RunRateAtEnd.new(run_rate:, reference: "EUR").call)
+
+    assert_equal "Run rate on 31 Mar 2028, the end of the 12 months shown: EUR 1.2m a year, same as Today's", line.text
+  end
+
   context "the actual, planned and forecast split" do
     should "give each part, signing planned and forecast, and leave forecast out until it adds something" do
       parts = { actual: sum({ "EUR" => "1200000" }, "1200000"), planned: sum({ "EUR" => "-40000" }, "-40000"), forecast: sum({ "EUR" => "0" }, "0") }
