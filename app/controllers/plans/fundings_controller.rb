@@ -4,6 +4,8 @@
 # back to the line the plan derives ([#411](https://github.com/espaliahq/espalia/issues/411)),
 # through `team_planning_set_position_funding` and `team_planning_clear_change`.
 # The form takes each line's part as a percentage; the operation takes a share.
+# A refusal redirects with an alert rather than answering 422: the form lives
+# in a dialog on the tab, which has no page of its own to show again.
 class Plans::FundingsController < ApplicationController
   include Plans::MapEditing
 
