@@ -65,6 +65,22 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
     [ @q1, @plan_id ].each { assert_no_pay_read(it) }
   end
 
+  should "list a removed scenario that held pay to every member as one count, with no amount or note from any read" do
+    q2 = call(Operations::TeamPlanning::ForkScenario, @holder, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2",
+                                                               ends_on: "2026-09-30")[:scenario_id]
+    set_pay(q2)
+    pay = call(Operations::TeamPlanning::History, @holder, plan_id: @plan_id, scenario_id: q2)[:entries].sole[:event_id]
+    call(Operations::TeamPlanning::NoteChange, @holder, plan_id: @plan_id, scenario_id: q2, event_id: pay, note: "Gone with Q2")
+    call(Operations::TeamPlanning::RemoveScenario, @holder, plan_id: @plan_id, scenario_id: q2)
+
+    [ @holder, @editor, @viewer ].each do |account|
+      removed = call(Operations::TeamPlanning::RemovedScenarios, account, plan_id: @plan_id)[:removed].sole
+      assert_equal [ q2, "Q2", 1 ], removed.values_at(:scenario_id, :name, :changes)
+      assert_not_includes removed.to_json, "Gone with Q2"
+    end
+    assert_no_pay_read(@q1, amounts: [ AMOUNT, "Gone with Q2" ])
+  end
+
   should "show no pay to anyone else from any read of a step with no end date, while a holder's cost, budget and funding run over it" do
     open = SecureRandom.uuid_v7
     TeamPlanning::CommandHandler.new(actor: context_for(@holder)).fork_scenario(@plan_id, open, parent_id: @q1, relation: "then", name: "Q2")

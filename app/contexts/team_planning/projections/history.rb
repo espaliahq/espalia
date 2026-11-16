@@ -8,15 +8,23 @@
 # Writes `team_planning_history_entries`, and nothing else writes it. An undo
 # marks the entry it reverses as undone and a redo lifts the mark; both stay
 # as entries of their own. A split moves the entries of its subjects and facets
-# to the agreed part, in their order, and a move, or an undo or redo of one,
+# to the agreed part, in their order, with the step's dates entries and their
+# undos and redos, as the plan's log moves them. A move, or an undo or redo of one,
 # takes the entries it moved to the step they now stand in. A removed scenario
-# or a deleted plan takes its entries with it; the stream keeps them. It hears
+# or a deleted plan takes its entries with it; the stream keeps them. A
+# removed scenario leaves a count of the changes it still held in
+# `team_planning_removed_scenario_tallies`, which it also writes alone
+# ([#340](https://github.com/espaliahq/espalia/issues/340)). It hears
 # every kind in {TeamPlanning::ChangeKinds}.
 #
 # Production already holds changes, pins and clears, so the deploy that ships
 # it needs `REBUILD_ON_DEPLOY=team_planning/history`. Version 2 adds each
 # step's new dates, which production already holds, so it needs the same. A
 # fork that closes a step with no end date is new, so it needs no rebuild.
+# Version 3 moves a split step's dates entries to the agreed part
+# ([#426](https://github.com/espaliahq/espalia/issues/426)), which changes
+# what replay writes, so it needs the same rebuild, which also counts each
+# past removal.
 #
 class TeamPlanning::Projections::History
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -24,7 +32,7 @@ class TeamPlanning::Projections::History
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 2
+  CODE_VERSION = 3
 
   # @return [Array<Class>]
   def self.handled_events
@@ -41,15 +49,20 @@ class TeamPlanning::Projections::History
   #
   # @param tenant [Tenant]
   def self.reset!(tenant:)
-    ActsAsTenant.with_tenant(tenant) { TeamPlanningHistoryEntry.where(tenant_id: tenant.id).delete_all }
+    ActsAsTenant.with_tenant(tenant) do
+      TeamPlanningHistoryEntry.where(tenant_id: tenant.id).delete_all
+      TeamPlanningRemovedScenarioTally.where(tenant_id: tenant.id).delete_all
+    end
   end
 
   # @param event [RubyEventStore::Event]
   def call(event)
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
       case event
-      when TeamPlanning::Events::ScenarioRemoved then TeamPlanningHistoryEntry.where(scenario_id: event.data[:scenario_id]).delete_all
-      when TeamPlanning::Events::PlanDeleted then TeamPlanningHistoryEntry.where(plan_id: event.data[:plan_id]).delete_all
+      when TeamPlanning::Events::ScenarioRemoved then remove(event)
+      when TeamPlanning::Events::PlanDeleted
+        TeamPlanningHistoryEntry.where(plan_id: event.data[:plan_id]).delete_all
+        TeamPlanningRemovedScenarioTally.where(plan_id: event.data[:plan_id]).delete_all
       when TeamPlanning::Events::ScenarioSplit then split(event.data)
       when TeamPlanning::Events::ChangeMoved
         rehome(event.data[:moved_event_ids], from: event.data[:scenario_id], to: event.data[:to_scenario_id]) unless recorded?(event)
@@ -64,13 +77,46 @@ class TeamPlanning::Projections::History
 
   private
 
+  def remove(event)
+    return if TeamPlanningRemovedScenarioTally.exists?(id: event.data[:scenario_id])
+
+    entries = TeamPlanningHistoryEntry.where(scenario_id: event.data[:scenario_id])
+    TeamPlanningRemovedScenarioTally.create!(id: event.data[:scenario_id], plan_id: event.data[:plan_id],
+                                             changes_held: held(entries.order(:position)),
+                                             created_at: event.timestamp, updated_at: event.timestamp)
+    entries.delete_all
+  end
+
+  # The subjects and facets a scenario still changed, as the plan's log
+  # works them out: a standing change or pin holds its key and a clear lets
+  # it go; undone entries, undos, redos, notes, moves and dates hold nothing.
+  def held(entries)
+    entries.where(undone_at: nil).pluck(:subject_id, :facet, :action).each_with_object(Set.new) do |(subject_id, facet, action), keys|
+      case action
+      when "set", "pin" then keys << [ subject_id, facet ]
+      when "clear" then keys.delete([ subject_id, facet ])
+      end
+    end.size
+  end
+
   def split(data)
     keys = data[:keys].map(&:to_a).to_set
-    moving = TeamPlanningHistoryEntry.where(scenario_id: data[:scenario_id]).order(:position).select { keys.include?([ it.subject_id, it.facet ]) }
+    dates = Set.new
+    moving = TeamPlanningHistoryEntry.where(scenario_id: data[:scenario_id]).order(:position).select do |entry|
+      keys.include?([ entry.subject_id, entry.facet ]) || dates?(entry, dates)
+    end
     moving.each.with_index(next_position(data[:agreed_id])) do |entry, position|
       end_state = TeamPlanning::ChangeEntry.moved_end_state(entry.kind, entry.end_state, from: entry.scenario_id, to: data[:agreed_id])
       entry.update!(scenario_id: data[:agreed_id], position:, end_state:)
     end
+  end
+
+  # A step's dates entry, or an undo or redo that reverses one; read in order,
+  # so `dates` already holds every dates entry before this one.
+  def dates?(entry, dates)
+    return false unless entry.action == "dates" || (entry.action.in?(%w[undo redo]) && dates.include?(entry.reverses_event_id))
+
+    dates << entry.id
   end
 
   def recorded?(event) = TeamPlanningHistoryEntry.exists?(id: event.event_id)

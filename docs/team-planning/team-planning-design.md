@@ -1037,11 +1037,39 @@ a former member.
 Production already holds changes, pins and clears, so the deploy that ships the history
 needs `REBUILD_ON_DEPLOY=team_planning/history` to fill it. Without it, predeploy's
 `verify` stops the deploy. Version 2 adds date edits, so the deploy that ships it needs the
-same rebuild. The history and overrides projections read events through one mapping,
+same rebuild. Version 3 moves a split step's date edits, with their undos and redos, to the
+agreed part, as the plan's log does ([#426](https://github.com/espaliahq/espalia/issues/426)),
+so it needs the rebuild too. The history and overrides projections read events through one mapping,
 `TeamPlanning::ChangeEntry`, so they agree on what each event did. A shreddable value
 never reaches either table: the history names the field in `sealed_fields` and leaves
 the value out. The note is the one exception, held in a sealed column (see below).
-Removing a scenario drops its history.
+Removing a scenario drops its history, and leaves a record of the scenario in its place
+([#340](https://github.com/espaliahq/espalia/issues/340)).
+
+### Removed scenarios
+
+**As built in [#340](https://github.com/espaliahq/espalia/issues/340):** the plan page lists
+each removed scenario under the scenario tree, closed as "Removed scenarios (N)" and absent
+while there are none. One line each, newest first: its name, its period, how many changes it
+still held, and who removed it and when. `team_planning_removed_scenarios` reads the same list,
+a hundred a page with a total. An archived or frozen plan shows it the same, since nothing on
+it can be changed.
+
+An entry names no subject, facet, value or note, and its count is one number for every facet,
+pay included. So every member reads the same entry, with or without the see-pay right or a
+scope. A field about a subject or a facet would need clearance first.
+
+Two tables hold it, joined at read time, each with one writer. The scenarios projection
+(version 3) moves the scenario's row to `team_planning_removed_scenarios` with its sealed name,
+period, remover and time; the name stays sealed under the plan's key and goes with it. The
+history projection (version 3) counts what the scenario still held into
+`team_planning_removed_scenario_tallies` before it drops the entries: each subject and facet a
+standing change or pin held and no clear let go, as the plan's log counts them. Either
+projection rebuilt alone gives the same list. A deleted plan takes both.
+
+The plan page has no Remove control yet; that is
+[#439](https://github.com/espaliahq/espalia/issues/439). Until it lands, a scenario is removed
+through `team_planning_remove_scenario`.
 
 ### Notes
 

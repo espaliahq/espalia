@@ -144,13 +144,13 @@ module ProjectionReplayHelpers
         { members: rows(TeamPlanningPlanMember, stable_id: true) }
       when "TeamPlanning::Projections::Scenarios"
         # The PK is the event's scenario id, or the plan's for the baseline.
-        { scenarios: rows(TeamPlanningScenario, stable_id: true) }
+        { scenarios: rows(TeamPlanningScenario, stable_id: true), removed: rows(TeamPlanningRemovedScenario, stable_id: true) }
       when "TeamPlanning::Projections::Overrides"
         # The PK derives from the scenario, subject and facet — assert it survives reset! + replay.
         { overrides: rows(TeamPlanningOverride, stable_id: true) }
       when "TeamPlanning::Projections::History"
         # The PK is the event's id — assert it survives reset! + replay.
-        { history: rows(TeamPlanningHistoryEntry, stable_id: true) }
+        { history: rows(TeamPlanningHistoryEntry, stable_id: true), tallies: rows(TeamPlanningRemovedScenarioTally, stable_id: true) }
 
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"

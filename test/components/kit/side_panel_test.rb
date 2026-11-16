@@ -26,6 +26,19 @@ class Components::Kit::SidePanelTest < ActiveSupport::TestCase
       assert aside.at_css("button[data-action='activity-pane#close'][aria-label='Close about this plan']")
     end
 
+    should "take the toggle's label from a block, keeping its controls" do
+      html = Components::Kit::SidePanel.new(id: "plan-side-panel", title: "About this plan", open: true,
+                                            cookie: "plan_side_panel_open", url_key: "panel").call do |panel|
+        panel.main { panel.toggle { panel.plain "About "; panel.span(class: "sr-only") { "this plan" } } }
+        panel.body { panel.p { "Rules" } }
+      end
+      toggle = Nokogiri::HTML5.fragment(html).at_css("button[data-activity-pane-target='toggle']")
+
+      assert_equal "About this plan", toggle.text.strip
+      assert_equal "this plan", toggle.at_css("span.sr-only").text
+      assert_equal "plan-side-panel", toggle["aria-controls"]
+    end
+
     should "render closed, hidden until the controller opens it" do
       doc = render_panel(open: false)
 

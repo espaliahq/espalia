@@ -185,6 +185,24 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
     assert_equal [ %w[2027-02-01 2027-04-30] ] * 2, [ period(q1), period(lean) ]
   end
 
+  should "keep a removed scenario's sealed name, its period, who removed it and when, until the plan goes" do
+    q1 = fork(ends_on: "2027-03-31")
+    lean = fork(q1, relation: "instead", name: "Lean Q1")
+    @handler.remove_scenario(@plan_id, lean)
+
+    assert_not TeamPlanningScenario.exists?(lean)
+    removed = TeamPlanningRemovedScenario.find(lean)
+    assert_equal [ "Lean Q1", "instead", "2027-01-01", "2027-03-31", @person.id ],
+                 [ removed.name.reveal, removed.relation, removed.starts_on.iso8601, removed.ends_on.iso8601, removed.removed_by_id ]
+    assert_in_delta Time.current, removed.removed_at, 5.seconds
+
+    PlanKeyStore.new.destroy_plan(@plan_id)
+    assert removed.reload.name.removed?
+
+    @handler.delete_plan(@plan_id)
+    assert_empty TeamPlanningRemovedScenario.all
+  end
+
   context "rebuild contract" do
     # A plan written before a first step could start after the base: its
     # first step's start is the base at the fork, and its period edit carries
@@ -234,7 +252,7 @@ class TeamPlanning::Projections::ScenariosTest < ActiveSupport::TestCase
       @handler.delete_plan(gone)
 
       before = snapshot_read_models(TeamPlanning::Projections::Scenarios, @tenant)
-      assert_equal 4, before[:scenarios].size
+      assert_equal [ 4, [ q2 ] ], [ before[:scenarios].size, before[:removed].pluck("id") ]
 
       TeamPlanning::Projections::Scenarios.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningScenario.count
