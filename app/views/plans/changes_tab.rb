@@ -20,7 +20,8 @@ class Views::Plans::ChangesTab < Views::Base
   STAYING = "Staying"
   PLAN_ONLY = "Only in this plan"
   WHOLE_PLAN = "The whole plan"
-  LONG_NOTE = 160
+  NARROW_NOTE = 100
+  WIDE_NOTE = 320
 
   # @param plan [Hash] from `team_planning_plan`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
@@ -233,11 +234,12 @@ class Views::Plans::ChangesTab < Views::Base
   def change_note(note)
     if note&.dig(:removed)
       p(class: "text-sm italic text-muted", data: { change_note: "removed" }) { "Note removed" }
-    elsif note && long_note?(note[:value])
+    elsif note && (reach = clamp_reach(note[:value]))
+      narrow = reach == :narrow
       div(class: "group/note space-y-1") do
-        render Components::Kit::Prose.new(note[:value], class: "text-sm text-muted break-words line-clamp-3 group-has-[details[open]]/note:line-clamp-none",
+        render Components::Kit::Prose.new(note[:value], class: [ "text-sm text-muted break-words line-clamp-3 group-has-[details[open]]/note:line-clamp-none", ("md:line-clamp-none" if narrow) ].compact.join(" "),
                                                         data: { change_note: "" })
-        details(data: { change_note_more: "" }, class: "group/more text-xs") do
+        details(data: { change_note_more: "" }, class: [ "group/more text-xs", ("md:hidden" if narrow) ].compact.join(" ")) do
           summary(class: "inline-flex min-h-6 w-fit cursor-pointer list-none items-center rounded font-medium text-link hover:underline " \
                          "[&::-webkit-details-marker]:hidden") do
             span(class: "group-open/more:hidden") { "Show the whole note" }
@@ -250,8 +252,14 @@ class Views::Plans::ChangesTab < Views::Base
     end
   end
 
-  # A note this long, or on this many lines, may run past the three a row shows.
-  def long_note?(text) = text.length > LONG_NOTE || text.count("\n") >= 3
+  # Where a note may run past the three lines a row shows: everywhere, only on
+  # a row as narrow as a phone's, or nowhere. Lengths are a row's three lines
+  # at each width, so a toggle never opens a note that already fits.
+  def clamp_reach(text)
+    if text.length > WIDE_NOTE || text.lines.count { it.strip.present? } > 3 then :everywhere
+    elsif text.length > NARROW_NOTE then :narrow
+    end
+  end
 
   def notable?(entry)
     @can_edit && !entry.dig(:note, :removed) && Operations::TeamPlanning::ChangeNote.visible?(entry[:facet], see_pay: @see_pay)

@@ -95,6 +95,14 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_clamped_note_opens
     end
 
+    should "show a note that fits three lines whole, with no toggle" do
+      medium_note_on_bo
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      assert_selector "[data-planned-change='done'] [data-change-note]", text: "every weekend in the quarter"
+      assert_no_selector "[data-change-note-more] summary", visible: true
+    end
+
     should "show a pay change's note to a member with the see-pay right, and neither the note nor its form to anyone else" do
       call(Operations::TeamPlanning::SetActualPay, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @ada.id,
                                                              amount: "93871", currency: "AUD", period: "year", basis: "full_time")
@@ -219,6 +227,18 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
       assert_clamped_note_opens
     end
 
+    should "hold a medium note to three lines on a phone, where it runs longer" do
+      medium_note_on_bo
+      sign_in_as(@viewer.user)
+      visit changes_plan_path(@plan_id, scenario: @q1)
+      note = "[data-planned-change='done'] [data-change-note]"
+      assert_selector note, text: "Bo moves to Growth"
+      assert_operator note_lines(note), :<=, 3
+
+      click_selector_with_js_fallback("[data-planned-change='done'] [data-change-note-more] summary", expect_text: "Show less")
+      assert_operator note_lines(note), :>, 3
+    end
+
     should "note a change in a form that fits, and mark a note erased with its person as removed, with no way to write another" do
       sign_in_as(@planner.user)
       visit changes_plan_path(@plan_id, scenario: @q1)
@@ -295,6 +315,11 @@ class PlanChangesSystemTest < ApplicationSystemTestCase
 
   LONG_NOTE = ("Bo moves to Growth once the second hire lands and the on-call rota has a replacement for the weekend. " * 5) +
               "https://example.test/notes/#{'a' * 90}".freeze
+  MEDIUM_NOTE = "Bo moves to Growth once the second hire lands, and the on-call rota has a replacement for every weekend in the quarter.".freeze
+
+  def medium_note_on_bo
+    call(Operations::TeamPlanning::NoteChange, @planner, plan_id: @plan_id, scenario_id: @q1, event_id: bo_change_id, note: MEDIUM_NOTE)
+  end
 
   def long_note_on_bo
     call(Operations::TeamPlanning::NoteChange, @planner, plan_id: @plan_id, scenario_id: @q1, event_id: bo_change_id, note: LONG_NOTE)

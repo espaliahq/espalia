@@ -1044,8 +1044,10 @@ change and pin may carry a `note`, the planner's reason, such as why someone mov
   every request, so withdrawing it hides those notes at once. Every other read carries
   no note: the timeline, rebase preview, move, split, fork and frozen-plan reads return
   none, and a refused note write names only the limit it broke.
-- **A long note shows three lines.** The Changes tab clamps a note over 160 characters,
-  or of four lines or more, behind a native `details` toggle, with no JavaScript.
+- **A long note shows three lines.** The Changes tab clamps a note over 320 characters,
+  or of four lines or more not counting blank ones, behind a native `details` toggle,
+  with no JavaScript. A note over 100 characters clamps only below `md`, where a row is
+  narrow, so a toggle never opens a note that already fits.
 - **No rebuild.** No stored event held a note before 3.13b and the new columns start empty,
   so neither projection's `CODE_VERSION` moved.
 
