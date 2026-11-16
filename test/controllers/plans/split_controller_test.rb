@@ -111,6 +111,14 @@ class Plans::SplitControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Split 1 change off into Agreed moves.", flash[:notice]
     end
 
+    should "count the changes chosen in its notice, not the earlier ones that go across with them" do
+      again = place(@ada, @platform)
+
+      post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ again, @creates ], name: "Agreed moves" }
+
+      assert_equal "Split 2 changes off into Agreed moves.", flash[:notice]
+    end
+
     should "split the agreed part again, so agreement can come in stages" do
       post split_plan_path(@plan_id, scenario_id: @q1), params: { event_ids: [ @creates, @to_platform ], name: "Agreed moves" }
       agreed = ActsAsTenant.with_tenant(@tenant) { TeamPlanningScenario.where(plan_id: @plan_id).order(:created_at).last.id }
