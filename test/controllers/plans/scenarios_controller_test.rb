@@ -3,6 +3,12 @@
 require "test_helper"
 
 class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
+  class HeadcountCap < TeamPlanning::RuleKind
+    def self.rule_name = "test_headcount_cap"
+    def self.description = "The most people a unit may hold"
+    def self.default = { "cap" => 10 }
+  end
+
   include Devise::Test::IntegrationHelpers
 
   setup do
@@ -102,8 +108,107 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "removing, as an editor" do
+    setup do
+      sign_in @editor.user
+      @lean = ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::TeamPlanning::ForkScenario, @editor, plan_id: @plan_id, parent_id: @q1, relation: "instead", name: "Lean Q1")[:scenario_id]
+      end
+    end
+
+    should "remove a scenario and land on the plan page with Removed scenarios open" do
+      delete plan_scenario_path(@plan_id, @lean)
+
+      assert_redirected_to plan_path(@plan_id, removed_page: 1, anchor: "removed-scenarios")
+      assert_response :see_other
+      assert_equal "Removed Lean Q1.", flash[:notice]
+      assert_nil scenario_named("Lean Q1")
+      follow_redirect!
+      assert_select "details#removed-scenarios[open] [data-removed-scenario='#{@lean}']", text: /Lean Q1/
+    end
+
+    should "say why a removal was refused, and remove nothing" do
+      delete plan_scenario_path(@plan_id, @q1)
+      assert_redirected_to plan_path(@plan_id)
+      assert_equal "Couldn't remove the scenario: 1 scenario forks from this one: remove it first", flash[:alert]
+
+      delete plan_scenario_path(@plan_id, @plan_id)
+      assert_equal "Couldn't remove the scenario: The baseline can't be removed", flash[:alert]
+      assert scenario_named("Q1 hires")
+    end
+
+    should "offer Remove for each scenario but the baseline, and name only the scenarios that block one" do
+      get plan_path(@plan_id)
+
+      assert_select "[role=menuitem][data-modal-target-id='remove-scenario-#{@lean}']", text: "Remove…"
+      assert_select "[data-modal-target-id='remove-scenario-#{@plan_id}']", count: 0
+      assert_select "#remove-scenario-#{@lean}" do
+        assert_select "h2, h3", text: "Remove Lean Q1?"
+        assert_select "p", text: /\AIt holds no changes\. It can't be restored/
+        assert_select "form[action='#{plan_scenario_path(@plan_id, @lean)}'] button[type=submit]", text: "Remove scenario"
+      end
+      assert_select "#remove-scenario-#{@q1}" do
+        assert_select "p", text: "1 scenario forks from it: Lean Q1. Remove that first."
+        assert_select "form", count: 0
+      end
+
+      get map_plan_path(@plan_id, scenario: @lean)
+      assert_select "button[data-modal-target-id='remove-scenario-#{@lean}']", text: "Remove…"
+      assert_select "#remove-scenario-#{@lean}"
+      assert_select "#remove-scenario-#{@q1}", count: 0
+    end
+
+    should "open the map's Remove dialog from a link whose id is in capitals" do
+      get map_plan_path(@plan_id, scenario: @lean.upcase)
+
+      assert_select "button[data-modal-target-id='remove-scenario-#{@lean}']", text: "Remove…"
+      assert_select "#remove-scenario-#{@lean}"
+    end
+
+    should "count the changes that go with it" do
+      TeamPlanning::RuleKinds.register(HeadcountCap)
+      ActsAsTenant.with_tenant(@tenant) do
+        TeamPlanning::CommandHandler.new(actor: AuthorizationContext.new(user: @editor.user, tenant_user: @editor, person: @editor.person))
+          .set_change(@plan_id, TeamPlanning::Events::RuleSet, scenario_id: @lean, subject_id: @plan_id,
+                                                               end_state: { rule: HeadcountCap.rule_name, value: { cap: 8 } })
+      end
+      get plan_path(@plan_id)
+      assert_select "#remove-scenario-#{@lean} p", text: /\AIts 1 change goes with it\./
+    ensure
+      TeamPlanning::RuleKinds.unregister(HeadcountCap)
+    end
+
+    should "offer no Remove on a frozen plan" do
+      PlanPolicy.stub(:frozen?, true) do
+        get plan_path(@plan_id)
+        assert_select "[data-modal-target-id^='remove-scenario-']", count: 0
+        get map_plan_path(@plan_id, scenario: @lean)
+        assert_select "[data-modal-target-id^='remove-scenario-']", count: 0
+      end
+    end
+
+    should "offer no Remove once the plan is archived" do
+      ActsAsTenant.with_tenant(@tenant) { call(Operations::TeamPlanning::ArchivePlan, @editor, plan_id: @plan_id) }
+
+      get plan_path(@plan_id)
+      assert_select "[id^='remove-scenario-']", count: 0
+      assert_select "[data-modal-target-id^='remove-scenario-']", count: 0
+      get map_plan_path(@plan_id, scenario: @lean)
+      assert_select "[data-modal-target-id^='remove-scenario-']", count: 0
+    end
+  end
+
   context "a viewer" do
     setup { sign_in @viewer.user }
+
+    should "be refused a removal, and offered no Remove" do
+      delete plan_scenario_path(@plan_id, @q1)
+      assert_redirected_to root_path
+      assert scenario_named("Q1 hires")
+
+      get plan_path(@plan_id)
+      assert_select "[id^='remove-scenario-']", count: 0
+    end
 
     should "be refused a fork and an edit" do
       post plan_scenarios_path(@plan_id), params: { scenario: { parent_id: @q1, relation: "then", name: "Q2 hires", ends_on: "2027-06-30" } }
@@ -132,6 +237,8 @@ class Plans::ScenariosControllerTest < ActionDispatch::IntegrationTest
     post plan_scenarios_path(@plan_id), params: { scenario: { parent_id: @q1, relation: "then", name: "Q2 hires", ends_on: "2027-06-30" } }
     assert_response :not_found
     patch plan_scenario_path(@plan_id, @q1), params: { scenario: { name: "Lean Q1" } }
+    assert_response :not_found
+    delete plan_scenario_path(@plan_id, @q1)
     assert_response :not_found
   end
 
