@@ -5,7 +5,8 @@
 # them. A scenario shows `team_planning_budget`'s four numbers, each line's
 # figures, and the positions `team_planning_funding` draws on it. Every figure
 # is the read's, only formatted here, so this page and an agent never
-# disagree.
+# disagree. A budget amount is pay, so a member without the see-pay right
+# sees head counts only ([#367](https://github.com/espaliahq/espalia/issues/367)).
 class Views::Plans::BudgetTab < Views::Base
   include Views::Plans::ScenarioTab
   include Views::Tenant::BudgetLines::LineText
@@ -36,6 +37,7 @@ class Views::Plans::BudgetTab < Views::Base
       div do
         h3(id: "budget-heading", class: "text-base font-semibold text-default") { "Budget on #{scenario_name(scenario_id)}" }
         @budget ? p(class: "mt-1 text-sm text-muted", data: { budget_basis: "" }) { basis } : today_note
+        p(class: "mt-1 text-sm text-muted", data: { budget_no_money: "" }) { "Budget amounts show only to members who may see pay." } unless money?
         scenario_picker(path: :budget_plan_path, select_id: "budget-scenario")
       end
       if (note = (@budget || @lines)[:note])
@@ -53,6 +55,8 @@ class Views::Plans::BudgetTab < Views::Base
   def scenario_id = @lines[:scenario_id]
 
   def reference = @budget[:reference_currency]
+
+  def money? = (@budget || @lines)[:money] != false
 
   def today_note
     p(class: "mt-1 text-sm text-muted", data: { budget_today: "" }) do
@@ -84,7 +88,7 @@ class Views::Plans::BudgetTab < Views::Base
         @lines[:budget_lines].each do |line|
           li(class: "space-y-1 p-3", data: { budget_line: line[:budget_line_id] }) do
             p(class: "text-sm font-medium text-default break-words") { line_name(line) }
-            p(class: "text-sm text-default") { figures_text(line) }
+            p(class: "text-sm text-default") { money? ? figures_text(line) : head_count_only(line[:head_count]) }
             p(class: "text-xs text-muted break-words") { terms_text(line) }
           end
         end
@@ -94,6 +98,8 @@ class Views::Plans::BudgetTab < Views::Base
 
   def basis
     period = @budget[:period]
+    return "For #{Views::Plans::ScenarioTable.figured(period)}." unless money?
+
     on = @budget[:basis] == "inclusive" ? "base pay plus on-cost" : "base pay alone"
     priced = @budget[:pay_view] == "band_midpoints" ? "Priced at pay band midpoints" : "Priced from the actual pay the plan holds, and at pay band midpoints for the rest"
     "For #{Views::Plans::ScenarioTable.figured(period)}, on #{on}. #{priced}. " \
@@ -124,8 +130,12 @@ class Views::Plans::BudgetTab < Views::Base
         plain label
         render Components::Kit::Badge.new("Over", tone: :danger, data: { budget_over: "" }) if over
       end
-      dd(class: "mt-1 text-lg font-semibold text-default break-words") { Views::Plans::CostMarks::Format.sum(sum, reference) }
-      dd(class: "text-xs text-muted") { heads } if heads
+      if money?
+        dd(class: "mt-1 text-lg font-semibold text-default break-words") { Views::Plans::CostMarks::Format.sum(sum, reference) }
+        dd(class: "text-xs text-muted") { heads } if heads
+      else
+        dd(class: "mt-1 text-lg font-semibold text-default break-words") { heads&.upcase_first || "No head count" }
+      end
       left = left_out&.dig(:mismatched_currencies).to_a
       dd(class: "mt-1 text-xs text-warning", data: { budget_left_out: left.size }) { "Leaves out #{lines_count(left.size)} drawn on in another currency" } if left.any?
     end
@@ -162,9 +172,15 @@ class Views::Plans::BudgetTab < Views::Base
       end
       p(class: "text-xs text-muted break-words") { terms_text(described) } if described
       dl(class: "grid grid-cols-1 gap-1 text-sm sm:grid-cols-3") do
-        figure("Approved", line[:approved][:amount] ? money_text(line[:approved][:amount], line[:currency]) : "No amount", head_count_text(line[:approved][:head_count]))
-        figure("Funded", natives(line[:funded][:native]), heads_text(line[:funded]))
-        figure("Remaining", remaining_text(line), head_count_text(line[:remaining][:head_count]), data: { budget_remaining: "" })
+        if money?
+          figure("Approved", line[:approved][:amount] ? money_text(line[:approved][:amount], line[:currency]) : "No amount", head_count_text(line[:approved][:head_count]))
+          figure("Funded", natives(line[:funded][:native]), heads_text(line[:funded]))
+          figure("Remaining", remaining_text(line), head_count_text(line[:remaining][:head_count]), data: { budget_remaining: "" })
+        else
+          figure("Approved", head_count_only(line[:approved][:head_count]), nil)
+          figure("Funded", heads_text(line[:funded]).upcase_first, nil)
+          figure("Remaining", head_count_only(line[:remaining][:head_count]), nil, data: { budget_remaining: "" })
+        end
       end
       draws(line)
     end
@@ -294,6 +310,8 @@ class Views::Plans::BudgetTab < Views::Base
   def heads_text(heads) = "#{positions_count(heads[:positions])}, #{decimal(heads[:fte])} FTE"
 
   def head_count_text(figure) = figure && "head count #{decimal(figure)}"
+
+  def head_count_only(figure) = head_count_text(figure)&.upcase_first || "No head count"
 
   def positions_count(count) = "#{count} #{count == 1 ? 'position' : 'positions'}"
 

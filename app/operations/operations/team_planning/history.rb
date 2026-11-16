@@ -32,7 +32,8 @@ class Operations::TeamPlanning::History < Operations::Base
               "period it brings back in the same fields. " \
               "An entry that stands undone says who undid it. A change, pin or note entry shows its note " \
               "as note: { value }, or { removed: true } once the plan is deleted. A note on a pay change reaches only a member with the see-pay right; anyone else gets no note on it, " \
-              "and no note entry for it. Any other value " \
+              "and no note entry for it. A budget line's amount, currency and period are pay too: anyone else gets its " \
+              "entries without them, so a priced line reads as one with a head count alone. Any other value " \
               "that can be erased is never shown here: sealed_fields names any such field. A forgotten person reads as " \
               "\"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the caller is a member."
   category :read
@@ -68,7 +69,9 @@ class Operations::TeamPlanning::History < Operations::Base
   def entry(row, names, see_pay)
     {
       event_id: row.id, action: row.action, subject_id: row.subject_id, facet: row.facet,
-      kind: row.kind&.demodulize&.underscore, end_state: row.end_state, sealed_fields: row.sealed_fields,
+      kind: row.kind&.demodulize&.underscore,
+      end_state: Operations::TeamPlanning::LineFigures.end_state(row.end_state, facet: row.facet, see_pay:),
+      sealed_fields: Operations::TeamPlanning::LineFigures.sealed_fields(row.sealed_fields, facet: row.facet, see_pay:),
       pinned_from: (row.action == "pin" ? { scenario_id: row.pinned_from_scenario_id, event_id: row.pinned_from_event_id } : nil),
       reverses_event_id: row.reverses_event_id, noted_event_id: row.noted_event_id, note: Operations::TeamPlanning::ChangeNote.payload(row.note, facet: row.facet, see_pay:),
       settles: row.settles, by: person(row.actor_id, names), at: row.at.utc.iso8601,
