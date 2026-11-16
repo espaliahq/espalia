@@ -31,7 +31,7 @@ class Views::Plans::RemovedScenarios < Views::Base
       span(class: "text-default") { row[:name] || "A scenario whose name is gone" }
       plain " · "
       period(row)
-      plain " · #{row[:changes]} #{row[:changes] == 1 ? 'change' : 'changes'} · removed by #{row[:removed_by][:name]} on "
+      plain " · #{row[:changes]} #{'change'.pluralize(row[:changes])} · removed by #{row[:removed_by][:name]} on "
       day(row[:removed_at])
     end
   end
