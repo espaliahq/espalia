@@ -59,6 +59,28 @@ class Operations::TeamPlanning::ForecastTest < ActiveSupport::TestCase
     assert_equal({ "EUR" => "2000" }, cost[:total][:parts][:forecast][:native])
   end
 
+  should "price attrition's row for both cost and capacity, at the unit's average filled seat" do
+    ActsAsTenant.with_tenant(@tenant) do
+      family = create(:framework_role_family, name: "Engineering")
+      role = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: family.role_family_id)
+      level = create(:framework_level, role_id: role.role_id, ordinal: 5, title: "Senior SWE")
+      PayBand.create!(level:, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      ada = create(:person, tenant: @tenant, name: "Ada Quill")
+      people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      people.record_person(ada.id, provider: "espalia", effective_on: "2025-12-01", employment_status: "employed", title: "Software Engineer", level: "5")
+      people.set_membership(ada.id, @payments, provider: "espalia", effective_on: "2025-12-01", allocation: 1.0)
+      @family_id = family.role_family_id
+    end
+    { "capacity_model" => { families: { @family_id => { model: "per_fte" } }, roles: {} },
+      "attrition" => { yearly_rate: "0.1" }, "time_to_hire" => { days: "73" } }.each do |rule, value|
+      call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @year, rule:, value:)
+    end
+
+    assert_equal [ { kind: "attrition", unit_id: @payments, unit_name: "Payments", cost_centre: nil,
+                     starts_on: "2026-01-01", ends_on: "2026-12-31", headcount: "-0.02",
+                     cost: { "EUR" => "-1800" }, capacity: { "per_fte" => "-0.018" } } ], forecast[:rows]
+  end
+
   should "give Today no rows, and refuse a caller outside the plan" do
     call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "test_forecast_hiring", value: { hires: "1" })
 
