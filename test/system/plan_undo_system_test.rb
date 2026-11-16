@@ -138,24 +138,34 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
     end
   end
 
-  should "never push the tabs onto another line, on a phone or at 1024 and 1280 pixels" do
+  should "keep the tabs on one line beside Undo and Redo at 1024 and 1280 pixels with the panel open or closed, and add no row on a phone" do
     call(Operations::TeamPlanning::SetPlannedLevel, @planner, plan_id: @plan_id, scenario_id: @year, person_id: @bo.id, level: "6")
     call(Operations::TeamPlanning::UndoChange, @planner, plan_id: @plan_id, scenario_id: @year)
     sign_in_as(@planner.user)
 
-    [ MOBILE_SIZE, [ 1024, 900 ], [ 1280, 900 ] ].product([ map_plan_path(@plan_id, scenario: @year), changes_plan_path(@plan_id, scenario: @year) ]).each do |(width, height), path|
+    paths = %w[open closed].flat_map do |panel|
+      [ map_plan_path(@plan_id, scenario: @year, panel:), changes_plan_path(@plan_id, scenario: @year, panel:) ]
+    end
+    [ MOBILE_SIZE, [ 1024, 900 ], [ 1280, 900 ] ].product(paths).each do |(width, height), path|
       page.driver.browser.manage.window.resize_to(width, height)
       visit path
       assert_selector "#{REDO}[aria-label='Redo: Bo Quill · Level']"
       assert_selector "#{UNDO}[aria-label='Undo: Position']"
-      with_controls = tab_rows
-      execute_script("document.querySelectorAll('[data-undo-control]').forEach(it => it.remove())")
-      assert_equal tab_rows, with_controls, "Undo and Redo wrap the tab strip on #{path} at #{width}"
+      if width == MOBILE_SIZE.first
+        with_controls = tab_rows
+        execute_script("document.querySelectorAll('[data-undo-control]').forEach(it => it.remove())")
+        assert_equal tab_rows, with_controls, "Undo and Redo wrap the tab strip on #{path} on a phone"
+      else
+        assert_equal 1, tab_rows, "the tab strip wraps on #{path} at #{width}"
+        assert_equal 0, tabs_scrolled_away, "the tab strip hides a tab behind its scroll on #{path} at #{width}"
+      end
       assert_no_sideways_overflow
     end
   end
 
   private
+
+  def tabs_scrolled_away = evaluate_script(%(document.querySelector('nav[aria-label="Plan views"] > div').scrollWidth - document.querySelector('nav[aria-label="Plan views"] > div').clientWidth))
 
   def tab_rows = evaluate_script(%(new Set([...document.querySelectorAll('nav[aria-label="Plan views"] a')].map(a => a.getBoundingClientRect().top)).size))
 
