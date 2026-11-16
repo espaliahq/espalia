@@ -61,6 +61,18 @@ class Plans::ScenarioDatesControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ "2027-05-01", "2027-06-30" ], periods[@q2]
     end
 
+    should "keep the map it came from when the editor follows the link to the step before" do
+      get dates_plan_path(@plan_id, scenario_id: @q2, from: "map")
+      q1_dates = dates_plan_path(@plan_id, scenario_id: @q1, from: "map", map_scenario: @q2)
+      assert_select "[data-dates-start='#{@q2}'] a[href='#{q1_dates}']", text: "Q1 hires"
+
+      get q1_dates
+      assert_select "a[href='#{map_plan_path(@plan_id, scenario: @q2)}']", text: "Cancel"
+
+      post dates_plan_path(@plan_id, scenario_id: @q1), params: { ends_on: "2027-04-30", from: "map", map_scenario: @q2 }
+      assert_redirected_to map_plan_path(@plan_id, scenario: @q2)
+    end
+
     should "let a first step start after the base, and go back to the scenarios" do
       post dates_plan_path(@plan_id, scenario_id: @q1), params: { starts_on: "2026-12-01", ends_on: "2027-03-31" }
 

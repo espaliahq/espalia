@@ -51,7 +51,10 @@ class Views::Plans::ScenarioDates < Views::Base
   # parent takes its period from when the parent is a split or an alternative.
   def parent = Views::Plans::ScenarioTable.period_owner(@scenarios.find { it[:scenario_id] == @scenario[:parent_id] }, @scenarios)
 
-  def back = @from == "map" ? map_plan_path(plan_id, scenario: @map_scenario || id) : plan_path(plan_id)
+  def back = map_to_return_to ? map_plan_path(plan_id, scenario: map_to_return_to) : plan_path(plan_id)
+
+  # The map that opened these dates, which the preceding step's link carries on.
+  def map_to_return_to = (@map_scenario || id if @from == "map")
 
   def came_from
     input(type: "hidden", name: "from", value: @from) if @from
@@ -80,7 +83,7 @@ class Views::Plans::ScenarioDates < Views::Base
       p(class: "text-sm font-semibold text-default") { "Starts on" }
       p(class: "mt-1 text-sm text-default") do
         plain "#{day(@scenario[:starts_on])}, the day after "
-        a(href: dates_plan_path(plan_id, scenario_id: parent[:scenario_id], from: @from, map_scenario: @map_scenario), class: "underline") { parent[:name] }
+        a(href: dates_plan_path(plan_id, scenario_id: parent[:scenario_id], from: @from, map_scenario: map_to_return_to), class: "underline") { parent[:name] }
         plain " ends. Change that step's end to move it."
       end
     end
