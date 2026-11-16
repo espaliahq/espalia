@@ -91,6 +91,7 @@ class Operations::TeamPlanning::RemovedScenariosTest < ActiveSupport::TestCase
       assert_equal 2, call[:total]
       assert_equal [ [ @q2 ], true ], call.then { [ it[:removed].pluck(:scenario_id), it[:next_page] ] }
       assert_equal [ [ @lean ], false ], call(page: 2).then { [ it[:removed].pluck(:scenario_id), it[:next_page] ] }
+      assert_equal [ 2, [ @lean ] ], call(page: 9).then { [ it[:page], it[:removed].pluck(:scenario_id) ] }
     end
   end
 
