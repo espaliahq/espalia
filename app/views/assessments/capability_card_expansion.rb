@@ -72,7 +72,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   end
 
   # The cell's comment thread, unrendered, so a comment's response can swap
-  # just the thread ([#625](https://github.com/mr-yum/growth-os/issues/625)).
+  # just the thread.
   #
   # @param focus [String, nil] what the thread focuses on connect, after the
   #   viewer's own write (see Comments::Thread)

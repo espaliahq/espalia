@@ -148,7 +148,7 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
   end
 
   # Home follows a transfer or promotion until alignment starts, then the
-  # conversation pins it (https://github.com/mr-yum/growth-os/issues/687).
+  # conversation pins it.
   context "history without a role after a transfer before alignment" do
     setup do
       transfer_to_pm

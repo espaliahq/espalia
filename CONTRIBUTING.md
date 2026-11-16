@@ -49,6 +49,12 @@ a dev admin (`admin@example.com` / `password123`, development only).
   includes the README's screenshots when your change shows up in one: one
   command regenerates them, with `pngquant` installed
   ([docs/screenshots/README.md](docs/screenshots/README.md)).
+- **Cite a lesson learned elsewhere by describing it, not linking it.** A
+  comment or guide that says why something is built a certain way should make
+  sense to anyone reading this repository. If the lesson came from a private
+  repository, an internal ticket or another company's incident, say what
+  happened in plain words. A link that most readers can't open explains
+  nothing. Link only to this repository's issues and PRs, or to public pages.
 
 ## Before opening the PR
 

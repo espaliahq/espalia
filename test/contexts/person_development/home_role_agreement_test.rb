@@ -4,9 +4,8 @@ require "test_helper"
 
 # After a mid-cycle transfer the aggregate, the enrollment snapshot and
 # `CurrentAssessment` must name the same home role: the new role before
-# alignment starts, the one alignment started on after it
-# (https://github.com/mr-yum/growth-os/issues/687). Driven through the real
-# command handlers and subscriptions, so the sync handler runs too.
+# alignment starts, the one alignment started on after it.
+# Driven through the real command handlers and subscriptions, so the sync handler runs too.
 class PersonDevelopment::HomeRoleAgreementTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)

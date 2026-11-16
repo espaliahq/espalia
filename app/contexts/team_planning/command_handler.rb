@@ -412,6 +412,9 @@ class TeamPlanning::CommandHandler
       end
 
       kind, end_state = choice.to_s == "reality" ? followable(*todays(plan, change, today)) : [ change.class, kept(change) ]
+      if kind == TeamPlanning::Events::DepartureWithdrawn && end_state[:left]
+        raise TeamPlanning::Error, "The Org Graph has this person leaving, so a withdrawn departure can't follow reality. You can still keep the plan"
+      end
       from_id, = plan.inherited_change(scenario_id, key) unless scenario_id == plan.plan_id
       note = note.presence || note_of(change) if choice.to_s == "plan"
       plan.settle_conflict(kind, scenario_id:, subject_id:, facet: key.last, choice: choice.to_s, end_state:, settled_by_id: actor_id!,
