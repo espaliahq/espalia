@@ -103,6 +103,7 @@ class Views::Plans::CostMarksTest < ActiveSupport::TestCase
         assert_equal [ "Actual EUR 100k", "Planned -EUR 20k", "Forecast +EUR 5k" ], html.css("[data-figure-parts] [data-part]").map(&:text)
       end
       assert_nil today.at_css("[data-figure-parts]")
+      assert_equal "Of which:", unit.at_css("[data-figure-parts] .sr-only").text.strip
     end
   end
 end
