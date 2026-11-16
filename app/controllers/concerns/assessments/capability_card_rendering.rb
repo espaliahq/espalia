@@ -4,10 +4,9 @@
 # capability card the way the matrix frame builds it.
 #
 # Shared by `AssessmentsController` (the matrix frame and the chip-click
-# card swap, [#488](https://github.com/mr-yum/growth-os/issues/488)) and
-# `Assessments::CommentsController` (a cell comment's response swaps that
-# card's thread and chip, [#625](https://github.com/mr-yum/growth-os/issues/625)), so
-# neither response can drift from the card the page rendered.
+# card swap) and `Assessments::CommentsController` (a cell comment's response
+# swaps that card's thread and chip), so neither response can drift
+# from the card the page rendered.
 #
 # Requires `@assignment` (a `PersonFrameworkAssignment`) and `current_person`.
 module Assessments::CapabilityCardRendering

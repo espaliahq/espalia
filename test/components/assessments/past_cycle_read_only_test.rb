@@ -3,7 +3,7 @@
 require "test_helper"
 
 # On a past cycle's page nobody edits, relinks, withdraws or deletes, even
-# their own feedback and comments (https://github.com/mr-yum/growth-os/issues/669).
+# their own feedback and comments.
 class Views::Assessments::PastCycleReadOnlyTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)

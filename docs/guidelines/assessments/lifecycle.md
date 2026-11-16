@@ -184,16 +184,14 @@ person made themselves, and the popover's "Clear rating" posts an explicit
 unambiguous.
 
 **The confirmation work is named, not implied (#480).** A dashed outline was
-the only signal, and people believed they had finished
-([#480](https://github.com/mr-yum/growth-os/issues/480)). So:
+the only signal, and people believed they had finished. So:
 
 - **Only cells that ask are marked.** `MatrixDataBuilder` reports a side as
   carried only at or above the scoring floor (`assumed_below`, the lower of
   the lens and home levels). Below it an unrated cell already reads as met
   and nothing counts it, so a carried value there wears no dashed treatment.
   Seeding still carries it: a lens at a lower level, or a later move to one,
-  reads the value ([#481](https://github.com/mr-yum/growth-os/issues/481)
-  explains why it isn't dropped).
+  reads the value, which is why it isn't dropped.
 - **Each surface says it.** The status pill reads **"N to confirm"** once
   every current-level cell holds a value (`current_level_work`); the hero
   swaps Continue for a "N to confirm →" jump chip at that point; a carried

@@ -275,8 +275,7 @@ Feedback, comments, notes and rationale are stored exactly as typed and may
 contain Markdown. Show them with `render Components::Kit::Prose.new(text,
 class: …)` — never as a bare string in a `whitespace-pre-wrap` element, and
 never with your own `raw`. `Kit::Prose` is the only component that emits
-`::Prose` HTML, so the sanitizer's allowlist is the whole security story
-([#482](https://github.com/mr-yum/growth-os/issues/482)).
+`::Prose` HTML, so the sanitizer's allowlist is the whole security story.
 
 - **Excerpts use `Prose.to_plain(text)`** — feed lines, notification bodies,
   previews, anything truncated or `line-clamp`ed. It reads as the text a
