@@ -29,7 +29,10 @@ module Plans::BudgetEditing
   # GET /planning/:id/budget/lines/:budget_line_id/edit?scenario=:scenario_id
   def edit_budget_line
     return unless (plan = budget_editor_plan)
-    render budget_line_page(plan, values: held_line, budget_line_id: budget_line_id)
+    values = held_line
+    return redirect_to budget_plan_path(plan[:plan_id], scenario: line_scenario_id), alert: TeamPlanning::LineMoney::REFUSAL, status: :see_other if priced_line_held_back?
+
+    render budget_line_page(plan, values:, budget_line_id: budget_line_id)
   end
 
   # PATCH /planning/:id/budget/lines/:budget_line_id
@@ -79,6 +82,18 @@ module Plans::BudgetEditing
     lines.find { it[:budget_line_id] == budget_line_id } || raise(ActiveRecord::RecordNotFound, "No such budget line")
   end
 
+  # A line that carries an amount is read-only without the see-pay right
+  # ([#367](https://github.com/espaliahq/espalia/issues/367)), so its form never opens. Only this refusal tells
+  # such a member the line has an amount; the tab offers Change on every line alike.
+  def priced_line_held_back?
+    return false if money_shown?
+
+    plan = TeamPlanning::Repository.new.load_plan(@plan_record.id)
+    TeamPlanning::LineMoney.priced?(plan, line_scenario_id, budget_line_id, TeamPlanning::LineMoney::FACET)
+  end
+
+  def money_shown? = TeamPlanning::Budget.money_shown?(context: pundit_user, plan: @plan_record)
+
   def budget_line_page(plan, values:, budget_line_id: nil, error: nil)
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     raise ActiveRecord::RecordNotFound, "No such scenario" if scenarios.none? { it[:scenario_id] == line_scenario_id }
@@ -86,6 +101,6 @@ module Plans::BudgetEditing
     plan_page(plan, scenarios:, open_tab: :budget,
                     body: Views::Plans::BudgetLineForm.new(plan:, scenarios:, scenario_id: line_scenario_id, values:, budget_line_id:, error:,
                                                            roles: FrameworkState::Role.includes(:levels).order(:name).to_a,
-                                                           countries: PayBand.known_countries))
+                                                           countries: PayBand.known_countries, money: money_shown?))
   end
 end
