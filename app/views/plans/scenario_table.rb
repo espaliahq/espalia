@@ -101,7 +101,7 @@ class Views::Plans::ScenarioTable < Views::Base
           menu.item(data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@plan_id, scenario[:scenario_id]), scenario)) do
             "Edit…"
           end
-          menu.item(href: dates_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Dates…" } if scenario[:relation] == "then"
+          menu.item(href: dates_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Dates…" } if self.class.dated?(scenario)
           menu.item(href: split_plan_path(@plan_id, scenario_id: scenario[:scenario_id])) { "Split off the agreed part…" }
         end
       end
@@ -127,10 +127,22 @@ class Views::Plans::ScenarioTable < Views::Base
   # @return [Date, nil]
   def self.today_continues_to(scenarios)
     baseline = scenarios.find { it[:parent_id].nil? }
-    first = scenarios.find { it[:relation] == "then" && it[:parent_id] == baseline&.dig(:scenario_id) }
+    first = scenarios.find { dated?(it) && it[:parent_id] == baseline&.dig(:scenario_id) }
     return unless first && first[:starts_on] > baseline[:starts_on]
 
     Date.iso8601(first[:starts_on]) - 1
+  end
+
+  # Whether a scenario has dates of its own to change: a step that follows
+  # another. A split's halves and an alternative take their parent's period.
+  #
+  # @param scenario [Hash] from `team_planning_scenarios`
+  # @return [Boolean]
+  def self.dated?(scenario)
+    case scenario[:relation]
+    in "then" then true
+    in "on" | "instead" | nil then false
+    end
   end
 
   # A scenario's period as the plan's pages print it: "As of" for the baseline,

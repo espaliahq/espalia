@@ -304,7 +304,7 @@ class PlansController < ApplicationController
   def dates_page(plan, draft:, error: nil, preview: true)
     scenario_id = params.expect(:scenario_id).downcase
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
-    scenario = scenarios.find { it[:scenario_id] == scenario_id && it[:relation] == "then" }
+    scenario = scenarios.find { it[:scenario_id] == scenario_id && Views::Plans::ScenarioTable.dated?(it) }
     raise ActiveRecord::RecordNotFound, "No such step" unless scenario
 
     if preview && draft[:ends_on]
