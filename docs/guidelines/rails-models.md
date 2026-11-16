@@ -18,7 +18,7 @@
 
 ## Migrations over copied tables
 
-An archived plan keeps a sealed copy of the tenant's pay bands, exchange rates, budget lines, reference currencies and planning rule defaults (`TeamPlanning::PricingInputs::MODELS`). No upcaster can reach inside it, and old copies keep the columns they were taken with. A migration that renames or drops one of those columns must also read the old name in `TeamPlanning::PricingInputs#rows`, or an archived plan loses that value. Adding a column needs nothing: an old copy takes the column's default.
+An archived plan keeps a sealed copy of the tenant's pay bands, exchange rates, budget lines, reference currencies and planning rule defaults (`TeamPlanning::PricingInputs::MODELS`). No upcaster can reach inside it, and old copies keep the columns they were taken with. A migration that renames or drops one of those columns must also read the old name in `TeamPlanning::PricingInputs#rows`, or an archived plan loses that value. An old copy takes a new column's current default, so adding one is safe only when that default prices an archived plan as it was priced before. If it doesn't, or a later migration changes the default, supply the old value in `#rows` too.
 
 ## UUID v7 Primary Keys
 
