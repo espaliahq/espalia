@@ -1623,8 +1623,13 @@ holds no budget line. An archived plan stays unchecked, as before.
 - **Unused budget line.** A line whose period overlaps the scenario's that nothing draws on.
   A line that positions tie on is not unused: choosing a funding fixes it.
 
-The mismatch check, a seat whose rules give a cost centre other than the one it keeps, follows
-in its own change.
+- **Cost centre mismatch.** A person costed in one cost centre while something else names
+  another, once for each: the entries that match them, while they keep their real one; their
+  position, by its label or the untouched occupant who decides it; or a budget line their
+  position draws on that names a third. The cost read keeps the value it gives, so the check
+  only names the disagreement. The cost read carries the entries' answer as
+  `rule_cost_centre` on a person who keeps their real one, and never costs them there. In a
+  scoped plan an item names only cost centres the plan holds.
 
 As built in 6.5 ([#384](https://github.com/espaliahq/espalia/issues/384)): the
 `budget_strictness` rule says how strictly positions follow budget lines. It is plan-wide, like
@@ -1695,7 +1700,10 @@ Graph, by which rule) and reports three conditions as checks:
   upstream. The rules never move a person's cost on their own. Two cases reach it from the
   cost centre resolution above: a labelled position whose untouched occupant keeps a
   different real cost centre, and a position the plan moves one occupant into while
-  another stays, whose cost centre follows the one who stays.
+  another stays, whose cost centre follows the one who stays. As built
+  ([#421](https://github.com/espaliahq/espalia/issues/421)), the check is per person, and
+  also names an untouched person whose entries give another cost centre and a position
+  drawing on a line for a third.
 - **Unplaced.** An open position with no cost centre: it has no label of its own and no rule
   matches it. It can draw only on a budget line that states
   no cost centre, which matches any position, and is unfunded when none matches. This is a
