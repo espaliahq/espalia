@@ -116,7 +116,7 @@ class Views::Plans::ScenarioMap < Views::Base
 
   def upload_pay_link
     scenario = @map[:scenario_id] unless baseline?(@map[:scenario_id])
-    render Components::Kit::Button.new(variant: :ghost, size: :sm, href: pay_upload_plan_path(@map[:plan_id], scenario:)) { "Upload pay…" }
+    render Components::Kit::Button.new(variant: :ghost, size: :sm, compact: true, href: pay_upload_plan_path(@map[:plan_id], scenario:)) { "Upload pay…" }
   end
 
   def scenario_label(scenario) = baseline?(scenario[:scenario_id]) ? "Today" : scenario[:name]
