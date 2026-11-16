@@ -83,11 +83,12 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   end
 
   # Turbo stamps its own state on an entry it pops back to, wiping the probe,
-  # so the pane's marker gone and its query dropped show its entry was left.
+  # so the pane's marker gone shows its entry was left. The entry it opened on
+  # says closed, or the cookie would reopen the pane there on a reload.
   # (Counting entries can't: Chrome caps history.length at 50 per tab.)
   def assert_back_on_opening_entry
     assert_nil page.evaluate_script("history.state?.sidePanelOverlay ?? null")
-    assert_no_match(/[?&]activity=/, page.current_url)
+    assert_current_path assessment_path(@assignment, activity: "closed")
   end
 
   def open_loaded_activity_pane
@@ -408,7 +409,6 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
 
       page.go_back
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
-      assert_current_path assessment_path(@assignment)
       assert_back_on_opening_entry
     end
 
@@ -419,8 +419,24 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       page.execute_script("document.querySelector(arguments[0]).click()", "#assessment-activity-pane button[aria-label='Close activity']")
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
-      assert_current_path assessment_path(@assignment)
       assert_back_on_opening_entry
+    end
+
+    # Turbo restores a page only from an entry that carries its own state; the
+    # overlay's entry didn't, so Back left the other page on screen under this URL.
+    should "bring the assessment back when Back returns from another page to the open overlay" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      page.execute_script("Turbo.visit(arguments[0])", assessments_path)
+      assert_no_selector "#assessment-activity-pane", visible: :all
+
+      page.go_back
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_selector "turbo-frame#assessment-matrix", visible: :all
+      assert_match(/[?&]activity=open/, page.current_url)
     end
   end
 
@@ -449,6 +465,42 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
 
       press_escape
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+    end
+
+    # The menu's own Escape closes it before a bubbling listener would look,
+    # so the pane checks in the capture phase, while the menu is still open.
+    should "leave the first Escape to a menu open inside it, and close on the next" do
+      open_loaded_activity_pane
+      page.execute_script(<<~JS)
+        document.getElementById("assessment-activity-pane").insertAdjacentHTML("afterbegin", `
+          <div id="probe-dropdown" data-controller="dropdown" data-action="keydown.esc@window->dropdown#close">
+            <button type="button" data-action="dropdown#toggle" data-dropdown-target="trigger">More</button>
+            <div role="menu" data-dropdown-target="menu" hidden><button role="menuitem">Item</button></div>
+          </div>`)
+      JS
+      wait_for_stimulus "dropdown", scope: "#probe-dropdown"
+      # Reconnect the pane so the menu's listener comes first, as the navbar's
+      # menus do on a real page: Stimulus runs a shared window listener's
+      # bindings in the order they connected.
+      page.execute_script(<<~JS)
+        const host = document.getElementById("assessment-activity-pane").closest("[data-controller~='activity-pane']")
+        host.removeAttribute("data-connected")
+        host.dataset.controller = ""
+        requestAnimationFrame(() => { host.dataset.controller = "activity-pane" })
+      JS
+      wait_for_stimulus "activity-pane"
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      page.execute_script("document.querySelector('#probe-dropdown button').click()")
+      assert_selector "#probe-dropdown [role='menu']", visible: true
+
+      # From the pane, as a real key would come: a dispatch on window itself
+      # runs its listeners in the order they were added, capture or not.
+      press_escape(scope: "#probe-dropdown")
+      assert_no_selector "#probe-dropdown [role='menu']", visible: true
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      press_escape(scope: "#assessment-activity-pane")
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
     end
   end
 

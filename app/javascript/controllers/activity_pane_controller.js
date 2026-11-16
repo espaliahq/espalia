@@ -25,6 +25,7 @@
 
 import BaseController from "controllers/base_controller"
 import { useClickOutside, useTransition } from "stimulus-use"
+import { somethingElseIsOpen } from "controllers/overlay_guard"
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 const MOBILE_BREAKPOINT = 1024
@@ -54,8 +55,15 @@ export default class extends BaseController {
     // away, and until it sticks it sits lower than its sticky offset, so
     // no CSS height can keep its bottom (and the feed's last entries) on
     // screen in every position.
-    fitViewport: { type: Boolean, default: false }
+    fitViewport: { type: Boolean, default: false },
+    // Set by `Kit::SidePanel`. Beside the page the pane adds no history
+    // entries; below lg its overlay acts as a screen of its own: Back and
+    // Escape close it, and focus moves in. Off, each toggle pushes an entry,
+    // as the calibration log panes still expect until they move onto the Kit.
+    screen: { type: Boolean, default: false }
   }
+
+  #leaving = false
 
   connect() {
     super.connect()
@@ -83,12 +91,15 @@ export default class extends BaseController {
 
     this.onPopState = () => this.#applyFromHistory()
     window.addEventListener("popstate", this.onPopState)
+    this.onBeforeVisit = () => this.#stampOwnEntry()
+    document.addEventListener("turbo:before-visit", this.onBeforeVisit)
 
     if (this.fitViewportValue) this.#observeViewport()
   }
 
   disconnect() {
     window.removeEventListener("popstate", this.onPopState)
+    document.removeEventListener("turbo:before-visit", this.onBeforeVisit)
     this.#unobserveViewport()
     super.disconnect()
   }
@@ -106,10 +117,11 @@ export default class extends BaseController {
     this.#commit("closed")
   }
 
-  // Bound to Escape on the window. Only the overlay answers it, and it gives
-  // way to a modal or menu open on top, which Escape closes first.
+  // Bound to Escape on the window, in the capture phase so it looks before a
+  // menu's own Escape closes it. Only the overlay answers, and it gives way
+  // to a modal or menu open on top, which Escape closes first.
   escape() {
-    if (!this.#overlaid() || this.#visualState() !== "open" || this.#somethingElseIsOpen()) return
+    if (!this.#actsAsScreen() || this.#visualState() !== "open" || somethingElseIsOpen()) return
     this.#commit("closed")
   }
 
@@ -153,16 +165,20 @@ export default class extends BaseController {
   // Animates to `state`, persists to cookie, and records it in the URL — the
   // user-driven path. Initial connect and popstate bypass this.
   #commit(state) {
-    const overlaid = this.#overlaid()
+    const screen = this.#actsAsScreen()
     const focusWasInside = this.paneTarget.contains(document.activeElement)
     this.#animate(state)
     this.#applyMetadata(state)
     this.#writeCookie(state)
-    this.#recordInHistory(state, overlaid)
+    if (state === "open") this.#revealStackedPane()
+    if (!this.screenValue) {
+      this.#pushBrowserUrl(state)
+      return
+    }
+    this.#recordInHistory(state, screen)
     if (state === "open") {
-      this.#revealStackedPane()
-      if (overlaid) this.paneTarget.focus({ preventScroll: true })
-    } else if (overlaid || focusWasInside) {
+      if (screen) this.paneTarget.focus({ preventScroll: true })
+    } else if (screen || focusWasInside) {
       this.#focusToggle()
     }
   }
@@ -171,27 +187,37 @@ export default class extends BaseController {
   // it adds a history entry and Back closes it; closing it any other way
   // takes that entry back off. Beside the page on lg+, the URL changes in
   // place and Back leaves the page.
-  #recordInHistory(state, overlaid) {
-    const ownEntry = window.history.state?.[HISTORY_KEY] === this.urlKeyValue
-    if (overlaid && state === "open" && !ownEntry) {
-      window.history.pushState({ [HISTORY_KEY]: this.urlKeyValue }, "", this.#urlWith(state))
+  //
+  // The entry the overlay leaves behind is marked closed, so Back lands on a
+  // URL that says so. A Back we queued is asynchronous: until it lands, the
+  // popstate it fires settles history (see #applyFromHistory).
+  #recordInHistory(state, screen) {
+    if (this.#leaving) return
+    const ownEntry = this.#onOwnEntry()
+    if (screen && state === "open" && !ownEntry) {
+      window.history.replaceState(window.history.state, "", this.#urlWith("closed"))
+      window.history.pushState({ [HISTORY_KEY]: this.urlKeyValue }, "", this.#urlWith("open"))
     } else if (state === "closed" && ownEntry) {
+      this.#leaving = true
       window.history.back()
     } else {
       window.history.replaceState(window.history.state, "", this.#urlWith(state))
     }
   }
 
-  #overlaid() {
-    return this.dismissOutsideValue && window.innerWidth < MOBILE_BREAKPOINT
+  #onOwnEntry() {
+    return window.history.state?.[HISTORY_KEY] === this.urlKeyValue
   }
 
-  // The rule the framework explorer's panes follow for Escape.
-  #somethingElseIsOpen() {
-    return Boolean(
-      document.querySelector("[data-modal-target='overlay']:not(.hidden)") ||
-      document.querySelector("[role='menu']:not([hidden])")
-    )
+  // Turbo restores a page only from an entry it stamped. Leaving from the
+  // overlay's own entry would bring Back to a page Turbo never restores, with
+  // the next page still on screen, so stamp it the way Turbo stamps its own.
+  #stampOwnEntry() {
+    if (this.#onOwnEntry()) window.Turbo?.session?.history?.replace(new URL(window.location.href))
+  }
+
+  #actsAsScreen() {
+    return this.screenValue && this.dismissOutsideValue && window.innerWidth < MOBILE_BREAKPOINT
   }
 
   #focusToggle() {
@@ -206,16 +232,23 @@ export default class extends BaseController {
     requestAnimationFrame(() => this.paneTarget.scrollIntoView({ block: "start" }))
   }
 
-  // Back and Forward change the URL without remounting the controller. Only
-  // the overlay's own entry means open; leaving it means closed.
+  // Back and Forward change the URL without remounting the controller. The
+  // overlay's own entry means open; any other entry says what it holds in
+  // the URL, and one that says nothing leaves the pane as it is.
   #applyFromHistory() {
-    const ownEntry = window.history.state?.[HISTORY_KEY] === this.urlKeyValue
-    const state = ownEntry ? "open" : "closed"
-    if (state === this.#visualState() || (!ownEntry && !this.#overlaid())) return
+    if (this.#leaving) {
+      this.#leaving = false
+      // Reopened while our Back was on its way: record it afresh.
+      if (this.#visualState() === "open") this.#recordInHistory("open", this.#actsAsScreen())
+      return
+    }
+    const fromUrl = new URL(window.location.href).searchParams.get(this.urlKeyValue)
+    const state = this.#onOwnEntry() ? "open" : fromUrl
+    if ((state !== "open" && state !== "closed") || state === this.#visualState()) return
     this.#animate(state)
     this.#applyMetadata(state)
     this.#writeCookie(state)
-    if (state === "closed") this.#focusToggle()
+    if (state === "closed" && this.screenValue) this.#focusToggle()
   }
 
   #animate(state) {
@@ -280,6 +313,11 @@ export default class extends BaseController {
     const url = new URL(window.location.href)
     url.searchParams.set(this.urlKeyValue, state)
     return url
+  }
+
+  #pushBrowserUrl(state) {
+    const url = this.#urlWith(state)
+    if (url.toString() !== window.location.href) window.history.pushState({}, "", url)
   }
 
   #readCookie() {

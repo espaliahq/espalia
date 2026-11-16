@@ -132,7 +132,8 @@ class Components::Kit::SidePanel < Components::Base
       activity_pane_default_state_value: state,
       activity_pane_dismiss_outside_value: @narrow[:dismiss_outside].to_s,
       activity_pane_fit_viewport_value: (@fit_viewport.to_s if @fit_viewport),
-      action: "keydown.esc@window->activity-pane#escape" }.compact
+      activity_pane_screen_value: "true",
+      action: "keydown.esc@window->activity-pane#escape:capture" }.compact
   end
 
   def row(**)
