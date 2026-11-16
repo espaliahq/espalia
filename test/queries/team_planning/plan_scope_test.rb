@@ -232,6 +232,24 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     assert call(Operations::TeamPlanning::PinChange, plan_id: @plan_id, scenario_id: @h2, subject_id: @brook.id, facet: "reporting_line")[:pinned]
   end
 
+  should "refuse to settle a conflict about someone the plan no longer covers, as one status doesn't read" do
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id,
+                                                  placements: [ { unit_id: @payments, allocation: 1 } ])
+    call(Operations::TeamPlanning::SetReportingLine, plan_id: @plan_id, scenario_id: @h1, person_id: @dee.id, manager_id: @ada.id)
+    travel_to Time.utc(2026, 2, 1, 9)
+    as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM).change_manager(@dee.id, @cy.id, provider: "espalia", effective_on: "2026-01-15") }
+    call(Operations::TeamPlanning::RebasePlan, plan_id: @plan_id, base_on: BASE_ON.iso8601)
+    dee = -> { call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @h1)[:statuses].find { it[:subject_id] == @dee.id && it[:facet] == "reporting_line" } }
+    assert_equal "conflicting", dee.call[:status], "the update carried the conflict while the plan covered Dee"
+
+    call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "assignment")
+    assert_equal "outside", dee.call[:status]
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::TeamPlanning::SettleConflict, plan_id: @plan_id, scenario_id: @h1, subject_id: @dee.id, facet: "reporting_line", choice: "reality")
+    end
+    assert_equal "Status doesn't read this as conflicting, so there is nothing to settle", error.message
+  end
+
   should "keep drift to what the plan covers, saying a covered person left without saying where to" do
     travel_to Time.utc(2026, 2, 1, 9)
     as_tenant do
