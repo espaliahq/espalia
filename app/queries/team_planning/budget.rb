@@ -141,7 +141,8 @@ class TeamPlanning::Budget
   # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
   # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
   #   resolved over that aggregate for this viewer
-  # @param cost [TeamPlanning::Cost::Report, nil] the scenario, already priced for this viewer
+  # @param cost [TeamPlanning::Cost::Report, nil] the scenario, already priced for this viewer. The caller
+  #   must pass a report priced from the same loaded plan as this read.
   # @raise [ArgumentError] when shared was resolved, or cost priced, for another viewer, plan or scenario
   def initialize(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, shared: nil, cost: nil)
     @context = context
