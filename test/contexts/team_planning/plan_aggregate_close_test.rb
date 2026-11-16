@@ -98,6 +98,17 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
       assert_nil @plan.standing_after(@plan_id)
     end
 
+    should "keep a step closed after it standing where it stood while open, and the next on that one" do
+      q3 = fork(@q2, ends_on: "2027-09-30")
+      lean_q2 = fork(@q2, relation: "instead")
+      close(@q2, today: Date.new(2027, 10, 1))
+
+      assert_equal [ @q1, Date.new(2027, 3, 31) ], @plan.standing_after(@q2)
+      assert_equal [ @q1, Date.new(2027, 3, 31) ], @plan.standing_after(lean_q2)
+      assert_equal [ @q2, Date.new(2027, 6, 30) ], @plan.standing_after(q3)
+      assert_nil @plan.standing_after(@lean_q2)
+    end
+
     should "refuse every change to the closed step and the alternatives not taken" do
       assert_equal "This step is closed: reopen it to change it", refusal { set(@q1) }
       assert_equal "This scenario wasn't taken: another step closed in its place", refusal { set(@lean) }

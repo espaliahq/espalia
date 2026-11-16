@@ -527,7 +527,13 @@ class TeamPlanning::PlanAggregate
   # @param scenario_id [String] a live scenario or the root
   # @return [Array(String, Date), nil] the step closed and the last day of its period
   def standing_after(scenario_id)
-    @closed.last unless frozen?(scenario_id) || scenario_id == @plan_id || @closed.empty?
+    return if scenario_id == @plan_id
+
+    path = timeline_path(scenario_id)
+    @closed.reverse.find do |closed_id, _|
+      taken = timeline_path(closed_id)
+      path.size > taken.size && path.first(taken.size) == taken
+    end
   end
 
   # Removes a scenario nothing forks from.
