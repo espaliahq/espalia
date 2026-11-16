@@ -226,11 +226,14 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
     assert_select "[data-budget-basis]", text: /the first 12 months of a step with no end date/
     assert_select "[data-budget-draw='#{seat}']", 0
     assert_select "[data-budget-unfunded='#{seat}']", 0
+    assert_select "[data-funding-action]"
+    assert_select "[data-funding-action='#{plan_funding_path(@plan_id, seat)}']", 0, "no Funding… button for a seat the tab doesn't list"
 
     call(Operations::TeamPlanning::SetPositionFunding, plan_id: @plan_id, scenario_id: open_step, position_id: seat, draws: [ { budget_line_id: line } ])
     get budget_plan_path(@plan_id, scenario: open_step)
     assert_response :success
     assert_select "[data-budget-draw='#{seat}']", 0, "a set funding funds nothing in months the seat isn't held"
+    assert_select "[data-funding-action='#{plan_funding_path(@plan_id, seat)}']", 0
 
     call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: open_step, subject_id: seat, facet: "funding")
     get budget_plan_path(@plan_id, scenario: open_step)
