@@ -527,7 +527,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
     assert_selector "##{frame_id}-error", text: "Couldn't load the figures."
     assert page.evaluate_script("document.activeElement.matches(arguments[0])", focused), "a quiet figures failure moved focus"
 
-    within("##{frame_id}-error") { click_button "Retry" }
+    within("##{frame_id}-error") { click_button_with_js_fallback "Retry", expect_no_text: "Couldn't load the figures." }
     assert_selector "turbo-frame##{frame_id}[complete] [data-timeline-figures]", visible: :all
     assert_no_selector "##{frame_id}-error", visible: true
 
