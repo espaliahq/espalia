@@ -127,7 +127,7 @@ class TeamPlanning::PlanAggregateCloseTest < ActiveSupport::TestCase
     end
 
     should "refuse updating the plan to today" do
-      assert_equal "This plan has a closed step: reopen it to update the plan to today",
+      assert_equal TeamPlanning::PlanAggregate::CLOSED_REBASE,
                    refusal { @plan.rebase(base_on: "2027-02-01", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id) }
     end
   end

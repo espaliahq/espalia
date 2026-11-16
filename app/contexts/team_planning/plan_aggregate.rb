@@ -57,6 +57,8 @@ class TeamPlanning::PlanAggregate
 
   # What every write to an archived plan is refused with.
   ARCHIVED = "This plan is archived: restore it to change it"
+  CLOSED_REBASE = "This plan has a closed step, so it can't be updated to today. The steps after a closed step already start from " \
+                  "the organisation as it stood the day after it ended. To update the whole plan, reopen the closed steps first."
   # An archived plan can't make anyone an editor or give anyone pay, so its
   # refusals say how to get there first.
   EDITOR_NEEDED = {
@@ -230,7 +232,7 @@ class TeamPlanning::PlanAggregate
     raise TeamPlanning::Error, "This plan already stands on #{@base_on.iso8601}" if base_on == @base_on
     raise TeamPlanning::Error, "This plan stands on #{@base_on.iso8601}, after #{base_on.iso8601}: a base only moves forward" if base_on < @base_on
 
-    raise TeamPlanning::Error, "This plan has a closed step: reopen it to update the plan to today" if @closed.any?
+    raise TeamPlanning::Error, CLOSED_REBASE if @closed.any?
 
     ensure_first_steps_reach!(base_on)
     apply(TeamPlanning::Events::PlanRebased.new(data: {
