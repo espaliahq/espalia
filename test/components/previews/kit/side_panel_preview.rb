@@ -58,17 +58,29 @@ class Kit::SidePanelPreview < Lookbook::Preview
     end
   end
 
+  # A shorter toggle label, with the title kept for screen readers
+  def short_toggle
+    side_panel(id: "short-toggle-panel", open: false, narrow: :overlay, short_label: true)
+  end
+
   # @!endgroup
 
   private
 
-  def side_panel(id:, open:, narrow:, **)
+  def side_panel(id:, open:, narrow:, short_label: false, **)
     render Components::Kit::SidePanel.new(id:, title: "About this plan", open:, narrow:,
                                           cookie: "lookbook_#{id.underscore}_open", url_key: id, **) do |panel|
       panel.main do
         panel.div(class: "mb-4 flex items-center justify-between gap-3") do
           panel.h2(class: "text-base font-semibold text-default") { "Scenarios" }
-          panel.toggle
+          if short_label
+            panel.toggle do
+              panel.plain "About "
+              panel.span(class: "sr-only") { "this plan" }
+            end
+          else
+            panel.toggle
+          end
         end
         panel.div(class: "rounded-lg border border-dashed border-emphasized p-10 text-sm text-muted") do
           "Two scenarios: Next quarter and Hiring freeze. The map takes this column's full width when the panel is closed."

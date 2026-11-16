@@ -117,8 +117,9 @@ class Components::Kit::SidePanel < Components::Base
   # The button that opens and closes the panel. Call it inside `main`, where it should sit.
   #
   # @param label [String] defaults to the panel's title
-  def toggle(label = @title)
-    render Toggle.new(controls: @id, open: @open) { label }
+  # @yield the label's markup instead, such as a shorter label with the title kept for screen readers
+  def toggle(label = @title, &content)
+    render Toggle.new(controls: @id, open: @open) { content ? content.call : label }
   end
 
   private
