@@ -27,9 +27,13 @@ class Views::Plans::ScenarioMap < Views::Base
   end
 
   # @param map [Hash] from `team_planning_scenario_map`
+  # @return [Hash{String => String}] every position's name, numbered within its unit
+  def self.all_position_names(map) = map[:positions].group_by { it[:unit_id] }.values.map { position_names(it) }.reduce({}, :merge)
+
+  # @param map [Hash] from `team_planning_scenario_map`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param unit_marks [#call] unit hash => components beside the unit's name
-  # @param person_marks [#call] (person hash, place hash or nil) => components beside the person's name
+  # @param person_marks [#call] (person hash, place hash or nil) => components after the person's name, before the level
   # @param position_marks [#call] position hash => components beside the position's label
   # @param summary [Phlex::SGML, nil] drawn under the date line, such as the capacity strip
   # @param can_edit [Boolean] whether the caller edits the plan: renaming the scenario shown, and moving people on it
@@ -53,7 +57,7 @@ class Views::Plans::ScenarioMap < Views::Base
       p(class: "text-sm text-muted") { as_of_line }
       render @summary if @summary
       unresolved_notice if @map[:unresolved].any?
-      div(class: "grid gap-4 md:grid-cols-2 2xl:grid-cols-3", data: ({ controller: "map-move" } if @moving)) do
+      div(class: "grid #{GRID} gap-4", data: ({ controller: "map-move" } if @moving)) do
         ordered_units.each { |unit, path| unit_card(unit, path) }
         unassigned_card if @moving || unassigned.any? || unplaced_positions.any?
       end
@@ -153,6 +157,9 @@ class Views::Plans::ScenarioMap < Views::Base
 
   DROP_OVER = "data-[drop-over]:border-brand data-[drop-over]:bg-brand-subtle"
 
+  # A card's width comes from the grid alone, so a full unit grows taller, never wider.
+  GRID = "grid-cols-[repeat(auto-fill,minmax(min(17rem,100%),1fr))]"
+
   def unresolved_notice
     render Components::Kit::Alert.new(tone: :warning, title: "Not on the map") do
       ul(class: "list-disc pl-5") do
@@ -164,11 +171,11 @@ class Views::Plans::ScenarioMap < Views::Base
   def unit_card(unit, path)
     people = members_of(unit[:id])
     section(aria: { labelledby: "map-unit-#{unit[:id]}" }, data: drop_target(unit[:id]),
-            class: "rounded-lg border border-default bg-default #{DROP_OVER}") do
+            class: "min-w-0 rounded-lg border border-default bg-default #{DROP_OVER}") do
       header(class: "border-b border-subtle px-4 py-3") do
         p(class: "text-xs text-muted break-words") { path.join(" › ") } if path.any?
         div(class: "flex flex-wrap items-center gap-2") do
-          h3(id: "map-unit-#{unit[:id]}", class: "text-base font-semibold text-default break-words") { unit[:name] }
+          h3(id: "map-unit-#{unit[:id]}", class: "min-w-0 text-base font-semibold text-default break-words") { unit[:name] }
           @unit_marks.call(unit).each { render it }
         end
         p(class: "mt-1 text-sm text-muted") { unit_summary(unit, people) }
@@ -179,7 +186,7 @@ class Views::Plans::ScenarioMap < Views::Base
 
   def unassigned_card
     section(aria: { labelledby: "map-unassigned" }, data: drop_target("unassigned"),
-            class: "rounded-lg border border-dashed border-default bg-default #{DROP_OVER}") do
+            class: "min-w-0 rounded-lg border border-dashed border-default bg-default #{DROP_OVER}") do
       header(class: "border-b border-subtle px-4 py-3") do
         h3(id: "map-unassigned", class: "text-base font-semibold text-default") { "Unassigned" }
         p(class: "mt-1 text-sm text-muted") { unassigned.any? || unplaced_positions.any? ? "#{unassigned_summary} in no unit" : "Drop someone here to take them out of a unit" }
@@ -216,10 +223,11 @@ class Views::Plans::ScenarioMap < Views::Base
     groups = people.group_by { |_, place| place[:role].presence }
     dl(class: "divide-y divide-subtle") do
       groups.keys.sort_by { [ it.nil? ? 1 : 0, it.to_s ] }.each do |role|
-        div(class: "flex gap-3 px-4 py-2") do
-          dt(class: "w-12 shrink-0 pt-1 text-xs font-semibold uppercase text-muted break-words") { role || "No role" }
+        label = role || "No role"
+        div(class: "flex gap-2 px-2 py-1") do
+          dt(class: "w-10 shrink-0 pt-1.5 pl-2 text-xs font-semibold uppercase text-muted line-clamp-2 text-ellipsis", title: label) { label }
           dd(class: "min-w-0 flex-1") do
-            ul(class: "space-y-1") { groups[role].sort_by { |person, _| name(person[:id]) }.each { |person, place| person_row(person, place) } }
+            ul { groups[role].sort_by { |person, _| name(person[:id]) }.each { |person, place| person_row(person, place) } }
           end
         end
       end
@@ -228,16 +236,34 @@ class Views::Plans::ScenarioMap < Views::Base
 
   def person_row(person, place)
     li(data: person_data(person, place), draggable: ("true" if @moving),
-       class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1 text-sm#{' cursor-grab' if @moving}") do
+       class: "flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded px-2 py-0.5 text-sm#{' cursor-grab' if @moving}") do
       span(class: "w-10 shrink-0 tabular-nums text-muted") { allocation(place) } if place
-      span(class: "min-w-0 font-medium text-default break-words") { name(person[:id]) }
+      person_details(person, place)
       @person_marks.call(person, place).each { render it }
-      span(class: "ml-auto flex items-center gap-2 text-muted") do
-        span(class: "hidden sm:inline") { person[:title] } if person[:title].present?
-        render Components::Kit::Badge.new(person[:level], size: :sm) if person[:level].present?
-        move_button(person, place) if @moving
+      render Components::Kit::Badge.new(person[:level], size: :sm) if person[:level].present?
+      move_button(person, place) if @moving
+    end
+  end
+
+  # Opens to show the name, title and role that truncation cut, by keyboard or touch.
+  # The 6rem floor wraps the badge and Move… before the name drops below it.
+  def person_details(person, place)
+    details(data: { map_person_details: "" }, class: "group min-w-24 flex-1 basis-0 open:basis-full") do
+      summary(class: "flex min-w-0 list-none items-baseline gap-2 rounded py-1 hover:bg-subtle [&::-webkit-details-marker]:hidden" \
+                     "#{' cursor-grab' if @moving}") do
+        span(class: "max-w-full shrink-0 truncate font-medium text-default group-open:whitespace-normal group-open:break-words") { name(person[:id]) }
+        span(class: "hidden min-w-0 shrink-[4] truncate text-muted sm:block sm:group-open:hidden") { person[:title] } if person[:title].present?
+      end
+      dl(class: "mb-1 grid grid-cols-[auto_1fr] gap-x-2 text-xs text-muted") do
+        details_line("Title", person[:title]) if person[:title].present?
+        details_line("Role", place ? place[:role].presence || "No role" : "In no unit")
       end
     end
+  end
+
+  def details_line(term, value)
+    dt { term }
+    dd(class: "min-w-0 break-words text-default") { value }
   end
 
   def person_data(person, place)
@@ -271,12 +297,12 @@ class Views::Plans::ScenarioMap < Views::Base
   def position_row(position)
     div(data: position_data(position), draggable: ("true" if movable?(position)), class: "px-4 py-2#{' cursor-grab' if movable?(position)}") do
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-dashed border-default px-2 py-1 text-sm #{DROP_OVER}") do
-        span(class: "font-medium text-default") { position_name(position) }
+        span(class: "min-w-0 break-words font-medium text-default") { position_name(position) }
         open_fte_note(position[:open_fte])
         @position_marks.call(position).each { render it }
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
         position.fetch(:occupants, []).sort_by { name(it[:person_id]) }.each do |occupant|
-          span(data: { map_occupant: occupant[:person_id] }, class: "text-muted") { "#{name(occupant[:person_id])} · #{allocation(occupant)}" }
+          span(data: { map_occupant: occupant[:person_id] }, class: "min-w-0 break-words text-muted") { "#{name(occupant[:person_id])} · #{allocation(occupant)}" }
         end
         span(class: "ml-auto") { move_position_button(position) } if movable?(position)
       end

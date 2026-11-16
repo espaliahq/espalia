@@ -19,4 +19,18 @@ namespace :org_graph do
       end
     end
   end
+
+  namespace :taxonomy do
+    desc "Report units sitting where their kind may not, and kind changes dated out of order. Fails on a misplaced unit."
+    task check: :environment do
+      misplaced = Tenant.find_each.sum do |tenant|
+        units, dates = ActsAsTenant.with_tenant(tenant) { OrgGraph::TaxonomyCheck.new.then { [ it.misplaced, it.out_of_order ] } }
+        puts "[#{tenant.id}] #{units.size} misplaced #{"unit".pluralize(units.size)}, " \
+             "#{dates.size} #{"change".pluralize(dates.size)} to the kinds dated out of order"
+        (units + dates).each { |line| puts "  #{line}" }
+        units.size
+      end
+      abort "Move the misplaced units before kinds state their rules." if misplaced.positive?
+    end
+  end
 end

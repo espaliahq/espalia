@@ -3,14 +3,14 @@
 # What a scenario costs over its period, beside the baseline priced over the
 # same days ([#288](https://github.com/espaliahq/espalia/issues/288)).
 #
-# Each seat is priced at the midpoint of the pay band for its level and
-# country (the band naming the country, else the any-location band), made
-# yearly, scaled by FTE and by the part of a 365-day year it is held, plus
+# Each seat is priced at the midpoint of the pay band with the last word for
+# its level and country ({PayBand::Lookup}), made yearly, scaled by FTE and by the part of a
+# 365-day year it is held, plus
 # the on-cost its unit's rule adds. A person is priced at their own level,
 # a planned one winning, and at their position's level only when theirs
 # resolves to none; the working names which. An open seat is the FTE a
-# position's occupants leave, priced at the position's level and the
-# any-location band, under its position's cost centre
+# position's occupants leave, priced at the position's level with no
+# country, under its position's cost centre
 # ({TeamPlanning::PositionCostCentres}). A person's seat keeps the person's
 # own cost centre, as the cost centre rules never move it; a placeholder
 # hire takes their position's. A seat no band prices is unpriced, with its reason,
@@ -58,6 +58,7 @@ class TeamPlanning::Cost
     "fte_unknown" => "The plan's FTE for the person was lost with their key",
     "no_level" => "No level resolves for the seat",
     "no_band" => "No pay band covers the seat's level and country",
+    "level_left" => "The seat's level is no longer in the framework, and no band made from it covers the seat's country",
     "on_cost_refused" => "The on-cost rule at the seat's unit can't price it, such as a fixed amount in another currency"
   }.freeze
 
@@ -393,8 +394,8 @@ class TeamPlanning::Cost
 
   def line(country:, reason:, pay: nil, **seat)
     seat[:year_days] = @year_days
-    band = PayBand.covering(bands.fetch(seat[:level_id], []), country) if seat[:level_id] && !pay
-    reason ||= seat[:level_id] ? ("no_band" unless band) : "no_level" unless pay
+    band = bands.covering(seat[:level_id], country) if seat[:level_id] && !pay
+    reason ||= seat[:level_id] ? (unbanded_reason(seat[:level_id]) unless band) : "no_level" unless pay
     return Line.new(**seat, **UNPRICED, reason:) if reason
 
     line = pay ? paid(pay, seat) : banded(band, seat)
@@ -519,7 +520,11 @@ class TeamPlanning::Cost
     @factors[currency] = e.message
   end
 
-  def bands = @bands ||= @inputs.bands.group_by(&:level_id)
+  def band_list = @band_list ||= @inputs.bands
+
+  def unbanded_reason(level_id) = bands.left?(level_id) ? "level_left" : "no_band"
+
+  def bands = @bands ||= PayBand::Lookup.new(band_list, tenant_id: @plan.tenant_id)
 
   def titles = @titles ||= Integrations::HrisTitleResolution.new(@plan.tenant)
 

@@ -51,8 +51,8 @@ class TeamPlanning::PricingInputs
     @copy = copy
   end
 
-  # @return [Array<PayBand>] read only
-  def bands = @bands ||= rows(:pay_bands)
+  # @return [Array<PayBand>] read only, in list order, as the last match wins
+  def bands = @bands ||= rows(:pay_bands).sort_by { [ it.position, it.id ] }
 
   # @return [Time, nil] when a band last changed, as the tenant recorded it
   def bands_changed_at

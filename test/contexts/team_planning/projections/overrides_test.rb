@@ -155,8 +155,38 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
     assert_equal [ CAP ], TeamPlanningOverride.where(scenario_id: @q1).pluck(:facet)
   end
 
+  def place(scenario_id)
+    @handler.set_change(@plan_id, TeamPlanning::Events::AssignmentSet, scenario_id:, subject_id: @person.id,
+                                                                       end_state: { placements: [ { unit_id: @plan_id, allocation: 1.0 } ] })
+  end
+
+  def move_later(scenario_id) = @handler.move_change(@plan_id, scenario_id:, subject_id: @person.id, facet: "assignment", direction: "later")
+
+  should "move a moved change's row to the step it reached, back on undo and across again on redo" do
+    q2 = fork(@q1, "then", "Q2", ends_on: "2027-06-30")
+    set_cap(@q1, 8)
+    place(@q1)
+    placed = TeamPlanningOverride.find_by!(facet: "assignment").event_id
+    rows = -> { TeamPlanningOverride.where(facet: "assignment").pluck(:scenario_id, :event_id) }
+
+    move_later(@q1)
+    assert_equal [ [ q2, placed ] ], rows.call
+    assert_equal [ CAP ], TeamPlanningOverride.where(scenario_id: @q1).pluck(:facet)
+
+    @handler.undo_change(@plan_id, scenario_id: q2)
+    assert_equal [ [ @q1, placed ] ], rows.call
+
+    @handler.redo_change(@plan_id, scenario_id: q2)
+    assert_equal [ [ q2, placed ] ], rows.call
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
+      q2 = fork(@q1, "then", "Q2", ends_on: "2027-06-30")
+      place(@q1)
+      move_later(@q1)
+      @handler.undo_change(@plan_id, scenario_id: q2)
+      @handler.redo_change(@plan_id, scenario_id: q2)
       set_cap(@q1, 8)
       @handler.pin_change(@plan_id, scenario_id: @lean, subject_id: @plan_id, facet: CAP)
       set_cap(@q1, 6, note: "Hiring freeze until the spring")
@@ -175,7 +205,7 @@ class TeamPlanning::Projections::OverridesTest < ActiveSupport::TestCase
       split(@q1, level_id)
 
       before = snapshot_read_models(TeamPlanning::Projections::Overrides, @tenant)
-      assert_equal 3, before[:overrides].size
+      assert_equal 4, before[:overrides].size
 
       TeamPlanning::Projections::Overrides.reset!(tenant: @tenant)
       assert_equal 0, TeamPlanningOverride.count
