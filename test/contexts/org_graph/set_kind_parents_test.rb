@@ -195,6 +195,38 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     end
   end
 
+  context "on a tenant whose Squads may nest only from today" do
+    setup do
+      @tenant = create(:tenant)
+      @tribe, @squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      publish_taxonomy([ { level_id: @tribe, name: "Tribe" }, { level_id: @squad, name: "Squad", parent_level_ids: [ @tribe ], top: false } ],
+                       on: (@today - 10).iso8601)
+      @payments = create_unit("Payments", @tribe, on: @today - 10)
+      @checkout = create_unit("Checkout", @squad, parent_id: @payments, on: @today - 10)
+      @basket = create_unit("Basket", @squad, parent_id: @payments, on: @today - 10)
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: @today) }
+    end
+
+    should "refuse a move dated before the rule that allows it, naming the day" do
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 1) }
+      end
+      assert_equal "On #{(@today - 1).iso8601}, Squad couldn't sit under Squad, so the change can't be dated before its rules allowed it",
+                   error.message
+    end
+
+    should "accept the same move dated from the rule's day" do
+      assert_nothing_raised { as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today) } }
+    end
+
+    should "accept a unit dated before its kind existed, as an HRIS backfill does" do
+      guild = SecureRandom.uuid_v7
+      as_tenant { @handler.add_level(guild, "Guild", effective_on: @today) }
+
+      assert_nothing_raised { create_unit("Ledger", guild, on: @today - 30) }
+    end
+  end
+
   context "on a tenant whose kinds changed out of date order" do
     setup do
       @tenant = create(:tenant)
@@ -231,9 +263,9 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     )
   end
 
-  def create_unit(name, level_id, parent_id: nil)
+  def create_unit(name, level_id, parent_id: nil, on: @today)
     unit_id = SecureRandom.uuid_v7
-    as_tenant { @handler.create_unit(unit_id, name, level_id:, parent_id:, effective_on: @today) }
+    as_tenant { @handler.create_unit(unit_id, name, level_id:, parent_id:, effective_on: on) }
     unit_id
   end
 

@@ -541,6 +541,11 @@ The dates follow the events:
   to the kinds before an earlier one; a kind's change then starts on its last change's
   date, so the order of events decides. A new change dated after today, or before the
   latest one dated today or earlier, is refused.
+- A unit placed from a past date must fit its kind's rules on every day the placement
+  holds, as this history shows them, not only today's. So a Squad can't move under a
+  Squad dated before the day Squads may nest. A day before the unit's kind, or its
+  parent's, joined the list isn't checked, so an HRIS backfill dated before a kind was
+  added still lands.
 
 Three rules hold across history, `AsOf`, `ChangesBetween` and the live tables
 (`org_memberships`, the `people` columns). First, a fact dated before one already held

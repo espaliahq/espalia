@@ -45,6 +45,7 @@ class OrgGraph::StructureAggregate
     @fact_fields = {}
     @successions = {}
     @kinds_change_dates = []
+    @kind_timelines = {}
   end
 
   # Defines or redefines the tenant's taxonomy, top level first.
@@ -425,7 +426,8 @@ class OrgGraph::StructureAggregate
     return if parent_id == unit.parent_id
 
     effective_on = dated_after_creation(unit, effective_on)
-    ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on)
+    ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on,
+                                                              until_on: @parents[unit_id].keys.select { it > effective_on }.min)
     raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
@@ -559,6 +561,12 @@ class OrgGraph::StructureAggregate
                          .to_h { |level| [ level[:level_id], level.slice(:parent_level_ids, :top) ] }
     @level_providers = @level_providers.slice(*level_ids(@levels))
     @level_fields = @level_fields.slice(*level_ids(@levels))
+    levels.each_with_index do |level, position|
+      revise_kind(level[:level_id], event.data[:effective_on]) do |kind|
+        { name: level[:name], position:, provider: kind&.fetch(:provider) || ESPALIA, **level.slice(:parent_level_ids, :top) }
+      end
+    end
+    (@kind_timelines.keys - level_ids(@levels)).each { |level_id| revise_kind(level_id, event.data[:effective_on]) { nil } }
   end
 
   on OrgGraph::Events::LevelProviderSet do |event|
@@ -566,6 +574,7 @@ class OrgGraph::StructureAggregate
     @kinds_change_dates << event.data[:effective_on] if event.data[:effective_on]
     @level_providers[event.data[:level_id]] = event.data[:provider]
     @level_fields[event.data[:level_id]] = event.data[:field]
+    revise_kind(event.data[:level_id], event.data[:effective_on]) { |kind| kind&.merge(provider: event.data[:provider]) }
   end
 
   on OrgGraph::Events::FactProviderSet do |event|
@@ -814,23 +823,55 @@ class OrgGraph::StructureAggregate
   end
 
   # A parent must be live and of a kind the unit's kind may sit beneath, and a
-  # mirrored unit never hangs beneath one Espalia holds.
-  def ensure_placeable!(provider, level_id, parent_id, on:)
+  # mirrored unit never hangs beneath one Espalia holds. A back-dated placement
+  # must also fit the kinds' rules on each day it holds, as the history shows them.
+  def ensure_placeable!(provider, level_id, parent_id, on:, until_on: nil)
     rules = taxonomy
+    parent = parent_id && @units[parent_id]
     if parent_id.nil?
       raise "#{rules.kind(level_id).name} can't sit at the top" unless rules.may_be_top?(level_id)
-
-      return
+    else
+      raise "Parent unit not found" unless parent
+      raise "Parent unit is retired" if parent.retired
+      raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
+      unless rules.allows?(level_id, beneath: parent.level_id)
+        raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent.level_id).name}"
+      end
+      raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
     end
+    ensure_placeable_while_held!(level_id, parent&.level_id, on:, until_on:)
+  end
 
-    parent = @units[parent_id]
-    raise "Parent unit not found" unless parent
-    raise "Parent unit is retired" if parent.retired
-    raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
-    unless rules.allows?(level_id, beneath: parent.level_id)
-      raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent.level_id).name}"
+  def ensure_placeable_while_held!(level_id, parent_level_id, on:, until_on:)
+    days = @kind_timelines.values.flatten(1).map(&:first).select { it > on && (until_on.nil? || it < until_on) }
+    [ on, *days ].uniq.sort.each do |day|
+      rules = rules_on(day)
+      next unless rules.kind(level_id) && (parent_level_id.nil? || rules.kind(parent_level_id))
+      next if parent_level_id ? rules.allows?(level_id, beneath: parent_level_id) : rules.may_be_top?(level_id)
+
+      where = parent_level_id ? "under #{rules.kind(parent_level_id).name}" : "at the top"
+      raise "On #{day}, #{rules.kind(level_id).name} couldn't sit #{where}, so the change can't be dated before its rules allowed it"
     end
-    raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
+  end
+
+  # The kinds of unit as they stood on a day, each with the rules it had then.
+  def rules_on(day)
+    kinds = @kind_timelines.filter_map { |level_id, points| points.select { it.first <= day }.last&.last&.merge(level_id:) }
+                           .sort_by { it[:position] }
+    OrgGraph::Taxonomy.new(kinds.map { it.except(:position, :provider) }, providers: kinds.to_h { [ it[:level_id], it[:provider] ] })
+  end
+
+  # Keeps each kind's dated values as the history does: a change takes effect
+  # on its date, or on the kind's last change if that is later.
+  def revise_kind(level_id, effective_on)
+    points = (@kind_timelines[level_id] ||= [])
+    latest = points.last&.last
+    value = yield(latest)
+    return if value == latest
+
+    from = [ effective_on.to_s.presence || "0000-01-01", points.last&.first ].compact.max
+    points.reject! { it.first == from }
+    points << [ from, value ]
   end
 
   def live_units
