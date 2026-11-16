@@ -1,0 +1,24 @@
+{
+  "name": "tenants_set_time_zone",
+  "description": "Set the active tenant's time zone, an IANA name such as Australia/Sydney. It decides the tenant's today: the default date of a plan, a change or an Org Graph fact. It moves today from now on and rewrites no stored date. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "time_zone": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "time_zone"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}
