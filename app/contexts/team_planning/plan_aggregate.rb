@@ -665,6 +665,7 @@ class TeamPlanning::PlanAggregate
   # @param direction [String] "earlier" or "later"
   # @param moved_by_id [String] person_id of the actor
   # @param to_scenario_id [String, nil] the step later, when there is more than one
+  # @return [String] the step the change moved to
   # @raise [TeamPlanning::Error] if the plan is deleted, the scenario unknown, the facet not one that moves,
   #   the scenario doesn't change it, there is no step that way or the step is the baseline, the step
   #   later isn't named among several, either step is half of a split, the target already changes it,
@@ -684,6 +685,7 @@ class TeamPlanning::PlanAggregate
       plan_id: @plan_id, scenario_id:, to_scenario_id: target_id, subject_id:, facet:, direction:,
       moved_event_ids: @logs.fetch(scenario_id).select { key_of(it) == key }.map(&:event_id), moved_by_id:
     }))
+    target_id
   end
 
   # Stops a scenario overriding one facet of one subject, so it follows its
