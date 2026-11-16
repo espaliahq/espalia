@@ -377,6 +377,16 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       assert_includes refusal { set_scope(@plan_id, [ @engineering ]) }, "1 other change"
     end
 
+    should "judge a line the plan added by each scenario's own cost centre, so a later step's relabel never excuses a cut" do
+      set_scope(@plan_id, [ @engineering, @sales ])
+      line = { plan_id: @plan_id, starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: "5", currency: "EUR", period: "year" }
+      added = call(Operations::TeamPlanning::SetBudgetLine, **line, scenario_id: @h1, cost_centre: "Revenue")[:budget_line_id]
+      call(Operations::TeamPlanning::SetBudgetLine, **line, scenario_id: @h2, budget_line_id: added, cost_centre: "Platform")
+      call(Operations::TeamPlanning::CutBudgetLine, plan_id: @plan_id, scenario_id: @h1, budget_line_id: added)
+
+      assert_includes refusal { set_scope(@plan_id, [ @engineering ]) }, "change"
+    end
+
     should "leave no funding naming a line outside the plan, though an older change funded a seat from it or cut it" do
       seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @h1, role_id: @engineer.role_id,
                                                          level_id: @e5.level_id, unit_id: @payments, fte: 1, basis: "new")[:position_id]

@@ -56,7 +56,7 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
     held_now = now.transform_values { held_ids(it) }
     later = maps(narrower, aggregate, scenario_ids)
     held = later.transform_values { held_ids(it) }
-    cost_centres = line_cost_centres(changes.map(&:last), now)
+    cost_centres = line_cost_centres(changes.map(&:last), now, aggregate)
     dropped = changes.select do |scenario_id, change|
       subject_id = change.data[:subject_id]
       (held_now[scenario_id].include?(subject_id) && !held[scenario_id].include?(subject_id)) ||
@@ -90,20 +90,23 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
     end
   end
 
-  # Each line's cost centre as each scenario's map holds it, else as the tenant
-  # does, else as the plan last set it, so one scenario's change never stands
-  # in for another's.
+  # Each line's cost centre as each scenario last set it along its own chain,
+  # else as its map holds it, else as the tenant does, the order
+  # {WithinScope#line_outside?} reads, so one scenario's set never stands in
+  # for another's.
   #
   # @return [Hash{String => Hash{String => String, nil}}] by scenario id, then line id
-  def line_cost_centres(changes, maps)
+  def line_cost_centres(changes, maps, aggregate)
     ids = changes.flat_map { line_ids(it) }.uniq
     return maps.transform_values { {} } if ids.empty?
 
-    fallback = changes.select { it.is_a?(::TeamPlanning::Events::BudgetLineSet) && ids.include?(it.data[:subject_id]) }
-                      .to_h { [ it.data[:subject_id], it.data[:cost_centre] ] }
-                      .merge(::BudgetLine.where(id: ids).pluck(:id, :cost_centre).to_h)
-    maps.transform_values do |map|
-      fallback.merge((map.budget_lines + map.outside_lines).select { ids.include?(it.id) }.to_h { [ it.id, it.cost_centre ] })
+    tenant = ::BudgetLine.where(id: ids).pluck(:id, :cost_centre).to_h
+    maps.to_h do |scenario_id, map|
+      held = (map.budget_lines + map.outside_lines).select { ids.include?(it.id) }.to_h { [ it.id, it.cost_centre ] }
+      set = aggregate.resolution_chain(scenario_id).flat_map { aggregate.changes_in(it) }
+                     .select { it.is_a?(::TeamPlanning::Events::BudgetLineSet) && ids.include?(it.data[:subject_id]) }
+                     .to_h { [ it.data[:subject_id], it.data[:cost_centre] ] }
+      [ scenario_id, tenant.merge(held).merge(set) ]
     end
   end
 
