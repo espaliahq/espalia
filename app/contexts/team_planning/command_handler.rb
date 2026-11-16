@@ -103,7 +103,7 @@ class TeamPlanning::CommandHandler
   def archive_plan(plan_id)
     @repository.with_plan(plan_id) do |plan|
       authorize_plan!(:update?, plan)
-      plan.archive(archived_by_id: actor_id!, prices: frozen_prices)
+      plan.archive(archived_by_id: actor_id!, prices: method(:frozen_prices))
     end
   end
 

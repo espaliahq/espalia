@@ -161,14 +161,16 @@ class TeamPlanning::PlanAggregate
   # {#restore}. Its prices hold still with it when the tenant's inputs are given.
   #
   # @param archived_by_id [String]
-  # @param prices [Hash, nil] as {TeamPlanning::PricingInputs.capture} gives them
+  # @param prices [#call, nil] gives the inputs as {TeamPlanning::PricingInputs.capture}
+  #   does, or nil; called only once the plan can be archived
   # @raise [TeamPlanning::Error] if the plan is gone or already archived
   def archive(archived_by_id:, prices: nil)
     ensure_exists!
     raise TeamPlanning::Error, "This plan is already archived" if archived?
 
     apply(TeamPlanning::Events::PlanArchived.new(data: { plan_id: @plan_id, archived_by_id: }))
-    apply(TeamPlanning::Events::PlanPricesFrozen.new(data: { plan_id: @plan_id, inputs: prices })) if prices
+    inputs = prices&.call
+    apply(TeamPlanning::Events::PlanPricesFrozen.new(data: { plan_id: @plan_id, inputs: })) if inputs
   end
 
   # Brings an archived plan back as it was archived.

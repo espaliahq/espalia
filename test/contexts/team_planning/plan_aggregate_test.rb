@@ -268,6 +268,16 @@ class TeamPlanning::PlanAggregateTest < ActiveSupport::TestCase
       assert_equal "This plan is already archived", assert_raises(TeamPlanning::Error) { @plan.archive(archived_by_id: @creator_id) }.message
     end
 
+    should "copy the prices only for an archive it records" do
+      asked = 0
+      assert_raises(TeamPlanning::Error) { @plan.archive(archived_by_id: @creator_id, prices: -> { asked += 1 }) }
+      assert_equal 0, asked
+
+      @plan.restore(restored_by_id: @creator_id)
+      @plan.archive(archived_by_id: @creator_id, prices: -> { { "pay_bands" => [] } })
+      assert_equal [ TeamPlanning::Events::PlanArchived, TeamPlanning::Events::PlanPricesFrozen ], @plan.unpublished_events.to_a.last(2).map(&:class)
+    end
+
     should "refuse every change to what the plan holds, in one message" do
       writes = [
         -> { @plan.set_scope(unit_ids: [ SecureRandom.uuid_v7 ], set_by_id: @creator_id) },
