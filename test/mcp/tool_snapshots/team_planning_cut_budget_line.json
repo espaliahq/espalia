@@ -1,6 +1,6 @@
 {
   "name": "team_planning_cut_budget_line",
-  "description": "Cut a budget line from a scenario of a Team Planning plan, by budget_line_id from team_planning_budget_lines. The scenarios that follow lose it too. Setting the line again brings it back. Refused on the baseline, which holds the organisation's approved budget, and unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
+  "description": "Cut a budget line from a scenario of a Team Planning plan, by budget_line_id from team_planning_budget_lines. The scenarios that follow lose it too. Setting the line again brings it back. Refused on the baseline, which holds the organisation's approved budget, for a line the plan doesn't hold, and unless the caller is one of the plan's editors. `note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
   "inputSchema": {
     "type": "object",
     "properties": {

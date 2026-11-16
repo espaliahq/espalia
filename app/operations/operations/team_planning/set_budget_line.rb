@@ -19,7 +19,8 @@ class Operations::TeamPlanning::SetBudgetLine < Operations::Base
               "field as the line reads afterwards: a field left out is cleared. The change reaches the scenarios that " \
               "follow, and a later change by the organisation to the same line no longer does. " \
               "#{Operations::Tenants::BudgetLineFields::HELP} Refused on the baseline, which holds the organisation's " \
-              "approved budget, and unless the caller is one of the plan's editors."
+              "approved budget, in a plan that covers some units for a line whose cost centre none of its seats can draw on, " \
+              "and unless the caller is one of the plan's editors."
   category :write
   approval :mcp_client
 
@@ -33,6 +34,7 @@ class Operations::TeamPlanning::SetBudgetLine < Operations::Base
     scenario_id = scenario!
     line_id = params[:budget_line_id].nil? ? SecureRandom.uuid_v7 : uuid!(:budget_line_id)
     changes = params[:budget_line_id].nil? ? [] : line_changes(line_id)
+    held!(loaded_plan, line_id) unless params[:budget_line_id].nil?
     tenant_line = !params[:budget_line_id].nil? && tenant_line?(line_id, changes.last)
     line = assign_line(held_line(line_id, changes))
     set_change!(KIND, subject_id: line_id, end_state: figures(line).merge(tenant_line:)) do |plan|

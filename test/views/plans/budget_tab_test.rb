@@ -54,10 +54,10 @@ class Views::Plans::BudgetTabTest < ActiveSupport::TestCase
           positions: [ { position_id: SEAT, unit_id: UNIT, role_name: "Software Engineer", level_name: "Engineer II" },
                        { position_id: SHORT, unit_id: UNIT, role_name: "Software Engineer", level_name: "Engineer II" } ] }.freeze
 
-  def render_tab(scenario_id: Q1, lines: [ described(PLATFORM, cost_centre: "Platform") ], **reads)
+  def render_tab(scenario_id: Q1, lines: [ described(PLATFORM, cost_centre: "Platform") ], scope: nil, **reads)
     controller = ApplicationController.new
     controller.request = ActionDispatch::TestRequest.create
-    tab = Views::Plans::BudgetTab.new(plan: { plan_id: PLAN, name: "Pay review" }, scenarios: SCENARIOS,
+    tab = Views::Plans::BudgetTab.new(plan: { plan_id: PLAN, name: "Pay review", scope: }, scenarios: SCENARIOS,
                                       lines: { plan_id: PLAN, scenario_id:, budget_lines: lines, orphaned: [] }, **reads)
     Nokogiri::HTML5.fragment(controller.view_context.render(tab))
   end
@@ -69,6 +69,16 @@ class Views::Plans::BudgetTabTest < ActiveSupport::TestCase
     assert_equal [ "Q1 hires" ], html.css("[data-budget-today] a").map(&:text)
     assert_match "EUR 146,000 a year", html.at_css("[data-budget-line='#{PLATFORM}']").text
     assert_empty html.css("[data-budget-totals]")
+  end
+
+  should "say a scoped plan's totals cover only the lines its seats can draw on, on Today and in a scenario" do
+    scoped = { whole_organisation: false, units: [ { unit_id: UNIT, name: "Payments" } ] }
+    sentence = "Totals cover the budget lines this plan's seats can draw on."
+
+    assert_equal sentence, render_tab(scenario_id: PLAN, scope: scoped).at_css("[data-budget-scope]").text
+    assert_equal sentence, render_tab(scope: scoped, budget: budget(lines: [ line(PLATFORM, remaining: "27000") ]), funding:, map: MAP)
+      .at_css("[data-budget-scope]").text
+    assert_empty render_tab(scenario_id: PLAN, scope: { whole_organisation: true, units: [] }).css("[data-budget-scope]")
   end
 
   should "show a scenario's four numbers as the read gives them" do

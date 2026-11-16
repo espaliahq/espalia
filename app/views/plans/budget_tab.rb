@@ -41,6 +41,7 @@ class Views::Plans::BudgetTab < Views::Base
       if (note = (@budget || @lines)[:note])
         render Components::Kit::Alert.new(tone: :info) { note }
       end
+      scope_note
       @budget ? scenario_budget : approved_lines
     end
   end
@@ -66,6 +67,13 @@ class Views::Plans::BudgetTab < Views::Base
       end
       plain "."
     end
+  end
+
+  # A scoped plan holds only these lines ([#378](https://github.com/espaliahq/espalia/issues/378)).
+  def scope_note
+    return if @plan.dig(:scope, :whole_organisation) != false
+
+    p(class: "text-sm text-muted", data: { budget_scope: "" }) { "Totals cover the budget lines this plan's seats can draw on." }
   end
 
   def approved_lines
