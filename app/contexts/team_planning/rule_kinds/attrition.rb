@@ -68,15 +68,36 @@ class TeamPlanning::RuleKinds::Attrition < TeamPlanning::ForecastKind
   # @return [Array<TeamPlanning::Forecast::Row>] one per unit and cost centre with seats empty in the step
   def self.forecast(frame)
     days = frame.step.count
-    carried_from = frame.earlier.map { it.step.end + 1 }.max
-    vacancies = vacancies(frame, frame.step.begin, frame.step.end) +
-                (carried_from ? frame.earlier.flat_map { vacancies(it, [ carried_from, frame.step.begin ].max, frame.step.end) } : [])
+    vacancies = vacancies(frame, frame.step.begin, frame.step.end) + carried(frame)
     vacancies.group_by(&:first).sort_by { |key, _| key.map(&:to_s) }.map do |(unit_id, cost_centre), parts|
       frame.row(unit_id:, cost_centre:, headcount: -parts.sum(0r) { it[2] },
                 cost: add(parts.map { |_, empty_days, _, average| average.cost.transform_values { -(it * empty_days / YEAR_DAYS) } }),
                 capacity: add(parts.map { |_, empty_days, _, average| average.capacity.transform_values { -(it * empty_days / days) } }))
     end
   end
+
+  # A seat stays empty past its step for up to the longest time to hire, and
+  # only if some rate is above 0.
+  #
+  # @param values [Hash{String => Array<Hash>}] rule name => each value it could take
+  # @return [Integer, nil]
+  def self.reach(values)
+    return unless values.fetch(rule_name, []).any? { yearly_rate(it).positive? }
+
+    values.fetch(TeamPlanning::RuleKinds::TimeToHire.rule_name, []).map { TeamPlanning::RuleKinds::TimeToHire.days(it) }.max
+  end
+
+  # What earlier steps' leavers leave empty on this step's dates, from the day
+  # after the latest of them ends. A unit this step no longer holds reads as
+  # unplaced, as a seat outside every unit does.
+  def self.carried(frame)
+    from = frame.earlier.map { it.step.end + 1 }.max or return []
+    live = frame.map.units.to_set(&:id)
+    frame.earlier.flat_map { vacancies(it, [ from, frame.step.begin ].max, frame.step.end) }.map do |(unit_id, cost_centre), *rest|
+      [ [ (unit_id if live.include?(unit_id)), cost_centre ], *rest ]
+    end
+  end
+  private_class_method :carried
 
   # The seats a step's leavers leave empty between two dates, by unit and
   # cost centre: the empty FTE-days, the FTE still empty on the last date, and

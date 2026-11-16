@@ -240,6 +240,15 @@ class TeamPlanning::AttritionTest < ActiveSupport::TestCase
       rule(@platform, "attrition", { yearly_rate: "0.73" })
     end
 
+    should "read step 1 only while a seat its leavers empty can still be waiting in step 2" do
+      defaults = TeamPlanning::RuleKinds.defaults.merge("time_to_hire" => { "days" => "0" })
+      reaching = -> { as_tenant { TeamPlanning::Forecast.reaching(TeamPlanning::Repository.new.load_plan(@plan_id), @second, defaults:) } }
+
+      assert_empty reaching.(), "no time to hire, so every seat is backfilled the day it empties"
+      rule(@platform, "time_to_hire", { days: "1" })
+      assert_equal [ @first ], reaching.()
+    end
+
     should "take away step 1's seats still empty in step 2, beside step 2's own" do
       rule(@platform, "time_to_hire", { days: "180" })
 

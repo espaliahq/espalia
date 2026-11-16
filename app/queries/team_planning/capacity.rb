@@ -103,7 +103,7 @@ class TeamPlanning::Capacity
       resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id: id, repository:, base:)
       new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(resolution.call(aggregate))
     end
-    earlier = TeamPlanning::Forecast.reaching(aggregate, scenario_id).index_with do |id|
+    earlier = TeamPlanning::Forecast.reaching(aggregate, scenario_id, defaults: base.rules.defaults).index_with do |id|
       price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
     end
     report = price.(scenario_id)

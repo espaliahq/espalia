@@ -21,7 +21,7 @@
 # price them.
 #
 # @example
-#   TeamPlanning::Forecast.new(aggregate:, scenario_id:, map:).rows # => [Row, ...]
+#   TeamPlanning::Forecast.new(aggregate:, scenario_id:, map:, earlier: {}).rows # => [Row, ...]
 class TeamPlanning::Forecast
   # One assumption's addition to one unit in one step.
   #
@@ -101,7 +101,7 @@ class TeamPlanning::Forecast
   # @param map [TeamPlanning::Baseline::Map] the scenario's resolved map
   # @param pricing [Pricing] the scenario's filled places, priced as the caller sees them
   # @param earlier [Hash{String => Step}] each of {.reaching}, by scenario id
-  def initialize(aggregate:, scenario_id:, map:, pricing: Pricing.new, earlier: {})
+  def initialize(aggregate:, scenario_id:, map:, earlier:, pricing: Pricing.new)
     @aggregate = aggregate
     @scenario_id = scenario_id
     @map = map
@@ -109,21 +109,36 @@ class TeamPlanning::Forecast
     @earlier = earlier
   end
 
-  # The steps before this one on its timeline that end within a longest time
-  # to hire of its start, so a seat they empty could still be empty in it.
+  # The steps before this one on its timeline that a forecast kind could
+  # carry from: those ending within the kind's {TeamPlanning::ForecastKind.reach}
+  # of its start. The reach reads the rule values the tenant's defaults and the
+  # step's own chain could set, so nothing is resolved to choose.
   #
   # @param aggregate [TeamPlanning::PlanAggregate]
   # @param scenario_id [String]
+  # @param defaults [Hash{String => Hash}] the tenant's rule defaults
   # @return [Array<String>] scenario ids, in timeline order
-  def self.reaching(aggregate, scenario_id)
+  def self.reaching(aggregate, scenario_id, defaults:)
     step = aggregate.period_of(scenario_id) or return []
 
-    reach = TeamPlanning::RuleKinds::TimeToHire::MAX_DAYS
     aggregate.timeline_path(scenario_id).select do |id|
       period = aggregate.period_of(id)
-      period && period.begin < step.begin && period.end + reach >= step.begin
+      next false unless period && period.begin < step.begin
+
+      values = rule_values(aggregate, id, defaults)
+      TeamPlanning::RuleKinds.forecasts.filter_map { it.reach(values) }.any? { period.end + it >= step.begin }
     end
   end
+
+  # @return [Hash{String => Array<Hash>}] rule name => every value set along the chain, with the default
+  def self.rule_values(aggregate, scenario_id, defaults)
+    values = defaults.transform_values { [ it ] }
+    aggregate.resolution_chain(scenario_id).flat_map { aggregate.changes_in(it) }.grep(TeamPlanning::Events::RuleSet).each do |change|
+      (values[change.data[:rule].to_s] ||= []) << change.data[:value].to_h.stringify_keys
+    end
+    values
+  end
+  private_class_method :rule_values
 
   # Today has no period, so no rows; nor has an id the plan doesn't hold, so a
   # caller resolves the scenario first.
@@ -132,7 +147,7 @@ class TeamPlanning::Forecast
   def rows
     step = @aggregate.period_of(@scenario_id) or return []
 
-    earlier = self.class.reaching(@aggregate, @scenario_id).map do |id|
+    earlier = self.class.reaching(@aggregate, @scenario_id, defaults: @map.rules.defaults).map do |id|
       reached = @earlier.fetch(id) { raise ArgumentError, "No earlier step #{id} to carry from" }
       frame(id, @aggregate.period_of(id), reached.map, reached.pricing)
     end

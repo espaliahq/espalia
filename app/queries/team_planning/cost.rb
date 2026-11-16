@@ -239,18 +239,11 @@ class TeamPlanning::Cost
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
   def call
-    aggregate = @aggregate ||= @repository.load_plan(@plan.id)
+    aggregate = prepare
     run_rate = @scenario_id == @plan.id
-    raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
-
-    @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
-    @year_days = run_rate ? @period.count : YEAR_DAYS
-    @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
-    @factors = {}
-    @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
-    @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
-    earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id).index_with { earlier_step(it) }
+    earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
     scenario = priced(resolved(@scenario_id))
+    @steps[@scenario_id] ||= TeamPlanning::Forecast::Step.new(map: scenario.map, pricing: scenario.pricing) unless run_rate
     forecast = forecasted(TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows)
     baseline = priced(resolved(@plan.id)) unless run_rate
     Report.new(basis: run_rate ? "run_rate" : "period", period: @period, pay_view: @actual_pay ? "band_ranges" : "band_midpoints",
@@ -289,24 +282,40 @@ class TeamPlanning::Cost
             converted: one.converted && other.converted && (one.converted + other.converted), missing: one.missing | other.missing)
   end
 
+  # This scenario's map and pricing, for a later step that carries what its
+  # leavers left empty.
+  #
+  # @return [TeamPlanning::Forecast::Step]
+  def step
+    prepare
+    @steps[@scenario_id] ||= priced(resolved(@scenario_id)).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+  end
+
   private
+
+  def prepare
+    aggregate = @aggregate ||= @repository.load_plan(@plan.id)
+    run_rate = @scenario_id == @plan.id
+    raise TeamPlanning::Error, "No such scenario" unless aggregate.scenario?(@scenario_id)
+
+    @period = run_rate ? TeamPlanning::Cost.year_from(aggregate.base_on) : aggregate.period_of(@scenario_id)
+    @year_days = run_rate ? @period.count : YEAR_DAYS
+    @reference = ReferenceCurrency.where(tenant_id: @plan.tenant_id).first&.currency
+    @factors = {}
+    @actual_pay = PlanPolicy.new(@context, @plan).see_pay?
+    @base ||= TeamPlanning::Baseline.new(context: @context, plan: @plan).structure
+    aggregate
+  end
 
   def resolved(scenario_id)
     resolution = TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id:, repository: @repository, base: @base)
     resolution.call(@aggregate)
   end
 
-  # Prices an earlier step over its own period, so a seat it empties costs
-  # what the step priced it at, then puts back this scenario's period.
-  def earlier_step(scenario_id) = @steps[scenario_id] ||= price_step(scenario_id)
-
-  def price_step(scenario_id)
-    period, factors = @period, @factors
-    @period, @factors = @aggregate.period_of(scenario_id), {}
-    step = priced(resolved(scenario_id))
-    TeamPlanning::Forecast::Step.new(map: step.map, pricing: step.pricing)
-  ensure
-    @period, @factors = period, factors
+  # Priced over its own period, so a seat it empties costs what that step priced it at.
+  def earlier_step(scenario_id)
+    @steps[scenario_id] || self.class.new(context: @context, plan: @plan, scenario_id:, repository: @repository, base: @base,
+                                          aggregate: @aggregate, steps: @steps).step
   end
 
   def priced(map)
