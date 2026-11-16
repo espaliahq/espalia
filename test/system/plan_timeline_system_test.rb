@@ -179,6 +179,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit timeline_plan_path(@plan_id, step: 1)
       assert_text "Step 2 of 3"
+      assert_no_selector "[data-timeline-shift-edge]"
       wait_for_stimulus "move-form"
       click_selector_with_js_fallback("[data-timeline-phone] button[aria-label='Move Bo Reyes in Q1 hires']", expect_text: "Moving Bo Reyes in Q1 hires")
       within("#move-person-modal-1") { select "Unassigned", from: "To" }
@@ -207,6 +208,49 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
+    context "dragging a bar's edge" do
+      setup do
+        page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+        visit timeline_plan_path(@plan_id)
+        assert_text "Showing the path to Q2 settle."
+        wait_for_stimulus "timeline-shift"
+      end
+
+      should "move a departure a step later by dropping its end on the lit column" do
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
+        assert_no_selector "[data-timeline-shift-hint='0']", visible: true
+        release
+
+        assert_text "Moved to Q2 settle."
+        within("[data-timeline-grid]") do
+          assert_selector "[data-timeline-lane]", text: "leaves in Q2 settle"
+          assert_no_text "leaves in Q1 hires"
+        end
+      end
+
+      should "save nothing for a drop on a column that isn't lit" do
+        hold(leaver_end_grip, over: "[data-timeline-step='0']")
+        assert_selector "[data-timeline-shift-hint='2']", text: "Move here", visible: true
+        release
+
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        assert_no_text "Moved to"
+        within("[data-timeline-grid]") { assert_selector "[data-timeline-lane]", text: "leaves in Q1 hires" }
+      end
+
+      should "save nothing when Escape lets go of the edge" do
+        hold(leaver_end_grip, over: "[data-timeline-step='2']")
+        assert_selector "[data-timeline-shift-hint='2']", visible: true
+        press_escape
+        assert_no_selector "[data-timeline-shift-hint='2']", visible: true
+        release
+
+        assert_no_text "Moved to"
+        within("[data-timeline-grid]") { assert_selector "[data-timeline-lane]", text: "leaves in Q1 hires" }
+      end
+    end
+
     should "move a change of place a step later on a phone, from the step that makes it" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit timeline_plan_path(@plan_id, step: 1)
@@ -230,6 +274,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       visit timeline_plan_path(@plan_id)
       assert_text "Showing the path to Q2 settle."
       assert_no_selector "[draggable]"
+      assert_no_selector "[data-timeline-shift-edge]"
       assert_no_button "Move…"
       assert_no_button "When…"
       assert_no_selector "[id^='move-person-modal']", visible: :all
@@ -251,6 +296,18 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
       fire(row, "dragend")
       return taken
     JS
+  end
+
+  # Real pointer input, so pointer capture and the controller's hit-testing run as they do for a person.
+  def hold(grip, over:)
+    page.driver.browser.action.move_to(grip.native).click_and_hold.move_to(find(over).native).perform
+  end
+
+  def release = page.driver.browser.action.release.perform
+
+  def leaver_end_grip
+    find(:xpath, "//*[@data-timeline-grid]//div[.//*[@data-timeline-lane][contains(normalize-space(.), 'leaves in Q1 hires')]]" \
+                 "/span[@data-timeline-shift-edge='end']")
   end
 
   def fork(**params) = call(Operations::TeamPlanning::ForkScenario, @planner, plan_id: @plan_id, **params)[:scenario_id]

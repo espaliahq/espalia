@@ -30,11 +30,11 @@ export default class extends BaseController {
 
     event.preventDefault()
     this.grip = event.currentTarget
-    this.targets = JSON.parse(this.grip.dataset.timelineShiftTargets)
+    this.reach = JSON.parse(this.grip.dataset.timelineShiftTargets)
     this.over = null
     this.grip.setPointerCapture(event.pointerId)
     this.grip.parentElement.dataset.shifting = ""
-    Object.keys(this.targets).forEach(step => {
+    Object.keys(this.reach).forEach(step => {
       this.#column(step).dataset.lit = ""
       this.#hint(step).hidden = false
     })
@@ -47,14 +47,14 @@ export default class extends BaseController {
     }
     Object.entries(this.listeners).forEach(([type, fn]) => this.grip.addEventListener(type, fn))
     this.escape = e => { if (e.key === "Escape") this.#finish() }
-    document.addEventListener("keydown", this.escape)
+    window.addEventListener("keydown", this.escape)
   }
 
   // private
 
   #move(event) {
     const step = this.#stepAt(event.clientX)
-    const over = step in this.targets ? step : null
+    const over = step in this.reach ? step : null
     if (over === this.over) return
 
     if (this.over !== null) delete this.#column(this.over).dataset.over
@@ -64,7 +64,7 @@ export default class extends BaseController {
 
   #drop(event) {
     this.#move(event)
-    const url = this.over === null ? null : this.targets[this.over]
+    const url = this.over === null ? null : this.reach[this.over]
     this.#finish()
     if (url) this.#post(url)
   }
@@ -73,9 +73,9 @@ export default class extends BaseController {
     if (!this.grip) return
 
     Object.entries(this.listeners).forEach(([type, fn]) => this.grip.removeEventListener(type, fn))
-    document.removeEventListener("keydown", this.escape)
+    window.removeEventListener("keydown", this.escape)
     delete this.grip.parentElement.dataset.shifting
-    Object.keys(this.targets).forEach(step => {
+    Object.keys(this.reach).forEach(step => {
       const column = this.#column(step)
       delete column.dataset.lit
       delete column.dataset.over
