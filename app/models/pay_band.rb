@@ -201,7 +201,7 @@ class PayBand < ApplicationRecord
   # A new band lands after the last band no more specific than it, so the
   # wider bands stay above the narrower ones without anyone moving them.
   def take_place_after_wider_bands
-    bands = PayBand.where(tenant_id:).order(:position).to_a
+    bands = PayBand.where(tenant_id:).lock.order(:position).to_a
     after = bands.reverse.find { it.specificity <= specificity }
     self.position = after ? after.position + 1 : 1
     PayBand.where(tenant_id:).where(position: position..).update_all("position = position + 1")
