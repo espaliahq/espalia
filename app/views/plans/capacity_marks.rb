@@ -31,6 +31,17 @@ class Views::Plans::CapacityMarks
     # @return [String]
     def step(amount) = amount.round(2).to_s("F").delete_suffix(".0")
 
+    # @param total [Total]
+    # @return [Array<Array(String, String)>] each part's label and figure; none when the total has no parts
+    def parts(total)
+      return [] unless total.parts
+
+      actual, planned, forecast = total.parts.values_at(:actual, :planned, :forecast)
+      forecast = change(forecast, total.unit)
+      [ [ "Actual", amount(actual, total.unit) ], [ "Planned", change(planned, total.unit) || amount(planned, total.unit) ],
+        ([ "Forecast", forecast ] if forecast) ].compact
+    end
+
     def suffix(unit) = unit.length == 1 ? unit : " #{unit}"
   end
 
@@ -38,7 +49,10 @@ class Views::Plans::CapacityMarks
   # @!attribute unit [String]
   # @!attribute amount [BigDecimal]
   # @!attribute change [BigDecimal] against the baseline
-  Total = Data.define(:model, :unit, :amount, :change)
+  # @!attribute parts [Hash{Symbol => BigDecimal}, nil] actual, planned and forecast, which add up to the amount
+  Total = Data.define(:model, :unit, :amount, :change, :parts) do
+    def initialize(parts: nil, **) = super
+  end
 
   # @param scenario [Hash] `team_planning_capacity` for the scenario shown
   # @param baseline [Hash] `team_planning_capacity` for the plan's baseline
@@ -63,7 +77,7 @@ class Views::Plans::CapacityMarks
   def baseline? = @scenario[:scenario_id] == @scenario[:plan_id]
 
   # @return [Array<Total>] the scenario's, one per model
-  def totals = compare(@scenario[:totals], @baseline[:totals])
+  def totals = compare(@scenario[:totals], @baseline[:totals], @scenario[:parts])
 
   # Figures arrive to 20 significant digits, so three thirds can sum a hair
   # under one; a remainder that rounds to nothing on screen is that, not a place.
@@ -73,7 +87,7 @@ class Views::Plans::CapacityMarks
     totals.filter_map do |total|
       inside = @scenario[:units].sum { exact(it[:totals][total.model]) }
       rest = total.amount - inside
-      total.with(amount: rest, change: 0) unless rest.round(1).zero?
+      total.with(amount: rest, change: 0, parts: nil) unless rest.round(1).zero?
     end
   end
 
@@ -89,7 +103,8 @@ class Views::Plans::CapacityMarks
     lambda do |unit|
       return [] unless measured?
 
-      [ Views::Plans::CapacityUnitTotal.new(totals: compare(unit_totals(@scenario)[unit[:id]], unit_totals(@baseline)[unit[:id]]),
+      row = unit_rows(@scenario)[unit[:id]]
+      [ Views::Plans::CapacityUnitTotal.new(totals: compare(row&.dig(:totals), unit_rows(@baseline)[unit[:id]]&.dig(:totals), row&.dig(:parts)),
                                             baseline: baseline?) ]
     end
   end
@@ -129,16 +144,16 @@ class Views::Plans::CapacityMarks
 
   def figure(priced, label) = Views::Plans::CapacityFigure.new(place: priced, marks: self, label:)
 
-  def compare(scenario, baseline)
+  def compare(scenario, baseline, parts = nil)
     scenario ||= {}
     baseline ||= {}
     (scenario.keys | baseline.keys).sort.map do |model|
       amount = exact(scenario[model])
-      Total.new(model:, unit: unit_of(model), amount:, change: amount - exact(baseline[model]))
+      Total.new(model:, unit: unit_of(model), amount:, change: amount - exact(baseline[model]), parts: parts && parts.transform_values { exact(it[model]) })
     end
   end
 
-  def unit_totals(payload) = (@unit_totals ||= {})[payload.object_id] ||= payload[:units].to_h { [ it[:unit_id], it[:totals] ] }
+  def unit_rows(payload) = (@unit_rows ||= {})[payload.object_id] ||= payload[:units].index_by { it[:unit_id] }
 
   def seats = @seats ||= @scenario[:seats].index_by { it[:seat_id] }
 

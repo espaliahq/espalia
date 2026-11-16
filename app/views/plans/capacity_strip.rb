@@ -33,6 +33,7 @@ class Views::Plans::CapacityStrip < Views::Base
     div(data: { capacity_total: total.model }, class: "flex flex-wrap items-baseline gap-x-2") do
       span(class: "text-lg font-semibold tabular-nums text-default") { Format.amount(total.amount, total.unit) }
       change(total) unless @marks.baseline?
+      render Views::Plans::FigureParts.new(parts: Format.parts(total)) unless @marks.baseline?
     end
   end
 
