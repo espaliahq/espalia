@@ -312,13 +312,10 @@ class PlanMapMovesSystemTest < ApplicationSystemTestCase
 
   MENU_ITEMS = { "Edit…" => "edit-position-modal", "Move…" => "move-position-modal", "Close…" => "close-position-modal" }.freeze
 
-  # The menu opens fixed at its trigger, so the row has to be on screen, as it is
-  # under a real tap.
   def use_position_menu(item, expect_text:)
     row = "[data-map-position='#{@position}']"
-    page.execute_script("document.querySelector(arguments[0]).scrollIntoView({ block: 'center' })", row)
-    open_dropdown(scope: row)
-    click_selector_with_js_fallback("#{row} [role=menuitem][data-modal-target-id='#{MENU_ITEMS.fetch(item)}']", expect_text:)
+    open_delegated_menu(find("#{row} [aria-haspopup][data-menu]", visible: :all)["aria-label"], scope: row)
+    click_selector_with_js_fallback("#{row} [data-delegated-menu] [role=menuitem][data-modal-target-id='#{MENU_ITEMS.fetch(item)}']", expect_text:)
   end
 
   def scenario_position

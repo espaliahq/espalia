@@ -77,7 +77,8 @@ class Views::Plans::ScenarioMap < Views::Base
       p(class: "text-sm text-muted") { as_of_line }
       render @summary if @summary
       unresolved_notice if @map[:unresolved].any?
-      div(class: "grid #{GRID} gap-4", data: ({ controller: "map-move" } if @moving)) do
+      div(class: "grid #{GRID} gap-4", data: (grid_data if @moving)) do
+        position_menu_template if @moving
         ordered_units.each { |unit, path| unit_card(unit, path) }
         unassigned_card if @moving || unassigned.any? || unplaced_positions.any?
       end
@@ -357,23 +358,33 @@ class Views::Plans::ScenarioMap < Views::Base
       action: "dragstart->map-move#start dragend->map-move#end dragover->map-move#over dragleave->map-move#leave drop->map-move#drop" }
   end
 
-  # Edit…, Move… and Close… for one position. Move… is a button in the row
-  # even while the menu is shut, so a drop on a unit can click it.
+  MENU = "position"
+
+  def grid_data
+    menu = Components::Kit::DelegatedMenu.root_data
+    { controller: "map-move #{menu[:controller]}", action: menu[:action] }
+  end
+
+  # Edit…, Move… and Close…, once for the whole map. Each `{name}` is filled
+  # from the row's trigger when its menu opens.
+  def position_menu_template
+    render Components::Kit::DelegatedMenu.new(kind: MENU) do |menu|
+      values = { unit_id: "{unit}", level_id: "{level}", fte: "{fte}", basis: "{basis}", cost_centre: "{cost-centre}" }
+      menu.item(data: Views::Plans::PositionDialog.trigger(mode: :edit, url: "{path}", name: "{name}", values:)) { "Edit…" }
+      menu.item(data: Views::Plans::MovePositionDialog.trigger(url: "{move-path}", name: "{name}", from: "{unit}")) { "Move…" }
+      menu.item(tone: :danger, data: Views::Plans::ClosePositionDialog.trigger(url: "{path}", name: "{name}", occupants: [ "{occupants}" ])) { "Close…" }
+    end
+  end
+
   def position_menu(position)
     label = position_name(position)
-    url = plan_position_path(@map[:plan_id], position[:position_id])
-    render Components::Kit::Dropdown.new(align: :right, strategy: :fixed) do |menu|
-      menu.trigger(label: "Actions for #{label} in #{units_by_id[position[:unit_id]][:name]}",
-                   button: { variant: :ghost, size: :sm, icon: true, compact: true }) { icon(:kebab, class: "size-4") }
-      menu.menu(width: "w-44") do
-        menu.item(data: Views::Plans::PositionDialog.trigger(mode: :edit, url:, name: label, values: position)) { "Edit…" }
-        menu.item(data: Views::Plans::MovePositionDialog.trigger(url: move_plan_position_path(@map[:plan_id], position[:position_id]),
-                                                                 name: label, from: position[:unit_id])) { "Move…" }
-        menu.item(tone: :danger, data: Views::Plans::ClosePositionDialog.trigger(
-          url:, name: label, occupants: position.fetch(:occupants, []).map { name(it[:person_id]) }.sort
-        )) { "Close…" }
-      end
-    end
+    render Components::Kit::DelegatedMenu::Trigger.new(
+      label: "Actions for #{label} in #{units_by_id[position[:unit_id]][:name]}", kind: MENU,
+      values: { path: plan_position_path(@map[:plan_id], position[:position_id]),
+                move_path: move_plan_position_path(@map[:plan_id], position[:position_id]), name: label,
+                unit: position[:unit_id], level: position[:level_id], fte: position[:fte], basis: position[:basis],
+                cost_centre: position[:cost_centre], occupants: position.fetch(:occupants, []).map { name(it[:person_id]) }.sort.to_sentence }
+    )
   end
 
   def open_position_button(unit)

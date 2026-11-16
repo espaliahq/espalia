@@ -78,10 +78,11 @@ class Plans::PositionsControllerTest < ActionDispatch::IntegrationTest
     should "be offered Edit, Move and Close on a scenario's positions, and Open on each unit" do
       get map_plan_path(@plan_id, scenario: @q1)
       row = "[data-map-position='#{@position}'][draggable='true']"
-      assert_select "#{row} [role=menu] [role=menuitem]", text: /Edit…|Move…|Close…/, count: 3
-      assert_select "#{row} button[data-move-from='#{@payments}'][data-modal-target-id='move-position-modal']", text: "Move…"
-      assert_select "#{row} button[data-modal-target-id='edit-position-modal'][data-position-level-id='#{@level.level_id}']" \
-                    "[data-position-cost-centre='Platform']", text: "Edit…"
+      assert_select "#{row} button[aria-haspopup=menu][data-menu=position][data-menu-unit='#{@payments}']" \
+                    "[data-menu-level='#{@level.level_id}'][data-menu-cost-centre='Platform']"
+      assert_select "template[data-delegated-menu-kind=position]", count: 1
+      assert_select "template[data-delegated-menu-kind=position] [role=menuitem]", text: /Edit…|Move…|Close…/, count: 3
+      assert_select "template [data-modal-target-id='move-position-modal'][data-move-action='{move-path}'][data-move-from='{unit}']"
       assert_select "button[aria-label='Open a position in Growth'][data-position-unit-id='#{@growth}']"
       assert_select "#move-position-modal form strong", text: "Q1 hires"
       assert_select "#edit-position-modal optgroup[label='Software Engineer'] option[value='#{@senior.level_id}']",
