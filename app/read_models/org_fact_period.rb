@@ -31,8 +31,8 @@ class OrgFactPeriod < ApplicationRecord
   # The rows the Org Graph believes now.
   scope :current, -> { where(superseded_at: nil) }
 
-  # The rows the Org Graph believed at the end of a day (UTC), or now.
+  # The rows the Org Graph believed at the end of a day in the tenant's time zone, or now.
   #
   # @param date [Date, nil] nil for what the Org Graph believes now
-  scope :known_on, ->(date) { date ? known_at(date.in_time_zone("UTC").end_of_day) : current }
+  scope :known_on, ->(date) { date ? known_at(ActsAsTenant.current_tenant.end_of(date)) : current }
 end

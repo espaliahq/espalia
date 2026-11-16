@@ -212,6 +212,13 @@ class Tenant < ApplicationRecord
   # @return [Date]
   def today(at: Time.current) = at.in_time_zone(time_zone).to_date
 
+  # The last moment of a day where the tenant works, for reading what was
+  # known by the end of it.
+  #
+  # @param date [Date]
+  # @return [ActiveSupport::TimeWithZone]
+  def end_of(date) = date.in_time_zone(time_zone).end_of_day
+
   # The current tenant's today, for code that runs inside a tenant.
   #
   # @return [Date]

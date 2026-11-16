@@ -101,6 +101,22 @@ class TeamPlanningTenantTodayTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 11, 16), plan(plan_id).archived_on
   end
 
+  should "count what the Org Graph learned late in the tenant's day as learned that day" do
+    @tenant.update!(time_zone: "America/Los_Angeles")
+    person = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Ada Quill") }
+    travel_to Time.utc(2026, 11, 17, 6)
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::CommandHandler.new(actor: SYSTEM)
+        .record_person(person.id, provider: "espalia", effective_on: "2026-11-16", employment_status: "employed", title: "Engineer")
+    end
+
+    learned = ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::ChangesBetween.new(context:, from: Date.new(2026, 11, 15), to: Date.new(2026, 11, 16), by: :learned).call.changes
+    end
+
+    assert_includes learned.map(&:person_id), person.id
+  end
+
   private
 
   def event_store = Rails.configuration.event_store
