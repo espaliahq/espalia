@@ -270,6 +270,23 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal [ [ "CC-1", "person", nil ] ], person_cost_centre(cost.scenario, hire), "not the Payments entry"
     end
 
+    should "count a seat at a new level as a change for someone priced at their position's level" do
+      eve = create(:person, tenant: @tenant, name: "Eve Quill")
+      as_tenant do
+        people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+        people.record_person(eve.id, **ESPALIA, employment_status: "employed", title: "Software Engineer", level: "9", fte: 1.0, cost_centre: "CC-3")
+        people.set_membership(eve.id, @payments, **ESPALIA, allocation: 1.0)
+      end
+      cost_centre_rules({ level_ordinal: 5, cost_centre: "Seniors" })
+      assert_equal [ [ "CC-3", "person", nil ] ], person_cost_centre(cost.scenario, eve.id), "no level of her own and no seat yet"
+
+      seat = operation(Operations::TeamPlanning::SetPosition, role_id: @engineer.role_id, level_id: @e5.level_id, unit_id: @payments,
+                                                              fte: 1, basis: "new")[:position_id]
+      operation(Operations::TeamPlanning::SetAssignment, person_id: eve.id, placements: [ { position_id: seat, allocation: 1 } ])
+
+      assert_equal [ [ "Seniors", "rule", 0 ] ], person_cost_centre(cost.scenario, eve.id), "priced at the seat's level 5, so the level entry applies"
+    end
+
     should "stay a real one the plan leaves untouched, in Today and in a scenario, whatever the rules say" do
       operation(Operations::TeamPlanning::SetPlanValue, person_id: @dee.id, field: "fte", value: "0.5")
 

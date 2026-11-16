@@ -381,8 +381,12 @@ class TeamPlanning::Cost
 
   def situation(member, map)
     positions, live = (@layouts ||= {})[map.object_id] ||= [ map.positions.index_by(&:id), map.units.to_set(&:id) ]
-    places = member.memberships.to_set { [ (it.unit_id if live.include?(it.unit_id)), role_at(member, positions[it.position_id]) ] }
-    [ places, member.own_target(titles).level&.level_id ]
+    own_level_id = member.own_target(titles).level&.level_id
+    places = member.memberships.to_set do
+      position = positions[it.position_id]
+      [ (it.unit_id if live.include?(it.unit_id)), role_at(member, position), own_level_id || position&.level_id ]
+    end
+    [ places, own_level_id ]
   end
 
   def role_at(member, position) = position&.role_id || member.own_target(titles).role&.role_id
