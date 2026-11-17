@@ -204,8 +204,14 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
 
     should "keep the latest dated parent when a move is backdated before it" do
       as_tenant do
+        sales = SecureRandom.uuid_v7
+        @handler.create_unit(sales, "Sales", level_id: @department_level, effective_on: "2026-01-01",
+                             provider: "hibob", external_ref: "dept-8")
         @handler.move_unit(@payments, nil, effective_on: "2026-05-01")
-        @handler.move_unit(@payments, @engineering, effective_on: "2026-03-01")
+        @handler.move_unit(@payments, sales, effective_on: "2026-03-01")
+        backdated = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data
+
+        assert_equal [ sales, "2026-03-01" ], [ backdated[:parent_id], backdated[:effective_on].to_s ]
         unit = OrgUnit.find(@payments)
 
         assert_nil unit.parent_id
