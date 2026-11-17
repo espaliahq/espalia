@@ -69,4 +69,19 @@ class AssessmentCardBladesSystemTest < ApplicationSystemTestCase
                     "expected the button's label on one line"
     assert_no_sideways_overflow
   end
+
+  should "show the caption only where it fits beside the button, at any card width" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    sign_in_as(@user)
+    visit assessments_path
+    assert_selector AVATAR
+
+    (760..1400).step(40).each do |width|
+      page.driver.browser.manage.window.resize_to(width, 900)
+      spill = evaluate_script(<<~JS)
+        (() => { const row = document.querySelector("#{AVATAR}").parentElement; return row.scrollWidth - row.clientWidth })()
+      JS
+      assert_equal 0, spill, "expected the card's footer to fit at a #{width}px window"
+    end
+  end
 end

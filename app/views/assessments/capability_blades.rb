@@ -17,7 +17,7 @@ class Views::Assessments::CapabilityBlades < Views::Base
 
   def view_template
     div(class: "flex shrink-0 items-center gap-3", data: { capability_blades: true }) do
-      span(class: "hidden text-right text-xs leading-tight text-muted @[19rem]:block", aria: { hidden: "true" },
+      span(class: "hidden text-right text-xs leading-tight text-muted @[22rem]:block", aria: { hidden: "true" },
            data: { blades_caption: true }) do
         span(class: "block text-sm font-bold text-default tabular-nums") { "#{met_count} of #{points.size}" }
         whitespace
