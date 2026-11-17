@@ -141,16 +141,16 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
           assert_selector "turbo-frame#org-graph-field-level-#{tribe_id}[complete]", visible: :all
 
           select "Cost centre code", from: "HRIS field for Tribe"
-          click_button_with_js_fallback("org-graph-field-preview-level-#{tribe_id}", expect_text: "Cost centre code as the level")
+          click_button_with_js_fallback("org-graph-field-preview-level-#{tribe_id}", expect_text: "Cost centre code as the unit type")
           within("#org-graph-level-#{tribe_id}") { assert_text(/Payments\s*1 person/) }
           assert_no_sideways_overflow
           screenshot("level_field_preview_#{viewport}")
 
           click_button_with_js_fallback("org-graph-field-use-level-#{tribe_id}", expect_text: "Tribe is now read from the HiBob field you chose.")
-          within("#org-graph-level-#{tribe_id}") { assert_text "From HiBob · 0 units" }
+          within("#org-graph-level-#{tribe_id}") { assert_text "Comes from HiBob · 0 units" }
 
           click_button_with_js_fallback("org-graph-level-espalia-#{tribe_id}", expect_text: "Tribe now comes from Espalia.")
-          within("#org-graph-level-#{tribe_id}") { assert_text "From Espalia · 0 units" }
+          within("#org-graph-level-#{tribe_id}") { assert_text "Managed here · 0 units" }
         end
       end
 
@@ -197,7 +197,7 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         end
       end
 
-      should "add a level and move it into place" do
+      should "add a unit type and say where it can sit, naming the units a narrower list would strand" do
         squad_id = SecureRandom.uuid_v7
         ActsAsTenant.with_tenant(@tenant) do
           structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
@@ -205,22 +205,38 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
           structure.create_unit(SecureRandom.uuid_v7, "Payments", level_id: squad_id, effective_on: "2026-01-01")
         end
         visit tenant_org_graph_settings_path
+        assert_no_selector "[id^='org-graph-level-up-'], [id^='org-graph-level-down-']"
 
-        js_fill_in "Name of the new level", with: "Guild"
-        click_button_with_js_fallback("Add a level", expect_text: "Guild is now the bottom level.")
+        js_fill_in "Name of the new unit type", with: "Guild"
+        click_button_with_js_fallback("Add a unit type", expect_text: "Guild is a unit type now.")
         assert_equal %w[Squad Guild], level_names
         guild_id = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.find_by!(name: "Guild").id }
+        within("#org-graph-level-rules-#{guild_id}") do
+          assert_selector "#org-graph-level-#{guild_id}-under-#{squad_id}:checked"
+          assert_selector "#org-graph-level-top-#{guild_id}:checked"
+        end
         assert_no_sideways_overflow
-        screenshot("levels_added_#{viewport}")
+        screenshot("unit_type_added_#{viewport}")
 
-        click_button_with_js_fallback("org-graph-level-up-#{guild_id}", expect_text: "Guild moved up.")
-        assert_equal %w[Guild Squad], level_names
-        within("#org-graph-level-#{guild_id}") { assert_no_button "Move Guild up" }
+        find("#org-graph-level-#{squad_id}-under-#{guild_id}").click
+        find("#org-graph-level-top-#{squad_id}").click
+        click_button_with_js_fallback("org-graph-level-rules-save-#{squad_id}",
+                                      expect_text: "Squad's place did not change: These units wouldn't fit this structure")
+        assert_text "Payments"
+        assert_selector "#org-graph-level-top-#{squad_id}:checked"
+        screenshot("unit_type_refused_#{viewport}")
+
+        find("#org-graph-level-top-#{guild_id}").click
+        find("#org-graph-level-#{guild_id}-under-#{guild_id}").click
+        click_button_with_js_fallback("org-graph-level-rules-save-#{guild_id}", expect_text: "Saved where Guild can sit.")
+        assert_no_selector "#org-graph-level-top-#{guild_id}:checked"
+        assert_selector "#org-graph-level-#{guild_id}-under-#{guild_id}:checked"
         assert_no_stolen_taps
-        screenshot("levels_moved_#{viewport}")
+        assert_no_sideways_overflow
+        screenshot("unit_type_saved_#{viewport}")
       end
 
-      should "remove a level no unit has ever held, after asking" do
+      should "remove a unit type no unit has ever been, after asking" do
         squad_id = SecureRandom.uuid_v7
         guild_id = SecureRandom.uuid_v7
         ActsAsTenant.with_tenant(@tenant) do
@@ -234,12 +250,12 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         assert_no_selector "#org-graph-level-menu-#{squad_id}"
         click_button_with_js_fallback("org-graph-level-menu-#{guild_id}", expect_selector: "#org-graph-level-remove-#{guild_id}")
         click_button_with_js_fallback("org-graph-level-remove-#{guild_id}",
-                                      expect_text: "No unit has ever sat at this level, so nothing else changes.")
+                                      expect_text: "No unit has ever been a Guild, so nothing else changes.")
         within("#org-graph-remove-level-#{guild_id}") do
-          assert_text "No unit has ever sat at this level, so nothing else changes."
+          assert_text "No unit has ever been a Guild, so nothing else changes."
           screenshot("level_remove_asked_#{viewport}")
         end
-        click_button_with_js_fallback("org-graph-level-remove-confirm-#{guild_id}", expect_text: "Guild is no longer a level.")
+        click_button_with_js_fallback("org-graph-level-remove-confirm-#{guild_id}", expect_text: "Guild is no longer a unit type.")
         assert_equal %w[Squad], level_names
         assert_no_sideways_overflow
         screenshot("level_removed_#{viewport}")

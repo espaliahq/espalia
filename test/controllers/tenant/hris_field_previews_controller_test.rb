@@ -48,7 +48,7 @@ class Tenant::HrisFieldPreviewsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_select FRAME do
-        assert_select "h2", text: "Team as the level"
+        assert_select "h2", text: "Team as the unit type"
         assert_select "li", count: 2
         assert_select "li", text: /Payments\s*1 person/
       end
@@ -67,7 +67,7 @@ class Tenant::HrisFieldPreviewsControllerTest < ActionDispatch::IntegrationTest
       get_preview(frame: false)
 
       assert_select "h1", text: "Preview an HRIS field"
-      assert_select "#{FRAME} h2", text: "Team as the level"
+      assert_select "#{FRAME} h2", text: "Team as the unit type"
     end
 
     should "say why for a field the HRIS does not have" do

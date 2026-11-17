@@ -27,7 +27,7 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
     if @unit.parent
       "The new units sit beside #{@unit.name}, under #{@unit.parent.name}, and you can't add units there."
     else
-      "The new units sit at the top level, where only an admin or an Org Graph editor can add units."
+      "The new units sit at the top, where only an admin or an Org Graph editor can add units."
     end
   end
 
@@ -82,7 +82,7 @@ class Views::Tenant::OrgGraph::SplitStep < Views::Tenant::OrgGraph::UnitStep
 
   def placement_phrase
     level = @overview.level_of(@unit)&.name&.downcase
-    where = @unit.parent ? "under #{@unit.parent.name}" : "at the top level"
+    where = @unit.parent ? "under #{@unit.parent.name}" : "at the top"
     level ? "#{where} as #{level.pluralize}" : where
   end
 

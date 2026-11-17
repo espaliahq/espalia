@@ -1,0 +1,25 @@
+# frozen_string_literal: true
+
+# Saves where one unit type can sit, from its row in the settings screen's
+# unit types panel: the types it can sit under, and whether it can sit at the
+# top. The form posts the whole list, which replaces the type's rules.
+class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
+  include OrgGraphSettingsRedirect
+
+  # PATCH /tenant/org_graph/settings/kind_parents/:level_id
+  def update
+    authorize :org_graph, :edit_taxonomy?
+
+    result = Operations::OrgGraph::SetKindParents.call(
+      context: pundit_user,
+      params: { level_id: params[:level_id].to_s, parent_ids: Array(params[:parent_ids]).map(&:to_s), top: params[:top] == "1" }
+    )
+    back_with_notice "Saved where #{result[:name]} can sit."
+  rescue Operations::Base::ParameterError => e
+    back_with_refusal "#{type_name}'s place did not change", e
+  end
+
+  private
+
+  def type_name = OrgTaxonomyLevel.find_by(id: params[:level_id].to_s.downcase)&.name || "The unit type"
+end

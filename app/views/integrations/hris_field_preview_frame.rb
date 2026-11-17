@@ -9,7 +9,7 @@ class Views::Integrations::HrisFieldPreviewFrame < Views::Base
   # A field holding a free-text value can give hundreds of units; the panel
   # names the largest and counts the rest.
   UNITS_SHOWN = 12
-  TARGET_NAMES = { "level" => "level", "cost_centre" => "cost centre", "country" => "country" }.freeze
+  TARGET_NAMES = { "level" => "unit type", "cost_centre" => "cost centre", "country" => "country" }.freeze
 
   # @param target [String] one of {Integrations::HrisFieldPreview::TARGETS}
   # @param preview [Hash, nil] the payload of {Operations::Integrations::HrisFieldPreview}

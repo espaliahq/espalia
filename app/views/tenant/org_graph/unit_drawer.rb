@@ -90,7 +90,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     end
   end
 
-  def parent_name = @unit.parent&.name || "None (top level)"
+  def parent_name = @unit.parent&.name || "None (at the top)"
 
   def rename_form
     drawer_form(tenant_org_unit_path(@unit), method: "patch", class: "space-y-1") do
@@ -111,7 +111,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
         select(id: "org-unit-parent", name: "org_unit[parent_id]", required: stays,
                class: "#{Components::Kit::Field::SELECT} flex-1 min-w-0") do
           current_place_option if stays
-          option(value: "", selected: @unit.parent_id.nil?) { "None (top level)" } if @rights.root_choice?
+          option(value: "", selected: @unit.parent_id.nil?) { "None (at the top)" } if @rights.root_choice?
           @rights.parent_choices.each { |unit| unit_option(unit, selected: unit.id == @unit.parent_id) }
         end
         submit("Move")
@@ -126,7 +126,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   # Without it the browser selects the first choice, and Move would send the unit somewhere nobody picked (#448).
   # As the select's first empty option it also makes `required` hold Move back until they choose.
   def current_place_option
-    place = @unit.parent_id.nil? ? "Top level" : @unit.parent.name
+    place = @unit.parent_id.nil? ? "At the top" : @unit.parent.name
     option(value: "", disabled: true, selected: true) { "#{place} (stays where it is)" }
   end
 

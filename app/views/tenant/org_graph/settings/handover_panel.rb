@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# "Handing a level over": each level that holds units, compared with an HRIS
+# "Handing a unit type over": each unit type that holds units, compared with an HRIS
 # field before it moves there, or handed back to Espalia. Each level loads in
 # a frame of its own, since comparing reads the HRIS.
 class Views::Tenant::OrgGraph::Settings::HandoverPanel < Views::Base
@@ -12,10 +12,10 @@ class Views::Tenant::OrgGraph::Settings::HandoverPanel < Views::Base
   end
 
   def view_template
-    render Components::Kit::Card.new(title: "Handing a level over", heading_level: :h2, id: "org-graph-handover") do |card|
+    render Components::Kit::Card.new(title: "Handing a unit type over", heading_level: :h2, id: "org-graph-handover") do |card|
       card.body do
         p(class: "text-sm text-muted") do
-          "A level that holds units moves to an HRIS field only once each unit has a call: the value it matches, " \
+          "A unit type that has units moves to an HRIS field only once each unit has a call: the value it matches, " \
             "or the unit it is succeeded into, or its retirement. Nothing changes until you hand it over."
         end
         if handable.empty?
@@ -38,9 +38,9 @@ class Views::Tenant::OrgGraph::Settings::HandoverPanel < Views::Base
   def espalia?(level) = [ nil, OrgGraph::StructureAggregate::ESPALIA ].include?(level[:provider])
 
   def empty_message
-    return "No level holds units yet." if @levels.none? { it[:live_units].positive? }
+    return "No unit type has units yet." if @levels.none? { it[:live_units].positive? }
 
-    "Connect an HRIS to hand a level over to it."
+    "Connect an HRIS to hand a unit type over to it."
   end
 
   def level_row(level)

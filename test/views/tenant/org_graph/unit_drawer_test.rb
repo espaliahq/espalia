@@ -46,7 +46,7 @@ class Views::Tenant::OrgGraph::UnitDrawerTest < ActiveSupport::TestCase
     select = render_drawer(:payments, admin)
 
     assert_equal "Checkout", select.at_css("option[selected]").text.squish
-    assert_equal "None (top level)", select.at_css("option").text
+    assert_equal "None (at the top)", select.at_css("option").text
     assert_not select.key?("required")
   end
 end

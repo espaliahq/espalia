@@ -47,7 +47,7 @@ class HrisFieldPreviewSystemTest < ApplicationSystemTestCase
         with_field do
           visit tenant_hris_field_preview_path(field_id: TEAM.id, target: "level")
           assert_text "Preview an HRIS field"
-          assert_selector FRAME, text: "Team as the level"
+          assert_selector FRAME, text: "Team as the unit type"
         end
 
         within(FRAME) do

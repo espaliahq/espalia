@@ -79,9 +79,9 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
     should "offer as parents only the units a level above" do
       get edit_tenant_org_unit_path(@org[:platform])
 
-      assert_equal [ "None (top level)", "Engineering" ],
+      assert_equal [ "None (at the top)", "Engineering" ],
                    drawer.css("select#org-unit-parent option").map(&:text).map(&:strip)
-      assert_not drawer.at_css("select#org-unit-parent").key?("required"), "None (top level) stays a choice"
+      assert_not drawer.at_css("select#org-unit-parent").key?("required"), "None (at the top) stays a choice"
     end
 
     should "show an HRIS unit's name and parent as read-only, naming the provider" do
