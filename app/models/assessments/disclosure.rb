@@ -45,16 +45,20 @@ class Assessments::Disclosure
   # @param lens [Assessments::Lens] any lens on the assignment — only its
   #   home is read
   # @param participant_status [String, nil] the home participation's status
+  # @param rows [Array<AssessmentCycleRoleAlignment>, nil] the participation's
+  #   alignments, when the caller has already loaded them
+  # @param roles [Hash{String => FrameworkState::Role}, nil] their roles by
+  #   role_id, likewise
   # @return [Assessments::Disclosure]
-  def self.for(lens:, participant_status:)
+  def self.for(lens:, participant_status:, rows: nil, roles: nil)
     assignment = lens.assignment
     cycle_id = lens.cycle&.cycle_id
-    rows = cycle_id ? AssessmentCycleRoleAlignment.for_participation(cycle_id: cycle_id, person_id: assignment.person_id).to_a : []
+    rows ||= cycle_id ? AssessmentCycleRoleAlignment.for_participation(cycle_id: cycle_id, person_id: assignment.person_id).to_a : []
     home_rows, lens_rows = rows.partition { |row| row.role_id == lens.home_role.role_id }
 
     alignments = []
     alignments << home_alignment(lens, participant_status, home_rows.first) if STARTED_STATUSES.include?(participant_status)
-    alignments.concat(lens_alignments(lens_rows, framework_id: assignment.framework_id))
+    alignments.concat(lens_alignments(lens_rows, framework_id: assignment.framework_id, roles: roles))
     new(alignments.flat_map { |alignment| alignment.scope.cells.to_a }, alignments: alignments)
   end
 
@@ -72,12 +76,12 @@ class Assessments::Disclosure
   end
   private_class_method :home_alignment
 
-  def self.lens_alignments(rows, framework_id:)
+  def self.lens_alignments(rows, framework_id:, roles: nil)
     return [] if rows.empty?
 
     role_ids = rows.map(&:role_id)
     scopes = Assessments::RoleScope.for_roles(role_ids: role_ids, framework_id: framework_id)
-    roles = FrameworkState::Role.where(role_id: role_ids).index_by(&:role_id)
+    roles ||= FrameworkState::Role.where(role_id: role_ids).index_by(&:role_id)
     rows.filter_map do |row|
       role = roles[row.role_id]
       next unless role

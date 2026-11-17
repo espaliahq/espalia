@@ -99,9 +99,10 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   def how_to_read
     return "The radar's rim is #{@shape.codes.first} met." if @shape.codes.one?
 
-    centre, rim = @shape.codes.values_at(@shape.window.begin, @shape.window.end)
-    rim_note = ", up to #{rim} at the rim" if @shape.zoom
-    "At the radar's centre is #{centre} met, and each ring is the next level#{rim_note}."
+    first = @shape.window.begin
+    centre = first.negative? ? "none of #{@shape.codes.first}" : "#{@shape.codes[first]} met"
+    rim_note = ", up to #{@shape.codes[@shape.window.end]} at the rim" if @shape.zoom
+    "At the radar's centre is #{centre}, and each ring is the next level#{rim_note}."
   end
 
   # Pressed while the whole ladder shows; pressing it again returns to the
@@ -143,7 +144,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
 
   def level_labels
     div(class: "relative hidden h-4 sm:block", aria: { hidden: "true" }) do
-      @shape.window.each do |i|
+      @shape.levels_in_view.each do |i|
         span(class: [ "absolute -translate-x-1/2 tabular-nums", axis_tone(i) ], style: "left: #{left(i)}") do
           @shape.codes[i]
         end
@@ -153,7 +154,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
 
   def level_toggles
     div(class: "relative hidden h-6 sm:block", role: "group", aria: { label: "Zoom the map to a level" }) do
-      @shape.window.each do |i|
+      @shape.levels_in_view.each do |i|
         code = @shape.codes[i]
         span(class: "absolute -translate-x-1/2", style: "left: #{left(i)}") do
           zoom_toggle(code, pressed: code == @shape.zoom, to: code == @shape.zoom ? "all" : code, key: code)
@@ -198,7 +199,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     span(class: "relative hidden h-4 sm:block", aria: { hidden: "true" }) do
       span(class: "absolute inset-y-0 rounded-sm bg-overlay-muted",
            style: "left: #{left(@shape.assessed_index)}; width: #{width_of_next_band}")
-      @shape.window.each do |i|
+      @shape.levels_in_view.each do |i|
         span(class: "absolute inset-y-0.5 w-px bg-(--gos-border-subtle)", style: "left: #{left(i)}")
       end
       span(class: "absolute inset-x-0 top-[7px] h-0.5 rounded-full bg-neutral-subtle")

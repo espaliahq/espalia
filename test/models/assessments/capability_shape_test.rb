@@ -151,11 +151,14 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
       assert_equal "PM2 + 50% to PM4", mid.label
     end
 
-    should "hold a capability short of the first level at the centre, saying how much of it is shown" do
-      short = point(shape({ "Product" => { "Discovery" => 0.6 } }, levels: PM, person_level: 10), "Discovery")
+    should "set a capability short of the first level, when that is the level assessed, inside it" do
+      first = shape({ "Product" => { "Discovery" => 0.6 } }, levels: PM, person_level: 10)
+      short = point(first, "Discovery")
 
-      assert_in_delta 0.0, short.reached, 0.001
+      assert_in_delta(-0.4, short.reached, 0.001)
       assert_equal "60% of PM1", short.label
+      assert_equal [ 0.2, 0.33 ], [ short.reached, 0 ].map { |position| first.fraction(position).round(2) },
+                   "expected 60% of PM1 a fifth of the way out and PM1 met a third of the way out"
     end
   end
 
@@ -163,6 +166,13 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
     should "open at the assessed level, from the level below met at the centre to the level above at the rim" do
       assert_equal [ 0.0, 0.0, 0.5, 0.75, 1.0, 1.0 ],
                    [ 0, 1, 2, 2.5, 3, 5 ].map { |position| zoomed.fraction(position) }
+    end
+
+    should "open at the first level halfway out when that is the level assessed, with nothing at the centre" do
+      first = shape({ "Craft" => { "Delivery" => 0.5 } }, levels: E1_TO_E8, person_level: 1)
+
+      assert_equal [ -1, 0, 1 ], first.window.to_a
+      assert_equal [ 0.25, 0.5 ], [ point(first, "Delivery").reached, 0 ].map { |position| first.fraction(position) }
     end
 
     should "span the whole ladder when zoomed out" do

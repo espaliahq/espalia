@@ -29,45 +29,54 @@ class Assessments::MatrixDataBuilder
   # @param context [Symbol] :self, :manager or :alignment
   # @param viewer_person_id [String, nil]
   # @param viewer_sees_all_evidence [Boolean]
+  # @param framework [FrameworkState::Framework, nil] what a listing has
+  #   already loaded, here and in the three after it; nil loads it
+  # @param categories [Array<FrameworkState::CapabilityCategory>, nil] a {.lens_tree}
+  # @param alignments [Array<AssessmentCycleRoleAlignment>, nil] see {Assessments::Disclosure.for}
+  # @param roles [Hash{String => FrameworkState::Role}, nil] the alignments' roles, likewise
+  # @param ratings [Array<AssessmentLevelRating>, nil] see {#initialize}
   # @return [Hash] see {#build}
-  def self.for_lens(lens:, context:, viewer_person_id: nil, viewer_sees_all_evidence: false)
+  def self.for_lens(lens:, context:, viewer_person_id: nil, viewer_sees_all_evidence: false,
+                    framework: nil, categories: nil, alignments: nil, roles: nil, ratings: nil)
     assignment = lens.assignment
     status = lens.participant_status
     new(
-      framework: FrameworkState::Framework.find_by!(framework_id: assignment.framework_id),
+      framework: framework || FrameworkState::Framework.find_by!(framework_id: assignment.framework_id),
       lens: lens,
       person_id: assignment.person_id,
       cycle_id: lens.cycle&.cycle_id,
-      categories: lens_tree(framework_id: assignment.framework_id, lens: lens),
+      categories: categories || lens_tree(framework_id: assignment.framework_id, lenses: [ lens ]),
       participant_status: status,
-      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
+      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status, rows: alignments, roles: roles),
       context: context,
       viewer_person_id: viewer_person_id,
-      viewer_sees_all_evidence: viewer_sees_all_evidence
+      viewer_sees_all_evidence: viewer_sees_all_evidence,
+      ratings: ratings
     ).build
   end
 
-  # The active categories, preloaded with only what the lens role reads: its
-  # bound capabilities, their expectations at its levels, and its own
+  # The active categories, preloaded with only what the lenses' roles read:
+  # their bound capabilities, expectations at their levels, and their own
   # illustrations (#487). The associations are marked loaded with that subset,
-  # so the tree must not leave this builder.
+  # so the tree must not leave readers of those roles.
   #
   # @param framework_id [String]
-  # @param lens [Assessments::Lens]
+  # @param lenses [Array<Assessments::Lens>]
   # @return [Array<FrameworkState::CapabilityCategory>]
-  def self.lens_tree(framework_id:, lens:)
+  def self.lens_tree(framework_id:, lenses:)
     categories = FrameworkState::CapabilityCategory
       .where(framework_id: framework_id, status: "active").order(:ordinal, :created_at, :id).to_a
-    preload(categories, :capabilities,
-            FrameworkState::Capability.where(capability_id: lens.scope.bindings.map(&:capability_id)))
+    preload(categories, :capabilities, FrameworkState::Capability.where(
+      capability_id: lenses.flat_map { |lens| lens.scope.bindings.map(&:capability_id) }.uniq
+    ))
     capabilities = categories.flat_map(&:capabilities)
-    preload(capabilities, :expectations,
-            FrameworkState::BehaviouralExpectation.where(level_ordinal: lens.role.levels.map(&:ordinal)))
+    preload(capabilities, :expectations, FrameworkState::BehaviouralExpectation.where(
+      level_ordinal: lenses.flat_map { |lens| lens.role.levels.map(&:ordinal) }.uniq
+    ))
     preload(capabilities.flat_map(&:expectations), :illustrations,
-            FrameworkState::RoleIllustration.where(role_id: lens.role.role_id))
+            FrameworkState::RoleIllustration.where(role_id: lenses.map { |lens| lens.role.role_id }.uniq))
     categories
   end
-  private_class_method :lens_tree
 
   def self.preload(records, association, scope = nil)
     ActiveRecord::Associations::Preloader.new(records: records, associations: association, scope: scope).call
@@ -110,10 +119,12 @@ class Assessments::MatrixDataBuilder
   #   assessee, anywhere in their manager chain, or a tenant admin. False for
   #   peers — in which case the builder only returns evidence the viewer
   #   themselves authored.
+  # @param ratings [Array<AssessmentLevelRating>, nil] the person's ratings in
+  #   the cycle within the role, when the caller has already loaded them
   def initialize(framework:, person_id:, cycle_id:, categories:, context:,
                  role: nil, level: nil, lens: nil, home_level: nil, disclosure: nil,
                  participant_status: nil,
-                 viewer_person_id: nil, viewer_sees_all_evidence: false)
+                 viewer_person_id: nil, viewer_sees_all_evidence: false, ratings: nil)
     # Repopulated by load_evidence; eager default so build_cells never
     # depends on load ordering.
     @link_comment_cell_counts = {}
@@ -129,6 +140,7 @@ class Assessments::MatrixDataBuilder
     @participant_status = participant_status
     @viewer_person_id = viewer_person_id
     @viewer_sees_all_evidence = viewer_sees_all_evidence
+    @ratings = ratings
     @context = context&.to_sym
     raise ArgumentError, "Pass a lens, or a role and a level" unless @role && @level
     return if VALID_CONTEXTS.include?(@context)
@@ -460,6 +472,7 @@ class Assessments::MatrixDataBuilder
   # @return [Hash{[String, Integer] => AssessmentLevelRating}]
   def load_ratings
     return {} if @cycle_id.nil?
+    return @ratings.index_by { |r| [ r.capability_stable_id, r.level_ordinal ] } if @ratings
 
     AssessmentLevelRating
       .for_person(@person_id)

@@ -11,18 +11,18 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
   E1_TO_E8 = (1..8).map { |n| { ordinal: n, level_code: "E#{n}" } }.freeze
 
   def render_map(rated: { "Delivery" => true, "Quality" => true, "Mentoring" => false }, statuses: {},
-                 levels: E1_TO_E5, src: nil, zoom: :all)
+                 levels: E1_TO_E5, src: nil, zoom: :all, person_level: 3)
     scores = { "Delivery" => 1.5, "Quality" => 1.25, "Mentoring" => 1.0 }
     groups = { "Craft" => %w[Delivery Quality], "People" => %w[Mentoring] }
     categories = groups.map do |category, names|
-      { category: CATEGORY.new(category_id: "cat-#{category}", name: category), person_level: 3,
+      { category: CATEGORY.new(category_id: "cat-#{category}", name: category), person_level: person_level,
         capabilities: names.map do |name|
           { capability: CAP.new(stable_id: "cap-#{name}", name: name),
-            cells: { 3 => { current_frequency: rated.fetch(name) ? "consistent" : nil } } }
+            cells: { person_level => { current_frequency: rated.fetch(name) ? "consistent" : nil } } }
         end }
     end
     shape = Assessments::CapabilityShape.new(
-      categories: categories, merged_levels: levels, person_level: 3, context: :self, zoom: zoom,
+      categories: categories, merged_levels: levels, person_level: person_level, context: :self, zoom: zoom,
       scoring: {
         capability_scores: scores.to_h { |n, s| [ "cap-#{n}", { score: s, scorable: true, required: false } ] },
         capability_statuses: statuses,
@@ -60,6 +60,19 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
 
     should "say where the radar's centre and rim are" do
       assert_includes @map.text, "At the radar's centre is E2 met, and each ring is the next level, up to E4 at the rim."
+    end
+  end
+
+  context "zoomed to the assessed level at the bottom of a long ladder" do
+    setup { @map = render_map(levels: E1_TO_E8, zoom: nil, person_level: 1) }
+
+    should "head the bars with only the levels in view, none past the top of the ladder" do
+      assert_equal [ [ "All levels", "false", "all" ], [ "E1", "true", "all" ], [ "E2", "false", "E2" ] ],
+                   toggles(@map)
+    end
+
+    should "say the radar's centre is none of the first level" do
+      assert_includes @map.text, "At the radar's centre is none of E1, and each ring is the next level, up to E2 at the rim."
     end
   end
 
