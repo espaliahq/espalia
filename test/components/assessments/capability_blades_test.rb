@@ -13,17 +13,18 @@ class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
 
   # @param groups [Hash{String => Hash{String => Float}}] category name =>
   #   capability name => score on the hero's scale
-  def shape(groups, unrated: [])
+  def shape(groups, unrated: [], levels: E1_TO_E5, person_level: 3)
     categories = groups.map do |category_name, caps|
       { category: CATEGORY.new(category_id: "cat-#{category_name}", name: category_name),
-        person_level: 3,
+        person_level: person_level,
         capabilities: caps.keys.map do |name|
           { capability: CAP.new(stable_id: "cap-#{name}", name: name),
-            cells: { 3 => { current_frequency: ("consistent" unless unrated.include?(name)) } } }
+            cells: { person_level => { current_frequency: ("consistent" unless unrated.include?(name)) } } }
         end }
     end
     scores = groups.values.reduce({}, :merge).to_h { |name, score| [ "cap-#{name}", { score: score, scorable: true } ] }
-    Assessments::CapabilityShape.new(categories: categories, merged_levels: E1_TO_E5, person_level: 3, context: :self,
+    Assessments::CapabilityShape.new(categories: categories, merged_levels: levels, person_level: person_level,
+                                     context: :self,
                                      scoring: { capability_scores: scores, capability_statuses: {} })
   end
 
@@ -61,9 +62,18 @@ class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
       avatar = render_blades(team_lead)
       met = avatar.at_css("[data-blades-met]")
 
-      assert_equal 15.0, met["r"].to_f, "expected E3 met halfway out, between E2 at the centre and E4 at the rim"
+      assert_equal 20.0, met["r"].to_f, "expected E3 met two thirds out, between none of it and 150% of it"
       assert met["stroke-dasharray"], "expected the met circle dashed"
-      assert_equal [ 22.5, 7.5, 15.0 ], (1..3).map { |n| wedge(avatar, n)[:radius] }
+      assert_equal [ 30.0, 10.0, 20.0 ], (1..3).map { |n| wedge(avatar, n)[:radius] }
+    end
+
+    should "measure from none of the assessed level whatever the ladder, holding a capability far ahead at the rim" do
+      first = shape({ "Craft" => { "Delivery" => 0.75, "Quality" => 3.0 } }, levels: E1_TO_E5.first(1), person_level: 1)
+      avatar = render_blades(first)
+
+      assert_equal 20.0, avatar.at_css("[data-blades-met]")["r"].to_f
+      assert_equal [ 15.0, 20.0 ], (1..2).map { |n| wedge(avatar, n)[:radius] },
+                   "expected 75% of E1 at half the radius and E1 held at met, the top of a one-level ladder"
     end
 
     should "fade only the blades short of the assessed level" do

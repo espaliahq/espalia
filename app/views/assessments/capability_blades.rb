@@ -5,6 +5,8 @@
 # assessed level met.
 class Views::Assessments::CapabilityBlades < Views::Base
   RADIUS = 30.0
+  # The score held at the rim, so the assessed level met sits two thirds out.
+  RIM_SCORE = 1.5
   # The share of a short blade's colour that shows through.
   SHORT_OPACITY = 0.45
 
@@ -39,7 +41,12 @@ class Views::Assessments::CapabilityBlades < Views::Base
 
   def met_count = points.count { |point| point.reached && point.reached >= @shape.assessed_index }
 
-  def radius_for(position) = (RADIUS * @shape.fraction(position)).round(2)
+  # From none of the assessed level at the centre, whatever the ladder, so a
+  # blade's length reads as its score on the hero's scale.
+  def radius_for(position)
+    score = position - @shape.assessed_index + 1
+    (RADIUS * score.clamp(0, RIM_SCORE) / RIM_SCORE).round(2)
+  end
 
   # Each category's slots, tinted as one wedge so no seam shows between them,
   # and so an unrated capability still holds its place.
