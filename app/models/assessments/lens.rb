@@ -124,7 +124,10 @@ class Assessments::Lens
   end
   private_class_method :nearest_level
 
-  def initialize(assignment:, role:, level:, home_role:, home_level:, cycle: nil, past: false, open_cycle_id: nil)
+  # @param participation [AssessmentCycleParticipation, nil] the person in the
+  #   cycle read, when the caller has already loaded it
+  def initialize(assignment:, role:, level:, home_role:, home_level:, cycle: nil, past: false, open_cycle_id: nil,
+                 participation: nil)
     @assignment = assignment
     @role = role
     @level = level
@@ -133,6 +136,7 @@ class Assessments::Lens
     @cycle = cycle
     @past = past
     @open_cycle_id = open_cycle_id
+    @participation = participation if participation
   end
 
   # @return [AssessmentCycle, nil] the cycle read: a past one, else the open one

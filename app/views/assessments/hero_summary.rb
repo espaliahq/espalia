@@ -40,6 +40,23 @@ class Views::Assessments::HeroSummary < Views::Base
     (total * COVERAGE_UNLOCK_THRESHOLD).ceil
   end
 
+  # Whether the score is trustworthy enough to show. Outside an alignment
+  # still agreeing cells, :alignment always scores: individual ratings are
+  # frozen, and a completed record has nothing left to agree. A role with no
+  # current-level cells unlocks too, to avoid a permanently-stuck prompt.
+  #
+  # @param rated [Integer] current-level cells the viewer's perspective rated
+  # @param total [Integer] current-level cells
+  # @param context [Symbol]
+  # @param awaiting_agreement [Boolean]
+  # @return [Boolean]
+  def self.coverage_unlocked_for(rated:, total:, context:, awaiting_agreement:)
+    return true if context == :alignment && !awaiting_agreement
+    return true if total.zero?
+
+    rated >= unlock_target_for(total, awaiting_agreement: awaiting_agreement)
+  end
+
   # Rows a gap list shows before it points at the rest. The band collapses
   # on scroll, so it stays short; the "+N more" line says it is not whole.
   GAP_ROWS = 3
@@ -499,16 +516,9 @@ class Views::Assessments::HeroSummary < Views::Base
     self.class.unlock_target_for(current_level_total, awaiting_agreement: awaiting_agreement?)
   end
 
-  # Whether the score + verdict are trustworthy enough to show. Outside an
-  # alignment still agreeing cells, :alignment always scores: individual
-  # ratings are frozen, and a completed record has nothing left to agree.
-  # A role with no current-level cells unlocks too, to avoid a
-  # permanently-stuck prompt.
   def coverage_unlocked?
-    return true if @context == :alignment && !awaiting_agreement?
-    return true if current_level_total.zero?
-
-    current_level_rated >= unlock_target
+    self.class.coverage_unlocked_for(rated: current_level_rated, total: current_level_total, context: @context,
+                                     awaiting_agreement: awaiting_agreement?)
   end
 
   def awaiting_agreement?

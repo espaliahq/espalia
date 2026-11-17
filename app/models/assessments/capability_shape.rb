@@ -67,6 +67,21 @@ class Assessments::CapabilityShape
     end
   end
 
+  # Whether the hero shows a score for this perspective: its coverage gate
+  # is open and there is a level to score against.
+  #
+  # @return [Boolean]
+  def scored?
+    counts = @categories.map { |category| category_rated_count(category, @context) }
+    total = counts.sum { |c| c[:total] }
+    return false if points.empty? || total.zero?
+
+    Views::Assessments::HeroSummary.coverage_unlocked_for(
+      rated: counts.sum { |c| c[:rated] }, total: total, context: @context,
+      awaiting_agreement: @categories.any? { |category| category[:awaiting_agreement] }
+    )
+  end
+
   # @return [Array<Point>] framework order
   def points = @points ||= groups.flat_map(&:points)
 

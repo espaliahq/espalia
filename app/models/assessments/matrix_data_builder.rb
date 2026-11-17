@@ -50,7 +50,7 @@ class Assessments::MatrixDataBuilder
   # The active categories, preloaded with only what the lens role reads: its
   # bound capabilities, their expectations at its levels, and its own
   # illustrations (#487). The associations are marked loaded with that subset,
-  # so the tree must not leave this builder.
+  # so the tree must not leave a reader of that role.
   #
   # @param framework_id [String]
   # @param lens [Assessments::Lens]
@@ -67,7 +67,6 @@ class Assessments::MatrixDataBuilder
             FrameworkState::RoleIllustration.where(role_id: lens.role.role_id))
     categories
   end
-  private_class_method :lens_tree
 
   def self.preload(records, association, scope = nil)
     ActiveRecord::Associations::Preloader.new(records: records, associations: association, scope: scope).call
@@ -110,10 +109,12 @@ class Assessments::MatrixDataBuilder
   #   assessee, anywhere in their manager chain, or a tenant admin. False for
   #   peers — in which case the builder only returns evidence the viewer
   #   themselves authored.
+  # @param ratings [Array<AssessmentLevelRating>, nil] the person's ratings in
+  #   the cycle within the role, when the caller has already loaded them
   def initialize(framework:, person_id:, cycle_id:, categories:, context:,
                  role: nil, level: nil, lens: nil, home_level: nil, disclosure: nil,
                  participant_status: nil,
-                 viewer_person_id: nil, viewer_sees_all_evidence: false)
+                 viewer_person_id: nil, viewer_sees_all_evidence: false, ratings: nil)
     # Repopulated by load_evidence; eager default so build_cells never
     # depends on load ordering.
     @link_comment_cell_counts = {}
@@ -129,6 +130,7 @@ class Assessments::MatrixDataBuilder
     @participant_status = participant_status
     @viewer_person_id = viewer_person_id
     @viewer_sees_all_evidence = viewer_sees_all_evidence
+    @ratings = ratings
     @context = context&.to_sym
     raise ArgumentError, "Pass a lens, or a role and a level" unless @role && @level
     return if VALID_CONTEXTS.include?(@context)
@@ -460,6 +462,7 @@ class Assessments::MatrixDataBuilder
   # @return [Hash{[String, Integer] => AssessmentLevelRating}]
   def load_ratings
     return {} if @cycle_id.nil?
+    return @ratings.index_by { |r| [ r.capability_stable_id, r.level_ordinal ] } if @ratings
 
     AssessmentLevelRating
       .for_person(@person_id)

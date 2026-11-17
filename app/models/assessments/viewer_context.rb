@@ -30,4 +30,18 @@ class Assessments::ViewerContext
 
     assignment.person_id == authorization.person&.id ? :self : :manager
   end
+
+  # The home lens's context for an assessment a listing already shows the
+  # viewer, from the participation it has loaded: {.for} without the policy
+  # lookups, which a listing would repeat per card.
+  #
+  # @param assignment [PersonFrameworkAssignment]
+  # @param viewer_person_id [String]
+  # @param participation [AssessmentCycleParticipation, nil] the open cycle's
+  # @return [Symbol] :self, :manager or :alignment
+  def self.for_listed(assignment:, viewer_person_id:, participation:)
+    return :alignment if Assessments::Disclosure::STARTED_STATUSES.include?(participation&.status)
+
+    assignment.person_id == viewer_person_id ? :self : :manager
+  end
 end

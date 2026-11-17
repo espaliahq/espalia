@@ -37,6 +37,7 @@ class AssessmentsController < ApplicationController
     cycle_pairs = all_assignments.map { |a| [ a.framework_id, a.person_id ] }
     @open_cycles = AssessmentCycle.open_cycles_for(cycle_pairs)
     @card_statuses = build_card_statuses(@open_cycles)
+    card_shapes = Assessments::CardShapes.new(assignments: all_assignments, viewer_person_id: current_person.id).call
     # The person's own and their team's, as `assessments_mine` returns them —
     # an exploration is a conversation between the two, not a list for the
     # wider chain.
@@ -52,6 +53,7 @@ class AssessmentsController < ApplicationController
       report_people: @report_people,
       open_cycles: @open_cycles,
       card_statuses: @card_statuses,
+      card_shapes: card_shapes,
       explorations: @explorations,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,

@@ -45,11 +45,13 @@ class Assessments::Disclosure
   # @param lens [Assessments::Lens] any lens on the assignment — only its
   #   home is read
   # @param participant_status [String, nil] the home participation's status
+  # @param rows [Array<AssessmentCycleRoleAlignment>, nil] the participation's
+  #   alignments, when the caller has already loaded them
   # @return [Assessments::Disclosure]
-  def self.for(lens:, participant_status:)
+  def self.for(lens:, participant_status:, rows: nil)
     assignment = lens.assignment
     cycle_id = lens.cycle&.cycle_id
-    rows = cycle_id ? AssessmentCycleRoleAlignment.for_participation(cycle_id: cycle_id, person_id: assignment.person_id).to_a : []
+    rows ||= cycle_id ? AssessmentCycleRoleAlignment.for_participation(cycle_id: cycle_id, person_id: assignment.person_id).to_a : []
     home_rows, lens_rows = rows.partition { |row| row.role_id == lens.home_role.role_id }
 
     alignments = []
