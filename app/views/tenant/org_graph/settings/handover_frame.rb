@@ -155,7 +155,7 @@ class Views::Tenant::OrgGraph::Settings::HandoverFrame < Views::Base
         li { "move #{count(@comparison[:differing], 'person', 'people')} to the unit the HRIS names" }
         li { "end #{count(@comparison[:blank], 'membership')} the HRIS leaves blank" }
         li { "keep #{count(@comparison[:hand_added], 'membership')} added by hand, which the HRIS doesn't read" }
-        li { "add #{count(@comparison[:joining], 'person', 'people')} the HRIS places at this level" }
+        li { "add #{count(@comparison[:joining], 'person', 'people')} the HRIS places in this unit type" }
       end
       decisions_left
     end

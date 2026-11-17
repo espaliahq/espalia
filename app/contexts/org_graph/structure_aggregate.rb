@@ -91,13 +91,13 @@ class OrgGraph::StructureAggregate
   #   fit, or an HRIS provides the kind and the rules break the HRIS rule
   def set_kind_parents(level_id, parent_ids:, top:, effective_on:, defined_by_id: nil)
     level_id = require_id(level_id, "Level id")
-    raise ArgumentError, "Level is not in the taxonomy" unless level_index(level_id)
+    raise ArgumentError, "That unit type doesn't exist" unless level_index(level_id)
 
     write_taxonomy(@levels, rules: { level_id => kind_rules(level_id, parent_ids, top) }, effective_on:, defined_by_id:)
   end
 
   # Adds a level Espalia holds below every other level. Works from the levels
-  # this stream holds, so a level added or moved meanwhile is kept.
+  # this stream holds, so a level added meanwhile is kept.
   #
   # Without `parent_ids:` or `top:` the new kind keeps the rule every level was
   # first written under: it may sit under any kind above it, or at the top.
@@ -126,23 +126,6 @@ class OrgGraph::StructureAggregate
     write_taxonomy(levels, rules:, effective_on:, defined_by_id:)
   end
 
-  # Puts the levels this stream holds in a new order, keeping their names.
-  #
-  # @param level_ids [Array<String>] every level's id once, top first
-  # @param effective_on [Date, String]
-  # @param defined_by_id [String, nil] person_id of the actor
-  # @raise [ArgumentError] unless the ids are exactly the current levels'
-  # @raise [RuntimeError] if the order breaks one {#define_taxonomy} keeps
-  def reorder_levels(level_ids, effective_on:, defined_by_id: nil)
-    by_id = @levels.index_by { |level| level[:level_id] }
-    ids = Array(level_ids).map { |id| id.to_s.downcase }
-    unless ids.any? && ids.uniq.size == ids.size && ids.sort == by_id.keys.sort
-      raise ArgumentError, "Name every level in the taxonomy once, top first"
-    end
-
-    define_taxonomy(ids.map { |id| by_id[id] }, effective_on:, defined_by_id:)
-  end
-
   # Removes a level Espalia holds that no unit has ever held. A unit keeps its
   # level for life, so the units this stream holds, retired ones included, are
   # every unit a level has held.
@@ -155,7 +138,7 @@ class OrgGraph::StructureAggregate
   def remove_level(level_id, effective_on:, defined_by_id: nil)
     level_id = require_id(level_id, "Level id")
     level = @levels.find { |candidate| candidate[:level_id] == level_id }
-    raise ArgumentError, "Level is not in the taxonomy" unless level
+    raise ArgumentError, "That unit type doesn't exist" unless level
     unless level_provider(level_id) == ESPALIA
       raise "#{level[:name]} comes from #{level_provider(level_id)}; hand it back to Espalia before removing it"
     end
@@ -1074,10 +1057,10 @@ class OrgGraph::StructureAggregate
       level = level.to_h.symbolize_keys
       { level_id: require_id(level[:level_id], "Level id"), name: level[:name].to_s.strip }
     end
-    raise ArgumentError, "A taxonomy needs at least one level" if levels.empty?
-    raise ArgumentError, "Every level needs a name" if levels.any? { |level| level[:name].empty? }
-    raise ArgumentError, "Level ids must be unique" unless level_ids(levels).uniq.size == levels.size
-    raise ArgumentError, "Level names must be unique" unless levels.map { |level| level[:name].downcase }.uniq.size == levels.size
+    raise ArgumentError, "A structure needs at least one unit type" if levels.empty?
+    raise ArgumentError, "Every unit type needs a name" if levels.any? { |level| level[:name].empty? }
+    raise ArgumentError, "Unit type ids must be unique" unless level_ids(levels).uniq.size == levels.size
+    raise ArgumentError, "Unit type names must be unique" unless levels.map { |level| level[:name].downcase }.uniq.size == levels.size
 
     levels
   end

@@ -122,7 +122,7 @@ Rails.application.routes.draw do
       resources :fact_providers, only: :update, param: :fact
       resources :fact_fields, only: :show, param: :fact
       resources :levels, only: [ :create, :destroy ]
-      resource :level_order, only: :update
+      resources :kind_parents, only: :update, param: :level_id
       resources :level_providers, only: :update, param: :level_id
       resources :level_fields, only: :show, param: :level_id
       resources :level_handovers, only: [ :show, :update, :destroy ], param: :level_id

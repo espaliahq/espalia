@@ -138,7 +138,8 @@ class OrgGraph::AsOfTest < ActiveSupport::TestCase
     travel_to Time.zone.parse("2026-04-02 09:00")
     as_tenant do
       @structure.add_level(guild, "Guild", effective_on: "2026-03-01")
-      @structure.reorder_levels([ guild, @departments, @squads ], effective_on: "2026-03-01")
+      @structure.define_taxonomy([ { level_id: guild, name: "Guild" }, { level_id: @departments, name: "Department" },
+                                   { level_id: @squads, name: "Squad" } ], effective_on: "2026-03-01")
       @structure.set_level_provider(guild, "hibob", effective_on: "2026-04-01", field: "work.guild")
     end
 

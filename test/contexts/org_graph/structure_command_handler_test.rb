@@ -106,7 +106,7 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
-  context "#add_level and #reorder_levels" do
+  context "#add_level" do
     should "add a level below the others, keeping one added meanwhile" do
       guild, chapter = Array.new(2) { SecureRandom.uuid_v7 }
       as_tenant do
@@ -116,20 +116,6 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
       assert_equal %w[Department Team Squad Guild Chapter], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
       assert_raises(ArgumentError) { as_tenant { @handler.add_level(guild, "Tribe", effective_on: @today) } }
-    end
-
-    should "reorder only the levels the stream holds, refusing a list that misses one" do
-      guild = SecureRandom.uuid_v7
-      stale = level_ids_top_first
-      as_tenant { @handler.add_level(guild, "Guild", effective_on: @today) }
-
-      error = assert_raises(ArgumentError) do
-        as_tenant { @handler.reorder_levels(stale.reverse, effective_on: @today) }
-      end
-      assert_equal "Name every level in the taxonomy once, top first", error.message
-
-      as_tenant { @handler.reorder_levels([ guild, *stale.reverse ], effective_on: @today, defined_by_id: @actor) }
-      assert_equal %w[Guild Squad Team Department], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
     end
   end
 

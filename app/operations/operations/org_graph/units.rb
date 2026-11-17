@@ -7,7 +7,8 @@ class Operations::OrgGraph::Units < Operations::Base
   description "List the Org Graph's live units in tree order, the order the Units page shows them: each " \
               "with its id, name, level, parent, the provider that holds it (\"espalia\" or an HRIS), its " \
               "head count (distinct people in it and every unit beneath it) and the person ids of its own " \
-              "members. Also returns the taxonomy levels, top first, and the ids of active people in no live " \
+              "members. Also returns the unit types, top first, each with the type ids it can sit under " \
+              "(parent_ids) and whether it can sit at the top, and the ids of active people in no live " \
               "unit. Admins only while the Org Graph is unfinished."
   category :read
   approval :none
@@ -22,13 +23,18 @@ class Operations::OrgGraph::Units < Operations::Base
     unplaced = overview.unplaced.map(&:id)
 
     {
-      levels: overview.levels.map { |level| { id: level.id, name: level.name } },
+      levels: level_rows(overview.levels),
       units: overview.in_tree_order.map { |unit| unit_payload(overview, unit) },
       in_no_unit: { count: unplaced.size, person_ids: unplaced }
     }
   end
 
   private
+
+  def level_rows(levels)
+    rules = OrgTaxonomyLevel.rules_by_id(levels)
+    levels.map { |level| { id: level.id, name: level.name, **rules[level.id] } }
+  end
 
   def unit_payload(overview, unit)
     {

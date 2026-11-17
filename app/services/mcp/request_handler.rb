@@ -21,6 +21,14 @@ class Mcp::RequestHandler
   SERVER_NAME = Rails.configuration.x.product_name.parameterize(separator: "_").presence || "espalia"
   SERVER_VERSION = "0.1.0"
 
+  # A tool removed in one release answers with its replacement for the next,
+  # so a client that cached the old tool list learns where it went. Drop an
+  # entry once a release has passed.
+  REPLACED_TOOLS = {
+    "org_graph_reorder_levels" => "org_graph_reorder_levels was replaced by org_graph_set_kind_parents: a unit type " \
+                                  "now sits under the types it names, not below the ones listed above it"
+  }.freeze
+
   # @param context [AuthorizationContext]
   # @param scopes [Doorkeeper::OAuth::Scopes, Array<String>, nil] scopes granted
   #   by the bearer token; used to gate write tools (read tools accept any
@@ -151,7 +159,7 @@ class Mcp::RequestHandler
     raise InvalidParams, "arguments must be a JSON object" unless arguments.is_a?(Hash)
     operation_class = Operations::Registry.find_by_tool_name(name)
 
-    raise MethodNotFound, "unknown tool: #{name}" if operation_class.nil?
+    raise MethodNotFound, REPLACED_TOOLS.fetch(name) { "unknown tool: #{name}" } if operation_class.nil?
 
     enforce_scope!(operation_class)
 

@@ -83,7 +83,7 @@ class Tenant::OrgGraphSettings::LevelSourcesControllersTest < ActionDispatch::In
 
       frame = "turbo-frame#org-graph-field-level-#{@tribe_id}"
       assert_select "#{frame} label", text: "HRIS field for Tribe"
-      assert_select "#{frame} h3", text: "Team as the level"
+      assert_select "#{frame} h3", text: "Team as the unit type"
       assert_select "#{frame} li", text: /Payments\s*1 person/
       assert_select "#{frame} form[data-turbo-frame=_top] input[name=field][value='#{TEAM.id}']"
     end
@@ -91,7 +91,7 @@ class Tenant::OrgGraphSettings::LevelSourcesControllersTest < ActionDispatch::In
     should "show each level with its source and units, and a picker only for an empty one" do
       Hris::BaseAdapter.stub(:for, @adapter) { get tenant_org_graph_settings_path }
 
-      assert_select "#org-graph-level-#{@tribe_id}", text: /From Espalia · 0 units/
+      assert_select "#org-graph-level-#{@tribe_id}", text: /Managed here · 0 units/
       assert_select "#org-graph-level-#{@tribe_id} turbo-frame#org-graph-field-level-#{@tribe_id}"
       assert_select "#org-graph-level-#{@squad_id}", text: /changes hands through the handover/
       assert_select "#org-graph-level-#{@squad_id} turbo-frame", count: 0

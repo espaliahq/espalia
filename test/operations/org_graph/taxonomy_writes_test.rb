@@ -62,7 +62,8 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_equal %w[Department Team Squad Guild], level_names
       assert_equal "Guild", result[:name]
       assert_equal "2026-11-01", result[:effective_on]
-      assert_equal({ level_id: result[:level_id], name: "Guild", provider: "espalia" }, result[:levels].last)
+      assert_equal({ level_id: result[:level_id], name: "Guild", provider: "espalia",
+                     parent_ids: result[:levels].first(3).pluck(:level_id), top: true }, result[:levels].last)
       assert_equal "hibob", result[:levels].first[:provider]
       event = Rails.configuration.event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).last
       assert_equal @admin.person.id, event.data[:defined_by_id]
@@ -71,7 +72,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     should "refuse a name another level has, whatever its case" do
       error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::AddLevel, name: "squad") }
 
-      assert_equal "There is already a level called Squad", error.message
+      assert_equal "There is already a unit type called Squad", error.message
       assert_equal %w[Department Team Squad], level_names
     end
 
@@ -80,52 +81,6 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         assert_raises(Pundit::NotAuthorizedError) { call(Operations::OrgGraph::AddLevel, as: caller, name: "Guild") }
       end
       assert_equal %w[Department Team Squad], level_names
-    end
-  end
-
-  context "ReorderLevels" do
-    setup do
-      @guild = call(Operations::OrgGraph::AddLevel, name: "Guild")[:level_id]
-      @department, @team, @squad = level_ids.first(3)
-    end
-
-    should "move a level past one that holds no units" do
-      result = call(Operations::OrgGraph::ReorderLevels, level_ids: [ @department, @team, @guild, @squad ])
-
-      assert_equal %w[Department Team Guild Squad], level_names
-      assert_equal %w[Department Team Guild Squad], result[:levels].pluck(:name)
-    end
-
-    should "keep a level the HRIS provides in its place, naming the provider" do
-      error = assert_raises(Operations::Base::ParameterError) do
-        call(Operations::OrgGraph::ReorderLevels, level_ids: [ @guild, @department, @team, @squad ])
-      end
-
-      assert_equal "Department comes from HiBob, so its place is set there", error.message
-      assert_equal %w[Department Team Squad Guild], level_names
-    end
-
-    should "keep two levels that hold units in their order, naming them" do
-      error = assert_raises(Operations::Base::ParameterError) do
-        call(Operations::OrgGraph::ReorderLevels, level_ids: [ @department, @squad, @team, @guild ])
-      end
-
-      assert_equal "Team and Squad both hold units, so Team must stay above Squad", error.message
-      assert_equal %w[Department Team Squad Guild], level_names
-    end
-
-    should "refuse an order that leaves out a level or names one twice" do
-      [ [ @department, @team, @squad ], [ @department, @team, @squad, @squad ],
-        [ @department, @team, @squad, SecureRandom.uuid_v7 ], [] ].each do |order|
-        assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::ReorderLevels, level_ids: order) }
-      end
-    end
-
-    should "leave the taxonomy to a tenant admin" do
-      assert_raises(Pundit::NotAuthorizedError) do
-        call(Operations::OrgGraph::ReorderLevels, as: @editor, level_ids: [ @department, @team, @guild, @squad ])
-      end
-      assert_equal %w[Department Team Squad Guild], level_names
     end
   end
 
@@ -355,7 +310,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         call(Operations::OrgGraph::RemoveLevel, level_id: SecureRandom.uuid_v7)
       end
 
-      assert_equal "Level is not in the taxonomy", error.message
+      assert_equal "That unit type doesn't exist", error.message
     end
 
     should "leave the taxonomy to a tenant admin" do

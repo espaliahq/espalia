@@ -21,6 +21,9 @@ class OrgGraph::Taxonomy
   Kind = Data.define(:id, :name, :provider, :parent_ids, :top) do
     # @return [Boolean] whether a unit of this kind may sit at the top
     def top? = top
+
+    # @return [Hash] `{ parent_ids:, top: }`, as the read tools return a kind's rules
+    def rules = { parent_ids:, top: }
   end
 
   # @return [Array<Kind>] top first, in the order the taxonomy lists them

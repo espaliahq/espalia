@@ -16,9 +16,13 @@ module Operations::OrgGraph::TaxonomyWrite
   # @return [Array<OrgTaxonomyLevel>] top first
   def current_levels = OrgTaxonomyLevel.top_first.to_a
 
-  # @return [Array<Hash>] `{ level_id, name, provider }`, top first
+  # @return [Array<Hash>] `{ level_id, name, provider, parent_ids, top }`, top first
   def levels_payload
-    current_levels.map { |level| { level_id: level.id, name: level.name, provider: level.provider } }
+    levels = current_levels
+    rules = OrgTaxonomyLevel.rules_by_id(levels)
+    levels.map do |level|
+      { level_id: level.id, name: level.name, provider: level.provider, **rules[level.id] }
+    end
   end
 
   # The commands refuse a taxonomy they can't keep with a message the caller

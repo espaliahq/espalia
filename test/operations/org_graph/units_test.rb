@@ -48,6 +48,16 @@ class Operations::OrgGraph::UnitsTest < ActiveSupport::TestCase
     assert_not_includes result.to_json, "Ada Quill"
   end
 
+  should "return each unit type's list of types it can sit under, and whether it can sit at the top" do
+    org = build_org_graph(@tenant)
+
+    rules = call[:levels].to_h { [ it[:name], it.slice(:parent_ids, :top) ] }
+
+    assert_equal({ "Department" => { parent_ids: [], top: true },
+                   "Team" => { parent_ids: [ org[:department] ], top: true },
+                   "Squad" => { parent_ids: [ org[:department], org[:team] ], top: true } }, rules)
+  end
+
   should "leave out a retired unit" do
     org = build_org_graph(@tenant)
     ActsAsTenant.with_tenant(@tenant) do

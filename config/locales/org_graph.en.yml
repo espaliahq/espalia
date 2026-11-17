@@ -1,0 +1,19 @@
+# Tal's words for the Org Graph's structures, decided 16 Nov on #390. Screens,
+# tool descriptions and refusals use these and no others: "level" is retired
+# from the screens, though code names may keep it.
+en:
+  org_graph:
+    structure: "Structure"
+    unit_type: "Unit type"
+    unit_types: "Unit types"
+    can_sit_under: "Can sit under"
+    can_sit_at_the_top: "Can sit at the top"
+    placement:
+      whole: "A person belongs to one"
+      split: "A person can be split across several"
+    source:
+      provider: "Comes from %{provider}"
+      here: "Managed here"
+    budgets: "Budgets are set for this type"
+    change_type: "Change type"
+    misfit: "Doesn't fit this structure"
