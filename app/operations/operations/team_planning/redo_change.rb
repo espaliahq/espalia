@@ -28,8 +28,8 @@ class Operations::TeamPlanning::RedoChange < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     event_id = refusing_bad_plans do
       handler.redo_change(plan_id, scenario_id:, event_id: scenario_id!(:event_id)) do |plan, entry|
-        unit_type_remains!(entry)
         within_scope!(plan, entry.class, entry.data[:subject_id], entry.data) if entry.is_a?(::TeamPlanning::Events::Change)
+        unit_type_remains!(entry)
       end
     end
     { plan_id:, scenario_id:, event_id:, redone: true }
