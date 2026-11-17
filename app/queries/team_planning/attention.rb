@@ -159,6 +159,7 @@ class TeamPlanning::Attention
     @live = map.units.to_set(&:id)
     @retired = map.retired_units.to_set(&:id)
     @outside = map.outside_ids
+    @roots = map.scope_ids.to_a.to_set
     @cut = map.cut_positions.to_set(&:id)
   end
 
@@ -207,13 +208,12 @@ class TeamPlanning::Attention
 
   # A unit the plan covers sits under one it doesn't, so its parent is never gone.
   def units
-    roots = @map.scope_ids.to_a.to_set
     parted = @map.units.filter_map do |unit|
-      next if unit.parent_id.nil? || @live.include?(unit.parent_id) || roots.include?(unit.id)
+      next if unit.parent_id.nil? || @live.include?(unit.parent_id) || @roots.include?(unit.id)
 
       item(unit.id, UNIT, "Its parent is #{gone(unit.parent_id)}", broken_by: [ [ unit.parent_id, UNIT ] ])
     end
-    parted + (roots - @live - @retired).map { item(it, UNIT, "The plan covers it, but the organisation no longer has it") }
+    parted + (@roots - @live - @retired).map { item(it, UNIT, "The plan covers it, but the organisation no longer has it") }
   end
 
   # A unit type's rules can narrow after the plan placed a unit, so the plan
@@ -229,10 +229,9 @@ class TeamPlanning::Attention
     return [] unless @taxonomy
 
     by_id = @map.units.index_by(&:id)
-    roots = @map.scope_ids.to_a.to_set
     @map.units.filter_map do |unit|
       parent = unit.parent_id && by_id[unit.parent_id]
-      next unless (why = misfit(unit, parent, judged: !((unit.parent_id || roots.include?(unit.id)) && !parent)))
+      next unless (why = misfit(unit, parent, judged: !((unit.parent_id || @roots.include?(unit.id)) && !parent)))
 
       item(unit.id, UNIT, "#{I18n.t('org_graph.misfit')}: #{why}")
     end
