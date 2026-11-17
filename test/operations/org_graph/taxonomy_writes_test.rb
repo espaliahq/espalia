@@ -39,6 +39,17 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     assert_empty ActsAsTenant.with_tenant(@tenant) { TeamPlanningOverride.where(plan_id: @plan_id, subject_id: @unit_id) }
   end
 
+  def scope_to_a_unit_without_the_ledger
+    payments = ActsAsTenant.with_tenant(@tenant) { OrgUnit.find_by!(name: "Payments").id }
+    call(Operations::TeamPlanning::SetPlanScope, plan_id: @plan_id, unit_ids: [ payments ])
+  end
+
+  def assert_refused_as_out_of_scope(&)
+    error = assert_raises(Operations::Base::ParameterError, &)
+    assert_equal "This unit is outside the units this plan covers. Place it in one of its units first.", error.message
+    assert_empty ActsAsTenant.with_tenant(@tenant) { TeamPlanningOverride.where(plan_id: @plan_id, subject_id: @unit_id) }
+  end
+
   def kind_rules(level_id)
     kind = ActsAsTenant.with_tenant(@tenant) { ::OrgGraph::Repository.new.load_structure.taxonomy.kind(level_id) }
     [ kind.parent_ids, kind.top ]
@@ -231,6 +242,22 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
 
         assert_refused_bringing_back { call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @scenario_id) }
+      end
+
+      should "refuse an undo outside a scoped plan's units as out of scope, though its level is gone" do
+        call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @scenario_id, subject_id: @unit_id, facet: "unit")
+        scope_to_a_unit_without_the_ledger
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+
+        assert_refused_as_out_of_scope { call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @scenario_id) }
+      end
+
+      should "refuse a redo outside a scoped plan's units as out of scope, though its level is gone" do
+        call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @scenario_id)
+        scope_to_a_unit_without_the_ledger
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+
+        assert_refused_as_out_of_scope { call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @scenario_id) }
       end
 
       should "stop offering Undo of a clear of the unit once its level is gone" do

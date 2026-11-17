@@ -34,8 +34,8 @@ class Operations::TeamPlanning::UndoChange < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     event_id = refusing_bad_plans do
       handler.undo_change(plan_id, scenario_id:, event_id: scenario_id!(:event_id)) do |plan, restored|
-        unit_type_remains!(restored)
         within_scope!(plan, restored.class, restored.data[:subject_id], restored.data) if restored
+        unit_type_remains!(restored)
       end
     end
     { plan_id:, scenario_id:, event_id:, undone: true }

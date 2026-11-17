@@ -427,9 +427,9 @@ class OrgGraph::StructureAggregate
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     parent_id = require_id(parent_id, "Parent id") if parent_id
-    return if parent_id == unit.parent_id
-
     effective_on = dated_after_creation(unit, effective_on)
+    return if parent_id == parent_on(unit_id, effective_on)
+
     ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on,
                                                               until_on: @parents[unit_id].keys.select { it > effective_on }.min)
     raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
