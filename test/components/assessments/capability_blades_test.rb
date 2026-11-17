@@ -31,7 +31,7 @@ class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
     Nokogiri::HTML5.fragment(Views::Assessments::CapabilityBlades.new(shape: shape).call)
   end
 
-  # Two blades short of E3, one past it, across two categories.
+  # One blade past E3, one short of it and one on it, across two categories.
   def team_lead
     shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 0.5 }, "People" => { "Mentoring" => 1.0 } })
   end
@@ -69,7 +69,8 @@ class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
     should "fade only the blades short of the assessed level" do
       avatar = render_blades(team_lead)
 
-      assert_equal %w[2], avatar.css("[data-blade-short]").map { |blade| blade["data-blade"] }
+      assert_equal [ [ "1", nil ], [ "2", "0.45" ], [ "3", nil ] ],
+                   avatar.css("[data-blade]").map { |blade| [ blade["data-blade"], blade["fill-opacity"] ] }
     end
 
     should "colour each blade by its category" do

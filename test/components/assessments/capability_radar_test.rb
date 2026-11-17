@@ -62,6 +62,18 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
     end
   end
 
+  context "assessed at the ladder's first level" do
+    should "draw that level's ring partway out, with a capability short of it inside" do
+      first = shape({ "Craft" => { "Delivery" => 1.0, "Quality" => 0.5 } }, levels: E1_TO_E5, person_level: 1,
+                    zoom: nil)
+      radar = render_radar(first)
+
+      assert_equal %w[E1 E2], radar.css("[data-radar-ring]").map { |r| r["data-radar-ring"] }
+      assert_equal [ 75, 38 ], [ 1, 2 ].map { |number| reach(radar, number) },
+                   "expected E1 met halfway out and 50% of E1 a quarter of the way out"
+    end
+  end
+
   context "its structure" do
     should "draw a segment per category, a spoke per capability and a ring per level above the first" do
       radar = render_radar(shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 1.2 },

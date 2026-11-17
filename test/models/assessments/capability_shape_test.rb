@@ -158,7 +158,7 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
       assert_in_delta(-0.4, short.reached, 0.001)
       assert_equal "60% of PM1", short.label
       assert_equal [ 0.2, 0.33 ], [ short.reached, 0 ].map { |position| first.fraction(position).round(2) },
-                   "expected nothing at the centre and PM1 met a third of the way out"
+                   "expected 60% of PM1 a fifth of the way out and PM1 met a third of the way out"
     end
   end
 

@@ -104,7 +104,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       sign_in @user
       get assessments_path
 
-      assert_select "[data-capability-blades] svg[aria-label='1 of 1 capabilities met at E2']"
+      assert_select "[data-capability-blades] svg[aria-label='1 of 1 capabilities met at E2']", count: 1
     end
 
     should "show nothing in the blades' place before the card has a score" do
@@ -113,6 +113,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_select "[data-capability-blades]", count: 0
+      assert_not_includes response.body, "met at E2"
     end
 
     should "draw no blades from ratings outside the assessed role" do
@@ -287,12 +288,29 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
       sign_in @manager_user
       get assessments_path
-      assert_select "[data-capability-blades] svg[aria-label='0 of 1 capabilities met at E2']"
+      assert_select "[data-capability-blades] svg[aria-label='0 of 1 capabilities met at E2']", count: 1
 
       delete destroy_user_session_path
       sign_in @user
       get assessments_path
-      assert_select "[data-capability-blades] svg[aria-label='1 of 1 capabilities met at E2']"
+      assert_select "[data-capability-blades] svg[aria-label='1 of 1 capabilities met at E2']", count: 1
+    end
+
+    should "show a skip-level card's blades through its manager's ratings" do
+      rate(@cap, "consistent")
+      rate_as_manager(@person, @cap, "none")
+      skip_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        grand_manager = create(:person, tenant: @tenant, email: skip_user.email, name: "Grand Manager")
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: grand_manager)
+        @manager.update!(manager: grand_manager)
+      end
+
+      sign_in skip_user
+      get assessments_path
+
+      assert_select "#skip-level-assessments [data-capability-blades] svg[aria-label='0 of 1 capabilities met at E2']",
+                    count: 1
     end
 
     should "draw every card's blades in the same number of queries, however many cards" do
