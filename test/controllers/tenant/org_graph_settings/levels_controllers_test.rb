@@ -108,7 +108,7 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_select "#org-graph-levels input#org-graph-new-level[name=name]"
     end
 
-    should "state an HRIS type's place as a sentence, since the HRIS sets it" do
+    should "offer an HRIS type the same boxes, and refuse a rule an HRIS type can't keep" do
       region_id = SecureRandom.uuid_v7
       ActsAsTenant.with_tenant(@tenant) do
         OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).define_taxonomy(
@@ -118,11 +118,14 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       end
 
       get tenant_org_graph_settings_path
-
-      assert_select "form#org-graph-level-rules-#{region_id}", count: 0
-      assert_select "p#org-graph-level-rules-#{region_id}", text: "Can sit at the top only"
+      assert_select "form#org-graph-level-rules-#{region_id} input#org-graph-level-top-#{region_id}[checked]"
       assert_select "#org-graph-level-#{region_id}", text: /Comes from HiBob · 0 units/
-      assert_select "form#org-graph-level-rules-#{@tribe_id}"
+
+      patch tenant_org_graph_settings_kind_parent_path(region_id), params: { parent_ids: [ @tribe_id ], top: "0" }
+
+      assert_equal "Region's place did not change: Region can sit only at the top, or under one type above it " \
+                   "that an HRIS provides, while it comes from HiBob", flash[:alert]
+      assert ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.taxonomy.kind(region_id).top? }
     end
 
     should "remove a level no unit has ever held" do

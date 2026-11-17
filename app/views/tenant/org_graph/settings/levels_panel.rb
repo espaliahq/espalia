@@ -27,7 +27,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
 
   # @param hris [Hash] provider, label and connected, as Operations::OrgGraph::Sources reads them
   # @param levels [Array<Hash>] each level as Operations::OrgGraph::Sources reads it, top first
-  # @param can_edit_taxonomy [Boolean] whether the viewer may add, move and remove levels
+  # @param can_edit_taxonomy [Boolean] whether the viewer may add and remove unit types, and set where each can sit
   def initialize(hris:, levels:, can_edit_taxonomy: false)
     @hris = hris
     @levels = levels
@@ -39,7 +39,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
       card.body do
         p(class: "text-sm text-muted") do
           plain "Each type of unit in the structure, and the types it can sit under. " \
-                "A type an HRIS supplies takes its place from the HRIS."
+                "A type an HRIS supplies sits at the top, or under one type above it that the HRIS supplies."
         end
         if @levels.empty?
           p(class: "mt-4 text-sm text-default") { "No unit types yet." }
@@ -67,7 +67,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
           level_menu(level) if @can_edit_taxonomy && level[:removable]
         end
       end
-      if @can_edit_taxonomy && level[:provider] == ESPALIA
+      if @can_edit_taxonomy
         rules_form(level)
       else
         p(class: "mt-1 text-sm text-default", id: "org-graph-level-rules-#{level[:id]}") { rules_sentence(level) }
