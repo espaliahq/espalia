@@ -111,6 +111,18 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
       assert_equal "Department can't sit under Squad", refusal(Operations::TeamPlanning::SetUnit, unit_id: sales, parent_id: @payments)
     end
 
+    should "refuse a parent outside a scoped plan's units as missing, never naming its type" do
+      call(Operations::TeamPlanning::SetPlanScope, plan_id: @plan_id, unit_ids: [ @payments ])
+
+      [ @platform, @engineering ].each do |outside|
+        assert_equal "The parent must be a live unit in this scenario",
+                     refusal(Operations::TeamPlanning::SetUnit, name: "Risk", level_id: @squad, parent_id: outside)
+      end
+      assert_equal "Department can't sit under Squad",
+                   refusal(Operations::TeamPlanning::SetUnit, name: "Sales", level_id: @department, parent_id: @payments)
+      assert_equal [ "Payments" ], names
+    end
+
     should "rename a unit whose level has left the taxonomy, and refuse to place a unit beneath it" do
       guild_level = SecureRandom.uuid_v7
       ActsAsTenant.with_tenant(@tenant) do
