@@ -13,6 +13,8 @@
 | `app/views/assessment_guides/show_view.rb` | "How assessments work" — the illustrated walk through one cycle (`/assessments/how-it-works`) |
 | `app/models/assessments/capability_shape.rb` | The capability radar's data: each capability's level reached on the role's ladder, its group, hue and number (see [*Capability radar and map*](scoring.md)) |
 | `app/views/assessments/capability_radar.rb` | The radar SVG, `:compact` in the hero and `:detailed` (spokes as links) in the map |
+| `app/views/assessments/capability_blades.rb` | The capability blades on each assessment card (see [*Capability radar and map*](scoring.md)) |
+| `app/queries/assessments/card_shapes.rb` | Every assessment card's capability shape, read as its hero reads it, loaded together for the list |
 | `app/views/assessments/capability_map_modal.rb` | The capability map: the radar beside a lane per capability, root-mounted; its content frame is streamed on the viewer's own rating and reloaded from `GET /assessments/:id/capability_map` on someone else's |
 | `app/views/assessments/status_pill.rb` | Header status pill — In Progress / N to confirm / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
 | `app/components/shared/to_confirm_chip.rb` | The dashed amber "to confirm" chip — status pill, card name row, list cards, the hero and category links |
