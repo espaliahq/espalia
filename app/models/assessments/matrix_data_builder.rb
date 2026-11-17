@@ -29,21 +29,28 @@ class Assessments::MatrixDataBuilder
   # @param context [Symbol] :self, :manager or :alignment
   # @param viewer_person_id [String, nil]
   # @param viewer_sees_all_evidence [Boolean]
+  # @param framework [FrameworkState::Framework, nil] what a listing has
+  #   already loaded, here and in the three after it; nil loads it
+  # @param categories [Array<FrameworkState::CapabilityCategory>, nil] a {.lens_tree}
+  # @param alignments [Array<AssessmentCycleRoleAlignment>, nil] see {Assessments::Disclosure.for}
+  # @param ratings [Array<AssessmentLevelRating>, nil] see {#initialize}
   # @return [Hash] see {#build}
-  def self.for_lens(lens:, context:, viewer_person_id: nil, viewer_sees_all_evidence: false)
+  def self.for_lens(lens:, context:, viewer_person_id: nil, viewer_sees_all_evidence: false,
+                    framework: nil, categories: nil, alignments: nil, ratings: nil)
     assignment = lens.assignment
     status = lens.participant_status
     new(
-      framework: FrameworkState::Framework.find_by!(framework_id: assignment.framework_id),
+      framework: framework || FrameworkState::Framework.find_by!(framework_id: assignment.framework_id),
       lens: lens,
       person_id: assignment.person_id,
       cycle_id: lens.cycle&.cycle_id,
-      categories: lens_tree(framework_id: assignment.framework_id, lenses: [ lens ]),
+      categories: categories || lens_tree(framework_id: assignment.framework_id, lenses: [ lens ]),
       participant_status: status,
-      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
+      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status, rows: alignments),
       context: context,
       viewer_person_id: viewer_person_id,
-      viewer_sees_all_evidence: viewer_sees_all_evidence
+      viewer_sees_all_evidence: viewer_sees_all_evidence,
+      ratings: ratings
     ).build
   end
 

@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-# A person's capabilities at a glance, for the assessment card: a blade per
-# capability, clockwise from the top and coloured by category, whose length
-# is the level it has reached. The blades touch, so the category colours
-# separate them. The dashed circle is the assessed level met; a blade short
-# of it is faded.
+# The assessment card's capabilities at a glance: a blade per capability,
+# as long as the level it has reached, around a dashed circle at the
+# assessed level met.
 class Views::Assessments::CapabilityBlades < Views::Base
   RADIUS = 30.0
   # The share of a short blade's colour that shows through.

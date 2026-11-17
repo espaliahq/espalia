@@ -96,10 +96,10 @@ class Assessments::CapabilityShape
   #   assessed
   def window
     @window ||= if @zoom_index
-      centre = (@zoom_index - 1).clamp(floor, @codes.size - 1 - ZOOM_SPAN)
+      centre = (@zoom_index - 1).clamp(lowest_position, @codes.size - 1 - ZOOM_SPAN)
       centre..(centre + ZOOM_SPAN)
     else
-      floor..top.to_i
+      lowest_position..top.to_i
     end
   end
 
@@ -119,16 +119,16 @@ class Assessments::CapabilityShape
     silence = unscored_label(cap)
     position = silence ? nil : position_for(stable_id)
     Point.new(number: number, stable_id: stable_id, name: cap[:capability].name, hue: hue,
-              reached: position&.clamp(floor.to_f, top), label: silence || label_for(position&.clamp(..top)),
+              reached: position&.clamp(lowest_position.to_f, top), label: silence || label_for(position&.clamp(..top)),
               required: @scoring.dig(:capability_scores, stable_id, :required) || false,
               blocked: @scoring.dig(:capability_statuses, stable_id) == :blocked)
   end
 
   def top = @codes.size - 1.0
 
-  # The lowest position drawn apart from the centre: the first level met,
-  # or none of it when that is the level assessed, so short and met differ.
-  def floor = @assessed_index&.zero? ? -1 : 0
+  # The centre's ladder position: the first level met, or none of it when
+  # that is the level assessed, so short and met still differ.
+  def lowest_position = @assessed_index&.zero? ? -1 : 0
 
   def category_score(category_data)
     return unless category_score_unlocked?(category_data, @scoring, @context)

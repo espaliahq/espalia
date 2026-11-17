@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-# The capability shape each assessment card shows: the hero's own, built by
-# the same {Assessments::MatrixDataBuilder} through the home lens, in the
-# context and from the ratings the viewer sees on opening the assessment. A
-# listing loads every card's inputs together, so the page's query count
-# doesn't grow with its cards; only a role it hasn't met yet costs more.
+# Each assessment card's capability shape, built as its hero builds it and
+# loaded for every card at once, so the list's query count doesn't grow with
+# its cards.
 class Assessments::CardShapes
   # @param assignments [Array<PersonFrameworkAssignment>] cards the viewer can open
   # @param viewer_person_id [String]
@@ -17,9 +15,7 @@ class Assessments::CardShapes
   #   only the cards whose hero shows a score
   def call
     Assessments::RoleScope.reusing do
-      role_ids_by_framework.each do |framework_id, role_ids|
-        Assessments::RoleScope.for_roles(role_ids: role_ids, framework_id: framework_id)
-      end
+      preload_role_scopes
       @assignments.each_with_object({}) do |assignment, shapes|
         shape = shape_for(assignment)
         shapes[assignment.id] = shape if shape&.scored?
@@ -31,18 +27,16 @@ class Assessments::CardShapes
 
   def shape_for(assignment)
     lens = lenses[assignment]
-    framework = frameworks[assignment.framework_id]
-    return unless lens && framework
+    return unless lens
 
     context = Assessments::ViewerContext.for_listed(assignment: assignment, viewer_person_id: @viewer_person_id,
                                                     participation: lens.participation)
-    data = Assessments::MatrixDataBuilder.new(
-      framework: framework, lens: lens, person_id: assignment.person_id, cycle_id: lens.cycle.cycle_id,
-      categories: trees.fetch(lens.framework_id), participant_status: lens.participant_status, context: context,
-      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: lens.participant_status,
-                                              rows: alignments.fetch([ lens.cycle.cycle_id, assignment.person_id ], [])),
-      ratings: ratings_for(lens)
-    ).build
+    key = [ lens.cycle.cycle_id, assignment.person_id ]
+    data = Assessments::MatrixDataBuilder.for_lens(
+      lens: lens, context: context, framework: frameworks[lens.framework_id],
+      categories: trees.fetch(lens.framework_id), alignments: alignments.fetch(key, []),
+      ratings: ratings.fetch(key, [])
+    )
     Assessments::CapabilityShape.new(categories: data[:categories], scoring: hero_scoring(data, context),
                                      merged_levels: data[:merged_levels], person_level: data[:person_level],
                                      context: context)
@@ -54,27 +48,16 @@ class Assessments::CardShapes
     data[key] || data[:scoring]
   end
 
-  # The open cycle's home lens, as {Assessments::Lens.home} resolves it. None
-  # outside a cycle, which has no ratings to show.
-  def lens_for(assignment)
-    enrollment = enrollments[[ assignment.framework_id, assignment.person_id ]]
-    return unless enrollment
+  # The open cycle's home lens per card; none outside a cycle, which has no
+  # ratings to show.
+  def lenses
+    @lenses ||= @assignments.index_with do |assignment|
+      enrollment = enrollment_for(assignment)
+      next unless enrollment && frameworks[assignment.framework_id]
 
-    role_id, level_id = home_ids(assignment, enrollment)
-    role = roles[role_id]
-    level = role&.levels&.find { |lvl| lvl.level_id == level_id }
-    return unless level
-
-    Assessments::Lens.new(assignment: assignment, role: role, level: level, home_role: role, home_level: level,
-                          cycle: enrollment.cycle, open_cycle_id: enrollment.cycle_id,
-                          participation: participations[[ enrollment.cycle_id, enrollment.person_id ]])
-  end
-
-  # The enrollment snapshot's role and level, else the live assignment's.
-  def home_ids(assignment, enrollment)
-    return [ enrollment.role_id, enrollment.level_id ] if enrollment.role_id && enrollment.level_id
-
-    [ assignment.role_id, assignment.level_id ]
+      Assessments::Lens.preloaded_home(assignment: assignment, enrollment: enrollment, roles: roles,
+                                       participation: participations[[ enrollment.cycle_id, enrollment.person_id ]])
+    end
   end
 
   # One tree per framework for every role its cards read.
@@ -84,14 +67,17 @@ class Assessments::CardShapes
     end
   end
 
-  def lenses
-    @lenses ||= @assignments.index_with { |assignment| lens_for(assignment) }
+  # Fills {Assessments::RoleScope.reusing}'s memo, one load per framework, so
+  # each lens's scope reads from it.
+  def preload_role_scopes
+    @assignments.group_by(&:framework_id).each do |framework_id, list|
+      Assessments::RoleScope.for_roles(role_ids: list.map { |a| home_role_id(a) }, framework_id: framework_id)
+    end
   end
 
-  def ratings_for(lens)
-    rows = ratings.fetch([ lens.assignment.person_id, lens.framework_id, lens.cycle.cycle_id ], [])
-    rows.select { |r| lens.scope.include?(r.capability_stable_id, r.level_ordinal) }
-  end
+  def home_role_id(assignment) = Assessments::Lens.home_ids(assignment, enrollment_for(assignment)).first
+
+  def enrollment_for(assignment) = enrollments[[ assignment.framework_id, assignment.person_id ]]
 
   # @return [Hash{Array(String, String) => AssessmentCycleEnrollment}] the open
   #   cycle's, by framework and person
@@ -104,34 +90,39 @@ class Assessments::CardShapes
       .index_by { |enrollment| [ enrollment.cycle.framework_id, enrollment.person_id ] }
   end
 
+  # The rest key by cycle and person.
   def participations
     @participations ||= AssessmentCycleParticipation.for_enrollments(enrollments.values)
       .index_by { |participation| [ participation.enrollment.cycle_id, participation.enrollment.person_id ] }
   end
 
   def alignments
-    @alignments ||= AssessmentCycleRoleAlignment
-      .where(cycle_id: enrollments.values.map(&:cycle_id).uniq, person_id: enrollments.values.map(&:person_id).uniq)
+    @alignments ||= AssessmentCycleRoleAlignment.where(cycle_id: cycle_ids, person_id: person_ids)
       .group_by { |row| [ row.cycle_id, row.person_id ] }
   end
 
-  # Every card's people at once, each read through its own lens's role in
-  # {#ratings_for}: a person can hold assignments on more than one framework.
+  # Every card's ratings within its own role, one framework's people at a
+  # time since a person's role differs between frameworks, in one query.
   def ratings
-    @ratings ||= AssessmentLevelRating.across_all_roles
-      .where(cycle_id: enrollments.values.map(&:cycle_id).uniq, person_id: enrollments.values.map(&:person_id).uniq)
-      .group_by { |r| [ r.person_id, r.framework_id, r.cycle_id ] }
-  end
+    @ratings ||= begin
+      reads = lenses.values.compact.group_by(&:framework_id).filter_map do |framework_id, framework_lenses|
+        scopes = framework_lenses.to_h { |lens| [ lens.assignment.person_id, lens.scope ] }
+        next if scopes.values.all?(&:empty?)
 
-  def role_ids_by_framework
-    @assignments.group_by(&:framework_id).transform_values do |list|
-      list.flat_map { |a| [ a.role_id, enrollments[[ a.framework_id, a.person_id ]]&.role_id ] }.compact.uniq
+        AssessmentLevelRating.for_framework(framework_id)
+          .for_cycle(framework_lenses.map { |lens| lens.cycle.cycle_id }.uniq).within(scopes)
+      end
+      reads.empty? ? {} : reads.reduce(:or).group_by { |r| [ r.cycle_id, r.person_id ] }
     end
   end
 
+  def cycle_ids = enrollments.values.map(&:cycle_id).uniq
+
+  def person_ids = enrollments.values.map(&:person_id).uniq
+
   def roles
-    @roles ||= FrameworkState::Role.includes(:levels)
-      .where(role_id: role_ids_by_framework.values.flatten.uniq).index_by(&:role_id)
+    @roles ||= FrameworkState::Role.includes(:levels).where(role_id: @assignments.map { |a| home_role_id(a) }.uniq)
+      .index_by(&:role_id)
   end
 
   def frameworks
