@@ -38,8 +38,10 @@ class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
 
   # A blade's wedge as its radius and the angles its arc runs between, in
   # degrees clockwise from twelve o'clock.
-  def wedge(avatar, number)
-    numbers = avatar.at_css("[data-blade='#{number}']")["d"].scan(/-?\d+(?:\.\d+)?/).map(&:to_f)
+  def wedge(avatar, number) = wedge_through(avatar.at_css("[data-blade='#{number}']"))
+
+  def wedge_through(path)
+    numbers = path["d"].scan(/-?\d+(?:\.\d+)?/).map(&:to_f)
     x0, y0, radius = numbers[2..4]
     x1, y1 = numbers.last(2)
     clock = ->(x, y) { ((Math.atan2(y, x) * 180 / Math::PI) + 90).round(1) % 360 }
@@ -76,6 +78,14 @@ class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
 
       assert_equal fill.(1), fill.(2)
       assert_not_equal fill.(1), fill.(3)
+    end
+
+    should "tint each category's slots as one wedge, so no seam shows inside it" do
+      tints = render_blades(team_lead).css("[data-blades-category]").map do |tint|
+        [ tint["data-blades-category"], wedge_through(tint).values_at(:from, :to) ]
+      end
+
+      assert_equal [ [ "Craft", [ 0.0, 240.0 ] ], [ "People", [ 240.0, 0.0 ] ] ], tints
     end
 
     should "leave an unrated capability's slot empty" do

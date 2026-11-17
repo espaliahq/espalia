@@ -25,7 +25,7 @@ class Views::Assessments::CapabilityBlades < Views::Base
       end
       svg(viewBox: "#{-RADIUS} #{-RADIUS} #{RADIUS * 2} #{RADIUS * 2}", class: "block size-16 shrink-0",
           role: "img", aria: { label: "#{met_count} of #{points.size} capabilities met at #{assessed_code}" }) do |s|
-        points.each_with_index { |point, i| slot(s, point, i) }
+        category_slots(s)
         points.each_with_index { |point, i| blade(s, point, i) if point.reached }
         s.circle(r: radius_for(@shape.assessed_index), fill: "none", stroke_width: 0.9, stroke_dasharray: "2 2",
                  class: "stroke-(--gos-content-default)", data: { blades_met: true })
@@ -43,25 +43,35 @@ class Views::Assessments::CapabilityBlades < Views::Base
 
   def radius_for(position) = (RADIUS * @shape.fraction(position)).round(2)
 
-  # The whole slot, tinted, so an unrated capability still holds its place.
-  def slot(s, point, i)
-    s.path(d: wedge(RADIUS, i), class: Views::Assessments::CapabilityRadar::SEGMENT.fetch(point.hue))
+  # Each category's slots, tinted as one wedge so no seam shows between them,
+  # and so an unrated capability still holds its place.
+  def category_slots(s)
+    first = 0
+    @shape.groups.each do |group|
+      s.path(d: wedge(RADIUS, first, first + group.points.size),
+             class: Views::Assessments::CapabilityRadar::SEGMENT.fetch(group.hue),
+             data: { blades_category: group.name.to_s })
+      first += group.points.size
+    end
   end
 
   def blade(s, point, i)
     short = point.reached < @shape.assessed_index
-    s.path(d: wedge(radius_for(point.reached), i), fill_opacity: (SHORT_OPACITY if short),
-           class: Views::Assessments::CapabilityRadar::DOT.fetch(point.hue),
+    s.path(d: wedge(radius_for(point.reached), i, i + 1), fill_opacity: (SHORT_OPACITY if short),
+           stroke_opacity: (SHORT_OPACITY if short), stroke_width: 0.5,
+           class: "#{Views::Assessments::CapabilityRadar::DOT.fetch(point.hue)} " \
+                  "#{Views::Assessments::CapabilityRadar::SPOKE.fetch(point.hue)}",
            data: { blade: point.number, blade_short: (true if short) })
   end
 
   # Degrees clockwise from twelve o'clock to where slot `i` starts.
   def start(i) = -90.0 + (i * 360.0 / points.size)
 
-  # Arced through the slot's middle, so a lone capability's full circle draws too.
-  def wedge(radius, i)
-    arc = ->(degrees) { "A#{radius} #{radius} 0 0 1 #{xy(radius, degrees).join(' ')}" }
-    "M0 0 L#{xy(radius, start(i)).join(' ')} #{arc.(start(i + 0.5))} #{arc.(start(i + 1))} Z"
+  # Slots `from` up to `to`, arced half a slot at a time so no arc passes
+  # 180 degrees, even a lone capability's full circle.
+  def wedge(radius, from, to)
+    arcs = (from * 2...to * 2).map { |half| "A#{radius} #{radius} 0 0 1 #{xy(radius, start((half + 1) / 2.0)).join(' ')}" }
+    "M0 0 L#{xy(radius, start(from)).join(' ')} #{arcs.join(' ')} Z"
   end
 
   def xy(radius, degrees)
