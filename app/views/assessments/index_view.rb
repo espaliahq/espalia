@@ -20,12 +20,14 @@ class Views::Assessments::IndexView < Views::Base
   # @param report_people [Hash{String => Person}] preloaded person records by ID (direct + skip-level)
   # @param open_cycles [Hash{Array(String, String) => AssessmentCycle}] preloaded open cycles keyed by [framework_id, person_id]
   # @param card_statuses [Hash{Array(String, String) => Hash}] per-card status keyed by [framework_id, person_id]
+  # @param card_shapes [Hash{String => Assessments::CapabilityShape}] the blades each scored card shows,
+  #   keyed by assignment id
   # @param explorations [Hash{String => Array<Assessments::OpenExplorations::Entry>}] open declared
   #   explorations keyed by assignment id
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(assignments:, report_assignments: [], skip_level_assignments: [], skip_level_pagy: nil, report_people: {}, open_cycles: {}, card_statuses: {}, explorations: {}, user: nil, current_tenant: nil, tenants: [])
+  def initialize(assignments:, report_assignments: [], skip_level_assignments: [], skip_level_pagy: nil, report_people: {}, open_cycles: {}, card_statuses: {}, card_shapes: {}, explorations: {}, user: nil, current_tenant: nil, tenants: [])
     @assignments = assignments
     @report_assignments = report_assignments
     @skip_level_assignments = skip_level_assignments
@@ -33,6 +35,7 @@ class Views::Assessments::IndexView < Views::Base
     @report_people = report_people
     @open_cycles = open_cycles
     @card_statuses = card_statuses
+    @card_shapes = card_shapes
     @explorations = explorations
     @user = user
     @current_tenant = current_tenant
@@ -211,7 +214,7 @@ class Views::Assessments::IndexView < Views::Base
         end
         exploration_chips(assignment)
 
-        div(class: "mt-4") do
+        card_footer(assignment) do
           render Components::Kit::Button.new(variant: :outline, size: :sm, touch: true, href: assessment_path(assignment)) do
             "Review assessment"
           end
@@ -239,7 +242,7 @@ class Views::Assessments::IndexView < Views::Base
           p(class: "mt-3 text-sm text-muted") { cycle.name }
         end
 
-        div(class: "mt-4") do
+        card_footer(assignment) do
           if cycle
             render Components::Kit::Button.new(tone: :brand, size: :sm, touch: true, href: assessment_path(assignment)) do
               "#{self_cta_verb(assignment)} self-assessment"
@@ -251,6 +254,16 @@ class Views::Assessments::IndexView < Views::Base
           end
         end
       end
+    end
+  end
+
+  # The card's button, with the capability blades beside it once the
+  # assessment has a score.
+  def card_footer(assignment, &)
+    shape = @card_shapes[assignment.id]
+    div(class: "@container mt-4 flex flex-wrap items-end justify-between gap-2") do
+      div(class: "shrink-0", &)
+      render Views::Assessments::CapabilityBlades.new(shape: shape) if shape
     end
   end
 

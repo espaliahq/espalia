@@ -68,6 +68,21 @@ class Assessments::Lens
         cycle: past ? enrollment.cycle : open_cycle, past: past, open_cycle_id: open_cycle&.cycle_id)
   end
 
+  # {.home} from what a listing has already loaded.
+  #
+  # @param assignment [PersonFrameworkAssignment]
+  # @param enrollment [AssessmentCycleEnrollment] the open cycle's, its cycle loaded
+  # @param roles [Hash{String => FrameworkState::Role}] by role_id, levels loaded
+  # @param participation [AssessmentCycleParticipation, nil]
+  # @return [Assessments::Lens, nil] nil when the home role or level is gone
+  def self.preloaded_home(assignment:, enrollment:, roles:, participation:)
+    role, level = home_pair(assignment, enrollment, roles: roles)
+    new(assignment: assignment, role: role, level: level, home_role: role, home_level: level,
+        cycle: enrollment.cycle, open_cycle_id: enrollment.cycle_id, participation: participation)
+  rescue ActiveRecord::RecordNotFound
+    nil
+  end
+
   # The URL / Operation params that name a lens, relative to a home: empty
   # for the home itself, `as_level` alone on the home role's ladder.
   #
@@ -80,19 +95,24 @@ class Assessments::Lens
   end
 
   # @return [Array(FrameworkState::Role, FrameworkState::Level)]
-  def self.home_pair(assignment, snapshot)
-    role_id, level_id =
-      if snapshot&.role_id && snapshot.level_id
-        [ snapshot.role_id, snapshot.level_id ]
-      else
-        [ assignment.role_id, assignment.level_id ]
-      end
-    role = FrameworkState::Role.includes(:levels).find_by!(role_id: role_id)
+  def self.home_pair(assignment, snapshot, roles: nil)
+    role_id, level_id = home_ids(assignment, snapshot)
+    role = roles ? roles[role_id] : FrameworkState::Role.includes(:levels).find_by!(role_id: role_id)
+    raise ActiveRecord::RecordNotFound, "Home role #{role_id} is gone" unless role
+
     level = role.levels.find { |lvl| lvl.level_id == level_id } ||
       raise(ActiveRecord::RecordNotFound, "Home level #{level_id} is not in role #{role.code}")
     [ role, level ]
   end
   private_class_method :home_pair
+
+  # @return [Array(String, String)] the snapshot's role and level ids, else
+  #   the live assignment's
+  def self.home_ids(assignment, snapshot)
+    return [ snapshot.role_id, snapshot.level_id ] if snapshot&.role_id && snapshot.level_id
+
+    [ assignment.role_id, assignment.level_id ]
+  end
 
   def self.open_enrollment(assignment, cycle)
     cycle && AssessmentCycleEnrollment.find_by(cycle_id: cycle.cycle_id, person_id: assignment.person_id)
@@ -124,7 +144,10 @@ class Assessments::Lens
   end
   private_class_method :nearest_level
 
-  def initialize(assignment:, role:, level:, home_role:, home_level:, cycle: nil, past: false, open_cycle_id: nil)
+  # @param participation [AssessmentCycleParticipation, nil] the person in the
+  #   cycle read, when the caller has already loaded it
+  def initialize(assignment:, role:, level:, home_role:, home_level:, cycle: nil, past: false, open_cycle_id: nil,
+                 participation: nil)
     @assignment = assignment
     @role = role
     @level = level
@@ -133,6 +156,7 @@ class Assessments::Lens
     @cycle = cycle
     @past = past
     @open_cycle_id = open_cycle_id
+    @participation = participation if participation
   end
 
   # @return [AssessmentCycle, nil] the cycle read: a past one, else the open one

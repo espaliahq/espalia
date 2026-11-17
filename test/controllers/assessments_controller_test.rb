@@ -98,6 +98,37 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Start self-assessment"
     end
 
+    should "show the capability blades on the own card once it has a score" do
+      rate(@cap, "consistent")
+
+      sign_in @user
+      get assessments_path
+
+      assert_select "[data-capability-blades] svg[aria-label='1 of 1 capabilities met at E2']", count: 1
+    end
+
+    should "show nothing in the blades' place before the card has a score" do
+      sign_in @user
+      get assessments_path
+
+      assert_response :success
+      assert_select "[data-capability-blades]", count: 0
+      assert_not_includes response.body, "met at E2"
+    end
+
+    should "draw no blades from ratings outside the assessed role" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create_out_of_scope_rating(person_id: @person.id, cycle: AssessmentCycle.find_by!(cycle_id: @cycle_id),
+          level_ordinal: 2)
+      end
+
+      sign_in @user
+      get assessments_path
+
+      assert_response :success
+      assert_select "[data-capability-blades]", count: 0
+    end
+
     should "redirect unauthenticated users to sign in" do
       get assessments_path
       assert_redirected_to new_user_session_path
@@ -249,6 +280,80 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       sign_in @manager_user
       get assessment_path(@assignment)
       assert_select "[data-testid='unplaced-feedback-notice']", text: /about Test User is waiting/
+    end
+
+    should "read each card's blades through the viewer's own ratings, as the hero does" do
+      rate(@cap, "consistent")
+      rate_as_manager(@person, @cap, "none")
+
+      sign_in @manager_user
+      get assessments_path
+      assert_select "[data-capability-blades] svg[aria-label='0 of 1 capabilities met at E2']", count: 1
+
+      delete destroy_user_session_path
+      sign_in @user
+      get assessments_path
+      assert_select "[data-capability-blades] svg[aria-label='1 of 1 capabilities met at E2']", count: 1
+    end
+
+    should "show a skip-level card's blades through its manager's ratings" do
+      rate(@cap, "consistent")
+      rate_as_manager(@person, @cap, "none")
+      skip_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        grand_manager = create(:person, tenant: @tenant, email: skip_user.email, name: "Grand Manager")
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: grand_manager)
+        @manager.update!(manager: grand_manager)
+      end
+
+      sign_in skip_user
+      get assessments_path
+
+      assert_select "#skip-level-assessments [data-capability-blades] svg[aria-label='0 of 1 capabilities met at E2']",
+                    count: 1
+    end
+
+    should "draw every card's blades in the same number of queries, however many cards" do
+      rate_as_manager(@person, @cap, "consistent")
+      sign_in @manager_user
+      one_card = count_queries { get assessments_path }
+
+      2.times { |i| rate_as_manager(add_report("Report #{i}"), @cap, "consistent") }
+      three_cards = count_queries { get assessments_path }
+
+      assert_select "[data-capability-blades]", count: 3
+      assert_equal one_card, three_cards
+    end
+
+    should "draw every card's blades in the same number of queries, however many roles the cards span" do
+      rate_as_manager(@person, @cap, "consistent")
+      sign_in @manager_user
+      one_card = count_queries { get assessments_path }
+
+      staff, staff_level = add_staff_role
+      2.times { |i| rate_as_manager(add_report("Staff #{i}", role: staff, level: staff_level), @cap, "consistent") }
+      three_cards = count_queries { get assessments_path }
+
+      assert_select "[data-capability-blades]", count: 3
+      assert_equal one_card, three_cards
+    end
+
+    should "draw every card's blades in the same number of queries, however many alignments other roles hold" do
+      staff, = add_staff_role
+      rate_as_manager(@person, @cap, "consistent")
+      start_lens_alignment(@person, staff)
+      sign_in @manager_user
+      one_card = count_queries { get assessments_path }
+
+      2.times do |i|
+        report = add_report("Report #{i}")
+        rate_as_manager(report, @cap, "consistent")
+        start_lens_alignment(report, staff)
+      end
+      three_cards = count_queries { get assessments_path }
+
+      assert_select "[data-capability-blades]", count: 3
+      assert_equal one_card, three_cards
     end
 
     should "render the capability map for the report, read through the manager's ratings" do
@@ -791,6 +896,53 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         level_ordinal: 2, frequency: frequency, cycle_id: @cycle_id
       )
     end
+  end
+
+  def rate_as_manager(person, capability, frequency)
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.rate_as_manager(
+        person.id, @framework.framework_id, capability.stable_id,
+        level_ordinal: 2, frequency: frequency, cycle_id: @cycle_id, rated_by_id: @manager.id
+      )
+    end
+  end
+
+  # A direct report of the manager, assigned (at E2 by default) and enrolled in the open cycle.
+  def add_report(name, role: @role, level: @level)
+    ActsAsTenant.with_tenant(@tenant) do
+      report = create(:person, tenant: @tenant, name: name, manager: @manager)
+      PersonDevelopment::CommandHandler.new.assign_to_framework(
+        report.id, @framework.framework_id, role.role_id, level.level_id
+      )
+      report
+    end
+  end
+
+  # A second role on the ladder, binding the same capability.
+  def add_staff_role
+    ActsAsTenant.with_tenant(@tenant) do
+      role = create(:framework_role, role_family_id: @role.role_family_id, name: "Staff Engineer", code: "S",
+                                     track: "ic")
+      create(:framework_capability_role_binding, capability_id: @cap.capability_id, role_id: role.role_id)
+      [ role, create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Staff", code: "S2") ]
+    end
+  end
+
+  # Alignment started against another role, as the per-role alignment records it.
+  def start_lens_alignment(person, role)
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentCycleRoleAlignment.create!(tenant: @tenant, cycle_id: @cycle_id, person_id: person.id,
+                                           framework_id: @framework.framework_id, role_id: role.role_id,
+                                           level_ordinal: 2, alignment_started_at: Time.current)
+    end
+  end
+
+  def count_queries(&block)
+    count = 0
+    counter = ->(_n, _s, _f, _i, payload) { count += 1 unless payload[:name] == "SCHEMA" || payload[:sql] =~ /SAVEPOINT/ }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record", &block)
+    assert_response :success
+    count
   end
 
   def sign_in(user)
