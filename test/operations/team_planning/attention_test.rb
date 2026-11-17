@@ -177,6 +177,19 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal "PositionSet", change_of(position)[:kind]
   end
 
+  should "mark a unit the plan placed once its type can no longer sit there, rather than refusing the plan" do
+    risk = write(Operations::TeamPlanning::SetUnit, @q2, name: "Risk", parent_id: @growth, level_id: @team)[:unit_id]
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                      .set_kind_parents(@team, parent_ids: [ @department ], top: false, effective_on: "2026-02-01")
+    end
+
+    assert_equal [ [ risk, "unit", "Doesn't fit this structure: Team can't sit under Squad" ] ], items
+    assert_equal({ kind: "UnitSet", scenario_id: @q2 }, change_of(risk).except(:event_id))
+    assert_equal "misfits", attention[:items].first[:check]
+    assert_equal({ risk => "Risk" }, attention[:names])
+  end
+
   should "mark someone placed who isn't on the map" do
     assign(@q2, @newcomer, { unit_id: @growth, allocation: 1 })
 

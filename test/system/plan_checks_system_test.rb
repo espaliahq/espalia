@@ -9,7 +9,7 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
     @tenant = create(:tenant)
     handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
-    team = SecureRandom.uuid_v7
+    @team = team = SecureRandom.uuid_v7
     @payments = payments = SecureRandom.uuid_v7
     @growth = SecureRandom.uuid_v7
 
@@ -88,6 +88,19 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_includes all("nav[aria-label='Checks'] a").map { it.text.squish }, "Cost centre mismatches 1"
       assert_no_sideways_overflow
     end
+    should "mark a unit whose type can no longer sit where the plan put it" do
+      misfit_unit
+      sign_in_as(@planner.user)
+      visit checks_plan_path(@plan_id, scenario: @q1)
+      assert_text "Checks on Q1 hires"
+
+      within("#checks-misfits") do
+        assert_selector "h4", text: "Structure"
+        assert_selector "[data-check-item]", text: /Risk · Unit.*Doesn't fit this structure: Squad can't sit under Team.*From a change in Q1 hires/m
+      end
+      assert_includes all("nav[aria-label='Checks'] a").map { it.text.squish }, "Structure 1"
+      assert_no_sideways_overflow
+    end
   end
 
   context "on a phone" do
@@ -125,6 +138,16 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_text "Checks on Q1 hires"
 
       assert_selector "#checks-cost-centre-mismatches [data-check-item]", text: /Costed in Platform, while the cost centre entries give Payments/m
+      assert_no_sideways_overflow
+    end
+
+    should "read a unit that no longer fits the structure without scrolling sideways" do
+      misfit_unit
+      sign_in_as(@planner.user)
+      visit checks_plan_path(@plan_id, scenario: @q1)
+      assert_text "Checks on Q1 hires"
+
+      assert_selector "#checks-misfits [data-check-item]", text: /Doesn't fit this structure: Squad can't sit under Team/
       assert_no_sideways_overflow
     end
   end
@@ -170,6 +193,17 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
       end
     end
+  end
+
+  # Squad may sit under Team when the plan places Risk, then may only sit at the top.
+  def misfit_unit
+    squad = SecureRandom.uuid_v7
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    ActsAsTenant.with_tenant(@tenant) do
+      structure.define_taxonomy([ { level_id: @team, name: "Team" }, { level_id: squad, name: "Squad" } ], effective_on: Date.current.iso8601)
+    end
+    call(Operations::TeamPlanning::SetUnit, @planner, plan_id: @plan_id, scenario_id: @q1, name: "Risk", parent_id: @payments, level_id: squad)
+    ActsAsTenant.with_tenant(@tenant) { structure.set_kind_parents(squad, parent_ids: [], top: true, effective_on: Date.current.iso8601) }
   end
 
   def disagreeing_entry

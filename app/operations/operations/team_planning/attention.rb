@@ -15,6 +15,8 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "capacity:#{::TeamPlanning::Attention::UNASSIGNED} for someone in no unit), a reason, and the change it belongs to: its " \
               "kind, the scenario that made it and its event_id. That is the later to land of the subject's own change and the change " \
               "that broke it, such as a parent unit's retirement; change is null when nothing in the plan explains it. " \
+              "A live unit whose unit type can no longer sit under its parent's type, or at the top, since the Org Graph " \
+              "changed where that type may sit, is listed under its unit facet as \"#{I18n.t('org_graph.misfit')}\", with the rule it breaks. " \
               "It also checks each person: placed nowhere, over or under 100% allocated (an unknown total is " \
               "neither), still in the plan after the Org Graph has them leave, no manager (except the head of the " \
               "tree), or a manager who is gone, has left, or is in or owns none of their units nor the unit directly above one. " \
