@@ -33,10 +33,11 @@ class Assessments::MatrixDataBuilder
   #   already loaded, here and in the three after it; nil loads it
   # @param categories [Array<FrameworkState::CapabilityCategory>, nil] a {.lens_tree}
   # @param alignments [Array<AssessmentCycleRoleAlignment>, nil] see {Assessments::Disclosure.for}
+  # @param roles [Hash{String => FrameworkState::Role}, nil] the alignments' roles, likewise
   # @param ratings [Array<AssessmentLevelRating>, nil] see {#initialize}
   # @return [Hash] see {#build}
   def self.for_lens(lens:, context:, viewer_person_id: nil, viewer_sees_all_evidence: false,
-                    framework: nil, categories: nil, alignments: nil, ratings: nil)
+                    framework: nil, categories: nil, alignments: nil, roles: nil, ratings: nil)
     assignment = lens.assignment
     status = lens.participant_status
     new(
@@ -46,7 +47,7 @@ class Assessments::MatrixDataBuilder
       cycle_id: lens.cycle&.cycle_id,
       categories: categories || lens_tree(framework_id: assignment.framework_id, lenses: [ lens ]),
       participant_status: status,
-      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status, rows: alignments),
+      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status, rows: alignments, roles: roles),
       context: context,
       viewer_person_id: viewer_person_id,
       viewer_sees_all_evidence: viewer_sees_all_evidence,

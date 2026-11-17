@@ -330,13 +330,26 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       sign_in @manager_user
       one_card = count_queries { get assessments_path }
 
-      staff, staff_level = ActsAsTenant.with_tenant(@tenant) do
-        role = create(:framework_role, role_family_id: @role.role_family_id, name: "Staff Engineer", code: "S",
-                                       track: "ic")
-        create(:framework_capability_role_binding, capability_id: @cap.capability_id, role_id: role.role_id)
-        [ role, create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Staff", code: "S2") ]
-      end
+      staff, staff_level = add_staff_role
       2.times { |i| rate_as_manager(add_report("Staff #{i}", role: staff, level: staff_level), @cap, "consistent") }
+      three_cards = count_queries { get assessments_path }
+
+      assert_select "[data-capability-blades]", count: 3
+      assert_equal one_card, three_cards
+    end
+
+    should "draw every card's blades in the same number of queries, however many alignments other roles hold" do
+      staff, = add_staff_role
+      rate_as_manager(@person, @cap, "consistent")
+      start_lens_alignment(@person, staff)
+      sign_in @manager_user
+      one_card = count_queries { get assessments_path }
+
+      2.times do |i|
+        report = add_report("Report #{i}")
+        rate_as_manager(report, @cap, "consistent")
+        start_lens_alignment(report, staff)
+      end
       three_cards = count_queries { get assessments_path }
 
       assert_select "[data-capability-blades]", count: 3
@@ -902,6 +915,25 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         report.id, @framework.framework_id, role.role_id, level.level_id
       )
       report
+    end
+  end
+
+  # A second role on the ladder, binding the same capability.
+  def add_staff_role
+    ActsAsTenant.with_tenant(@tenant) do
+      role = create(:framework_role, role_family_id: @role.role_family_id, name: "Staff Engineer", code: "S",
+                                     track: "ic")
+      create(:framework_capability_role_binding, capability_id: @cap.capability_id, role_id: role.role_id)
+      [ role, create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Staff", code: "S2") ]
+    end
+  end
+
+  # Alignment started against another role, as the per-role alignment records it.
+  def start_lens_alignment(person, role)
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentCycleRoleAlignment.create!(tenant: @tenant, cycle_id: @cycle_id, person_id: person.id,
+                                           framework_id: @framework.framework_id, role_id: role.role_id,
+                                           level_ordinal: 2, alignment_started_at: Time.current)
     end
   end
 

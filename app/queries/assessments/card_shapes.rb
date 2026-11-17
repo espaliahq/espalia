@@ -34,7 +34,7 @@ class Assessments::CardShapes
     key = [ lens.cycle.cycle_id, assignment.person_id ]
     data = Assessments::MatrixDataBuilder.for_lens(
       lens: lens, context: context, framework: frameworks[lens.framework_id],
-      categories: trees.fetch(lens.framework_id), alignments: alignments.fetch(key, []),
+      categories: trees.fetch(lens.framework_id), alignments: alignments.fetch(key, []), roles: roles,
       ratings: ratings.fetch(key, [])
     )
     Assessments::CapabilityShape.new(categories: data[:categories], scoring: hero_scoring(data, context),
@@ -68,14 +68,23 @@ class Assessments::CardShapes
   end
 
   # Fills {Assessments::RoleScope.reusing}'s memo, one load per framework, so
-  # each lens's scope reads from it.
+  # each lens's and alignment's scope reads from it.
   def preload_role_scopes
-    @assignments.group_by(&:framework_id).each do |framework_id, list|
-      Assessments::RoleScope.for_roles(role_ids: list.map { |a| home_role_id(a) }, framework_id: framework_id)
+    role_ids_by_framework.each do |framework_id, role_ids|
+      Assessments::RoleScope.for_roles(role_ids: role_ids, framework_id: framework_id)
     end
   end
 
-  def home_role_id(assignment) = Assessments::Lens.home_ids(assignment, enrollment_for(assignment)).first
+  # The home roles of the cards in a cycle, and the roles of their alignments.
+  def role_ids_by_framework
+    @role_ids_by_framework ||= enrolled.group_by(&:framework_id).transform_values do |list|
+      homes = list.map { |a| Assessments::Lens.home_ids(a, enrollment_for(a)).first }
+      aligned = list.flat_map { |a| alignments.fetch([ enrollment_for(a).cycle_id, a.person_id ], []).map(&:role_id) }
+      (homes + aligned).uniq
+    end
+  end
+
+  def enrolled = @assignments.select { |assignment| enrollment_for(assignment) }
 
   def enrollment_for(assignment) = enrollments[[ assignment.framework_id, assignment.person_id ]]
 
@@ -121,7 +130,7 @@ class Assessments::CardShapes
   def person_ids = enrollments.values.map(&:person_id).uniq
 
   def roles
-    @roles ||= FrameworkState::Role.includes(:levels).where(role_id: @assignments.map { |a| home_role_id(a) }.uniq)
+    @roles ||= FrameworkState::Role.includes(:levels).where(role_id: role_ids_by_framework.values.flatten.uniq)
       .index_by(&:role_id)
   end
 
