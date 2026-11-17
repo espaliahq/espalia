@@ -13,7 +13,8 @@ class Operations::OrgGraph::AsOf < Operations::Base
   include Operations::OrgGraph::DateParameter
 
   description "Read the Org Graph as it stood on one date: the live units with their parent, " \
-              "level, owners and direct member count, and the number of employed people. A future " \
+              "level, owners and direct member count, the unit types with the type ids each could sit under " \
+              "(parent_ids) and whether it could sit at the top, and the number of employed people. A future " \
               "date includes changes already recorded for it, such as a hire who starts then or a " \
               "scheduled move. known_on reads what the Org Graph knew at the end of that earlier " \
               "date in the tenant's time zone, leaving out corrections learned " \
@@ -36,7 +37,8 @@ class Operations::OrgGraph::AsOf < Operations::Base
     authorize :org_graph, :show?
   end
 
-  # @return [Hash] `:date`, `:known_on`, `:people_count` (everyone employed,
+  # @return [Hash] `:date`, `:known_on`, `:kinds` (the unit types on that
+  #   date, top first, with their rules), `:people_count` (everyone employed,
   #   or with `unit_id` everyone placed under it) and `:units`, each with
   #   `:id`, `:name`, `:parent_id`, `:level_id`, `:owner_ids` and
   #   `:member_count` (its direct members); in full mode also `:people` and
@@ -61,6 +63,7 @@ class Operations::OrgGraph::AsOf < Operations::Base
       date: snapshot.date.iso8601,
       known_on: snapshot.known_on&.iso8601,
       people_count: people.size,
+      kinds: snapshot.kinds.map { { id: it.id, name: it.name, provider: it.provider, **it.rules } },
       units: units.map { it.to_h.merge(member_count: member_counts.fetch(it.id, 0)) }
     }
     return result unless params[:mode] == "full"

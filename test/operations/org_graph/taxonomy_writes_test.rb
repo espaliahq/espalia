@@ -62,7 +62,8 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_equal %w[Department Team Squad Guild], level_names
       assert_equal "Guild", result[:name]
       assert_equal "2026-11-01", result[:effective_on]
-      assert_equal({ level_id: result[:level_id], name: "Guild", provider: "espalia" }, result[:levels].last)
+      assert_equal({ level_id: result[:level_id], name: "Guild", provider: "espalia",
+                     parent_ids: result[:levels].first(3).pluck(:level_id), top: true }, result[:levels].last)
       assert_equal "hibob", result[:levels].first[:provider]
       event = Rails.configuration.event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).last
       assert_equal @admin.person.id, event.data[:defined_by_id]

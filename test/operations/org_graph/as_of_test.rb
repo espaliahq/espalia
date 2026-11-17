@@ -36,6 +36,19 @@ class Operations::OrgGraph::AsOfTest < ActiveSupport::TestCase
 
   def call(**params) = as_tenant { Operations::OrgGraph::AsOf.call(context: @context, params:) }
 
+  should "return the unit types with the rules they had on the date" do
+    as_tenant do
+      OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+        .set_kind_parents(@squads, parent_ids: [ @departments ], top: false, effective_on: "2026-02-01")
+    end
+
+    before, after = [ "2026-01-15", "2026-02-15" ].map { |date| call(date:)[:kinds].index_by { it[:id] } }
+
+    assert_equal [ "Department", "espalia", [], true ], before[@departments].values_at(:name, :provider, :parent_ids, :top)
+    assert_equal [ [ @departments ], true ], before[@squads].values_at(:parent_ids, :top)
+    assert_equal [ [ @departments ], false ], after[@squads].values_at(:parent_ids, :top)
+  end
+
   should "summarise the units with their member counts by default" do
     result = call(date: "2026-02-15")
 
