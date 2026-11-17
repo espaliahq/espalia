@@ -307,6 +307,24 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_equal one_card, three_cards
     end
 
+    should "draw every card's blades in the same number of queries, however many roles the cards span" do
+      rate_as_manager(@person, @cap, "consistent")
+      sign_in @manager_user
+      one_card = count_queries { get assessments_path }
+
+      staff, staff_level = ActsAsTenant.with_tenant(@tenant) do
+        role = create(:framework_role, role_family_id: @role.role_family_id, name: "Staff Engineer", code: "S",
+                                       track: "ic")
+        create(:framework_capability_role_binding, capability_id: @cap.capability_id, role_id: role.role_id)
+        [ role, create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Staff", code: "S2") ]
+      end
+      2.times { |i| rate_as_manager(add_report("Staff #{i}", role: staff, level: staff_level), @cap, "consistent") }
+      three_cards = count_queries { get assessments_path }
+
+      assert_select "[data-capability-blades]", count: 3
+      assert_equal one_card, three_cards
+    end
+
     should "render the capability map for the report, read through the manager's ratings" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.rate_as_manager(
@@ -858,12 +876,12 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # A direct report of the manager, assigned at E2 and enrolled in the open cycle.
-  def add_report(name)
+  # A direct report of the manager, assigned (at E2 by default) and enrolled in the open cycle.
+  def add_report(name, role: @role, level: @level)
     ActsAsTenant.with_tenant(@tenant) do
       report = create(:person, tenant: @tenant, name: name, manager: @manager)
       PersonDevelopment::CommandHandler.new.assign_to_framework(
-        report.id, @framework.framework_id, @role.role_id, @level.level_id
+        report.id, @framework.framework_id, role.role_id, level.level_id
       )
       report
     end

@@ -38,7 +38,7 @@ class Assessments::MatrixDataBuilder
       lens: lens,
       person_id: assignment.person_id,
       cycle_id: lens.cycle&.cycle_id,
-      categories: lens_tree(framework_id: assignment.framework_id, lens: lens),
+      categories: lens_tree(framework_id: assignment.framework_id, lenses: [ lens ]),
       participant_status: status,
       disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
       context: context,
@@ -47,24 +47,26 @@ class Assessments::MatrixDataBuilder
     ).build
   end
 
-  # The active categories, preloaded with only what the lens role reads: its
-  # bound capabilities, their expectations at its levels, and its own
+  # The active categories, preloaded with only what the lenses' roles read:
+  # their bound capabilities, expectations at their levels, and their own
   # illustrations (#487). The associations are marked loaded with that subset,
-  # so the tree must not leave a reader of that role.
+  # so the tree must not leave readers of those roles.
   #
   # @param framework_id [String]
-  # @param lens [Assessments::Lens]
+  # @param lenses [Array<Assessments::Lens>]
   # @return [Array<FrameworkState::CapabilityCategory>]
-  def self.lens_tree(framework_id:, lens:)
+  def self.lens_tree(framework_id:, lenses:)
     categories = FrameworkState::CapabilityCategory
       .where(framework_id: framework_id, status: "active").order(:ordinal, :created_at, :id).to_a
-    preload(categories, :capabilities,
-            FrameworkState::Capability.where(capability_id: lens.scope.bindings.map(&:capability_id)))
+    preload(categories, :capabilities, FrameworkState::Capability.where(
+      capability_id: lenses.flat_map { |lens| lens.scope.bindings.map(&:capability_id) }.uniq
+    ))
     capabilities = categories.flat_map(&:capabilities)
-    preload(capabilities, :expectations,
-            FrameworkState::BehaviouralExpectation.where(level_ordinal: lens.role.levels.map(&:ordinal)))
+    preload(capabilities, :expectations, FrameworkState::BehaviouralExpectation.where(
+      level_ordinal: lenses.flat_map { |lens| lens.role.levels.map(&:ordinal) }.uniq
+    ))
     preload(capabilities.flat_map(&:expectations), :illustrations,
-            FrameworkState::RoleIllustration.where(role_id: lens.role.role_id))
+            FrameworkState::RoleIllustration.where(role_id: lenses.map { |lens| lens.role.role_id }.uniq))
     categories
   end
 

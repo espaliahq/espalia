@@ -30,7 +30,7 @@ class Assessments::CardShapes
   private
 
   def shape_for(assignment)
-    lens = lens_for(assignment)
+    lens = lenses[assignment]
     framework = frameworks[assignment.framework_id]
     return unless lens && framework
 
@@ -38,7 +38,7 @@ class Assessments::CardShapes
                                                     participation: lens.participation)
     data = Assessments::MatrixDataBuilder.new(
       framework: framework, lens: lens, person_id: assignment.person_id, cycle_id: lens.cycle.cycle_id,
-      categories: tree(lens), participant_status: lens.participant_status, context: context,
+      categories: trees.fetch(lens.framework_id), participant_status: lens.participant_status, context: context,
       disclosure: Assessments::Disclosure.for(lens: lens, participant_status: lens.participant_status,
                                               rows: alignments.fetch([ lens.cycle.cycle_id, assignment.person_id ], [])),
       ratings: ratings_for(lens)
@@ -77,10 +77,15 @@ class Assessments::CardShapes
     [ assignment.role_id, assignment.level_id ]
   end
 
-  def tree(lens)
-    @trees ||= {}
-    @trees[[ lens.framework_id, lens.role.role_id ]] ||=
-      Assessments::MatrixDataBuilder.lens_tree(framework_id: lens.framework_id, lens: lens)
+  # One tree per framework for every role its cards read.
+  def trees
+    @trees ||= lenses.values.compact.group_by(&:framework_id).to_h do |framework_id, framework_lenses|
+      [ framework_id, Assessments::MatrixDataBuilder.lens_tree(framework_id: framework_id, lenses: framework_lenses) ]
+    end
+  end
+
+  def lenses
+    @lenses ||= @assignments.index_with { |assignment| lens_for(assignment) }
   end
 
   def ratings_for(lens)
