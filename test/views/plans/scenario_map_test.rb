@@ -41,6 +41,17 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
       assert_includes card(render_map(positions: [ position(-1.0) ]), "Payments").text, "1.0 FTE over"
     end
 
+    should "say where hiring stands on an open position, and nothing once it is full" do
+      note = lambda do |open_fte, **hiring|
+        card(render_map(positions: [ position(open_fte).merge(hiring) ]), "Payments").at_css("[data-hiring-note]")&.text
+      end
+
+      assert_equal "Offer accepted · starts 1 Jan 2027", note.(1.0, hiring_status: "offer_accepted", target_start: "2027-01-01")
+      assert_equal "On hold", note.(0.5, hiring_status: "on_hold", target_start: nil)
+      assert_nil note.(1.0, hiring_status: "not_started", target_start: nil)
+      assert_nil note.(0.0, hiring_status: "recruiting", target_start: "2027-01-01")
+    end
+
     should "keep its positions out of the description list" do
       ada = { id: ADA, fte: 1.0, memberships: [ place(PAYMENTS, 1.0) ] }
       payments = card(render_map(people: [ ada ], positions: [ position(1.0) ]), "Payments")

@@ -21,8 +21,14 @@ class Operations::TeamPlanning::Timeline < Operations::Base
               "that place in each of its columns, counting every place they hold as the map does. moves name the units a person left and joined after a " \
               "column (crossing is \"out\" when they leave the units a scoped plan covers and \"in\" when they join them), and departures the column they leave in, with its backfill. " \
               "Each column's movable lists the places, positions and departures that step itself changes, as subject_id and facet: " \
-              "what team_planning_move_change can move a step earlier or later. positions are keyed by id, each as " \
-              "it stands in the last column it appears in. `names` maps every person id " \
+              "what team_planning_move_change can move a step earlier or later. walk counts the plan's heads in each column, " \
+              "and each block's walk and unassigned_walk the heads in that block and in Unassigned: opening (the last column's " \
+              "closing), hires (new to the map), transfers_in (from another unit, or from outside a scoped plan's units), " \
+              "departures, transfers_out and closing, which is opening plus hires and transfers_in less departures and " \
+              "transfers_out. Heads, not FTE: a person in two units is one head in each and one in the plan. The first " \
+              "column, today, has a closing only. positions are keyed by id, each as " \
+              "it stands in the last column it appears in, plus hiring: its hiring_status and target_start in each column, null where " \
+              "the column has no such position. `names` maps every person id " \
               "to a name; a forgotten person reads as \"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, " \
               "unless the caller is a member."
   category :read
@@ -31,13 +37,13 @@ class Operations::TeamPlanning::Timeline < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "The last step, or the plan's id for the baseline alone." }
 
-  # @return [Hash] `{ plan_id, scenario_id, columns, next_ids, blocks, unassigned_lane_ids, lanes, positions, names }`
+  # @return [Hash] `{ plan_id, scenario_id, columns, next_ids, walk, blocks, unassigned_lane_ids, unassigned_walk, lanes, positions, names }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     timeline = refusing_bad_plans { ::TeamPlanning::Timeline.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, scenario_id:, columns: columns(plan, timeline), next_ids: timeline.next_ids,
-      blocks: blocks(timeline), unassigned_lane_ids: timeline.unassigned_lane_ids,
+    { plan_id: plan.id, scenario_id:, columns: columns(plan, timeline), next_ids: timeline.next_ids, walk: timeline.walk.map(&:to_h),
+      blocks: blocks(timeline), unassigned_lane_ids: timeline.unassigned_lane_ids, unassigned_walk: timeline.unassigned_walk.map(&:to_h),
       lanes: timeline.lanes.map { lane(it) }, positions: positions(timeline),
       names: timeline.maps.map { names_for(it) }.reduce({}, :merge) }
   end
@@ -63,7 +69,7 @@ class Operations::TeamPlanning::Timeline < Operations::Base
       units = block.unit_ids.zip(timeline.maps).map do |unit_id, map|
         unit_id && { unit_id:, name: map.units.find { it.id == unit_id }.name }
       end
-      { block_id: block.id, units:, continues_from_ids: block.continues_from_ids, lane_ids: block.lane_ids }
+      { block_id: block.id, units:, continues_from_ids: block.continues_from_ids, lane_ids: block.lane_ids, walk: block.walk.map(&:to_h) }
     end
   end
 
@@ -73,6 +79,10 @@ class Operations::TeamPlanning::Timeline < Operations::Base
   end
 
   def positions(timeline)
-    timeline.maps.flat_map { positions_payload(it) }.to_h { [ it[:position_id], it.except(:position_id) ] }
+    hiring = Hash.new { |by_id, id| by_id[id] = Array.new(timeline.maps.size) }
+    timeline.maps.each_with_index do |map, column|
+      map.positions.each { hiring[it.id][column] = { hiring_status: it.hiring_status, target_start: it.target_start&.iso8601 } }
+    end
+    timeline.maps.flat_map { positions_payload(it) }.to_h { [ it[:position_id], { **it.except(:position_id), hiring: hiring[it[:position_id]] } ] }
   end
 end

@@ -10,7 +10,7 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
     @eng_id = SecureRandom.uuid_v7
     @sales_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @ada_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @ada_id, time_zone: "UTC")
     @q1 = fork(@plan_id, "then", ends_on: "2027-03-31")
     @q2 = fork(@q1, "then", ends_on: "2027-06-30")
     @q3 = fork(@q2, "then", ends_on: "2027-09-30")
@@ -331,7 +331,7 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
 
   test "refuse to move a change with an unsettled conflict from the last update to today, pointing at the Changes tab" do
     placed = place(@q1, @eng_id)
-    @plan.rebase(base_on: "2027-02-10", expected_base_on: "2027-01-01", rebased_by_id: @ada_id,
+    @plan.rebase(base_on: "2027-02-10", expected_base_on: "2027-01-01", rebased_by_id: @ada_id, time_zone: "UTC",
                  conflicts: [ { scenario_id: @q1, subject_id: @grace_id, facet: "assignment", change_id: placed } ])
 
     assert_match "Changes tab", refusal { move(@q1, "later") }
@@ -340,7 +340,7 @@ class TeamPlanning::PlanAggregateMoveTest < ActiveSupport::TestCase
 
   test "refuse to move a change earlier while its conflict from the last update to today is unsettled" do
     placed = place(@q2, @eng_id)
-    @plan.rebase(base_on: "2027-02-10", expected_base_on: "2027-01-01", rebased_by_id: @ada_id,
+    @plan.rebase(base_on: "2027-02-10", expected_base_on: "2027-01-01", rebased_by_id: @ada_id, time_zone: "UTC",
                  conflicts: [ { scenario_id: @q2, subject_id: @grace_id, facet: "assignment", change_id: placed } ])
 
     assert_match "Changes tab", refusal { move(@q2, "earlier") }

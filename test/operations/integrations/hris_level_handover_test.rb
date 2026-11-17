@@ -75,6 +75,17 @@ class Operations::Integrations::HrisLevelHandoverTest < ActiveSupport::TestCase
       assert_equal "hibob", ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.find(@level_id).provider }
     end
 
+    should "date the handover by the tenant's today, behind UTC in its evening" do
+      @tenant.update!(time_zone: "America/Los_Angeles")
+      travel_to Time.utc(2026, 11, 17, 4) do
+        fingerprint = compare(matches: @matches, resolutions: @resolutions)[:fingerprint]
+        call(Operations::Integrations::HandOverHrisLevel, field_id: TEAM.id, matches: @matches, resolutions: @resolutions, fingerprint:)
+      end
+
+      level = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.find(@level_id) }
+      assert_equal [ "hibob", Date.new(2026, 11, 16) ], [ level.provider, level.provider_effective_on ]
+    end
+
     should "refuse a fingerprint nobody was shown" do
       error = assert_raises(Operations::Base::ParameterError) do
         call(Operations::Integrations::HandOverHrisLevel, field_id: TEAM.id, matches: @matches, resolutions: @resolutions,

@@ -13,7 +13,7 @@
   per-element callback name — so it re-checks containment itself rather than
   trusting which one fired, and registers each element only once.
 - **Esc close** (`closeOverlayPanes`) — narrow viewports only. Both it and the
-  outside-tap path gate on `#somethingElseIsOpen` (no open modal overlay, no
+  outside-tap path gate on `somethingElseIsOpen` (`controllers/overlay_guard.js`, shared with `activity-pane`: no open modal overlay, no
   open `[role="menu"]`)
 - **Focus hand-off** for the activity overlay — into the pane on open, back to
   the Activity toggle on every close
@@ -156,9 +156,11 @@ Mounted **once** on the explorer root; every ⋮ in the matrix ships as a bare
 and the menu is built on open from that dataset plus the grid's own coordinates
 (§11a). Kinds: `capability` · `expectation` · `illustration` · `category` ·
 `expectation-create` · `illustration-create`, each with a builder function in the
-controller. Owns the open/close lifecycle (Esc → focus back to trigger, outside
-click, `modal:open`, acting on an item), fixed positioning that follows the
-trigger on scroll, roving ArrowUp/Down/Home/End focus, and the **resolved-
+controller. It extends `delegated_menu_controller.js` (`Kit::DelegatedMenu`,
+which the scenario map uses as it is), which owns the open/close lifecycle (Esc
+→ focus back to trigger, outside click, `modal:open`, acting on an item), fixed
+positioning that follows the trigger on scroll, and roving
+ArrowUp/Down/Home/End focus. The explorer adds its builders and the **resolved-
 suggestion memory** that renders a later-built Approve/Reject pair terminal
 (§12). It builds nothing itself that behaves — items carry the `data-*` for
 `modal#open` / `field-editor#open` / `reorder-move#move` / `reorder-list#moveUp`

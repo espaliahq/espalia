@@ -29,6 +29,16 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
 
   def level_ids = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_first.pluck(:id) }
 
+  def nothing_offered = { plan_id: @plan_id, scenario_id: @scenario_id, undo: nil, redo: nil }
+
+  def undo_step = call(Operations::TeamPlanning::UndoStep, plan_id: @plan_id, scenario_id: @scenario_id)
+
+  def assert_refused_bringing_back(&)
+    error = assert_raises(Operations::Base::ParameterError, &)
+    assert_equal "This change places a unit of a type that has been removed, so it can't be brought back", error.message
+    assert_empty ActsAsTenant.with_tenant(@tenant) { TeamPlanningOverride.where(plan_id: @plan_id, subject_id: @unit_id) }
+  end
+
   def kind_rules(level_id)
     kind = ActsAsTenant.with_tenant(@tenant) { ::OrgGraph::Repository.new.load_structure.taxonomy.kind(level_id) }
     [ kind.parent_ids, kind.top ]
@@ -203,9 +213,40 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     context "that a plan places a unit at" do
       setup do
         @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: Date.current.iso8601)[:plan_id]
-        scenario_id = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1",
-                                                                   ends_on: (Date.current + 90).iso8601)[:scenario_id]
-        call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id:, name: "Ledger", top_level: true, level_id: @guild)
+        @scenario_id = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1",
+                                                                    ends_on: (Date.current + 90).iso8601)[:scenario_id]
+        @unit_id = call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, scenario_id: @scenario_id, name: "Ledger",
+                                                           top_level: true, level_id: @guild)[:unit_id]
+      end
+
+      should "refuse to undo a clear of the unit once its level is gone" do
+        call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @scenario_id, subject_id: @unit_id, facet: "unit")
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+
+        assert_refused_bringing_back { call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @scenario_id) }
+      end
+
+      should "refuse to redo the unit once its level is gone" do
+        call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @scenario_id)
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+
+        assert_refused_bringing_back { call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @scenario_id) }
+      end
+
+      should "stop offering Undo of a clear of the unit once its level is gone" do
+        call(Operations::TeamPlanning::ClearChange, plan_id: @plan_id, scenario_id: @scenario_id, subject_id: @unit_id, facet: "unit")
+        assert undo_step[:undo]
+
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+        assert_equal nothing_offered, undo_step
+      end
+
+      should "stop offering Redo of the unit once its level is gone" do
+        call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @scenario_id)
+        assert undo_step[:redo]
+
+        call(Operations::OrgGraph::RemoveLevel, level_id: @guild)
+        assert_equal nothing_offered, undo_step
       end
 
       should "keep the level while the plan is live, counting the plans" do
@@ -214,6 +255,21 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         assert_equal "Guild can't be removed, as 1 live plan places units of this type. Change or archive that plan first, " \
                      "or delete it if no one can edit it any more",
                      error.message
+        assert_includes level_names, "Guild"
+      end
+
+      should "keep the level while the plans' overrides are being rebuilt" do
+        overrides = TeamPlanning::Projections::Overrides::PROJECTION_NAME
+        rebuilding = lambda do |*names, &block|
+          raise ProjectionVersion::Rebuilding if names.include?(overrides)
+
+          block.call
+        end
+        error = ProjectionVersion.stub(:unless_rebuilding, rebuilding) do
+          assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @guild) }
+        end
+
+        assert_equal "The Org Graph is being rebuilt; try again in a minute.", error.message
         assert_includes level_names, "Guild"
       end
 

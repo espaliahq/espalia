@@ -32,7 +32,8 @@ class OrgGraph::StructureAggregate
   MAPPABLE_FIELDS = { "cost_centre" => %w[cost_centre], "site" => %w[country] }.freeze
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :owner_ids,
-                    :created_on, :changed_on, keyword_init: true)
+                    :created_on, :changed_on, :retired_on, keyword_init: true)
+  Placement = Struct.new(:unit, :parent_id, :until_on, keyword_init: true)
 
   def initialize
     @levels = []
@@ -45,6 +46,7 @@ class OrgGraph::StructureAggregate
     @fact_fields = {}
     @successions = {}
     @kinds_change_dates = []
+    @kind_timelines = {}
   end
 
   # Defines or redefines the tenant's taxonomy, top level first.
@@ -97,8 +99,9 @@ class OrgGraph::StructureAggregate
   # Adds a level Espalia holds below every other level. Works from the levels
   # this stream holds, so a level added or moved meanwhile is kept.
   #
-  # Without `parent_ids:` the new kind keeps the rule every level was first
-  # written under: it may sit under any kind above it, or at the top.
+  # Without `parent_ids:` or `top:` the new kind keeps the rule every level was
+  # first written under: it may sit under any kind above it, or at the top.
+  # With only `top:`, it may sit under any kind above it.
   #
   # @param level_id [String] a new level's id
   # @param name [String]
@@ -114,8 +117,12 @@ class OrgGraph::StructureAggregate
     level_id = require_id(level_id, "Level id")
     raise ArgumentError, "Level id is taken" if level_index(level_id)
 
+    rules = {}
+    unless parent_ids.nil? && top.nil?
+      parent_ids = level_ids(@levels) if parent_ids.nil?
+      rules = { level_id => kind_rules(level_id, parent_ids, top.nil? ? Array(parent_ids).empty? : top) }
+    end
     levels = [ *@levels, { level_id:, name: } ]
-    rules = parent_ids.nil? ? {} : { level_id => kind_rules(level_id, parent_ids, top.nil? ? Array(parent_ids).empty? : top) }
     write_taxonomy(levels, rules:, effective_on:, defined_by_id:)
   end
 
@@ -173,8 +180,8 @@ class OrgGraph::StructureAggregate
   # @param set_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the provider is unknown, or a field is named for Espalia
   # @raise [RuntimeError] if the level is unknown, holds live units while its
-  #   provider or field changes, would break the order of providers, or the
-  #   date is out of range
+  #   provider or field changes, would break the order of providers, would
+  #   forbid a placement held since the date, or the date is out of range
   def set_level_provider(level_id, provider, effective_on:, field: nil, set_by_id: nil)
     level_id = require_id(level_id, "Level id")
     provider = require_provider(provider)
@@ -194,6 +201,7 @@ class OrgGraph::StructureAggregate
       ensure_hris_kinds_fit!(with_stated_rules(@levels), level_id => provider)
     end
     ensure_not_before_last_change!(effective_on)
+    ensure_units_still_fit!({ level_id => provider }, from: iso_date(effective_on)) unless provider == previous
 
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id: level_id,
@@ -242,7 +250,7 @@ class OrgGraph::StructureAggregate
     ensure_not_before_last_change!(effective_on)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
     ensure_hris_kinds_fit!(with_stated_rules(@levels), level_id => provider)
-    ensure_units_still_fit!({ level_id => provider })
+    ensure_units_still_fit!({ level_id => provider }, from: effective_on)
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id:, provider:, previous_provider: ESPALIA, field:, effective_on:, set_by_id:
     }))
@@ -422,13 +430,14 @@ class OrgGraph::StructureAggregate
     return if parent_id == unit.parent_id
 
     effective_on = dated_after_creation(unit, effective_on)
-    ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on)
+    ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on,
+                                                              until_on: @parents[unit_id].keys.select { it > effective_on }.min)
     raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit_id,
       parent_id: parent_id,
-      previous_parent_id: unit.parent_id,
+      previous_parent_id: parent_on(unit_id, effective_on),
       provider: unit.provider,
       effective_on: effective_on,
       moved_by_id: moved_by_id,
@@ -556,6 +565,12 @@ class OrgGraph::StructureAggregate
                          .to_h { |level| [ level[:level_id], level.slice(:parent_level_ids, :top) ] }
     @level_providers = @level_providers.slice(*level_ids(@levels))
     @level_fields = @level_fields.slice(*level_ids(@levels))
+    levels.each_with_index do |level, position|
+      revise_kind(level[:level_id], event.data[:effective_on]) do |kind|
+        { name: level[:name], position:, provider: kind&.fetch(:provider) || ESPALIA, **level.slice(:parent_level_ids, :top) }
+      end
+    end
+    (@kind_timelines.keys - level_ids(@levels)).each { |level_id| revise_kind(level_id, event.data[:effective_on]) { nil } }
   end
 
   on OrgGraph::Events::LevelProviderSet do |event|
@@ -563,6 +578,7 @@ class OrgGraph::StructureAggregate
     @kinds_change_dates << event.data[:effective_on] if event.data[:effective_on]
     @level_providers[event.data[:level_id]] = event.data[:provider]
     @level_fields[event.data[:level_id]] = event.data[:field]
+    revise_kind(event.data[:level_id], event.data[:effective_on]) { |kind| kind&.merge(provider: event.data[:provider]) }
   end
 
   on OrgGraph::Events::FactProviderSet do |event|
@@ -599,13 +615,14 @@ class OrgGraph::StructureAggregate
   on OrgGraph::Events::UnitMoved do |event|
     unit = @units.fetch(event.data[:unit_id])
     [ unit.unit_id, unit.parent_id, event.data[:parent_id] ].each { |id| touch(id, event.data[:effective_on]) }
-    unit.parent_id = event.data[:parent_id]
     @parents[unit.unit_id][event.data[:effective_on]] = event.data[:parent_id]
+    unit.parent_id = @parents[unit.unit_id].max_by(&:first).last
   end
 
   on OrgGraph::Events::UnitRetired do |event|
     unit = @units.fetch(event.data[:unit_id])
     unit.retired = true
+    unit.retired_on = event.data[:effective_on]
     touch(unit.parent_id, event.data[:effective_on])
   end
 
@@ -669,7 +686,7 @@ class OrgGraph::StructureAggregate
 
     ensure_hris_levels_on_top!(level_ids(levels), new_providers)
     ensure_hris_kinds_fit!(levels, new_providers)
-    ensure_units_still_fit!(new_providers, levels:)
+    ensure_units_still_fit!(new_providers, levels:, from: iso_date(effective_on))
 
     apply(OrgGraph::Events::TaxonomyDefined.new(data: {
       levels: levels,
@@ -789,13 +806,38 @@ class OrgGraph::StructureAggregate
   # A level an HRIS provides may sit only beneath the one HRIS level its list
   # names (by default, the one directly above it), so handing a level over, or
   # inserting an HRIS level above one, can leave a unit where its kind may no
-  # longer sit.
-  def ensure_units_still_fit!(provider_changes, levels: with_stated_rules(@levels))
+  # longer sit. A change dated in the past also covers the placements units
+  # held since, retired units' included.
+  def ensure_units_still_fit!(provider_changes, from:, levels: with_stated_rules(@levels))
     prospective = OrgGraph::Taxonomy.new(levels, providers: @level_providers.merge(provider_changes))
     stranded = misplaced_units(prospective) - misplaced_units
-    return if stranded.empty?
+    if stranded.any?
+      raise "These units wouldn't fit this structure, so move them first: #{stranded.map { describe_fit(it, prospective) }.join(', ')}"
+    end
 
-    raise "These units wouldn't fit this structure, so move them first: #{stranded.map { describe_fit(it, prospective) }.join(', ')}"
+    held = placements_ended_after(from).select { fits?(it, taxonomy) && !fits?(it, prospective) }
+    return if held.empty?
+
+    raise "These units sat where this structure wouldn't allow after #{from}, so date it #{held.map(&:until_on).max} or later: " \
+          "#{held.map { describe_held(it, prospective) }.join(', ')}"
+  end
+
+  # The placements that ended, by a move or a retirement, after a day. Each
+  # ends on the first day it no longer held: a move's date, or the day after a
+  # retirement, since a unit is still live on the day it retires.
+  def placements_ended_after(day)
+    @units.values.flat_map do |unit|
+      points = @parents.fetch(unit.unit_id, {}).sort
+      ends = points.drop(1).map(&:first) + [ unit.retired_on && (Date.iso8601(unit.retired_on) + 1).iso8601 ]
+      points.zip(ends).filter_map do |(from, parent_id), until_on|
+        Placement.new(unit:, parent_id:, until_on:) if until_on && until_on > day && until_on > from
+      end
+    end
+  end
+
+  def fits?(placement, rules)
+    parent = placement.parent_id && @units[placement.parent_id]
+    parent ? rules.allows?(placement.unit.level_id, beneath: parent.level_id) : rules.may_be_top?(placement.unit.level_id)
   end
 
   # A unit's latest change includes a sub-unit arriving beneath it or leaving,
@@ -813,23 +855,57 @@ class OrgGraph::StructureAggregate
   end
 
   # A parent must be live and of a kind the unit's kind may sit beneath, and a
-  # mirrored unit never hangs beneath one Espalia holds.
-  def ensure_placeable!(provider, level_id, parent_id, on:)
+  # mirrored unit never hangs beneath one Espalia holds. A back-dated placement
+  # must also fit the kinds' rules on each day it holds, as the history shows
+  # them; one that a later move ends before today answers only to those days.
+  def ensure_placeable!(provider, level_id, parent_id, on:, until_on: nil)
     rules = taxonomy
+    held_today = until_on.nil? || until_on > today
+    parent = parent_id && @units[parent_id]
     if parent_id.nil?
-      raise "#{rules.kind(level_id).name} can't sit at the top" unless rules.may_be_top?(level_id)
-
-      return
+      raise "#{rules.kind(level_id).name} can't sit at the top" if held_today && !rules.may_be_top?(level_id)
+    else
+      raise "Parent unit not found" unless parent
+      raise "Parent unit is retired" if parent.retired
+      raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
+      if held_today && !rules.allows?(level_id, beneath: parent.level_id)
+        raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent.level_id).name}"
+      end
+      raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
     end
+    ensure_placeable_while_held!(level_id, parent&.level_id, on:, until_on:)
+  end
 
-    parent = @units[parent_id]
-    raise "Parent unit not found" unless parent
-    raise "Parent unit is retired" if parent.retired
-    raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
-    unless rules.allows?(level_id, beneath: parent.level_id)
-      raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent.level_id).name}"
+  def ensure_placeable_while_held!(level_id, parent_level_id, on:, until_on:)
+    days = @kind_timelines.values.flatten(1).map(&:first).select { it > on && (until_on.nil? || it < until_on) }
+    [ on, *days ].uniq.sort.each do |day|
+      rules = rules_on(day)
+      next unless rules.kind(level_id) && (parent_level_id.nil? || rules.kind(parent_level_id))
+      next if parent_level_id ? rules.allows?(level_id, beneath: parent_level_id) : rules.may_be_top?(level_id)
+
+      where = parent_level_id ? "under #{rules.kind(parent_level_id).name}" : "at the top"
+      raise "On #{day}, #{rules.kind(level_id).name} couldn't sit #{where}, so the change can't be dated before its rules allowed it"
     end
-    raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
+  end
+
+  # The kinds of unit as they stood on a day, each with the rules it had then.
+  def rules_on(day)
+    kinds = @kind_timelines.filter_map { |level_id, points| points.select { it.first <= day }.last&.last&.merge(level_id:) }
+                           .sort_by { it[:position] }
+    OrgGraph::Taxonomy.new(kinds.map { it.except(:position, :provider) }, providers: kinds.to_h { [ it[:level_id], it[:provider] ] })
+  end
+
+  # Keeps each kind's dated values as the history does: a change takes effect
+  # on its date, or on the kind's last change if that is later.
+  def revise_kind(level_id, effective_on)
+    points = (@kind_timelines[level_id] ||= [])
+    latest = points.last&.last
+    value = yield(latest)
+    return if value == latest
+
+    from = [ effective_on.to_s.presence || "0000-01-01", points.last&.first ].compact.max
+    points.reject! { it.first == from }
+    points << [ from, value ]
   end
 
   def live_units
@@ -967,6 +1043,13 @@ class OrgGraph::StructureAggregate
     "#{unit.name} (#{parent ? "#{kind} under #{rules.kind(parent.level_id).name}" : "#{kind} at the top"})"
   end
 
+  def describe_held(placement, rules)
+    parent = placement.parent_id && @units[placement.parent_id]
+    kind = rules.kind(placement.unit.level_id).name
+    where = parent ? "under #{rules.kind(parent.level_id).name}" : "at the top"
+    "#{placement.unit.name} (#{kind} #{where} until #{placement.until_on})"
+  end
+
   def level_name(level_id) = @levels.find { |level| level[:level_id] == level_id }&.dig(:name)
 
   # The kinds' history dates each change no earlier than the last, so a
@@ -975,7 +1058,7 @@ class OrgGraph::StructureAggregate
   # dated today or earlier. A future-dated change an older stream holds is
   # left out of the comparison, so it can't lock out today's changes.
   def ensure_not_before_last_change!(effective_on)
-    on, today = iso_date(effective_on), Date.current.iso8601
+    on = iso_date(effective_on)
     raise "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan" if on > today
 
     last = @kinds_change_dates.select { it <= today }.max
@@ -983,6 +1066,8 @@ class OrgGraph::StructureAggregate
 
     raise "The unit types last changed on #{last}, so a change can't be dated before it"
   end
+
+  def today = Tenant.today.iso8601
 
   def normalise_levels(levels)
     levels = Array(levels).map do |level|

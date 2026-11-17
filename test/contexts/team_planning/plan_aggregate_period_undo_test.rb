@@ -8,7 +8,7 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
     @editor_id = SecureRandom.uuid_v7
     @other_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @editor_id, time_zone: "UTC")
     @q1 = fork(ends_on: "2027-03-31")
     @q2 = fork(@q1, name: "Q2", ends_on: "2027-06-30")
   end
@@ -118,14 +118,14 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
 
     should "refuse an undo of a first step's start once the base has moved past it" do
       edit = set(@q1, starts_on: "2027-01-20", ends_on: "2027-03-31")
-      @plan.rebase(base_on: "2027-01-10", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id)
+      @plan.rebase(base_on: "2027-01-10", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id, time_zone: "UTC")
 
       assert_equal "A first step starts on or after the plan's base date, 2027-01-10", refusal { undo_edit(@q1, edit) }
     end
 
     should "undo and redo an edit that moved only a first step's end, after the base moved past its old start" do
       edit = set(@q1, ends_on: "2027-04-30")
-      @plan.rebase(base_on: "2027-01-10", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id)
+      @plan.rebase(base_on: "2027-01-10", expected_base_on: "2027-01-01", conflicts: [], rebased_by_id: @editor_id, time_zone: "UTC")
 
       undo_edit(@q1, edit)
       assert_equal %w[2027-01-10 2027-03-31], period(@q1)
@@ -272,7 +272,7 @@ class TeamPlanning::PlanAggregatePeriodUndoTest < ActiveSupport::TestCase
   context "an archived plan" do
     should "refuse an undo and a redo of a date edit" do
       edit = set(@q1, ends_on: "2027-02-28")
-      @plan.archive(archived_by_id: @editor_id)
+      @plan.archive(archived_by_id: @editor_id, archived_on: Date.new(2026, 11, 16), time_zone: "UTC")
 
       assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal { undo_edit(@q1, edit) }
       assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal { redo_edit(@q1, edit) }

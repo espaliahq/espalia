@@ -42,12 +42,13 @@ class TeamPlanning::Baseline
   # @!attribute fundings [Hash{String => Array<Hash>}] position id => the draws a {TeamPlanning::Events::PositionFundingSet} sets
   # @!attribute held_cost_centres [Set<String>, nil] the cost centres a scoped plan's lines may name, fixed by its baseline; nil holds every line
   # @!attribute outside_lines [Array<BudgetLine>] the lines naming a cost centre the plan doesn't hold. Never shown, named or counted
+  # @!attribute step [Range<Date>, nil] the days the scenario's figures run over, which resolution fills in; nil starts every seat
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
                     :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings, :scope_ids, :outside,
-                    :cut_positions, :cut_unit_ids, :held_cost_centres, :outside_lines) do
+                    :cut_positions, :cut_unit_ids, :held_cost_centres, :outside_lines, :step) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
                    orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], cut_unit_ids: Set.new,
-                   held_cost_centres: nil, outside_lines: [], **) = super
+                   held_cost_centres: nil, outside_lines: [], step: nil, **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -66,7 +67,7 @@ class TeamPlanning::Baseline
       map = with(people: people.map(&placed), outside: outside.map(&placed))
       map = map.cut if scope_ids
       gone, staying = map.people.partition { it.departure && step_ids.exclude?(it.departure[:leaves_in_id]) }
-      map = map.with(people: staying, departed: departed + gone.map { Departed.new(person_id: it.id, country: it.country, **it.departure) })
+      map = map.with(people: staying, departed: departed + gone.map { Departed.new(person_id: it.id, country: it.country, fte: TeamPlanning::SeatStart.fte_of(it), **it.departure) })
       live = map.units.to_set(&:id)
       map.with(unassigned_ids: map.people.reject { |person| person.memberships.any? { live.include?(it.unit_id) } }.map(&:id))
     end
@@ -160,6 +161,9 @@ class TeamPlanning::Baseline
       Membership.shares(member.memberships).reject { |place, _, _| away.include?(place) }
     end
 
+    # @return [Hash{String => Position}] by id
+    def positions_by_id = positions.index_by(&:id)
+
     # A leaver never fills the position that backfills them.
     #
     # @return [Hash{String => Array<Array(Member, Membership)>}] position id => each person placed there, with the placement
@@ -174,6 +178,22 @@ class TeamPlanning::Baseline
       (people.filter_map { [ it.backfill_id, it.id ] if it.backfill_id } + departed.filter_map { [ it.position_id, it.person_id ] if it.position_id })
         .group_by(&:first).transform_values { it.map(&:last) }
     end
+
+    # A placeholder hire fills the first position it is placed in, so it
+    # starts when that seat does; one in no position starts with the step.
+    #
+    # @param member [Member]
+    # @return [Boolean] whether the person is in post by the step's last day
+    def started?(member)
+      return true unless step && member.placeholder?
+
+      position = member.memberships.lazy.filter_map { positions_by_id[it.position_id] if it.position_id }.first
+      position.nil? || TeamPlanning::SeatStart.new(position).started_in?(step)
+    end
+
+    # @param position [Position]
+    # @return [Boolean] whether the position's open seat has started by the step's last day
+    def seat_started?(position) = step.nil? || TeamPlanning::SeatStart.new(position).started_in?(step)
 
     # The people whose line points at a person or a position. For a vacant
     # manager position, this is the span the open seat carries.
@@ -389,14 +409,18 @@ class TeamPlanning::Baseline
     def backfill_id = departure&.dig(:position_id)
   end
 
+  # The FTE a leaver gone in an earlier step left their backfill, and the
+  # day that share opens. Nothing else of the leaver.
+  Vacated = Data.define(:fte, :opens_on)
+
   # Where a reporting line points: a person or a position, never both.
   Line = Data.define(:person_id, :position_id)
 
   # Someone a departure in an earlier step took off the map, the step they
-  # left in, the position backfilling them, if any, and the date within the
-  # step, if the plan gave one.
-  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on, :country) do
-    def initialize(leaves_on: nil, country: nil, **) = super
+  # left in, the position backfilling them, if any, the date within the
+  # step, if the plan gave one, and the FTE their backfill takes over.
+  Departed = Data.define(:person_id, :leaves_in_id, :position_id, :leaves_on, :country, :fte) do
+    def initialize(leaves_on: nil, country: nil, fte: 1r, **) = super
 
     # @return [Hash] as {TeamPlanning::Events::DepartureSet} set it, `leaves_on` only when given
     def departure = { leaves_in_id:, position_id: }.merge(leaves_on ? { leaves_on: } : {})
@@ -430,9 +454,13 @@ class TeamPlanning::Baseline
 
   # An open position. Its role and level names are nil until joined, and stay
   # nil for a role or level the framework no longer has. Its cost centre is
-  # its own label, nil when it has none.
-  Position = Data.define(:id, :role_id, :level_id, :unit_id, :fte, :basis, :cost_centre, :role_name, :level_name) do
-    def initialize(cost_centre: nil, **) = super
+  # its own label, nil when it has none. `opened_on` is the first day of the
+  # earliest step in the chain that sets it, and `vacated` the share each
+  # leaver gone in an earlier step left it, from the day it opens: both
+  # resolution fills in.
+  Position = Data.define(:id, :role_id, :level_id, :unit_id, :fte, :basis, :cost_centre, :role_name, :level_name,
+                         :hiring_status, :target_start, :opened_on, :vacated) do
+    def initialize(cost_centre: nil, hiring_status: "not_started", target_start: nil, opened_on: nil, vacated: [], **) = super
 
     # @param basis [String]
     # @return [String] "committed" for a backfill, "planned" for a new position
@@ -512,13 +540,23 @@ class TeamPlanning::Baseline
 
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def structure = CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, known_on ]) { map_on(@plan.base_on, known_on:) }
+  def structure
+    CurrentPlanReads.fetch([ :baseline, *CurrentPlanReads.viewer(@context), @plan.id, @plan.base_on, known_at ]) do
+      map_on(@plan.base_on, known_on:, known_at:)
+    end
+  end
 
   # The Org Graph as known the day before the base, or on the archive day if
   # that came first, so a fact recorded after archiving moves no figure.
   #
   # @return [Date]
   def known_on = [ @plan.base_on - 1, @plan.archived_on ].compact.min
+
+  # The instant {#known_on} ended, fixed in the zone the tenant had when the
+  # plan recorded it ({TeamPlanningPlan#known_at}).
+  #
+  # @return [ActiveSupport::TimeWithZone]
+  def known_at = @plan.known_at
 
   # The organisation on another day, in the shape {#structure} gives, so a
   # reader can hold the plan up against it.
@@ -528,15 +566,16 @@ class TeamPlanning::Baseline
   #
   # @param date [Date]
   # @param known_on [Date, nil] nil for what the Org Graph knows now
+  # @param known_at [Time, nil] the instant `known_on` ended, when the plan fixed it
   # @param history [Boolean] whether to carry the units the Org Graph retired, the
   #   successions it recorded and the people it had leave, by that day
   # @param scoped [Boolean] false for the whole organisation, so a reader can
   #   find someone the plan moved out of its scope
   # @return [Map] by id, with no names
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
-  def map_on(date, known_on: nil, history: false, scoped: true)
+  def map_on(date, known_on: nil, known_at: nil, history: false, scoped: true)
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
-    snapshot = OrgGraph::AsOf.new(context: @context, date:, known_on:).call
+    snapshot = OrgGraph::AsOf.new(context: @context, date:, known_on:, known_at:).call
 
     places = snapshot.memberships.group_by(&:person_id)
     people = snapshot.people.map { |person| person_from(person, places.fetch(person.id, [])) }

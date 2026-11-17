@@ -67,9 +67,6 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
 
   def event_count = Rails.configuration.event_store.read.count
 
-  # Ids and the signature are hex, so a short amount can turn up inside one.
-  def without_ids(result) = result.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}|\h{64}/, "")
-
   should "match people by id, HRIS id or either email, and preview what the file would change" do
     csv = "Amount,PERIOD,ignored,Person,Currency\n" \
           "90413,year,x,E-100,eur\n" \
@@ -82,7 +79,7 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     assert_equal [ @ada.id, @cy.id ], preview[:newly_priced_ids]
     assert_equal({ @ada.id => "Ada Quill", @cy.id => "Cy Quill" }, preview[:names])
     assert_match(/\A\h{64}\z/, preview[:signature])
-    assert_not_includes without_ids(preview), "90413"
+    assert_no_pay_figure preview, "90413"
 
     by_id = upload("#{HEADER}#{@ada.id.upcase},90413,EUR,year\n#{@cy.email.upcase},1,EUR,year\n")
     assert_equal [ @ada.id, @cy.id ], by_id[:matched_ids]
@@ -128,7 +125,7 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
                    { line: 6, codes: %w[bad_amount bad_currency bad_period] },
                    { line: 7, codes: [ "duplicate_person", "hourly_actual" ] } ], preview[:failures]
     assert_nil preview[:signature]
-    %w[90413 -61937 XYZ week nobody].each { assert_not_includes without_ids(preview), it }
+    %w[90413 -61937 XYZ week nobody].each { assert_no_pay_figure preview, it }
     assert_equal before, event_count
   end
 
@@ -172,7 +169,7 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
       "x" * (TeamPlanning::PayUpload::MAX_BYTES + 1) => "too_large" }.each do |csv, problem|
       preview = upload(csv)
       assert_equal problem, preview[:problem], problem
-      assert_not_includes without_ids(preview), "90413"
+      assert_no_pay_figure preview, "90413"
       assert_nil preview[:signature]
     end
   end
@@ -249,7 +246,7 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
     stored = [ ActiveRecord::Base.connection.select_values("SELECT data::text FROM event_store_events").join,
                *ActiveRecord::Base.connection.tables.grep(/\Ateam_planning/).map { ActiveRecord::Base.connection.select_values("SELECT t::text FROM #{it} t").join },
                ActiveRecord::Base.connection.select_values("SELECT t::text FROM mcp_pending_approvals t").join ].join
-    assert_not_includes stored, "91234.5678"
+    assert_no_pay_figure stored, "91234.5678"
   end
 
   should "answer an editor without the see-pay right, a viewer and an outsider as if there were no plan" do

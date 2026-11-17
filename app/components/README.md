@@ -51,6 +51,22 @@ end
 
 Use `strategy: :fixed` inside a scrolling container, so the menu isn't clipped.
 
+**`Kit::DelegatedMenu`**: one menu for a ⋮ on every row. The page renders the
+items once; each row's trigger carries the values that fill each `{name}`.
+
+```ruby
+div(data: Components::Kit::DelegatedMenu.root_data) do
+  render Components::Kit::DelegatedMenu.new(kind: "position") do |menu|
+    menu.item(data: { action: "click->modal#open", modal_target_id: "edit-modal", edit_url: "{path}" }) { "Edit…" }
+    menu.item(tone: :danger, data: { action: "click->modal#open", modal_target_id: "close-modal", close_url: "{path}" }) { "Close…" }
+  end
+  positions.each do |position|
+    render Components::Kit::DelegatedMenu::Trigger.new(label: "Actions for #{position.name}", kind: "position",
+                                                       values: { path: position_path(position) })
+  end
+end
+```
+
 **`Kit::SegmentedControl`**: one choice from a few, on a shared track.
 
 ```ruby
@@ -131,7 +147,7 @@ end
 
 - **`Kit::Card`**: `variant: :flush` drops the body padding (for a table), `:inset` is a panel inside another surface. `density: :compact` tightens it. `href:` makes the whole card a link, so it can't hold other links.
 - **`Kit::SectionHeading`**: a heading with an optional subtitle and action. `tag: :h3` for a lower level.
-- **`Kit::SidePanel`**: a main column with a panel beside it the viewer can close, remembered in a cookie and the URL. The page reads the cookie to pass `open:`. Below lg the panel overlays the page (`narrow: :overlay`) or stacks under the main column (`:stack`). `panel.toggle { … }` takes the label's markup, so a tight row can show a shorter label and keep the title for screen readers.
+- **`Kit::SidePanel`**: a main column with a panel beside it the viewer can close, remembered in a cookie and the URL. The page reads the cookie to pass `open:`. Below lg the panel overlays the page (`narrow: :overlay`), where Back, Escape and a tap outside close it, or stacks under the main column (`:stack`). `sticky:` keeps it in view as the page scrolls; `heading: false` is for a body that draws its own heading and `SidePanel::Close`. `panel.toggle { … }` takes the label's markup, so a tight row can show a shorter label and keep the title for screen readers. A toggle outside the row, in a page header, goes in `wrap` as `SidePanel::Toggle`, with `columns` placing the row.
 - **`Kit::DescriptionList`**: term and detail pairs in 1 to 4 columns.
 - **`Kit::Prose`**: anything a person wrote (feedback, comments, notes), with its Markdown rendered and escaped. `Prose.to_plain(text)` for an excerpt.
 

@@ -10,9 +10,10 @@
 # draws under the date line: capacity (#255), items needing attention (#257),
 # a leaving mark and reporting lines (#256). An editor on a scenario other
 # than Today can move people and positions ([#285](https://github.com/espaliahq/espalia/issues/285)): units take drops, and
-# so do positions, for people. Each person row and each position is draggable,
-# with a "Move…" button that opens {Views::Plans::MoveDialog} or
-# {Views::Plans::MovePositionDialog}.
+# so do positions, for people. Each person row and each position is draggable.
+# A person has a "Move…" button that opens {Views::Plans::MoveDialog}; a
+# position has a menu of Edit…, Move… and Close…, and each unit an "Open a
+# position" button ([#461](https://github.com/espaliahq/espalia/issues/461)).
 class Views::Plans::ScenarioMap < Views::Base
   NONE = ->(*) { [] }
 
@@ -30,6 +31,21 @@ class Views::Plans::ScenarioMap < Views::Base
   # @return [Hash{String => String}] every position's name, numbered within its unit
   def self.all_position_names(map) = map[:positions].group_by { it[:unit_id] }.values.map { position_names(it) }.reduce({}, :merge)
 
+  # @param units [Array<Hash>] the map's units
+  # @return [Array<Array(Hash, Array<String>)>] each unit with the names above it, parents before children, by name
+  def self.ordered_units(units)
+    children = units.group_by { it[:parent_id] }
+    ids = units.to_set { it[:id] }
+    seen = Set.new
+    walk = lambda do |unit, path|
+      next [] unless seen.add?(unit[:id])
+
+      [ [ unit, path ] ] + children.fetch(unit[:id], []).sort_by { it[:name] }.flat_map { walk.(it, path + [ unit[:name] ]) }
+    end
+    roots, rest = units.sort_by { it[:name] }.partition { !ids.include?(it[:parent_id]) }
+    (roots + rest).flat_map { walk.(it, []) }
+  end
+
   # @param map [Hash] from `team_planning_scenario_map`
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`, baseline first
   # @param unit_marks [#call] unit hash => components beside the unit's name
@@ -38,9 +54,13 @@ class Views::Plans::ScenarioMap < Views::Base
   # @param summary [Phlex::SGML, nil] drawn under the date line, such as the capacity strip
   # @param can_edit [Boolean] whether the caller edits the plan: renaming the scenario shown, and moving people on it
   # @param can_upload_pay [Boolean] whether the caller may hold actual pay from a file, an editor with the see-pay right
+  # @param removable [Array<String>] the scenarios that offer Remove, each with its dialog on the page
+  # @param roles [Array<FrameworkState::Role>] with their levels, for opening and editing positions
   def initialize(map:, scenarios:, unit_marks: NONE, person_marks: NONE, position_marks: NONE, summary: nil, can_edit: false,
-                 can_upload_pay: false)
+                 can_upload_pay: false, removable: [], roles: [])
+    @roles = roles
     @can_edit = can_edit
+    @removable = removable
     @can_upload_pay = can_upload_pay
     @map = map
     @moving = can_edit && !baseline?(map[:scenario_id])
@@ -57,7 +77,8 @@ class Views::Plans::ScenarioMap < Views::Base
       p(class: "text-sm text-muted") { as_of_line }
       render @summary if @summary
       unresolved_notice if @map[:unresolved].any?
-      div(class: "grid #{GRID} gap-4", data: ({ controller: "map-move" } if @moving)) do
+      div(class: "grid #{GRID} gap-4", data: (grid_data if @moving)) do
+        position_menu_template if @moving
         ordered_units.each { |unit, path| unit_card(unit, path) }
         unassigned_card if @moving || unassigned.any? || unplaced_positions.any?
       end
@@ -93,7 +114,7 @@ class Views::Plans::ScenarioMap < Views::Base
 
   # A phone has no room for a pill per scenario, so it picks from a list.
   def scenario_select
-    form(action: map_plan_path(@map[:plan_id]), method: "get", class: "flex min-w-0 flex-1 items-center gap-2 text-sm sm:hidden",
+    form(action: map_plan_path(@map[:plan_id]), method: "get", class: "flex min-w-0 basis-full items-center gap-2 text-sm sm:hidden",
          data: { controller: "auto-submit" }) do
       label(for: "map-scenario", class: "text-muted") { "Showing" }
       select(id: "map-scenario", name: "scenario", class: "min-w-0 flex-1 #{Components::Kit::Field::SELECT}",
@@ -116,6 +137,10 @@ class Views::Plans::ScenarioMap < Views::Base
       variant: :ghost, size: :sm,
       data: Views::Plans::ScenarioDialogs.edit_trigger(plan_scenario_path(@map[:plan_id], current[:scenario_id]), current)
     ) { "Edit…" }
+    if @removable.include?(current[:scenario_id])
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, compact: true,
+                                         data: Views::Plans::RemoveScenarioDialog.trigger(current[:scenario_id])) { "Remove…" }
+    end
     step = Views::Plans::ScenarioTable.dated_step(current, @scenarios)
     return unless step
 
@@ -152,6 +177,11 @@ class Views::Plans::ScenarioMap < Views::Base
     render Views::Plans::MoveDialog.new(scenario_id: @map[:scenario_id], scenario_name:, units: ordered_units,
                                         positions: @map[:positions].group_by { it[:unit_id] })
     render Views::Plans::MovePositionDialog.new(scenario_id: @map[:scenario_id], scenario_name:, units: ordered_units)
+    %i[open edit].each do |mode|
+      form = Views::Plans::PositionForm.new(mode:, scenario_id: @map[:scenario_id], scenario_name:, units: ordered_units, roles: @roles)
+      render Views::Plans::PositionDialog.new(mode:, form:)
+    end
+    render Views::Plans::ClosePositionDialog.new(scenario_id: @map[:scenario_id], scenario_name:)
   end
 
   # Where a unit card takes a dragged person.
@@ -187,6 +217,7 @@ class Views::Plans::ScenarioMap < Views::Base
         p(class: "mt-1 text-sm text-muted") { unit_summary(unit, people) }
       end
       rows(people, positions_in(unit[:id]))
+      open_position_button(unit) if @moving
     end
   end
 
@@ -305,12 +336,13 @@ class Views::Plans::ScenarioMap < Views::Base
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-dashed border-default px-2 py-1 text-sm #{DROP_OVER}") do
         span(class: "min-w-0 break-words font-medium text-default") { position_name(position) }
         open_fte_note(position[:open_fte])
+        render Views::Plans::HiringNote.new(position) if position[:open_fte].positive?
         @position_marks.call(position).each { render it }
         render Components::Kit::Badge.new(position[:level_name], size: :sm) if position[:level_name]
         position.fetch(:occupants, []).sort_by { name(it[:person_id]) }.each do |occupant|
           span(data: { map_occupant: occupant[:person_id] }, class: "min-w-0 break-words text-muted") { "#{name(occupant[:person_id])} · #{allocation(occupant)}" }
         end
-        span(class: "ml-auto") { move_position_button(position) } if movable?(position)
+        span(class: "ml-auto") { position_menu(position) } if movable?(position)
       end
     end
   end
@@ -327,13 +359,43 @@ class Views::Plans::ScenarioMap < Views::Base
       action: "dragstart->map-move#start dragend->map-move#end dragover->map-move#over dragleave->map-move#leave drop->map-move#drop" }
   end
 
-  def move_position_button(position)
+  MENU = "position"
+
+  def grid_data
+    menu = Components::Kit::DelegatedMenu.root_data
+    { controller: "map-move #{menu[:controller]}", action: menu[:action] }
+  end
+
+  # Edit…, Move… and Close…, once for the whole map. Each `{name}` is filled
+  # from the row's trigger when its menu opens.
+  def position_menu_template
+    render Components::Kit::DelegatedMenu.new(kind: MENU) do |menu|
+      path = "#{plan_positions_path(@map[:plan_id])}/{id}"
+      values = { unit_id: "{unit}", level_id: "{level}", fte: "{fte}", basis: "{basis}", cost_centre: "{cost-centre}" }
+      menu.item(data: Views::Plans::PositionDialog.trigger(mode: :edit, url: path, name: "{name}", values:)) { "Edit…" }
+      menu.item(data: Views::Plans::MovePositionDialog.trigger(url: "#{path}/move", name: "{name}", from: "{unit}")) { "Move…" }
+      menu.item(tone: :danger, data: Views::Plans::ClosePositionDialog.trigger(url: path, name: "{name}", occupants: [ "{occupants}" ])) { "Close…" }
+    end
+  end
+
+  def position_menu(position)
     label = position_name(position)
-    render Components::Kit::Button.new(
-      variant: :ghost, size: :sm, aria_label: "Move #{label} in #{units_by_id[position[:unit_id]][:name]}",
-      data: Views::Plans::MovePositionDialog.trigger(url: plan_position_path(@map[:plan_id], position[:position_id]), name: label,
-                                                     from: position[:unit_id])
-    ) { "Move…" }
+    render Components::Kit::DelegatedMenu::Trigger.new(
+      label: "Actions for #{label} in #{units_by_id.dig(position[:unit_id], :name) || "no unit"}", kind: MENU,
+      values: { id: position[:position_id], name: label,
+                unit: position[:unit_id], level: position[:level_id], fte: position[:fte], basis: position[:basis],
+                cost_centre: position[:cost_centre], occupants: position.fetch(:occupants, []).map { name(it[:person_id]) }.sort.to_sentence }
+    )
+  end
+
+  def open_position_button(unit)
+    div(class: "border-t border-subtle px-2 py-1") do
+      render Components::Kit::Button.new(
+        variant: :ghost, size: :sm, aria_label: "Open a position in #{unit[:name]}",
+        data: Views::Plans::PositionDialog.trigger(mode: :open, url: plan_positions_path(@map[:plan_id]), name: unit[:name],
+                                                   values: { unit_id: unit[:id] })
+      ) { "Open a position" }
+    end
   end
 
   def units_by_id = @units_by_id ||= @map[:units].index_by { it[:id] }
@@ -373,20 +435,7 @@ class Views::Plans::ScenarioMap < Views::Base
   # Each unit with the names of the units above it, parents before children.
   # Scenarios can set any unit's parent, so units caught in a loop come last
   # rather than not at all.
-  def ordered_units
-    @ordered_units ||= begin
-      children = @map[:units].group_by { it[:parent_id] }
-      ids = @map[:units].to_set { it[:id] }
-      seen = Set.new
-      walk = lambda do |unit, path|
-        next [] unless seen.add?(unit[:id])
-
-        [ [ unit, path ] ] + children.fetch(unit[:id], []).sort_by { it[:name] }.flat_map { walk.(it, path + [ unit[:name] ]) }
-      end
-      roots, rest = @map[:units].sort_by { it[:name] }.partition { !ids.include?(it[:parent_id]) }
-      (roots + rest).flat_map { walk.(it, []) }
-    end
-  end
+  def ordered_units = @ordered_units ||= self.class.ordered_units(@map[:units])
 
   # @return [Array<Array(Hash, Hash)>] each person in the unit with their place there
   def members_of(unit_id)

@@ -56,10 +56,12 @@ class OrgGraph::AsOf
   # @param context [AuthorizationContext]
   # @param date [Date] the day to read
   # @param known_on [Date, nil] read what was known at the end of this day
-  def initialize(context:, date:, known_on: nil)
+  # @param known_at [Time, nil] the instant `known_on` ended, when the reader fixed it
+  def initialize(context:, date:, known_on: nil, known_at: nil)
     @context = context
     @date = date
     @known_on = known_on
+    @known_at = known_at
   end
 
   # @return [Snapshot]
@@ -85,7 +87,7 @@ class OrgGraph::AsOf
   private
 
   def periods
-    day = OrgFactPeriod.known_on(@known_on).in_effect_on(@date)
+    day = OrgFactPeriod.known_on(@known_on, at: @known_at).in_effect_on(@date)
     day.where(subject_type: OrgGraph::Projections::History::PERSON, fact: PERSON_FACTS + %w[membership])
       .or(day.where(subject_type: OrgGraph::Projections::History::UNIT, fact: UNIT_FACTS))
       .or(day.where(subject_type: OrgGraph::Projections::History::SUCCESSION, fact: "succession"))

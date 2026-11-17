@@ -78,13 +78,57 @@ class Operations::TeamPlanning::ScenariosTest < ActiveSupport::TestCase
     end
 
     should "list the baseline first, then each scenario with its parent, relation and period" do
-      call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28")
+      travel_to Time.utc(2027, 2, 1, 9) do
+        call(Operations::TeamPlanning::SetScenarioPeriod, plan_id: @plan_id, scenario_id: @q1, ends_on: "2027-02-28")
 
-      assert_equal({ plan_id: @plan_id, scenarios: [
-        { scenario_id: @plan_id, parent_id: nil, relation: nil, name: "Baseline", description: nil, starts_on: "2027-01-01", ends_on: nil },
-        { scenario_id: @q1, parent_id: @plan_id, relation: "then", name: "Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28" },
-        { scenario_id: @lean, parent_id: @q1, relation: "instead", name: "Lean Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28" }
-      ] }, call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id))
+        open = ->(why) { { state: "open", closed_on: nil, closed_by: nil, not_closable_because: why } }
+        waiting = open.("This step ends on 2027-02-28: it can be closed from the day after")
+        assert_equal({ plan_id: @plan_id, scenarios: [
+          { scenario_id: @plan_id, parent_id: nil, relation: nil, name: "Baseline", description: nil, starts_on: "2027-01-01", ends_on: nil, changes: 0,
+            **open.("The baseline can't be closed") },
+          { scenario_id: @q1, parent_id: @plan_id, relation: "then", name: "Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28", changes: 0,
+            **waiting },
+          { scenario_id: @lean, parent_id: @q1, relation: "instead", name: "Lean Q1", description: nil, starts_on: "2027-01-01", ends_on: "2027-02-28", changes: 0,
+            **waiting }
+        ] }, call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id))
+      end
+    end
+
+    should "say which step is ready to close, which closed and who closed it, and which wasn't taken" do
+      q2 = fork(parent_id: @q1, relation: "then", name: "Q2", ends_on: "2027-06-30")[:scenario_id]
+      states = -> { call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].to_h { [ it[:name], it.slice(:state, :closed_on, :closed_by, :not_closable_because) ] } }
+
+      travel_to Time.utc(2027, 4, 2, 9) do
+        assert_equal({ state: "ready_to_close", closed_on: nil, closed_by: nil, not_closable_because: nil }, states.()["Q1"])
+        assert_equal "This step ends on 2027-06-30: it can be closed from the day after", states.()["Q2"][:not_closable_because]
+
+        call(Operations::TeamPlanning::CloseStep, plan_id: @plan_id, scenario_id: @lean)
+        read = states.()
+        assert_equal({ state: "closed", closed_on: "2027-04-02", closed_by: { person_id: @admin.person_id, name: @admin.person.name },
+                       not_closable_because: "This step is closed: reopen it to change it" }, read["Lean Q1"])
+        assert_equal [ "not_taken", "not_taken", "open" ], read.values_at("Q1", "Q2", "Baseline").map { it[:state] }
+        assert_equal "This scenario wasn't taken: another step closed in its place", read["Q1"][:not_closable_because]
+
+        call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+        assert_equal [ "closed", TeamPlanning::PlanAggregate::ARCHIVED ], states.()["Lean Q1"].values_at(:state, :not_closable_because)
+      end
+    end
+
+    should "read a split step's agreed part closed once the rest closes, and the alternative it passed over not taken" do
+      set(TeamPlanning::Events::LevelSet, @admin.person_id, level: "4")
+      moving = set(TeamPlanning::Events::LevelSet, @other_admin.person_id, level: "5")
+      agreed = call(Operations::TeamPlanning::SplitScenario, plan_id: @plan_id, scenario_id: @q1, event_ids: [ moving ], name: "Agreed Q1")[:agreed_id]
+      states = -> { call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].to_h { [ it[:name], it.slice(:state, :closed_on, :closed_by) ] } }
+
+      travel_to Time.utc(2027, 4, 2, 9) do
+        call(Operations::TeamPlanning::CloseStep, plan_id: @plan_id, scenario_id: @q1)
+        closed = { state: "closed", closed_on: "2027-04-02", closed_by: { person_id: @admin.person_id, name: @admin.person.name } }
+
+        assert_equal({ "Baseline" => "open", "Agreed Q1" => "closed", "Q1" => "closed", "Lean Q1" => "not_taken" }, states.().transform_values { it[:state] })
+        assert_equal closed, states.()["Agreed Q1"]
+        assert_equal closed, states.()["Q1"]
+        assert_equal agreed, call(Operations::TeamPlanning::Scenarios, plan_id: @plan_id)[:scenarios].find { it[:name] == "Q1" }[:parent_id]
+      end
     end
 
     should "move a step's end and say the period it now has" do

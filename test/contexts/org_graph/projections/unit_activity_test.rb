@@ -136,6 +136,7 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
   end
 
   should "show a handover in the unit's feed, naming its provider and field but not its value" do
+    travel_to START + 1.day
     product = SecureRandom.uuid_v7
     as_tenant do
       @structure.create_unit(product, "Product", level_id: @departments, effective_on: "2026-01-01")
@@ -169,6 +170,7 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
 
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
+      travel_to START + 3.days
       as_tenant do
         @handler.set_membership(@ada.id, @payments, **ESPALIA, allocation: 1.0)
         @handler.set_membership(@ada.id, @payments, **ESPALIA, allocation: 0.5)

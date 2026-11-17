@@ -39,8 +39,10 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
   def ensure_no_live_plan_holds!(level)
     return unless level
 
-    plans = TeamPlanningOverride.where(plan_id: TeamPlanningPlan.live.select(:id), kind: TeamPlanning::Events::UnitSet.name)
-                                .where("end_state ->> 'level_id' = ?", level.id).distinct.count(:plan_id)
+    plans = ProjectionVersion.unless_rebuilding(TeamPlanning::Projections::Overrides::PROJECTION_NAME) do
+      TeamPlanningOverride.where(plan_id: TeamPlanningPlan.live.select(:id), kind: TeamPlanning::Events::UnitSet.name)
+                          .where("end_state ->> 'level_id' = ?", level.id).distinct.count(:plan_id)
+    end
     return if plans.zero?
 
     advice = plans == 1 ? "Change or archive that plan first, or delete it if no one can edit it any more" :

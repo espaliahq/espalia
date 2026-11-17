@@ -22,6 +22,12 @@
 #   the first person to fill it takes its lane, so a seat and its hire read
 #   as one head.
 # - A position's bar runs while it stands empty.
+# - A walk counts heads, not FTE: a person in two units is one head in each,
+#   and one in the plan. Opening is the last column's closing. Someone new to
+#   the map is a hire; someone who arrives from another unit, or from outside a
+#   scoped plan's units, transfers in. A leaver departs in the step they leave
+#   in, so closing is opening, plus hires and transfers in, less departures and
+#   transfers out. The first column, today, has a closing only.
 # - Blocks come in the order they first appear, then as the map orders units.
 #   Lanes in a block come in the order they first appear there, people
 #   before positions, then by name and id.
@@ -53,7 +59,11 @@ class TeamPlanning::Timeline
 
   # A unit's run along the path, by the unit it held in each column.
   # `continues_from_ids` names the blocks a split or merge carries on from.
-  Block = Data.define(:id, :unit_ids, :continues_from_ids, :lane_ids)
+  # `walk` counts its heads in each column, as the plan's walk does.
+  Block = Data.define(:id, :unit_ids, :continues_from_ids, :lane_ids, :walk)
+
+  # The heads in a column: how many it opened with, arrived, left and closed with.
+  Walk = Data.define(:opening, :hires, :transfers_in, :departures, :transfers_out, :closing)
 
   # @!attribute columns [Array<Column>] root first
   # @!attribute next_ids [Array<String>] the scenarios that follow the last step
@@ -61,7 +71,9 @@ class TeamPlanning::Timeline
   # @!attribute blocks [Array<Block>]
   # @!attribute unassigned_lane_ids [Array<String>] lanes with a bar in no live unit
   # @!attribute lanes [Array<Lane>]
-  Result = Data.define(:columns, :next_ids, :maps, :blocks, :unassigned_lane_ids, :lanes)
+  # @!attribute walk [Array<Walk>] the plan's heads, per column
+  # @!attribute unassigned_walk [Array<Walk>] the heads placed in no live unit, per column
+  Result = Data.define(:columns, :next_ids, :maps, :blocks, :unassigned_lane_ids, :lanes, :walk, :unassigned_walk)
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
@@ -134,7 +146,8 @@ class TeamPlanning::Timeline
       lane_of = lane_owners
       lanes = lanes(lane_of)
       Result.new(columns:, next_ids:, maps: @maps, blocks: blocks(lanes), unassigned_lane_ids: lane_ids_in(lanes, nil),
-                 lanes: lanes.sort_by { lane_order(it, it.bars) })
+                 lanes: lanes.sort_by { lane_order(it, it.bars) }, walk: walk(@maps.map { |map| map.people.select { map.started?(it) }.to_set(&:id) }),
+                 unassigned_walk: block_walk(nil))
     end
 
     private
@@ -161,9 +174,40 @@ class TeamPlanning::Timeline
       end
       first_seen.values.sort.map do |_, _, block_id|
         Block.new(id: block_id, unit_ids: @maps.map { |map| map.units.find { @block_of[it.id] == block_id }&.id },
-                  continues_from_ids: continues_from(block_id), lane_ids: lane_ids_in(lanes, block_id))
+                  continues_from_ids: continues_from(block_id), lane_ids: lane_ids_in(lanes, block_id), walk: block_walk(block_id))
       end
     end
+
+    def block_walk(block_id) = walk(heads_by_block.map { it.fetch(block_id, Set[]) })
+
+    # A placeholder hire counts as a head, and a hire, from the step its
+    # seat starts in ({TeamPlanning::Baseline::Map#started?}).
+    def heads_by_block
+      @heads_by_block ||= @maps.map do |map|
+        map.people.select { map.started?(it) }.each_with_object({}) do |person, heads|
+          units_of(map, person).each { (heads[block_for(it)] ||= Set[]) << person.id }
+        end
+      end
+    end
+
+    # @param heads [Array<Set<String>>] the people counted, per column
+    def walk(heads)
+      heads.each_with_index.map do |now, column|
+        closing = (now - leaving_ids[column]).size
+        next Walk.new(opening: nil, hires: nil, transfers_in: nil, departures: nil, transfers_out: nil, closing:) if column.zero?
+
+        opened = heads[column - 1] - leaving_ids[column - 1]
+        arrived, gone = now - opened, opened - now
+        hires = (arrived - held_ids[column - 1]).size
+        Walk.new(opening: opened.size, hires:, transfers_in: arrived.size - hires,
+                 departures: ((now | gone) & leaving_ids[column]).size, transfers_out: (gone - leaving_ids[column]).size, closing:)
+      end
+    end
+
+    # A leaver the same step takes outside a scoped plan is in `outside`, and still leaves.
+    def leaving_ids = @leaving_ids ||= @maps.map { |map| (map.people + map.outside).select(&:leaving?).to_set(&:id) }
+
+    def held_ids = @held_ids ||= @maps.map { |map| map.people.select { map.started?(it) }.to_set(&:id) | map.outside_ids }
 
     def continues_from(block_id)
       successions.select { |succession| succession.successor_ids.any? { @block_of[it] == block_id } }
@@ -309,7 +353,7 @@ class TeamPlanning::Timeline
     end
 
     def units_of(map, person)
-      live = map.units.to_set(&:id)
+      live = (@live_unit_ids ||= {}.compare_by_identity)[map] ||= map.units.to_set(&:id)
       units = person.memberships.map(&:unit_id).select { live.include?(it) }.uniq.sort
       units.empty? ? [ nil ] : units
     end

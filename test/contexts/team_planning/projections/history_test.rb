@@ -92,6 +92,14 @@ class TeamPlanning::Projections::HistoryTest < ActiveSupport::TestCase
     assert_equal [ [ "archive", @person.id ], [ "restore", @person.id ] ], history(@plan_id).pluck(:action, :actor_id)
   end
 
+  should "keep each close and reopen in the step's history, with who did it and nothing else" do
+    @handler.close_step(@plan_id, @q1, today: Date.new(2027, 4, 1))
+    @handler.reopen_step(@plan_id, @q1)
+
+    assert_equal [ [ "close", @person.id, nil, nil ], [ "reopen", @person.id, nil, nil ] ], history(@q1).pluck(:action, :actor_id, :end_state, :subject_id)
+    assert_empty history(@lean)
+  end
+
   should "drop a removed scenario's history, and every entry of a deleted plan" do
     set_cap(@q1, 8)
     set_cap(@lean, 5)

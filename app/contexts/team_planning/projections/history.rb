@@ -24,7 +24,7 @@
 # Version 3 moves a split step's dates entries to the agreed part
 # ([#426](https://github.com/espaliahq/espalia/issues/426)), which changes
 # what replay writes, so it needs the same rebuild, which also counts each
-# past removal.
+# past removal. Closing and reopening a step are new, so they need no rebuild.
 #
 class TeamPlanning::Projections::History
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -41,7 +41,7 @@ class TeamPlanning::Projections::History
       TeamPlanning::Events::ChangeRedone, TeamPlanning::Events::ChangeNoted, TeamPlanning::Events::PlanRebased,
       TeamPlanning::Events::ChangeMoved, TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioForked,
       TeamPlanning::Events::PlanArchived, TeamPlanning::Events::PlanRestored, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::ScenarioSplit,
-      TeamPlanning::Events::PlanDeleted
+      TeamPlanning::Events::PlanDeleted, TeamPlanning::Events::StepClosed, TeamPlanning::Events::StepReopened
     ]
   end
 
@@ -82,21 +82,9 @@ class TeamPlanning::Projections::History
 
     entries = TeamPlanningHistoryEntry.where(scenario_id: event.data[:scenario_id])
     TeamPlanningRemovedScenarioTally.create!(id: event.data[:scenario_id], plan_id: event.data[:plan_id],
-                                             changes_held: held(entries.order(:position)),
+                                             changes_held: TeamPlanningHistoryEntry.changes_held([ event.data[:scenario_id] ]).fetch(event.data[:scenario_id], 0),
                                              created_at: event.timestamp, updated_at: event.timestamp)
     entries.delete_all
-  end
-
-  # The subjects and facets a scenario still changed, as the plan's log
-  # works them out: a standing change or pin holds its key and a clear lets
-  # it go; undone entries, undos, redos, notes, moves and dates hold nothing.
-  def held(entries)
-    entries.where(undone_at: nil).pluck(:subject_id, :facet, :action).each_with_object(Set.new) do |(subject_id, facet, action), keys|
-      case action
-      when "set", "pin" then keys << [ subject_id, facet ]
-      when "clear" then keys.delete([ subject_id, facet ])
-      end
-    end.size
   end
 
   def split(data)

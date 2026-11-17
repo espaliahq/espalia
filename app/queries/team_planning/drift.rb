@@ -27,7 +27,8 @@ class TeamPlanning::Drift
   # @!attribute from_plan [Boolean] whether it was applied from this plan
   # @!attribute meets [Array<Met>] the plan's changes to the facet it moves
   # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
-  Drifted = Data.define(:change, :from_plan, :meets, :sources)
+  # @!attribute outside [Array<String>] the fields {TeamPlanning::DriftScope} cut as outside the plan
+  Drifted = Data.define(:change, :from_plan, :meets, :sources, :outside)
 
   # @!attribute scenario_id [String] the plan's id for the root
   # @!attribute change_id [String] the planned change's event id
@@ -37,9 +38,9 @@ class TeamPlanning::Drift
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
-  # @param today [Date] the window's last day, as a UTC date
+  # @param today [Date] the window's last day, the tenant's today
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, today: Time.now.utc.to_date, repository: TeamPlanning::Repository.new)
+  def initialize(context:, plan:, today: Tenant.today, repository: TeamPlanning::Repository.new)
     @context = context
     @plan = plan
     @today = today
@@ -56,24 +57,50 @@ class TeamPlanning::Drift
     from = @plan.base_on - 1
     return Report.new(from:, to: @today, changes: [], names: {}) unless @today > from
 
-    changes = OrgGraph::ChangesBetween.new(context: @context, from:, to: @today, by: :learned).call.changes
+    changes = OrgGraph::ChangesBetween.new(context: @context, from:, to: @today, by: :learned, opened_at: @plan.base_known_at).call.changes
     return Report.new(from:, to: @today, changes: [], names: {}) if changes.empty?
 
-    planned = planned_changes
+    aggregate = @repository.load_plan(@plan.id)
+    cuts = within_scope(aggregate, changes)
+    changes = cuts.map(&:change)
+    return Report.new(from:, to: @today, changes: [], names: {}) if changes.empty?
+
+    planned = planned_changes(aggregate)
     from_plan = plan_ids(changes.map(&:event_id))
     sources = TeamPlanning::SourceOfTruth.new(tenant_id: @plan.tenant_id)
                                          .preload(unit_ids: changes.flat_map { [ it.unit_id, it.from_unit_id ] },
                                                   succession_ids: changes.map(&:succession_id))
-    drifted = changes.map do
-      Drifted.new(change: it, from_plan: from_plan[it.event_id] == @plan.id, meets: meeting(planned, it), sources: sources.of_drift(it))
+    drifted = cuts.map do |cut|
+      change = cut.change
+      Drifted.new(change:, from_plan: from_plan[change.event_id] == @plan.id, meets: meeting(planned, change),
+                  sources: sources.of_drift(change), outside: cut.outside)
     end
     Report.new(from:, to: @today, changes: drifted, names: names_for(changes, sources))
   end
 
   private
 
-  def planned_changes
-    plan = @repository.load_plan(@plan.id)
+  # A plan covering the whole organisation keeps every change.
+  def within_scope(aggregate, changes)
+    return changes.map { TeamPlanning::DriftScope::Cut.new(change: it, outside: []) } if @plan.scope_unit_ids.blank?
+
+    baseline = TeamPlanning::Baseline.new(context: @context, plan: @plan)
+    base = baseline.structure
+    whole = baseline.map_on(@plan.base_on, known_on: baseline.known_on, known_at: baseline.known_at, history: true, scoped: false)
+    parents = (whole.units + whole.retired_units).to_h { [ it.id, it.parent_id ] }
+    maps = [ @plan.id, *aggregate.scenarios.keys ].map { TeamPlanning::Resolution.new(context: @context, plan: @plan, scenario_id: it, base:).structure(aggregate) }
+    @scope = TeamPlanning::DriftScope.new(base, maps, parents:)
+    @scope.call(changes, known: known_moves(baseline, changes), through: @today)
+  end
+
+  # What the baseline knew would change after its day, which the window,
+  # reading only what was learned since, never holds.
+  def known_moves(baseline, changes)
+    to = [ @today, *changes.map(&:effective_on) ].max
+    OrgGraph::ChangesBetween.new(context: @context, from: @plan.base_on, to:, known_on: baseline.known_on, known_at: baseline.known_at).call.changes
+  end
+
+  def planned_changes(plan)
     [ @plan.id, *plan.scenarios.keys ].flat_map do |scenario_id|
       plan.changes_in(scenario_id).index_by(&:key).values.map { [ scenario_id, it ] }
     end
@@ -96,7 +123,8 @@ class TeamPlanning::Drift
 
   def names_for(changes, sources)
     ids = changes.flat_map { [ it.person_id, it.before&.dig("manager_id"), it.after&.dig("manager_id") ] }.compact.uniq
-    units = changes.flat_map { [ it.unit_id, it.from_unit_id ] }.compact.uniq.filter_map { |id| (name = sources.unit_name(id)) && [ id, name ] }
+    units = changes.flat_map { [ it.unit_id, it.from_unit_id ] }.compact.uniq.select { @scope.nil? || @scope.covers_unit?(it) }
+                   .filter_map { |id| (name = sources.unit_name(id)) && [ id, name ] }
     units.to_h.merge(::Person.where(tenant_id: @plan.tenant_id, id: ids).pluck(:id, :name).to_h)
   end
 end

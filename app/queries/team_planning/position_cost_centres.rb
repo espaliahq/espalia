@@ -29,15 +29,17 @@ class TeamPlanning::PositionCostCentres
   # @!attribute source [String] a {SOURCES} entry
   # @!attribute rule_index [Integer, nil] the deciding entry's place in the list, for "rule"
   # @!attribute rule_matcher [Hash, nil] the deciding entry without its label, for "rule"
-  Resolved = Data.define(:cost_centre, :source, :rule_index, :rule_matcher) do
-    def initialize(rule_index: nil, rule_matcher: nil, **) = super
+  # @!attribute rule_cost_centre [String, nil] for a real value kept, the other cost centre the entries give it
+  Resolved = Data.define(:cost_centre, :source, :rule_index, :rule_matcher, :rule_cost_centre) do
+    def initialize(rule_index: nil, rule_matcher: nil, rule_cost_centre: nil, **) = super
   end
 
   NONE = Resolved.new(cost_centre: nil, source: "none")
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param tenant_id [String]
-  # @param base [TeamPlanning::Baseline::Map] Today, which {#changed?} compares the map with
+  # @param base [TeamPlanning::Baseline::Map] Today, which {#changed?} compares the map with: the plan's
+  #   baseline, or for a step after a closed one, the organisation the day after the close
   # @param titles [Integrations::HrisTitleResolution] each person's own role and level
   def initialize(map, tenant_id:, base:, titles:)
     @map = map
@@ -60,7 +62,8 @@ class TeamPlanning::PositionCostCentres
   # or location. Otherwise the first of these that gives one wins: their
   # position's own label; the entries read at their planned place; their real
   # cost centre. A placeholder hire reads as its position's open seat, {#of},
-  # so its caller sends one here only when it holds no position.
+  # so its caller sends one here only when it holds no position. A kept real
+  # value the entries disagree with carries theirs as {Resolved#rule_cost_centre}.
   #
   # @param cost_centre [String, nil] their real cost centre
   # @param changed [Boolean] whether the plan changes their unit, role, level or location
@@ -72,10 +75,10 @@ class TeamPlanning::PositionCostCentres
   # @return [Resolved]
   def person(cost_centre:, changed:, position:, unit_id:, role_id:, level_id:, location:)
     real = Resolved.new(cost_centre:, source: "person") if cost_centre.present?
-    return real if real && !changed
+    ruled = by_rules(unit_id:, role_id:, level_id:, location:)
+    return real.with(rule_cost_centre: (ruled.cost_centre if ruled && ruled.cost_centre != cost_centre)) if real && !changed
 
-    (position && own(position)) ||
-      by_rules(unit_id:, role_id:, level_id:, location:) || real || NONE
+    (position && own(position)) || ruled || real || NONE
   end
 
   # Whether the plan changes what a cost centre entry can see of them: their
@@ -135,6 +138,12 @@ class TeamPlanning::PositionCostCentres
   def by_allocation(held) = held.sort_by { |person, place| [ -place.allocation.to_f, person.id ] }.map(&:first)
 
   def by_rules(unit_id:, role_id:, level_id:, location:)
+    (@by_rules ||= {}).fetch([ unit_id, role_id, level_id, location ]) do |key|
+      @by_rules[key] = match_rules(unit_id:, role_id:, level_id:, location:)
+    end
+  end
+
+  def match_rules(unit_id:, role_id:, level_id:, location:)
     return if TeamPlanning::RuleKinds::CostCentre.entries(rules_at(unit_id)).empty?
 
     entry, index = TeamPlanning::RuleKinds::CostCentre.match(rules_at(unit_id), unit_ids: chain(unit_id), role_id:, role_family_id: family(role_id),

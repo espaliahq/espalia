@@ -35,6 +35,8 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     end
     @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-01-01")[:plan_id]
     @year = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+    # These price open seats from the day they open; the hiring lag has its own tests.
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "time_to_hire", value: { days: "0" })
   end
 
   def call(operation, as: @admin, **params)
@@ -166,7 +168,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_equal %w[0.00 100000.00 200419.00], band_of(holder).values_at(:minimum, :midpoint, :maximum)
       assert_equal [ :midpoint ], band_of(viewer).keys & PayBand::FIGURES
       assert_equal holder[:total], viewer[:total]
-      assert_not_includes without_ids(viewer), "200419"
+      assert_no_pay_figure viewer, "200419"
     end
 
     should "show everyone else only the midpoint of a family's band, with its matcher" do
@@ -179,8 +181,8 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
 
       assert_equal [ { role_family_id: @engineer.role_family_id, level_ordinal: 5 }, "100000.00" ], band_of(viewer).values_at(:matcher, :midpoint)
       assert_equal [ :midpoint ], band_of(viewer).keys & PayBand::FIGURES
-      assert_not_includes without_ids(viewer), "200419"
-      assert_not_includes without_ids(viewer), "1234"
+      assert_no_pay_figure viewer, "200419"
+      assert_no_pay_figure viewer, "1234"
     end
 
     should "give an agent acting for a person exactly that person's view" do
@@ -229,9 +231,9 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       assert_not viewer.key?(:actual_pay_seats)
       assert_equal [ "band_midpoint", nil, "80000" ], ada(viewer).values_at(:pay_source, :basis, :amount)
       assert_equal "80000", viewer[:total][:scenario][:converted]
-      assert_includes without_ids(holder), "60417"
-      assert_not_includes without_ids(viewer), "60417"
-      assert_not_includes without_ids(viewer), "50419"
+      assert_pay_figure holder, "60417"
+      assert_no_pay_figure viewer, "60417"
+      assert_no_pay_figure viewer, "50419"
     end
 
     should "add the unit's on-cost on top of actual pay" do
@@ -285,9 +287,6 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
   end
 
   def band_of(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }[:band]
-
-  # Ids are hex, so a short run of digits can turn up inside one.
-  def without_ids(result) = result.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
 
   should "show a level the plan cleared to follow the Org Graph as an unpriced seat with no level, while the baseline still prices it" do
     follow_cleared_level(@ada)

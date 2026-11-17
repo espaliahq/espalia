@@ -36,7 +36,7 @@ class Hris::LevelHandover
   # @param level [OrgTaxonomyLevel]
   # @param adapter [Hris::BaseAdapter]
   # @param today [Date]
-  def initialize(tenant, level, adapter: Hris::BaseAdapter.for(tenant), today: Date.current)
+  def initialize(tenant, level, adapter: Hris::BaseAdapter.for(tenant), today: tenant.today)
     @tenant = tenant
     @level = level
     @adapter = adapter

@@ -12,7 +12,7 @@ class TeamPlanning::PlanAggregateRebaseTest < ActiveSupport::TestCase
     @plan_id = SecureRandom.uuid_v7
     @ada_id = SecureRandom.uuid_v7
     @plan = TeamPlanning::PlanAggregate.new
-    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @ada_id)
+    @plan.create(@plan_id, name: "Next year", base_on: "2027-01-01", created_by_id: @ada_id, time_zone: "UTC")
     @q1 = fork(@plan_id, "then", ends_on: "2027-03-31")
     @lean = fork(@q1, "instead")
   end
@@ -28,7 +28,7 @@ class TeamPlanning::PlanAggregateRebaseTest < ActiveSupport::TestCase
   def set(scenario_id, title) = @plan.set_change(TitleSet, scenario_id:, subject_id: "lin", set_by_id: @ada_id, end_state: { title: })
 
   def rebase(base_on, expected: @plan.base_on, conflicts: [])
-    @plan.rebase(base_on:, expected_base_on: expected, conflicts:, rebased_by_id: @ada_id)
+    @plan.rebase(base_on:, expected_base_on: expected, conflicts:, rebased_by_id: @ada_id, time_zone: "UTC")
   end
 
   def conflict(scenario_id, change_id: @plan.winning_changes(scenario_id)[%w[lin title]]&.event_id || "none")
@@ -43,7 +43,7 @@ class TeamPlanning::PlanAggregateRebaseTest < ActiveSupport::TestCase
 
     assert_kind_of TeamPlanning::Events::PlanRebased, last_event
     assert_equal({ plan_id: @plan_id, base_on: "2027-02-10", previous_base_on: "2027-01-01",
-                   conflicts: [ conflict(@q1) ], rebased_by_id: @ada_id }, last_event.data)
+                   conflicts: [ conflict(@q1) ], rebased_by_id: @ada_id, time_zone: "UTC" }, last_event.data)
     assert_equal Date.new(2027, 2, 10), @plan.base_on
     assert_equal Date.new(2027, 2, 10)..Date.new(2027, 3, 31), @plan.period_of(@lean)
   end

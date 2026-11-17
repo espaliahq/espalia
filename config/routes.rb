@@ -96,6 +96,7 @@ Rails.application.routes.draw do
       get :preview
     end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
+    resource :time_zone, only: [ :show, :update ]
     resources :pay_bands, only: [ :index, :create, :edit, :update, :destroy ] do
       patch :reorder, on: :collection
     end
@@ -413,6 +414,8 @@ Rails.application.routes.draw do
     get :map, on: :member
     # One path along the calendar ([#298](https://github.com/espaliahq/espalia/issues/298)).
     get :timeline, on: :member
+    # The quiet figures under each step of that path, loaded once the path is drawn ([#452](https://github.com/espaliahq/espalia/issues/452)).
+    get :timeline_figures, on: :member, path: "timeline/figures"
     # The Org Graph's changes since the base, and where the plan's stand ([#287](https://github.com/espaliahq/espalia/issues/287)).
     get :changes, on: :member
     # What no longer fits in one scenario, by check ([#350](https://github.com/espaliahq/espalia/issues/350)).
@@ -442,12 +445,19 @@ Rails.application.routes.draw do
     # Set a plan aside, and bring it back ([#383](https://github.com/espaliahq/espalia/issues/383)).
     post :archive, on: :member
     post :restore, on: :member
-    # Fork and rename a scenario (#271).
-    resources :scenarios, only: [ :create, :update ], controller: "plans/scenarios"
+    # Fork, rename and remove a scenario (#271, [#439](https://github.com/espaliahq/espalia/issues/439)).
+    resources :scenarios, only: [ :create, :update, :destroy ], controller: "plans/scenarios" do
+      # Close a step once its period ends, or reopen the last one closed ([#466](https://github.com/espaliahq/espalia/issues/466)).
+      resource :closure, only: %i[create destroy], controller: "plans/step_closures"
+      # A closed step's plan beside what happened, as a lazy frame in its dialog.
+      resource :outcome, only: :show, controller: "plans/step_outcomes"
+    end
     # Move a person's place on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285)); the id is the person's.
     resources :assignments, only: [ :update ], controller: "plans/assignments"
-    # Move a position to another unit on the scenario map; the id is the position's.
-    resources :positions, only: [ :update ], controller: "plans/positions"
+    # Open, edit, close and move a position on the scenario map ([#285](https://github.com/espaliahq/espalia/issues/285), [#461](https://github.com/espaliahq/espalia/issues/461)).
+    resources :positions, only: [ :create, :update, :destroy ], controller: "plans/positions" do
+      patch :move, on: :member
+    end
     # Which budget lines a position draws on, from the Budget tab ([#411](https://github.com/espaliahq/espalia/issues/411)); the id is the position's.
     resources :fundings, only: [ :update, :destroy ], controller: "plans/fundings"
     # Move a place, position or departure a step earlier or later on the timeline ([#309](https://github.com/espaliahq/espalia/issues/309)).
@@ -461,6 +471,8 @@ Rails.application.routes.draw do
     resources :undos, only: [ :create ], controller: "plans/undos"
     resources :redos, only: [ :create ], controller: "plans/redos"
     resources :clears, only: [ :create ], controller: "plans/clears"
+    # Undo a change about someone the plan no longer covers, from its own row ([#435](https://github.com/espaliahq/espalia/issues/435)).
+    resources :change_undos, only: [ :create ], controller: "plans/change_undos", path: "change-undos"
   end
 
   # Calibration sessions — facilitator-run rating-calibration forums.

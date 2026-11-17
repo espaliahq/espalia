@@ -35,7 +35,7 @@ class Operations::OrgGraph::SetLevelProvider < Operations::Base
       raise ParameterError, "field: name the HRIS field this level's units are read from"
     end
     refusals do
-      structure.set_level_provider(level.id, provider, field: params[:field], effective_on: Date.current)
+      structure.set_level_provider(level.id, provider, field: params[:field], effective_on: Tenant.today)
     end
     level.reload
     { id: level.id, name: level.name, provider: level.provider, field: level.provider_field }

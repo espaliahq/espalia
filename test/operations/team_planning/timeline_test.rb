@@ -171,6 +171,15 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
     assert_equal "Software Engineer", result[:positions][fresh][:role_name]
   end
 
+  should "give each position where its hiring stood in every column" do
+    seat = open_position(@q1)
+    call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @q2, position_id: seat, role_id: @engineer.role_id,
+                                                level_id: @e2.level_id, unit_id: @payments, fte: 1, basis: "new", hiring_status: "on_hold")
+
+    assert_equal [ nil, { hiring_status: "not_started", target_start: nil }, { hiring_status: "on_hold", target_start: nil } ],
+                 timeline[:positions][seat][:hiring]
+  end
+
   should "carry a hire on in the lane of the position they fill" do
     seat = open_position(@q1, unit_id: @growth)
     hire = hire(@q2, "Growth engineer", seat)
@@ -232,5 +241,64 @@ class Operations::TeamPlanning::TimelineTest < ActiveSupport::TestCase
     assert_equal [ @plan_id, @q1, @q2 ], timeline(as: @viewer)[:columns].pluck(:scenario_id)
     error = assert_raises(Operations::Base::ParameterError) { timeline(as: @outsider) }
     assert_equal "No such plan", error.message
+  end
+  def walk(*counts) = %i[opening hires transfers_in departures transfers_out closing].zip(counts).to_h
+
+  def assert_walks_reconcile(result)
+    walks = [ result[:walk], result[:unassigned_walk], *result[:blocks].pluck(:walk) ]
+    walks.each do |columns|
+      columns.each_cons(2) do |before, after|
+        assert_equal before[:closing], after[:opening]
+        assert_equal after[:closing], after[:opening] + after[:hires] + after[:transfers_in] - after[:departures] - after[:transfers_out]
+      end
+    end
+  end
+
+  should "walk the heads of the plan and each unit, counting a person in two units once in each" do
+    assign(@q1, @ada, { unit_id: @payments, allocation: 0.5 }, { unit_id: @growth, allocation: 0.5 })
+    hire(@q1, "Growth engineer", open_position(@q1, unit_id: @growth))
+    leave(@q1, @bo)
+    assign(@q2, @cy, { unit_id: @growth, allocation: 1 })
+    result = timeline
+
+    assert_equal [ walk(nil, nil, nil, nil, nil, 3), walk(3, 1, 0, 1, 0, 3), walk(3, 0, 0, 0, 0, 3) ], result[:walk]
+    assert_equal [ walk(nil, nil, nil, nil, nil, 3), walk(3, 0, 0, 1, 0, 2), walk(2, 0, 0, 0, 1, 1) ], block(result, @payments)[:walk]
+    assert_equal [ walk(nil, nil, nil, nil, nil, 0), walk(0, 1, 1, 0, 0, 2), walk(2, 0, 1, 0, 0, 3) ], block(result, @growth)[:walk]
+    assert_equal [ 0, 0, 0 ], result[:unassigned_walk].pluck(:closing)
+    assert_walks_reconcile(result)
+  end
+
+  should "count a move across a scoped plan's edge as a transfer, and a half-outside person as one head" do
+    dee = ActsAsTenant.with_tenant(@tenant) do
+      create(:person, tenant: @tenant, name: "Dee Park").tap do |person|
+        handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        handler.record_person(person.id, **ESPALIA, effective_on: "2026-01-15", employment_status: "employed")
+        handler.set_membership(person.id, @growth, **ESPALIA, effective_on: "2026-01-15", allocation: 1.0)
+      end
+    end
+    @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Payments", base_on: "2026-03-02", unit_ids: [ @payments ])[:plan_id]
+    h1 = fork(relation: "then", name: "H1", ends_on: "2026-06-30")
+    assign(h1, @ada, { unit_id: @growth, allocation: 1 })
+    call(Operations::TeamPlanning::SetAssignment, plan_id: @plan_id, scenario_id: h1, person_id: dee.id, placements: [ { unit_id: @payments, allocation: 1 } ])
+    assign(h1, @bo, { unit_id: @payments, allocation: 0.5 }, { unit_id: @growth, allocation: 0.5 })
+    hire(h1, "Payments engineer", open_position(h1))
+    result = timeline(h1)
+
+    assert_equal [ walk(nil, nil, nil, nil, nil, 3), walk(3, 1, 1, 0, 1, 4) ], result[:walk]
+    assert_equal [ walk(nil, nil, nil, nil, nil, 3), walk(3, 1, 1, 0, 1, 4) ], block(result, @payments)[:walk]
+    assert_nil block(result, @growth)
+    assert_walks_reconcile(result)
+  end
+
+  should "count a leaver as a departure though the same step also takes them outside a scoped plan" do
+    @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Payments", base_on: "2026-03-02", unit_ids: [ @payments ])[:plan_id]
+    h1 = fork(relation: "then", name: "H1", ends_on: "2026-06-30")
+    leave(h1, @bo)
+    assign(h1, @bo, { unit_id: @growth, allocation: 1 })
+    result = timeline(h1)
+
+    assert_equal walk(3, 0, 0, 1, 0, 2), result[:walk].last
+    assert_equal walk(3, 0, 0, 1, 0, 2), block(result, @payments)[:walk].last
+    assert_walks_reconcile(result)
   end
 end

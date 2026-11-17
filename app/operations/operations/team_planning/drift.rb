@@ -9,7 +9,7 @@ class Operations::TeamPlanning::Drift < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
   description "Get the drift of a Team Planning plan the caller is in: every change the Org Graph learned " \
-              "on or after the plan's base date, up to today (UTC days), whatever day it took effect, in effective " \
+              "on or after the plan's base date, up to today (days in the tenant's time zone), whatever day it took effect, in effective " \
               "date order, as org_graph_changes_between by \"learned\" gives them for from (the day before the base " \
               "date) and to (today). A change it no longer believes comes back withdrawn. Each change carries `meets`, the " \
               "plan's latest change to the facet it moves, one per scenario that holds one (a scenario_id equal " \
@@ -17,7 +17,13 @@ class Operations::TeamPlanning::Drift < Operations::Base
               "moves: the provider of a person fact, whoever supplied a membership, or the providers of the units a unit or succession touches " \
               "(\"espalia\" for one Espalia supplies, or an HRIS such as \"hibob\"). " \
               "A person's placements are one facet, so a move in one placement meets the plan's whole list. " \
-              "People are named by id, and `names` maps every person and unit id the changes name to a name; a forgotten " \
+              "A plan covering some units lists only changes about the people and units it covers, at its base, in any " \
+              "scenario, or placed in one of them since, including by a move known before the base that takes effect after it. " \
+              "Such a move decides coverage from its own day but is not listed. A change that takes one of them out, or a covered person now reporting " \
+              "to someone the plan can't show, keeps the fact and nulls what lies outside; a joiner keeps only the units and manager " \
+              "the plan covers. A change that took effect before the base nulls `before`. `outside` lists the fields nulled or trimmed. " \
+              "People are named by id, and `names` maps every person and unit id the changes name to a name, but a scoped plan " \
+              "names only the units it covers today; a forgotten " \
               "person reads as \"#{Person::FORMER_MEMBER}\". #{UNCHECKED} Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
@@ -41,7 +47,8 @@ class Operations::TeamPlanning::Drift < Operations::Base
     change = drifted.change
     change.to_h.merge(kind: change.kind.to_s, effective_on: change.effective_on.iso8601,
                       learned_at: change.learned_at&.utc&.iso8601,
-                      from_plan: drifted.from_plan, meets: drifted.meets.map(&:to_h), sources: drifted.sources)
+                      from_plan: drifted.from_plan, meets: drifted.meets.map(&:to_h), sources: drifted.sources,
+                      outside: drifted.outside)
   end
   private_class_method :names_for, :serialize
 

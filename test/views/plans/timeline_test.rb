@@ -22,20 +22,31 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
   ].freeze
 
   # `movable` lists, per column, the changes that column's step makes itself.
-  def render_timeline(bars:, moves: [], departures: [], unassigned: false, step: 0, scenarios: SCENARIOS, movable: {}, can_edit: false)
+  def render_timeline(bars:, moves: [], departures: [], unassigned: false, step: 0, scenarios: SCENARIOS, movable: {}, can_edit: false,
+                      walk: steady_walk(scenarios.size), unit_walk: walk, units: nil, positions: {})
     timeline = {
+      walk:, unassigned_walk: steady_walk(scenarios.size, heads: 0),
       plan_id: PLAN, scenario_id: scenarios.last[:scenario_id], next_ids: [],
       columns: scenarios.each_with_index.map do |scenario, index|
         { scenario_id: scenario[:scenario_id], name: scenario[:name], alternative_ids: [], movable: movable.fetch(index, []) }
       end,
-      blocks: [ { block_id: PAYMENTS, units: [ { unit_id: PAYMENTS, name: "Payments" } ] * scenarios.size, continues_from_ids: [], lane_ids: [ ADA ] } ],
+      blocks: [ { block_id: PAYMENTS, units: units || ([ { unit_id: PAYMENTS, name: "Payments" } ] * scenarios.size), continues_from_ids: [], lane_ids: [ ADA ], walk: unit_walk } ],
       unassigned_lane_ids: unassigned ? [ ADA ] : [],
       lanes: [ { lane_id: ADA, bars:, moves:, departures: } ],
-      positions: {}, names: { ADA => "Ada Quill" }
+      positions:, names: { ADA => "Ada Quill" }
     }
     controller = ApplicationController.new
     controller.request = ActionDispatch::TestRequest.create
     Nokogiri::HTML5.fragment(controller.view_context.render(Views::Plans::Timeline.new(timeline:, scenarios:, step:, can_edit:)))
+  end
+
+  def steady_walk(size, heads: 1)
+    [ counts(nil, closing: heads), *Array.new(size - 1) { counts(heads, closing: heads) } ]
+  end
+
+  def counts(opening, closing:, hires: 0, transfers_in: 0, departures: 0, transfers_out: 0)
+    { opening:, hires: opening && hires, transfers_in: opening && transfers_in, departures: opening && departures,
+      transfers_out: opening && transfers_out, closing: }
   end
 
   def grip_targets(html, edge)
@@ -118,6 +129,26 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
       assert_equal [ [ 2 ] ], grip_targets(html, "start")
     end
 
+    should "say where hiring stands on a position's bar, and nothing on a seat not yet started" do
+      bar = { kind: "position", subject_id: ADA, from: 0, to: 1, unit_id: PAYMENTS, position_id: ADA, role: "ENG", level: "L3" }
+      note = lambda do |hiring|
+        render_timeline(bars: [ bar ], positions: { ADA => { role_name: "Software Engineer", hiring: [ hiring, hiring ] } }).at_css("[data-hiring-note]")&.text
+      end
+
+      assert_equal "Recruiting · starts 1 Feb 2027", note.({ hiring_status: "recruiting", target_start: "2027-02-01" })
+      assert_equal "On hold", note.({ hiring_status: "on_hold", target_start: "2027-02-01" })
+      assert_equal "Starts 1 Feb 2027", note.({ hiring_status: "not_started", target_start: "2027-02-01" })
+      assert_nil note.({ hiring_status: "not_started", target_start: nil })
+    end
+
+    should "read where hiring stood in the column a position's bar starts, not where it ends up" do
+      bar = { kind: "position", subject_id: ADA, from: 1, to: 2, unit_id: PAYMENTS, position_id: ADA, role: "ENG", level: "L3" }
+      hiring = [ nil, { hiring_status: "recruiting", target_start: "2027-02-01" }, { hiring_status: "on_hold", target_start: nil } ]
+      html = render_timeline(bars: [ bar ], scenarios: FOUR_STEPS, positions: { ADA => { role_name: "Software Engineer", hiring: } })
+
+      assert_equal "Recruiting · starts 1 Feb 2027", html.at_css("[data-hiring-note]").text
+    end
+
     should "keep a level change in the middle of a position's bar on the menu only" do
       position = { kind: "position", subject_id: ADA, from: 1, to: 3, unit_id: PAYMENTS, position_id: ADA, role: "ENG", level: "L3" }
       html = render_timeline(bars: [ position ], scenarios: FOUR_STEPS, movable: { 2 => [ { subject_id: ADA, facet: "position" } ] }, can_edit: true)
@@ -145,6 +176,38 @@ class Views::Plans::TimelineTest < ActiveSupport::TestCase
 
       assert_empty html.css("[data-timeline-phone] [data-timeline-shift-edge]")
       assert_equal 1, html.css("[data-timeline-grid] [data-timeline-shift-edge]").size
+    end
+  end
+
+  context "the headcount walk" do
+    should "put the plan's walk under each step and each unit's in its heading row, naming only what changed" do
+      walk = [ counts(nil, closing: 3), counts(3, closing: 4, hires: 2, departures: 1) ]
+      unit_walk = [ counts(nil, closing: 2), counts(2, closing: 2, transfers_in: 1, transfers_out: 1) ]
+      html = render_timeline(bars: [ bar(0, 1) ], walk:, unit_walk:)
+      header = html.css("[data-timeline-step] [data-walk]").map { it.text.squish }
+      unit = html.css("[data-timeline-walk] [data-walk]").map { it.text.squish }
+
+      assert_equal [ "3 heads", "3 → to 4 heads · 2 hired, 1 left" ], header
+      assert_equal [ "Today: 2 heads", "Q1 hires: 2 → to 2 heads · 1 moved in, 1 moved out" ], unit
+      assert_equal "true", html.at_css("[data-timeline-step='1'] [data-walk] span[aria-hidden]")["aria-hidden"]
+    end
+
+    should "leave Unassigned's heading out until someone is in it, and show a phone the step's walk and each unit's" do
+      html = render_timeline(bars: [ bar(0, 1) ], step: 1, walk: [ counts(nil, closing: 1), counts(1, closing: 2, hires: 1) ], unit_walk: steady_walk(2))
+      phone = html.at_css("[data-timeline-phone]")
+
+      assert_equal [ "1 → to 2 heads · 1 hired", "1 head" ], phone.css("[data-walk]").map { it.text.squish }
+      assert_not html.text.include?(Views::Plans::Timeline::UNASSIGNED)
+    end
+
+    should "show the walk out of a unit in the step it retires in, and of a unit a step empties, on a phone too" do
+      emptied = [ counts(nil, closing: 2), counts(2, closing: 0, transfers_out: 2) ]
+      retired = render_timeline(bars: [ bar(0, 0) ], unit_walk: emptied, units: [ { unit_id: PAYMENTS, name: "Payments" }, nil ])
+      phone = render_timeline(bars: [ bar(0, 0) ], unit_walk: emptied, step: 1).at_css("[data-timeline-phone]")
+
+      assert_equal "Q1 hires: 2 → to 0 heads · 2 moved out", retired.at_css("[data-timeline-walk='1']").text.squish
+      assert_equal [ "1 head", "2 → to 0 heads · 2 moved out" ], phone.css("[data-walk]").map { it.text.squish }
+      assert_includes phone.text, "Payments"
     end
   end
 end

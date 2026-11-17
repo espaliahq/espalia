@@ -18,6 +18,9 @@
 # that table, which past removals fill, so its deploy needs
 # `REBUILD_ON_DEPLOY=team_planning/scenarios`.
 #
+# A closed step holds the tenant's day it was closed and who closed it, until it
+# is reopened. Closing is new, so it needs no rebuild.
+#
 class TeamPlanning::Projections::Scenarios
   # Stable identifier used as the natural key in `projection_versions.name`.
   PROJECTION_NAME = "team_planning/scenarios"
@@ -31,7 +34,7 @@ class TeamPlanning::Projections::Scenarios
     [ TeamPlanning::Events::PlanCreated, TeamPlanning::Events::PlanDeleted, TeamPlanning::Events::ScenarioForked,
       TeamPlanning::Events::ScenarioRenamed, TeamPlanning::Events::ScenarioDescribed,
       TeamPlanning::Events::ScenarioPeriodSet, TeamPlanning::Events::ScenarioRemoved, TeamPlanning::Events::PlanRebased,
-      TeamPlanning::Events::ScenarioSplit ]
+      TeamPlanning::Events::ScenarioSplit, TeamPlanning::Events::StepClosed, TeamPlanning::Events::StepReopened ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -70,11 +73,18 @@ class TeamPlanning::Projections::Scenarios
         follow_tree(data[:plan_id], event) { it[data[:plan_id]].starts_on = Date.iso8601(data[:base_on]) }
       when TeamPlanning::Events::ScenarioSplit then split(event)
       when TeamPlanning::Events::ScenarioRemoved then remove(event)
+      when TeamPlanning::Events::StepClosed
+        TeamPlanningScenario.find_by(id: data[:scenario_id])
+                            &.update!(closed_on: closed_on(event), closed_by_id: data[:closed_by_id], updated_at: event.timestamp)
+      when TeamPlanning::Events::StepReopened
+        TeamPlanningScenario.find_by(id: data[:scenario_id])&.update!(closed_on: nil, closed_by_id: nil, updated_at: event.timestamp)
       end
     end
   end
 
   private
+
+  def closed_on(event) = event.data[:closed_on]&.then { Date.iso8601(it) } || event.timestamp.utc.to_date
 
   def remove(event)
     data = event.data

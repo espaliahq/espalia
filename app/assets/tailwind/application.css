@@ -831,6 +831,15 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   @apply rounded-md border tone-danger bg-tone-subtle border-tone text-tone-content-strong px-3 py-2 text-xs;
 }
 
+/* Kit::DelegatedMenu::Trigger, the ⋮ on every row of a long list. */
+.kit-menu-trigger {
+  @apply inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted cursor-pointer transition-colors hover:bg-hover hover:text-default focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-expanded:bg-neutral-muted aria-expanded:text-default;
+}
+.kit-menu-trigger > svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 .mx-sticky-edge {
   @variant dark {
     box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.65);

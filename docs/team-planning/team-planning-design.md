@@ -225,7 +225,10 @@ plans projection keeps the list in `scope_unit_ids`.
   An undone bring-in, or an Org Graph move out of the plan's units, leaves the person's
   other changes in the plan. Attention lists each one under "A change about someone this
   plan no longer covers", with the change, so a planner can clear it or bring the person
-  back. History, status and overrides keep naming the subject by id, unnamed.
+  back. History, status and overrides keep naming the subject by id, unnamed. The changes
+  tab names the row "Someone this plan no longer covers" and offers Clear, Undo and its
+  note: a removing write and a note stay allowed, while a pin or a settle about the subject is refused
+  ([#435](https://github.com/espaliahq/espalia/issues/435)).
 - **The scope cut runs before the pay filter.** The cut runs first, in `Map#settled`, so
   people outside never reach `map.people`. The see-pay filter runs after it, per person, in
   `map_payload`. Cost drops places outside before pricing, and reads actual pay only for
@@ -301,19 +304,55 @@ none of these rules:
   appear in, people before positions, then by name and id.
 - **Names.** Lanes and blocks carry ids, and names come from the map's own lookup, so a
   forgotten person keeps their lane under Person::FORMER_MEMBER.
+- **Walk** ([#451](https://github.com/espaliahq/espalia/issues/451)). Each column counts
+  heads for the plan, for each block and for Unassigned: opening, hires, transfers in,
+  departures, transfers out and closing. A person counts once in a unit however they split,
+  and once in the plan's total, so taking a second place moves a head into that unit and
+  leaves the first unit's count alone. Opening is the last column's closing; a leaver still counts
+  in the step they leave in and is gone from its closing. A hire is a head the last step
+  didn't hold at all; a head the plan held elsewhere, or outside a scoped plan's edge, moved
+  in. Today has a closing and nothing else. Each walk is a difference of sets, so opening
+  plus hires and transfers in, less departures and transfers out, is always closing. Forecast
+  attrition and open positions stay out: the walk counts people.
 
 The baseline is read once and every step resolves over it, so each column sees the same Org
 Graph and the read costs one Org Graph query whatever the path's length.
+
+**Figures** ([#452](https://github.com/espaliahq/espalia/issues/452)).
+`TeamPlanning::TimelineFigures` (the `team_planning_timeline_figures` tool) gives each column
+what it costs, what of its budget is unfunded, and what it can deliver. Each figure is the one
+the step's own cost, budget and capacity reads give, so the timeline can't disagree with those
+tabs. It resolves each step once and hands that resolution to all three reads, and the budget
+read reuses the cost read's pricing.
+
+- **Cost.** Today shows its yearly run rate. A step shows its seats and forecast over its
+  period, and an open last step over the months its period shows, labelled so. Seats no band
+  prices are counted beside it, never priced at nothing.
+- **Budget.** Approved and unfunded for a step; Today has no period, so no budget. A step over
+  its budget says so wherever the plan's budget strictness judges it: a line, a cost centre or
+  the total, as the Budget tab and the variance check do. Without the see-pay right only heads
+  can put a step over, as money stays hidden.
+- **Capacity.** The total per capacity model, the step's own and its forecast.
+- **Pay.** Without the see-pay right a viewer gets band midpoints in cost and a budget in
+  positions, with every budget amount left out. A scoped plan counts only its units.
+
+It is a tool of its own so `team_planning_timeline` stays free of money. The tab loads it in a
+lazy frame once the path is drawn, so the grid is usable before any figure arrives. On a wide
+screen the figures sit on a row of their own under the step headers, one cell per column on
+the grid's own tracks, so no column grows wider. A phone fetches the
+same path's figures and shows its own step's on the card. Loading reads "Loading figures…" and a failure is one line with a Retry beside it.
 
 The tab shows one path at a time. With no scenario named, it follows the first `then` at
 each step to a leaf, and the page says which path it shows and how many others run through
 the plan. Each step lists its alternatives as "or instead" links, and the last step its
 `then` steps, so a viewer switches path by following one. A wide screen draws a grid: a
 column per step, a heading per block, and a row per lane, with each bar spanning the steps
-it holds. A phone shows one step at a time, picked from a row of steps that marks the
+it holds. A quiet line under each step's name walks the plan's heads, and each block's
+heading row walks its own under each column, including the step a unit retires in. A phone shows one step at a time, picked from a row of steps that marks the
 current one. Since the neighbouring steps are out of sight there, each bar says where its
 person came from when they arrive and where they go when they leave. A path with nobody on
-it still shows its steps, so its alternatives stay in reach.
+it still shows its steps, so its alternatives stay in reach. On a phone the step's walk sits on
+its card and each unit's under its name.
 
 An editor moves people from the tab too ([#309](https://github.com/espaliahq/espalia/issues/309)).
 Dragging a person's bar onto another block in a column moves them in that column's step, and
@@ -387,6 +426,16 @@ mapping, and the write checks that the level belongs to the role. `basis` is `ba
 which is committed budget, or `new`, which is planned; the map reads it as the position's
 budget. A position's unit is not checked at write: a position in a retired unit still
 resolves, and 3.8 marks it. The baseline has no positions, so every one starts in a plan.
+
+The map opens, edits, moves and closes a position
+([#461](https://github.com/espaliahq/espalia/issues/461)). Opening writes through
+`SetPosition` and closing through `ClosePosition`. An edit goes through `EditPosition`,
+which reads the position from the resolved map, merges in only the fields the editor
+changed and writes one `PositionSet`. The read and the write share the plan's lock, so
+two editors who change different fields of one position both keep their change. An
+omitted field keeps its value. An empty or null cost centre clears it; the other fields
+are required, so an empty one is refused. `MovePosition` is an edit
+of the unit alone.
 
 ### Assignments as built
 
@@ -479,7 +528,7 @@ It also checks each person (4.6):
   only in a gone unit or a closed position already has that item, so they are not also placed
   nowhere.
 - **Since left.** Someone the scenario still has, with no planned departure, whom the Org Graph
-  has had leave by today, a UTC day. They are placed but left, or, with no place, left. Either
+  has had leave by the tenant's today. They are placed but left, or, with no place, left. Either
   way that is their only allocation item. `Attention.for` reads them from
   `org_leavers`, since the base map can't know.
 - **Manager.** A contributor with no manager, though not the head of the tree, who owns a unit
@@ -1024,7 +1073,11 @@ Each row of the Changes tab that `team_planning_status` marks `clearable` carrie
 behind a dialog that names the step the scenario follows again: its own parent, whatever
 its relation. A row is clearable when
 the scenario shown makes the change itself, the caller may edit, the facet isn't pay
-withheld from them, and the subject is still inside a scoped plan's units. Undo, Redo and
+withheld from them. A change about someone a scoped plan no longer covers stays clearable,
+and its row adds an Undo of that change alone, since the plan page's Undo never offers it
+([#435](https://github.com/espaliahq/espalia/issues/435)). The Undo shows only when the
+status read marks the row `undoable`: when undoing it brings no earlier change about that
+subject and facet back, which the plan could no longer show. Clear stays either way. Undo, Redo and
 Clear each return to the tab and scenario they were pressed on, and a refusal shows the
 operation's own words.
 
@@ -1067,9 +1120,16 @@ history projection (version 3) counts what the scenario still held into
 standing change or pin held and no clear let go, as the plan's log counts them. Either
 projection rebuilt alone gives the same list. A deleted plan takes both.
 
-The plan page has no Remove control yet; that is
-[#439](https://github.com/espaliahq/espalia/issues/439). Until it lands, a scenario is removed
-through `team_planning_remove_scenario`.
+**Removing one, as built in [#439](https://github.com/espaliahq/espalia/issues/439):** an editor
+removes a scenario from its row's menu on the Scenarios tab, or with Remove… beside Edit… on the
+map. A dialog asks first. It says how many changes go with the scenario, counted by the rule the
+tally keeps, so the number matches the entry it leaves: `team_planning_scenarios` returns that
+count per scenario as `changes`. An editor who can't see pay also reads the operation's own
+`approval_notice`, which says, by count alone, what hidden pay, budget amounts included, goes too. A scenario others fork
+from, or the agreed part of a split, can't be removed yet, so its dialog names the scenarios to
+remove first and offers no Remove. The baseline, and an archived or frozen plan, offer none at all.
+Once removed, the page opens on Removed scenarios with the entry in view.
+`team_planning_remove_scenario` does the same through MCP.
 
 ### Notes
 
@@ -1172,7 +1232,10 @@ and bring it back. `PlanArchived` and `PlanRestored` each carry who did it.
 - What stays live is structure. Framework roles and levels, and HRIS title mappings, say
   who is at which level, not what a level costs. A plan reads the Org Graph as known the
   day before its base date, or on the archive day if that comes first, so someone
-  recorded as leaving after the archive moves no archived figure. Actual pay is never in
+  recorded as leaving after the archive moves no archived figure. Each day ends at
+  midnight in the zone the tenant had when the plan recorded it, so changing the zone
+  later moves neither cut-off. A plan recorded before tenants had zones ends its days at
+  midnight UTC. Actual pay is never in
   the copy: it stays sealed per person, and the reader's see-pay view applies at read
   time, so forgetting a person still removes it.
 - The copy carries tenant configuration text as it stood: location, cost centre, a
@@ -1220,7 +1283,7 @@ day before its base date has passed. Until then its base moves as edits land.
 
 ### Updating to today
 
-`team_planning_rebase_plan` moves a plan's base to today, a UTC day, and nothing else.
+`team_planning_rebase_plan` moves a plan's base to the tenant's today and nothing else.
 Every scenario keeps its changes and resolves them over the Org Graph as of the new base,
 so someone who joined since the old base comes onto the map, and someone who left drops
 off it, with "has left" against any change that still places them. The first step after
@@ -1279,7 +1342,9 @@ reads. `team_planning_settle_conflict` takes one of two choices, in one scenario
   retirements written with it wouldn't follow, so the editor changes it on the map.
 
 Settling is refused once status no longer reads the row as conflicting: the Org Graph
-has caught up with the plan, or the person was forgotten.
+has caught up with the plan, or the person was forgotten. It is refused, with the same
+answer as an unknown subject, for someone the plan no longer covers: the changes tab
+offers Clear there instead.
 
 No new event records the choice. The write carries a `settles` marker, the day the
 conflict was found and the choice, and the conflict ends by the rule above: a newer
@@ -1334,6 +1399,32 @@ A change applied from this plan comes back `from_plan`, matched through the `pla
 its event; nothing sets one until approval exists. Whether a planned change is done,
 pending or conflicting is 4.3's status, below.
 
+A plan covering some units sees only drift about the people and units it covers
+([#435](https://github.com/espaliahq/espalia/issues/435)). `TeamPlanning::DriftScope`
+follows the window in date order, judging each change by who and what the plan covers
+when it happens. Someone the baseline covers stops counting from the change that takes
+them out of the plan's units, and counts again if they come back. Someone whose last
+place ends stays, as the baseline keeps them unassigned. Someone the window brings in
+counts from that change on, and so does anyone in a unit beneath one it brings in.
+Anyone a scenario holds, and any unit a scenario created, count throughout. Units
+follow the same rule. Within a day, the changes that move someone or some unit are
+judged first, so a title that changes on the day someone leaves goes with them. A move
+the Org Graph knew before the window but that takes effect after the base moves them
+too, on its own day and ahead of that day's changes, though drift never reports it. A
+change about anything the plan doesn't cover at that point is dropped, names and all.
+
+The change that takes a person or unit out keeps the plan's side and nulls the
+destination: the reader learns they left the plan's units, not where they went. The
+change that brings them in nulls where they came from. A covered person now reporting
+to someone the plan can't name reads the same way, and so does the earlier value of a
+fact or name last set while its subject was outside, before the window or in it.
+A change that took effect before the base, learned since, always drops its earlier
+value, since coverage is judged only from the base on; a plan covering the whole
+organisation keeps it. A unit is named only if the plan covers it today, since a unit's
+name now may have been set after it left. A joiner's first-day facts keep only the units, owned units and manager the plan
+covers. `outside` lists the fields nulled or trimmed,
+and the Changes tab words each one.
+
 `team_planning_drift` gives the same report to MCP, with people by id and a `names` map
 beside them.
 
@@ -1368,6 +1459,9 @@ reads its end state off both with `read_from`.
 - **Plan only**: the Org Graph never holds what the change plans, so it is never compared
   and counts as no Org Graph work: a rule, a position, a capacity, a budget line, a hire
   the plan adds, or a person's pay. It still shows, so an editor sees the change exists.
+- **Outside**: a scoped plan no longer covers the subject, in the scenario's map or the
+  baseline. The entry carries only the scenario, the change, the subject's id, the
+  facet and the plan's own note: no name, no `since` and no sources.
 
 A plan whose base is still to come holds every change against today, so nothing reads
 conflicting before the plan starts.
@@ -1668,8 +1762,13 @@ holds no budget line. An archived plan stays unchecked, as before.
 - **Unused budget line.** A line whose period overlaps the scenario's that nothing draws on.
   A line that positions tie on is not unused: choosing a funding fixes it.
 
-The mismatch check, a seat whose rules give a cost centre other than the one it keeps, follows
-in its own change.
+- **Cost centre mismatch.** A person costed in one cost centre while something else names
+  another, once for each: the entries that match them, while they keep their real one; their
+  position, by its label or the untouched occupant who decides it; or a budget line their
+  position draws on that names a third. The cost read keeps the value it gives, so the check
+  only names the disagreement. The cost read carries the entries' answer as
+  `rule_cost_centre` on a person who keeps their real one, and never costs them there. In a
+  scoped plan an item names only cost centres the plan holds.
 
 As built in 6.5 ([#384](https://github.com/espaliahq/espalia/issues/384)): the
 `budget_strictness` rule says how strictly positions follow budget lines. It is plan-wide, like
@@ -1740,7 +1839,10 @@ Graph, by which rule) and reports three conditions as checks:
   upstream. The rules never move a person's cost on their own. Two cases reach it from the
   cost centre resolution above: a labelled position whose untouched occupant keeps a
   different real cost centre, and a position the plan moves one occupant into while
-  another stays, whose cost centre follows the one who stays.
+  another stays, whose cost centre follows the one who stays. As built
+  ([#421](https://github.com/espaliahq/espalia/issues/421)), the check is per person, and
+  also names an untouched person whose entries give another cost centre and a position
+  drawing on a line for a third.
 - **Unplaced.** An open position with no cost centre: it has no label of its own and no rule
   matches it. It can draw only on a budget line that states
   no cost centre, which matches any position, and is unfunded when none matches. This is a
@@ -1799,7 +1901,8 @@ promotions and increases, matched by cost centre and period like any other.
 
 [#351](https://github.com/espaliahq/espalia/issues/351) built the frame (10.1), and
 [#362](https://github.com/espaliahq/espalia/issues/362) the first kind, attrition (10.2).
-The hiring and ramp assumptions (10.3 and 10.4) are stories of their own.
+[#458](https://github.com/espaliahq/espalia/issues/458) added hiring dates (10.3). The ramp
+(10.4) is a story of its own.
 
 - **A step is the scenario's period**, the unit the timeline and cost already use. Today
   has no period, so it has no forecast and is all actual.
@@ -1912,6 +2015,54 @@ reads from the places they priced, so the forecast never reads pay on its own. T
 invariant holds for every caller: actual, planned and forecast add up to the total, per
 unit and overall. The pay privacy test walks the real kind for a holder and a non-holder.
 
+### Hiring dates as built
+
+[#458](https://github.com/espaliahq/espalia/issues/458) gave `PositionSet` two optional
+fields, both plan-held:
+
+- **`hiring_status`** is not_started, recruiting, on_hold or offer_accepted. An older
+  event, which carries none, reads as not_started.
+- **`target_start`** is the day someone is planned to start. offer_accepted needs one.
+
+Each position also knows the day it opens: the base date for a position the baseline
+already holds, else the first day of the step that opens it. A backfill opens the day after
+its leaver goes.
+
+`TeamPlanning::SeatStart` is the one rule cost, capacity, the forecast, the headcount walk
+and Checks share. An open seat starts on its target start, never before it opens, and not
+at all while on hold. An undated seat starts the day it opens, as the plan's own figures
+always had it. The start applies to open FTE and placeholders, never to a named person.
+
+- **Capacity reads the step's last day.** A seat has started in a step when its start falls
+  on or before that day, and then counts in full; an unstarted seat counts zero.
+- **Cost prices the days from the start.** A seat starting halfway through a step costs
+  half the step.
+- **The walk counts a placeholder as hired** in the step it starts.
+- **There is no step average** for a dated seat: each read takes its own reading of the one
+  start.
+
+The `time_to_hire` rule, already read for backfills, now forecasts an undated open seat
+too: it fills that many days after it opens. The forecast row takes away cost for the days
+before then, and takes away capacity and headcount only when the forecast start falls after
+the step ends. A seat with a target start, or on hold, gets no forecast, and 0 days
+forecasts nothing, so a tenant that sets 0 keeps the figures it had before.
+
+Each leaver's share of a backfill opens the day after they go, and the rest opens with the
+position. That holds in the step they leave in and in every step after, so the hiring lag on
+each share runs from its own day.
+
+Two edges stay as they are. Capacity counts a backfill in full when its leaver leaves on the
+step's last day, while cost prices it 0 days. Budget head counts take a position's FTE
+whatever its start, and the budget treats forecast rows as unfunded.
+
+Checks lists each open seat whose target start is before today under **Late hires**, with
+the FTE still open. The map labels an open seat with its status and start, such as
+"Recruiting · starts 1 Jun 2027", and so does its bar on the timeline, as the seat stood
+in the step the bar starts. Not started goes
+unsaid. The Hiring dialog that sets both fields from the map follows in
+[#465](https://github.com/espaliahq/espalia/issues/465); until then they are set through
+`team_planning_set_position`.
+
 ## Approval and carrying a plan out
 
 Approval is the one process this module owns.
@@ -2006,9 +2157,47 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 - The next step resolves over the Org Graph, not over what the closed step planned.
 - Changes still pending in the closed step are shown in the next step as carried over.
   This is derived: no event copies them.
+- A seat still open at the close opens the day after it. At a close we know the seat is
+  still open, so its time to hire runs from the day after, as in a fresh plan.
 - The closed step is read as planned against actual, using the Org Graph as of its end (R4).
 - Alternatives to the closed step that were not taken are kept with it and no longer
   offered.
+
+### Planned against actual as built
+
+A closed step's row on the plan page, and its bar on the timeline, carry "Planned against
+actual…" ([#466](https://github.com/espaliahq/espalia/issues/466)). It opens a dialog that
+loads `TeamPlanning::StepOutcome` in a lazy frame, so the plan page pays nothing for it until
+someone asks. `team_planning_step_outcome` returns the same read to an agent. Every member
+may read it, viewers included.
+
+- **The planned side** is the step as it closed, resolved on the plan's own base.
+- **The actual side** is the Org Graph on the step's last day (`ends_on`), as it reads now.
+  An archived plan reads it as known on its archive day (`known_on`).
+- **Rows key on unit id**, under the plan's name for the unit. A unit renamed since still
+  matches, and one retired since keeps its row with nothing on the actual side.
+- **Each unit** carries planned and actual heads, and its people by outcome: as planned,
+  planned here but not here, here but not planned, and a placeholder hire not filled.
+  Someone planned here but not here gets no word on where they went: they may be outside the
+  plan's scope, or have left.
+- **A seat is filled** only where the plan placed someone in that position and they are in
+  its unit on the last day. Nobody new turning up fills it.
+- **Heads and names only.** No level, pay, cost or budget, so the read is the same for a
+  holder of the see-pay right as for anyone else, and the pay privacy test walks it.
+- **On a phone** the table becomes a card per unit.
+
+Known limits, each its own issue:
+
+- The outcome moves as the Org Graph learns more about the step's last day. Freezing it at
+  the close is [#477](https://github.com/espaliahq/espalia/issues/477).
+- The next step's changes that carried over aren't marked as such:
+  [#478](https://github.com/espaliahq/espalia/issues/478).
+- Updating to today is refused while a step is closed:
+  [#467](https://github.com/espaliahq/espalia/issues/467).
+- The Changes tab still lists drift from the plan's original base:
+  [#468](https://github.com/espaliahq/espalia/issues/468).
+- "The step's last day has passed" uses the UTC date:
+  [#469](https://github.com/espaliahq/espalia/issues/469).
 
 ## Projections
 
@@ -2021,6 +2210,7 @@ after:    parent ── S₁ (the agreed part) ── S (the rest) ── descen
 | Capability profile | Per unit and per position, under the existing cohort rule. |
 | Timeline | One path through the scenario tree, with lanes and moves. Read on demand by `TeamPlanning::Timeline`, not stored. |
 | Headcount walk | Per step and unit: opening, hires, known and expected departures, transfers, closing. Drawn as a lane of the timeline. |
+| Timeline figures | Per step: cost, budget and unfunded, and capacity per model, from the step's own reads. Read on demand by `TeamPlanning::TimelineFigures`, not stored. |
 | Checks | Every warning, with guardrail checks marked. |
 | Change list | The approved changes with their derived status. |
 

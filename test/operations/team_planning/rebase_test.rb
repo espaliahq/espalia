@@ -191,6 +191,14 @@ class Operations::TeamPlanning::RebaseTest < ActiveSupport::TestCase
     assert_equal "Q1 ends on 2026-06-30, before 2026-07-02: end it later or remove it first", refusal { rebase }
   end
 
+  should "refuse a preview once a step is closed, as the update itself is refused" do
+    travel_to Time.utc(2026, 7, 2, 9)
+    call(:CloseStep, plan_id: @plan_id, scenario_id: @q1)
+
+    assert_equal TeamPlanning::PlanAggregate::CLOSED_REBASE, refusal { preview }
+    assert_equal TeamPlanning::PlanAggregate::CLOSED_REBASE, refusal { preview(as: @viewer) }
+  end
+
   should "name a conflict an earlier update carried, though the drift since no longer holds its subject" do
     drift_brook
     rebase

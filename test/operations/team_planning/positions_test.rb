@@ -47,15 +47,32 @@ class Operations::TeamPlanning::PositionsTest < ActiveSupport::TestCase
   should "open a position with its budget, and list it with the framework's names" do
     opened = open_position(@q1, basis: "backfill", fte: 0.5)
     assert_equal({ plan_id: @plan_id, scenario_id: @q1, position_id: opened[:position_id], role_id: @engineer.role_id,
-                   level_id: @e2.level_id, unit_id: @unit_id, fte: 0.5, basis: "backfill", cost_centre: nil, budget: "committed" }, opened)
+                   level_id: @e2.level_id, unit_id: @unit_id, fte: 0.5, basis: "backfill", cost_centre: nil, hiring_status: "not_started",
+                   target_start: nil, budget: "committed" }, opened)
 
     assert_equal [ { position_id: opened[:position_id], role_id: @engineer.role_id, level_id: @e2.level_id, unit_id: @unit_id,
-                     fte: 0.5, basis: "backfill", cost_centre: nil, role_name: "Software Engineer", level_name: "Engineer II", budget: "committed",
+                     fte: 0.5, basis: "backfill", cost_centre: nil, role_name: "Software Engineer", level_name: "Engineer II",
+                     hiring_status: "not_started", target_start: nil, opens_on: "2027-01-01", budget: "committed",
                      occupants: [], open_fte: 0.5, backfill_for_ids: [] } ],
                  positions(@q1)
 
     planned = open_position(@q1)[:position_id]
     assert_equal "planned", positions(@q1).find { it[:position_id] == planned }[:budget]
+  end
+
+  should "store and list a hiring status and target start, and when each seat opened" do
+    opened = open_position(@q1, hiring_status: "offer_accepted", target_start: "2027-02-15")
+    assert_equal({ hiring_status: "offer_accepted", target_start: "2027-02-15" }, opened.slice(:hiring_status, :target_start))
+    open_position(@q2)
+    today = open_position(@plan_id)
+
+    listed = positions(@q2).index_by { it[:position_id] }
+    assert_equal [ "offer_accepted", "2027-02-15", "2027-01-01" ], listed[opened[:position_id]].values_at(:hiring_status, :target_start, :opens_on)
+    assert_equal "2027-04-01", positions(@q2).find { it[:position_id] != opened[:position_id] && it[:position_id] != today[:position_id] }[:opens_on]
+    assert_equal "2027-01-01", listed[today[:position_id]][:opens_on]
+    assert_equal "An accepted offer needs a target start",
+                 refusal(Operations::TeamPlanning::SetPosition, scenario_id: @q1, role_id: @engineer.role_id, level_id: @e2.level_id,
+                                                                unit_id: @unit_id, fte: 1, basis: "new", hiring_status: "offer_accepted")
   end
 
   should "store and list the position's own cost centre" do

@@ -9,14 +9,17 @@ class Operations::TeamPlanning::Status < Operations::Base
   include Operations::TeamPlanning::PlanRead
 
   description "Get the status of each planned change in a scenario of a Team Planning plan the caller is in, " \
-              "held against the Org Graph today (a UTC day, as known now). There is one status per subject and " \
+              "held against the Org Graph today (in the tenant's time zone, as known now). There is one status per subject and " \
               "facet the scenario resolves, from its own changes and those it inherits from the scenarios it " \
               "follows; scenario_id says which scenario made it (the plan_id is the baseline). 'done' when today " \
               "reads the planned end state, 'pending' when today still reads what the plan's base held or what " \
               "the step before plans, 'conflicting' when it reads none of these, 'unknown' when the plan's value " \
               "was private and has since been removed, and 'plan_only' for a change the Org Graph never holds, " \
               "such as a rule, a position, a capacity, a budget line, a hire the plan adds or a person's pay: it is " \
-              "never compared, so it is no Org Graph work still to do, and has no sources. Before the plan's base " \
+              "never compared, so it is no Org Graph work still to do, and has no sources. On a plan scoped to some units, " \
+              "'outside' marks a change about someone or some unit the plan no longer covers: the scope hides " \
+              "the organisation's data about them, so it is never compared and carries only scenario_id, " \
+              "change_id, subject_id and facet, plus the plan's own note, with no since, sources or name. Clear, undo or note it. Before the plan's base " \
               "date nothing reads conflicting. A " \
               "conflict an update to today carried forward still reads 'conflicting', with since the day of the " \
               "update that first found it, while the scenario still resolves to the same change: a set, pin, " \
@@ -37,9 +40,10 @@ class Operations::TeamPlanning::Status < Operations::Base
               "once erased. A note on a pay change reaches only a member with the see-pay right; anyone else gets no note on it. " \
               "clearable is true on a status the caller may hand back to what the step before gives it with " \
               "team_planning_clear_change: an editor's, on a change the scenario makes itself, never on the " \
-              "baseline, never on a pay change or on a budget line that carries an amount without the see-pay " \
-              "right, and never about someone or something " \
-              "outside the units a scoped plan covers. #{UNCHECKED} Refused, as an unknown plan, unless " \
+              "baseline, and never on a pay change or on a budget line that carries an amount without the see-pay right. A change about " \
+              "someone or something a scoped plan no longer covers is clearable like any other, so it can be removed. Such a status, " \
+              "read as outside, also carries undoable: true when team_planning_undo_change on its change_id would take " \
+              "it out and bring no earlier change back, since that would name what the plan no longer covers. #{UNCHECKED} Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
   approval :none
@@ -61,9 +65,11 @@ class Operations::TeamPlanning::Status < Operations::Base
     notes = notes_of(plan, report.statuses.map(&:change_id))
     see_pay = PlanPolicy.new(context, plan).see_pay?
     clearable = clearable(plan, scenario_id, see_pay)
+    undoable = undoable(plan, scenario_id)
     { plan_id: plan.id, scenario_id:, **checked(plan), on: report.on.iso8601,
-      statuses: report.statuses.map do
-        status_row(it, ::Operations::TeamPlanning::ChangeNote.payload(notes[it.change_id], facet: it.facet, see_pay:), clearable.call(it))
+      statuses: report.statuses.map do |entry|
+        note = ::Operations::TeamPlanning::ChangeNote.payload(notes[entry.change_id], facet: entry.facet, see_pay:)
+        status_row(entry, note, clearable.call(entry)) { undoable.call(entry) }
       end,
       names: report.names }
   end
@@ -74,11 +80,7 @@ class Operations::TeamPlanning::Status < Operations::Base
   def clearable(plan, scenario_id, see_pay)
     return ->(_) { false } if scenario_id == plan.id || PlanPolicy.frozen?(plan) || !PlanPolicy.new(context, plan).update?
 
-    outside = nil
-    lambda do |entry|
-      entry.scenario_id == scenario_id && (see_pay || stays_theirs?(plan, scenario_id, entry)) &&
-        !(outside ||= outside_scope(plan, scenario_id)).include?(entry.subject_id)
-    end
+    ->(entry) { entry.scenario_id == scenario_id && (see_pay || stays_theirs?(plan, scenario_id, entry)) }
   end
 
   # Without the see-pay right, a pay change and a change on a budget line that
@@ -91,11 +93,13 @@ class Operations::TeamPlanning::Status < Operations::Base
     !@priced.include?([ entry.subject_id, entry.facet ])
   end
 
-  def outside_scope(plan, scenario_id)
-    return Set.new if plan.scope_unit_ids.blank?
-
-    map = ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure
-    map.outside_ids | map.cut_ids
+  # @return [Proc] whether undoing an outside change brings nothing back; the plan is loaded only when asked
+  def undoable(plan, scenario_id)
+    aggregate = nil
+    lambda do |entry|
+      aggregate ||= ::TeamPlanning::Repository.new.load_plan(plan.id)
+      aggregate.restored_by_undo(scenario_id, entry.change_id).nil?
+    end
   end
 
   # A change's note is rewritten apart from it, so it is read off the override
@@ -105,6 +109,11 @@ class Operations::TeamPlanning::Status < Operations::Base
   end
 
   def status_row(entry, note, clearable)
+    if entry.status == :outside
+      return entry.to_h.slice(:scenario_id, :change_id, :subject_id, :facet).merge(status: "outside", clearable:, undoable: clearable && yield,
+                                                                                   **({ note: } if note))
+    end
+
     entry.to_h.except(:staying).merge(status: entry.status.to_s, since: entry.since&.iso8601, clearable:,
                                       **({ staying: true } if entry.staying),
                                       **({ note: } if note))

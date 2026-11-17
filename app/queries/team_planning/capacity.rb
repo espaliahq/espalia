@@ -39,6 +39,7 @@ class TeamPlanning::Capacity
     "unknown_role" => "The role isn't in the framework",
     "closed_position" => "The position this place is in has closed",
     "leaving" => "The person leaves in this step, so a backfill position carries the seat if the plan gives one",
+    "not_started" => "The seat is filled after this step ends, or recruiting for it is on hold, so it delivers nothing yet",
     "no_level" => "The level resolves to none, so the model has nothing to price",
     "no_model" => "No capacity model is chosen for the role or its family",
     "unknown_model" => "The chosen capacity model isn't available",
@@ -66,14 +67,23 @@ class TeamPlanning::Capacity
   # A scenario's capacity beside the baseline's, with what its forecast adds.
   #
   # @!attribute report [Report] the scenario's
-  # @!attribute baseline [Report, nil] nil when the scenario is the baseline
+  # @!attribute baseline [Report, nil] nil when the scenario is the baseline, or it was skipped
   # @!attribute forecast [Array<TeamPlanning::Forecast::Row>]
-  Split = Data.define(:report, :baseline, :forecast) do
+  # @!attribute baseline_skipped [Boolean] whether the caller asked for no baseline
+  Split = Data.define(:report, :baseline, :forecast, :baseline_skipped) do
+    def initialize(baseline_skipped: false, **) = super
+
+    # @return [Hash{String => Rational}] model => the scenario's own capacity plus what its forecast adds
+    def total = TeamPlanning::Capacity.add([ report.totals, *forecast.map(&:capacity) ])
+
     # The baseline is all actual.
     #
     # @param unit_id [String, nil] a live unit of the scenario, or nil for the plan
     # @return [Parts]
+    # @raise [ArgumentError] when the baseline was skipped
     def parts(unit_id = nil)
+      raise ArgumentError, "This capacity was read without its baseline, so it can't split its total" if baseline_skipped
+
       pick = ->(report) { unit_id ? report.units.fetch(unit_id, {}) : report.totals }
       scenario = pick.(report)
       return Parts.new(actual: scenario, planned: {}, forecast: {}, total: scenario) unless baseline
@@ -93,22 +103,39 @@ class TeamPlanning::Capacity
   # @param plan [TeamPlanningPlan]
   # @param scenario_id [String] the plan's id for the baseline
   # @param repository [TeamPlanning::Repository]
+  # @param aggregate [TeamPlanning::PlanAggregate, nil] the plan, already loaded
+  # @param shared [TeamPlanning::Resolution::Shared, nil] the scenario, already
+  #   resolved over that aggregate for this viewer, which also gives the base
+  # @param steps [Hash{String => TeamPlanning::Forecast::Step}] earlier steps
+  #   already priced, which this fills as it prices more
+  # @param baseline [Boolean] false skips pricing the baseline, for a caller that reads only {Split#total}
   # @return [Split]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] for a scenario the plan doesn't have
-  def self.split(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new)
-    aggregate = repository.load_plan(plan.id)
-    base = TeamPlanning::Baseline.new(context:, plan:).structure
+  # @raise [ArgumentError] when shared was resolved for another viewer, plan or scenario
+  def self.split(context:, plan:, scenario_id:, repository: TeamPlanning::Repository.new, aggregate: nil, shared: nil, steps: {}, baseline: true)
+    shared = shared&.for!(context, plan, scenario_id)
+    aggregate ||= repository.load_plan(plan.id)
+    base = shared&.base || TeamPlanning::Baseline.new(context:, plan:).structure
     price = lambda do |id|
       resolution = TeamPlanning::Resolution.new(context:, plan:, scenario_id: id, repository:, base:)
-      new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(resolution.call(aggregate))
+      map = shared && id == scenario_id ? shared.named(TeamPlanning::Baseline.new(context:, plan:)) : resolution.call(aggregate)
+      new(context:, plan:, scenario_id: id, repository:, resolution:).report_for(map)
+    end
+    titles = Integrations::HrisTitleResolution.new(plan.tenant)
+    standing = TeamPlanning::Resolution.new(context:, plan:, scenario_id:, repository:, base:)
+    priced = lambda do |report|
+      report.pricing(TeamPlanning::PositionCostCentres.new(report.map, tenant_id: plan.tenant_id, base: standing.standing_base(report.map), titles:))
     end
     earlier = TeamPlanning::Forecast.reaching(aggregate, scenario_id, defaults: base.rules.defaults).index_with do |id|
-      price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: it.pricing) }
+      steps[id] ||= price.(id).then { TeamPlanning::Forecast::Step.new(map: it.map, pricing: priced.(it)) }
     end
     report = price.(scenario_id)
-    baseline = price.(plan.id) unless scenario_id == plan.id
-    Split.new(report:, baseline:, forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing: report.pricing, earlier:).rows)
+    pricing = priced.(report)
+    steps[scenario_id] ||= TeamPlanning::Forecast::Step.new(map: report.map, pricing:) unless scenario_id == plan.id
+    against = price.(plan.id) if baseline && scenario_id != plan.id
+    Split.new(report:, baseline: against, baseline_skipped: !baseline,
+              forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing:, earlier:).rows)
   end
 
   # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named
@@ -116,21 +143,32 @@ class TeamPlanning::Capacity
   # @!attribute units [Hash{String => Hash{String => Rational}}] live unit id => model => total
   # @!attribute totals [Hash{String => Rational}] model => total
   Report = Data.define(:map, :seats, :units, :totals) do
+    # A seat not yet started counts nowhere by design, so it is not listed.
+    #
     # @return [Array<Array(Seat, Place)>] each place that counts nowhere, with its seat
-    def unclassified = seats.flat_map { |seat| seat.places.select(&:unclassified?).map { [ seat, it ] } }
+    def unclassified = seats.flat_map { |seat| seat.places.select { it.unclassified? && it.reason != "not_started" }.map { [ seat, it ] } }
 
     # What each person's places in a unit deliver, so a forecast takes away
     # what an empty seat would have delivered.
     #
     # @return [TeamPlanning::Forecast::Pricing]
-    def pricing
+    #
+    # @param cost_centres [TeamPlanning::PositionCostCentres, nil] each open
+    #   seat's cost centre, so a hiring-lag row joins its cost twin
+    def pricing(cost_centres = nil)
       live = map.units.to_set(&:id)
       places = seats.select { it.seat.kind == "person" }.flat_map do |seat|
         seat.places.select { it.figure && it.model }.map { [ seat.seat.id, live.include?(it.unit_id) ? it.unit_id : nil, it ] }
       end
+      positions = map.positions_by_id
+      open = seats.select { it.seat.kind == "position" }.to_h do |seat|
+        delivered = seat.places.select { it.figure && it.model }.map { { it.model => Rational(it.figure.amount.to_s) / seat.seat.fte } }
+        cost_centre = cost_centres&.of(positions.fetch(seat.seat.id))&.cost_centre
+        [ seat.seat.id, TeamPlanning::Forecast::Open.new(cost_centre:, capacity: TeamPlanning::Capacity.add(delivered)) ]
+      end
       TeamPlanning::Forecast::Pricing.new(capacity: places.group_by { it.first(2) }.transform_values do |group|
         TeamPlanning::Capacity.add(group.map { { it[2].model => it[2].figure.amount } })
-      end)
+      end, open:)
     end
 
     # @return [Boolean] whether any place has a model chosen, so the plan measures capacity at all
@@ -209,6 +247,7 @@ class TeamPlanning::Capacity
     shares = member.memberships.empty? ? TeamPlanning::Baseline::Membership.shares([ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]) : @map.counted_shares(member)
     places, reasons = shares.map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
     reasons = reasons.map { "leaving" } if member.leaving?
+    reasons = reasons.map { "not_started" } unless @map.started?(member)
     (@own_levels ||= {})[member.id] = own.level&.level_id
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]
   end
@@ -226,7 +265,9 @@ class TeamPlanning::Capacity
   end
 
   # A position counts only for the FTE its occupants leave open, so a filled
-  # one is counted once, through the people in it.
+  # one is counted once, through the people in it. Capacity is the step's end
+  # state, so an open seat counts in full once it has started by the step's
+  # last day and not at all before ({TeamPlanning::SeatStart}).
   def open_positions(people)
     filled = Hash.new(0r)
     backfill = @map.people.to_h { [ it.id, it.backfill_id ] }
@@ -237,7 +278,8 @@ class TeamPlanning::Capacity
 
       place = Model::Place.new(unit_id: position.unit_id, allocation: 1r, allocation_known: true, role_id: position.role_id,
                                level_id: position.level_id, position_id: position.id)
-      [ Model::Seat.new(id: position.id, kind: "position", fte: open, fte_known: true, places: [ place ]), [ nil ] ]
+      [ Model::Seat.new(id: position.id, kind: "position", fte: open, fte_known: true, places: [ place ]),
+        [ ("not_started" unless @map.seat_started?(position)) ] ]
     end
   end
 

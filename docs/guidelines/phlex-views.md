@@ -41,6 +41,7 @@ Look a job up here, then check its states in Lookbook (`/lookbook`) before writi
 | A toggle or filter, or a removable choice such as a person | `Kit::Chip.new(label, pressed:)`, `remove:` |
 | One choice from a few, on a shared track | `Kit::SegmentedControl` |
 | A menu, or one row in it | `Kit::Dropdown`; `Kit::Dropdown.item_classes(tone:, size:)` for a `button_to` row |
+| A ⋮ on every row of a long list or grid | `Kit::DelegatedMenu.new(kind:)` once, with `#item`, and a `Kit::DelegatedMenu::Trigger.new(label:, kind:, values:)` per row |
 | A status or count (square) | `Kit::Badge.new(label, tone:)` |
 | A dot saying something needs the viewer | `Kit::AttentionDot.new(label)`; on a segment, `SegmentedControl#segment(marked:)` |
 | A level, role family or category (rounded) | `Kit::Tag.new(label, category:)` |
@@ -49,7 +50,7 @@ Look a job up here, then check its states in Lookbook (`/lookbook`) before writi
 | A message on the page, or one that comes and goes | `Kit::Alert`, `Kit::Toast` |
 | Nothing to show yet | `Kit::EmptyState` |
 | A dialog | `Kit::Modal` |
-| A side panel the viewer can close beside the main column | `Kit::SidePanel.new(id:, title:, open:, cookie:, url_key:, narrow:)`, then `main`, `body`, `toggle` |
+| A side panel the viewer can close beside the main column | `Kit::SidePanel.new(id:, title:, open:, cookie:, url_key:, narrow:)`, then `main`, `body`, `toggle`. A toggle outside the row: `wrap` the page, place the row with `columns`, render `SidePanel::Toggle`. A body with its own heading: `heading: false` and `SidePanel::Close`. `sticky:` and `fit_viewport:` keep it in view |
 | A section heading, with a subtitle or an action | `Kit::SectionHeading.new(title, subtitle:)`, then `heading.action { }` |
 | Term and detail pairs | `Kit::DescriptionList.new(items:, columns:)` |
 | A term whose definition shows on hover and focus | `Kit::DefinitionTip.new(term, definition:, id:)` |
@@ -250,11 +251,17 @@ rules, both non-negotiable:
 
 Use a shared trigger rather than hand-rolling the ⋮ glyph, and make sure the
 trigger stays visible on `pointer-coarse` so touch devices aren't left with an
-invisible control. In the framework explorer's grid that is
-`Views::Frameworks::Explorer::Concerns::MenuItems#render_menu_trigger` — a bare
-trigger whose menu one root-mounted controller builds on open (see
-[framework-explorer.md](framework-explorer.md) §11a; a per-kebab `Kit::Dropdown`
-does not scale to a grid). The explorer's role tree uses `Kit::Dropdown` with
+invisible control. Where every row of a long list or grid has a ⋮, use
+`Kit::DelegatedMenu`: a bare `Trigger` per row and one menu, built on open by a
+controller mounted once on the container. A `Kit::Dropdown` per row ships every
+menu with the page: on a 2,000-position scenario map it cost 3.3 KB and 0.2 ms a
+row, against 0.6 KB and 0.07 ms for a trigger. Give a trigger only what
+changes per row (an id, not a path), and spell the rest once in the template.
+The scenario map uses it as it is. The framework explorer's grid extends
+its controller, since its items depend on more than the trigger's values, and
+renders the trigger through
+`Views::Frameworks::Explorer::Concerns::MenuItems#render_menu_trigger` (see
+[framework-explorer.md](framework-explorer.md) §11a). The explorer's role tree uses `Kit::Dropdown` with
 `Concerns::KebabChrome#kebab_trigger`. Everywhere else, `Kit::Dropdown#trigger(label:,
 button: { variant: :ghost, size: :xs, icon: true })` draws the ⋮ and its ARIA, and
 `#item` (or `.item_classes` on a `button_to`) draws each entry, as the comment and

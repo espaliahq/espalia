@@ -26,9 +26,9 @@ class TeamPlanning::RebasePreview
 
   # @param context [AuthorizationContext]
   # @param plan [TeamPlanningPlan]
-  # @param today [Date] as a UTC date
+  # @param today [Date] the tenant's today
   # @param repository [TeamPlanning::Repository]
-  def initialize(context:, plan:, today: Time.now.utc.to_date, repository: TeamPlanning::Repository.new)
+  def initialize(context:, plan:, today: Tenant.today, repository: TeamPlanning::Repository.new)
     @context = context
     @plan = plan
     @today = today
@@ -38,7 +38,7 @@ class TeamPlanning::RebasePreview
   # @return [Report]
   # @raise [Pundit::NotAuthorizedError] when the caller can't open the plan or see the Org Graph
   # @raise [TeamPlanning::Error] when the plan already stands on today, or on a day still to come, or is
-  #   updated while the preview reads it, or when its first step would end before today
+  #   updated while the preview reads it, or when its first step would end before today or a step is closed
   def call
     Pundit.authorize(@context, @plan, :show?, policy_class: PlanPolicy)
     @plan.reload
@@ -49,6 +49,8 @@ class TeamPlanning::RebasePreview
 
     base_on = @plan.base_on
     aggregate = @repository.load_plan(@plan.id)
+    raise TeamPlanning::Error, TeamPlanning::PlanAggregate::CLOSED_REBASE if aggregate.closed_steps.any?
+
     aggregate.ensure_first_steps_reach!(@today)
     starts = aggregate.first_step_starts(@today).map { |id, before, after| { scenario_id: id, starts_on: before, will_start_on: after } }
     drift = TeamPlanning::Drift.new(context: @context, plan: @plan, today: @today, repository: @repository).call

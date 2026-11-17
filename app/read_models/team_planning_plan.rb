@@ -25,6 +25,23 @@ class TeamPlanningPlan < ApplicationRecord
   # @return [Boolean]
   def archived? = !archived_on.nil?
 
+  # The instant the baseline stopped learning: the end of the day before the
+  # base, in the zone the tenant had when the base was set.
+  #
+  # @return [ActiveSupport::TimeWithZone]
+  def base_known_at = super || (base_on - 1).in_time_zone("UTC").end_of_day
+
+  # The instant an archived plan stopped learning: the end of its archive
+  # day, in the zone the tenant had then.
+  #
+  # @return [ActiveSupport::TimeWithZone, nil] nil while it is live
+  def archived_known_at = super || archived_on&.in_time_zone("UTC")&.end_of_day
+
+  # The earlier of the two, which every baseline read is held to.
+  #
+  # @return [ActiveSupport::TimeWithZone]
+  def known_at = [ base_known_at, archived_known_at ].compact.min
+
   # @param person_id [String, nil]
   # @return [String, nil] "editor", "viewer", or nil for a non-member
   def role_of(person_id) = members.find { it.person_id == person_id }&.role

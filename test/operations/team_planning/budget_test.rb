@@ -22,6 +22,8 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
     @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2027-01-01")[:plan_id]
     call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @viewer.person_id, role: "viewer")
     @q1 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1", ends_on: "2027-03-31")[:scenario_id]
+    # These price open seats from the day they open; the hiring lag has its own tests.
+    call(Operations::TeamPlanning::SetRule, plan_id: @plan_id, scenario_id: @plan_id, rule: "time_to_hire", value: { days: "0" })
     @seat = call(Operations::TeamPlanning::SetPosition, plan_id: @plan_id, scenario_id: @q1, role_id: @engineer.role_id, level_id: @e2.level_id,
                                                         unit_id: @unit_id, fte: 0.5, basis: "new", cost_centre: "Platform")[:position_id]
   end
@@ -84,8 +86,7 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
     assert_equal({ native: nil, positions: 1, fte: "0.5" }, read[:units].sole[:funded])
     assert_equal({ native: nil, converted: nil, missing: nil }, read[:forecast])
     assert_equal shape(holder), shape(read), "only values differ, never keys"
-    figures = read.to_json.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "")
-    [ "36000", "27000", "9000" ].each { assert_not_includes figures, it }
+    [ "36000", "27000", "9000" ].each { assert_no_pay_figure read, it }
   end
 
   should "follow the budget_basis rule" do

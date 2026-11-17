@@ -178,12 +178,39 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     assert_equal [ [ @tribe ], false ], rules(guild)
   end
 
+  should "keep a kind added with only top: false off the top, under any kind above it" do
+    guild = SecureRandom.uuid_v7
+    as_tenant { @handler.add_level(guild, "Guild", top: false, effective_on: @today) }
+
+    assert_equal [ [ @tribe, @squad ], false ], rules(guild)
+  end
+
   should "refuse a change dated after today, pointing to a plan" do
     error = assert_raises(RuntimeError) do
       as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: @today + 1) }
     end
     assert_equal "A change to the unit types can't be dated after today. Date it today or earlier; plan a future structure in a plan",
                  error.message
+  end
+
+  context "on a tenant ahead of UTC, at 09:00 in Sydney" do
+    setup do
+      travel_to Time.utc(2026, 11, 16, 22)
+      @tenant.update!(time_zone: "Australia/Sydney")
+    end
+
+    should "accept a change dated the tenant's today, a day ahead of UTC" do
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: Date.new(2026, 11, 17)) }
+
+      assert_equal [ [ @tribe, @squad ], false ], rules(@squad)
+    end
+
+    should "refuse a change dated the tenant's tomorrow" do
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: Date.new(2026, 11, 18)) }
+      end
+      assert_match "can't be dated after today", error.message
+    end
   end
 
   should "hold a change of a type's provider to the same dates" do
@@ -225,6 +252,162 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     end
   end
 
+  context "on a tenant whose Squads may nest only from today" do
+    setup do
+      @tenant = create(:tenant)
+      @tribe, @squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      publish_taxonomy([ { level_id: @tribe, name: "Tribe" }, { level_id: @squad, name: "Squad", parent_level_ids: [ @tribe ], top: false } ],
+                       on: (@today - 10).iso8601)
+      @payments = create_unit("Payments", @tribe, on: @today - 10)
+      @checkout = create_unit("Checkout", @squad, parent_id: @payments, on: @today - 10)
+      @basket = create_unit("Basket", @squad, parent_id: @payments, on: @today - 10)
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe, @squad ], top: false, effective_on: @today) }
+    end
+
+    should "refuse a move dated before the rule that allows it, naming the day" do
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 1) }
+      end
+      assert_equal "On #{(@today - 1).iso8601}, Squad couldn't sit under Squad, so the change can't be dated before its rules allowed it",
+                   error.message
+    end
+
+    should "accept the same move dated from the rule's day" do
+      assert_nothing_raised { as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today) } }
+    end
+
+    should "accept a unit dated before its kind existed, as an HRIS backfill does" do
+      guild = SecureRandom.uuid_v7
+      as_tenant { @handler.add_level(guild, "Guild", effective_on: @today) }
+
+      assert_nothing_raised { create_unit("Ledger", guild, on: @today - 30) }
+    end
+  end
+
+  context "on a tenant whose Basket sat under another Squad until three days ago" do
+    setup do
+      @tenant = create(:tenant)
+      @tribe, @squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      publish_taxonomy([ { level_id: @tribe, name: "Tribe" },
+                         { level_id: @squad, name: "Squad", parent_level_ids: [ @tribe, @squad ], top: false } ],
+                       on: (@today - 10).iso8601)
+      @payments = create_unit("Payments", @tribe, on: @today - 10)
+      @checkout = create_unit("Checkout", @squad, parent_id: @payments, on: @today - 10)
+      @basket = create_unit("Basket", @squad, parent_id: @checkout, on: @today - 10)
+    end
+
+    should "refuse to stop Squads nesting from before the Basket moved, naming when it did" do
+      as_tenant { @handler.move_unit(@basket, @payments, effective_on: @today - 3) }
+
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 5) }
+      end
+      assert_equal "These units sat where this structure wouldn't allow after #{(@today - 5).iso8601}, " \
+                   "so date it #{(@today - 3).iso8601} or later: Basket (Squad under Squad until #{(@today - 3).iso8601})",
+                   error.message
+    end
+
+    should "refuse the same change while a retired Basket still sat under Checkout" do
+      as_tenant { @handler.retire_unit(@basket, effective_on: @today - 3) }
+
+      assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 5) }
+      end
+    end
+
+    should "count a retired Basket under Checkout on its retirement day, and accept the change from the day after" do
+      as_tenant { @handler.retire_unit(@basket, effective_on: @today - 3) }
+
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 3) }
+      end
+      assert_equal "These units sat where this structure wouldn't allow after #{(@today - 3).iso8601}, " \
+                   "so date it #{(@today - 2).iso8601} or later: Basket (Squad under Squad until #{(@today - 2).iso8601})",
+                   error.message
+
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 2) }
+      assert_equal [ [ @tribe ], false ], rules(@squad)
+    end
+
+    should "accept the change dated from the day the Basket moved" do
+      as_tenant { @handler.move_unit(@basket, @payments, effective_on: @today - 3) }
+      as_tenant { @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 3) }
+
+      assert_equal [ [ @tribe ], false ], rules(@squad)
+    end
+  end
+
+  context "on a tenant whose Squads could nest until two days ago" do
+    setup do
+      @tenant = create(:tenant)
+      @tribe, @squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      publish_taxonomy([ { level_id: @tribe, name: "Tribe" },
+                         { level_id: @squad, name: "Squad", parent_level_ids: [ @tribe, @squad ], top: false } ],
+                       on: (@today - 10).iso8601)
+      @payments = create_unit("Payments", @tribe, on: @today - 10)
+      @orders = create_unit("Orders", @tribe, on: @today - 10)
+      @checkout = create_unit("Checkout", @squad, parent_id: @payments, on: @today - 10)
+      @basket = create_unit("Basket", @squad, parent_id: @payments, on: @today - 10)
+      as_tenant do
+        @handler.move_unit(@basket, @orders, effective_on: @today - 4)
+        @handler.set_kind_parents(@squad, parent_ids: [ @tribe ], top: false, effective_on: @today - 2)
+      end
+    end
+
+    should "accept a move under a Squad that ends before Squads stopped nesting" do
+      as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 6) }
+
+      moved = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data
+      assert_equal [ @basket, @checkout, (@today - 6).iso8601 ], moved.values_at(:unit_id, :parent_id, :effective_on)
+    end
+
+    should "keep the Basket under Orders today, as the later move still holds" do
+      as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 6) }
+
+      assert_equal @orders, as_tenant { OrgGraph::Repository.new.load_structure.unit(@basket).parent_id }
+      moved = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data
+      assert_equal @payments, moved[:previous_parent_id]
+    end
+
+    should "still refuse a move under a Squad that holds into today" do
+      error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 1) } }
+      assert_equal "Squad can't sit under Squad", error.message
+    end
+  end
+
+  context "on a tenant whose retired Ledger sat under a Division until three days ago" do
+    setup do
+      @tenant = create(:tenant)
+      @division, @department, @team = Array.new(3) { SecureRandom.uuid_v7 }
+      as_tenant do
+        [ [ @division, "Division" ], [ @department, "Department" ], [ @team, "Team" ] ].each do |id, name|
+          @handler.add_level(id, name, effective_on: @today - 10)
+        end
+        @handler.set_level_provider(@division, "hibob", effective_on: @today - 10, field: "division")
+        @handler.set_level_provider(@department, "hibob", effective_on: @today - 10, field: "department")
+        @org = SecureRandom.uuid_v7
+        @handler.create_unit(@org, "Org", level_id: @division, provider: "hibob", external_ref: "d1", effective_on: @today - 10)
+      end
+      @ledger = create_unit("Ledger", @team, parent_id: @org, on: @today - 10)
+      as_tenant { @handler.retire_unit(@ledger, effective_on: @today - 3) }
+    end
+
+    should "refuse to hand Team to the HRIS from before the Ledger retired, naming when it left" do
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_level_provider(@team, "hibob", effective_on: @today - 5, field: "team") }
+      end
+      assert_equal "These units sat where this structure wouldn't allow after #{(@today - 5).iso8601}, " \
+                   "so date it #{(@today - 2).iso8601} or later: Ledger (Team under Division until #{(@today - 2).iso8601})",
+                   error.message
+    end
+
+    should "hand Team to the HRIS from the day after the Ledger retired" do
+      as_tenant { @handler.set_level_provider(@team, "hibob", effective_on: @today - 2, field: "team") }
+
+      assert_equal "hibob", as_tenant { OrgTaxonomyLevel.find(@team).provider }
+    end
+  end
+
   context "on a tenant whose kinds changed out of date order" do
     setup do
       @tenant = create(:tenant)
@@ -261,9 +444,9 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
     )
   end
 
-  def create_unit(name, level_id, parent_id: nil)
+  def create_unit(name, level_id, parent_id: nil, on: @today)
     unit_id = SecureRandom.uuid_v7
-    as_tenant { @handler.create_unit(unit_id, name, level_id:, parent_id:, effective_on: @today) }
+    as_tenant { @handler.create_unit(unit_id, name, level_id:, parent_id:, effective_on: on) }
     unit_id
   end
 

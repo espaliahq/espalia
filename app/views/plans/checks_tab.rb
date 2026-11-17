@@ -12,6 +12,7 @@ class Views::Plans::ChecksTab < Views::Base
   HEADINGS = {
     placements: [ "Placements", "People placed in a unit or position the scenario no longer has." ],
     positions: [ "Positions", "Positions in a unit the scenario retired, or filled past their FTE." ],
+    late_hires: [ "Late hires", "Open seats whose target start has passed with nobody started in them." ],
     units: [ "Units", "Units whose parent the scenario retired." ],
     unresolved: [ "People the plan can't place", "People placed who joined after the base or have left, so the Org Graph can't place them." ],
     uncovered: [ "People the plan no longer covers", "Changes about someone outside the plan's units, since a bring-in was undone or the Org Graph moved them out." ],
@@ -27,6 +28,7 @@ class Views::Plans::ChecksTab < Views::Base
     unfunded: [ "Unfunded positions", "Held positions no budget line matches, with no funding set." ],
     ambiguous_funding: [ "Ambiguous funding", "Positions more than one budget line could fund, with no funding set to choose." ],
     unplaced: [ "No cost centre", "Seats with no cost centre: no label, cost centre of their own or entry gives one." ],
+    cost_centre_mismatches: [ "Cost centre mismatches", "People costed in one cost centre while their entries, position or budget line names another." ],
     budget_variance: [ "Over budget", "Budget lines, cost centres or the whole budget over their approved amount or head count." ],
     unused_budget_lines: [ "Unused budget lines", "Budget lines in this scenario's period that nothing draws on." ]
   }.freeze

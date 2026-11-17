@@ -384,4 +384,71 @@ class TenantTest < ActiveSupport::TestCase
       assert_nil membership.reload.slack_user_id
     end
   end
+
+  context "#today" do
+    should "be the UTC date for a tenant that hasn't chosen a zone" do
+      tenant = build(:tenant)
+
+      assert_equal "UTC", tenant.time_zone
+      assert_equal Date.new(2026, 11, 16), tenant.today(at: Time.utc(2026, 11, 16, 23, 59))
+    end
+
+    should "be tomorrow already for a tenant ahead of UTC, from its local midnight" do
+      tenant = build(:tenant, time_zone: "Australia/Sydney")
+
+      assert_equal Date.new(2026, 11, 16), tenant.today(at: Time.utc(2026, 11, 16, 12, 59))
+      assert_equal Date.new(2026, 11, 17), tenant.today(at: Time.utc(2026, 11, 16, 13, 0))
+    end
+
+    should "still be yesterday for a tenant behind UTC, until its local midnight" do
+      tenant = build(:tenant, time_zone: "America/Los_Angeles")
+
+      assert_equal Date.new(2026, 11, 16), tenant.today(at: Time.utc(2026, 11, 17, 7, 59))
+      assert_equal Date.new(2026, 11, 17), tenant.today(at: Time.utc(2026, 11, 17, 8, 0))
+    end
+
+    should "read the clock when no moment is given" do
+      tenant = build(:tenant, time_zone: "Pacific/Auckland")
+
+      travel_to Time.utc(2026, 11, 16, 11, 30) do
+        assert_equal Date.new(2026, 11, 17), tenant.today
+      end
+    end
+  end
+
+  context "time_zone" do
+    should "accept any IANA zone and refuse a name it doesn't know" do
+      assert build(:tenant, time_zone: "Australia/Sydney").valid?
+      assert build(:tenant, time_zone: "America/Toronto").valid?, "an IANA zone Rails doesn't name"
+
+      tenant = build(:tenant, time_zone: "Middle Earth")
+
+      assert_not tenant.valid?
+      assert_match(/isn't a time zone we know/, tenant.errors[:time_zone].first)
+    end
+
+    should "refuse to read today or a day's end outside a tenant" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ActsAsTenant::Errors::NoTenantSet) { Tenant.today }
+        assert_raises(ActsAsTenant::Errors::NoTenantSet) { Tenant.end_of(Date.new(2026, 11, 16)) }
+      end
+    end
+
+    should "let a tenant save while it keeps a zone no longer known" do
+      tenant = create(:tenant)
+      tenant.update_column(:time_zone, "Middle Earth")
+
+      assert tenant.reload.update(name: "Renamed")
+    end
+
+    should "read today in UTC while it keeps a zone no longer known" do
+      tenant = create(:tenant)
+      tenant.update_column(:time_zone, "Middle Earth")
+      travel_to Time.utc(2026, 11, 16, 23)
+
+      assert_equal "UTC", tenant.reload.working_zone
+      assert_equal Date.new(2026, 11, 16), tenant.today
+      assert_equal Time.utc(2026, 11, 16).end_of_day, tenant.end_of(Date.new(2026, 11, 16))
+    end
+  end
 end

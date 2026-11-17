@@ -66,6 +66,40 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_includes rows[4], "Ada Quill joined #{TeamPlanning::Attention::REMOVED_UNIT}"
     end
 
+    should "say a covered person or unit left the plan's units without naming where they went" do
+      html = render_tab(changes: [
+        drift_change("moved", person_id: BO, unit_id: nil, from_unit_id: PAYMENTS, outside: [ "unit_id" ]),
+        drift_change("moved", person_id: ADA, unit_id: GROWTH, from_unit_id: nil, outside: [ "from_unit_id" ]),
+        drift_change("fact_changed", person_id: ADA, fact: "manager", before: { "manager_id" => BO }, after: { "manager_id" => nil },
+                                     outside: [ "after" ]),
+        drift_change("unit_moved", unit_id: PAYMENTS, before: { "parent_id" => GROWTH }, after: { "parent_id" => nil }, outside: [ "after" ]),
+        drift_change("owner_added", person_id: nil, unit_id: PAYMENTS, outside: [ "person_id" ])
+      ])
+
+      assert_equal [ "Bo Reyes left the units this plan covers", "Ada Quill joined Growth from outside the units this plan covers",
+                     "Ada Quill's manager changed from Bo Reyes to someone outside this plan", "Payments left the units this plan covers",
+                     "Someone outside this plan became an owner of Payments" ],
+                   html.css("[data-drift-change] .break-words").map { it.text.squish }
+    end
+
+    should "read a removed manager as no manager, not as someone outside the plan" do
+      html = render_tab(changes: [ drift_change("fact_changed", person_id: ADA, fact: "manager", before: { "manager_id" => BO },
+                                                                after: { "manager_id" => nil }) ])
+
+      assert_equal [ "Ada Quill's manager changed" ], html.css("[data-drift-change] .break-words").map { it.text.squish }
+    end
+
+    should "give only the new value when the earlier one was set while its subject was outside the plan" do
+      html = render_tab(changes: [ drift_change("fact_changed", person_id: ADA, fact: "title", before: nil, after: { "title" => "Staff Engineer" },
+                                                                outside: [ "before" ]),
+                                   drift_change("fact_changed", person_id: ADA, fact: "manager", before: nil, after: { "manager_id" => BO },
+                                                                outside: [ "before" ]),
+                                   drift_change("unit_renamed", unit_id: PAYMENTS, before: nil, after: { "name" => "Platform" }, outside: [ "before" ]) ])
+
+      assert_equal [ "Ada Quill's title is now Staff Engineer", "Ada Quill's manager is now Bo Reyes", "Renamed Platform" ],
+                   html.css("[data-drift-change] .break-words").map { it.text.squish }
+    end
+
     should "mark a change from this plan, and link each scenario whose plan it meets" do
       html = render_tab(changes: [ drift_change("joined", person_id: ADA, from_plan: true,
                                                           meets: [ { scenario_id: PLAN }, { scenario_id: Q1 }, { scenario_id: Q1 } ]) ])
@@ -151,8 +185,35 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       end
       rows = texts(render_tab(statuses:), "[data-planned-change]")
 
-      assert_equal [ "Done", "Pending", "Conflicting", "Unknown", "Plan only" ], rows.map { it.delete_prefix("Bo Reyes · Pay").strip }
+      assert_equal [ "Done", "Pending", "Conflicting", "Unknown", "Plan only", "Outside this plan" ],
+                   rows.map { it.sub(/\A(Bo Reyes|#{Views::Plans::ChangesTab::NO_LONGER_COVERED}) · Pay/, "").strip }
       assert_raises(KeyError) { render_tab(statuses: [ statuses.first.merge(status: "stalled") ]) }
+    end
+
+    should "offer an editor Clear, Undo and a note on a change about someone the plan no longer covers, and name no one" do
+      outside = { scenario_id: Q1, change_id: "o1", subject_id: BO, facet: "level", status: "outside", clearable: true, undoable: true }
+      html = render_tab(statuses: [ outside ], scenario_id: Q1, can_edit: true)
+      row = html.at_css("[data-planned-change='outside']")
+      label = "#{Views::Plans::ChangesTab::NO_LONGER_COVERED} · Level"
+
+      assert_includes row.text.squish, label
+      assert_not_includes html.to_html, "Bo Reyes"
+      assert_equal [ "Clear #{label}" ], row.css("[data-clear-change]").map { it["aria-label"] }
+      assert_equal "Clear this level change?", row.at_css("[id^='clear-'][role='dialog'] h2").text.squish
+      assert_includes row.at_css("[id^='clear-'][role='dialog']").text.squish,
+                      "Since the plan no longer covers them, Undo brings it back only if the change places them in its units."
+      assert_equal [ "Undo #{label}" ], row.css("[data-undo-change='level'] button").map { it["aria-label"] }
+      assert_equal({ "scenario_id" => Q1, "event_id" => "o1", "tab" => "changes" },
+                   row.css("form[action$='/change-undos'] input[type=hidden]").to_h { [ it["name"], it["value"] ] }.except("authenticity_token"))
+      assert_empty row.css("[data-settle-conflict]")
+      assert_equal "Add a note", row.at_css("[data-change-note-editor] summary").text.squish, "a note acts on the plan's own change"
+      noted = render_tab(statuses: [ outside.merge(note: { value: "Agreed in March" }) ], scenario_id: Q1).at_css("[data-planned-change='outside']")
+      assert_equal "Agreed in March", noted.at_css("[data-change-note]").text.squish
+      assert_empty render_tab(statuses: [ outside ], scenario_id: Q1).css("[data-clear-change], [data-undo-change]"), "a viewer gets no buttons"
+      assert_empty render_tab(statuses: [ outside.merge(clearable: false) ], scenario_id: Q1, can_edit: true).css("[data-undo-change]")
+      bringing_back = render_tab(statuses: [ outside.merge(undoable: false) ], scenario_id: Q1, can_edit: true)
+      assert_equal [ [ "Clear #{label}" ], [] ], [ bringing_back.css("[data-clear-change]").map { it["aria-label"] }, bringing_back.css("[data-undo-change]").to_a ],
+                   "an undo that would bring an earlier change back is not offered"
     end
 
     should "name a rule by its kind, a plan-wide rule by the plan, a plan value apart from a level change, and a hire only the plan holds" do

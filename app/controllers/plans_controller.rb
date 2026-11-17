@@ -6,7 +6,7 @@
 class PlansController < ApplicationController
   include Plans::BudgetEditing
 
-  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map budget new_budget_line create_budget_line edit_budget_line update_budget_line cut_budget_line]
+  around_action ->(_, action) { TeamPlanning::Resolution.reusing(&action) }, only: %i[show map timeline_figures budget new_budget_line create_budget_line edit_budget_line update_budget_line cut_budget_line]
 
   # GET /planning?state=archived
   def index
@@ -81,12 +81,15 @@ class PlansController < ApplicationController
     plan = read(Operations::TeamPlanning::Plan)
     authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
-    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?,
+    removals = removals(plan, scenarios, scenarios.map { it[:scenario_id] })
+    closures = closures(plan, scenarios)
+    table = Views::Plans::ScenarioTable.new(plan_id: plan[:plan_id], scenarios:, can_edit: can_edit?, removable: removals.map(&:scenario_id),
+                                            closable: closures.to_h { [ it.scenario_id, it.mode ] }, outcomes: true,
                                             extra_columns: cost_columns + capacity_columns(plan, scenarios))
     removed_page = params[:removed_page].to_i.clamp(1..)
     removed = Views::Plans::RemovedScenarios.new(plan_id: plan[:plan_id], open: params.key?(:removed_page),
                                                  read: read(Operations::TeamPlanning::RemovedScenarios, page: removed_page))
-    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:)
+    render plan_page(plan, scenarios:, open_tab: :scenarios, body: table, removed:, removals:, closures:, outcomes: outcomes(plan, scenarios))
   end
 
   # GET /planning/:id/map?scenario=:scenario_id
@@ -100,8 +103,10 @@ class PlansController < ApplicationController
     scenario_id = params[:scenario].presence || plan[:plan_id]
     map = read(Operations::TeamPlanning::ScenarioMap, scenario_id:)
     marks = capacity_marks(plan, scenario_id, names: map[:names], live_unit_ids: map[:units].map { it[:id] })
-    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id,
-                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?,
+    removals = removals(plan, scenarios, [ scenario_id.downcase ])
+    render plan_page(plan, scenarios:, open_tab: :map, undo_in: scenario_id, removals:,
+                           body: Views::Plans::ScenarioMap.new(map:, scenarios:, can_edit: can_edit?, removable: removals.map(&:scenario_id),
+                                                               roles: (map_roles if can_edit? && scenario_id != plan[:plan_id]) || [],
                                                                can_upload_pay: policy_for(@plan_record).upload_pay? && !@plan_record.archived?,
                                                                **map_hooks(cost_hooks(map), capacity_hooks(marks))))
   end
@@ -117,8 +122,26 @@ class PlansController < ApplicationController
     scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
     scenario_id = params[:scenario].presence || Views::Plans::Timeline.first_leaf(scenarios, plan[:plan_id])
     timeline = read(Operations::TeamPlanning::Timeline, scenario_id:)
-    render plan_page(plan, scenarios:, open_tab: :timeline,
-                           body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i, can_edit: can_edit?))
+    closures = closures(plan, scenarios, return_to: timeline_plan_path(plan[:plan_id], scenario: params[:scenario].presence, step: params[:step].presence))
+    render plan_page(plan, scenarios:, open_tab: :timeline, closures:, outcomes: outcomes(plan, scenarios),
+                           body: Views::Plans::Timeline.new(timeline:, scenarios:, step: params[:step].to_i, can_edit: can_edit?,
+                                                            closable: closures.to_h { [ it.scenario_id, it.mode ] }, outcomes: true))
+  end
+
+  # GET /planning/:id/timeline/figures?scenario=:scenario_id&layout=phone&step=:index
+  #
+  # What each step on that path costs, leaves unfunded and can deliver
+  # ([#452](https://github.com/espaliahq/espalia/issues/452)), as a lazy frame
+  # the timeline loads after it is drawn. A phone's frame shows `step` alone.
+  def timeline_figures
+    plan = read(Operations::TeamPlanning::Plan)
+    authorize @plan_record = TeamPlanningPlan.find(plan[:plan_id]), :show?, policy_class: PlanPolicy
+    scenarios = read(Operations::TeamPlanning::Scenarios)[:scenarios]
+    scenario_id = params[:scenario].presence || Views::Plans::Timeline.first_leaf(scenarios, plan[:plan_id])
+    return redirect_to timeline_plan_path(plan[:plan_id], scenario: scenario_id, step: params[:step].presence) unless turbo_frame_request?
+
+    render Views::Plans::TimelineFigures.new(figures: read(Operations::TeamPlanning::TimelineFigures, scenario_id:), scenarios:,
+                                             phone: params[:layout] == "phone", step: params[:step].to_i)
   end
 
   # GET /planning/:id/changes?scenario=:scenario_id
@@ -204,7 +227,7 @@ class PlansController < ApplicationController
   def rebase_plan
     plan = read(Operations::TeamPlanning::Plan)
     authorize TeamPlanningPlan.find(plan[:plan_id]), :update?, policy_class: PlanPolicy
-    today = Time.now.utc.to_date.iso8601
+    today = Tenant.today.iso8601
     # A second click lands after the first has moved the base to the day it confirmed.
     return redirect_to(changes_plan_path(plan[:plan_id]), notice: "Updated to today, #{day(today)}.") if plan[:base_on] == today && params[:to] == today
     return redirect_to(rebase_plan_path(plan[:plan_id]), alert: "The day has turned since you looked, so check the update again.") if params[:to] != today
@@ -475,7 +498,11 @@ class PlansController < ApplicationController
   end
 
   # @param undo_in [String, nil] the scenario the open tab shows, whose Undo and Redo the tab strip offers
-  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil, undo_in: nil, removed: nil)
+  # @param removals [Array<Views::Plans::RemoveScenarioDialog>] the Remove dialogs the open tab's triggers open
+  # @param closures [Array<Views::Plans::StepClosureDialog>] the Close and Reopen dialogs the open tab's triggers open
+  # @param outcomes [Array<Views::Plans::StepOutcomeDialog>] the closed steps' outcome dialogs the open tab's triggers open
+  def plan_page(plan, open_tab:, scenarios: read(Operations::TeamPlanning::Scenarios)[:scenarios], body: nil, undo_in: nil, removed: nil,
+                removals: [], closures: [], outcomes: [])
     members = read(Operations::TeamPlanning::PlanMembers)[:members]
     Views::Plans::ShowView.new(
       plan:,
@@ -496,6 +523,9 @@ class PlansController < ApplicationController
       can_delete: policy_for(@plan_record).destroy?,
       coverable_units: (read(Operations::TeamPlanning::CoverableUnits)[:units] if can_edit?),
       removed:,
+      removals:,
+      closures:,
+      outcomes:,
       undo_step: (read(Operations::TeamPlanning::UndoStep, scenario_id: undo_in.downcase) if can_edit? && undo_in),
       panel_open: Views::Plans::ShowView.panel_open?(
         url: params[Views::Plans::ShowView::PANEL_URL_KEY], cookie: cookies[Views::Plans::ShowView.panel_cookie(current_user)],
@@ -534,6 +564,40 @@ class PlansController < ApplicationController
       reachable_ids: PlanPolicy.reachable_ids(members.pluck(:person_id)),
       locked_out: PlanPolicy.locked_out?(@plan_record) && !PlanPolicy.frozen?(@plan_record) }
   end
+
+  # A Close dialog for each step ready to close, and a Reopen one for the last
+  # closed, while an editor can change the plan.
+  def closures(plan, scenarios, return_to: nil)
+    return [] if !can_edit? || PlanPolicy.frozen?(@plan_record)
+
+    Views::Plans::StepClosureDialog.offered(scenarios).map do |scenario, mode|
+      Views::Plans::StepClosureDialog.new(plan_id: plan[:plan_id], scenario:, mode:, scenarios:, return_to:)
+    end
+  end
+
+  # An outcome dialog for each closed step, for any member.
+  def outcomes(plan, scenarios)
+    scenarios.select { Views::Plans::StepOutcomeDialog.offered?(it) }.map { Views::Plans::StepOutcomeDialog.new(plan_id: plan[:plan_id], scenario: it) }
+  end
+
+  # A Remove dialog for each of `ids` an editor may remove: never the baseline,
+  # a closed step or one not taken, nor anything on an archived or frozen plan. Only a dialog that offers
+  # Remove asks the operation how much hidden pay goes with it, all in one load of the plan.
+  def removals(plan, scenarios, ids)
+    return [] if !can_edit? || PlanPolicy.frozen?(@plan_record)
+
+    offered = scenarios.select { ids.include?(it[:scenario_id]) && it[:scenario_id] != plan[:plan_id] && !Views::Plans::StepClosureDialog.settled?(it) }
+                       .map { [ it, Views::Plans::RemoveScenarioDialog.forks(it, scenarios) ] }
+    notices = Operations::TeamPlanning::RemoveScenario.approval_notices(
+      context: pundit_user, plan_id: plan[:plan_id], scenario_ids: offered.filter_map { |scenario, forks| scenario[:scenario_id] if forks.empty? }
+    )
+    offered.map do |scenario, forks|
+      Views::Plans::RemoveScenarioDialog.new(plan_id: plan[:plan_id], scenario:, forks:, hidden_pay: notices[scenario[:scenario_id]])
+    end
+  end
+
+  # The roles a position can be, for the map's open and edit dialogs.
+  def map_roles = FrameworkState::Role.includes(:levels).order(:name).to_a
 
   # An archived plan takes no changes, so its editors see it as its viewers do.
   def can_edit?

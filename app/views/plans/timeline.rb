@@ -40,7 +40,11 @@ class Views::Plans::Timeline < Views::Base
   # @param scenarios [Array<Hash>] from `team_planning_scenarios`
   # @param step [Integer] the step a phone shows, from the left
   # @param can_edit [Boolean] whether the viewer edits the plan
-  def initialize(timeline:, scenarios:, step: 0, can_edit: false)
+  # @param closable [Hash{String => Symbol}] the steps that offer Close or Reopen, each with its dialog on the page
+  # @param outcomes [Boolean] whether the page holds each closed step's outcome dialog
+  def initialize(timeline:, scenarios:, step: 0, can_edit: false, closable: {}, outcomes: false)
+    @closable = closable
+    @outcomes = outcomes
     @timeline = timeline
     @moving = can_edit && timeline[:columns].size > 1
     @scenarios = scenarios.index_by { it[:scenario_id] }
@@ -119,29 +123,46 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def header_row
-    div(class: "border-b border-default px-3 py-2 text-xs font-semibold uppercase text-muted", style: cell(1, 1)) { "Step" }
+    div(class: "border-b border-default px-3 py-2 text-xs font-semibold uppercase text-muted", style: "grid-row: 1 / 3; grid-column: 1") { "Step" }
     columns.each_index do |index|
-      div(class: "border-b border-l border-default px-3 py-2", style: cell(1, index + 2), data: { timeline_step: index }) do
+      div(class: "border-l border-default px-3 pt-2 pb-1", style: cell(1, index + 2), data: { timeline_step: index }) do
         p(class: "font-semibold text-default") { step_name(index) }
         p(class: "text-muted") { period(index) }
+        step_state(index)
         today_continues(index)
         alternatives(index)
+        walk_line(@timeline[:walk][index], class: "mt-1")
         # Keeps its line while unseen, so the header row doesn't grow under the pointer mid-drag.
         p(class: "invisible font-medium text-brand", data: { timeline_shift_hint: index }) { "Move here" } if @moving
       end
     end
     @row += 1
+    figures_row
   end
 
+  # The figures arrive after the grid is drawn and usable, as a row of their
+  # own, so a slow or failed load never holds up the path.
+  def figures_row
+    div(class: "grid border-b border-default", style: "grid-row: #{@row}; grid-column: 2 / -1; grid-template-columns: subgrid",
+        data: { controller: "frame-error", frame_error_quiet_value: true }) do
+      render Views::Plans::TimelineFigures.new(src: figures_path)
+      render Components::Shared::FrameLoadError.new(id: "#{Views::Plans::TimelineFigures::WIDE_ID}-error", subject: "the figures",
+                                                    inline: true, classes: "border-l border-default px-3 pb-2 [grid-column:1/-1]")
+    end
+    @row += 1
+  end
+
+  def figures_path(**) = timeline_figures_plan_path(@timeline[:plan_id], scenario: @timeline[:scenario_id], **)
+
   def wide_block(block)
-    block_heading(block_title(block), subtitle: continues_from(block))
+    block_heading(block_title(block), subtitle: continues_from(block), walk: block[:walk], lives: ->(index) { block[:units][index] || changed?(block[:walk][index]) })
     drop_cells(->(index) { block[:units][index]&.dig(:unit_id) }) do
       block[:lane_ids].each { |lane_id| wide_lane(lane_id) { |bar| in_block?(bar, block) } }
     end
   end
 
   def wide_unassigned
-    block_heading(UNASSIGNED, subtitle: nil)
+    block_heading(UNASSIGNED, subtitle: nil, walk: @timeline[:unassigned_walk], lives: ->(index) { counted?(@timeline[:unassigned_walk][index]) })
     drop_cells(->(_) { UNASSIGNED_ID }) do
       unassigned_lanes.each { |lane_id| wide_lane(lane_id) { |bar| bar[:unit_id].nil? } }
     end
@@ -170,10 +191,20 @@ class Views::Plans::Timeline < Views::Base
     @row += 1
   end
 
-  def block_heading(title, subtitle:)
-    div(class: "bg-subtle px-3 py-1.5", style: "grid-row: #{@row}; grid-column: 1 / -1") do
-      h3(class: "inline font-semibold text-default") { title }
-      span(class: "ml-2 text-muted") { subtitle } if subtitle
+  # The title takes the label column so each step's walk sits under its own
+  # step, in the same row: a walk never widens a column or adds a row.
+  def block_heading(title, subtitle:, walk:, lives:)
+    div(class: "bg-subtle", style: "grid-row: #{@row}; grid-column: 1 / -1", data: { timeline_band: "" })
+    div(class: "min-w-0 px-3 py-1.5 break-words", style: cell(@row, 1)) do
+      h3(class: "font-semibold text-default") { title }
+      p(class: "text-xs text-muted") { subtitle } if subtitle
+    end
+    walk.each_with_index do |counts, index|
+      next unless lives.(index)
+
+      div(class: "pointer-events-none min-w-0 px-3 py-1.5", style: cell(@row, index + 2), data: { timeline_walk: index }) do
+        walk_line(counts, label: step_name(index))
+      end
     end
     @row += 1
   end
@@ -218,8 +249,15 @@ class Views::Plans::Timeline < Views::Base
       render Components::Kit::Card.new(title: step_name(@step), density: :compact) do |card|
         card.body do
           p(class: "text-sm text-muted") { period(@step) }
+          step_state(@step)
           today_continues(@step)
           alternatives(@step)
+          walk_line(@timeline[:walk][@step], class: "mt-1")
+          div(data: { controller: "frame-error", frame_error_quiet_value: true }) do
+            render Views::Plans::TimelineFigures.new(src: figures_path(layout: "phone", step: @step), phone: true, step: @step)
+            render Components::Shared::FrameLoadError.new(id: "#{Views::Plans::TimelineFigures::PHONE_ID}-error", subject: "the figures",
+                                                          inline: true, classes: "mt-1")
+          end
         end
       end
       @timeline[:blocks].each { phone_block(it) }
@@ -247,23 +285,27 @@ class Views::Plans::Timeline < Views::Base
 
   def phone_block(block)
     lane_ids = block[:lane_ids].select { |id| lanes_by_id.fetch(id)[:bars].any? { in_block?(it, block) && covers?(it) } }
-    return if lane_ids.empty?
+    walk = block[:walk][@step]
+    return if lane_ids.empty? && !changed?(walk)
 
-    phone_section(unit_name(@step, block[:units][@step]&.dig(:unit_id)) || block_title(block)) do
+    phone_section(unit_name(@step, block[:units][@step]&.dig(:unit_id)) || block_title(block), walk: (walk if block[:units][@step] || changed?(walk)), lanes: lane_ids.any?) do
       lane_ids.each { |id| phone_lane(id) { |bar| in_block?(bar, block) && covers?(bar) } }
     end
   end
 
   def phone_unassigned
     lane_ids = unassigned_lanes.select { |id| lanes_by_id.fetch(id)[:bars].any? { it[:unit_id].nil? && covers?(it) } }
-    return if lane_ids.empty?
+    return if lane_ids.empty? && !changed?(@timeline[:unassigned_walk][@step])
 
-    phone_section(UNASSIGNED) { lane_ids.each { |id| phone_lane(id) { |bar| bar[:unit_id].nil? && covers?(bar) } } }
+    phone_section(UNASSIGNED, walk: @timeline[:unassigned_walk][@step], lanes: lane_ids.any?) { lane_ids.each { |id| phone_lane(id) { |bar| bar[:unit_id].nil? && covers?(bar) } } }
   end
 
-  def phone_section(title, &block)
+  def phone_section(title, walk:, lanes:, &block)
     render Components::Kit::Card.new(title:, variant: :flush, density: :compact) do |card|
-      card.body { ul(class: "divide-y divide-subtle border-t border-default", &block) }
+      card.body do
+        walk_line(walk, class: "px-3 pb-2")
+        ul(class: "divide-y divide-subtle border-t border-default", &block) if lanes
+      end
     end
   end
 
@@ -462,6 +504,7 @@ class Views::Plans::Timeline < Views::Base
     arrival = arrival(lane, bar) if bar[:from] == starts
     span(class: "font-medium") { arrival } if arrival
     span { subject(bar) }
+    render Views::Plans::HiringNote.new(@timeline[:positions].dig(bar[:subject_id], :hiring, starts) || {}) if bar[:kind] == "position"
     departure = departure(lane, bar, starts..ends)
     span(class: "text-muted") { departure } if departure
     onward = onward(lane, bar) if bar[:to] == ends
@@ -524,6 +567,38 @@ class Views::Plans::Timeline < Views::Base
 
   def span_of(bar) = bar[:from] == bar[:to] ? step_name(bar[:from]) : "#{step_name(bar[:from])} to #{step_name(bar[:to])}"
 
+  # -- The walk ---------------------------------------------------------------
+
+  WALK_WORDS = { hires: "hired", departures: "left", transfers_in: "moved in", transfers_out: "moved out" }.freeze
+
+  # One quiet line: "3 → 4 heads · 1 hired, 1 moved out", or "3 heads" for
+  # today or a step that changes no one.
+  # A heading row's cells name their step for a screen reader, as a bar does.
+  def walk_line(walk, label: nil, **attrs)
+    return unless walk
+
+    p(class: "text-xs text-muted #{attrs.delete(:class)}", data: { walk: "" }, **attrs) do
+      span(class: "sr-only") { "#{label}: " } if label
+      changes = changes(walk)
+      if changes.empty?
+        plain heads(walk[:closing])
+      else
+        plain walk[:opening].to_s
+        span(aria: { hidden: "true" }) { " → " }
+        span(class: "sr-only") { " to " }
+        plain "#{heads(walk[:closing])} · #{changes.join(', ')}"
+      end
+    end
+  end
+
+  def heads(count) = "#{count} #{'head'.pluralize(count)}"
+
+  def changes(walk) = WALK_WORDS.filter_map { |key, word| "#{walk[key]} #{word}" if walk[key].to_i.positive? }
+
+  def changed?(walk) = walk.present? && changes(walk).any?
+
+  def counted?(walk) = walk.present? && (walk[:closing].positive? || changed?(walk))
+
   # -- Lookups ----------------------------------------------------------------
 
   def columns = @timeline[:columns]
@@ -555,6 +630,28 @@ class Views::Plans::Timeline < Views::Base
   end
 
   def scenario_name(id) = @scenarios.dig(id, :name).presence || UNNAMED
+
+  # An open step keeps its header as it was; the badge shows once a step can
+  # close, has closed or wasn't taken.
+  def step_state(index)
+    scenario = @scenarios.fetch(columns[index][:scenario_id])
+    mode = @closable[scenario[:scenario_id]]
+    return unless scenario[:parent_id] && (mode || scenario[:state] != "open")
+
+    div(class: "mt-1 flex flex-wrap items-center gap-2") do
+      render Views::Plans::StepState.new(scenario)
+      if mode
+        render Components::Kit::Button.new(variant: :outline, size: :xs, data: Views::Plans::StepClosureDialog.trigger(scenario[:scenario_id])) do
+          mode == :close ? "Close step…" : "Reopen step…"
+        end
+      end
+      if @outcomes && Views::Plans::StepOutcomeDialog.offered?(scenario)
+        render Components::Kit::Button.new(variant: :outline, size: :xs, data: Views::Plans::StepOutcomeDialog.trigger(scenario[:scenario_id])) do
+          "Planned against actual…"
+        end
+      end
+    end
+  end
 
   def period(index) = Views::Plans::ScenarioTable.period(@scenarios.fetch(columns[index][:scenario_id]))
 

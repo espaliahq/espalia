@@ -10,7 +10,7 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
     handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     team = SecureRandom.uuid_v7
-    payments = SecureRandom.uuid_v7
+    @payments = payments = SecureRandom.uuid_v7
     @growth = SecureRandom.uuid_v7
 
     travel_to(30.days.ago) do
@@ -21,7 +21,7 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
         structure.define_taxonomy([ { level_id: team, name: "Team" } ], effective_on: since)
         structure.create_unit(payments, "Payments", level_id: team, effective_on: since)
         structure.create_unit(@growth, "Growth", level_id: team, effective_on: since)
-        handler.record_person(@bo.id, **ESPALIA, effective_on: since, employment_status: "employed")
+        handler.record_person(@bo.id, **ESPALIA, effective_on: since, employment_status: "employed", cost_centre: "Platform")
         handler.set_membership(@bo.id, payments, **ESPALIA, effective_on: since, allocation: 1.0, role: "ENG")
       end
       @plan_id = call(Operations::TeamPlanning::CreatePlan, @planner, name: "Pay review 2027", base_on: (Date.current + 1).iso8601)[:plan_id]
@@ -74,6 +74,20 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_includes all("nav[aria-label='Checks'] a").map { it.text.squish }, "Unused budget lines 1"
       assert_no_sideways_overflow
     end
+
+    should "list a person whose cost centre disagrees with their entries under its own heading" do
+      disagreeing_entry
+      sign_in_as(@planner.user)
+      visit checks_plan_path(@plan_id, scenario: @q1)
+      assert_text "Checks on Q1 hires"
+
+      within("#checks-cost-centre-mismatches") do
+        assert_selector "h4", text: "Cost centre mismatches"
+        assert_selector "[data-check-item]", text: /Bo Reyes · Placement.*Costed in Platform, while the cost centre entries give Payments/m
+      end
+      assert_includes all("nav[aria-label='Checks'] a").map { it.text.squish }, "Cost centre mismatches 1"
+      assert_no_sideways_overflow
+    end
   end
 
   context "on a phone" do
@@ -103,6 +117,16 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_selector "#checks-unused-budget-lines [data-check-item]", text: /Any role · Growth.*Nothing in this scenario draws on it/m
       assert_no_sideways_overflow
     end
+
+    should "read a cost centre mismatch without scrolling sideways" do
+      disagreeing_entry
+      sign_in_as(@planner.user)
+      visit checks_plan_path(@plan_id, scenario: @q1)
+      assert_text "Checks on Q1 hires"
+
+      assert_selector "#checks-cost-centre-mismatches [data-check-item]", text: /Costed in Platform, while the cost centre entries give Payments/m
+      assert_no_sideways_overflow
+    end
   end
 
   private
@@ -112,6 +136,47 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       BudgetLine.create!(starts_on: Date.current - 60, ends_on: Date.current + 300, origin: "new", amount: 90_000, currency: "AUD",
                          period: "year", cost_centre: "Growth")
     end
+  end
+
+  [ [ "desktop", DESKTOP_SIZE ], [ "phone", MOBILE_SIZE ] ].each do |label, size|
+    context "an open seat whose target start has passed, on a #{label}" do
+      setup do
+        page.driver.browser.manage.window.resize_to(*size)
+        level = ActsAsTenant.with_tenant(@tenant) do
+          role = create(:framework_role, code: "E", name: "Software Engineer")
+          create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Engineer II")
+        end
+        call(Operations::TeamPlanning::SetPosition, @planner, plan_id: @plan_id, scenario_id: @plan_id, role_id: level.role_id,
+                                                              level_id: level.level_id, unit_id: @payments, fte: 1.0, basis: "new",
+                                                              hiring_status: "recruiting", target_start: (Date.current - 10).iso8601)
+        @started = (Date.current - 10).strftime("%-d %b %Y")
+      end
+
+      should "list it under Late hires, and say on the map and timeline where its hiring stands" do
+        sign_in_as(@planner.user)
+        visit checks_plan_path(@plan_id)
+        within("#checks-late-hires") do
+          assert_selector "h4", text: "Late hires"
+          assert_selector "[data-check-item]", text: "Its target start, #{@started}, has passed with 1 FTE still open"
+        end
+        assert_no_sideways_overflow
+
+        visit map_plan_path(@plan_id)
+        assert_selector "[data-map-position] [data-hiring-note]", text: "Recruiting · starts #{@started}"
+        assert_no_sideways_overflow
+
+        visit timeline_plan_path(@plan_id)
+        assert_selector "[data-timeline-lane] [data-hiring-note]", text: "Recruiting · starts #{@started}"
+        assert_no_sideways_overflow
+      end
+    end
+  end
+
+  def disagreeing_entry
+    idle_line
+    call(Operations::TeamPlanning::SetAssignment, @planner, plan_id: @plan_id, scenario_id: @q1, person_id: @bo.id,
+                                                            placements: [ { unit_id: @payments, allocation: 1, role: "ENG" } ])
+    call(Operations::Tenants::SetPlanningRule, account(role: :admin), rule: "cost_centre", value: { entries: [ { unit_id: @payments, cost_centre: "Payments" } ] })
   end
 
   def account(role: :member, name: "Someone", **grants)

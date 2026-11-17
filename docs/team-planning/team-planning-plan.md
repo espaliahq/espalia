@@ -1,6 +1,6 @@
 # Team Planning implementation plan
 
-> Status: approved on 14 Nov 2026. Nothing here is built yet. Read [the module description](team-planning.md)
+> Status: approved on 14 Nov 2026. A story marked "Built in" has shipped; the rest is still to do. Read [the module description](team-planning.md)
 > and [the data design](team-planning-design.md) first. This page orders the work. It has
 > no sizes: nobody has estimated it.
 
@@ -237,13 +237,13 @@ because a binding budget guardrail needs them.
 
 | # | Story | Needs |
 |---|---|---|
-| 1.1 | Plan stream `tenant-{id}/Plan-{plan_id}` through `EventStreamNaming`: `PlanCreated` with name and base date, `PlanRenamed`, `PlanDeleted` | none |
-| 1.2 | Members as editor or viewer, `PlanMemberAdded` and `PlanMemberRemoved`, and a `PlanPolicy` under which a tenant admin does not open someone else's plan. A planner role, given by a tenant admin, may create a plan (decision 7). A plan always keeps an editor; one whose editors have all left or been forgotten is frozen, readable by its viewers, and a tenant admin may delete it unread, saying why. Ships the member, planner and frozen-plan Operations, and a plan list by id and role | 1.1 |
-| 1.3 | Baseline reader: the root scenario resolved over `OrgGraph::AsOf` on the plan's base date, joined to names, with "Former member" for anyone forgotten | 1.1 |
-| 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes | 1.2, 1.3 |
-| 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only | 1.4 |
-| 1.6 | Read-only map of any scenario, the baseline by default: units, people with their allocation and role, open positions, and the Unassigned bucket, read through `team_planning_scenario_map` | 1.4 |
-| 1.7 | What a plan covers: the whole organisation or chosen units, set when it starts and widened later, through `PlanScopeSet`, `team_planning_set_plan_scope` and `team_planning_coverable_units`. Units only; narrowing is refused while a change falls outside; the picker reaches the whole organisation ([#338](https://github.com/espaliahq/espalia/issues/338)) | 1.5, 1.6 |
+| 1.1 | Plan stream `tenant-{id}/Plan-{plan_id}` through `EventStreamNaming`: `PlanCreated` with name and base date, `PlanRenamed`, `PlanDeleted`. Built in [#192](https://github.com/espaliahq/espalia/issues/192) | none |
+| 1.2 | Members as editor or viewer, `PlanMemberAdded` and `PlanMemberRemoved`, and a `PlanPolicy` under which a tenant admin does not open someone else's plan. A planner role, given by a tenant admin, may create a plan (decision 7). A plan always keeps an editor; one whose editors have all left or been forgotten is frozen, readable by its viewers, and a tenant admin may delete it unread, saying why. Ships the member, planner and frozen-plan Operations, and a plan list by id and role. Built in [#203](https://github.com/espaliahq/espalia/issues/203) | 1.1 |
+| 1.3 | Baseline reader: the root scenario resolved over `OrgGraph::AsOf` on the plan's base date, joined to names, with "Former member" for anyone forgotten. Built in [#201](https://github.com/espaliahq/espalia/issues/201) | 1.1 |
+| 1.4 | Operations: get a plan, its members with their names, and the baseline map. 1.1 and 1.2 shipped create, rename, delete, the list and the member writes. Built in [#210](https://github.com/espaliahq/espalia/issues/210) | 1.2, 1.3 |
+| 1.5 | Plans index and the plan page: scenarios, rules and members, with the baseline row read-only. Built in [#226](https://github.com/espaliahq/espalia/issues/226) | 1.4 |
+| 1.6 | Read-only map of any scenario, the baseline by default: units, people with their allocation and role, open positions, and the Unassigned bucket, read through `team_planning_scenario_map`. Built in [#227](https://github.com/espaliahq/espalia/issues/227) | 1.4 |
+| 1.7 | What a plan covers: the whole organisation or chosen units, set when it starts and widened later, through `PlanScopeSet`, `team_planning_set_plan_scope` and `team_planning_coverable_units`. Units only; narrowing is refused while a change falls outside; the picker reaches the whole organisation. Built in [#338](https://github.com/espaliahq/espalia/issues/338) | 1.5, 1.6 |
 
 ### P2 Shreddable plan fields
 
@@ -251,93 +251,93 @@ Built from [the shreddable fields design](shreddable-fields-design.md).
 
 | # | Story | Needs |
 |---|---|---|
-| 2.1 | Key store: a key per plan, and one per person within a plan, to encrypt a field, decrypt it, and destroy the key | none |
-| 2.2 | Shreddable fields on events, and the aggregate guard: an aggregate never decides on a shreddable value | 2.1 |
-| 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form | 2.2 |
-| 2.4 | `PlanDeleted` destroys the plan's keys | 1.1, 2.1 |
-| 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6) | 2.2 |
-| [#209](https://github.com/espaliahq/espalia/issues/209) | Plan and scenario names are sealed under the plan's key, and the names written before are sealed in place, the one rewrite of stored events | 2.3 |
+| 2.1 | Key store: a key per plan, and one per person within a plan, to encrypt a field, decrypt it, and destroy the key. Built in [#190](https://github.com/espaliahq/espalia/issues/190) | none |
+| 2.2 | Shreddable fields on events, and the aggregate guard: an aggregate never decides on a shreddable value. Built in [#213](https://github.com/espaliahq/espalia/issues/213) | 2.1 |
+| 2.3 | Projections rebuild with keys destroyed, showing a value as removed: a read-model column holds the sealed form. Built in [#248](https://github.com/espaliahq/espalia/issues/248) | 2.2 |
+| 2.4 | `PlanDeleted` destroys the plan's keys. Built in [#242](https://github.com/espaliahq/espalia/issues/242) | 1.1, 2.1 |
+| 2.5 | Forgetting a person destroys their key in every plan at once, in the transaction that writes `PersonForgotten` (decision 6). Built in [#247](https://github.com/espaliahq/espalia/issues/247) | 2.2 |
+| [#209](https://github.com/espaliahq/espalia/issues/209) | Plan and scenario names are sealed under the plan's key, and the names written before are sealed in place, the one rewrite of stored events. Built in [#209](https://github.com/espaliahq/espalia/issues/209) | 2.3 |
 
 ### P3 Scenarios and changes
 
 | # | Story | Needs |
 |---|---|---|
-| 3.1 | Scenarios: `ScenarioForked` with parent, `then` or `instead` and period, `ScenarioPeriodSet`, `ScenarioRemoved`. Periods along a path are contiguous | 1.1 |
-| 3.2 | Resolution: the base, then each scenario's changes down the chain, last change per subject and facet. The plan's lock serialises writes, so changes to different facets both land | 3.1, 1.3 |
-| 3.3 | Rules: `RuleSet` with tenant defaults, resolved down the chain like any change. The real rule kinds come with 5.2, 7.1 and 8.1 | 3.2 |
-| 3.4 | Unit changes: `UnitSet`, `UnitRetired`, `UnitSuccessionSet`, with ids the plan mints | 3.2 |
-| 3.5 | Positions: `PositionSet` (role and level from the framework, unit, FTE, backfill or new) and `PositionClosed` | 3.2 |
-| 3.6 | Assignments: `AssignmentSet` places a person in a position or unit with an allocation. The Unassigned bucket is derived | 3.5 |
-| 3.7 | `ReportingLineSet`, and `DepartureSet` with its linked position | 3.6 |
-| 3.8 | A change that no longer fits still resolves, and is marked as needing attention | 3.4, 3.6 |
-| 3.9 | `ChangeCleared` and `ChangePinned`, and the overrides projection behind the one override mark | 3.2 |
-| 3.10 | `ChangeUndone` and `ChangeRedone`, and a scenario's history with who made each change | 3.2 |
-| 3.11 | Fork, rename and switch scenarios from the plan page | 3.1, 1.5 |
-| 3.12 | Edit on the map: drag a person or position, drop on the Unassigned bucket, set allocation as they land. Moving a person, by drag or Move…, writes through `MovePlace`, which can also place them in a position; moving a position writes through `MovePosition`, and the people in it go with it ([#285](https://github.com/espaliahq/espalia/issues/285)) | 3.6, 1.6 |
-| 3.13a | `ScenarioDescribed`: what a scenario is for, shreddable under the plan key ([#272](https://github.com/espaliahq/espalia/issues/272)) | 3.2, 2.2 |
-| 3.13b | Notes on changes, shreddable under the subject's key: the person's for a change to a person, else the plan's. Settle one sealed note on the `Change` base first ([#273](https://github.com/espaliahq/espalia/issues/273)). [Design: Notes](team-planning-design.md#notes) | 3.2, 2.2 |
-| 3.14 | `PlanDataSet` for a corrected level or FTE and a placeholder hire, and `LevelSet` for a planned promotion, each shreddable under the person's key | 3.6, 2.2 |
+| 3.1 | Scenarios: `ScenarioForked` with parent, `then` or `instead` and period, `ScenarioPeriodSet`, `ScenarioRemoved`. Periods along a path are contiguous. Built in [#208](https://github.com/espaliahq/espalia/issues/208) | 1.1 |
+| 3.2 | Resolution: the base, then each scenario's changes down the chain, last change per subject and facet. The plan's lock serialises writes, so changes to different facets both land. Built in [#214](https://github.com/espaliahq/espalia/issues/214) | 3.1, 1.3 |
+| 3.3 | Rules: `RuleSet` with tenant defaults, resolved down the chain like any change. The real rule kinds come with 5.2, 7.1 and 8.1. Built in [#225](https://github.com/espaliahq/espalia/issues/225) | 3.2 |
+| 3.4 | Unit changes: `UnitSet`, `UnitRetired`, `UnitSuccessionSet`, with ids the plan mints. Built in [#233](https://github.com/espaliahq/espalia/issues/233) | 3.2 |
+| 3.5 | Positions: `PositionSet` (role and level from the framework, unit, FTE, backfill or new) and `PositionClosed`. Built in [#228](https://github.com/espaliahq/espalia/issues/228) | 3.2 |
+| 3.6 | Assignments: `AssignmentSet` places a person in a position or unit with an allocation. The Unassigned bucket is derived. Built in [#229](https://github.com/espaliahq/espalia/issues/229) | 3.5 |
+| 3.7 | `ReportingLineSet`, and `DepartureSet` with its linked position. Built in [#256](https://github.com/espaliahq/espalia/issues/256) | 3.6 |
+| 3.8 | A change that no longer fits still resolves, and is marked as needing attention. Built in [#257](https://github.com/espaliahq/espalia/issues/257) | 3.4, 3.6 |
+| 3.9 | `ChangeCleared` and `ChangePinned`, and the overrides projection behind the one override mark. Built in [#239](https://github.com/espaliahq/espalia/issues/239) | 3.2 |
+| 3.10 | `ChangeUndone` and `ChangeRedone`, and a scenario's history with who made each change. Built in [#243](https://github.com/espaliahq/espalia/issues/243) | 3.2 |
+| 3.11 | Fork, rename and switch scenarios from the plan page. Built in [#271](https://github.com/espaliahq/espalia/issues/271) | 3.1, 1.5 |
+| 3.12 | Edit on the map: drag a person or position, drop on the Unassigned bucket, set allocation as they land. Moving a person, by drag or Move…, writes through `MovePlace`, which can also place them in a position; moving a position writes through `MovePosition`, and the people in it go with it. Each position has one menu: Edit…, Move… and Close…. Each unit card can open a position. An edit sends only the fields the editor changed, through `EditPosition`, so another editor's change to a different field survives. Built in [#285](https://github.com/espaliahq/espalia/issues/285) and [#461](https://github.com/espaliahq/espalia/issues/461) | 3.6, 1.6 |
+| 3.13a | `ScenarioDescribed`: what a scenario is for, shreddable under the plan key. Built in [#272](https://github.com/espaliahq/espalia/issues/272) | 3.2, 2.2 |
+| 3.13b | Notes on changes, shreddable under the subject's key: the person's for a change to a person, else the plan's. Settle one sealed note on the `Change` base first ([#273](https://github.com/espaliahq/espalia/issues/273)). [Design: Notes](team-planning-design.md#notes). Built in [#273](https://github.com/espaliahq/espalia/issues/273) | 3.2, 2.2 |
+| 3.14 | `PlanDataSet` for a corrected level or FTE and a placeholder hire, and `LevelSet` for a planned promotion, each shreddable under the person's key. Built in [#270](https://github.com/espaliahq/espalia/issues/270) | 3.6, 2.2 |
 
 ### P4 Keep up with reality
 
 | # | Story | Needs |
 |---|---|---|
-| 4.1 | Drift report from `OrgGraph::ChangesBetween` by learned date since the base, each change with what it does to the plan | 3.2 |
-| 4.2 | Update to today: `PlanRebased` moves the base. Nothing else is rewritten | 4.1 |
-| 4.3 | Status per change, done, pending or conflicting, by comparing its end state with `OrgGraph::AsOf` today | 3.2 |
-| 4.4 | Changes tab: drift and planned changes, each with its source of truth from `OrgFactProvider`. An Org Graph change that came from this plan is matched through its event's `plan_id`. [Design: The changes tab as built](team-planning-design.md#the-changes-tab-as-built) | 4.1, 4.3 |
-| 4.5 | Reconcile a conflict: keep the plan (pin) or follow reality (clear) | 4.4, 3.9 |
-| 4.6 | Checks projection: over- or under-allocated, placed nowhere, placed but left, no manager, a manager sharing no unit | 3.7, 4.3 |
-| 4.7 | Checks tab: what no longer fits in one scenario, grouped by check, each item linked to the change behind it. [Design: The checks tab as built](team-planning-design.md#the-checks-tab-as-built) | 4.6 |
+| 4.1 | Drift report from `OrgGraph::ChangesBetween` by learned date since the base, each change with what it does to the plan. Built in [#234](https://github.com/espaliahq/espalia/issues/234) | 3.2 |
+| 4.2 | Update to today: `PlanRebased` moves the base. Nothing else is rewritten. Built in [#263](https://github.com/espaliahq/espalia/issues/263) and [#337](https://github.com/espaliahq/espalia/issues/337) | 4.1 |
+| 4.3 | Status per change, done, pending or conflicting, by comparing its end state with `OrgGraph::AsOf` today. Built in [#235](https://github.com/espaliahq/espalia/issues/235) | 3.2 |
+| 4.4 | Changes tab: drift and planned changes, each with its source of truth from `OrgFactProvider`. An Org Graph change that came from this plan is matched through its event's `plan_id`. [Design: The changes tab as built](team-planning-design.md#the-changes-tab-as-built). Built in [#287](https://github.com/espaliahq/espalia/issues/287) | 4.1, 4.3 |
+| 4.5 | Reconcile a conflict: keep the plan (pin) or follow reality (clear). Built in [#336](https://github.com/espaliahq/espalia/issues/336) | 4.4, 3.9 |
+| 4.6 | Checks projection: over- or under-allocated, placed nowhere, placed but left, no manager, a manager sharing no unit. Built in [#266](https://github.com/espaliahq/espalia/issues/266) and [#282](https://github.com/espaliahq/espalia/issues/282) | 3.7, 4.3 |
+| 4.7 | Checks tab: what no longer fits in one scenario, grouped by check, each item linked to the change behind it. [Design: The checks tab as built](team-planning-design.md#the-checks-tab-as-built). Built in [#350](https://github.com/espaliahq/espalia/issues/350) | 4.6 |
 
 ### P5 Cost
 
 | # | Story | Needs |
 |---|---|---|
-| 5.1 | Pay bands as tenant configuration: an ordered list, each band matching any mix of role family, role, level number and location, or one framework level by its id with a location, the last match winning ([#368](https://github.com/espaliahq/espalia/issues/368)). A band made from a level follows it through a renumbering, and keeps pricing its seats once it leaves the framework. Held by tenant admins | none |
-| 5.2 | On-cost models (flat, by country, itemised) as rules with a tenant default | 5.1, 3.3 |
-| 5.3 | Exchange rates and a reference currency, applied once at report time | 5.1 |
-| 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). | 5.2, 5.3, 3.5, 3.7 |
-| 5.5 | The see-pay right per plan member. Without it, band midpoints only | 5.4, 1.2 |
-| 5.6 | Plan-held pay: `PlanDataSet` for a person's actual cost, shreddable under their key | 5.5, 2.2 |
-| 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Ask once per file whether amounts are actual pay or full-time figures. Never written to the Org Graph | 5.6 |
-| 5.8 | Cost on the plan page and the map, with the difference from the baseline | 5.4 |
-| 5.9 | Today's yearly run rate: every seat Today holds priced for a year from the plan's start, shown on Today's map and row and never set against a scenario's period total | 5.4, 5.8 |
+| 5.1 | Pay bands as tenant configuration: an ordered list, each band matching any mix of role family, role, level number and location, or one framework level by its id with a location, the last match winning ([#368](https://github.com/espaliahq/espalia/issues/368)). A band made from a level follows it through a renumbering, and keeps pricing its seats once it leaves the framework. Held by tenant admins. Built in [#191](https://github.com/espaliahq/espalia/issues/191) and [#368](https://github.com/espaliahq/espalia/issues/368) | none |
+| 5.2 | On-cost models (flat, by country, itemised) as rules with a tenant default. Built in [#267](https://github.com/espaliahq/espalia/issues/267) | 5.1, 3.3 |
+| 5.3 | Exchange rates and a reference currency, applied once at report time. Built in [#205](https://github.com/espaliahq/espalia/issues/205) | 5.1 |
+| 5.4 | Position cost for the part of the period it exists, priced at band midpoint, rolled up by unit and cost centre, against the baseline. It must answer one question: editing a pay band changes what existing plans cost, so does a plan reprice live, or price a scenario at the bands as they stood on a date? A leaver costs part of a period, so this story adds an optional leaving date within the step to `DepartureSet` (3.7 has the step as the date). Built in [#288](https://github.com/espaliahq/espalia/issues/288) | 5.2, 5.3, 3.5, 3.7 |
+| 5.5 | The see-pay right per plan member. Without it, band midpoints only. Built in [#300](https://github.com/espaliahq/espalia/issues/300) | 5.4, 1.2 |
+| 5.6 | Plan-held pay: `PlanDataSet` for a person's actual cost, shreddable under their key. Built in [#317](https://github.com/espaliahq/espalia/issues/317) | 5.5, 2.2 |
+| 5.7 | Upload actual pay from a file into one plan: match people by Org Graph id or email, preview the matches and blanks, write plan-held values. Ask once per file whether amounts are actual pay or full-time figures. Never written to the Org Graph. Built in [#323](https://github.com/espaliahq/espalia/issues/323) | 5.6 |
+| 5.8 | Cost on the plan page and the map, with the difference from the baseline. Built in [#316](https://github.com/espaliahq/espalia/issues/316) | 5.4 |
+| 5.9 | Today's yearly run rate: every seat Today holds priced for a year from the plan's start, shown on Today's map and row and never set against a scenario's period total. Built in [#318](https://github.com/espaliahq/espalia/issues/318) | 5.4, 5.8 |
 
 ### P6 Budget
 
 | # | Story | Needs |
 |---|---|---|
-| 6.1 | Budget lines: the tenant's approved budget as a table and Budget page held by tenant admins ([#302](https://github.com/espaliahq/espalia/issues/302)), read live as the root's default; `BudgetLineSet` and `BudgetLineCut`, amounts shreddable, a change to a removed line orphaned and flagged by Attention, read through `team_planning_budget_lines` | 2.2, 3.3 |
-| 6.2 | Cost centre rules: an ordered list of matchers. A filled position takes its person's cost centre from `AsOf::Person`. Adds the position's own cost-centre label, which 5.4 left out | 3.3, 3.5 |
-| 6.3 | Funding: the most specific matching budget line, draw order, and `PositionFundingSet` for trades | 6.1, 6.2, 5.4 |
-| 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated by the `budget_basis` rule, read through `team_planning_budget` ([#369](https://github.com/espaliahq/espalia/issues/369)) | 6.3 |
-| 6.5 | Strictness: position control, envelope, or the dimensions that must match | 6.3 |
-| 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line. All but mismatch are built ([#421](https://github.com/espaliahq/espalia/issues/421)) | 6.4, 4.6 |
-| 6.7 | Budget tab: read-only first ([#395](https://github.com/espaliahq/espalia/issues/395)), then editing lines and funding on a scenario ([#411](https://github.com/espaliahq/espalia/issues/411)) | 6.4 |
+| 6.1 | Budget lines: the tenant's approved budget as a table and Budget page held by tenant admins ([#302](https://github.com/espaliahq/espalia/issues/302)), read live as the root's default; `BudgetLineSet` and `BudgetLineCut`, amounts shreddable, a change to a removed line orphaned and flagged by Attention, read through `team_planning_budget_lines`. Built in [#302](https://github.com/espaliahq/espalia/issues/302) | 2.2, 3.3 |
+| 6.2 | Cost centre rules: an ordered list of matchers. A filled position takes its person's cost centre from `AsOf::Person`. Adds the position's own cost-centre label, which 5.4 left out. Built in [#325](https://github.com/espaliahq/espalia/issues/325) and [#387](https://github.com/espaliahq/espalia/issues/387) | 3.3, 3.5 |
+| 6.3 | Funding: the most specific matching budget line, draw order, and `PositionFundingSet` for trades. Built in [#345](https://github.com/espaliahq/espalia/issues/345) | 6.1, 6.2, 5.4 |
+| 6.4 | Approved, funded, remaining and unfunded per unit and cost centre, with the basis stated by the `budget_basis` rule, read through `team_planning_budget`. Built in [#369](https://github.com/espaliahq/espalia/issues/369) | 6.3 |
+| 6.5 | Strictness: position control, envelope, or the dimensions that must match. Built in [#384](https://github.com/espaliahq/espalia/issues/384) | 6.3 |
+| 6.6 | Budget checks: unfunded, mismatch, unplaced, ambiguous, variance, unused budget line. Built in [#421](https://github.com/espaliahq/espalia/issues/421) and [#449](https://github.com/espaliahq/espalia/pull/449) | 6.4, 4.6 |
+| 6.7 | Budget tab: read-only first ([#395](https://github.com/espaliahq/espalia/issues/395)), then editing lines and funding on a scenario ([#411](https://github.com/espaliahq/espalia/issues/411)). Built in [#395](https://github.com/espaliahq/espalia/issues/395) and [#411](https://github.com/espaliahq/espalia/issues/411) | 6.4 |
 
 ### P7 Capacity
 
 | # | Story | Needs |
 |---|---|---|
-| 7.1 | Capacity model interface, chosen per role family and overridable per role, as a rule. [Design: Capacity as built](team-planning-design.md#capacity-as-built) | 3.3 |
-| 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph. [Design: The units model](team-planning-design.md#the-units-model) | 7.1, 3.7 |
-| 7.3 | Override a person's capacity in an assignment, with the calculated figure behind it | 7.2, 3.9 |
-| 7.4 | Capacity per model, per unit and per scenario, each figure with its working, and the unclassified role check | 7.2 |
-| 7.5 | Attention check for a seat whose reports cost more to manage than it delivers, overridden or open | 7.2, 4.6 |
+| 7.1 | Capacity model interface, chosen per role family and overridable per role, as a rule. [Design: Capacity as built](team-planning-design.md#capacity-as-built). Built in [#255](https://github.com/espaliahq/espalia/issues/255) | 3.3 |
+| 7.2 | The units model: a curve by level, and the cost of managing from the reporting graph. [Design: The units model](team-planning-design.md#the-units-model). Built in [#265](https://github.com/espaliahq/espalia/issues/265) | 7.1, 3.7 |
+| 7.3 | Override a person's capacity in an assignment, with the calculated figure behind it. Built in [#284](https://github.com/espaliahq/espalia/issues/284) | 7.2, 3.9 |
+| 7.4 | Capacity per model, per unit and per scenario, each figure with its working, and the unclassified role check. Built in [#296](https://github.com/espaliahq/espalia/issues/296) | 7.2 |
+| 7.5 | Attention check for a seat whose reports cost more to manage than it delivers, overridden or open. Built in [#332](https://github.com/espaliahq/espalia/issues/332) | 7.2, 4.6 |
 
 ### P8 Approval and carrying out
 
 | # | Story | Needs |
 |---|---|---|
 | 8.1 | The may-approve right, and tenant guardrails as rules that are binding at approval | 6.5, 4.6 |
-| 8.2 | `ScenarioSplit`: move the agreed changes into a new scenario beneath, with what they overwrite, and name any change that blocks the split. [Design: Splitting a scenario](team-planning-design.md#splitting-a-scenario) | 3.2 |
-| 8.3 | Org Graph Operations accept a plan reference and a cause, and pass them to the handlers. A change made this way shows "From plan" in the activity feed | none |
+| 8.2 | `ScenarioSplit`: move the agreed changes into a new scenario beneath, with what they overwrite, and name any change that blocks the split. [Design: Splitting a scenario](team-planning-design.md#splitting-a-scenario). Built in [#321](https://github.com/espaliahq/espalia/issues/321) | 3.2 |
+| 8.3 | Org Graph Operations accept a plan reference and a cause, and pass them to the handlers. A change made this way shows "From plan" in the activity feed. Built in [#193](https://github.com/espaliahq/espalia/issues/193) | none |
 | 8.4 | `PlanApproved` pins a point and applies every change Espalia holds, with `ChangeApplied` for each (see below) | 8.1, 8.3 |
 | 8.5 | The change list Operation for an approved point, with a stable id per entry, and `ChangeRaised` with the upstream reference | 8.4 |
-| 8.6a | Split a scenario from the plan page: choose the agreed changes, see before submit which can't go across alone, name the part and split ([#360](https://github.com/espaliahq/espalia/issues/360)) | 8.2 |
+| 8.6a | Split a scenario from the plan page: choose the agreed changes, see before submit which can't go across alone, name the part and split. Built in [#360](https://github.com/espaliahq/espalia/issues/360) | 8.2 |
 | 8.6b | Approve the agreed part and carry it out, on the 8.6a page ([#359](https://github.com/espaliahq/espalia/issues/359)) | 8.6a, 8.5 |
-| 8.7 | `StepClosed`: the next step stands on the Org Graph, pending changes show as carried over, and the closed step reads planned against actual through `AsOf` on its end date | 4.3 |
+| 8.7 | `StepClosed`: the next step stands on the Org Graph, pending changes carry over, and the closed step reads planned against actual on its end date. [Design: Planned against actual as built](team-planning-design.md#planned-against-actual-as-built). Built in [#466](https://github.com/espaliahq/espalia/issues/466); marking what carried over is [#478](https://github.com/espaliahq/espalia/issues/478) | 4.3 |
 
 **One transaction.** 8.4 builds the person and structure handlers with the approval's
 id as `cause_id`, and passes `plan_id` and `plan_change_id` on every command. Each kind
@@ -373,11 +373,11 @@ edits the change, then approves again.
 
 | # | Story | Needs |
 |---|---|---|
-| 9.1 | Timeline projection: one path from the baseline to a leaf, with lanes and moves | 3.6 |
-| 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.1 |
-| 9.3 | Edit in time: drag a person between blocks, move a change a step earlier or later (a "When…" menu for now; dragging a bar's end is still to come). [Design: The timeline as built](team-planning-design.md#the-timeline-as-built) | 9.2, 3.12 |
-| 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit | 9.1 |
-| 9.5 | Cost against budget, unfunded and capacity under each column | 9.2, 5.8, 6.4, 7.4 |
+| 9.1 | Timeline projection: one path from the baseline to a leaf, with lanes and moves. Built in [#289](https://github.com/espaliahq/espalia/issues/289) | 3.6 |
+| 9.2 | Timeline screen, read-only, with a switch at each step that has alternatives. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built). Built in [#298](https://github.com/espaliahq/espalia/issues/298) | 9.1 |
+| 9.3 | Edit in time: drag a person between blocks, move a change a step earlier or later, from a "When…" menu or by dragging a bar's end. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built). Built in [#309](https://github.com/espaliahq/espalia/issues/309) and [#393](https://github.com/espaliahq/espalia/issues/393) | 9.2, 3.12 |
+| 9.4 | Headcount walk: opening, hires, departures, transfers, closing, per step and unit. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built). Built in [#451](https://github.com/espaliahq/espalia/issues/451) | 9.1 |
+| 9.5 | Cost against budget, unfunded and capacity under each column. [Design: The timeline as built](team-planning-design.md#the-timeline-as-built). Built in [#452](https://github.com/espaliahq/espalia/issues/452) | 9.2, 5.8, 6.4, 7.4 |
 
 ### P10 Forecasts
 
@@ -385,7 +385,7 @@ edits the change, then approves again.
 |---|---|---|
 | 10.1 | Forecast frame: assumptions as rules, forecast rows per unit and step from a read model, and every total stating its actual, planned and forecast parts. Built in [#351](https://github.com/espaliahq/espalia/issues/351), shown on screen in [#352](https://github.com/espaliahq/espalia/issues/352) | 3.3, 5.4 |
 | 10.2 | Attrition: a yearly rate, backfills kept open for the time to hire. Anyone with a `DepartureSet` is left out. Built in [#362](https://github.com/espaliahq/espalia/issues/362), API only | 10.1 |
-| 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire | 10.1 |
+| 10.3 | Hiring status and target start on `PositionSet`, and a forecast start from the tenant's time to hire. Built in [#458](https://github.com/espaliahq/espalia/issues/458); the Hiring dialog follows in [#465](https://github.com/espaliahq/espalia/issues/465) | 10.1 |
 | 10.4 | Ramp: a new hire's capacity in their first steps | 10.1, 7.2 |
 | 10.5 | An Operation for promotion readiness and place in band for a person on a date, as known at the end of the day before, from `PersonDevelopment::Scoring`, gated by `AssessmentPolicy#show?`; and the assessment changes recorded between two dates, for the drift report | none |
 | 10.6 | Forecast promotions per unit and level, under the cohort minimum of `Reporting::CapabilityAttainment`, drawing on a pool | 10.1, 10.5, 6.1 |

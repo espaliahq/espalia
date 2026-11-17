@@ -31,9 +31,6 @@ class Operations::OrgGraph::AddLevel < Operations::Base
   private
 
   def stated_rules
-    return {} if params[:parent_ids].nil? && params[:top].nil?
-
-    parent_ids = params[:parent_ids].nil? ? current_levels.map(&:id) : Array(params[:parent_ids]).map { |id| id.to_s.downcase }
-    { parent_ids:, top: params[:top] }
+    { parent_ids: params[:parent_ids]&.then { |ids| Array(ids).map { |id| id.to_s.downcase } }, top: params[:top] }
   end
 end

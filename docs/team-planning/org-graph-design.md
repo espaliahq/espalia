@@ -488,9 +488,9 @@ Graph could no longer say what it knew before. From it:
   in effect on a day. Each kind comes with its provider and where it may sit.
   By default it reads what the Org Graph knows now, so a later day includes the changes
   already recorded for it: a hire who starts then, a move or a leaving scheduled for it.
-  With `known_on` it reads what was known at the end of that day in UTC. Tenants hold no
-  time zone yet, so for a tenant in Sydney the day ends at 10 or 11 in the morning local
-  time, and a fact learned that afternoon counts as known the next day. People come back as
+  With `known_on` it reads what was known at the end of that day in the tenant's time zone
+  (#469), so for a tenant in Sydney a fact learned that afternoon counts as known that day.
+  People come back as
   ids, and callers join names, so a forgotten person reads as a former member. MCP clients
   read it through `org_graph_as_of`. Beside the live units, the class gives the units
   retired by that day, as each last stood, and the successions recorded, each held apart,
@@ -507,7 +507,7 @@ Graph could no longer say what it knew before. From it:
   date it lists what took effect after the first day, up to and including the last: the
   steps from `AsOf` on one day to `AsOf` on the other, with the same `known_on`. By learned
   date it lists what the Org Graph learned after the end of the first day, up to the end
-  of the last, each read at 23:59:59 UTC as `known_on` is, whatever day it took effect. A
+  of the last, each read at the end of the day in the tenant's time zone as `known_on` is, whatever day it took effect. A
   change it learned before the window and no longer believes, such as one changed back on
   its own day or a value a correction replaced, comes back `withdrawn`, and the summary
   counts it apart. A correction to an earlier value leaves a later change standing unless
@@ -553,6 +553,17 @@ The dates follow the events:
   to the kinds before an earlier one; a kind's change then starts on its last change's
   date, so the order of events decides. A new change dated after today, or before the
   latest one dated today or earlier, is refused.
+- A unit placed from a past date must fit its kind's rules on every day the placement
+  holds, as this history shows them, not only today's. So a Squad can't move under a
+  Squad dated before the day Squads may nest. A day before the unit's kind, or its
+  parent's, joined the list isn't checked, so an HRIS backfill dated before a kind was
+  added still lands.
+- A change to the kinds dated in the past, or to who provides one, covers every placement
+  held since its date, including placements that later moves or retirements ended. So
+  Squads can't stop nesting from a day a Squad still sat under another, and a kind can't
+  pass to an HRIS from a day one of its units sat where the HRIS rule forbids. A unit
+  still holds its place on the day it retires. The refusal names the unit and the first
+  day it no longer sat there, and the change can be dated from that day.
 
 Three rules hold across history, `AsOf`, `ChangesBetween` and the live tables
 (`org_memberships`, the `people` columns). First, a fact dated before one already held

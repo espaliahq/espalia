@@ -1,0 +1,15 @@
+<div class="w-80 rounded-md border border-default bg-default" <%= tag.attributes(data: Components::Kit::DelegatedMenu.root_data) %>>
+  <%= render Components::Kit::DelegatedMenu.new(kind: "position") do |menu|
+        menu.item(data: { row: "{name}" }) { "Edit…" }
+        menu.item(data: { row: "{name}" }) { "Move…" }
+        menu.item(tone: :danger, data: { row: "{name}" }) { "Close…" }
+      end %>
+  <ul class="divide-y divide-subtle">
+    <% rows.each_with_index do |name, index| %>
+      <li class="flex items-center gap-2 px-3 py-2 text-sm text-default">
+        <span class="min-w-0 flex-1 truncate"><%= name %></span>
+        <%= render Components::Kit::DelegatedMenu::Trigger.new(label: "Actions for #{name}", kind: "position", values: { name: "#{name} #{index + 1}" }) %>
+      </li>
+    <% end %>
+  </ul>
+</div>

@@ -54,6 +54,8 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
       TeamPlanning::CommandHandler.new(actor: context_for(@planner)).create_plan(@plan_id, name: "Next year", base_on: Date.new(2026, 1, 1))
     end
     @year = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+    # These price open seats from the day they open; the hiring lag has its own tests.
+    operation(Operations::TeamPlanning::SetRule, scenario_id: @plan_id, rule: "time_to_hire", value: { days: "0" })
   end
 
   def as_tenant(tenant = @tenant, &) = ActsAsTenant.with_tenant(tenant, &)
@@ -428,6 +430,56 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
         assert_match "another viewer, plan or scenario", error.message
       end
     end
+  end
+
+  def priced(scenario_id = @year, as: @planner)
+    as_tenant do
+      TeamPlanning::Cost.new(context: context_for(as), plan: TeamPlanningPlan.find(@plan_id), scenario_id:).call(at_end: false, baseline: false)
+    end
+  end
+
+  def budget_with(cost, as: @planner)
+    as_tenant { TeamPlanning::Budget.new(context: context_for(as), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @year, cost:).call }
+  end
+
+  should "give the same budget from a cost its caller already priced, with a mismatched currency and a line outside the period" do
+    dollars = line(amount: 150_000, currency: "USD", period: "year", cost_centre: "Platform")
+    later = line(head_count: 100, cost_centre: "Platform", starts_on: "2027-01-01", ends_on: "2027-12-31")
+    euros(250_000, cost_centre: "CC-1", head_count: 3)
+    fill(open_position(cost_centre: "CC-1"), @ada)
+    operation(Operations::TeamPlanning::SetPositionFunding, position_id: open_position, draws: [ { budget_line_id: later } ])
+    operation(Operations::TeamPlanning::SetPositionFunding, position_id: open_position, draws: [ { budget_line_id: dollars } ])
+    strictness(preset: "cost_centre")
+    alone = budget
+    given = budget_with(priced)
+
+    assert_equal alone, given
+    assert_equal [ alone.totals, alone.lines, alone.cost_centres ], [ given.totals, given.lines, given.cost_centres ]
+    assert_equal [ [ dollars ], [ "EUR" ] ], [ alone.totals.remaining_left_out, of(alone, dollars).mismatched ]
+    assert_equal(-1r, of(alone, later).remaining_head_count, "the line outside the period counts no heads, while its draw still spends")
+  end
+
+  should "refuse a cost priced for another member or another scenario" do
+    colleague = as_tenant { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant)) }
+    operation(Operations::TeamPlanning::AddPlanMember, scenario_id: nil, person_id: colleague.person_id, role: "viewer")
+    as_tenant do
+      plan = TeamPlanningPlan.find(@plan_id)
+      [ priced(as: colleague), priced(@plan_id) ].each do |cost|
+        error = assert_raises(ArgumentError) { TeamPlanning::Budget.new(context: context_for(@planner), plan:, scenario_id: @year, cost:) }
+        assert_match "another viewer, plan or scenario", error.message
+      end
+    end
+  end
+
+  should "refuse a cost priced for a see-pay holder handed to the budget of a member without the right" do
+    viewer = as_tenant { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
+    operation(Operations::TeamPlanning::AddPlanMember, scenario_id: nil, person_id: viewer.person_id, role: "viewer")
+    held = priced
+
+    assert_equal [ "band_ranges", "band_midpoints" ], [ held.pay_view, priced(as: viewer).pay_view ]
+    error = assert_raises(ArgumentError) { budget_with(held, as: viewer) }
+    assert_match "another viewer, plan or scenario", error.message
+    assert_equal budget_as(context_for(viewer)), budget_with(priced(as: viewer), as: viewer)
   end
 
   should "refuse the baseline, which has no period" do
