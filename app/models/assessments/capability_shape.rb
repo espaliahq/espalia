@@ -103,6 +103,9 @@ class Assessments::CapabilityShape
     end
   end
 
+  # @return [Array<Integer>] the places in {#codes} the window shows
+  def levels_in_view = window.select { |i| i >= 0 }
+
   # How far from the centre to the rim a position sits, held at the centre
   # or the rim past either edge.
   #
