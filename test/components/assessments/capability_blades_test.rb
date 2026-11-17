@@ -79,7 +79,7 @@ class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
     should "fade only the blades short of the assessed level" do
       avatar = render_blades(team_lead)
 
-      assert_equal [ [ "1", nil ], [ "2", "0.45" ], [ "3", nil ] ],
+      assert_equal [ [ "1", nil ], [ "2", "0.8" ], [ "3", nil ] ],
                    avatar.css("[data-blade]").map { |blade| [ blade["data-blade"], blade["fill-opacity"] ] }
     end
 

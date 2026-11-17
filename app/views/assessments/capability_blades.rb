@@ -8,7 +8,7 @@ class Views::Assessments::CapabilityBlades < Views::Base
   # The score held at the rim, so the assessed level met sits two thirds out.
   RIM_SCORE = 1.5
   # The share of a short blade's colour that shows through.
-  SHORT_OPACITY = 0.45
+  SHORT_OPACITY = 0.8
 
   # @param shape [Assessments::CapabilityShape]
   def initialize(shape:)
@@ -16,14 +16,14 @@ class Views::Assessments::CapabilityBlades < Views::Base
   end
 
   def view_template
-    div(class: "flex shrink-0 items-center gap-3", data: { capability_blades: true }) do
-      span(class: "hidden text-right text-xs leading-tight text-muted @[22rem]:block", aria: { hidden: "true" },
+    div(class: "ml-auto flex shrink-0 items-center gap-3", data: { capability_blades: true }) do
+      span(class: "hidden text-right text-xs leading-tight text-muted @[23rem]:block", aria: { hidden: "true" },
            data: { blades_caption: true }) do
         span(class: "block text-sm font-bold text-default tabular-nums") { "#{met_count} of #{points.size}" }
         whitespace
         span(class: "block") { "met at #{assessed_code}" }
       end
-      svg(viewBox: "#{-RADIUS} #{-RADIUS} #{RADIUS * 2} #{RADIUS * 2}", class: "block size-16 shrink-0",
+      svg(viewBox: "#{-RADIUS} #{-RADIUS} #{RADIUS * 2} #{RADIUS * 2}", class: "block size-18 shrink-0",
           role: "img", aria: { label: "#{met_count} of #{points.size} capabilities met at #{assessed_code}" }) do |s|
         category_slots(s)
         points.each_with_index { |point, i| blade(s, point, i) if point.reached }

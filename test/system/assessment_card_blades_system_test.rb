@@ -41,11 +41,16 @@ class AssessmentCardBladesSystemTest < ApplicationSystemTestCase
       cycle_id = SecureRandom.uuid_v7
       AssessmentCycles::CommandHandler.new.define_cycle(cycle_id, framework_id, "H2 2026 review", "regular", 1)
       AssessmentCycles::CommandHandler.new.enroll(cycle_id, person.id)
-      capabilities.each do |capability|
-        handler.rate_self(person.id, framework_id, capability.stable_id, level_ordinal: 2, frequency: "consistent",
-                                                                         cycle_id: cycle_id)
-      end
+      # Half rated: scored, with the card's longest button, "Continue self-assessment".
+      handler.rate_self(person.id, framework_id, capabilities.first.stable_id, level_ordinal: 2,
+                                                                                frequency: "consistent", cycle_id: cycle_id)
     end
+  end
+
+  def footer_spill
+    evaluate_script(<<~JS)
+      (() => { const row = document.querySelector("#{AVATAR}").parentElement; return row.scrollWidth - row.clientWidth })()
+    JS
   end
 
   should "name what the blades show beside them on a wide card" do
@@ -53,8 +58,8 @@ class AssessmentCardBladesSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
     visit assessments_path
 
-    assert_selector "#{AVATAR} svg[role='img'][aria-label='2 of 2 capabilities met at E2']", visible: true
-    assert_selector "#{AVATAR} [data-blades-caption]", text: /2 of 2\s+met at E2/, visible: true
+    assert_selector "#{AVATAR} svg[role='img'][aria-label='1 of 2 capabilities met at E2']", visible: true
+    assert_selector "#{AVATAR} [data-blades-caption]", text: /1 of 2\s+met at E2/, visible: true
   end
 
   should "keep only the shape on a phone, with the card's button on one line" do
@@ -62,11 +67,12 @@ class AssessmentCardBladesSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
     visit assessments_path
 
-    assert_selector "#{AVATAR} svg[aria-label='2 of 2 capabilities met at E2']", visible: true
+    assert_selector "#{AVATAR} svg[aria-label='1 of 2 capabilities met at E2']", visible: true
     assert_no_selector "#{AVATAR} [data-blades-caption]", visible: true
-    button = find_link(text: /self-assessment/)
+    button = find_link("Continue self-assessment")
     assert_operator button.evaluate_script("this.getBoundingClientRect().height"), :<=, 48,
                     "expected the button's label on one line"
+    assert_equal 0, footer_spill, "expected the card's footer to fit"
     assert_no_sideways_overflow
   end
 
@@ -78,10 +84,7 @@ class AssessmentCardBladesSystemTest < ApplicationSystemTestCase
 
     (760..1400).step(40).each do |width|
       page.driver.browser.manage.window.resize_to(width, 900)
-      spill = evaluate_script(<<~JS)
-        (() => { const row = document.querySelector("#{AVATAR}").parentElement; return row.scrollWidth - row.clientWidth })()
-      JS
-      assert_equal 0, spill, "expected the card's footer to fit at a #{width}px window"
+      assert_equal 0, footer_spill, "expected the card's footer to fit at a #{width}px window"
     end
   end
 end

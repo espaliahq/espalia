@@ -261,7 +261,7 @@ class Views::Assessments::IndexView < Views::Base
   # assessment has a score.
   def card_footer(assignment, &)
     shape = @card_shapes[assignment.id]
-    div(class: "@container mt-4 flex items-end justify-between gap-3") do
+    div(class: "@container mt-4 flex flex-wrap items-end justify-between gap-2") do
       div(class: "shrink-0", &)
       render Views::Assessments::CapabilityBlades.new(shape: shape) if shape
     end
