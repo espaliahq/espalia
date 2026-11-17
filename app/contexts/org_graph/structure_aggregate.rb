@@ -435,7 +435,7 @@ class OrgGraph::StructureAggregate
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit_id,
       parent_id: parent_id,
-      previous_parent_id: unit.parent_id,
+      previous_parent_id: parent_on(unit_id, effective_on),
       provider: unit.provider,
       effective_on: effective_on,
       moved_by_id: moved_by_id,
@@ -613,8 +613,8 @@ class OrgGraph::StructureAggregate
   on OrgGraph::Events::UnitMoved do |event|
     unit = @units.fetch(event.data[:unit_id])
     [ unit.unit_id, unit.parent_id, event.data[:parent_id] ].each { |id| touch(id, event.data[:effective_on]) }
-    unit.parent_id = event.data[:parent_id]
     @parents[unit.unit_id][event.data[:effective_on]] = event.data[:parent_id]
+    unit.parent_id = @parents[unit.unit_id].max_by(&:first).last
   end
 
   on OrgGraph::Events::UnitRetired do |event|

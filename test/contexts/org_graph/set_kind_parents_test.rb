@@ -324,6 +324,14 @@ class OrgGraph::SetKindParentsTest < ActiveSupport::TestCase
       assert_equal [ @basket, @checkout, (@today - 6).iso8601 ], moved.values_at(:unit_id, :parent_id, :effective_on)
     end
 
+    should "keep the Basket under Orders today, as the later move still holds" do
+      as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 6) }
+
+      assert_equal @orders, as_tenant { OrgGraph::Repository.new.load_structure.unit(@basket).parent_id }
+      moved = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data
+      assert_equal @payments, moved[:previous_parent_id]
+    end
+
     should "still refuse a move under a Squad that holds into today" do
       error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(@basket, @checkout, effective_on: @today - 1) } }
       assert_equal "Squad can't sit under Squad", error.message
