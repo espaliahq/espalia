@@ -27,15 +27,16 @@ class Views::Assessments::CapabilityBlades < Views::Base
   end
 
   def view_template
-    div(class: "ml-auto flex shrink-0 items-center gap-3", data: { capability_blades: true }) do
+    div(class: "flex grow items-center justify-end gap-3", data: { capability_blades: true }) do
       span(class: "hidden text-right text-xs leading-tight text-muted @[23rem]:block", aria: { hidden: "true" },
            data: { blades_caption: true }) do
         span(class: "block text-sm font-bold text-default tabular-nums") { "#{met_count} of #{points.size}" }
         whitespace
         span(class: "block") { "met at #{assessed_code}" }
       end
-      # 56px until the footer fits the longest button beside the 72px shape.
-      svg(viewBox: "#{-RADIUS} #{-RADIUS} #{RADIUS * 2} #{RADIUS * 2}", class: "block size-14 shrink-0 @[17.25rem]:size-18",
+      # Wraps only when 48px won't fit beside the button, then grows into what's left, up to 72px.
+      svg(viewBox: "#{-RADIUS} #{-RADIUS} #{RADIUS * 2} #{RADIUS * 2}",
+          class: "block aspect-square h-auto w-12 max-w-18 grow",
           role: "img", aria: { label: "#{met_count} of #{points.size} capabilities met at #{assessed_code}" }) do |s|
         category_slots(s)
         points.each_with_index { |point, i| beyond(s, point, i) if ahead?(point) }
