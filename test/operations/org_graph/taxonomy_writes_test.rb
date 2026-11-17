@@ -255,6 +255,21 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         assert_includes level_names, "Guild"
       end
 
+      should "keep the level while the plans' overrides are being rebuilt" do
+        overrides = TeamPlanning::Projections::Overrides::PROJECTION_NAME
+        rebuilding = lambda do |*names, &block|
+          raise ProjectionVersion::Rebuilding if names.include?(overrides)
+
+          block.call
+        end
+        error = ProjectionVersion.stub(:unless_rebuilding, rebuilding) do
+          assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @guild) }
+        end
+
+        assert_equal "The Org Graph is being rebuilt; try again in a minute.", error.message
+        assert_includes level_names, "Guild"
+      end
+
       should "remove the level once the plan is archived" do
         call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
 
