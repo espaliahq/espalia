@@ -53,6 +53,16 @@ class AssessmentCardBladesSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  def beside_button?(button)
+    evaluate_script(<<~JS, button)
+      ((link) => {
+        const shape = document.querySelector("#{AVATAR} svg").getBoundingClientRect()
+        const box = link.getBoundingClientRect()
+        return shape.top < box.bottom && shape.bottom > box.top
+      })(arguments[0])
+    JS
+  end
+
   should "name what the blades show beside them on a wide card" do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     sign_in_as(@user)
@@ -66,12 +76,14 @@ class AssessmentCardBladesSystemTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
     sign_in_as(@user)
     visit assessments_path
+    assert_equal MOBILE_SIZE.first, evaluate_script("window.innerWidth"), "expected the page laid out at phone width"
 
     assert_selector "#{AVATAR} svg[aria-label='1 of 2 capabilities met at E2']", visible: true
     assert_no_selector "#{AVATAR} [data-blades-caption]", visible: true
     button = find_link("Continue self-assessment")
     assert_operator button.evaluate_script("this.getBoundingClientRect().height"), :<=, 48,
                     "expected the button's label on one line"
+    assert beside_button?(button), "expected the shape beside the button, not below it"
     assert_equal 0, footer_spill, "expected the card's footer to fit"
     assert_no_sideways_overflow
   end
