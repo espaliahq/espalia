@@ -518,7 +518,14 @@ a position in such a unit, or overfilled; a unit under a retired parent; anyone 
 `unresolved`; a change about someone a scoped plan no longer covers, other than the
 assignment that moved them out, unnamed and under the change's own facet; and a succession
 that lost a predecessor or whose successor is no longer live. A
-position in a retired unit is the position's item, not each occupant's. `team_planning_attention`
+position in a retired unit is the position's item, not each occupant's.
+
+It also marks a unit that doesn't fit the Org Graph's structure today
+([#390](https://github.com/espaliahq/espalia/issues/390)): its unit type is gone, or it can no
+longer sit under its parent's type, or at the top. Its change is the unit's own, since a type
+never changes and a parent's change can't break the fit. A scoped plan's roots sit under units
+the plan doesn't cover, so they are judged only once the plan puts them under a unit on its map,
+and the reason never names the unit above them. `team_planning_attention`
 reads it, and the changes tab (4.4) and the checks tab (4.7) will too.
 
 It also checks each person (4.6):
