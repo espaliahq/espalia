@@ -217,15 +217,20 @@ class TeamPlanning::Attention
   end
 
   # A unit type's rules can narrow after the plan placed a unit, so the plan
-  # marks the unit instead of refusing what it already holds. A parent gone
-  # from the scenario, or outside a scoped plan, is the units check's.
+  # marks the unit instead of refusing what it already holds. It reads the
+  # resolved map, which a scoped plan has cut to its units. A root of that
+  # scope sits under a unit the plan doesn't cover, whatever the cut map shows
+  # as its parent, so it is judged only once the plan puts it under a unit on
+  # the map: never at the top, and never against a unit the plan can't name.
+  # A parent gone from the scenario is the units check's.
   def misfits
     return [] unless @taxonomy
 
     by_id = @map.units.index_by(&:id)
+    roots = @map.scope_ids.to_a.to_set
     @map.units.filter_map do |unit|
       parent = unit.parent_id && by_id[unit.parent_id]
-      next if unit.parent_id && !parent
+      next if (unit.parent_id || roots.include?(unit.id)) && !parent
       next unless (why = misfit(unit, parent))
 
       item(unit.id, UNIT, "#{I18n.t('org_graph.misfit')}: #{why}", broken_by: [ ([ parent.id, UNIT ] if parent) ].compact)

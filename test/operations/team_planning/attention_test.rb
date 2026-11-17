@@ -190,6 +190,24 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal({ risk => "Risk" }, attention[:names])
   end
 
+  should "judge a scoped plan's root only under a unit the plan covers, and never name the unit above it" do
+    write(Operations::TeamPlanning::SetUnit, @q2, unit_id: @payments, top_level: true)
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                      .set_kind_parents(@squad, parent_ids: [ @department ], top: false, effective_on: "2026-02-01")
+    end
+    misfits = attention[:items].select { it[:check] == "misfits" }.map { it.values_at(:subject_id, :reason) }
+    assert_equal [ [ @payments, "Doesn't fit this structure: Squad can't sit at the top" ] ], misfits
+
+    call(Operations::TeamPlanning::SetPlanScope, plan_id: @plan_id, unit_ids: [ @payments ])
+
+    [ @q1, @q2 ].each do |scenario_id|
+      payload = attention(scenario_id)
+      assert_empty payload[:items].select { it[:check] == "misfits" }
+      [ @engineering, "Engineering", "Department" ].each { assert_not_includes payload.to_json, it }
+    end
+  end
+
   should "mark someone placed who isn't on the map" do
     assign(@q2, @newcomer, { unit_id: @growth, allocation: 1 })
 
