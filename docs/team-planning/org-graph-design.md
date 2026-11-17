@@ -190,6 +190,24 @@ lists the people with no membership of a live unit, for the "in no team" tray.
   `bin/rails org_graph:taxonomy:check` names any live unit sitting where its kind may
   not, and fails on one; it runs per tenant before kinds can state their rules
   ([#391](https://github.com/espaliahq/espalia/issues/391)).
+- **An admin states a kind's rules.** `set_kind_parents` (MCP:
+  `org_graph_set_kind_parents`) replaces an Espalia kind's list of parent kinds and its
+  top switch, and `add_level` can state both up front. A kind that lists itself lets its
+  units nest. A kind needs somewhere to sit: a parent other than itself, or the top. A
+  change that would leave live units where they no longer fit is refused, naming each
+  unit and where it sits. A kind an HRIS provides keeps the HRIS rule for now. Removing a
+  kind drops it from every list that named it. Until the readers move to the lists, the
+  unit settings and Team Planning still place units by level order.
+- **A kinds change is dated today or earlier, and not before the last one.** A future
+  structure belongs in a plan, so a later date is refused. The aggregate keeps every date
+  across `TaxonomyDefined` and `LevelProviderSet`, as older streams hold them out of
+  order, and compares a change with the latest one that isn't in the future. A
+  future-dated change an older stream already holds can't lock out today's changes. The
+  refusal names that date.
+- **A kind a live plan still places units of can't be removed.** The operation checks
+  Team Planning's overrides, as the Org Graph context never reads Team Planning and the
+  operation is the only way a kind is removed. Archived and deleted plans don't count.
+  The refusal counts the plans: their names belong to their members.
 - **A unit comes from its level's provider.** Levels an HRIS supplies sit above every
   level Espalia holds, so the same holds for top-level units as for a parent and its
   child.
@@ -521,8 +539,19 @@ The dates follow the events:
 - A kind of unit has one fact, `kind`: its name, its place in the list, its provider
   and, once stated, its rules. Removing the kind ends it. Older streams can date a change
   to the kinds before an earlier one; a kind's change then starts on its last change's
-  date, so the order of events decides. A new rule change dated before the latest one
-  will be refused.
+  date, so the order of events decides. A new change dated after today, or before the
+  latest one dated today or earlier, is refused.
+- A unit placed from a past date must fit its kind's rules on every day the placement
+  holds, as this history shows them, not only today's. So a Squad can't move under a
+  Squad dated before the day Squads may nest. A day before the unit's kind, or its
+  parent's, joined the list isn't checked, so an HRIS backfill dated before a kind was
+  added still lands.
+- A change to the kinds dated in the past, or to who provides one, covers every placement
+  held since its date, including placements that later moves or retirements ended. So
+  Squads can't stop nesting from a day a Squad still sat under another, and a kind can't
+  pass to an HRIS from a day one of its units sat where the HRIS rule forbids. A unit
+  still holds its place on the day it retires. The refusal names the unit and the first
+  day it no longer sat there, and the change can be dated from that day.
 
 Three rules hold across history, `AsOf`, `ChangesBetween` and the live tables
 (`org_memberships`, the `people` columns). First, a fact dated before one already held

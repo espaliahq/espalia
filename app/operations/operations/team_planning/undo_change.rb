@@ -6,6 +6,7 @@
 class Operations::TeamPlanning::UndoChange < Operations::Base
   include Operations::TeamPlanning::PlanWrite
   include Operations::TeamPlanning::WithinScope
+  include Operations::TeamPlanning::UnitTypeRemains
 
   description "Undo a change, pin or clear in a scenario of a Team Planning plan, so the scenario resolves as if " \
               "it had not been made. Give event_id, as team_planning_history lists it, or leave it out to undo " \
@@ -14,7 +15,7 @@ class Operations::TeamPlanning::UndoChange < Operations::Base
               "already undone, or unless the caller is an editor. In a plan scoped to chosen units, an undo is " \
               "refused when the change it brings back is about someone, a unit or a position the plan no longer " \
               "covers, unless it places them in. Refused, too, when it brings back a last day outside the dates of " \
-              "the step they leave in. A date edit of a step (a dates entry) is undone too, bringing back the step's " \
+              "the step they leave in, or a unit of a type removed since. A date edit of a step (a dates entry) is undone too, bringing back the step's " \
               "previous dates under the same checks as a new date edit: refused when a later date edit of the step " \
               "replaced it, when the step forked after it closed its dates (a closing is never undone: set the dates " \
               "instead), or when a later step would end before it starts, naming that step. " \
@@ -34,6 +35,7 @@ class Operations::TeamPlanning::UndoChange < Operations::Base
     event_id = refusing_bad_plans do
       handler.undo_change(plan_id, scenario_id:, event_id: scenario_id!(:event_id)) do |plan, restored|
         within_scope!(plan, restored.class, restored.data[:subject_id], restored.data) if restored
+        unit_type_remains!(restored)
       end
     end
     { plan_id:, scenario_id:, event_id:, undone: true }

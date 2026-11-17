@@ -180,6 +180,15 @@ class Operations::OrgGraph::SourcesTest < ActiveSupport::TestCase
       end
     end
 
+    should "date the change by the tenant's today, behind UTC in its evening" do
+      @tenant.update!(time_zone: "America/Los_Angeles")
+      travel_to Time.utc(2026, 11, 17, 4) do
+        call(Operations::OrgGraph::SetLevelProvider, level_id: @empty, provider: "hibob", field: "work.region")
+      end
+
+      assert_equal Date.new(2026, 11, 16), ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.find(@empty).provider_effective_on }
+    end
+
     should "refuse a member who is not an Org Graph editor" do
       assert_raises(Pundit::NotAuthorizedError) do
         call(Operations::OrgGraph::SetLevelProvider, tenant_user: @member, level_id: @empty, provider: "espalia")

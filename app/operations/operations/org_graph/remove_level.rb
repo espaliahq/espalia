@@ -7,8 +7,8 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
 
   description "Remove a level from the Org Graph's taxonomy, from effective_on (today by default). Only a " \
               "level no unit has ever held, retired units included, can go; the refusal names the units. " \
-              "A level an HRIS provides is handed back to Espalia first. Refused unless the caller is a " \
-              "tenant admin."
+              "A level an HRIS provides is handed back to Espalia first. A level a live plan places a unit " \
+              "at stays until the plan changes or is archived. Refused unless the caller is a tenant admin."
   category :destructive
   approval :in_app
 
@@ -23,7 +23,32 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
             "#{level.name} comes from #{HrisConfig.provider_label(level.provider)}; hand it back to Espalia before removing it"
     end
 
-    refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:) }
+    ActiveRecord::Base.transaction do
+      ::OrgGraph::Repository.new.lock_structure # a plan places units under it too, so the count holds
+      ensure_no_live_plan_holds!(level)
+      refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:) }
+    end
     { level_id: params[:level_id].to_s.downcase, name: level&.name, effective_on:, levels: levels_payload }
+  end
+
+  private
+
+  # Plans live outside the Org Graph, so its aggregate can't see them; this
+  # operation is the only way a level is removed. Plan names stay with their
+  # members, so the refusal counts the plans rather than naming them.
+  def ensure_no_live_plan_holds!(level)
+    return unless level
+
+    plans = ProjectionVersion.unless_rebuilding(TeamPlanning::Projections::Overrides::PROJECTION_NAME) do
+      TeamPlanningOverride.where(plan_id: TeamPlanningPlan.live.select(:id), kind: TeamPlanning::Events::UnitSet.name)
+                          .where("end_state ->> 'level_id' = ?", level.id).distinct.count(:plan_id)
+    end
+    return if plans.zero?
+
+    advice = plans == 1 ? "Change or archive that plan first, or delete it if no one can edit it any more" :
+                          "Change or archive those plans first, or delete any no one can edit any more"
+    raise Operations::Base::ParameterError,
+          "#{level.name} can't be removed, as #{plans} live #{'plan'.pluralize(plans)} " \
+          "#{plans == 1 ? 'places' : 'place'} units of this type. #{advice}"
   end
 end

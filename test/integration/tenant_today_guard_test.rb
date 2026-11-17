@@ -24,14 +24,11 @@ class TenantTodayGuardTest < ActiveSupport::TestCase
     app/controllers/tenant/org_people_controller.rb
     app/controllers/tenant/org_units_controller.rb
     app/integrations/hris/hibob/adapter.rb
-    app/integrations/hris/level_handover.rb
-    app/integrations/hris/level_mirror.rb
     app/models/org_graph_config.rb
     app/models/pay_band.rb
     app/models/tenant.rb
     app/operations/operations/org_graph/confirm_fact.rb
     app/operations/operations/org_graph/set_fact_provider.rb
-    app/operations/operations/org_graph/set_level_provider.rb
     app/operations/operations/org_graph/unit_write.rb
     app/queries/org_graph/date_comparison.rb
     app/queries/org_graph/person_profile.rb

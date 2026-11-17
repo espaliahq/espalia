@@ -1,6 +1,6 @@
 {
   "name": "team_planning_restore_plan",
-  "description": "Restore an archived Team Planning plan, so it takes changes and is checked against the organisation again. Refused unless the caller is one of its editors, or when the plan isn't archived.",
+  "description": "Restore an archived Team Planning plan, so it takes changes and is checked against the organisation again. Refused unless the caller is one of its editors, when the plan isn't archived, or when it places units of a type removed since.",
   "inputSchema": {
     "type": "object",
     "properties": {

@@ -10,6 +10,7 @@
 class Operations::TeamPlanning::UndoStep < Operations::Base
   include Operations::TeamPlanning::PlanRead
   include Operations::TeamPlanning::WithinScope
+  include Operations::TeamPlanning::UnitTypeRemains
 
   DATES = "dates"
 
@@ -23,7 +24,8 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
               "budget line that carries an amount, is offered only to a member with the see-pay right; anyone " \
               "else is offered their latest other change, or null. Both " \
               "are null for a viewer, for the baseline, and for an archived or frozen plan, and when the change is " \
-              "about someone or something outside the units a scoped plan covers. An undo of a clear that " \
+              "about someone or something outside the units a scoped plan covers, or when it brings back a unit of a " \
+              "type removed since. An undo of a clear that " \
               "brings someone back into those units is offered with subject null, since the plan covers them " \
               "only once it lands. Refused, as an unknown plan, " \
               "unless the caller is a member."
@@ -76,7 +78,10 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
     entry = aggregate.log_of(scenario_id).find { it.event_id == event_id }
     return dates(event_id) unless entry
 
-    held = yield(entry) || entry
+    restored = yield(entry)
+    return nil if unit_type_removed?(restored)
+
+    held = restored || entry
     within_scope!(aggregate, held.class, held.data[:subject_id], held.data)
 
     subject_id = entry.data[:subject_id]
