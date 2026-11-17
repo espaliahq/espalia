@@ -42,6 +42,16 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         assert_equal Date.new(2026, 1, 1), OrgTaxonomyLevel.find(@team_level).effective_on
       end
     end
+    should "hold the rules a level states, leaving them null on a level that never stated any" do
+      as_tenant do
+        @handler.set_kind_parents(@team_level, parent_ids: [ @team_level, @department_level ], top: true, effective_on: Date.current)
+
+        assert_equal [ [ @department_level, @team_level ], true ], OrgTaxonomyLevel.find(@team_level).values_at(:parent_level_ids, :top)
+        assert_equal [ nil, nil ], OrgTaxonomyLevel.find(@department_level).values_at(:parent_level_ids, :top)
+        assert_equal [ [ [], true ], [ [ @department_level, @team_level ], true ] ],
+                     OrgTaxonomyLevel.taxonomy.kinds.map { [ it.parent_ids, it.top ] }
+      end
+    end
   end
 
   context "the providers" do
@@ -192,6 +202,23 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep the latest dated parent when a move is backdated before it" do
+      as_tenant do
+        sales = SecureRandom.uuid_v7
+        @handler.create_unit(sales, "Sales", level_id: @department_level, effective_on: "2026-01-01",
+                             provider: "hibob", external_ref: "dept-8")
+        @handler.move_unit(@payments, nil, effective_on: "2026-05-01")
+        @handler.move_unit(@payments, sales, effective_on: "2026-03-01")
+        backdated = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data
+
+        assert_equal [ sales, "2026-03-01" ], [ backdated[:parent_id], backdated[:effective_on].to_s ]
+        unit = OrgUnit.find(@payments)
+
+        assert_nil unit.parent_id
+        assert_equal Date.new(2026, 5, 1), unit.parent_effective_on
+      end
+    end
+
     should "keep a retired unit with the date it ended" do
       as_tenant do
         @handler.retire_unit(@payments, effective_on: "2026-06-30")
@@ -262,6 +289,7 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         @handler.add_unit_owner(@engineering, SecureRandom.uuid_v7, effective_on: "2026-06-01")
         @handler.add_unit_owner(@billing, SecureRandom.uuid_v7.tap { |id| @former = id }, effective_on: "2026-07-01")
         @handler.remove_unit_owner(@billing, @former, effective_on: "2026-08-01")
+        @handler.set_kind_parents(@team_level, parent_ids: [ @department_level, @team_level ], top: true, effective_on: Date.current)
       end
 
       before = snapshot_read_models(OrgGraph::Projections::Structure, @tenant)

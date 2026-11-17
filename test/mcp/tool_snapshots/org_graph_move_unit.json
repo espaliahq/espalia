@@ -1,6 +1,6 @@
 {
   "name": "org_graph_move_unit",
-  "description": "Move a unit in the Org Graph beneath another live unit at a higher level, or to the top when parent_id is omitted, from effective_on (today by default). Only a unit Espalia holds can be moved here. Moving a unit changes who inherits its ownership, so the caller needs rights on the unit and where it lands.",
+  "description": "Move a unit in the Org Graph beneath another live unit of a kind its own kind can sit under, or to the top when parent_id is omitted and its kind can sit there, from effective_on (today by default). Only a unit Espalia holds can be moved here. Moving a unit changes who inherits its ownership, so the caller needs rights on the unit and where it lands.",
   "inputSchema": {
     "type": "object",
     "properties": {

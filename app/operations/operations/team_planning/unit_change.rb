@@ -48,8 +48,8 @@ module Operations::TeamPlanning::UnitChange
   # @return [Hash] a unit's name, parent and level, as a change carries them
   def as_it_stands(unit) = unit.to_h.slice(:name, :parent_id, :level_id)
 
-  # @return [Array<String>] the taxonomy's level ids, top first
-  def level_ids = @level_ids ||= OrgTaxonomyLevel.top_first.pluck(:id)
+  # @return [OrgGraph::Taxonomy] the live kinds of unit, and where each may sit
+  def taxonomy = @taxonomy ||= OrgTaxonomyLevel.taxonomy
 
   def refuse!(message) = raise(Operations::Base::ParameterError, message)
 end

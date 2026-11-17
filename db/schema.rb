@@ -881,6 +881,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_200129) do
     t.string "provider", default: "espalia", null: false
     t.date "provider_effective_on"
     t.string "provider_field"
+    t.uuid "parent_level_ids", array: true
+    t.boolean "top"
     t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
   end
 

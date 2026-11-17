@@ -6,7 +6,9 @@
 # Writes `org_taxonomy_levels`, `org_units`, `org_unit_successions`,
 # `org_unit_owners` and `org_fact_providers`, and nothing else writes them. The level and unit
 # primary keys are event-carried ids, so references survive a rebuild.
-# A level's effective_on is the date its name or place last changed.
+# A level's effective_on is the date its name or place last changed. Its
+# parent_level_ids and top hold the rules it states, and stay null on a level
+# that never stated them, so {OrgTaxonomyLevel.taxonomy} derives the legacy rule.
 #
 class OrgGraph::Projections::Structure
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -14,7 +16,7 @@ class OrgGraph::Projections::Structure
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   # @return [Array<Class>]
   def self.handled_events
@@ -58,7 +60,7 @@ class OrgGraph::Projections::Structure
     when OrgGraph::Events::TaxonomyDefined then handle_taxonomy_defined(event.data)
     when OrgGraph::Events::UnitCreated then handle_unit_created(event.data)
     when OrgGraph::Events::UnitRenamed then update_unit(event.data, name: event.data[:name], name_effective_on: event.data[:effective_on])
-    when OrgGraph::Events::UnitMoved then update_unit(event.data, parent_id: event.data[:parent_id], parent_effective_on: event.data[:effective_on])
+    when OrgGraph::Events::UnitMoved then handle_unit_moved(event.data)
     when OrgGraph::Events::UnitRetired then update_unit(event.data, retired_on: event.data[:effective_on])
     when OrgGraph::Events::UnitSucceeded then handle_unit_succeeded(event.data)
     when OrgGraph::Events::UnitHandedOver then update_unit(event.data, provider: event.data[:provider], external_ref: event.data[:external_ref])
@@ -79,7 +81,7 @@ class OrgGraph::Projections::Structure
     levels.each.with_index do |level, position|
       row = OrgTaxonomyLevel.find_or_initialize_by(id: level[:level_id])
       unchanged = row.persisted? && row.name == level[:name] && row.position == -position - 1
-      row.assign_attributes(name: level[:name], position: position)
+      row.assign_attributes(name: level[:name], position:, parent_level_ids: level[:parent_level_ids], top: level[:top])
       row.effective_on = data[:effective_on] unless unchanged
       row.save!
     end
@@ -127,6 +129,14 @@ class OrgGraph::Projections::Structure
   def handle_unit_owner_removed(data)
     OrgUnitOwner.where(unit_id: data[:unit_id], person_id: data[:person_id]).delete_all
     update_unit(data, owners_lost_on: data[:effective_on]) unless OrgUnitOwner.exists?(unit_id: data[:unit_id])
+  end
+
+  # A move dated before the unit's latest one changes only its past.
+  def handle_unit_moved(data)
+    unit = OrgUnit.find(data[:unit_id])
+    return if unit.parent_effective_on > Date.iso8601(data[:effective_on])
+
+    unit.update!(parent_id: data[:parent_id], parent_effective_on: data[:effective_on])
   end
 
   def update_unit(data, **attributes)
