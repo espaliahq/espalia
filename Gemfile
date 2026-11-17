@@ -32,7 +32,7 @@ gem "turbo-rails"
 gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 
-gem "acts_as_tenant", "~> 1.0"
+gem "acts_as_tenant", "~> 2.2"
 gem "devise", "~> 5.0.3"
 # OAuth 2.0 + PKCE provider — backs the MCP server's bearer-token auth.
 # Doorkeeper is OAuth 2.0; we configure it with `force_pkce`, no refresh
