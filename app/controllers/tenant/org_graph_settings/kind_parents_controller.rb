@@ -11,12 +11,17 @@ class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
   # PATCH /tenant/org_graph/settings/kind_parents/:level_id
   def update
     authorize :org_graph, :edit_taxonomy?
-    return back_with_alert(changed_meanwhile) if changed_since_drawn?
+    result = ActiveRecord::Base.transaction do
+      ::OrgGraph::Repository.new.lock_structure # so no save lands between the comparison and this write
+      next if changed_since_drawn?
 
-    result = Operations::OrgGraph::SetKindParents.call(
-      context: pundit_user,
-      params: { level_id: params[:level_id].to_s, parent_ids: Array(params[:parent_ids]).map(&:to_s), top: params[:top] == "1" }
-    )
+      Operations::OrgGraph::SetKindParents.call(
+        context: pundit_user,
+        params: { level_id: params[:level_id].to_s, parent_ids: Array(params[:parent_ids]).map(&:to_s), top: params[:top] == "1" }
+      )
+    end
+    return back_with_alert(changed_meanwhile) unless result
+
     back_with_notice "Saved where #{result[:name]} can sit."
   rescue Operations::Base::ParameterError => e
     back_with_refusal "#{type_name}'s place did not change", e
