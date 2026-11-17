@@ -29,80 +29,80 @@ class OrgGraph::StructureCommandHandler
     @repository = repository
   end
 
-  # The history records each kind, so every change to the kinds waits for
-  # its rebuild, as a provider change does.
+  # The history and the structure record each kind, so every change to the
+  # kinds waits for their rebuilds, as a provider change does.
   #
   # @see OrgGraph::StructureAggregate#define_taxonomy
-  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def define_taxonomy(levels, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_taxonomy!
-    unless_history_rebuilding do
+    unless_kinds_rebuilding do
       with_structure(plan) { |structure| structure.define_taxonomy(levels, **attributed(options, :defined_by_id)) }
     end
   end
 
   # @see OrgGraph::StructureAggregate#add_level
-  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def add_level(level_id, name, **options)
     authorize_taxonomy!
-    unless_history_rebuilding do
+    unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.add_level(level_id, name, **attributed(options, :defined_by_id)) }
     end
   end
 
   # @see OrgGraph::StructureAggregate#set_kind_parents
-  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def set_kind_parents(level_id, **options)
     authorize_taxonomy!
-    unless_history_rebuilding do
+    unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.set_kind_parents(level_id, **attributed(options, :defined_by_id)) }
     end
   end
 
   # @see OrgGraph::StructureAggregate#reorder_levels
-  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def reorder_levels(level_ids, **options)
     authorize_taxonomy!
-    unless_history_rebuilding do
+    unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.reorder_levels(level_ids, **attributed(options, :defined_by_id)) }
     end
   end
 
   # @see OrgGraph::StructureAggregate#remove_level
-  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def remove_level(level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_taxonomy!
-    unless_history_rebuilding do
+    unless_kinds_rebuilding do
       with_structure(plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
     end
   end
 
   # @see OrgGraph::StructureAggregate#set_level_provider
-  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def set_level_provider(level_id, provider, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_structure!
-    unless_history_rebuilding do
+    unless_kinds_rebuilding do
       with_structure(plan) { |structure| structure.set_level_provider(level_id, provider, **attributed(options, :set_by_id)) }
     end
   end
 
   # @see OrgGraph::StructureAggregate#hand_over_level
-  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def hand_over_level(level_id, provider, **options)
     authorize_structure!
-    unless_history_rebuilding do
+    unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_over_level(level_id, provider, **attributed(options, :set_by_id)) }
     end
   end
 
   # @see OrgGraph::StructureAggregate#hand_back_level
-  # @raise [ProjectionVersion::Rebuilding] while the history is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def hand_back_level(level_id, **options)
     authorize_structure!
-    unless_history_rebuilding do
+    unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_back_level(level_id, **attributed(options, :set_by_id)) }
     end
   end
@@ -222,9 +222,11 @@ class OrgGraph::StructureCommandHandler
 
   # The history records a provider change only when it changes the kind, so a
   # change that reached both the live subscriber and a replay would leave the
-  # replay's older provider standing.
-  def unless_history_rebuilding(&)
-    ProjectionVersion.unless_rebuilding(OrgGraph::Projections::History::PROJECTION_NAME, &)
+  # replay's older provider standing. The structure holds each kind's rules,
+  # and places units by them, so a change mid-rebuild could be overtaken too.
+  def unless_kinds_rebuilding(&)
+    ProjectionVersion.unless_rebuilding(OrgGraph::Projections::History::PROJECTION_NAME,
+                                        OrgGraph::Projections::Structure::PROJECTION_NAME, &)
   end
 
   # Checks every placement before any is written. Once the succession is

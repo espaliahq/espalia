@@ -107,6 +107,24 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
     assert_equal before, Rails.configuration.event_store.read.stream(stream).count
   end
 
+  should "refuse to change the kinds while the structure is rebuilt, writing nothing" do
+    stream = as_tenant { EventStreamNaming.org_structure_stream }
+    before = Rails.configuration.event_store.read.stream(stream).count
+    current = %w[Division Department Team Squad].map { id(it) }
+
+    while_rebuilding(@tenant, OrgGraph::Projections::Structure) do
+      as_tenant do
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.add_level(SecureRandom.uuid_v7, "Guild", effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.set_kind_parents(id("Squad"), parent_ids: [ id("Team") ], top: false, effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.reorder_levels(current.reverse, effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.remove_level(id("Squad"), effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.hand_back_level(id("Division"), effective_on: @today) }
+      end
+    end
+
+    assert_equal before, Rails.configuration.event_store.read.stream(stream).count
+  end
+
   should "let every live unit sit where it is, and every kind at the top" do
     structure = as_tenant { OrgGraph::Repository.new.load_structure }
 
