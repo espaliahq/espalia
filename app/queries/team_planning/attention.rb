@@ -206,10 +206,12 @@ class TeamPlanning::Attention
     end
   end
 
-  # A unit the plan covers sits under one it doesn't, so its parent is never gone.
+  # A root of a scoped plan sits under a unit the plan doesn't cover, so that
+  # parent is never gone. Once the plan puts the root under a unit the
+  # scenario retires, its parent is one the plan covers, and gone like any.
   def units
     parted = @map.units.filter_map do |unit|
-      next if unit.parent_id.nil? || @live.include?(unit.parent_id) || @roots.include?(unit.id)
+      next if unit.parent_id.nil? || @live.include?(unit.parent_id) || (@roots.include?(unit.id) && !@retired.include?(unit.parent_id))
 
       item(unit.id, UNIT, "Its parent is #{gone(unit.parent_id)}", broken_by: [ [ unit.parent_id, UNIT ] ])
     end

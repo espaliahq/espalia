@@ -357,6 +357,13 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_empty TeamPlanning::Attention.new(map(units:), {}).call.select { it.check == :misfits }, "no taxonomy checks no fit"
   end
 
+  should "mark a scoped plan's root once the plan puts it under a unit the scenario retires, but not under the unit above the scope" do
+    other_root = SecureRandom.uuid_v7
+    units = [ unit(ROOT, nil), unit(LIVE, RETIRED), unit(other_root, GONE) ]
+
+    assert_equal [ "Its parent is a retired unit" ], reasons(map(units:, scope_ids: [ LIVE, other_root, RETIRED ]))
+  end
+
   should "tell a retired unit from one no longer in the scenario" do
     units = [ unit(ROOT, nil), unit(LIVE, GONE) ]
     person = B::Member.new(id: PERSON, title: nil, level: nil, manager_id: nil, cost_centre: nil, site: nil, country: nil, fte: 1,
