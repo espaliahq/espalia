@@ -315,7 +315,8 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
       travel_to Time.zone.parse("2026-04-02 09:00")
       as_tenant do
         @structure.add_level(guild, "Guild", effective_on: "2026-02-01")
-        @structure.reorder_levels([ guild, @departments, @squads ], effective_on: "2026-03-01")
+        @structure.define_taxonomy([ { level_id: guild, name: "Guild" }, { level_id: @departments, name: "Department" },
+                                     { level_id: @squads, name: "Squad" } ], effective_on: "2026-03-01")
         @structure.set_level_provider(guild, "hibob", effective_on: "2026-03-15", field: "work.guild")
         @structure.hand_back_level(guild, effective_on: "2026-04-01")
         @structure.remove_level(guild, effective_on: "2026-04-01")
@@ -371,7 +372,8 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
         @structure.add_unit_owner(@platform, @ada.id, effective_on: "2026-02-01")
         guild = SecureRandom.uuid_v7
         @structure.add_level(guild, "Guild", effective_on: "2026-02-01")
-        @structure.reorder_levels([ guild, @departments, @squads ], effective_on: "2026-02-01")
+        @structure.define_taxonomy([ { level_id: guild, name: "Guild" }, { level_id: @departments, name: "Department" },
+                                     { level_id: @squads, name: "Squad" } ], effective_on: "2026-02-01")
         @structure.set_level_provider(guild, "hibob", effective_on: "2026-02-01", field: "work.guild")
       end
 

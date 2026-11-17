@@ -60,15 +60,6 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
-  # @see OrgGraph::StructureAggregate#reorder_levels
-  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
-  def reorder_levels(level_ids, **options)
-    authorize_taxonomy!
-    unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.reorder_levels(level_ids, **attributed(options, :defined_by_id)) }
-    end
-  end
-
   # @see OrgGraph::StructureAggregate#remove_level
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def remove_level(level_id, **options)

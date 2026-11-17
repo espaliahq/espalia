@@ -126,23 +126,6 @@ class OrgGraph::StructureAggregate
     write_taxonomy(levels, rules:, effective_on:, defined_by_id:)
   end
 
-  # Puts the levels this stream holds in a new order, keeping their names.
-  #
-  # @param level_ids [Array<String>] every level's id once, top first
-  # @param effective_on [Date, String]
-  # @param defined_by_id [String, nil] person_id of the actor
-  # @raise [ArgumentError] unless the ids are exactly the current levels'
-  # @raise [RuntimeError] if the order breaks one {#define_taxonomy} keeps
-  def reorder_levels(level_ids, effective_on:, defined_by_id: nil)
-    by_id = @levels.index_by { |level| level[:level_id] }
-    ids = Array(level_ids).map { |id| id.to_s.downcase }
-    unless ids.any? && ids.uniq.size == ids.size && ids.sort == by_id.keys.sort
-      raise ArgumentError, "Name every level in the taxonomy once, top first"
-    end
-
-    define_taxonomy(ids.map { |id| by_id[id] }, effective_on:, defined_by_id:)
-  end
-
   # Removes a level Espalia holds that no unit has ever held. A unit keeps its
   # level for life, so the units this stream holds, retired ones included, are
   # every unit a level has held.

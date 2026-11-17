@@ -99,7 +99,6 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
       as_tenant do
         assert_raises(ProjectionVersion::Rebuilding) { @handler.define_taxonomy(renamed, effective_on: @today) }
         assert_raises(ProjectionVersion::Rebuilding) { @handler.add_level(SecureRandom.uuid_v7, "Guild", effective_on: @today) }
-        assert_raises(ProjectionVersion::Rebuilding) { @handler.reorder_levels(current.map { it[:level_id] }.reverse, effective_on: @today) }
         assert_raises(ProjectionVersion::Rebuilding) { @handler.remove_level(id("Squad"), effective_on: @today) }
       end
     end
@@ -110,13 +109,13 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
   should "refuse to change the kinds while the structure is rebuilt, writing nothing" do
     stream = as_tenant { EventStreamNaming.org_structure_stream }
     before = Rails.configuration.event_store.read.stream(stream).count
-    current = %w[Division Department Team Squad].map { id(it) }
+    current = levels(%w[Division Department Team Squad])
 
     while_rebuilding(@tenant, OrgGraph::Projections::Structure) do
       as_tenant do
         assert_raises(ProjectionVersion::Rebuilding) { @handler.add_level(SecureRandom.uuid_v7, "Guild", effective_on: @today) }
         assert_raises(ProjectionVersion::Rebuilding) { @handler.set_kind_parents(id("Squad"), parent_ids: [ id("Team") ], top: false, effective_on: @today) }
-        assert_raises(ProjectionVersion::Rebuilding) { @handler.reorder_levels(current.reverse, effective_on: @today) }
+        assert_raises(ProjectionVersion::Rebuilding) { @handler.define_taxonomy(current.reverse, effective_on: @today) }
         assert_raises(ProjectionVersion::Rebuilding) { @handler.remove_level(id("Squad"), effective_on: @today) }
         assert_raises(ProjectionVersion::Rebuilding) { @handler.hand_back_level(id("Division"), effective_on: @today) }
       end
@@ -138,8 +137,8 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
     as_tenant do
       @handler.define_taxonomy(levels(%w[Division Department Team Squad]), effective_on: @today)
       @handler.add_level(id("Guild"), "Guild", effective_on: @today)
-      @handler.reorder_levels(%w[Division Department Squad Team Guild].map { id(it) }, effective_on: @today)
-      @handler.reorder_levels(%w[Division Department Team Squad Guild].map { id(it) }, effective_on: @today)
+      @handler.define_taxonomy(levels(%w[Division Department Squad Team Guild]), effective_on: @today)
+      @handler.define_taxonomy(levels(%w[Division Department Team Squad Guild]), effective_on: @today)
       @handler.remove_level(id("Guild"), effective_on: @today)
       %w[Division Department].each { @handler.set_level_provider(id(it), "hibob", effective_on: @today, field: "work.#{it.downcase}") }
 

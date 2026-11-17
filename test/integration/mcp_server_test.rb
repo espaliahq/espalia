@@ -220,6 +220,16 @@ class McpServerTest < ActionDispatch::IntegrationTest
       assert_match(/unknown tool/, err["message"])
     end
 
+    should "name the replacement when a client calls a tool removed last release" do
+      post_mcp({
+        jsonrpc: "2.0", id: 4, method: "tools/call",
+        params: { name: "org_graph_reorder_levels", arguments: { level_ids: [] } }
+      })
+
+      assert_equal(-32601, json_body.dig("error", "code"))
+      assert_match(/replaced by org_graph_set_kind_parents/, json_body.dig("error", "message"))
+    end
+
     # Regression: pre-fix this returned -32603 "internal error" with the
     # full SQL fragment in the log + on the wire. The classification is
     # important so Datadog error monitors scoped to MCP only fire on
