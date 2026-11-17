@@ -93,11 +93,14 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   # The whole list replaces the type's rules, so every box posts, and the
-  # hidden top value stands for an unticked switch.
+  # hidden top value stands for an unticked switch. The was_ values are the
+  # rules as drawn, so the controller can refuse a save over a newer change.
   def rules_form(level)
     settings_form(tenant_org_graph_settings_kind_parent_path(level[:id]), method: :patch,
                                                                           id: "org-graph-level-rules-#{level[:id]}",
                                                                           class: "mt-3") do
+      level[:parent_ids].each { |id| input(type: "hidden", name: "was_parent_ids[]", value: id) }
+      input(type: "hidden", name: "was_top", value: level[:top] ? "1" : "0")
       fieldset do
         legend(class: "text-sm font-medium text-default") { words("can_sit_under") }
         div(class: "mt-2 flex flex-wrap gap-x-5 gap-y-2") do

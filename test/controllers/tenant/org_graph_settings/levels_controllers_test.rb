@@ -60,6 +60,18 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_equal [ [ @squad_id, @tribe_id ].sort, false ], [ squad.parent_ids.sort, squad.top? ]
     end
 
+    should "save over the rules the page drew, and refuse a page drawn before another admin's change" do
+      drawn = { was_parent_ids: [ @tribe_id ], was_top: "1" }
+      patch tenant_org_graph_settings_kind_parent_path(@squad_id), params: { parent_ids: [ @tribe_id ], top: "0", **drawn }
+      assert_equal "Saved where Squad can sit.", flash[:notice]
+
+      patch tenant_org_graph_settings_kind_parent_path(@squad_id), params: { parent_ids: [ @tribe_id ], top: "1", **drawn }
+
+      assert_equal "Someone changed where Squad can sit while this page was open, so yours wasn't saved. " \
+                   "The boxes now show their change: tick yours again and save.", flash[:alert]
+      assert_not ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.taxonomy.kind(@squad_id).top? }
+    end
+
     should "name the units a narrower list would leave where they no longer fit" do
       patch tenant_org_graph_settings_kind_parent_path(@team_id), params: { parent_ids: [ @squad_id ], top: "1" }
 
@@ -88,7 +100,10 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
         assert_select "input#org-graph-level-#{@team_id}-under-#{@squad_id}[checked]"
         assert_select "label[for=?]", "org-graph-level-#{@team_id}-under-#{@team_id}", text: "Team (inside another Team)"
         assert_select "input#org-graph-level-top-#{@team_id}[checked]"
+        assert_select "input[type=hidden][name=was_top][value='1']"
       end
+      drawn = css_select("form#org-graph-level-rules-#{@team_id} input[type=hidden][name='was_parent_ids[]']")
+      assert_equal [ @tribe_id, @squad_id ], drawn.map { it["value"] }
       assert_select "[id^='org-graph-level-up-'], [id^='org-graph-level-down-']", count: 0
       assert_select "#org-graph-levels input#org-graph-new-level[name=name]"
     end
