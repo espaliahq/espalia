@@ -91,25 +91,24 @@ class Assessments::CapabilityShape
   # @return [String, nil] the level zoomed to; nil for the whole ladder
   def zoom = @zoom_index && @codes[@zoom_index]
 
-  # @return [Range<Integer>] the places in {#codes} from the centre to the rim
+  # @return [Range<Integer>] the places in {#codes} from the centre to the
+  #   rim; -1 is none of the first level, the centre when that is the level
+  #   assessed
   def window
     @window ||= if @zoom_index
-      centre = (@zoom_index - 1).clamp(0, @codes.size - 1 - ZOOM_SPAN)
+      centre = (@zoom_index - 1).clamp(floor, @codes.size - 1 - ZOOM_SPAN)
       centre..(centre + ZOOM_SPAN)
     else
-      0..top.to_i
+      floor..top.to_i
     end
   end
 
   # How far from the centre to the rim a position sits, held at the centre
-  # or the rim past either edge. A one-level ladder has no climb, so it runs from none of its
-  # level to all of it.
+  # or the rim past either edge.
   #
   # @param position [Numeric] a ladder position, as {Point#reached}
   # @return [Float]
   def fraction(position)
-    return position + 1 if top.zero?
-
     ((position - window.begin) / (window.end - window.begin).to_f).clamp(0.0, 1.0)
   end
 
@@ -120,12 +119,16 @@ class Assessments::CapabilityShape
     silence = unscored_label(cap)
     position = silence ? nil : position_for(stable_id)
     Point.new(number: number, stable_id: stable_id, name: cap[:capability].name, hue: hue,
-              reached: position&.clamp(top.zero? ? -1.0 : 0.0, top), label: silence || label_for(position&.clamp(..top)),
+              reached: position&.clamp(floor.to_f, top), label: silence || label_for(position&.clamp(..top)),
               required: @scoring.dig(:capability_scores, stable_id, :required) || false,
               blocked: @scoring.dig(:capability_statuses, stable_id) == :blocked)
   end
 
   def top = @codes.size - 1.0
+
+  # The lowest position drawn apart from the centre: the first level met,
+  # or none of it when that is the level assessed, so short and met differ.
+  def floor = @assessed_index&.zero? ? -1 : 0
 
   def category_score(category_data)
     return unless category_score_unlocked?(category_data, @scoring, @context)
