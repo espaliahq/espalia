@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # "Handing a unit type over": each unit type that holds units, compared with an HRIS
-# field before it moves there, or handed back to Espalia. Each level loads in
+# field before it moves there, or handed back to Espalia. Each type loads in
 # a frame of its own, since comparing reads the HRIS.
 class Views::Tenant::OrgGraph::Settings::HandoverPanel < Views::Base
   # @param hris [Hash] provider, label and connected, as Operations::OrgGraph::Sources reads them
