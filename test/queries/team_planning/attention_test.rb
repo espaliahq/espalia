@@ -341,13 +341,15 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                                         { level_id: team, name: "Team", parent_level_ids: [ squad ], top: true } ])
     units = [ unit(ROOT, nil), unit(LIVE, ROOT).with(level_id: team), unit(top, nil).with(level_id: squad),
               unit(SecureRandom.uuid_v7, top).with(level_id: team), unit(SecureRandom.uuid_v7, RETIRED).with(level_id: team),
-              unit(gone = SecureRandom.uuid_v7, ROOT).with(level_id: SecureRandom.uuid_v7) ]
+              unit(gone = SecureRandom.uuid_v7, ROOT).with(level_id: SecureRandom.uuid_v7),
+              unit(orphan = SecureRandom.uuid_v7, RETIRED).with(level_id: SecureRandom.uuid_v7) ]
     placed = change(TeamPlanning::Events::UnitSet, LIVE, name: "Unit", parent_id: ROOT, level_id: team)
     items = TeamPlanning::Attention.new(map(units:), { [ LIVE, "unit" ] => placed }, taxonomy:).call.select { it.check == :misfits }
 
     assert_equal [ [ LIVE, "Doesn't fit this structure: Team can't sit under Department" ],
                    [ top, "Doesn't fit this structure: Squad can't sit at the top" ],
-                   [ gone, "Doesn't fit this structure: its unit type no longer exists" ] ].sort, items.map { [ it.subject_id, it.reason ] }
+                   [ gone, "Doesn't fit this structure: its unit type no longer exists" ],
+                   [ orphan, "Doesn't fit this structure: its unit type no longer exists" ] ].sort, items.map { [ it.subject_id, it.reason ] }
     assert_same placed, items.find { it.subject_id == LIVE }.change
     assert_empty TeamPlanning::Attention.new(map(units:), {}).call.select { it.check == :misfits }, "no taxonomy checks no fit"
   end
