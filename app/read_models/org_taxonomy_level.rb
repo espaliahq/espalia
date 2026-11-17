@@ -28,4 +28,13 @@ class OrgTaxonomyLevel < ApplicationRecord
     end
     OrgGraph::Taxonomy.new(levels, providers: rows.to_h { [ it.id, it.provider ] })
   end
+
+  # Each level's rules as the payloads and forms read them.
+  #
+  # @param rows [Array<OrgTaxonomyLevel>] the levels, top first, when already loaded
+  # @return [Hash{String => Hash}] level id => `{ parent_ids:, top: }`
+  def self.rules_by_id(rows = top_first.to_a)
+    taxonomy = taxonomy(rows)
+    rows.to_h { [ it.id, taxonomy.kind(it.id).rules ] }
+  end
 end

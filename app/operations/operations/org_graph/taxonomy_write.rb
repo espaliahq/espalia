@@ -19,9 +19,9 @@ module Operations::OrgGraph::TaxonomyWrite
   # @return [Array<Hash>] `{ level_id, name, provider, parent_ids, top }`, top first
   def levels_payload
     levels = current_levels
-    taxonomy = OrgTaxonomyLevel.taxonomy(levels)
+    rules = OrgTaxonomyLevel.rules_by_id(levels)
     levels.map do |level|
-      { level_id: level.id, name: level.name, provider: level.provider, **taxonomy.kind(level.id).rules }
+      { level_id: level.id, name: level.name, provider: level.provider, **rules[level.id] }
     end
   end
 

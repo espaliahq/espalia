@@ -23,7 +23,7 @@ class Operations::OrgGraph::Units < Operations::Base
     unplaced = overview.unplaced.map(&:id)
 
     {
-      levels: levels_payload(overview.levels),
+      levels: level_rows(overview.levels),
       units: overview.in_tree_order.map { |unit| unit_payload(overview, unit) },
       in_no_unit: { count: unplaced.size, person_ids: unplaced }
     }
@@ -31,9 +31,9 @@ class Operations::OrgGraph::Units < Operations::Base
 
   private
 
-  def levels_payload(levels)
-    taxonomy = OrgTaxonomyLevel.taxonomy(levels)
-    levels.map { |level| { id: level.id, name: level.name, **taxonomy.kind(level.id).rules } }
+  def level_rows(levels)
+    rules = OrgTaxonomyLevel.rules_by_id(levels)
+    levels.map { |level| { id: level.id, name: level.name, **rules[level.id] } }
   end
 
   def unit_payload(overview, unit)

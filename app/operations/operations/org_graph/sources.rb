@@ -54,14 +54,14 @@ class Operations::OrgGraph::Sources < Operations::Base
     live = names_by_level(OrgUnit.live)
     retired = names_by_level(OrgUnit.where.not(retired_on: nil))
     levels = OrgTaxonomyLevel.top_first.to_a
-    taxonomy = OrgTaxonomyLevel.taxonomy(levels)
+    rules = OrgTaxonomyLevel.rules_by_id(levels)
     levels.map do |level|
       live_count, live_names = live.fetch(level.id, [ 0, [] ])
       retired_count, retired_names = retired.fetch(level.id, [ 0, [] ])
       { id: level.id, name: level.name, provider: level.provider, field: level.provider_field,
         live_units: live_count, live_unit_names: live_names, retired_units: retired_count,
         retired_unit_names: retired_names, removable: removable?(level, live_count + retired_count, levels.size),
-        **taxonomy.kind(level.id).rules }
+        **rules[level.id] }
     end
   end
 
