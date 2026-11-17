@@ -95,10 +95,10 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_text "Checks on Q1 hires"
 
       within("#checks-misfits") do
-        assert_selector "h4", text: "Structure"
+        assert_selector "h4", text: "Unit types"
         assert_selector "[data-check-item]", text: /Risk · Unit.*Doesn't fit this structure: Squad can't sit under Team.*From a change in Q1 hires/m
       end
-      assert_includes all("nav[aria-label='Checks'] a").map { it.text.squish }, "Structure 1"
+      assert_includes all("nav[aria-label='Checks'] a").map { it.text.squish }, "Unit types 1"
       assert_no_sideways_overflow
     end
   end
