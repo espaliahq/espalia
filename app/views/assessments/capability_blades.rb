@@ -34,7 +34,8 @@ class Views::Assessments::CapabilityBlades < Views::Base
         whitespace
         span(class: "block") { "met at #{assessed_code}" }
       end
-      svg(viewBox: "#{-RADIUS} #{-RADIUS} #{RADIUS * 2} #{RADIUS * 2}", class: "block size-18 shrink-0",
+      # 56px until the footer fits the longest button beside the 72px shape.
+      svg(viewBox: "#{-RADIUS} #{-RADIUS} #{RADIUS * 2} #{RADIUS * 2}", class: "block size-14 shrink-0 @[17.25rem]:size-18",
           role: "img", aria: { label: "#{met_count} of #{points.size} capabilities met at #{assessed_code}" }) do |s|
         category_slots(s)
         points.each_with_index { |point, i| beyond(s, point, i) if ahead?(point) }
