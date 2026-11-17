@@ -40,7 +40,7 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
     should "say why a level could not be added" do
       post tenant_org_graph_settings_levels_path, params: { name: "squad" }
 
-      assert_equal "The unit type could not be added: There is already a level called Squad", flash[:alert]
+      assert_equal "The unit type could not be added: There is already a unit type called Squad", flash[:alert]
       assert_equal %w[Tribe Squad Team], level_names
     end
 
@@ -157,7 +157,7 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
                    flash[:alert]
 
       delete tenant_org_graph_settings_level_path(SecureRandom.uuid_v7)
-      assert_equal "The unit type could not be removed: Level is not in the taxonomy", flash[:alert]
+      assert_equal "The unit type could not be removed: That unit type doesn't exist", flash[:alert]
       assert_equal %w[Region Tribe Squad Team], level_names
     end
 

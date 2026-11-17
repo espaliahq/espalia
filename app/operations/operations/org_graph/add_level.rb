@@ -21,7 +21,7 @@ class Operations::OrgGraph::AddLevel < Operations::Base
   def perform
     name = params[:name].strip
     taken = current_levels.find { |level| level.name.casecmp?(name) }
-    raise Operations::Base::ParameterError, "There is already a level called #{taken.name}" if taken
+    raise Operations::Base::ParameterError, "There is already a unit type called #{taken.name}" if taken
 
     level_id = SecureRandom.uuid_v7
     refusing_as_parameter_errors { structure_handler.add_level(level_id, name, effective_on:, **stated_rules) }

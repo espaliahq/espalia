@@ -72,7 +72,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     should "refuse a name another level has, whatever its case" do
       error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::AddLevel, name: "squad") }
 
-      assert_equal "There is already a level called Squad", error.message
+      assert_equal "There is already a unit type called Squad", error.message
       assert_equal %w[Department Team Squad], level_names
     end
 
@@ -310,7 +310,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
         call(Operations::OrgGraph::RemoveLevel, level_id: SecureRandom.uuid_v7)
       end
 
-      assert_equal "Level is not in the taxonomy", error.message
+      assert_equal "That unit type doesn't exist", error.message
     end
 
     should "leave the taxonomy to a tenant admin" do
