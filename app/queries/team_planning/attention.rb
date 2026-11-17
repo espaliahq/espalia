@@ -233,7 +233,8 @@ class TeamPlanning::Attention
   end
 
   def misfit(unit, parent)
-    return unless (kind = @taxonomy.kind(unit.level_id))
+    return unless unit.level_id
+    return "its unit type no longer exists" unless (kind = @taxonomy.kind(unit.level_id))
     return ("#{kind.name} can't sit at the top" unless kind.top?) unless parent
     return unless (parent_kind = @taxonomy.kind(parent.level_id))
 

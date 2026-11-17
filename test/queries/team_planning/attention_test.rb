@@ -334,18 +334,20 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                  reasons(map(people: [ member(places: [ [ GONE, 0.5 ], [ RETIRED, 0.5 ] ]) ]))
   end
 
-  should "mark a unit whose type can no longer sit under its parent's, or at the top, and leave a gone parent to the units check" do
+  should "mark a unit whose type is gone or can no longer sit under its parent's, or at the top, and leave a gone parent to the units check" do
     team, squad, top = Array.new(3) { SecureRandom.uuid_v7 }
     taxonomy = OrgGraph::Taxonomy.new([ { level_id: LEVEL, name: "Department", parent_level_ids: [], top: true },
                                         { level_id: squad, name: "Squad", parent_level_ids: [ LEVEL ], top: false },
                                         { level_id: team, name: "Team", parent_level_ids: [ squad ], top: true } ])
     units = [ unit(ROOT, nil), unit(LIVE, ROOT).with(level_id: team), unit(top, nil).with(level_id: squad),
-              unit(SecureRandom.uuid_v7, top).with(level_id: team), unit(SecureRandom.uuid_v7, RETIRED).with(level_id: team) ]
+              unit(SecureRandom.uuid_v7, top).with(level_id: team), unit(SecureRandom.uuid_v7, RETIRED).with(level_id: team),
+              unit(gone = SecureRandom.uuid_v7, ROOT).with(level_id: SecureRandom.uuid_v7) ]
     placed = change(TeamPlanning::Events::UnitSet, LIVE, name: "Unit", parent_id: ROOT, level_id: team)
     items = TeamPlanning::Attention.new(map(units:), { [ LIVE, "unit" ] => placed }, taxonomy:).call.select { it.check == :misfits }
 
     assert_equal [ [ LIVE, "Doesn't fit this structure: Team can't sit under Department" ],
-                   [ top, "Doesn't fit this structure: Squad can't sit at the top" ] ].sort, items.map { [ it.subject_id, it.reason ] }
+                   [ top, "Doesn't fit this structure: Squad can't sit at the top" ],
+                   [ gone, "Doesn't fit this structure: its unit type no longer exists" ] ].sort, items.map { [ it.subject_id, it.reason ] }
     assert_same placed, items.find { it.subject_id == LIVE }.change
     assert_empty TeamPlanning::Attention.new(map(units:), {}).call.select { it.check == :misfits }, "no taxonomy checks no fit"
   end
