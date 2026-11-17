@@ -218,16 +218,16 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
         screenshot("unit_type_added_#{viewport}")
 
-        find("#org-graph-level-#{squad_id}-under-#{guild_id}").click
-        find("#org-graph-level-top-#{squad_id}").click
+        js_set_checkbox("org-graph-level-#{squad_id}-under-#{guild_id}", checked: true)
+        js_set_checkbox("org-graph-level-top-#{squad_id}", checked: false)
         click_button_with_js_fallback("org-graph-level-rules-save-#{squad_id}",
                                       expect_text: "Squad's place did not change: These units wouldn't fit this structure")
         assert_text "Payments"
         assert_selector "#org-graph-level-top-#{squad_id}:checked"
         screenshot("unit_type_refused_#{viewport}")
 
-        find("#org-graph-level-top-#{guild_id}").click
-        find("#org-graph-level-#{guild_id}-under-#{guild_id}").click
+        js_set_checkbox("org-graph-level-top-#{guild_id}", checked: false)
+        js_set_checkbox("org-graph-level-#{guild_id}-under-#{guild_id}", checked: true)
         click_button_with_js_fallback("org-graph-level-rules-save-#{guild_id}", expect_text: "Saved where Guild can sit.")
         assert_no_selector "#org-graph-level-top-#{guild_id}:checked"
         assert_selector "#org-graph-level-#{guild_id}-under-#{guild_id}:checked"
