@@ -60,7 +60,7 @@ class OrgGraph::Projections::Structure
     when OrgGraph::Events::TaxonomyDefined then handle_taxonomy_defined(event.data)
     when OrgGraph::Events::UnitCreated then handle_unit_created(event.data)
     when OrgGraph::Events::UnitRenamed then update_unit(event.data, name: event.data[:name], name_effective_on: event.data[:effective_on])
-    when OrgGraph::Events::UnitMoved then update_unit(event.data, parent_id: event.data[:parent_id], parent_effective_on: event.data[:effective_on])
+    when OrgGraph::Events::UnitMoved then handle_unit_moved(event.data)
     when OrgGraph::Events::UnitRetired then update_unit(event.data, retired_on: event.data[:effective_on])
     when OrgGraph::Events::UnitSucceeded then handle_unit_succeeded(event.data)
     when OrgGraph::Events::UnitHandedOver then update_unit(event.data, provider: event.data[:provider], external_ref: event.data[:external_ref])
@@ -129,6 +129,14 @@ class OrgGraph::Projections::Structure
   def handle_unit_owner_removed(data)
     OrgUnitOwner.where(unit_id: data[:unit_id], person_id: data[:person_id]).delete_all
     update_unit(data, owners_lost_on: data[:effective_on]) unless OrgUnitOwner.exists?(unit_id: data[:unit_id])
+  end
+
+  # A move dated before the unit's latest one changes only its past.
+  def handle_unit_moved(data)
+    unit = OrgUnit.find(data[:unit_id])
+    return if unit.parent_effective_on > Date.iso8601(data[:effective_on])
+
+    unit.update!(parent_id: data[:parent_id], parent_effective_on: data[:effective_on])
   end
 
   def update_unit(data, **attributes)

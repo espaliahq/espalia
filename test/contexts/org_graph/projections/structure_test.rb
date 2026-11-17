@@ -202,6 +202,17 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep the latest dated parent when a move is backdated before it" do
+      as_tenant do
+        @handler.move_unit(@payments, nil, effective_on: "2026-05-01")
+        @handler.move_unit(@payments, @engineering, effective_on: "2026-03-01")
+        unit = OrgUnit.find(@payments)
+
+        assert_nil unit.parent_id
+        assert_equal Date.new(2026, 5, 1), unit.parent_effective_on
+      end
+    end
+
     should "keep a retired unit with the date it ended" do
       as_tenant do
         @handler.retire_unit(@payments, effective_on: "2026-06-30")
