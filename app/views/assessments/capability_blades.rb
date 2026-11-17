@@ -1,14 +1,25 @@
 # frozen_string_literal: true
 
 # The assessment card's capabilities at a glance: a blade per capability,
-# as long as the level it has reached, around a dashed circle at the
-# assessed level met.
+# as long as the level it has reached, filling a circle whose dashed edge is
+# the assessed level met and sticking out past it when ahead.
 class Views::Assessments::CapabilityBlades < Views::Base
+  # A level ahead of the assessed one reaches the rim.
   RADIUS = 30.0
-  # The score held at the rim, so the assessed level met sits two thirds out.
-  RIM_SCORE = 1.5
+  MET_RADIUS = 22.0
   # The share of a short blade's colour that shows through.
   SHORT_OPACITY = 0.8
+  # Written out per hue: Tailwind builds only class names it can read whole.
+  BEYOND = {
+    1 => "fill-(--gos-category-1-content) stroke-(--gos-category-1-content)",
+    2 => "fill-(--gos-category-2-content) stroke-(--gos-category-2-content)",
+    3 => "fill-(--gos-category-3-content) stroke-(--gos-category-3-content)",
+    4 => "fill-(--gos-category-4-content) stroke-(--gos-category-4-content)",
+    5 => "fill-(--gos-category-5-content) stroke-(--gos-category-5-content)",
+    6 => "fill-(--gos-category-6-content) stroke-(--gos-category-6-content)",
+    7 => "fill-(--gos-category-7-content) stroke-(--gos-category-7-content)",
+    8 => "fill-(--gos-category-8-content) stroke-(--gos-category-8-content)"
+  }.freeze
 
   # @param shape [Assessments::CapabilityShape]
   def initialize(shape:)
@@ -26,8 +37,9 @@ class Views::Assessments::CapabilityBlades < Views::Base
       svg(viewBox: "#{-RADIUS} #{-RADIUS} #{RADIUS * 2} #{RADIUS * 2}", class: "block size-18 shrink-0",
           role: "img", aria: { label: "#{met_count} of #{points.size} capabilities met at #{assessed_code}" }) do |s|
         category_slots(s)
+        points.each_with_index { |point, i| beyond(s, point, i) if ahead?(point) }
         points.each_with_index { |point, i| blade(s, point, i) if point.reached }
-        s.circle(r: radius_for(@shape.assessed_index), fill: "none", stroke_width: 0.9, stroke_dasharray: "2 2",
+        s.circle(r: MET_RADIUS, fill: "none", stroke_width: 0.9, stroke_dasharray: "2 2",
                  class: "stroke-(--gos-content-default)", data: { blades_met: true })
       end
     end
@@ -41,11 +53,13 @@ class Views::Assessments::CapabilityBlades < Views::Base
 
   def met_count = points.count { |point| point.reached && point.reached >= @shape.assessed_index }
 
+  def ahead?(point) = point.reached && point.reached > @shape.assessed_index
+
   # From none of the assessed level at the centre, whatever the ladder, so a
   # blade's length reads as its score on the hero's scale.
   def radius_for(position)
     score = position - @shape.assessed_index + 1
-    (RADIUS * score.clamp(0, RIM_SCORE) / RIM_SCORE).round(2)
+    (MET_RADIUS * score.clamp(0, 1) + (RADIUS - MET_RADIUS) * (score - 1).clamp(0, 1)).round(2)
   end
 
   # Each category's slots, tinted as one wedge so no seam shows between them,
@@ -53,7 +67,7 @@ class Views::Assessments::CapabilityBlades < Views::Base
   def category_slots(s)
     first = 0
     @shape.groups.each do |group|
-      s.path(d: wedge(RADIUS, first, first + group.points.size),
+      s.path(d: wedge(MET_RADIUS, first, first + group.points.size),
              class: Views::Assessments::CapabilityRadar::SEGMENT.fetch(group.hue),
              data: { blades_category: group.name.to_s })
       first += group.points.size
@@ -62,11 +76,17 @@ class Views::Assessments::CapabilityBlades < Views::Base
 
   def blade(s, point, i)
     short = point.reached < @shape.assessed_index
-    s.path(d: wedge(radius_for(point.reached), i, i + 1), fill_opacity: (SHORT_OPACITY if short),
+    s.path(d: wedge([ radius_for(point.reached), MET_RADIUS ].min, i, i + 1), fill_opacity: (SHORT_OPACITY if short),
            stroke_opacity: (SHORT_OPACITY if short), stroke_width: 0.5,
            class: "#{Views::Assessments::CapabilityRadar::DOT.fetch(point.hue)} " \
                   "#{Views::Assessments::CapabilityRadar::SPOKE.fetch(point.hue)}",
            data: { blade: point.number, blade_short: (true if short) })
+  end
+
+  # The part of a blade past the met circle, drawn whole beneath the blade.
+  def beyond(s, point, i)
+    s.path(d: wedge(radius_for(point.reached), i, i + 1), stroke_width: 0.5, class: BEYOND.fetch(point.hue),
+           data: { blade_beyond: point.number })
   end
 
   # Degrees clockwise from twelve o'clock to where slot `i` starts.

@@ -3,8 +3,8 @@
 require "test_helper"
 
 # The card's avatar: a blade per capability, clockwise from the top, whose
-# length is the level it has reached, around a dashed circle at the assessed
-# level met.
+# length is the level it has reached, filling a circle whose edge is the
+# assessed level met and sticking out past it when ahead.
 class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
   CAP = Struct.new(:stable_id, :name, keyword_init: true)
   CATEGORY = Struct.new(:category_id, :name, keyword_init: true)
@@ -58,22 +58,43 @@ class Views::Assessments::CapabilityBladesTest < ActiveSupport::TestCase
       assert_empty avatar.css("line"), "expected no lines between the blades"
     end
 
-    should "reach the dashed circle at the assessed level met, past it when ahead and inside it when short" do
+    should "reach the circle's dashed edge at the assessed level met, and fall inside it when short" do
       avatar = render_blades(team_lead)
       met = avatar.at_css("[data-blades-met]")
 
-      assert_equal 20.0, met["r"].to_f, "expected E3 met two thirds out, between none of it and 150% of it"
+      assert_equal 22.0, met["r"].to_f
       assert met["stroke-dasharray"], "expected the met circle dashed"
-      assert_equal [ 30.0, 10.0, 20.0 ], (1..3).map { |n| wedge(avatar, n)[:radius] }
+      assert_equal [ 22.0, 11.0, 22.0 ], (1..3).map { |n| wedge(avatar, n)[:radius] }
+      assert_equal [ 22.0, 22.0 ], avatar.css("[data-blades-category]").map { |tint| wedge_through(tint)[:radius] },
+                   "expected the category tints to end at the met circle"
     end
 
-    should "measure from none of the assessed level whatever the ladder, holding a capability far ahead at the rim" do
+    should "stick a blade ahead of the assessed level out past the circle, a level ahead at the rim" do
+      avatar = render_blades(shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 2.0, "Testing" => 3.0,
+                                                  "Review" => 1.0 } }))
+      beyond = ->(n) { avatar.at_css("[data-blade-beyond='#{n}']") }
+
+      assert_equal [ 26.0, 30.0, 30.0 ], (1..3).map { |n| wedge_through(beyond.(n))[:radius] }
+      assert_nil beyond.(4), "expected a blade on the level to stop at the circle"
+      assert_equal [ 22.0, 22.0, 22.0 ], (1..3).map { |n| wedge(avatar, n)[:radius] },
+                   "expected the part inside the circle drawn as any met blade"
+    end
+
+    should "draw the part past the circle in its category's darker colour" do
+      avatar = render_blades(team_lead)
+
+      assert_match(/fill-\(--gos-category-\d+-content\)/, avatar.at_css("[data-blade-beyond='1']")["class"])
+      assert_match(/fill-\(--gos-category-\d+-strong\)/, avatar.at_css("[data-blade='1']")["class"])
+    end
+
+    should "measure from none of the assessed level whatever the ladder, holding the top of the ladder at the circle" do
       first = shape({ "Craft" => { "Delivery" => 0.75, "Quality" => 3.0 } }, levels: E1_TO_E5.first(1), person_level: 1)
       avatar = render_blades(first)
 
-      assert_equal 20.0, avatar.at_css("[data-blades-met]")["r"].to_f
-      assert_equal [ 15.0, 20.0 ], (1..2).map { |n| wedge(avatar, n)[:radius] },
-                   "expected 75% of E1 at half the radius and E1 held at met, the top of a one-level ladder"
+      assert_equal 22.0, avatar.at_css("[data-blades-met]")["r"].to_f
+      assert_equal [ 16.5, 22.0 ], (1..2).map { |n| wedge(avatar, n)[:radius] },
+                   "expected 75% of E1 three quarters out and E1 held at met, the top of a one-level ladder"
+      assert_empty avatar.css("[data-blade-beyond]")
     end
 
     should "fade only the blades short of the assessed level" do
