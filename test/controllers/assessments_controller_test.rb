@@ -734,6 +734,22 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         assert_includes response.body, "data-capability-lane"
       end
 
+      should "name the person, not the viewer, on every lane their manager reads" do
+        manager_user = create(:user, password: "password123")
+        ActsAsTenant.with_tenant(@tenant) do
+          manager = create(:person, tenant: @tenant, email: manager_user.email, name: "Manager")
+          create(:tenant_user, tenant: @tenant, user: manager_user, person: manager)
+          @person.update!(manager:)
+        end
+        delete destroy_user_session_path
+        sign_in manager_user
+
+        lanes = compare.css("[data-comparison-scores]").map { |lane| lane.text.squish }
+
+        assert lanes.any?
+        assert lanes.all? { |text| text.start_with?("Test User ") }, "expected every lane to name the person: #{lanes}"
+      end
+
       should "offer no comparison on a page read at another level, which the comparison would not match" do
         get assessment_path(@assignment, as_level: 1)
         assert_response :success

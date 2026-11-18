@@ -149,7 +149,7 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
   end
 
   def both(yours, theirs)
-    plain "You "
+    plain "#{@whose || 'You'} "
     strong(class: "text-default") { yours ? "#{yours}%" : "not rated" }
     plain " · #{plural} #{theirs ? "#{theirs}%" : 'no score'}"
   end
