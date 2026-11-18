@@ -652,6 +652,13 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The capability map's comparison tab, at the level asked for.
+  def compare(**params)
+    get capability_map_assessment_path(@assignment, tab: "compare", **params)
+    assert_response :success
+    Nokogiri::HTML5.fragment(response.body)
+  end
+
   context "GET /assessments/:id/capability_map" do
     should "render just the map's contents, as the frame the page reloads, read through the viewer's ratings" do
       rate(@cap, "consistent")
@@ -664,6 +671,66 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes frame.text, "You at E2"
       assert_includes frame.at_css("[data-capability-lane='1']").text, "E2 met"
       assert_not_includes response.body, %(id="#{Views::Assessments::CapabilityMapModal::ID}"), "no overlay around it"
+    end
+
+    context "compared with the person's level" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          @snapshot = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1))
+          [ [ 1, 6, 1.0 ], [ 2, 7, 0.5 ] ].each do |level, size, median|
+            @snapshot.groups.create!(tenant: @tenant, framework_id: @assignment.framework_id, role_id: @role.role_id,
+                                     level_ordinal: level, group_size: size,
+                                     capability_medians: { @cap.stable_id => median },
+                                     category_medians: { @cap.category_id => median })
+          end
+        end
+        rate(@cap, "consistent")
+        sign_in @user
+      end
+
+      should "offer two tabs, opening on the capabilities, with the comparison one click away" do
+        get capability_map_assessment_path(@assignment)
+        tabs = Nokogiri::HTML5.fragment(response.body).css("[role='tab']")
+
+        assert_equal [ [ "Capabilities", "true" ], [ "Compared with your level", "false" ] ],
+                     tabs.map { |t| [ t.text.strip, t["aria-selected"] ] }
+      end
+
+      should "show the person's blades beside the group's middle score at their level, and when it was taken" do
+        map = compare
+
+        assert_equal "Compared with your level", map.at_css("[role='tab'][aria-selected='true']").text.strip
+        assert_includes map.text, "as of 1 Nov 2026"
+        assert_equal "You 100% · E2s 50%", map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish
+        assert map.at_css("svg [data-blade-median='1']"), "expected the group's line across the blade"
+      end
+
+      should "switch to a level either side, read on that level's scale" do
+        map = compare(compare_level: 1)
+
+        assert_includes map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish, "E1s 100%"
+        assert_equal [ [ "E1", "true" ], [ "E2", "false" ] ],
+                     map.css("[data-comparison-level]").map { |c| [ c["data-comparison-level"], c["aria-pressed"] ] }.first(2)
+      end
+
+      should "send no group scores for a level under the minimum, and say how many it needs" do
+        @snapshot.groups.find_by!(level_ordinal: 2).update!(group_size: 3)
+        map = compare
+
+        assert_includes map.text, "Not enough E2s to compare with"
+        assert_includes map.text, "Try E1."
+        assert_empty map.css("[data-blade-median]")
+        assert_empty map.css("[data-comparison-scores]")
+        assert_includes map.css("[data-comparison-level]").map(&:text).join(" "), "fewer than 5"
+      end
+
+      should "show no tabs when the tenant has comparisons off" do
+        @tenant.update!(comparison_config: ComparisonConfig.new(enabled: false))
+        get capability_map_assessment_path(@assignment, tab: "compare")
+
+        assert_empty Nokogiri::HTML5.fragment(response.body).css("[role='tab']")
+        assert_includes response.body, "data-capability-lane"
+      end
     end
 
     should "zoom to the level asked for, or out to the whole ladder, and to the assessed level otherwise" do

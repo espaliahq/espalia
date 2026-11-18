@@ -1,6 +1,6 @@
 /**
  * Lights every element sharing a `data-capability-map-key` while one is pointed at or focused,
- * and zooms the map by reloading its content frame at another `zoom`.
+ * and reloads the map's content frame at another `zoom`, tab or compared level.
  *
  * @example
  * <div data-controller="capability-map"
@@ -20,12 +20,17 @@ export default class extends BaseController {
   #focused = null
 
   zoom({ params: { zoom } }) {
-    const frame = this.#keepZoom(zoom)
-    if (frame) frame.src = frame.dataset.reloadSrc
+    this.#reload({ zoom })
+  }
+
+  /** Switches tab, or the level the comparison tab compares with. */
+  show({ params: { tab, compareLevel } }) {
+    this.#reload({ tab, compare_level: compareLevel ?? null })
   }
 
   viewTargetConnected(view) {
-    this.#keepZoom(view.dataset.zoom)
+    const { zoom, tab, compareLevel } = view.dataset
+    this.#keep({ zoom: zoom ?? null, tab: tab ?? null, compare_level: compareLevel ?? null })
   }
 
   light(event) {
@@ -36,13 +41,24 @@ export default class extends BaseController {
     this.#track(event, false)
   }
 
-  /** Writes the zoom into the content frame's reload source, so a reload after someone else's rating keeps it. */
-  #keepZoom(zoom) {
+  #reload(changes) {
+    const frame = this.#keep(changes)
+    if (frame) frame.src = frame.dataset.reloadSrc
+  }
+
+  /**
+   * Writes the view into the content frame's reload source, so a reload after someone else's rating keeps it.
+   * A null value drops that parameter.
+   */
+  #keep(changes) {
     const frame = this.element.querySelector("turbo-frame[data-reload-src]")
     if (!frame) return null
 
     const url = new URL(frame.dataset.reloadSrc, window.location.origin)
-    url.searchParams.set("zoom", zoom)
+    Object.entries(changes).forEach(([ key, value ]) => {
+      if (value === null || value === undefined) url.searchParams.delete(key)
+      else url.searchParams.set(key, value)
+    })
     frame.dataset.reloadSrc = `${url.pathname}${url.search}`
     return frame
   }

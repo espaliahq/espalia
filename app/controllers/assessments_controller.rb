@@ -194,8 +194,8 @@ class AssessmentsController < ApplicationController
     zoom = params[:zoom].to_s
     render Views::Assessments::CapabilityMapModal.for(
       matrix_data: @matrix_data, scoring: hero_scoring, context: assessment_context,
-      whose: manager_viewing? ? @assessee&.name || "This person" : nil, part: :frame,
-      zoom: zoom == "all" ? :all : zoom.presence
+      whose: map_whose, part: :frame, zoom: zoom == "all" ? :all : zoom.presence,
+      comparable: level_comparison.enabled?, compared: (compared_panel if params[:tab] == "compare")
     ), layout: false
   end
 
@@ -219,6 +219,38 @@ class AssessmentsController < ApplicationController
 
   private
 
+  def map_whose = manager_viewing? ? @assessee&.name || "This person" : nil
+
+  def level_comparison
+    @level_comparison ||= Assessments::LevelComparison.new(lens: lens, tenant: ActsAsTenant.current_tenant)
+  end
+
+  # The comparison tab at the level asked for, the page's own otherwise. The
+  # person's blades are their own ratings in the viewer's perspective, read
+  # on the compared level's scale, so both shapes share it.
+  #
+  # @return [Views::Assessments::LevelComparisonPanel, nil] nil when comparisons are off
+  def compared_panel
+    return unless level_comparison.enabled?
+
+    asked = Integer(params[:compare_level].to_s, exception: false)
+    level = level_comparison.levels.find { |l| l.ordinal == asked } || level_comparison.levels.find(&:own)
+    Views::Assessments::LevelComparisonPanel.new(
+      comparison: level_comparison, selected: level.ordinal, shape: (compared_shape(level.ordinal) if level.available),
+      role_name: lens.role.name, context: assessment_context, whose: map_whose
+    )
+  end
+
+  def compared_shape(ordinal)
+    at = Assessments::Lens.resolve(assignment: @assignment, as_role: lens.role.role_id, as_level: ordinal,
+                                   cycle_id: params[:cycle_id])
+    data = Assessments::MatrixDataBuilder.for_lens(lens: at, context: assessment_context,
+                                                   viewer_person_id: current_person&.id)
+    Assessments::CapabilityShape.new(categories: data[:categories], scoring: hero_scoring(data),
+                                     merged_levels: data[:merged_levels], person_level: data[:person_level],
+                                     context: assessment_context)
+  end
+
   def activity_pane_open?
     toggle = Views::Assessments::Activity::PaneToggle
     toggle.open?(url: params[toggle::URL_KEY], cookie: cookies[toggle::COOKIE])
@@ -228,9 +260,9 @@ class AssessmentsController < ApplicationController
   # its own reads the hero's number.
   #
   # @return [Hash]
-  def hero_scoring
+  def hero_scoring(data = @matrix_data)
     key = { self: :self_scoring, manager: :manager_scoring, alignment: :aligned_scoring }[assessment_context]
-    (key && @matrix_data[key]) || @matrix_data[:scoring]
+    (key && data[key]) || data[:scoring]
   end
 
   def require_person

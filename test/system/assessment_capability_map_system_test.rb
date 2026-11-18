@@ -37,6 +37,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       role_id = SecureRandom.uuid_v7
       handler.add_role_family(framework_id, rf_id, "Product")
       handler.add_role(framework_id, role_id, rf_id, "Product Manager", "PM", "ic")
+      @role_id = role_id
       levels = { 10 => "PM1", 20 => "PM2", 40 => "PM4", 50 => "PM5" }
       level_ids = levels.to_h { |ordinal, _| [ ordinal, SecureRandom.uuid_v7 ] }
       levels.each_with_index do |(ordinal, code), i|
@@ -61,6 +62,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
         [ name, stable_id ]
       end
       handler.publish_version(framework_id, "test")
+      @categories = categories
 
       pd_handler = PersonDevelopment::CommandHandler.new
       pd_handler.assign_to_framework(@person.id, framework_id, role_id, level_ids[20])
@@ -169,6 +171,41 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
 
     assert_selector "#{MAP}[data-kept='yes'] [data-capability-lane='2']", text: "PM2 met", visible: true
     assert_equal "hidden", page.evaluate_script("document.body.style.overflow")
+  end
+
+  context "compared with the person's level" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        snapshot = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1))
+        { 10 => [ 5, 1.0 ], 20 => [ 6, 0.5 ] }.each do |ordinal, (size, median)|
+          snapshot.groups.create!(tenant: @tenant, framework_id: @assignment.framework_id, role_id: @role_id,
+                                  level_ordinal: ordinal, group_size: size,
+                                  capability_medians: @stable_ids.values.index_with { median },
+                                  category_medians: @categories.values.index_with { median })
+        end
+      end
+    end
+
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "compare the person's blades with their level's middle scores, and a level below, on #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        open_map
+        wait_for_stimulus "capability-map"
+        click_selector_with_js_fallback("#{MAP} [role='tab']:not([aria-selected='true'])", expect_selector: "#{MAP} [data-comparison-lane]")
+
+        within(MAP) do
+          assert_text "as of 1 Nov 2026"
+          assert_selector "[data-comparison-lane='3'] [data-comparison-scores]", text: "You 100% · PM2s 50%"
+          assert_selector "svg [data-blade-median]", count: 4, visible: :all
+          assert_selector "[data-comparison-level='PM4'][disabled]", text: "fewer than 5"
+        end
+        assert_blades_above_lanes if label == "mobile"
+        assert_no_sideways_overflow
+
+        click_selector_with_js_fallback("#{MAP} [data-comparison-level='PM1']", expect_selector: "#{MAP} [data-level-comparison='PM1']")
+        assert_selector "#{MAP} [data-comparison-lane='3'] [data-comparison-scores]", text: "PM1s 100%"
+      end
+    end
   end
 
   should "update an open map, keeping it open and its lane focused, when someone else's rating arrives" do
@@ -320,6 +357,18 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
   private
 
   def zoom_toggle(key) = "[data-refresh-focus='zoom-#{key}']"
+
+  # On a phone the blades stack above the lanes.
+  def assert_blades_above_lanes
+    stacked = page.evaluate_script(<<~JS)
+      (() => {
+        const blades = document.querySelector("#{MAP} [data-level-comparison] svg").getBoundingClientRect()
+        const lane = document.querySelector("#{MAP} [data-comparison-lane]").getBoundingClientRect()
+        return blades.bottom <= lane.top
+      })()
+    JS
+    assert stacked, "expected the blades above the lanes"
+  end
 
   def open_map
     visit assessment_path(@assignment)

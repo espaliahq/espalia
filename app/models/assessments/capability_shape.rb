@@ -15,9 +15,9 @@ class Assessments::CapabilityShape
   # out: on the assessment page red means a rating.
   HUES = [ 1, 3, 4, 5, 7, 6, 8 ].freeze
 
-  # A category's segment: its name, categorical `hue`, `score` (nil until
-  # the coverage gate opens), scoring `state` and its {Point}s.
-  Group = Data.define(:name, :hue, :score, :state, :points)
+  # A category's segment: its id and name, categorical `hue`, `score` (nil
+  # until the coverage gate opens), scoring `state` and its {Point}s.
+  Group = Data.define(:category_id, :name, :hue, :score, :state, :points)
 
   # A capability's spoke: its 1-based `number` across the map, `reached` (a
   # ladder position from the first level met, nil when unrated or with no
@@ -61,7 +61,7 @@ class Assessments::CapabilityShape
       @categories.each_with_index.map do |category_data, i|
         hue = HUES[i % HUES.size]
         points = category_data[:capabilities].map { |cap| point_for(cap, number += 1, hue) }
-        Group.new(name: category_data[:category]&.name, hue: hue, score: category_score(category_data),
+        Group.new(category_id: category_data[:category]&.category_id, name: category_data[:category]&.name, hue: hue, score: category_score(category_data),
                   state: category_result(category_data)&.dig(:state), points: points)
       end
     end
