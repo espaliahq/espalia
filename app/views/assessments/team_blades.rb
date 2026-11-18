@@ -45,7 +45,7 @@ class Views::Assessments::TeamBlades < Views::Assessments::CapabilityBlades
   def median_line(s, capability, i)
     return unless capability[:group_median]
 
-    radius = [ radius_for(capability[:group_median] / 100.0), ZERO_MEDIAN_RADIUS ].max
+    radius = capability[:group_median].zero? ? ZERO_MEDIAN_RADIUS : radius_for(capability[:group_median] / 100.0)
     s.path(d: "M#{xy(radius, start(i)).join(' ')} #{arcs(radius, i, i + 1)}", fill: "none", stroke_width: 1.1,
            class: "stroke-(--gos-accent-strong)", data: { blade_median: i + 1 })
   end

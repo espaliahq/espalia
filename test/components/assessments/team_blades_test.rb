@@ -9,15 +9,24 @@ class Views::Assessments::TeamBladesTest < ActiveSupport::TestCase
       group_median: }
   end
 
-  def medians(capabilities)
-    html = Views::Assessments::TeamBlades.new(capabilities:, label: "Team", medians: true).call
-    Nokogiri::HTML5.fragment(html).css("[data-blade-median]").map { |line| line["data-blade-median"] }
+  def picture(capabilities)
+    Nokogiri::HTML5.fragment(Views::Assessments::TeamBlades.new(capabilities:, label: "Team", medians: true).call)
   end
+
+  def medians(capabilities) = picture(capabilities).css("[data-blade-median]").map { |line| line["data-blade-median"] }
+
+  def radius(path) = path["d"].scan(/A(\d+(?:\.\d+)?)/).first.first.to_f
 
   should "draw a line for a group score of 0, and none where there is no group score" do
     lines = medians([ capability("a", score: 80, group_median: 0), capability("b", score: 80, group_median: nil),
                       capability("c", score: 80, group_median: 90) ])
 
     assert_equal %w[1 3], lines
+  end
+
+  should "draw a small group score where a team blade of the same score ends" do
+    drawn = picture([ capability("a", score: 3, group_median: 3) ])
+
+    assert_equal radius(drawn.at_css("[data-blade='1']")), radius(drawn.at_css("[data-blade-median='1']"))
   end
 end
