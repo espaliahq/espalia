@@ -32,6 +32,12 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
 
   def level_of(unit) = ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[unit]).level_id }
 
+  def move_in(as: @admin, conversion: { @org[:team] => @stream })
+    call(Operations::OrgGraph::MoveUnit, as:, unit_id: @org[:platform], parent_id: @org[:checkout], conversion:)
+  end
+
+  def members_of(unit) = ActsAsTenant.with_tenant(@tenant) { OrgMembership.where(unit_id: @org[unit]).pluck(:person_id, :allocation).sort }
+
   context "DeclareStructure" do
     should "give a unit its own types, minting their ids and converting the units beneath it" do
       result = declare
@@ -217,6 +223,26 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
 
         assert_equal "This came with a change to a unit's own structure, which can't be changed back yet",
                      OrgGraph::ChangeBackHandler.new(actor: context).refusal(conversion)
+      end
+    end
+
+    context "MoveUnit with a conversion" do
+      should "move a team into the structure, converting it, and keep its members" do
+        members = members_of(:platform)
+        result = move_in
+
+        assert_equal({ @org[:team] => @stream }, result[:conversion])
+        assert_equal [ @stream, @org[:checkout] ], ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).then { [ it.level_id, it.parent_id ] } }
+        assert_equal members, members_of(:platform)
+      end
+
+      should "refuse a misfit as a parameter error, and leave the move to a tenant admin" do
+        error = assert_raises(Operations::Base::ParameterError) { move_in(conversion: { @org[:team] => @lane }) }
+        assert_equal "These units wouldn't fit Checkout's structure: Platform (Lane at the top)", error.message
+
+        error = assert_raises(OrgGraph::Authorization::Refused) { move_in(as: @editor) }
+        assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+        assert_equal @org[:team], level_of(:platform)
       end
     end
   end
