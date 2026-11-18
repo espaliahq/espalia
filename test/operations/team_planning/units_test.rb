@@ -90,13 +90,19 @@ class Operations::TeamPlanning::UnitsTest < ActiveSupport::TestCase
         "Level is not in the taxonomy" => { name: "Risk", level_id: SecureRandom.uuid_v7 },
         "Squad can't sit under Squad" => { name: "Risk", level_id: @squad, parent_id: @payments },
         "The parent must be a live unit in this scenario" => { name: "Risk", level_id: @squad, parent_id: SecureRandom.uuid_v7 },
-        "A unit's level can't change: create a unit at the new level instead" => { unit_id: risk, level_id: @department },
+        "A unit's level can't change: create a unit at the new level instead" => { unit_id: @payments, level_id: @department },
         "A unit can't move beneath itself or a unit below it" => { unit_id: @engineering, parent_id: @engineering },
         "Give parent_id or top_level, not both" => { unit_id: @payments, parent_id: @engineering, top_level: true },
         "There is no such unit in this scenario" => { unit_id: SecureRandom.uuid_v7, name: "Ghost" }
       }.each { |message, params| assert_equal message, refusal(Operations::TeamPlanning::SetUnit, **params) }
       assert_equal "There is no such unit in this scenario",
                    refusal(Operations::TeamPlanning::SetUnit, scenario_id: @plan_id, unit_id: risk, name: "Risk")
+    end
+
+    should "let a unit the plan created take another type it may hold where it sits" do
+      risk = write(Operations::TeamPlanning::SetUnit, name: "Risk", level_id: @squad)[:unit_id]
+
+      assert_equal @department, write(Operations::TeamPlanning::SetUnit, unit_id: risk, level_id: @department)[:level_id]
     end
 
     should "place units where the unit types' stated rules let them sit" do
