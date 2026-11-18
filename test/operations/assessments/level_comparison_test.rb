@@ -1,0 +1,84 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+# The comparison tab's numbers for an agent: the person's scores beside the
+# group's middle scores, under the same minimum and snapshot as the web.
+class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
+  setup do
+    @tenant = create(:tenant)
+    @fx = build_role_lens_framework(tenant: @tenant)
+    ActsAsTenant.with_tenant(@tenant) do
+      @user = create(:user)
+      @person = create(:person, tenant: @tenant, email: @user.email)
+      @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: @person, role: :member)
+      @snapshot = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1))
+      [ [ 1, 6 ], [ 2, 5 ], [ 3, 2 ] ].each do |level, size|
+        @snapshot.groups.create!(tenant: @tenant, framework_id: @fx.framework_id, role_id: @fx.engineer.role_id,
+                                 level_ordinal: level, group_size: size,
+                                 capability_medians: { @fx.shared.stable_id => 0.5, @fx.e_only.stable_id => 1.0 },
+                                 category_medians: { @fx.shared.category_id => 0.75 })
+      end
+    end
+    @assignment, = enrol_in_role_lens_framework(@person, @fx, tenant: @tenant, level_ordinal: 2)
+    @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
+  end
+
+  def call(params = {}, context: @context)
+    ActsAsTenant.with_tenant(@tenant) do
+      Operations::Assessments::LevelComparison.call(context:, params: { assignment_id: @assignment.id }.merge(params))
+    end
+  end
+
+  should "compare with the person's own level, naming the snapshot and the levels on offer" do
+    result = call
+
+    assert_equal [ true, "2026-11-01", 5 ], result.values_at(:enabled, :taken_on, :min_group_size)
+    assert_equal({ ordinal: 2, code: "E2", group_size: 5 }, result[:level])
+    assert_equal [ [ "E1", 6, true ], [ "E2", 5, true ], [ "E3", nil, false ] ],
+                 result[:levels].map { |l| l.values_at(:code, :group_size, :available) }
+  end
+
+  should "give each capability's group middle score beside the person's, as a percentage" do
+    rows = call[:capabilities].to_h { |c| [ c[:stable_id], c.slice(:name, :group_median) ] }
+
+    assert_equal({ name: "Critical Thinking", group_median: 50 }, rows[@fx.shared.stable_id])
+    assert_equal({ name: "Systems Design", group_median: 100 }, rows[@fx.e_only.stable_id])
+    assert_equal [ 75 ], call[:categories].map { |c| c[:group_median] }
+    assert call[:capabilities].all? { |c| c.key?(:your_score) && c.key?(:scored) }
+  end
+
+  should "read the person's scores at the level compared with" do
+    assert_equal({ ordinal: 1, code: "E1", group_size: 6 }, call({ level_ordinal: 1 })[:level])
+  end
+
+  should "send no group scores for a level under the minimum" do
+    result = call({ level_ordinal: 3 })
+
+    assert_nil result[:level][:group_size]
+    assert_empty result[:capabilities]
+    assert_empty result[:categories]
+  end
+
+  should "refuse a level that isn't the person's or one either side" do
+    @tenant.update!(comparison_config: ComparisonConfig.new)
+    error = assert_raises(Operations::Base::ParameterError) { call({ level_ordinal: 7 }) }
+
+    assert_match(/E1, E2 or E3/, error.message)
+  end
+
+  should "say so when comparisons are off" do
+    @tenant.update!(comparison_config: ComparisonConfig.new(enabled: false))
+
+    assert_equal({ enabled: false }, call)
+  end
+
+  should "refuse someone who can't see the assessment" do
+    other = create(:user)
+    other_tu = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: other, role: :member) }
+
+    assert_raises(Pundit::NotAuthorizedError) do
+      call(context: AuthorizationContext.new(user: other, tenant_user: other_tu, person: nil))
+    end
+  end
+end
