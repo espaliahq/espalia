@@ -1,0 +1,138 @@
+[
+  {
+    "event_id": "c34d8127-25d4-4704-ac03-9df3a133511a",
+    "event_type": "OrgGraph::Events::TaxonomyDefined",
+    "data": "{\"levels\":[{\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"name\":\"Division\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"name\":\"Department\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"name\":\"Team\"}],\"previous_levels\":[],\"effective_on\":\"2026-01-05\",\"defined_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"198e03dd-3bb5-4acf-9279-2e4398a5cf26\",\"types\":{\"data\":{\"levels\":[\"Symbol\",[{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]}]],\"previous_levels\":[\"Symbol\",[]],\"effective_on\":[\"Symbol\",\"String\"],\"defined_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.214401Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "43b1ae11-aa9c-43cc-87d8-5050c251b4b5",
+    "event_type": "OrgGraph::Events::TaxonomyDefined",
+    "data": "{\"levels\":[{\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"name\":\"Division\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"name\":\"Department\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"name\":\"Team\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000004\",\"name\":\"Squad\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000005\",\"name\":\"Guild\"}],\"previous_levels\":[{\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"name\":\"Division\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"name\":\"Department\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"name\":\"Team\"}],\"effective_on\":\"2026-02-02\",\"defined_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"b295ef19-0d1b-4663-b6d2-dc0561542da4\",\"types\":{\"data\":{\"levels\":[\"Symbol\",[{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]}]],\"previous_levels\":[\"Symbol\",[{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]}]],\"effective_on\":[\"Symbol\",\"String\"],\"defined_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.297324Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "fbe70fef-67a4-47e2-8944-ff16479e60be",
+    "event_type": "OrgGraph::Events::TaxonomyDefined",
+    "data": "{\"levels\":[{\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"name\":\"Division\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"name\":\"Department\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000005\",\"name\":\"Guild\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"name\":\"Team\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000004\",\"name\":\"Squad\"}],\"previous_levels\":[{\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"name\":\"Division\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"name\":\"Department\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"name\":\"Team\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000004\",\"name\":\"Squad\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000005\",\"name\":\"Guild\"}],\"effective_on\":\"2026-02-16\",\"defined_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"05d57da9-6039-48b9-9e4f-7d5e4158b66b\",\"types\":{\"data\":{\"levels\":[\"Symbol\",[{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]}]],\"previous_levels\":[\"Symbol\",[{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]}]],\"effective_on\":[\"Symbol\",\"String\"],\"defined_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.357451Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "f90ac75d-57bc-41ad-9112-7dd4470ccf41",
+    "event_type": "OrgGraph::Events::TaxonomyDefined",
+    "data": "{\"levels\":[{\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"name\":\"Division\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"name\":\"Department\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"name\":\"Team\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000004\",\"name\":\"Squad\"}],\"previous_levels\":[{\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"name\":\"Division\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"name\":\"Department\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000005\",\"name\":\"Guild\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"name\":\"Team\"},{\"level_id\":\"01a1d95d-0001-7000-8000-000000000004\",\"name\":\"Squad\"}],\"effective_on\":\"2026-03-02\",\"defined_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"25cc45b0-b753-48aa-8d9a-b41c6d048c01\",\"types\":{\"data\":{\"levels\":[\"Symbol\",[{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]}]],\"previous_levels\":[\"Symbol\",[{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]},{\"level_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"]}]],\"effective_on\":[\"Symbol\",\"String\"],\"defined_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.428408Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "64b44bae-b319-40ba-b2f9-b908d2e0681a",
+    "event_type": "OrgGraph::Events::LevelProviderSet",
+    "data": "{\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"provider\":\"hibob\",\"previous_provider\":\"espalia\",\"field\":\"work.division\",\"effective_on\":\"2026-03-09\",\"set_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"a63603a1-fa67-4107-9a8e-2a1947226ef7\",\"types\":{\"data\":{\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"previous_provider\":[\"Symbol\",\"String\"],\"field\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"set_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.490090Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "ce9c9ddd-bb7b-492f-8e5f-c119c5b1117f",
+    "event_type": "OrgGraph::Events::LevelProviderSet",
+    "data": "{\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"provider\":\"hibob\",\"previous_provider\":\"espalia\",\"field\":\"work.department\",\"effective_on\":\"2026-03-09\",\"set_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"c305c4ab-fa06-4253-96c9-579edae039ff\",\"types\":{\"data\":{\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"previous_provider\":[\"Symbol\",\"String\"],\"field\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"set_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.526884Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "d720bccb-5992-4293-af6b-6190c1109e41",
+    "event_type": "OrgGraph::Events::UnitCreated",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000001\",\"name\":\"Ops\",\"parent_id\":null,\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"provider\":\"hibob\",\"external_ref\":\"ops\",\"effective_on\":\"2026-03-09\",\"created_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"2fd08fae-47ff-4870-8b55-defa11c017de\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"parent_id\":[\"Symbol\",\"NilClass\"],\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.549866Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "e049e557-1e83-4b2d-9925-dadfbfc06d8a",
+    "event_type": "OrgGraph::Events::UnitCreated",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000002\",\"name\":\"Sales\",\"parent_id\":null,\"level_id\":\"01a1d95d-0001-7000-8000-000000000001\",\"provider\":\"hibob\",\"external_ref\":\"sales\",\"effective_on\":\"2026-03-09\",\"created_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"d7876583-e966-4c5b-a44c-1971510cfa7f\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"parent_id\":[\"Symbol\",\"NilClass\"],\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.708722Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "26f40741-125c-4a95-a216-80a27554e83d",
+    "event_type": "OrgGraph::Events::UnitCreated",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000003\",\"name\":\"Engineering\",\"parent_id\":\"01a1d95d-0002-7000-8000-000000000001\",\"level_id\":\"01a1d95d-0001-7000-8000-000000000002\",\"provider\":\"hibob\",\"external_ref\":\"eng\",\"effective_on\":\"2026-03-09\",\"created_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"57968c32-9d01-45bd-8e3d-1b0b1eee9b0b\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"parent_id\":[\"Symbol\",\"String\"],\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.745043Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "03838944-9612-44c6-aa83-6dcb18be7247",
+    "event_type": "OrgGraph::Events::UnitCreated",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000004\",\"name\":\"Payments\",\"parent_id\":\"01a1d95d-0002-7000-8000-000000000003\",\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"provider\":\"espalia\",\"external_ref\":null,\"effective_on\":\"2026-03-10\",\"created_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"d6c51500-14ce-4066-bf54-a235e40b895e\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"parent_id\":[\"Symbol\",\"String\"],\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"NilClass\"],\"effective_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.781134Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "54c53e8c-af8a-4bda-aba3-a1cfc5c7b9f5",
+    "event_type": "OrgGraph::Events::UnitCreated",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000005\",\"name\":\"Platform\",\"parent_id\":\"01a1d95d-0002-7000-8000-000000000001\",\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"provider\":\"espalia\",\"external_ref\":null,\"effective_on\":\"2026-03-10\",\"created_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"a78dcada-ce7d-4818-a93b-5a1dd9024307\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"parent_id\":[\"Symbol\",\"String\"],\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"NilClass\"],\"effective_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.816820Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "e0cade50-665d-44d2-a732-9fa28e58c86e",
+    "event_type": "OrgGraph::Events::UnitCreated",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000006\",\"name\":\"Lending\",\"parent_id\":null,\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"provider\":\"espalia\",\"external_ref\":null,\"effective_on\":\"2026-03-10\",\"created_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"4aa44905-d7a7-4f89-b20e-88baf31f1034\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"parent_id\":[\"Symbol\",\"NilClass\"],\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"NilClass\"],\"effective_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.853608Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "d3222984-79e7-4884-be05-7c318b41a208",
+    "event_type": "OrgGraph::Events::UnitCreated",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000007\",\"name\":\"Checkout\",\"parent_id\":\"01a1d95d-0002-7000-8000-000000000004\",\"level_id\":\"01a1d95d-0001-7000-8000-000000000004\",\"provider\":\"espalia\",\"external_ref\":null,\"effective_on\":\"2026-03-10\",\"created_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"fb2776c4-bc8e-413b-850f-dccccdcafa9e\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"name\":[\"Symbol\",\"String\"],\"parent_id\":[\"Symbol\",\"String\"],\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"NilClass\"],\"effective_on\":[\"Symbol\",\"String\"],\"created_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.884310Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "50f002dd-ea71-4fda-86bd-0cc733921575",
+    "event_type": "OrgGraph::Events::LevelProviderSet",
+    "data": "{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"provider\":\"hibob\",\"previous_provider\":\"espalia\",\"field\":\"work.team\",\"effective_on\":\"2026-04-06\",\"set_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"bd73ef05-c559-439d-86c7-be37929ce1f6\",\"types\":{\"data\":{\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"previous_provider\":[\"Symbol\",\"String\"],\"field\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"set_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.909850Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "c9a44fe6-975a-4e1f-9c24-6c655fef0ae4",
+    "event_type": "OrgGraph::Events::UnitHandedOver",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000004\",\"provider\":\"hibob\",\"previous_provider\":\"espalia\",\"field\":\"work.team\",\"previous_field\":null,\"external_ref\":\"pay\",\"previous_external_ref\":null,\"effective_on\":\"2026-04-06\",\"handed_over_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"ac251d50-6bb1-4fae-b434-a37940b1aac6\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"previous_provider\":[\"Symbol\",\"String\"],\"field\":[\"Symbol\",\"String\"],\"previous_field\":[\"Symbol\",\"NilClass\"],\"external_ref\":[\"Symbol\",\"String\"],\"previous_external_ref\":[\"Symbol\",\"NilClass\"],\"effective_on\":[\"Symbol\",\"String\"],\"handed_over_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.924260Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "22d22e11-040b-465d-ad23-429ebbf3d20d",
+    "event_type": "OrgGraph::Events::LevelProviderSet",
+    "data": "{\"level_id\":\"01a1d95d-0001-7000-8000-000000000003\",\"provider\":\"espalia\",\"previous_provider\":\"hibob\",\"field\":null,\"effective_on\":\"2026-05-04\",\"set_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"bda0e73f-9fe5-45b5-b62a-e82f430c3bd0\",\"types\":{\"data\":{\"level_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"previous_provider\":[\"Symbol\",\"String\"],\"field\":[\"Symbol\",\"NilClass\"],\"effective_on\":[\"Symbol\",\"String\"],\"set_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.939500Z",
+    "valid_at": null
+  },
+  {
+    "event_id": "c5373c4b-8cb7-40b7-82f4-f9f8867fc37f",
+    "event_type": "OrgGraph::Events::UnitHandedOver",
+    "data": "{\"unit_id\":\"01a1d95d-0002-7000-8000-000000000004\",\"provider\":\"espalia\",\"previous_provider\":\"hibob\",\"field\":null,\"previous_field\":\"work.team\",\"external_ref\":null,\"previous_external_ref\":\"pay\",\"effective_on\":\"2026-05-04\",\"handed_over_by_id\":null}",
+    "metadata": "{\"tenant_id\":\"01a1d95d-7b58-71c7-b4a0-9a980c3e2b2b\",\"correlation_id\":\"b856d3d8-edaa-4cb5-b2e1-953dbdf012fb\",\"types\":{\"data\":{\"unit_id\":[\"Symbol\",\"String\"],\"provider\":[\"Symbol\",\"String\"],\"previous_provider\":[\"Symbol\",\"String\"],\"field\":[\"Symbol\",\"NilClass\"],\"previous_field\":[\"Symbol\",\"String\"],\"external_ref\":[\"Symbol\",\"NilClass\"],\"previous_external_ref\":[\"Symbol\",\"String\"],\"effective_on\":[\"Symbol\",\"String\"],\"handed_over_by_id\":[\"Symbol\",\"NilClass\"]},\"metadata\":{\"tenant_id\":[\"Symbol\",\"String\"],\"correlation_id\":[\"Symbol\",\"String\"]}}}",
+    "created_at": "2026-11-18T03:03:45.953747Z",
+    "valid_at": null
+  }
+]
