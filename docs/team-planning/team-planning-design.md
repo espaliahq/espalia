@@ -553,7 +553,8 @@ it should take.
   beneath it, which may cross by taking a type of the structure it lands in, in the same call.
 - **A scoped plan.** Finding the structure in force above a scope root walks Org Graph units
   the plan doesn't cover. Nothing from that walk reaches a payload, a refusal or a log line
-  but a type's name and "the structure above this plan".
+  but a type's name: a refusal says "the structure this unit would sit in", never which unit
+  declared it.
   `test/integration/scoped_plan_structure_audit_test.rb` walks every read that takes a
   plan_id, open and with a step closed, and fails if any shows a unit above the plan or
   another branch's structure, or if a new read needs a value it has none for.

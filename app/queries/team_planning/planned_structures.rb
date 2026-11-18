@@ -15,14 +15,12 @@
 #
 # Above a scoped plan's roots the walk reads the Org Graph's live parents,
 # units the plan doesn't cover. Nothing from that walk leaves this class but
-# a type and {ABOVE}: a caller never learns which unit declared it.
+# a type: a caller never learns which unit declared it.
 #
 # @example
 #   structures = TeamPlanning::PlannedStructures.load(map)
 #   structures.beneath(parent_id).kind(level_id)
 class TeamPlanning::PlannedStructures
-  # How a refusal or a misfit names a structure declared outside the plan's scope.
-  ABOVE = "the structure above this plan"
   EMPTY = OrgGraph::Taxonomy.new([])
 
   # @param map [TeamPlanning::Baseline::Map]
