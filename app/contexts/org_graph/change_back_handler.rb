@@ -16,6 +16,7 @@ class OrgGraph::ChangeBackHandler
   include OrgGraph::Authorization
 
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
+  WHOLE_STRUCTURE = "This came with a change to a unit's own structure, so change the whole change back"
   MOVED_IN = "A move into a unit's own structure can't be changed back until units can move out of one. " \
              "Withdrawing that structure converts every unit in it back into the structure above, where they stay"
 
@@ -73,7 +74,7 @@ class OrgGraph::ChangeBackHandler
 
   def refusal_for(entries, apart_from: nil)
     ensure_reversible!(entries, apart_from:)
-    entries.uniq(&:event_id).each { authorize_inverse!(it) }
+    inverted(entries).each { authorize_inverse!(it) }
     nil
   rescue Refused, RuntimeError => e
     e.message
@@ -88,6 +89,7 @@ class OrgGraph::ChangeBackHandler
       authorize_move_membership!(entry.person_id, from, to)
     when "UnitMoved" then authorize_move_unit!(entry.unit_id, entry.before["parent_id"])
     when "UnitKindChanged" then authorize_unit_kind!
+    when "TaxonomyDefined" then authorize_structure_of!(entry.unit_id)
     else authorize_unit!(entry.unit_id)
     end
   end
@@ -99,12 +101,21 @@ class OrgGraph::ChangeBackHandler
       raise "This change is still being written; try again in a moment" unless streams(entries) <= held
       ensure_reversible!(entries, apart_from:)
       build_handlers(cause_id: inverse_cause)
-      entries.uniq(&:event_id).each do |entry|
+      inverted(entries).each do |entry|
         options = { effective_on: (effective_on || entry.effective_on).to_s, changed_back_id: entry.event_id }
+        next undo_structure(entry, options, entries) if entry.subject == "structure"
+
         send(:"undo_#{entry.event_type.underscore}", entry, options)
-        ensure_inverted!(entry)
       end
+      entries.uniq(&:event_id).each { ensure_inverted!(it) }
     end
+  end
+
+  # The entries whose inverse is issued directly: a structure's own, which
+  # sends the units it retyped back as well, or else each one.
+  def inverted(entries)
+    structure = entries.select { it.subject == "structure" }
+    structure.presence || entries.uniq(&:event_id)
   end
 
   def build_handlers(cause_id:)
@@ -145,12 +156,13 @@ class OrgGraph::ChangeBackHandler
     causes = OrgUnitActivity.where(cause_id: entries.map(&:cause_id))
     structure_causes = causes.where(subject: "structure").distinct.pluck(:cause_id)
     move_in_causes = causes.where(event_type: "UnitMoved").where("after ? 'conversion'").distinct.pluck(:cause_id)
-    raise "A unit's own structure can't be changed back yet" if entries.any? { it.subject == "structure" }
+    structure = entries.find { it.subject == "structure" }
+    ensure_structure_reversible!(structure, entries, apart_from:) if structure
 
     entries.each do |entry|
-      raise "This came with a change to a unit's own structure, which can't be changed back yet" if structure_causes.include?(entry.cause_id)
+      raise WHOLE_STRUCTURE if !structure && structure_causes.include?(entry.cause_id)
       raise MOVED_IN if move_in_causes.include?(entry.cause_id)
-      raise "#{entry.event_type.titleize} can't be changed back" unless entry.reversible?
+      raise "#{entry.event_type.titleize} can't be changed back" unless entry == structure || entry.reversible?
       raise "This change has already been changed back" if entry.changed_back?
       raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA
     end
@@ -162,12 +174,37 @@ class OrgGraph::ChangeBackHandler
     raise "This moved the day they joined earlier, which can't be undone yet"
   end
 
+  # A unit's own structure changes back whole: its declaration or withdrawal
+  # with every unit it retyped, as one change.
+  def ensure_structure_reversible!(structure, entries, apart_from:)
+    raise WHOLE_STRUCTURE unless apart_from
+    unless entries.all? { it == structure || it.event_type == "UnitKindChanged" }
+      raise "This came with a change to a unit's own structure, which can't be changed back yet"
+    end
+    return unless structure.before && structure.after
+
+    raise "A change to a structure's unit types can't be changed back yet"
+  end
+
   # A set dated before the membership it changed gave that membership an
   # earlier start. No command withdraws those days
   # ([#154](https://github.com/espaliahq/espalia/issues/154)), so its inverse
   # would only set the same terms on the same day again.
   def moved_start_earlier?(entry)
     entry.event_type == "MembershipSet" && entry.before && terms_known_before(entry).nil?
+  end
+
+  # A declaration is withdrawn, and a withdrawal declared again with the same
+  # type ids; either way each unit goes back to the type its own entry says it
+  # held, which inverting the conversion can't tell once two types became one.
+  def undo_structure(entry, options, entries)
+    kinds = entries.select { it.event_type == "UnitKindChanged" }.to_h do |kind|
+      [ kind.unit_id, { level_id: kind.before["level_id"], changed_back_id: kind.event_id } ]
+    end
+    return @structure.change_declaration_back(entry.unit_id, kinds:, **options) if entry.after
+
+    levels = Rails.configuration.event_store.read.event(entry.event_id).data[:previous_levels]
+    @structure.change_withdrawal_back(entry.unit_id, levels:, kinds:, **options)
   end
 
   def undo_membership_set(entry, options)

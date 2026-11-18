@@ -590,6 +590,68 @@ class OrgGraph::StructureAggregate
     apply_conversion(governed, conversion, effective_on, withdrawn_by_id)
   end
 
+  # Changes a declaration back: withdraws the unit's own structure, and each
+  # unit it governs goes back to the type it held before. A per-type
+  # conversion can't say that once the declaration made two types one.
+  #
+  # @param unit_id [String] a live unit with a structure of its own
+  # @param kinds [Hash{String => Hash}] per unit it governs, `{ level_id:, changed_back_id: }`:
+  #   the type it goes back to, and the event that changed it
+  # @param changed_back_id [String] the declaration
+  # @param effective_on [Date, String] as for {#declare_structure}
+  # @param withdrawn_by_id [String, nil]
+  # @raise [RuntimeError] naming what doesn't fit
+  def change_declaration_back(unit_id, kinds:, changed_back_id:, effective_on:, withdrawn_by_id: nil)
+    unit = live_unit!(unit_id)
+    raise "#{unit.name} has no structure of its own" unless @structures.key?(unit.unit_id)
+
+    governed = governed_by(unit.unit_id)
+    kind_of = restored_kinds!(governed, kinds, unit)
+    effective_on = structure_dated!(unit, governed, effective_on)
+    above = structure_in_force(unit.unit_id)
+    ensure_restorable!(governed, kind_of, into: kinds_at(above), label: structure_label(above), &:itself)
+    if above
+      ensure_within_structure!(above, effective_on)
+    else
+      ensure_fits_since!(governed.map(&kind_of).uniq, effective_on) do |rules, label|
+        ensure_fits!(governed, into: rules, label:, kind_of:, &:itself)
+      end
+    end
+    apply(withdrawal(unit, conversion: restored_conversion(governed, kind_of), effective_on:,
+                           withdrawn_by_id:, changed_back_id:))
+    restore_kinds(governed, kinds, effective_on, withdrawn_by_id)
+  end
+
+  # Changes a withdrawal back: declares the structure again with the same
+  # unit types, keeping their ids, so each reads as one line in history.
+  # Each unit beneath goes back to the type it held in it.
+  #
+  # @param unit_id [String] a live unit with no structure of its own
+  # @param levels [Array<Hash>] the types withdrawn, as the withdrawal recorded them
+  # @param kinds [Hash{String => Hash}] as for {#change_declaration_back}
+  # @param changed_back_id [String] the withdrawal
+  # @param effective_on [Date, String] as for {#declare_structure}
+  # @param defined_by_id [String, nil]
+  # @raise [ArgumentError, RuntimeError] naming what doesn't fit
+  def change_withdrawal_back(unit_id, levels:, kinds:, changed_back_id:, effective_on:, defined_by_id: nil)
+    unit = live_unit!(unit_id)
+    raise "#{unit.name} already has its own structure" if @structures.key?(unit.unit_id)
+
+    levels = declared_levels(levels, nil, home: unit.unit_id)
+    governed = governed_by(unit.unit_id)
+    kind_of = restored_kinds!(governed, kinds, unit)
+    effective_on = structure_dated!(unit, governed, effective_on)
+    into = OrgGraph::Taxonomy.new(levels.map { it.slice(:level_id, :name, :parent_level_ids, :top) })
+    ensure_restorable!(governed, kind_of, into:, label: "#{unit.name}'s structure") do |parent_id|
+      parent_id == unit.unit_id ? nil : parent_id
+    end
+    apply(OrgGraph::Events::TaxonomyDefined.new(data: {
+      levels:, previous_levels: [], structure_unit_id: unit.unit_id, copied_from: nil,
+      conversion: restored_conversion(governed, kind_of), effective_on:, defined_by_id:, changed_back_id:
+    }))
+    restore_kinds(governed, kinds, effective_on, defined_by_id)
+  end
+
   # Retires a unit. Its live sub-units must be moved or retired first. A unit
   # with a structure of its own gives it up in the same change, whoever
   # supplies the retirement, so changing the retirement back can restore both.
@@ -899,10 +961,10 @@ class OrgGraph::StructureAggregate
     end
   end
 
-  def withdrawal(unit, conversion:, effective_on:, withdrawn_by_id:)
+  def withdrawal(unit, conversion:, effective_on:, withdrawn_by_id:, changed_back_id: nil)
     OrgGraph::Events::TaxonomyDefined.new(data: {
       levels: [], previous_levels: @structure_levels.fetch(unit.unit_id), structure_unit_id: unit.unit_id, conversion:,
-      effective_on:, defined_by_id: withdrawn_by_id
+      effective_on:, defined_by_id: withdrawn_by_id, **({ changed_back_id: } if changed_back_id)
     })
   end
 
@@ -1036,32 +1098,88 @@ class OrgGraph::StructureAggregate
     missing = governed.map(&:level_id).uniq - conversion.keys
     raise "Say what #{missing.map { any_kind_name(it) }.sort.to_sentence} units become" if missing.any?
 
-    converting = governed.to_set(&:unit_id)
+    ensure_fits!(governed, into:, label:, kind_of: ->(child) { conversion.fetch(child.level_id) }) { yield(it) }
+    conversion.slice(*governed.map(&:level_id).uniq)
+  end
+
+  # Checks that each unit, at the type `kind_of` gives it, may sit where it
+  # does in `into`. The block gives the parent whose type a unit answers to.
+  def ensure_fits!(governed, into:, label:, kind_of:)
+    converting = governed.to_h { [ it.unit_id, it ] }
     misfits = governed.filter_map do |child|
-      kind = conversion.fetch(child.level_id)
+      kind = kind_of.(child)
       parent_id = yield(child.parent_id)
-      parent_kind = parent_id && @units[parent_id].level_id
-      parent_kind = conversion.fetch(parent_kind) if converting.include?(parent_id)
+      parent_kind = parent_id && (converting.key?(parent_id) ? kind_of.(converting[parent_id]) : @units[parent_id].level_id)
       next if parent_kind ? into.allows?(kind, beneath: parent_kind) : into.may_be_top?(kind)
 
       where = parent_kind ? "under #{into.kind(parent_kind)&.name || any_kind_name(parent_kind)}" : "at the top"
       "#{child.name} (#{into.kind(kind).name} #{where})"
     end
     raise "These units wouldn't fit #{label}: #{misfits.sort.join(', ')}" if misfits.any?
-
-    conversion.slice(*governed.map(&:level_id).uniq)
   end
 
   # The top structure keeps dated rules, so a conversion into it must fit on
   # its date and on every later change to them.
   def ensure_converted_since!(governed, conversion, from)
+    ensure_fits_since!(conversion.values.uniq, from) do |rules, label|
+      converted!(governed, conversion, into: rules, label:, &:itself)
+    end
+  end
+
+  # Yields the top structure's rules on `from` and on each later change to
+  # them, once each type in `targets` exists on that day.
+  def ensure_fits_since!(targets, from)
     [ from, *@kind_timelines.values.flatten(1).map(&:first).select { it > from } ].uniq.sort.each do |day|
       rules = rules_on(day)
-      if (absent = conversion.values.uniq.find { !rules.kind(it) })
+      if (absent = targets.find { !rules.kind(it) })
         raise "#{any_kind_name(absent)} begins on #{@kind_timelines.fetch(absent).first.first}, so date this then or later"
       end
 
-      converted!(governed, conversion, into: rules, label: "the structure on #{day}", &:itself)
+      yield rules, "the structure on #{day}"
+    end
+  end
+
+  # Every unit governed now must be one the change being reversed retyped.
+  # @return [Proc] each unit's type to go back to
+  def restored_kinds!(governed, kinds, unit)
+    kinds = kinds.to_h.transform_keys(&:to_s)
+    joined = governed.reject { kinds.key?(it.unit_id) }
+    if joined.any?
+      raise "#{joined.map(&:name).sort.to_sentence} joined #{unit.name}'s units since, so " \
+            "#{joined.one? ? 'it has' : 'they have'} no type to go back to"
+    end
+    left = kinds.keys - governed.map(&:unit_id)
+    raise "#{left.map { @units[it]&.name || it }.sort.to_sentence} no longer sits beneath #{unit.name}" if left.any?
+
+    ->(child) { kinds.fetch(child.unit_id)[:level_id] }
+  end
+
+  def ensure_restorable!(governed, kind_of, into:, label:, &)
+    targets = governed.map(&kind_of).uniq
+    raise "A unit here would go back to a type #{label} no longer holds" unless targets.all? { into.kind(it) }
+    if (mirrored = targets.find { level_provider(it) != ESPALIA })
+      raise "#{any_kind_name(mirrored)} comes from #{HrisConfig.provider_label(level_provider(mirrored))}, so no unit here can change to it"
+    end
+
+    ensure_fits!(governed, into:, label:, kind_of:, &)
+  end
+
+  # The types that went back whole, for the record: one that split, as two
+  # types made one come apart again, has no single answer.
+  def restored_conversion(governed, kind_of)
+    governed.group_by(&:level_id).filter_map do |from, units|
+      targets = units.map(&kind_of).uniq
+      [ from, targets.first ] if targets.one?
+    end.to_h
+  end
+
+  def restore_kinds(governed, kinds, effective_on, changed_by_id)
+    governed.each do |child|
+      kind = kinds.to_h.transform_keys(&:to_s).fetch(child.unit_id)
+      apply(OrgGraph::Events::UnitKindChanged.new(data: {
+        unit_id: child.unit_id, level_id: kind[:level_id], previous_level_id: child.level_id,
+        provider: child.provider, effective_on:, kind_changed_by_id: changed_by_id, changed_back_id: kind[:changed_back_id]
+      }))
     end
   end
 

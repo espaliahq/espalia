@@ -60,6 +60,24 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
+  # @see OrgGraph::StructureAggregate#change_declaration_back
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
+  def change_declaration_back(unit_id, **options)
+    authorize_structure_of!(unit_id)
+    unless_kinds_rebuilding do
+      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.change_declaration_back(unit_id, **attributed(options, :withdrawn_by_id)) }
+    end
+  end
+
+  # @see OrgGraph::StructureAggregate#change_withdrawal_back
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
+  def change_withdrawal_back(unit_id, **options)
+    authorize_structure_of!(unit_id)
+    unless_kinds_rebuilding do
+      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.change_withdrawal_back(unit_id, **attributed(options, :defined_by_id)) }
+    end
+  end
+
   # @see OrgGraph::StructureAggregate#add_level
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def add_level(level_id, name, **options)

@@ -201,7 +201,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       end
     end
 
-    should "show the declaration and the withdrawal in the unit's activity, and refuse to change either back" do
+    should "show the declaration and the withdrawal in the unit's activity, and change the withdrawal back" do
       call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
 
       ActsAsTenant.with_tenant(@tenant) do
@@ -212,12 +212,17 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal [ "Withdrew its structure of Stream and Lane", "Gave it a structure of its own: Stream and Lane" ],
                      [ withdrawal, declaration ].map { it.parts.find { |part| part.entry.subject == "structure" }.description }
         assert_equal [ "withdrew its structure", "gave it a structure of its own" ], [ withdrawal, declaration ].map { it.group.summary.split(" and ").last }
-        assert_equal [ "A unit's own structure can't be changed back yet" ] * 2, [ withdrawal, declaration ].map(&:refusal)
+        assert_equal [ nil, "A later change has replaced this one; change that back first" ], [ withdrawal, declaration ].map(&:refusal)
         assert_equal [ @admin.person.name ] * 2, [ withdrawal, declaration ].map { it.parts.find { |part| part.entry.subject == "structure" }.by }
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::OrgGraph::ChangeBackGroup, cause_id: OrgUnitActivity.where(subject: "structure").order(:position).last.cause_id)
+        assert_includes OrgGraph::Repository.new.load_structure.declared_structures.fetch(@org[:checkout]).kinds.map(&:id), @stream
       end
     end
 
-    should "refuse to change back a type the withdrawal converted, as the request shares one cause" do
+    should "refuse to change back a type the withdrawal converted alone, as the request shares one cause" do
       AuditMetadata.with(acting_via: :web, correlation_id: SecureRandom.uuid_v7) do
         call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
       end
@@ -226,7 +231,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
         conversion = OrgUnitActivity.where(unit_id: @org[:payments], event_type: "UnitKindChanged").order(:created_at).last
 
-        assert_equal "This came with a change to a unit's own structure, which can't be changed back yet",
+        assert_equal "This came with a change to a unit's own structure, so change the whole change back",
                      OrgGraph::ChangeBackHandler.new(actor: context).refusal(conversion)
       end
     end

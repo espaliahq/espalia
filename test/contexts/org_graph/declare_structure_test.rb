@@ -446,7 +446,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
         assert_equal [ @basket, @checkout ].sort, kinds.map(&:unit_id).sort
         assert_equal @payments, OrgUnitActivity.find_by!(cause_id:, subject: "structure").unit_id
         error = assert_raises(RuntimeError) { change_back.change_back(kinds.first) }
-        assert_equal "This came with a change to a unit's own structure, which can't be changed back yet", error.message
+        assert_equal "This came with a change to a unit's own structure, so change the whole change back", error.message
       end
     end
   end
