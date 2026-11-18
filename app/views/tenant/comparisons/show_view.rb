@@ -9,11 +9,13 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
   INTERVALS = ComparisonConfig::SNAPSHOT_INTERVALS.to_h { |months| [ months, "#{months} #{'month'.pluralize(months)}" ] }.freeze
 
   # @param settings [Hash] `Operations::Tenants::Comparisons.payload`
+  # @param submitted [Hash] the form as sent, shown again when it couldn't be saved
   # @param user [User]
   # @param current_tenant [Tenant]
   # @param tenants [Array<Tenant>]
-  def initialize(settings:, user:, current_tenant:, tenants: [])
+  def initialize(settings:, user:, current_tenant:, submitted: {}, tenants: [])
     @settings = settings
+    @submitted = submitted
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -49,10 +51,12 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
 
   private
 
+  def field(key) = @submitted.fetch(key, @settings[key])
+
   def enabled_field(form)
     div(class: "flex items-center gap-3 pb-4") do
       form.hidden_field :enabled, value: "0", id: nil
-      form.check_box :enabled, { checked: @settings[:enabled], class: Components::Kit::Field::CHECKBOX,
+      form.check_box :enabled, { checked: ActiveModel::Type::Boolean.new.cast(field(:enabled)), class: Components::Kit::Field::CHECKBOX,
                                  id: "comparisons_enabled" }, "1", nil
       label(for: "comparisons_enabled", class: "text-sm font-medium text-default") { "Let people compare with their level" }
     end
@@ -61,7 +65,7 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
   def group_size_field(form)
     div(class: "flex flex-col gap-2 py-4") do
       label(for: "comparisons_min_group_size", class: "text-sm font-medium text-default") { "Smallest group to compare with" }
-      form.number_field :min_group_size, value: @settings[:min_group_size], min: ComparisonConfig::LOWEST_MIN_GROUP_SIZE,
+      form.number_field :min_group_size, value: field(:min_group_size), min: ComparisonConfig::LOWEST_MIN_GROUP_SIZE,
                                          max: ComparisonConfig::HIGHEST_MIN_GROUP_SIZE, id: "comparisons_min_group_size",
                                          class: "#{Components::Kit::Field::INPUT} max-w-24",
                                          aria: { describedby: "comparisons_min_group_size_help" }
@@ -77,7 +81,7 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
     div(class: "flex flex-col gap-2 pt-4") do
       label(for: "comparisons_snapshot_every_months", class: "text-sm font-medium text-default") { "Take a new snapshot every" }
       form.select :snapshot_every_months, INTERVALS.map { |months, words| [ words, months ] },
-                  { selected: @settings[:snapshot_every_months] },
+                  { selected: field(:snapshot_every_months) },
                   id: "comparisons_snapshot_every_months", class: "#{Components::Kit::Field::SELECT} max-w-48"
     end
   end

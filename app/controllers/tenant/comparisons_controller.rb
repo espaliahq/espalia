@@ -17,13 +17,15 @@ class Tenant::ComparisonsController < ApplicationController
                                          status: :see_other
   rescue Operations::Base::ParameterError => e
     flash.now[:alert] = "The comparison settings could not be saved: #{e.message.delete_suffix('.')}."
-    render_page(status: :unprocessable_content)
+    render_page(submitted: submitted.to_h.symbolize_keys, status: :unprocessable_content)
   end
 
   private
 
+  def submitted = params.expect(comparisons: [ :enabled, :min_group_size, :snapshot_every_months ])
+
   def comparison_params
-    raw = params.expect(comparisons: [ :enabled, :min_group_size, :snapshot_every_months ])
+    raw = submitted
     { enabled: (ActiveModel::Type::Boolean.new.cast(raw[:enabled]) if raw.key?(:enabled)),
       min_group_size: whole_number(raw[:min_group_size], "Smallest group"),
       snapshot_every_months: whole_number(raw[:snapshot_every_months], "Snapshot interval") }.compact
@@ -36,10 +38,10 @@ class Tenant::ComparisonsController < ApplicationController
     Integer(value, 10, exception: false) || raise(Operations::Base::ParameterError, "#{name} must be a whole number")
   end
 
-  def render_page(status: :ok)
+  def render_page(submitted: {}, status: :ok)
     tenant = ActsAsTenant.current_tenant
     render Views::Tenant::Comparisons::ShowView.new(
-      settings: Operations::Tenants::Comparisons.payload(tenant), user: current_user, current_tenant: tenant,
+      settings: Operations::Tenants::Comparisons.payload(tenant), submitted:, user: current_user, current_tenant: tenant,
       tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a }
     ), status:
   end

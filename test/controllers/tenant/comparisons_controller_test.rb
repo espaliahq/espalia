@@ -49,6 +49,16 @@ class Tenant::ComparisonsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "at least 4"
       assert_equal 5, @tenant.reload.comparison_config.min_group_size
     end
+
+    should "show what was sent again, not the saved settings, so fixing one field doesn't undo the others" do
+      patch tenant_comparisons_path, params: { comparisons: { enabled: "0", min_group_size: "2", snapshot_every_months: "3" } }
+
+      assert_response :unprocessable_content
+      assert_select "input[type=checkbox][name='comparisons[enabled]']:not([checked])"
+      assert_select "input[name='comparisons[min_group_size]'][value='2']"
+      assert_select "select[name='comparisons[snapshot_every_months]'] option[selected]", text: "3 months"
+      assert_equal [ true, 5, 1 ], @tenant.reload.comparison_config.then { |c| [ c.enabled, c.min_group_size, c.snapshot_every_months ] }
+    end
   end
 
   context "as a tenant admin sending a group size that isn't a whole number" do
