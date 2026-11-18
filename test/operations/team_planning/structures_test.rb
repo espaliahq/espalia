@@ -66,6 +66,19 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
       assert_equal "Level is not in the taxonomy", refusal(name: "Ops", parent_id: @payments, level_id: SecureRandom.uuid_v7)
     end
 
+    should "mark a unit at the top of the structure without naming the unit that declares it" do
+      crew = call(Operations::OrgGraph::AddLevel, name: "Crew", top: true, structure_unit_id: @engineering)[:level_id]
+      risk = set_unit(name: "Risk", parent_id: @engineering, level_id: crew)[:unit_id]
+      call(Operations::OrgGraph::SetKindParents, level_id: crew, parent_ids: [ @group ], top: false, structure_unit_id: @engineering)
+      item = ActsAsTenant.with_tenant(@tenant) do
+        TeamPlanning::Attention.for(context: AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person),
+                                    plan: TeamPlanningPlan.find(@plan_id), scenario_id: @plan_id).items.find { it.subject_id == risk }
+      end
+
+      assert_match "Crew can't sit at the top", item.reason
+      assert_not_includes item.unit_ids, @engineering
+    end
+
     should "flag no Org Graph unit that holds a type of the structure it sits in" do
       assert_empty misfits
       set_unit(name: "Fraud", parent_id: @payments, level_id: @pod)

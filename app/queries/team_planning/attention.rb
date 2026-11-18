@@ -238,7 +238,7 @@ class TeamPlanning::Attention
       parent = unit.parent_id && by_id[unit.parent_id]
       next unless (why = misfit(unit, parent, judged: !((unit.parent_id || @roots.include?(unit.id)) && !parent)))
 
-      beneath = parent && @structures.at(unit.id).kind(@structures.level_of(unit))
+      beneath = parent && !@structures.declares?(parent.id) && @structures.at(unit.id).kind(@structures.level_of(unit))
       item(unit.id, UNIT, "#{I18n.t('org_graph.misfit')}: #{why}", units: beneath ? [ parent.id ] : [])
     end
   end
