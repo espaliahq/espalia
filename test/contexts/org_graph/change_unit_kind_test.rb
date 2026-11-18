@@ -145,6 +145,14 @@ class OrgGraph::ChangeUnitKindTest < ActiveSupport::TestCase
     assert_equal "Crew can't be removed, as it held Payments", error.message
   end
 
+  should "keep a type a unit held for less than a day from being removed" do
+    @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10")
+    @system.change_unit_kind(@payments, @team, effective_on: "2026-12-10")
+
+    error = assert_raises(RuntimeError) { @system.remove_level(@crew, effective_on: "2026-12-20") }
+    assert_equal "Crew can't be removed, as it held Payments", error.message
+  end
+
   context "authorization" do
     setup do
       @owner = create(:person, tenant: @tenant, name: "Owner")

@@ -41,6 +41,7 @@ class OrgGraph::StructureAggregate
     @units = {}
     @parents = {}
     @unit_kinds = {}
+    @held_kinds = {}
     @level_providers = {}
     @level_fields = {}
     @fact_providers = {}
@@ -619,12 +620,14 @@ class OrgGraph::StructureAggregate
     )
     @parents[data[:unit_id]] = { data[:effective_on] => data[:parent_id] }
     @unit_kinds[data[:unit_id]] = { data[:effective_on] => data[:level_id] }
+    @held_kinds[data[:unit_id]] = Set[data[:level_id]]
     touch(data[:parent_id], data[:effective_on])
   end
 
   on OrgGraph::Events::UnitKindChanged do |event|
     unit = @units.fetch(event.data[:unit_id])
     @unit_kinds[unit.unit_id][event.data[:effective_on]] = event.data[:level_id]
+    @held_kinds[unit.unit_id] << event.data[:level_id]
     unit.level_id = @unit_kinds[unit.unit_id].max_by(&:first).last
     touch(unit.unit_id, event.data[:effective_on])
   end
@@ -806,7 +809,7 @@ class OrgGraph::StructureAggregate
   end
 
   def ensure_never_held!(level)
-    held = @units.values.select { |unit| @unit_kinds.fetch(unit.unit_id, {}).value?(level[:level_id]) }.sort_by(&:name)
+    held = @units.values.select { |unit| @held_kinds.fetch(unit.unit_id, Set.new).include?(level[:level_id]) }.sort_by(&:name)
     return if held.empty?
 
     live, retired = held.partition { !it.retired && it.level_id == level[:level_id] }
