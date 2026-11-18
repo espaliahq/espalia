@@ -47,20 +47,24 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
 
   private
 
-  # A Structure rebuild empties org_units, so the units are read only once the
-  # command has passed its rebuild check and refused, to name a missing one.
+  # A Structure rebuild empties org_units, so this path never reads them: the
+  # command names a unit it can't find from its own state, under its lock.
   def move_into_structure
     unit_id = uuid!(:unit_id).downcase
     parent_id = params[:parent_id] && uuid!(:parent_id).downcase
     on = effective_on
     refusing_as_parameter_errors do
       structure_handler.move_unit(unit_id, parent_id, effective_on: on, **conversion_option, **plan)
-    rescue RuntimeError
-      live_unit!(:unit_id)
-      parent_id && live_unit!(:parent_id)
-      raise
+    rescue OrgGraph::StructureAggregate::UnitUnavailable => e
+      raise Operations::Base::ParameterError, unavailable_message(e)
     end
     { unit_id:, parent_id:, effective_on: on, **conversion_option }
+  end
+
+  def unavailable_message(error)
+    return "#{error.retired_name} is retired" if error.retired_name
+
+    "#{error.role == :parent ? :parent_id : :unit_id} names no unit in the Org Graph"
   end
 
   def ensure_conversion_well_formed!

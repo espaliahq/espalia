@@ -266,6 +266,47 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal "parent_id names no unit in the Org Graph", error.message
       end
 
+      should "keep the command's refusal when a rebuild empties the units before it reaches the caller" do
+        tenant = @tenant
+        build = OrgGraph::StructureCommandHandler.method(:new)
+        rebuilding_after_refusal = lambda do |**options|
+          build.call(**options).tap do |handler|
+            move = handler.method(:move_unit)
+            handler.define_singleton_method(:move_unit) do |*args, **kwargs|
+              move.call(*args, **kwargs)
+            rescue RuntimeError
+              OrgGraph::Projections::Structure.reset!(tenant:)
+              raise
+            end
+          end
+        end
+        tomorrow = ActsAsTenant.with_tenant(@tenant) { Tenant.today + 1 }.iso8601
+
+        error = OrgGraph::StructureCommandHandler.stub(:new, rebuilding_after_refusal) do
+          assert_raises(Operations::Base::ParameterError) do
+            call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], parent_id: @org[:checkout],
+                                                 effective_on: tomorrow, conversion: { @org[:team] => @stream })
+          end
+        end
+        assert_equal "A move into a structure can't be dated after today", error.message
+        replay(@tenant, OrgGraph::Projections::Structure)
+      end
+
+      should "name a retired unit or parent from the command's own state" do
+        retired = ActsAsTenant.with_tenant(@tenant) do
+          OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).tap do |handler|
+            handler.retire_unit(@org[:payments], effective_on: Tenant.today.iso8601)
+          end
+          OrgUnit.find(@org[:payments]).name
+        end
+        [ [ @org[:payments], @org[:checkout] ], [ @org[:platform], @org[:payments] ] ].each do |unit_id, parent_id|
+          error = assert_raises(Operations::Base::ParameterError) do
+            call(Operations::OrgGraph::MoveUnit, unit_id:, parent_id:, conversion: { @org[:team] => @stream })
+          end
+          assert_equal "#{retired} is retired", error.message
+        end
+      end
+
       should "refuse an unknown or another tenant's unit with the ordinary message, naming no unit" do
         elsewhere = build_org_graph(create(:tenant))
         move = ->(as, unit_id, parent_id) { call(Operations::OrgGraph::MoveUnit, as:, unit_id:, parent_id:, conversion: { @org[:team] => @stream }) }

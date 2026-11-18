@@ -19,6 +19,22 @@ class OrgGraph::StructureAggregate
   include Shreddable::AggregateRoot
   prepend OrgGraph::PlanReference::Stamping
 
+  # A unit the command names that the structure doesn't hold, or holds
+  # retired. It says which, so a caller can name its own parameter without
+  # reading the read model again.
+  class UnitUnavailable < RuntimeError
+    # @return [Symbol] :unit, or :parent for the unit it would sit beneath
+    attr_reader :role
+    # @return [String, nil] the unit's name when it is retired
+    attr_reader :retired_name
+
+    def initialize(message, role: :unit, retired_name: nil)
+      super(message)
+      @role = role
+      @retired_name = retired_name
+    end
+  end
+
   ESPALIA = "espalia"
   PROVIDERS = OrgGraph::PersonAggregate::PROVIDERS
   UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
@@ -1089,6 +1105,7 @@ class OrgGraph::StructureAggregate
   #
   # @raise [ArgumentError, RuntimeError] naming what doesn't fit
   def move_into_structure(unit, parent_id, conversion, effective_on:, moved_by_id:)
+    live_unit!(parent_id, role: :parent) if parent_id
     into = structure_beneath(parent_id)
     from = structure_in_force(unit.unit_id)
     raise "#{unit.name} stays in #{structure_label(from)}, so the move takes no conversion" if into == from
@@ -1128,8 +1145,6 @@ class OrgGraph::StructureAggregate
     raise "A move into a structure can't be dated after today" if on > today
 
     parent = @units[parent_id]
-    raise "Parent unit not found" unless parent
-    raise "Parent unit is retired" if parent.retired
     raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
 
     ensure_within_structure!(into, on)
@@ -1197,10 +1212,11 @@ class OrgGraph::StructureAggregate
     end
   end
 
-  def live_unit!(unit_id)
+  def live_unit!(unit_id, role: :unit)
     unit = @units[unit_id.to_s.downcase]
-    raise "Unit not found" unless unit
-    raise "Unit is retired" if unit.retired
+    label = role == :parent ? "Parent unit" : "Unit"
+    raise UnitUnavailable.new("#{label} not found", role:) unless unit
+    raise UnitUnavailable.new("#{label} is retired", role:, retired_name: unit.name) if unit.retired
 
     unit
   end
