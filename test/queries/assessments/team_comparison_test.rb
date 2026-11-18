@@ -71,27 +71,25 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     assert compare({ 2 => 1, 3 => 3 }).shown?
   end
 
-  should "read the day's snapshot with its groups when it is replaced between reads" do
-    stale = @snapshot
-    @snapshot = LevelComparisonSnapshot.new(tenant: @tenant, taken_on: stale.taken_on)
-    stale.groups.each { |g| @snapshot.groups.build(g.attributes.except("id", "snapshot_id", "created_at", "updated_at")) }
-    stale.destroy!
-    @snapshot.save!
+  should "read the latest snapshot's day and its groups in one statement" do
+    reads = []
+    count = ->(*, payload) { reads << payload[:sql] if payload[:sql].include?("level_comparison") }
+    result = ActiveSupport::Notifications.subscribed(count, "sql.active_record") { compare({ 2 => 1, 3 => 3 }) }
 
-    LevelComparisonSnapshot.stub(:latest, stale) { assert compare({ 2 => 1, 3 => 3 }).shown? }
+    assert result.shown?
+    assert_equal 1, reads.size, "expected one read, so the day and the groups come from one snapshot"
+    assert_match(/level_comparison_snapshots.*level_comparison_groups/m, reads.sole)
   end
 
-  should "take the day and the groups from one snapshot when a newer one lands between reads" do
-    newer = lambda do
-      LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 12, 1)).tap do |snapshot|
-        snapshot.groups.create!(tenant: @tenant, framework_id: SecureRandom.uuid_v7, role_id: @role_id, level_ordinal: 5,
-                                group_size: 6, capability_medians: { "cap-a" => 1.0 }, capability_counts: { "cap-a" => 6 },
-                                category_medians: {})
-      end
-    end
-    result = LevelComparisonSnapshot.stub(:latest, newer) { compare({ 5 => 1 }) }
+  should "take the day from the newest snapshot even when none of its groups are at the levels in view" do
+    newer = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 12, 1))
+    newer.groups.create!(tenant: @tenant, framework_id: SecureRandom.uuid_v7, role_id: @role_id, level_ordinal: 5,
+                         group_size: 6, capability_medians: { "cap-a" => 1.0 }, capability_counts: { "cap-a" => 6 },
+                         category_medians: {})
 
-    assert_equal [ :too_few, Date.new(2026, 11, 1) ], [ result.reason, result.taken_on ]
+    result = compare({ 2 => 1 })
+
+    assert_equal [ :too_few, Date.new(2026, 12, 1), [ 2 ] ], [ result.reason, result.taken_on, result.short_ordinals ]
   end
 
   should "say when there is no snapshot yet" do
