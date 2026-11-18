@@ -309,7 +309,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
       assert_equal [ { @basket => %w[Lane] }, {} ], [ @retire_on - 1, @retire_on ].map { structures_as_of(it) }
     end
 
-    should "refuse a retirement or succession that withdraws a structure while the kinds are rebuilt, and retire any other unit" do
+    should "refuse a retirement, succession or applied succession that withdraws a structure while the kinds are rebuilt, and retire any other unit" do
       declare(unit: @basket, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {})
       till, ledger = %w[Till Ledger].map { create_unit(it, @pod, parent_id: @checkout) }
       while_rebuilding(@tenant, OrgGraph::Projections::History) { as_tenant { @handler.retire_unit(ledger, effective_on: @retire_on) } }
@@ -324,6 +324,10 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
             assert_raises(ProjectionVersion::Rebuilding) do
               @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ till ],
                                                                effective_on: @retire_on, retire_predecessors: true)
+            end
+            assert_raises(ProjectionVersion::Rebuilding) do
+              @handler.apply_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ till ],
+                                                              effective_on: @retire_on)
             end
           end
         end
