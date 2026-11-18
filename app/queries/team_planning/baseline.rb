@@ -43,7 +43,7 @@ class TeamPlanning::Baseline
   # @!attribute held_cost_centres [Set<String>, nil] the cost centres a scoped plan's lines may name, fixed by its baseline; nil holds every line
   # @!attribute outside_lines [Array<BudgetLine>] the lines naming a cost centre the plan doesn't hold. Never shown, named or counted
   # @!attribute step [Range<Date>, nil] the days the scenario's figures run over, which resolution fills in; nil starts every seat
-  # @!attribute org_unit_levels [Hash{String => String}] unit id => type, for every unit the Org Graph held, live or retired, in scope or not. Never shown
+  # @!attribute org_unit_levels [Hash{String => String}] unit id => type, for every unit the Org Graph held, live or retired, in scope or not. Never shown, put in a payload or cut into a view model, as it names units outside the plan's scope
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
                     :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings, :scope_ids, :outside,
                     :cut_positions, :cut_unit_ids, :held_cost_centres, :outside_lines, :step, :org_unit_levels) do
