@@ -55,10 +55,13 @@ class Operations::Assessments::LevelComparison < Operations::Base
   end
 
   def summary(level)
-    lens = Assessments::Lens.resolve(assignment:, as_level: level.ordinal)
-    @summary ||= Assessments::ScoreSummary.new(
-      assignment:, lens:, context: Assessments::ViewerContext.for(assignment:, authorization: context, lens:)
-    )
+    @summaries ||= {}
+    @summaries[level.ordinal] ||= begin
+      lens = Assessments::Lens.resolve(assignment:, as_level: level.ordinal)
+      Assessments::ScoreSummary.new(
+        assignment:, lens:, context: Assessments::ViewerContext.for(assignment:, authorization: context, lens:)
+      )
+    end
   end
 
   def categories(group, level)

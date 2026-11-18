@@ -55,7 +55,7 @@ class Assessments::LevelComparison
   def neighbours
     ladder = @lens.role.levels.sort_by(&:ordinal)
     at = ladder.index { |level| level.ordinal == own_ordinal }
-    ladder[[ at - 1, 0 ].max..at + 1]
+    at ? ladder[[ at - 1, 0 ].max..at + 1] : []
   end
 
   def snapshot

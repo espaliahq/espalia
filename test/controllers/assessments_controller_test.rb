@@ -725,6 +725,15 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         assert_includes map.css("[data-comparison-level]").map(&:text).join(" "), "fewer than 5"
       end
 
+      should "fall back to the capabilities when the comparison can't be read" do
+        Operations::Assessments::LevelComparison.stub(:call, ->(**) { raise Operations::Base::ParameterError, "gone" }) do
+          get capability_map_assessment_path(@assignment, tab: "compare")
+        end
+
+        assert_response :success
+        assert_includes response.body, "data-capability-lane"
+      end
+
       should "show no tabs when the tenant has comparisons off" do
         @tenant.update!(comparison_config: ComparisonConfig.new(enabled: false))
         get capability_map_assessment_path(@assignment, tab: "compare")

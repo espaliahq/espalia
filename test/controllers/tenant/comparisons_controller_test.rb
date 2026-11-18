@@ -51,6 +51,17 @@ class Tenant::ComparisonsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "as a tenant admin sending a group size that isn't a whole number" do
+    setup { sign_in @admin_user }
+
+    should "refuse it rather than round it" do
+      patch tenant_comparisons_path, params: { comparisons: { enabled: "1", min_group_size: "4.9", snapshot_every_months: "1" } }
+
+      assert_response :unprocessable_content
+      assert_equal 5, @tenant.reload.comparison_config.min_group_size
+    end
+  end
+
   context "as a member" do
     setup { sign_in @member_user }
 

@@ -25,8 +25,15 @@ class Tenant::ComparisonsController < ApplicationController
   def comparison_params
     raw = params.expect(comparisons: [ :enabled, :min_group_size, :snapshot_every_months ])
     { enabled: (ActiveModel::Type::Boolean.new.cast(raw[:enabled]) if raw.key?(:enabled)),
-      min_group_size: raw[:min_group_size].presence&.to_i,
-      snapshot_every_months: raw[:snapshot_every_months].presence&.to_i }.compact
+      min_group_size: whole_number(raw[:min_group_size], "Smallest group"),
+      snapshot_every_months: whole_number(raw[:snapshot_every_months], "Snapshot interval") }.compact
+  end
+
+  # @raise [Operations::Base::ParameterError] for anything but a whole number, rather than rounding it
+  def whole_number(value, name)
+    return if value.blank?
+
+    Integer(value, 10, exception: false) || raise(Operations::Base::ParameterError, "#{name} must be a whole number")
   end
 
   def render_page(status: :ok)

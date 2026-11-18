@@ -17,10 +17,10 @@ class LevelComparisonSnapshot < ApplicationRecord
   # @return [LevelComparisonSnapshot] the tenant's snapshot for that day, replaced if it already had one
   def self.take!(tenant:, on:)
     groups = LevelComparisons::GroupScores.new(tenant:).call
-    transaction do
-      where(tenant:, taken_on: on).destroy_all
-      create!(tenant:, taken_on: on).tap do |snapshot|
-        groups.each { |group| snapshot.groups.create!(tenant:, **group) }
+    ActsAsTenant.with_tenant(tenant) do
+      transaction do
+        where(taken_on: on).destroy_all
+        create!(taken_on: on).tap { |snapshot| groups.each { |group| snapshot.groups.create!(**group) } }
       end
     end
   end

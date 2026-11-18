@@ -229,7 +229,7 @@ class AssessmentsController < ApplicationController
   # @return [Views::Assessments::LevelComparisonPanel, nil] nil when comparisons are off
   def compared_panel
     comparison = level_comparison(params[:compare_level].presence) || level_comparison(nil)
-    return unless comparison[:enabled]
+    return unless comparison&.dig(:enabled)
 
     at = Assessments::Lens.resolve(assignment: @assignment, as_level: comparison.dig(:level, :ordinal))
     context = Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user, lens: at)
