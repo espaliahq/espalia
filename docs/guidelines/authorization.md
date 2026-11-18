@@ -166,7 +166,7 @@ Pundit's `authorize` passes none.
 | See the Org Graph (`show?`) | Any tenant member |
 | The Units view, its activity sidebar and change it back, and `org_graph_units`, `org_graph_activity`, `org_graph_change_back` and `org_graph_change_back_group` (`show_units?`; a change-back also needs the rights to make the inverse change) | A tenant admin, until the Org Graph's screens are finished; it then opens to `show?` |
 | Add, rename or remove a unit type, or say where it can sit (`edit_taxonomy?`) | A tenant admin. Every unit has a type, so the structure's shape is a bigger call than a unit edit |
-| Give a unit a structure of its own, withdraw it, or change its types (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494)) | A tenant admin, for now. Step 6 of [#390](https://github.com/espaliahq/espalia/issues/390) widens this one predicate; nothing else names who may |
+| Give a unit a structure of its own, withdraw it, change its types, or move a unit into it (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494)) | A tenant admin, for now. A move in also needs `move_unit?`, and its refusal names no unit. Step 6 of [#390](https://github.com/espaliahq/espalia/issues/390) widens this one predicate; nothing else names who may |
 | Providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
 | Rename, retire or own a unit, or add a unit beneath it (`edit_unit?`, `create_unit?(parent)`) | The above, or an active owner of that unit or any unit above it |
 | Change a unit's type (`change_unit_kind?`), or change that back | A tenant admin or an Org Graph editor. An owner may move a unit but not change its type, since its type decides what may sit above and below it |
@@ -207,6 +207,8 @@ a retirement moving its members, the HRIS fact claim, a rake task. Nobody is
 acting, so nothing is checked. A handler built with no actor, or with `nil`,
 raises `ArgumentError`, so a screen that forgets to pass one fails instead of
 skipping the check. Pass `SYSTEM` only where no person drives the write.
+`SYSTEM` can't move a unit into a unit's own structure: the conversion is a
+tenant admin's call, and no sync or task makes one.
 `TenantUser#ensure_person!` records a new person's stream as `SYSTEM` even when
 an admin triggers it, since provisioning a person for an account is the
 system's act and must never fail a member's sign-in.

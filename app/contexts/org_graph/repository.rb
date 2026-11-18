@@ -49,12 +49,16 @@ class OrgGraph::Repository
   #
   # @param plan [OrgGraph::PlanReference, nil] stamped on every event written
   # @param cause_id [String, nil] the correlation id every event written shares
+  # @param one_moment [Boolean] give every event written one timestamp, so the
+  #   history learns the change at once and no cutoff falls inside it
   # @yield [OrgGraph::StructureAggregate] the loaded aggregate
   # @raise [ArgumentError] if no tenant context is available
-  def with_structure(plan: nil, cause_id: nil, &block)
+  def with_structure(plan: nil, cause_id: nil, one_moment: false, &block)
     with_locked_stream(EventStreamNaming.org_structure_stream, cause_id) do |stream|
-      @repository.with_aggregate(OrgGraph::StructureAggregate.new, stream) do |structure|
-        structure.within_plan(plan, &block)
+      at_one_moment(one_moment) do
+        @repository.with_aggregate(OrgGraph::StructureAggregate.new, stream) do |structure|
+          structure.within_plan(plan, &block)
+        end
       end
     end
   end
@@ -95,6 +99,14 @@ class OrgGraph::Repository
         yield stream
       end
     end
+  end
+
+  # RES reads its clock once per event unless the metadata names a time. The
+  # time is read once the lock is held, so the stream's timestamps still rise.
+  def at_one_moment(one_moment, &)
+    return yield unless one_moment
+
+    @event_store.with_metadata({ timestamp: Time.now.utc.round(RubyEventStore::TIMESTAMP_PRECISION) }, &)
   end
 
   def lock_stream(stream, shared: false)

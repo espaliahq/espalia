@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 # Declaring and withdrawing a unit's own structure, and changing its types,
 # through the operations MCP and the web share (#494).
 class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
   include OrgGraphFixture
+  include RebuildLock
 
   setup do
     @tenant = create(:tenant)
@@ -31,6 +33,12 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
   end
 
   def level_of(unit) = ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[unit]).level_id }
+
+  def move_in(as: @admin, conversion: { @org[:team] => @stream })
+    call(Operations::OrgGraph::MoveUnit, as:, unit_id: @org[:platform], parent_id: @org[:checkout], conversion:)
+  end
+
+  def members_of(unit) = ActsAsTenant.with_tenant(@tenant) { OrgMembership.where(unit_id: @org[unit]).pluck(:person_id, :allocation).sort }
 
   context "DeclareStructure" do
     should "give a unit its own types, minting their ids and converting the units beneath it" do
@@ -217,6 +225,169 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
 
         assert_equal "This came with a change to a unit's own structure, which can't be changed back yet",
                      OrgGraph::ChangeBackHandler.new(actor: context).refusal(conversion)
+      end
+    end
+
+    context "MoveUnit with a conversion" do
+      should "move a team into the structure, converting it, and keep its members" do
+        members = members_of(:platform)
+        result = move_in
+
+        assert_equal({ @org[:team] => @stream }, result[:conversion])
+        assert_equal [ @stream, @org[:checkout] ], ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).then { [ it.level_id, it.parent_id ] } }
+        assert_equal members, members_of(:platform)
+      end
+
+      should "learn the move and its type changes at one moment, so no cutoff shows it half made" do
+        known = lambda do |at, on|
+          ActsAsTenant.with_tenant(@tenant) do
+            %w[parent level].map do |fact|
+              OrgFactPeriod.known_at(at).in_effect_on(on)
+                           .find_by(subject_type: OrgGraph::Projections::History::UNIT, subject_id: @org[:platform], fact:)
+                           &.value&.values&.first
+            end
+          end
+        end
+        was = ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).then { [ it.parent_id, it.level_id ] } }
+        on = move_in[:effective_on]
+
+        events = Rails.configuration.event_store.read.of_type([ OrgGraph::Events::UnitMoved, OrgGraph::Events::UnitKindChanged ]).to_a
+        moved = events.reverse.find { it.is_a?(OrgGraph::Events::UnitMoved) }
+        change = events.select { it.metadata[:correlation_id] == moved.metadata[:correlation_id] }
+        assert_operator change.size, :>, 1
+        assert_equal [ moved.timestamp ], change.map(&:timestamp).uniq
+        learned = ActsAsTenant.with_tenant(@tenant) { OrgFactPeriod.where(event_id: change.map(&:event_id)).distinct.pluck(:learned_at) }
+        assert_equal [ moved.timestamp ], learned
+        assert_equal was, known.call(moved.timestamp - 0.000001, on)
+        assert_equal [ @org[:checkout], @stream ], known.call(moved.timestamp, on)
+      end
+
+      should "refuse a misfit as a parameter error, and leave the move to a tenant admin" do
+        error = assert_raises(Operations::Base::ParameterError) { move_in(conversion: { @org[:team] => @lane }) }
+        assert_equal "These units wouldn't fit Checkout's structure: Platform (Lane at the top)", error.message
+
+        error = assert_raises(OrgGraph::Authorization::Refused) { move_in(as: @editor) }
+        assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+        assert_equal @org[:team], level_of(:platform)
+      end
+
+      should "ask the caller to retry while the units are rebuilt, and name a unit that isn't there" do
+        while_rebuilding(@tenant, OrgGraph::Projections::Structure) do
+          error = assert_raises(Operations::Base::ParameterError) { move_in }
+          assert_equal ProjectionVersion::Rebuilding.new.message, error.message
+        end
+        replay(@tenant, OrgGraph::Projections::Structure)
+        assert_equal @org[:team], level_of(:platform)
+
+        missing = SecureRandom.uuid_v7
+        error = assert_raises(Operations::Base::ParameterError) do
+          call(Operations::OrgGraph::MoveUnit, unit_id: missing, parent_id: @org[:checkout], conversion: { @org[:team] => @stream })
+        end
+        assert_equal "unit_id names no unit in the Org Graph", error.message
+        error = assert_raises(Operations::Base::ParameterError) do
+          call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], parent_id: missing, conversion: { @org[:team] => @stream })
+        end
+        assert_equal "parent_id names no unit in the Org Graph", error.message
+      end
+
+      should "keep the command's refusal when a rebuild empties the units before it reaches the caller" do
+        tenant = @tenant
+        build = OrgGraph::StructureCommandHandler.method(:new)
+        rebuilding_after_refusal = lambda do |**options|
+          build.call(**options).tap do |handler|
+            move = handler.method(:move_unit)
+            handler.define_singleton_method(:move_unit) do |*args, **kwargs|
+              move.call(*args, **kwargs)
+            rescue RuntimeError
+              OrgGraph::Projections::Structure.reset!(tenant:)
+              raise
+            end
+          end
+        end
+        tomorrow = ActsAsTenant.with_tenant(@tenant) { Tenant.today + 1 }.iso8601
+
+        error = OrgGraph::StructureCommandHandler.stub(:new, rebuilding_after_refusal) do
+          assert_raises(Operations::Base::ParameterError) do
+            call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], parent_id: @org[:checkout],
+                                                 effective_on: tomorrow, conversion: { @org[:team] => @stream })
+          end
+        end
+        assert_equal "A move into a structure can't be dated after today", error.message
+        replay(@tenant, OrgGraph::Projections::Structure)
+      end
+
+      should "name a retired unit or parent from the command's own state" do
+        retired = ActsAsTenant.with_tenant(@tenant) do
+          OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).tap do |handler|
+            handler.retire_unit(@org[:payments], effective_on: Tenant.today.iso8601)
+          end
+          OrgUnit.find(@org[:payments]).name
+        end
+        [ [ @org[:payments], @org[:checkout] ], [ @org[:platform], @org[:payments] ] ].each do |unit_id, parent_id|
+          error = assert_raises(Operations::Base::ParameterError) do
+            call(Operations::OrgGraph::MoveUnit, unit_id:, parent_id:, conversion: { @org[:team] => @stream })
+          end
+          assert_equal "#{retired} is retired", error.message
+        end
+      end
+
+      should "refuse an unknown or another tenant's unit with the ordinary message, naming no unit" do
+        elsewhere = build_org_graph(create(:tenant))
+        move = ->(as, unit_id, parent_id) { call(Operations::OrgGraph::MoveUnit, as:, unit_id:, parent_id:, conversion: { @org[:team] => @stream }) }
+        [ SecureRandom.uuid_v7, elsewhere[:platform] ].each do |stranger|
+          [ [ stranger, @org[:checkout] ], [ @org[:platform], stranger ] ].each do |unit_id, parent_id|
+            error = assert_raises(OrgGraph::Authorization::Refused) { move.call(@editor, unit_id, parent_id) }
+            assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+
+            error = assert_raises(Operations::Base::ParameterError) { move.call(@admin, unit_id, parent_id) }
+            named = unit_id == stranger ? "unit_id" : "parent_id"
+            assert_equal "#{named} names no unit in the Org Graph", error.message
+          end
+        end
+        assert_equal @org[:team], level_of(:platform)
+      end
+
+      should "return the date it wrote when the tenant's day turns over mid-call" do
+        today = ActsAsTenant.with_tenant(@tenant) { Tenant.today }
+        days = [ today, today + 1 ]
+        result = Tenant.stub(:today, -> { days.shift || today + 1 }) { move_in }
+
+        written = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data[:effective_on]
+        assert_equal written, result[:effective_on]
+      end
+
+      should "refuse a malformed conversion before the operation runs, so MCP saves no approval for it" do
+        build = lambda do |conversion|
+          ActsAsTenant.with_tenant(@tenant) do
+            context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+            Operations::OrgGraph::MoveUnit.new(context:, params: { unit_id: @org[:platform], parent_id: @org[:checkout], conversion: })
+          end
+        end
+
+        error = assert_raises(Operations::Base::ParameterError) { build.call({ @org[:team] => true }) }
+        assert_equal "conversion maps level ids to level ids, got #{@org[:team].inspect} => true", error.message
+        assert_raises(Operations::Base::ParameterError) { build.call({ "Team" => @stream }) }
+        error = assert_raises(Operations::Base::ParameterError) { build.call({}) }
+        assert_equal "conversion can't be blank", error.message
+        error = assert_raises(Operations::Base::ParameterError) do
+          ActsAsTenant.with_tenant(@tenant) do
+            context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+            Operations::OrgGraph::MoveUnit.new(context:, params: { unit_id: @org[:platform], conversion: { @org[:team] => @stream } })
+          end
+        end
+        assert_equal "A move with a conversion needs parent_id: a unit at the top stays in the top structure", error.message
+        assert_equal @org[:team], level_of(:platform)
+      end
+
+      should "refuse two spellings of one type that map to different types, and accept one in capitals" do
+        error = assert_raises(Operations::Base::ParameterError) do
+          move_in(conversion: { @org[:team].upcase => @stream, @org[:team] => @lane })
+        end
+        assert_equal "conversion gives #{@org[:team]} two different types", error.message
+        assert_equal @org[:team], level_of(:platform)
+
+        assert_equal({ @org[:team] => @stream }, move_in(conversion: { @org[:team].upcase => @stream.upcase })[:conversion])
+        assert_equal @stream, level_of(:platform)
       end
     end
   end

@@ -47,7 +47,7 @@ class OrgGraph::StructureCommandHandler
   def declare_structure(unit_id, **options)
     authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
+      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
     end
   end
 
@@ -56,7 +56,7 @@ class OrgGraph::StructureCommandHandler
   def withdraw_structure(unit_id, **options)
     authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
+      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
     end
   end
 
@@ -160,10 +160,16 @@ class OrgGraph::StructureCommandHandler
     with_structure(plan) { |structure| structure.rename_unit(unit_id, name, **attributed(options, :renamed_by_id)) }
   end
 
+  # A move with a conversion also needs the right to change the structure it
+  # moves into, checked under the structure's lock before anything about the
+  # move is.
+  #
   # @see OrgGraph::StructureAggregate#move_unit
   def move_unit(unit_id, parent_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_move_unit!(unit_id, parent_id)
+    return move_into_structure(unit_id, parent_id, plan, options) unless options[:conversion].nil?
+
     with_structure(plan) { |structure| structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
   end
 
@@ -244,6 +250,13 @@ class OrgGraph::StructureCommandHandler
 
   private
 
+  def move_into_structure(unit_id, parent_id, plan, options)
+    with_structure(plan, grouped: true) do |structure|
+      authorize_move_into!(structure.structure_joined_beneath(parent_id))
+      unless_kinds_rebuilding { structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
+    end
+  end
+
   # The history records a provider change only when it changes the kind, so a
   # change that reached both the live subscriber and a replay would leave the
   # replay's older provider standing. The structure holds each kind's rules,
@@ -294,7 +307,12 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
-  def with_structure(plan, &block)
-    @repository.with_structure(plan:, cause_id: @cause_id, &block)
+  # A change that converts units is `grouped`: it shares one cause with their
+  # type changes even outside a request, so change back sees one change, and
+  # one timestamp, so the history never shows it half made.
+  def with_structure(plan, grouped: false, &block)
+    cause_id = @cause_id
+    cause_id ||= Rails.configuration.event_store.metadata[:correlation_id] || SecureRandom.uuid_v7 if grouped
+    @repository.with_structure(plan:, cause_id:, one_moment: grouped, &block)
   end
 end
