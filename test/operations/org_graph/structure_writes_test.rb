@@ -174,8 +174,8 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
 
       result = call(Operations::OrgGraph::AsOf, date: day, unit_id: @org[:payments])
 
-      assert_equal [ [ @org[:checkout], %w[Stream Lane] ], [ @org[:payments], %w[Pod] ] ],
-                   result[:structures].map { [ it[:unit_id], it[:kinds].pluck(:name) ] }.sort
+      assert_equal({ @org[:checkout] => %w[Stream Lane], @org[:payments] => %w[Pod] },
+                   result[:structures].to_h { [ it[:unit_id], it[:kinds].pluck(:name) ] })
     end
 
     should "offer a unit only the types and places of the structure in force where it sits" do
