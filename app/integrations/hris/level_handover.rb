@@ -123,7 +123,7 @@ class Hris::LevelHandover
                                 allocation: membership.allocation, role: membership.role, effective_on: @today)
         end
         Hris::LevelMirror.forget_parent_readings([ @level ])
-        HrisSyncIssue.where(kind: "in_structure", unit_id: units.map(&:id)).destroy_all
+        HrisSyncIssue.where(kind: "in_structure", unit_id: OrgUnit.where(level_id: @level.id).select(:id)).destroy_all
       end
       handback
     end

@@ -252,9 +252,9 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_not HrisUnitParentProposal.exists?(unit_id: @payments)
     end
 
-    should "clear the level's units' in-structure sync issues, and no others" do
+    should "clear the in-structure sync issues of the level's units, retired ones too, and no others" do
       elsewhere = SecureRandom.uuid_v7
-      [ @payments, @search, elsewhere ].each { create(:hris_sync_issue, unit_id: it) }
+      [ @payments, @search, @legacy, elsewhere ].each { create(:hris_sync_issue, unit_id: it) }
 
       handover.hand_back!(fingerprint: handover.compare_handback.fingerprint, actor: @actor)
 
