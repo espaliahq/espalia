@@ -133,6 +133,30 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal lane, structure.unit(@basket).level_id
   end
 
+  context "dating a change inside a declared structure" do
+    setup do
+      @lane = SecureRandom.uuid_v7
+      declare(levels: [ *groups_and_streams, { level_id: @lane, name: "Lane", parent_level_ids: [], top: true } ])
+      @search = create_unit("Search", @group, parent_id: @payments)
+      @wharf = create_unit("Wharf", @lane, parent_id: @payments)
+      as_tenant { @handler.move_unit(@basket, @search, effective_on: @today + 4) }
+    end
+
+    should "refuse a type a sub-unit couldn't sit beneath before it left" do
+      error = assert_raises(RuntimeError) { as_tenant { @handler.change_unit_kind(@checkout, @lane, effective_on: @today + 2) } }
+      assert_equal "On #{(@today + 2).iso8601}, Lane wouldn't have fit: Basket (Stream under Lane). Date the change later", error.message
+
+      as_tenant { @handler.change_unit_kind(@checkout, @lane, effective_on: @today + 4) }
+      assert_equal @lane, structure.unit(@checkout).level_id
+    end
+
+    should "refuse a back-dated move beneath a type the rules forbid" do
+      error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(@basket, @wharf, effective_on: @today + 2) } }
+      assert_equal "On #{(@today + 2).iso8601}, Stream couldn't sit under Lane, so the change can't be dated before its rules allowed it",
+                   error.message
+    end
+  end
+
   should "move a tenant-wide type into one unit's structure, then retire it tenant-wide (the worked example)" do
     declared_on = @today + 3
     group = SecureRandom.uuid_v7

@@ -1323,15 +1323,14 @@ class OrgGraph::StructureAggregate
   # the unit had then, and the sub-units beneath it then. Days after today
   # count too, since a move can be dated ahead.
   def ensure_kind_fitted_since!(unit, level_id, from:)
-    if (structure_unit_id = structure_in_force(unit.unit_id))
-      return ensure_within_structure!(structure_unit_id, from)
-    end
+    structure_unit_id = structure_in_force(unit.unit_id)
+    ensure_within_structure!(structure_unit_id, from) if structure_unit_id
 
     [ from, *kind_fit_days(unit.unit_id).select { it > from } ].uniq.sort.each do |day|
-      rules = rules_on(day)
+      rules = dated_rules(structure_unit_id, day)
       raise "#{level_name(level_id)} didn't exist on #{day}, so date the change later" unless rules.kind(level_id)
 
-      misfits = kind_misfits_on(unit, level_id, day, rules)
+      misfits = kind_misfits_on(unit, level_id, day, rules, structure_unit_id:)
       next if misfits.empty?
 
       kind = rules.kind(level_id).name
@@ -1351,8 +1350,9 @@ class OrgGraph::StructureAggregate
       *children.filter_map { (retired_on = @units[it]&.retired_on) && (Date.iso8601(retired_on) + 1).iso8601 } ]
   end
 
-  def kind_misfits_on(unit, level_id, day, rules)
+  def kind_misfits_on(unit, level_id, day, rules, structure_unit_id: nil)
     parent_id = parent_on(unit.unit_id, day)
+    parent_id = nil if parent_id == structure_unit_id
     parent_kind = parent_id && kind_on(parent_id, day)
     kind = rules.kind(level_id).name
     misfits = []
@@ -1401,20 +1401,20 @@ class OrgGraph::StructureAggregate
       raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent_kind).name}"
     end
     raise "A mirrored unit can't sit beneath a unit Espalia holds" if parent && provider != ESPALIA && parent.provider == ESPALIA
-    return ensure_within_structure!(structure_unit_id, on) if structure_unit_id
+    ensure_within_structure!(structure_unit_id, on) if structure_unit_id
 
-    ensure_placeable_while_held!(level_id, parent_id, unit_id:, on:, until_on:)
+    ensure_placeable_while_held!(level_id, parent_id, unit_id:, on:, until_on:, structure_unit_id:)
   end
 
   # Each day reads the kinds the unit and its parent held then, so a back-dated
   # move answers to a type either has since changed.
-  def ensure_placeable_while_held!(level_id, parent_id, unit_id:, on:, until_on:)
+  def ensure_placeable_while_held!(level_id, parent_id, unit_id:, on:, until_on:, structure_unit_id: nil)
     days = [ *@kind_timelines.values.flatten(1).map(&:first), *kind_change_days(unit_id, parent_id) ]
            .select { it > on && (until_on.nil? || it < until_on) }
     [ on, *days ].uniq.sort.each do |day|
       level_id = kind_on(unit_id, day) if unit_id
-      parent_level_id = parent_id && kind_on(parent_id, day)
-      rules = rules_on(day)
+      parent_level_id = parent_id && parent_id != structure_unit_id ? kind_on(parent_id, day) : nil
+      rules = dated_rules(structure_unit_id, day)
       next unless rules.kind(level_id) && (parent_level_id.nil? || rules.kind(parent_level_id))
       next if parent_level_id ? rules.allows?(level_id, beneath: parent_level_id) : rules.may_be_top?(level_id)
 
@@ -1422,6 +1422,10 @@ class OrgGraph::StructureAggregate
       raise "On #{day}, #{rules.kind(level_id).name} couldn't sit #{where}, so the change can't be dated before its rules allowed it"
     end
   end
+
+  # A declared structure keeps no dated rules, so its current ones govern
+  # every day since it began.
+  def dated_rules(structure_unit_id, day) = structure_unit_id ? kinds_at(structure_unit_id) : rules_on(day)
 
   # The kinds of unit as they stood on a day, each with the rules it had then.
   def rules_on(day)
