@@ -65,6 +65,16 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
       assert_equal 1, result.met
     end
 
+    should "keep a mean just short of met short of it, unrounded" do
+      scores = [ 1.0, 1.0, 0.99991, 1.0, 1.0, 1.0 ]
+      query = Assessments::TeamCapabilities.new(person_ids: [ @ada, @bo, @cy ].map(&:id))
+      team = query.stub(:score_for, ->(*) { scores.shift }) { query.call }
+
+      critical = team.capabilities.find { |c| c.stable_id == @critical.stable_id }
+      assert_operator critical.score, :<, 1.0
+      assert_not critical.met?
+    end
+
     should "count the people in view and those with a score" do
       assert_equal 3, result.people
       assert_equal 3, result.scored

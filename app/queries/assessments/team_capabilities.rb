@@ -159,7 +159,7 @@ class Assessments::TeamCapabilities
       scores = scorings.filter_map { |scoring, mine, level| score_for(scoring, mine, level, binding) }
       Capability.new(stable_id:, name: binding.capability.name, category_id: binding.capability.category_id,
                      category_name: category_names[binding.capability.category_id],
-                     hue: hues.fetch(binding.capability.category_id), score: scores.empty? ? nil : (scores.sum / scores.size).round(4),
+                     hue: hues.fetch(binding.capability.category_id), score: scores.empty? ? nil : scores.sum / scores.size,
                      scored: scores.size, short: scores.count { |score| score < 1.0 })
     end
   end
