@@ -94,7 +94,7 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
       publish_taxonomy([ { level_id: lane, name: "Lane", parent_level_ids: [], top: true } ], unit_id: @checkout, on: @today + 1)
 
       error = assert_raises(RuntimeError) { create_unit("Fast lane", lane, parent_id: @checkout) }
-      assert_equal "Checkout's structure began on #{(@today + 1).iso8601}, so date the change then or later", error.message
+      assert_equal "Checkout's structure last changed on #{(@today + 1).iso8601}, so date the change then or later", error.message
     end
 
     should "refuse a move out of the structure, and one into it" do

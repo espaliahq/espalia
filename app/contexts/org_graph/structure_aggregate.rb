@@ -1057,12 +1057,13 @@ class OrgGraph::StructureAggregate
     raise "A merge or split can't cross structures: these units sit in #{structures.map { structure_label(it) }.to_sentence}"
   end
 
-  # A change to a unit in a declared structure can't predate the structure.
+  # A declared structure keeps no dated rules (#498), so a change to a unit
+  # in one can't predate the structure's last change.
   def ensure_within_structure!(structure_unit_id, on)
-    since = structure_unit_id && @structure_since[structure_unit_id]
-    return unless since && on < since
+    last = @structure_changed_on[structure_unit_id] || @structure_since[structure_unit_id]
+    return unless last && on < last
 
-    raise "#{structure_label(structure_unit_id).upcase_first} began on #{since}, so date the change then or later"
+    raise "#{structure_label(structure_unit_id).upcase_first} last changed on #{last}, so date the change then or later"
   end
 
   def write_taxonomy(levels, effective_on:, defined_by_id:, rules: {})
@@ -1426,7 +1427,7 @@ class OrgGraph::StructureAggregate
   end
 
   # A declared structure keeps no dated rules, so its current ones govern
-  # every day since it began.
+  # every day since it last changed.
   def dated_rules(structure_unit_id, day) = structure_unit_id ? kinds_at(structure_unit_id) : rules_on(day)
 
   # The kinds of unit as they stood on a day, each with the rules it had then.

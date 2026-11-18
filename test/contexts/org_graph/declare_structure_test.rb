@@ -153,6 +153,38 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal @squad, structure.unit(@checkout).level_id
   end
 
+  should "refuse a change inside a declared structure dated before it last changed, and allow one on that day" do
+    declare
+    lane = SecureRandom.uuid_v7
+    search = create_unit("Search", @group, parent_id: @payments)
+    as_tenant { @admin.add_level(lane, "Lane", parent_ids: [ @group ], structure_unit_id: @payments, effective_on: @today + 3) }
+    refusal = "Payments's structure last changed on #{(@today + 3).iso8601}, so date the change then or later"
+
+    [ -> { @handler.change_unit_kind(@basket, lane, effective_on: @today + 2) },
+      -> { @handler.move_unit(@basket, search, effective_on: @today + 2) } ].each do |change|
+      assert_equal refusal, assert_raises(RuntimeError) { as_tenant(&change) }.message
+    end
+
+    as_tenant do
+      @handler.change_unit_kind(@basket, lane, effective_on: @today + 3)
+      @handler.move_unit(@basket, search, effective_on: @today + 3)
+    end
+    assert_equal [ lane, search ], structure.unit(@basket).then { [ it.level_id, it.parent_id ] }
+  end
+
+  should "convert the units beneath on the day a structure is declared or withdrawn, after a change on that day" do
+    declare(on: @today + 2)
+    lane = SecureRandom.uuid_v7
+    as_tenant do
+      @admin.add_level(lane, "Lane", parent_ids: [ @group ], structure_unit_id: @payments, effective_on: @today + 3)
+      @admin.withdraw_structure(@payments, conversion: { @group => @squad, @stream => @pod }, effective_on: @today + 3)
+    end
+
+    converted = event_store.read.of_type(OrgGraph::Events::UnitKindChanged).map { it.data.values_at(:unit_id, :level_id, :effective_on) }
+    assert_equal [ [ @checkout, @group, (@today + 2).iso8601 ], [ @basket, @stream, (@today + 2).iso8601 ],
+                   [ @checkout, @squad, (@today + 3).iso8601 ], [ @basket, @pod, (@today + 3).iso8601 ] ], converted
+  end
+
   context "dating a change inside a declared structure" do
     setup do
       @lane = SecureRandom.uuid_v7
