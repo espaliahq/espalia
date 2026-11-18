@@ -96,7 +96,8 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     return views unless @comparable
 
     tabs
-    div(id: PANEL_ID, role: "tabpanel", aria: { labelledby: tab_id(@compared ? "compare" : "capabilities") }) { views }
+    div(id: PANEL_ID, role: "tabpanel", tabindex: 0, aria: { labelledby: tab_id(@compared ? "compare" : "capabilities") },
+        class: "rounded-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus") { views }
   end
 
   def views

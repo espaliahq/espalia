@@ -704,6 +704,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         assert_equal [ [ "-1", "false" ], [ "0", "true" ] ], tabs.map { |t| [ t["tabindex"], t["aria-selected"] ] }
         assert_equal [ panel["id"] ], tabs.map { |t| t["aria-controls"] }.uniq
         assert_equal tabs.last["id"], panel["aria-labelledby"]
+        assert_equal "0", panel["tabindex"], "expected the panel to take focus, as it opens on text"
         assert panel.at_css("[data-comparison-lane]"), "expected the comparison inside its panel"
       end
 
