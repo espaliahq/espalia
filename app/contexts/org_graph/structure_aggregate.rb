@@ -558,7 +558,7 @@ class OrgGraph::StructureAggregate
     effective_on = structure_dated!(unit, governed, effective_on)
     above = structure_in_force(unit.unit_id)
     conversion = converted!(governed, conversion, into: kinds_at(above), label: structure_label(above), &:itself)
-    ensure_converted_since!(governed, conversion, effective_on) unless above
+    above ? ensure_within_structure!(above, effective_on) : ensure_converted_since!(governed, conversion, effective_on)
     apply(withdrawal(unit, conversion:, effective_on:, withdrawn_by_id:))
     apply_conversion(governed, conversion, effective_on, withdrawn_by_id)
   end

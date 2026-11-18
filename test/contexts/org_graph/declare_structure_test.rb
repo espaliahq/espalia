@@ -172,6 +172,21 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal [ lane, search ], structure.unit(@basket).then { [ it.level_id, it.parent_id ] }
   end
 
+  should "refuse a withdrawal into a declared structure dated before it last changed, and allow one on that day" do
+    declare
+    leaf, lane = Array.new(2) { SecureRandom.uuid_v7 }
+    declare(unit: @checkout, levels: [ { level_id: leaf, name: "Leaf" } ], conversion: { @stream => leaf }, on: @today + 1)
+    as_tenant { @admin.add_level(lane, "Lane", parent_ids: [ @group ], structure_unit_id: @payments, effective_on: @today + 6) }
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @admin.withdraw_structure(@checkout, conversion: { leaf => lane }, effective_on: @today + 4) }
+    end
+    assert_equal "Payments's structure last changed on #{(@today + 6).iso8601}, so date the change then or later", error.message
+
+    as_tenant { @admin.withdraw_structure(@checkout, conversion: { leaf => lane }, effective_on: @today + 6) }
+    assert_equal lane, structure.unit(@basket).level_id
+  end
+
   should "convert the units beneath on the day a structure is declared or withdrawn, after a change on that day" do
     declare(on: @today + 2)
     lane = SecureRandom.uuid_v7
