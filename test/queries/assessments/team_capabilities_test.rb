@@ -161,6 +161,14 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
     assert_equal [ 1, 1 ], [ narrowed.people, narrowed.scored ]
   end
 
+  should "read every level when the role asked for isn't in the team" do
+    fallback = result(role_id: @designer.role_id, level_ordinal: 3)
+
+    assert_equal @engineer.role_id, fallback.role.role_id
+    assert_nil fallback.level_ordinal
+    assert_equal 3, fallback.people
+  end
+
   should "read every level for a level that isn't on the role's ladder" do
     narrowed = result(level_ordinal: 9)
 

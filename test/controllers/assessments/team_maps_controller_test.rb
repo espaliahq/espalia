@@ -38,6 +38,13 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#team-map [data-team-lane='#{@fx.shared.stable_id}']", text: /Team 33%.*1 short/m
   end
 
+  should "keep the role shown in its links when the team holds only one" do
+    sign_in @user
+    get team_map_assessments_path
+
+    assert_select "#team-map a[data-team-level='E3'][href*='team_role=#{@fx.engineer.role_id}']"
+  end
+
   should "show the ratings it reads, and switch to self-ratings" do
     sign_in @user
     get team_map_assessments_path(team_ratings: "self")

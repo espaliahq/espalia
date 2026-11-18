@@ -45,7 +45,7 @@ class Assessments::TeamCapabilities
   # @param person_ids [Array<String>] the team
   # @param perspective [Symbol] :manager_only, :self_only or :aligned_only
   # @param role_id [String, nil] the role to show; nil for the one most of the team holds
-  # @param level_ordinal [Integer, nil] one level to narrow to; nil for every level
+  # @param level_ordinal [Integer, nil] one level to narrow to; nil for every level, as it is when `role_id` isn't in the team
   def initialize(person_ids:, perspective: :manager_only, role_id: nil, level_ordinal: nil)
     @person_ids = person_ids
     @perspective = perspective
@@ -56,7 +56,8 @@ class Assessments::TeamCapabilities
 
   # @return [Result]
   def call
-    @level_ordinal = nil if role && ladder.none? { |level| level.ordinal == @level_ordinal }
+    fell_back = @role_id && role&.role_id != @role_id
+    @level_ordinal = nil if role && (fell_back || ladder.none? { |level| level.ordinal == @level_ordinal })
     on_role = role ? enrollments.select { |enrollment| enrollment.role_id == role.role_id } : []
     in_view = @level_ordinal ? on_role.select { |enrollment| enrollment.level_ordinal == @level_ordinal } : on_role
     scorings = in_view.filter_map { |enrollment| scoring_for(enrollment) }
