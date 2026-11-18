@@ -21,11 +21,14 @@ namespace :org_graph do
   end
 
   namespace :taxonomy do
-    desc "Report units sitting where their kind may not, and kind changes dated out of order. Fails on a misplaced unit."
+    desc "Report each tenant's structures, units sitting where their kind may not, and kind changes dated out of order. Fails on a misplaced unit."
     task check: :environment do
       misplaced = Tenant.find_each.sum do |tenant|
-        units, dates = ActsAsTenant.with_tenant(tenant) { OrgGraph::TaxonomyCheck.new.then { [ it.misplaced, it.out_of_order ] } }
-        puts "[#{tenant.id}] #{units.size} misplaced #{"unit".pluralize(units.size)}, " \
+        structures, units, dates = ActsAsTenant.with_tenant(tenant) do
+          OrgGraph::TaxonomyCheck.new.then { [ it.structures, it.misplaced, it.out_of_order ] }
+        end
+        puts "[#{tenant.id}] #{structures} #{"structure".pluralize(structures)}, " \
+             "#{units.size} misplaced #{"unit".pluralize(units.size)}, " \
              "#{dates.size} #{"change".pluralize(dates.size)} to the kinds dated out of order"
         (units + dates).each { |line| puts "  #{line}" }
         units.size

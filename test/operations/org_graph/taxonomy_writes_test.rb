@@ -25,9 +25,9 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
     end
   end
 
-  def level_names = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_first.pluck(:name) }
+  def level_names = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.pluck(:name) }
 
-  def level_ids = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_first.pluck(:id) }
+  def level_ids = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.pluck(:id) }
 
   def nothing_offered = { plan_id: @plan_id, scenario_id: @scenario_id, undo: nil, redo: nil }
 

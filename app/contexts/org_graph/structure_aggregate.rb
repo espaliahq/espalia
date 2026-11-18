@@ -49,6 +49,7 @@ class OrgGraph::StructureAggregate
     @successions = {}
     @kinds_change_dates = []
     @kind_timelines = {}
+    @structures = {}
   end
 
   # Defines or redefines the tenant's taxonomy, top level first.
@@ -583,19 +584,11 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::TaxonomyDefined do |event|
     levels = event.data[:levels].map { |level| level.to_h.symbolize_keys }
-    @taxonomy = nil
-    @kinds_change_dates << event.data[:effective_on] if event.data[:effective_on]
-    @levels = levels.map { |level| level.slice(:level_id, :name) }
-    @level_rules = levels.select { |level| level.key?(:parent_level_ids) }
-                         .to_h { |level| [ level[:level_id], level.slice(:parent_level_ids, :top) ] }
-    @level_providers = @level_providers.slice(*level_ids(@levels))
-    @level_fields = @level_fields.slice(*level_ids(@levels))
-    levels.each_with_index do |level, position|
-      revise_kind(level[:level_id], event.data[:effective_on]) do |kind|
-        { name: level[:name], position:, provider: kind&.fetch(:provider) || ESPALIA, **level.slice(:parent_level_ids, :top) }
-      end
+    if (structure_unit_id = event.data[:structure_unit_id])
+      define_declared_structure(structure_unit_id, levels)
+    else
+      define_top_structure(levels, event)
     end
-    (@kind_timelines.keys - level_ids(@levels)).each { |level_id| revise_kind(level_id, event.data[:effective_on]) { nil } }
   end
 
   on OrgGraph::Events::LevelProviderSet do |event|
@@ -680,13 +673,42 @@ class OrgGraph::StructureAggregate
     @taxonomy ||= OrgGraph::Taxonomy.new(with_stated_rules(@levels), providers: @level_providers)
   end
 
-  # The live units sitting where their kind's rules no longer allow.
+  # The unit whose structure governs a unit: the nearest unit above it that
+  # declared one. A declaring unit's own type comes from the structure above.
   #
+  # @param unit_id [String]
+  # @return [String, nil] the declaring unit's id; nil for the top structure
+  def structure_in_force(unit_id)
+    return if @structures.empty?
+
+    above = @units[unit_id]&.parent_id
+    above = @units[above]&.parent_id until above.nil? || @structures.key?(above)
+    above
+  end
+
+  # @param unit_id [String]
+  # @return [OrgGraph::Taxonomy] the types of the structure in force at a unit
+  def taxonomy_for(unit_id) = structure_taxonomy(structure_in_force(unit_id), taxonomy)
+
+  # @return [Hash{String => OrgGraph::Taxonomy}] each declared structure, by its declaring unit's id
+  def declared_structures = @structures.dup
+
+  # The live units sitting where their kind's rules no longer allow, each
+  # judged by the structure in force where it sits. A unit directly beneath a
+  # declaring unit sits at the top of that unit's structure.
+  #
+  # @param rules [OrgGraph::Taxonomy] the top structure's rules
   # @return [Array<Unit>] by name
   def misplaced_units(rules = taxonomy)
     live_units.reject do |unit|
+      structure_unit_id = structure_in_force(unit.unit_id)
+      kinds = structure_taxonomy(structure_unit_id, rules)
       parent = unit.parent_id && @units[unit.parent_id]
-      parent ? rules.allows?(unit.level_id, beneath: parent.level_id) : rules.may_be_top?(unit.level_id)
+      if parent && parent.unit_id != structure_unit_id
+        kinds.allows?(unit.level_id, beneath: parent.level_id)
+      else
+        kinds.may_be_top?(unit.level_id)
+      end
     end.sort_by(&:name)
   end
 
@@ -704,6 +726,33 @@ class OrgGraph::StructureAggregate
     changed_on && Date.iso8601(changed_on.to_s)
   end
   private
+
+  def structure_taxonomy(structure_unit_id, top) = structure_unit_id ? @structures.fetch(structure_unit_id) : top
+
+  def define_top_structure(levels, event)
+    @taxonomy = nil
+    @kinds_change_dates << event.data[:effective_on] if event.data[:effective_on]
+    @levels = levels.map { |level| level.slice(:level_id, :name) }
+    @level_rules = levels.select { |level| level.key?(:parent_level_ids) }
+                         .to_h { |level| [ level[:level_id], level.slice(:parent_level_ids, :top) ] }
+    @level_providers = @level_providers.slice(*level_ids(@levels))
+    @level_fields = @level_fields.slice(*level_ids(@levels))
+    levels.each_with_index do |level, position|
+      revise_kind(level[:level_id], event.data[:effective_on]) do |kind|
+        { name: level[:name], position:, provider: kind&.fetch(:provider) || ESPALIA, **level.slice(:parent_level_ids, :top) }
+      end
+    end
+    (@kind_timelines.keys - level_ids(@levels)).each { |level_id| revise_kind(level_id, event.data[:effective_on]) { nil } }
+  end
+
+  # Withdrawing a structure defines it with no types.
+  def define_declared_structure(unit_id, levels)
+    if levels.empty?
+      @structures.delete(unit_id)
+    else
+      @structures[unit_id] = OrgGraph::Taxonomy.new(levels.map { it.slice(:level_id, :name, :parent_level_ids, :top) })
+    end
+  end
 
   def write_taxonomy(levels, effective_on:, defined_by_id:, rules: {})
     new_providers = new_level_providers(levels)

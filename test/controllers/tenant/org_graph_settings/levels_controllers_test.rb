@@ -24,7 +24,7 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
     end
   end
 
-  def level_names = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_first.pluck(:name) }
+  def level_names = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.pluck(:name) }
 
   context "as a tenant admin" do
     setup { sign_in @admin_user }

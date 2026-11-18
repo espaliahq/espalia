@@ -73,17 +73,20 @@ class OrgGraph::Projections::Structure
     end
   end
 
-  # Positions are cleared first so a reorder can't trip the unique index.
+  # Positions are cleared first so a reorder can't trip the unique index. The
+  # event names one structure, so the other structures' levels stay as they are.
   def handle_taxonomy_defined(data)
     levels = data[:levels].map { |level| level.to_h.symbolize_keys }
-    existing = OrgTaxonomyLevel.where(tenant_id: ActsAsTenant.current_tenant.id)
+    structure_unit_id = data[:structure_unit_id]
+    existing = OrgTaxonomyLevel.where(tenant_id: ActsAsTenant.current_tenant.id, structure_unit_id:)
     existing.where.not(id: levels.pluck(:level_id)).delete_all
     existing.update_all("position = -position - 1")
 
     levels.each.with_index do |level, position|
       row = OrgTaxonomyLevel.find_or_initialize_by(id: level[:level_id])
       unchanged = row.persisted? && row.name == level[:name] && row.position == -position - 1
-      row.assign_attributes(name: level[:name], position:, parent_level_ids: level[:parent_level_ids], top: level[:top])
+      row.assign_attributes(name: level[:name], position:, parent_level_ids: level[:parent_level_ids], top: level[:top],
+                            structure_unit_id:)
       row.effective_on = data[:effective_on] unless unchanged
       row.save!
     end

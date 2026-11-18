@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_16_200129) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_024901) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -883,7 +883,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_200129) do
     t.string "provider_field"
     t.uuid "parent_level_ids", array: true
     t.boolean "top"
-    t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
+    t.uuid "structure_unit_id"
+    t.index ["tenant_id", "structure_unit_id", "position"], name: "index_org_taxonomy_levels_on_structure_position", unique: true, nulls_not_distinct: true
   end
 
   create_table "org_unit_activities", id: :uuid, default: nil, force: :cascade do |t|

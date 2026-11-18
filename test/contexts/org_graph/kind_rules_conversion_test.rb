@@ -21,7 +21,7 @@ class OrgGraph::KindRulesConversionTest < ActiveSupport::TestCase
   end
 
   should "accept and refuse every placement as the ordered levels did, narrowed for mirrored units" do
-    order = as_tenant { OrgTaxonomyLevel.top_first.pluck(:id) }
+    order = as_tenant { OrgTaxonomyLevel.top_structure.pluck(:id) }
     providers = as_tenant { OrgTaxonomyLevel.pluck(:id, :provider).to_h }
     units = as_tenant { OrgUnit.where(retired_on: nil).to_a }
     assert_equal 9, units.size
