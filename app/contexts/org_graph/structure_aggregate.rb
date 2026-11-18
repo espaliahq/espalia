@@ -28,6 +28,9 @@ class OrgGraph::StructureAggregate
     # @return [String, nil] the unit's name when it is retired
     attr_reader :retired_name
 
+    # @param message [String] the refusal, as other callers of the command read it
+    # @param role [Symbol] :unit, or :parent for the unit it would sit beneath
+    # @param retired_name [String, nil] the unit's name when it is retired; nil when it is missing
     def initialize(message, role: :unit, retired_name: nil)
       super(message)
       @role = role
