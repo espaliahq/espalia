@@ -104,6 +104,19 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       assert_selector player_coach, text: /Team 100%.*0 short/
     end
 
+    should "offer Retry when the team map fails to load, and draw the map on it" do
+      visit_team(DESKTOP_SIZE)
+      wait_for_stimulus "frame-error", scope: "#team-map-modal"
+      patch_fetch("team-map", respond: :reject, once: true)
+
+      click_button_with_js_fallback("Open team map", expect_text: "Couldn't load the team map")
+      assert_no_selector "#team-map [data-team-lane]"
+      execute_script("[...document.querySelectorAll('#team-map-error button')].find((b) => b.textContent.trim() === 'Retry').click()")
+
+      assert_selector "#team-map [data-team-lane]", count: 2, visible: true
+      assert_no_selector "#team-map-error", visible: true
+    end
+
     should "keep keyboard focus on the level picked when the map reloads" do
       visit_team(DESKTOP_SIZE)
       open_team_map
