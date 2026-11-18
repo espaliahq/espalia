@@ -70,12 +70,12 @@ export default class extends BaseController {
 
   /**
    * A rating streams in the capabilities view, which would replace an open comparison. While the
-   * comparison shows, reload it instead, so it keeps its level and picks up the new score.
+   * comparison shows, or is loading, reload it instead, so it keeps its level and picks up the new score.
    */
   #refetchComparison(event) {
     const frame = this.element.querySelector("turbo-frame[data-reload-src]")
     if (!frame || event.target.getAttribute("target") !== frame.id) return
-    if (!this.viewTargets.some((view) => view.dataset.tab === "compare")) return
+    if (new URL(frame.dataset.reloadSrc, window.location.origin).searchParams.get("tab") !== "compare") return
 
     event.detail.render = () => this.#load(frame)
   }

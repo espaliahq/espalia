@@ -297,6 +297,35 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       assert_selector "#{MAP} [data-comparison-lane='2'] [data-comparison-scores]", text: "You 100%"
       assert_selector "#{MAP} [role='tab'][aria-selected='true']", text: "Compared with your level"
     end
+
+    # The first comparison is read before the rating lands and answers after it.
+    should "end on the new score when the person's own rating lands while the comparison is still loading" do
+      open_map
+      wait_for_stimulus "capability-map"
+      read = Operations::Assessments::LevelComparison.method(:call)
+      first, computed, release = Queue.new, Queue.new, Queue.new
+      first << true
+      held = lambda do |**args|
+        result = read.call(**args)
+        if first.pop(timeout: 0)
+          computed << true
+          release.pop(timeout: 15)
+        end
+        result
+      end
+
+      Operations::Assessments::LevelComparison.stub(:call, held) do
+        page.execute_script("document.querySelector(\"#{MAP} [role='tab']:not([aria-selected='true'])\").click()")
+        assert computed.pop(timeout: 15), "expected the comparison to be read"
+        rate_behind_map("Prioritisation", "consistent")
+        assert_selector "#assessment-live-status", visible: :all, text: "Prioritisation"
+        release << true
+
+        assert_selector "#{MAP} [data-comparison-lane='2'] [data-comparison-scores]", text: "You 100%"
+      ensure
+        release << true
+      end
+    end
   end
 
   should "update an open map, keeping it open and its lane focused, when someone else's rating arrives" do
