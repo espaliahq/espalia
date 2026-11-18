@@ -708,7 +708,8 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       should "switch to a level either side, read on that level's scale" do
         map = compare(compare_level: 1)
 
-        assert_includes map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish, "E1s 100%"
+        assert_equal "You not rated · E1s 100%", map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish,
+                     "expected the person's score read at E1, where they haven't rated"
         assert_equal [ [ "E1", "true" ], [ "E2", "false" ] ],
                      map.css("[data-comparison-level]").map { |c| [ c["data-comparison-level"], c["aria-pressed"] ] }.first(2)
       end

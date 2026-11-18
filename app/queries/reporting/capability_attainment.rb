@@ -22,14 +22,16 @@
 #
 # == Privacy — small-cohort suppression
 #
-# The invariant: never show an aggregate derived from data the viewer cannot
-# open at the individual level. With `suppress_small_groups: true`, any cell
-# whose denominator is under the tenant's smallest group
-# (`ComparisonConfig#min_group_size`, shared with the level comparison) keeps
-# its coverage counts but nils the buckets/percentages. Family cells apply a
-# secondary guard: when the people hidden behind suppressed role cells number
-# 1..floor-1, the family cell is suppressed too — otherwise subtracting the visible role cells
-# from the family cell would reconstruct the small cohort.
+# This report shows an aggregate only of data the viewer can open at the
+# individual level. The level comparison is the one place that shows people
+# an aggregate of others' assessments, which is why it shares this report's
+# floor and reads from a monthly snapshot. With `suppress_small_groups: true`,
+# any cell whose denominator is under the tenant's smallest group
+# (`ComparisonConfig#min_group_size`) keeps its coverage counts but nils the
+# buckets/percentages. Family cells apply a secondary guard: when the people
+# hidden behind suppressed role cells number 1..floor-1, the family cell is
+# suppressed too, since subtracting the visible role cells from it would
+# reconstruct the small cohort.
 #
 # Since AssessmentPolicy#show? grants the full live manager chain individual
 # view access, every current attainment viewer's scope is covered and callers

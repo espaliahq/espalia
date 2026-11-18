@@ -48,8 +48,21 @@ class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
     assert call[:capabilities].all? { |c| c.key?(:your_score) && c.key?(:scored) }
   end
 
+  # A level below their own counts as rated only where they rated it, as on a lens.
   should "read the person's scores at the level compared with" do
-    assert_equal({ ordinal: 1, code: "E1", group_size: 6 }, call({ level_ordinal: 1 })[:level])
+    ActsAsTenant.with_tenant(@tenant) do
+      cycle_id = AssessmentCycleEnrollment.find_by!(person_id: @person.id).cycle_id
+      [ 1, 2 ].each do |level|
+        PersonDevelopment::CommandHandler.new.rate_self(@person.id, @fx.framework_id, @fx.shared.stable_id,
+                                                        level_ordinal: level, frequency: "consistent", cycle_id:)
+      end
+    end
+    shared = ->(result) { result[:capabilities].find { |c| c[:stable_id] == @fx.shared.stable_id } }
+
+    assert_equal 100, shared.(call)[:your_score], "E2 met, on E2's scale"
+    at_e1 = call({ level_ordinal: 1 })
+    assert_equal({ ordinal: 1, code: "E1", group_size: 6 }, at_e1[:level])
+    assert_equal 200, shared.(at_e1)[:your_score], "E1 met and E2 in full, on E1's scale"
   end
 
   should "send no group scores for a level under the minimum" do

@@ -4,6 +4,9 @@
 # on the 1st of the month, so a change to one person's rating reaches the
 # group's middle score only with everyone else's changes since the last one.
 class LevelComparisonSnapshot < ApplicationRecord
+  # How a snapshot's day reads on screen: "1 Nov 2026".
+  DATE_FORMAT = "%-d %b %Y"
+
   acts_as_tenant :tenant
 
   has_many :groups, class_name: "LevelComparisonGroup", foreign_key: :snapshot_id, inverse_of: :snapshot,
@@ -24,11 +27,4 @@ class LevelComparisonSnapshot < ApplicationRecord
 
   # @return [LevelComparisonSnapshot, nil] the snapshot comparisons show now
   def self.latest = order(taken_on: :desc).first
-
-  # @param role_id [String]
-  # @param level_ordinal [Integer]
-  # @return [LevelComparisonGroup, nil] nil when nobody on the role at the level had a settled assessment
-  def group_for(role_id:, level_ordinal:)
-    groups.find { |group| group.role_id == role_id && group.level_ordinal == level_ordinal }
-  end
 end

@@ -9,8 +9,7 @@ class ComparisonConfig
   include StoreModel::Model
 
   DEFAULT_MIN_GROUP_SIZE = 5
-  # The capability attainment report's floor before this setting existed, so
-  # no tenant can show smaller groups than it did.
+  # Smaller groups could point at one person, in a comparison or the capability attainment report.
   LOWEST_MIN_GROUP_SIZE = 4
   HIGHEST_MIN_GROUP_SIZE = 100
   SNAPSHOT_INTERVALS = [ 1, 3, 6 ].freeze

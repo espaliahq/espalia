@@ -1,13 +1,8 @@
 # frozen_string_literal: true
 
-# The capability map's "Compared with your level" tab, for an agent: the
-# person's scores beside the middle scores of everyone on their role at a
-# level, from the tenant's latest snapshot. A level whose group is under the
-# tenant's minimum gives no group scores and no size, as on the web.
-#
-# The person's own scores are live and read in the viewer's own perspective,
-# at the level compared with, through {Assessments::ScoreSummary}; the
-# group's are agreed ratings from settled assessments.
+# A person's scores beside the middle scores of everyone on their role at a
+# level. The capability map's comparison tab renders this payload, so the web
+# and an agent read one set of numbers.
 class Operations::Assessments::LevelComparison < Operations::Base
   description "Compare a person's capabilities with everyone on their role at their level, or one level either " \
               "side: the person's live score on each capability and category beside the group's middle " \
@@ -35,9 +30,12 @@ class Operations::Assessments::LevelComparison < Operations::Base
       raise(ParameterError, "level_ordinal must be #{comparison.levels.map(&:code).to_sentence(last_word_connector: ' or ')}")
     group = comparison.group_at(level.ordinal)
     { enabled: true, taken_on: comparison.taken_on&.iso8601, min_group_size: comparison.min_group_size,
+      role: { id: home_lens.role.role_id, name: home_lens.role.name },
       level: { ordinal: level.ordinal, code: level.code, group_size: level.group_size },
-      levels: comparison.levels.map(&:to_h),
+      levels: comparison.levels.map(&:to_h), suggested_ordinal: comparison.suggested_ordinal,
       categories: group ? categories(group, level) : [], capabilities: group ? capabilities(group, level) : [] }
+  rescue Assessments::Lens::NotFound => e
+    raise ParameterError, e.message
   end
 
   private
@@ -58,7 +56,7 @@ class Operations::Assessments::LevelComparison < Operations::Base
 
   def summary(level)
     lens = Assessments::Lens.resolve(assignment:, as_level: level.ordinal)
-    Assessments::ScoreSummary.new(
+    @summary ||= Assessments::ScoreSummary.new(
       assignment:, lens:, context: Assessments::ViewerContext.for(assignment:, authorization: context, lens:)
     )
   end

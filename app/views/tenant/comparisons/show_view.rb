@@ -6,8 +6,7 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Phlex::Rails::Helpers::FormWith
 
-  DATE_FORMAT = "%-d %b %Y"
-  INTERVALS = { 1 => "1 month", 3 => "3 months", 6 => "6 months" }.freeze
+  INTERVALS = ComparisonConfig::SNAPSHOT_INTERVALS.to_h { |months| [ months, "#{months} #{'month'.pluralize(months)}" ] }.freeze
 
   # @param settings [Hash] `Operations::Tenants::Comparisons.payload`
   # @param user [User]
@@ -105,5 +104,5 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
     end
   end
 
-  def date(iso) = iso && Date.iso8601(iso).strftime(DATE_FORMAT)
+  def date(iso) = iso && Date.iso8601(iso).strftime(LevelComparisonSnapshot::DATE_FORMAT)
 end
