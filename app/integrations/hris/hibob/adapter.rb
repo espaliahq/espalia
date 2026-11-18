@@ -58,7 +58,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
   #   :skipped_no_title, :forgotten_skipped, :levels_skipped_while_rebuilding,
   #   :people_skipped_while_rebuilding,
-  #   :split_units (mirrored units whose people sit under different parents)
+  #   :split_units (mirrored units whose people sit under different parents),
+  #   :units_in_structures (mirrored units whose parent lies inside a unit's own structure)
   def sync_people
     @sync_correlation_id = correlation_id.presence || SecureRandom.uuid_v7
     unless_structure_rebuilding do |writable|
@@ -414,6 +415,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       people_skipped_while_rebuilding: 0,
       errors: [],
       split_units: [],
+      units_in_structures: [],
       unmapped_titles: Set.new,
       missing_roles: Set.new,
       missing_levels: Set.new,

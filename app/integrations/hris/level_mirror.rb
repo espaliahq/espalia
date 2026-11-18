@@ -21,6 +21,10 @@
 #   :split_units. A parent changes only when two syncs in a row read the same
 #   one ({HrisUnitParentProposal}). A new unit takes the parent read when it
 #   is created.
+# - **Structures.** A parent read inside a unit's own structure (#494) is
+#   never written there, since the HRIS's types belong to the top structure.
+#   A new unit is created with no parent, an existing one keeps its own, and
+#   both are listed in the result's :units_in_structures with the structure.
 #
 # Retirements and ended memberships each have their own brake, as
 # {Hris::BaseAdapter::ABSENCE_BRAKE} has for people: over it, none of that
@@ -99,6 +103,8 @@ class Hris::LevelMirror
     plans = @levels.filter_map { |level| plan(level, taxonomy) }
     @plans = plans.index_by { it.level.id }
     @proposals = HrisUnitParentProposal.where(unit_id: OrgUnit.where(level_id: @levels.map(&:id))).index_by(&:unit_id)
+    @parent_ids = OrgUnit.live.pluck(:id, :parent_id).to_h
+    @declaring_ids = OrgTaxonomyLevel.where.not(structure_unit_id: nil).distinct.pluck(:structure_unit_id).to_set
     @read_parents = Set.new
     plans.each { |level_plan| mirror_units(level_plan) }
     forget_unread_parents
@@ -140,9 +146,10 @@ class Hris::LevelMirror
 
       if (unit = units[ref])
         rename(unit, name) if level_plan.field.list?
-        reparent(unit, parent)
+        reparent(unit, outside_structures(unit.id, unit.name, parent))
       else
-        units[ref] = create(level_plan, ref, name, parent)
+        unit_id = SecureRandom.uuid_v7
+        units[ref] = create(level_plan, unit_id, ref, name, outside_structures(unit_id, name, parent))
       end
     rescue => e
       @result[:errors] << { unit: ref, error: e.message }
@@ -179,14 +186,29 @@ class Hris::LevelMirror
     parents.many? ? :split : parents.first
   end
 
-  def create(level_plan, ref, name, parent)
-    unit_id = SecureRandom.uuid_v7
+  # @return [String, nil, :split] the reading, or nil in place of a parent
+  #   inside a declared structure, which is listed instead
+  def outside_structures(unit_id, name, parent)
+    structure_unit_id = parent.is_a?(String) && structure_beneath(parent)
+    return parent unless structure_unit_id
+
+    @result[:units_in_structures] << { unit_id:, name:, parent_id: parent, structure_unit_id: }
+    nil
+  end
+
+  def structure_beneath(unit_id)
+    unit_id = @parent_ids[unit_id] until unit_id.nil? || @declaring_ids.include?(unit_id)
+    unit_id
+  end
+
+  def create(level_plan, unit_id, ref, name, parent)
     if parent == :split
       parent = nil
       @result[:split_units] << { unit_id:, name: }
     end
     structure.create_unit(unit_id, name, level_id: level_plan.level.id, parent_id: parent, provider: @provider,
                           external_ref: ref, effective_on: @today)
+    @parent_ids[unit_id] = parent
     counted
     OrgUnit.find(unit_id)
   end

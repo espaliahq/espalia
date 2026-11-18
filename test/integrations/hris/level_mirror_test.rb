@@ -186,6 +186,34 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_nil unit("work.department/t1").parent_id
     end
 
+    should "never seat a new unit inside a unit's own structure, listing it with the structure instead" do
+      mirror(@staff[0] => { division: "d1" })
+      product = unit("work.division/d1")
+      @structure.declare_structure(product.id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
+                                               effective_on: TODAY)
+
+      result = mirror(@staff[0] => { division: "d1", team: "t1" })
+
+      payments = unit("work.department/t1")
+      assert_nil payments.parent_id
+      assert_equal [ { unit_id: payments.id, name: "Payments", parent_id: product.id, structure_unit_id: product.id } ],
+                   result[:units_in_structures]
+      assert_empty result[:errors]
+    end
+
+    should "keep an existing unit's parent when its people move inside a unit's own structure" do
+      mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" })
+      platform = unit("work.division/d2")
+      @structure.declare_structure(platform.id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
+                                                effective_on: TODAY)
+
+      results = Array.new(2) { mirror(@staff[0] => { division: "d2", team: "t1" }, @staff[1] => { division: "d2" }) }
+
+      assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
+      assert_equal [ [ "Payments", platform.id ] ] * 2, results.map { it[:units_in_structures].map { |row| row.values_at(:name, :structure_unit_id) }.sole }
+      assert_not HrisUnitParentProposal.exists?
+    end
+
     should "start over when a sync between two readings reads no parent" do
       mirror(@staff[0] => { division: "d1", team: "t1" })
       mirror(@staff[0] => { division: "d2", team: "t1" })
@@ -351,7 +379,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
   def mirror(readings) = mirror_with(readings)
 
   def mirror_with(readings, **options)
-    result = { errors: [], split_units: [], org_graph_events: 0 }
+    result = { errors: [], split_units: [], units_in_structures: [], org_graph_events: 0 }
     Hris::LevelMirror.new(provider: "hibob", catalogue: @catalogue, readings: readings.to_h { |person, held| [ person, reading(held) ] },
                           result:, today: TODAY, **options).call
     result

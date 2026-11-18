@@ -198,7 +198,7 @@ class Hris::LevelHandover
   end
 
   def mirror(comparison, cause_id)
-    result = { errors: [], split_units: [], org_graph_events: 0 }
+    result = { errors: [], split_units: [], units_in_structures: [], org_graph_events: 0 }
     Hris::LevelMirror.new(provider:, catalogue: [ comparison.field ], levels: [ @level.reload ], today: @today, cause_id:,
                           brake: false, readings: comparison.preview[:readings].transform_values { Reading.new(it) }, result:).call
     raise Refused, "The handover could not mirror the field: #{result[:errors].map { it[:error] }.uniq.join('; ')}" if
