@@ -62,8 +62,8 @@ class Operations::OrgGraph::Sources < Operations::Base
 
   # @param levels [Array<OrgTaxonomyLevel>] one structure's, top first
   def levels_payload(levels)
-    live = live_names
-    retired = retired_names
+    live = live_units_by_level
+    retired = retired_units_by_level
     rules = OrgTaxonomyLevel.rules_by_id(levels)
     levels.map do |level|
       live_count, live_names = live.fetch(level.id, [ 0, [] ])
@@ -75,9 +75,9 @@ class Operations::OrgGraph::Sources < Operations::Base
     end
   end
 
-  def live_names = @live_names ||= names_by_level(OrgUnit.live)
+  def live_units_by_level = @live_units_by_level ||= names_by_level(OrgUnit.live)
 
-  def retired_names = @retired_names ||= names_by_level(OrgUnit.where.not(retired_on: nil))
+  def retired_units_by_level = @retired_units_by_level ||= names_by_level(OrgUnit.where.not(retired_on: nil))
 
   # Stricter than the aggregate, which lets a level go the day after its last
   # unit left it: the panel's Remove still says no unit was ever one, so a
