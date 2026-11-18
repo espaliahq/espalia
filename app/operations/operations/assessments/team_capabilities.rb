@@ -12,13 +12,14 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
               "it on average), with how many were scored and how many are short. gaps lists capabilities where " \
               "more than half are short. people is direct (direct reports, the default) or below (everyone " \
               "below the caller); ratings is manager (the default), self or aligned. Only people whose score has " \
-              "unlocked count: scored is those in view, scored_on_role those at any level of the role. compare is level (the default) or none: with level, each capability's " \
-              "group_median is everyone on the role at the team's levels, team included, from the level " \
-              "comparison's latest snapshot of agreed ratings (taken every 1, 3 or 6 months, as the tenant " \
+              "unlocked count: scored is those in view, scored_on_role those at any level of the role. compare " \
+              "is level (the default) or none, and the payload's compare echoes it: with level, each " \
+              "capability's group_median is everyone on the role at the team's levels, team included, from the " \
+              "level comparison's latest snapshot of agreed ratings (taken every 1, 3 or 6 months, as the tenant " \
               "chooses), weighted by how many of the team are at each level; comparison.taken_on says when it " \
-              "was taken. Without a line, comparison.reason says why: none (compare is none), off (the tenant " \
-              "has comparisons turned off), no_snapshot, or too_few with the short_levels under " \
-              "min_group_size. Nothing names anyone on the team."
+              "was taken. Without a line, comparison.reason says why: none (compare is none, or no one in view " \
+              "has a role, so there is nothing to compare), off (the tenant has comparisons turned off), " \
+              "no_snapshot, or too_few with the short_levels under min_group_size. Nothing names anyone on the team."
   category :read
   approval :none
 
