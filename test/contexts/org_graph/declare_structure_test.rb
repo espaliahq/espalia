@@ -118,6 +118,21 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal "These units wouldn't fit the top structure: Checkout (Tribe under Tribe)", error.message
   end
 
+  should "refuse a withdrawal into a type the structure above gains only later, and allow it from that day" do
+    declare
+    lane = SecureRandom.uuid_v7
+    as_tenant { @handler.add_level(lane, "Lane", parent_ids: [ @squad ], effective_on: @today + 5) }
+    conversion = { @group => @squad, @stream => lane }
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @handler.withdraw_structure(@payments, conversion:, effective_on: @today + 2) }
+    end
+    assert_equal "Lane begins on #{(@today + 5).iso8601}, so date this then or later", error.message
+
+    as_tenant { @handler.withdraw_structure(@payments, conversion:, effective_on: @today + 5) }
+    assert_equal lane, structure.unit(@basket).level_id
+  end
+
   should "move a tenant-wide type into one unit's structure, then retire it tenant-wide (the worked example)" do
     declared_on = @today + 3
     group = SecureRandom.uuid_v7

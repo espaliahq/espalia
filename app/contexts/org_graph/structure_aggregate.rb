@@ -558,6 +558,7 @@ class OrgGraph::StructureAggregate
     effective_on = structure_dated!(unit, governed, effective_on)
     above = structure_in_force(unit.unit_id)
     conversion = converted!(governed, conversion, into: kinds_at(above), label: structure_label(above), &:itself)
+    ensure_converted_since!(governed, conversion, effective_on) unless above
     apply(withdrawal(unit, conversion:, effective_on:, withdrawn_by_id:))
     apply_conversion(governed, conversion, effective_on, withdrawn_by_id)
   end
@@ -977,6 +978,19 @@ class OrgGraph::StructureAggregate
     raise "These units wouldn't fit #{label}: #{misfits.sort.join(', ')}" if misfits.any?
 
     conversion.slice(*governed.map(&:level_id).uniq)
+  end
+
+  # The top structure keeps dated rules, so a conversion into it must fit on
+  # its date and on every later change to them.
+  def ensure_converted_since!(governed, conversion, from)
+    [ from, *@kind_timelines.values.flatten(1).map(&:first).select { it > from } ].uniq.sort.each do |day|
+      rules = rules_on(day)
+      if (absent = conversion.values.uniq.find { !rules.kind(it) })
+        raise "#{any_kind_name(absent)} begins on #{@kind_timelines.fetch(absent).first.first}, so date this then or later"
+      end
+
+      converted!(governed, conversion, into: rules, label: "the structure on #{day}", &:itself)
+    end
   end
 
   def apply_conversion(governed, conversion, effective_on, changed_by_id)
