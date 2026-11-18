@@ -476,6 +476,8 @@ inconsistencies from the organisation's rules.
 - A person over- or under-allocated, or placed nowhere.
 - A manager whose reports cost more capacity than they have.
 - A descendant's change that no longer fits what its ancestors now say.
+- A unit whose type its structure no longer holds, including one of the plan's own units
+  beneath a unit that has since been given a structure of its own.
 - A contributor whose manager shares no unit with them, or who has no manager at all.
 - Positions that no budget line covers, a cost centre or the organisation over its limit,
   and, under position control, each position that differs from the budget line behind it.
