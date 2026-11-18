@@ -990,10 +990,12 @@ class OrgGraph::StructureAggregate
     missing = governed.map(&:level_id).uniq - conversion.keys
     raise "Say what #{missing.map { any_kind_name(it) }.sort.to_sentence} units become" if missing.any?
 
+    converting = governed.to_set(&:unit_id)
     misfits = governed.filter_map do |child|
       kind = conversion.fetch(child.level_id)
       parent_id = yield(child.parent_id)
-      parent_kind = parent_id && conversion.fetch(@units[parent_id].level_id, @units[parent_id].level_id)
+      parent_kind = parent_id && @units[parent_id].level_id
+      parent_kind = conversion.fetch(parent_kind) if converting.include?(parent_id)
       next if parent_kind ? into.allows?(kind, beneath: parent_kind) : into.may_be_top?(kind)
 
       where = parent_kind ? "under #{into.kind(parent_kind)&.name || any_kind_name(parent_kind)}" : "at the top"

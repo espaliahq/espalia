@@ -87,6 +87,18 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_nil structure.structure_in_force(@ledger)
   end
 
+  should "fit a moved unit to the type its new parent holds, whatever the conversion maps that type to" do
+    cards = create_unit("Cards", @group, parent_id: @payments, on: @today + 1)
+    wallet = create_unit("Wallet", @stream, parent_id: cards, on: @today + 1)
+    lending = create_unit("Lending", @squad, parent_id: @core)
+
+    error = assert_raises(RuntimeError) { move_in(unit: lending, parent_id: wallet, conversion: { @squad => @stream, @stream => @group }) }
+    assert_equal "These units wouldn't fit Payments's structure: Lending (Stream under Stream)", error.message
+
+    move_in(unit: lending, parent_id: cards, conversion: { @squad => @stream, @stream => @group })
+    assert_equal [ cards, @stream ], [ structure.unit(lending).parent_id, structure.unit(lending).level_id ]
+  end
+
   should "date the move no earlier than the structure's last change or a change beneath, and no later than today" do
     error = assert_raises(RuntimeError) { move_in(on: @today) }
     assert_equal "Payments's structure last changed on #{(@today + 1).iso8601}, so date the change then or later", error.message
