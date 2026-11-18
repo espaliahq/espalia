@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_18_005609) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_005931) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -687,6 +687,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_005609) do
     t.index ["tenant_id"], name: "index_hris_unit_parent_proposals_on_tenant_id"
   end
 
+  create_table "level_comparison_groups", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "snapshot_id", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "role_id", null: false
+    t.integer "level_ordinal", null: false
+    t.integer "group_size", null: false
+    t.jsonb "capability_medians", default: {}, null: false
+    t.jsonb "category_medians", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["snapshot_id", "role_id", "level_ordinal"], name: "idx_on_snapshot_id_role_id_level_ordinal_9db6c1f62a", unique: true
+  end
+
+  create_table "level_comparison_snapshots", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.date "taken_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "taken_on"], name: "index_level_comparison_snapshots_on_tenant_id_and_taken_on", unique: true
+  end
+
   create_table "manager_assessment_delegations", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "delegate_person_id", null: false
@@ -1355,6 +1377,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_005609) do
   add_foreign_key "framework_suggestion_comments", "people", column: "edited_by_id", on_delete: :nullify
   add_foreign_key "framework_suggestion_comments", "tenants"
   add_foreign_key "hris_unit_parent_proposals", "tenants"
+  add_foreign_key "level_comparison_groups", "level_comparison_snapshots", column: "snapshot_id", on_delete: :cascade
   add_foreign_key "manager_assessment_delegations", "tenants"
   add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"
   add_foreign_key "mcp_pending_approvals", "tenants"
