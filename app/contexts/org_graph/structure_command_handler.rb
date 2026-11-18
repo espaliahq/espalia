@@ -45,7 +45,7 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#declare_structure
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def declare_structure(unit_id, **options)
-    authorize_taxonomy!
+    authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
     end
@@ -54,7 +54,7 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#withdraw_structure
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def withdraw_structure(unit_id, **options)
-    authorize_taxonomy!
+    authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
     end
@@ -63,7 +63,7 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#add_level
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def add_level(level_id, name, **options)
-    authorize_taxonomy!
+    authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.add_level(level_id, name, **attributed(options, :defined_by_id)) }
     end
@@ -72,7 +72,7 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#set_kind_parents
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def set_kind_parents(level_id, **options)
-    authorize_taxonomy!
+    authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.set_kind_parents(level_id, **attributed(options, :defined_by_id)) }
     end
@@ -82,7 +82,7 @@ class OrgGraph::StructureCommandHandler
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def remove_level(level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
-    authorize_taxonomy!
+    authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
       with_structure(plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
     end

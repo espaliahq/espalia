@@ -42,6 +42,14 @@ class OrgGraphPolicy < ApplicationPolicy
   # @return [Boolean]
   def edit_taxonomy? = tenant_admin?
 
+  # Declare, withdraw or edit the structure a unit gives the units beneath it
+  # (#494), or, given nil, the top structure. Admins only until the rights
+  # step of #390 widens it; nothing else names who may.
+  #
+  # @param _unit [OrgUnit, nil] the declaring unit, nil for the top structure
+  # @return [Boolean]
+  def edit_structure_of?(_unit) = edit_taxonomy?
+
   # The providers, units at the root, and people's facts.
   #
   # @return [Boolean]

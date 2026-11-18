@@ -30,6 +30,15 @@ module OrgGraph::Authorization
     authorize!(:edit_taxonomy?) { "Only a tenant admin can change the taxonomy's levels" }
   end
 
+  # @param unit_id [String, nil] the declaring unit, nil for the top structure
+  def authorize_structure_of!(unit_id)
+    return authorize_taxonomy! unless unit_id
+    return if system?
+
+    unit = unit_for(unit_id)
+    authorize!(:edit_structure_of?, unit) { "Only a tenant admin can change #{unit_name(unit)}'s structure" }
+  end
+
   def authorize_structure!
     authorize!(:edit_structure?) do
       "Only a tenant admin or an Org Graph editor can change the providers or people's facts"
