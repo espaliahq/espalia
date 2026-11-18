@@ -342,6 +342,18 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "read only the people and role the card offers, so its map opens on the same team" do
+      2.times { |i| rate_as_manager(add_report("Report #{i}"), @cap, "consistent") }
+      sign_in @manager_user
+      get assessments_path(team_level: 9, team_ratings: "self")
+
+      assert_select "#team-card", text: /3 direct reports · Software Engineer · manager ratings/
+      assert_select "#team-card [data-team-blades]", count: 1
+      assert_select "turbo-frame#team-map[src]" do |frame|
+        assert_no_match(/team_level|team_ratings|team_compare/, frame.first["src"])
+      end
+    end
+
     should "widen the team card to everyone below the manager" do
       rate_as_manager(@person, @cap, "consistent")
       ActsAsTenant.with_tenant(@tenant) { rate_as_manager(add_report("Report one").tap { |r| r.update!(manager: @person) }, @cap, "none") }

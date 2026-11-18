@@ -7,10 +7,12 @@ module Assessments::TeamCapabilitiesParams
 
   # A choice the operation would refuse falls back to its default, leaving the others in place.
   #
+  # @param only [Array<Symbol>, nil] the choices read from the query string; nil for all of them
   # @param fixed [Hash] choices the caller makes regardless of the query string
   # @return [Hash] the operation's payload
-  def team_capabilities(**fixed)
-    Operations::Assessments::TeamCapabilities.call(context: pundit_user, params: team_choices.merge(fixed))
+  def team_capabilities(only: nil, **fixed)
+    choices = only ? team_choices.slice(*only) : team_choices
+    Operations::Assessments::TeamCapabilities.call(context: pundit_user, params: choices.merge(fixed))
   end
 
   def team_level
