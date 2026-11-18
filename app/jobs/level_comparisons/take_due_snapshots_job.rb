@@ -22,7 +22,7 @@ class LevelComparisons::TakeDueSnapshotsJob < ApplicationJob
     return unless config.enabled
 
     today = tenant.today
-    last = ActsAsTenant.with_tenant(tenant) { LevelComparisonSnapshot.latest&.taken_on }
+    last = ActsAsTenant.with_tenant(tenant) { LevelComparisonSnapshot.latest&.then { |s| s.taken_on if s.counted? } }
     return if config.next_snapshot_on(last, today:) > today
 
     LevelComparisonSnapshot.take!(tenant:, on: today)

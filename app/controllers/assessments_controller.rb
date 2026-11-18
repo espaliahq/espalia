@@ -10,6 +10,7 @@
 #
 class AssessmentsController < ApplicationController
   include Assessments::CapabilityCardRendering
+  include Assessments::TeamCapabilitiesParams
 
   # Skip-level subtrees can be large for senior managers — the section is
   # paginated rather than rendering an unbounded card grid.
@@ -21,6 +22,7 @@ class AssessmentsController < ApplicationController
   # GET /assessments
   def index
     authorize PersonFrameworkAssignment, :index?
+    response.headers["Cache-Control"] = "no-store"
     @page_title = "My Assessments"
     @own_assignments = PersonFrameworkAssignment.for_person(current_person.id)
       .includes(:framework, :role, :level)
@@ -55,6 +57,7 @@ class AssessmentsController < ApplicationController
       card_statuses: @card_statuses,
       card_shapes: card_shapes,
       explorations: @explorations,
+      team: (team_capabilities(only: %i[people role_id], compare: "none") if current_person.direct_reports.exists?),
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants

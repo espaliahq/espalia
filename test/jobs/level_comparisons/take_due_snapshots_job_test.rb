@@ -23,6 +23,21 @@ class LevelComparisons::TakeDueSnapshotsJobTest < ActiveJob::TestCase
     assert_equal [ Date.new(2026, 11, 18) ], snapshot_days(tenant)
   end
 
+  should "retake a snapshot taken without contributor counts, since it would hide every median" do
+    tenant = snapshotted(on: Date.new(2026, 11, 18))
+    uncounted = ActsAsTenant.with_tenant(tenant) do
+      LevelComparisonSnapshot.latest.tap do |snapshot|
+        snapshot.groups.create!(framework_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7, level_ordinal: 2,
+                                group_size: 5, capability_medians: { "cap" => 0.5 })
+      end
+    end
+
+    run_at Time.utc(2026, 11, 18, 11)
+
+    assert_equal [ Date.new(2026, 11, 18) ], snapshot_days(tenant)
+    assert_not LevelComparisonSnapshot.exists?(uncounted.id), "expected the uncounted snapshot replaced"
+  end
+
   should "take the next on the 1st of the following month, not before" do
     tenant = snapshotted(on: Date.new(2026, 11, 18))
 

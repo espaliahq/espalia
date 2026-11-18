@@ -181,7 +181,9 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
           snapshot.groups.create!(tenant: @tenant, framework_id: @assignment.framework_id, role_id: @role_id,
                                   level_ordinal: ordinal, group_size: size,
                                   capability_medians: @stable_ids.values.index_with { median },
-                                  category_medians: @categories.values.index_with { median })
+                                  capability_counts: @stable_ids.values.index_with { size },
+                                  category_medians: @categories.values.index_with { median },
+                                  category_counts: @categories.values.index_with { size })
         end
       end
     end
