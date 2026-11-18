@@ -158,6 +158,16 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       assert_empty call(Operations::OrgGraph::AsOf, date: day, unit_id: @org[:platform])[:structures]
     end
 
+    should "read the structure a declaring unit sits in, narrowed to that unit" do
+      call(Operations::OrgGraph::DeclareStructure, unit_id: @org[:payments], levels: [ { name: "Pod" } ], conversion: {})
+      day = ActsAsTenant.with_tenant(@tenant) { Tenant.today.iso8601 }
+
+      result = call(Operations::OrgGraph::AsOf, date: day, unit_id: @org[:payments])
+
+      assert_equal [ [ @org[:checkout], %w[Stream Lane] ], [ @org[:payments], %w[Pod] ] ],
+                   result[:structures].map { [ it[:unit_id], it[:kinds].pluck(:name) ] }.sort
+    end
+
     should "offer a unit only the types and places of the structure in force where it sits" do
       ActsAsTenant.with_tenant(@tenant) do
         context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)

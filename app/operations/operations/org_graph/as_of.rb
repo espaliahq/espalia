@@ -83,14 +83,12 @@ class Operations::OrgGraph::AsOf < Operations::Base
     return {} if snapshot.structures.empty?
 
     by_id = snapshot.units.index_by(&:id)
-    in_force = units.filter_map do |unit|
-      next unit.id if snapshot.structures.key?(unit.id)
-
+    in_force = units.flat_map do |unit|
       above = by_id[unit.parent_id]
       above = by_id[above.parent_id] until above.nil? || snapshot.structures.key?(above.id)
-      above&.id
+      [ unit.id, above&.id ]
     end
-    snapshot.structures.slice(*in_force)
+    snapshot.structures.slice(*in_force.compact)
   end
 
   # @return [Set<String>] the ids of the units to report on
