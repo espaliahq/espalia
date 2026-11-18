@@ -40,6 +40,7 @@ class OrgGraph::StructureAggregate
     @level_rules = {}
     @units = {}
     @parents = {}
+    @unit_kinds = {}
     @level_providers = {}
     @level_fields = {}
     @fact_providers = {}
@@ -428,6 +429,46 @@ class OrgGraph::StructureAggregate
     }))
   end
 
+  # Changes a unit's kind in place, keeping its id, name, place, owners and
+  # members. An unchanged kind writes nothing.
+  #
+  # The new kind must sit where the unit sits, and each sub-unit must sit
+  # beneath it, on every day from the change's date, by the rules each day had.
+  #
+  # @param unit_id [String] a live unit Espalia holds
+  # @param level_id [String] a kind Espalia supplies
+  # @param effective_on [Date, String] no earlier than the unit's last change of kind, and no later than today
+  # @param provider [String] who supplies the change; must be the unit's own
+  # @param kind_changed_by_id [String, nil]
+  # @param changed_back_id [String, nil] the event this changes back
+  # @raise [RuntimeError] naming every unit that wouldn't fit
+  def change_unit_kind(unit_id, level_id, effective_on:, provider: ESPALIA, kind_changed_by_id: nil, changed_back_id: nil)
+    unit = editable_unit!(unit_id, provider)
+    unit_id = unit.unit_id
+    level_id = require_id(level_id, "Level id")
+    raise "That unit type doesn't exist" unless level_index(level_id)
+    raise "#{level_provider(level_id)} supplies #{level_name(level_id)} units" unless level_provider(level_id) == unit.provider
+    return if level_id == unit.level_id
+
+    effective_on = dated_after_creation(unit, effective_on)
+    last_change = @unit_kinds[unit_id].keys.max
+    raise "The unit's type last changed on #{last_change}, so date this then or later" if effective_on < last_change
+    raise "A unit's type can't change after today" if effective_on > today
+
+    ensure_kind_fits!(unit, level_id)
+    ensure_kind_fitted_since!(unit, level_id, from: effective_on)
+
+    apply(OrgGraph::Events::UnitKindChanged.new(data: {
+      unit_id: unit_id,
+      level_id: level_id,
+      previous_level_id: unit.level_id,
+      provider: unit.provider,
+      effective_on: effective_on,
+      kind_changed_by_id: kind_changed_by_id,
+      changed_back_id: changed_back_id
+    }))
+  end
+
   # Retires a unit. Its live sub-units must be moved or retired first.
   #
   # @param unit_id [String]
@@ -577,7 +618,15 @@ class OrgGraph::StructureAggregate
       created_on: data[:effective_on], changed_on: data[:effective_on]
     )
     @parents[data[:unit_id]] = { data[:effective_on] => data[:parent_id] }
+    @unit_kinds[data[:unit_id]] = { data[:effective_on] => data[:level_id] }
     touch(data[:parent_id], data[:effective_on])
+  end
+
+  on OrgGraph::Events::UnitKindChanged do |event|
+    unit = @units.fetch(event.data[:unit_id])
+    @unit_kinds[unit.unit_id][event.data[:effective_on]] = event.data[:level_id]
+    unit.level_id = @unit_kinds[unit.unit_id].max_by(&:first).last
+    touch(unit.unit_id, event.data[:effective_on])
   end
 
   on OrgGraph::Events::UnitOwnerAdded do |event|
@@ -757,10 +806,10 @@ class OrgGraph::StructureAggregate
   end
 
   def ensure_never_held!(level)
-    held = @units.values.select { |unit| unit.level_id == level[:level_id] }.sort_by(&:name)
+    held = @units.values.select { |unit| @unit_kinds.fetch(unit.unit_id, {}).value?(level[:level_id]) }.sort_by(&:name)
     return if held.empty?
 
-    retired, live = held.partition(&:retired)
+    live, retired = held.partition { !it.retired && it.level_id == level[:level_id] }
     reasons = [ ("holds #{live.map(&:name).to_sentence}" if live.any?),
                 ("held #{retired.map(&:name).to_sentence}" if retired.any?) ].compact
     raise "#{level[:name]} can't be removed, as it #{reasons.join(' and ')}"
@@ -836,6 +885,62 @@ class OrgGraph::StructureAggregate
 
     effective_on
   end
+
+  def ensure_kind_fits!(unit, level_id)
+    rules = taxonomy
+    parent = unit.parent_id && @units[unit.parent_id]
+    unless parent ? rules.allows?(level_id, beneath: parent.level_id) : rules.may_be_top?(level_id)
+      raise "#{rules.kind(level_id).name} can't sit #{parent ? "under #{rules.kind(parent.level_id).name}" : 'at the top'}"
+    end
+
+    stranded = live_units.select { it.parent_id == unit.unit_id && !rules.allows?(it.level_id, beneath: level_id) }
+    return if stranded.empty?
+
+    raise "These units wouldn't fit under #{rules.kind(level_id).name}, so move them first: " \
+          "#{stranded.sort_by(&:name).map { "#{it.name} (#{rules.kind(it.level_id).name})" }.join(', ')}"
+  end
+
+  # A back-dated change must also fit each day since, by that day's rules: the
+  # parent the unit had then, and the sub-units beneath it then.
+  def ensure_kind_fitted_since!(unit, level_id, from:)
+    days = [ *@parents.values.flat_map(&:keys), *@unit_kinds.values.flat_map(&:keys), *@kind_timelines.values.flatten(1).map(&:first),
+             *@units.values.filter_map { it.retired_on && (Date.iso8601(it.retired_on) + 1).iso8601 } ]
+    [ from, *days.select { it > from && it <= today } ].uniq.sort.each do |day|
+      rules = rules_on(day)
+      raise "#{level_name(level_id)} didn't exist on #{day}, so date the change later" unless rules.kind(level_id)
+
+      misfits = kind_misfits_on(unit, level_id, day, rules)
+      next if misfits.empty?
+
+      raise "On #{day}, #{rules.kind(level_id).name} wouldn't have fit: #{misfits.join(', ')}. Date the change later"
+    end
+  end
+
+  def kind_misfits_on(unit, level_id, day, rules)
+    parent_id = parent_on(unit.unit_id, day)
+    parent_kind = parent_id && kind_on(parent_id, day)
+    kind = rules.kind(level_id).name
+    misfits = []
+    if parent_id.nil?
+      misfits << "#{unit.name} (#{kind} at the top)" unless rules.may_be_top?(level_id)
+    elsif rules.kind(parent_kind) && !rules.allows?(level_id, beneath: parent_kind)
+      misfits << "#{unit.name} (#{kind} under #{rules.kind(parent_kind).name})"
+    end
+    children = @units.values.select { live_on?(it, day) && parent_on(it.unit_id, day) == unit.unit_id }
+    children.sort_by(&:name).each do |child|
+      child_kind = kind_on(child.unit_id, day)
+      next if !rules.kind(child_kind) || rules.allows?(child_kind, beneath: level_id)
+
+      misfits << "#{child.name} (#{rules.kind(child_kind).name} under #{kind})"
+    end
+    misfits
+  end
+
+  def kind_on(unit_id, day)
+    @unit_kinds.fetch(unit_id, {}).select { |from, _| from <= day }.max_by(&:first)&.last || @units[unit_id]&.level_id
+  end
+
+  def live_on?(unit, day) = unit.created_on <= day && (unit.retired_on.nil? || unit.retired_on >= day)
 
   # A parent must be live and of a kind the unit's kind may sit beneath, and a
   # mirrored unit never hangs beneath one Espalia holds. A back-dated placement
