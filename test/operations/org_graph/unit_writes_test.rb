@@ -116,6 +116,15 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
       assert_equal @admin.person.id, Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitKindChanged).last.data[:kind_changed_by_id]
     end
 
+    should "date a change with no date on the tenant's today, behind UTC's" do
+      @tenant.update!(time_zone: "America/Los_Angeles")
+      travel_to Time.utc(2026, 11, 18, 5) do
+        result = call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: @pods)
+
+        assert_equal "2026-11-17", result[:effective_on]
+      end
+    end
+
     should "refuse an owner of the unit's parent, who may still move it" do
       error = assert_raises(OrgGraph::Authorization::Refused) do
         call(Operations::OrgGraph::ChangeUnitKind, as: @owner, unit_id: @org[:payments], level_id: @pods)

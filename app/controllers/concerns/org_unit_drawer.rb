@@ -39,7 +39,7 @@ module OrgUnitDrawer
   def drawer_path = edit_tenant_org_unit_path(@unit, on: drawer_on, **comparison_params)
 
   # The date a drawer step opens with: the one carried in, or today.
-  def step_date = params[:on].presence || effective_on || Date.current.iso8601
+  def step_date = params[:on].presence || effective_on || Tenant.today.iso8601
 
   # Renders a drawer over the Units view, opened at the unit.
   #

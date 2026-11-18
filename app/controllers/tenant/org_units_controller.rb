@@ -21,7 +21,7 @@ class Tenant::OrgUnitsController < ApplicationController
         overview:,
         rights: OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview),
         confirmations:,
-        effective_on: params[:on].presence || Date.current.iso8601,
+        effective_on: params[:on].presence || Tenant.today.iso8601,
         alert: flash[:drawer_alert]
       ),
       **comparison_slots(unit_id: @unit.id)

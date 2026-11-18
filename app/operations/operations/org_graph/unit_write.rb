@@ -26,7 +26,7 @@ module Operations::OrgGraph::UnitWrite
   # @return [String] ISO date, today unless the caller named one
   # @raise [Operations::Base::ParameterError]
   def effective_on
-    return Date.current.iso8601 unless params[:effective_on]
+    return Tenant.today.iso8601 unless params[:effective_on]
 
     Date.iso8601(params[:effective_on]).iso8601
   rescue Date::Error
