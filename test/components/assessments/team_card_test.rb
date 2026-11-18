@@ -64,6 +64,17 @@ class Views::Assessments::TeamCardTest < ActiveSupport::TestCase
     assert_nil render_card.at_css("[aria-label='Who is in the team']")
   end
 
+  should "carry the card's choices in each link's query string, back to the card" do
+    roles = [ { id: "role-e", name: "Software Engineer", people: 7 }, { id: "role-d", name: "Product Designer", people: 3 } ]
+    card = render_card(payload(indirect_reports: true, roles:))
+    below = URI.parse(card.at_css("[aria-label='Who is in the team'] a:last-child")["href"])
+    designer = URI.parse(card.css("[data-team-roles] [role='menuitem']").last["href"])
+
+    assert_equal [ "/assessments", "team-card" ], [ below.path, below.fragment ]
+    assert_equal({ "team_people" => "below", "team_role" => "role-e" }, Rack::Utils.parse_query(below.query))
+    assert_equal({ "team_role" => "role-d" }, Rack::Utils.parse_query(designer.query))
+  end
+
   should "keep the switch on the blank slate, so widening can give enough people" do
     assert render_card(payload(scored: 0, indirect_reports: true)).at_css("[aria-label='Who is in the team']")
   end

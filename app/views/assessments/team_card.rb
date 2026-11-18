@@ -90,7 +90,7 @@ class Views::Assessments::TeamCard < Views::Base
 
   # The card's own choices: people and role.
   def team_path(**overrides)
-    assessments_path(team_choices.slice(:team_people, :team_role).merge(overrides).compact, anchor: "team-card")
+    assessments_path(team_choices.slice(:team_people, :team_role).merge(overrides).compact.merge(anchor: "team-card"))
   end
 
   # Opens with the card's choices.
