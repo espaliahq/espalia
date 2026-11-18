@@ -55,6 +55,7 @@ class AssessmentsController < ApplicationController
       card_statuses: @card_statuses,
       card_shapes: card_shapes,
       explorations: @explorations,
+      team: (team_capabilities if @report_assignments.any?),
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
@@ -218,6 +219,11 @@ class AssessmentsController < ApplicationController
   end
 
   private
+
+  # The team card's payload, read through the operation agents use.
+  def team_capabilities
+    Operations::Assessments::TeamCapabilities.call(context: pundit_user)
+  end
 
   def map_whose = manager_viewing? ? @assessee&.name || "This person" : nil
 
