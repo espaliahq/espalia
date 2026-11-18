@@ -33,7 +33,7 @@ class OrgGraph::StructureAggregate
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :owner_ids,
                     :created_on, :changed_on, :retired_on, keyword_init: true)
-  Placement = Struct.new(:unit, :parent_id, :until_on, keyword_init: true)
+  Placement = Struct.new(:unit, :parent_id, :until_on, :level_id, :parent_level_id, keyword_init: true)
 
   def initialize
     @levels = []
@@ -414,7 +414,7 @@ class OrgGraph::StructureAggregate
     effective_on = dated_after_creation(unit, effective_on)
     return if parent_id == parent_on(unit_id, effective_on)
 
-    ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on,
+    ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on, unit_id:,
                                                               until_on: @parents[unit_id].keys.select { it > effective_on }.min)
     raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
 
@@ -861,15 +861,34 @@ class OrgGraph::StructureAggregate
     @units.values.flat_map do |unit|
       points = @parents.fetch(unit.unit_id, {}).sort
       ends = points.drop(1).map(&:first) + [ unit.retired_on && (Date.iso8601(unit.retired_on) + 1).iso8601 ]
-      points.zip(ends).filter_map do |(from, parent_id), until_on|
-        Placement.new(unit:, parent_id:, until_on:) if until_on && until_on > day && until_on > from
+      points.zip(ends).flat_map do |(from, parent_id), until_on|
+        next [] unless until_on && until_on > day && until_on > from
+
+        held_kinds(unit.unit_id, parent_id, from:, until_on:).filter_map do |start, finish|
+          next unless finish > day
+
+          Placement.new(unit:, parent_id:, until_on: finish, level_id: kind_on(unit.unit_id, start),
+                        parent_level_id: parent_id && kind_on(parent_id, start))
+        end
       end
     end
   end
 
+  # A placement split where the unit or its parent changed type, each span as
+  # `[from, until_on]`.
+  def held_kinds(unit_id, parent_id, from:, until_on:)
+    starts = [ from, *kind_change_days(unit_id, parent_id).select { it > from && it < until_on } ].uniq.sort
+    starts.zip(starts.drop(1) + [ until_on ])
+  end
+
+  def kind_change_days(*unit_ids)
+    unit_ids.compact.flat_map { @unit_kinds.fetch(it, {}).keys }
+  end
+
   def fits?(placement, rules)
-    parent = placement.parent_id && @units[placement.parent_id]
-    parent ? rules.allows?(placement.unit.level_id, beneath: parent.level_id) : rules.may_be_top?(placement.unit.level_id)
+    return rules.may_be_top?(placement.level_id) unless placement.parent_id
+
+    rules.allows?(placement.level_id, beneath: placement.parent_level_id)
   end
 
   # A unit's latest change includes a sub-unit arriving beneath it or leaving,
@@ -946,7 +965,7 @@ class OrgGraph::StructureAggregate
   # mirrored unit never hangs beneath one Espalia holds. A back-dated placement
   # must also fit the kinds' rules on each day it holds, as the history shows
   # them; one that a later move ends before today answers only to those days.
-  def ensure_placeable!(provider, level_id, parent_id, on:, until_on: nil)
+  def ensure_placeable!(provider, level_id, parent_id, on:, until_on: nil, unit_id: nil)
     rules = taxonomy
     held_today = until_on.nil? || until_on > today
     parent = parent_id && @units[parent_id]
@@ -961,12 +980,17 @@ class OrgGraph::StructureAggregate
       end
       raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
     end
-    ensure_placeable_while_held!(level_id, parent&.level_id, on:, until_on:)
+    ensure_placeable_while_held!(level_id, parent_id, unit_id:, on:, until_on:)
   end
 
-  def ensure_placeable_while_held!(level_id, parent_level_id, on:, until_on:)
-    days = @kind_timelines.values.flatten(1).map(&:first).select { it > on && (until_on.nil? || it < until_on) }
+  # Each day reads the kinds the unit and its parent held then, so a back-dated
+  # move answers to a type either has since changed.
+  def ensure_placeable_while_held!(level_id, parent_id, unit_id:, on:, until_on:)
+    days = [ *@kind_timelines.values.flatten(1).map(&:first), *kind_change_days(unit_id, parent_id) ]
+           .select { it > on && (until_on.nil? || it < until_on) }
     [ on, *days ].uniq.sort.each do |day|
+      level_id = kind_on(unit_id, day) if unit_id
+      parent_level_id = parent_id && kind_on(parent_id, day)
       rules = rules_on(day)
       next unless rules.kind(level_id) && (parent_level_id.nil? || rules.kind(parent_level_id))
       next if parent_level_id ? rules.allows?(level_id, beneath: parent_level_id) : rules.may_be_top?(level_id)
@@ -1132,9 +1156,8 @@ class OrgGraph::StructureAggregate
   end
 
   def describe_held(placement, rules)
-    parent = placement.parent_id && @units[placement.parent_id]
-    kind = rules.kind(placement.unit.level_id).name
-    where = parent ? "under #{rules.kind(parent.level_id).name}" : "at the top"
+    kind = rules.kind(placement.level_id).name
+    where = placement.parent_id ? "under #{rules.kind(placement.parent_level_id).name}" : "at the top"
     "#{placement.unit.name} (#{kind} #{where} until #{placement.until_on})"
   end
 

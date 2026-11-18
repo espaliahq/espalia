@@ -109,6 +109,32 @@ class OrgGraph::ChangeUnitKindTest < ActiveSupport::TestCase
       assert_equal "On 2026-12-10, Crew wouldn't have fit: Ledger (Crew under Studio). Date the change later", error.message
       assert_nothing_raised { @system.change_unit_kind(ledger, @crew, effective_on: "2026-12-20") }
     end
+
+    should "judge a back-dated move by the type the unit held on each day it covers" do
+      studio_kind = SecureRandom.uuid_v7
+      @system.add_level(studio_kind, "Studio", parent_ids: [], top: true, effective_on: "2026-12-01")
+      @system.set_kind_parents(@crew, parent_ids: [ @tribe, studio_kind ], top: false, effective_on: "2026-12-01")
+      studio = create_unit("Studio One", studio_kind)
+      @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10")
+
+      error = assert_raises(RuntimeError) { @system.move_unit(@payments, studio, effective_on: "2026-12-05") }
+      assert_equal "On 2026-12-05, Team couldn't sit under Studio, so the change can't be dated before its rules allowed it",
+                   error.message
+      assert_nothing_raised { @system.move_unit(@payments, studio, effective_on: "2026-12-10") }
+    end
+
+    should "judge a back-dated change of rules by the type a unit held under its parent then" do
+      retail = create_unit("Retail", @tribe)
+      @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10")
+      @system.move_unit(@payments, retail, effective_on: "2026-12-15")
+
+      error = assert_raises(RuntimeError) do
+        @system.set_kind_parents(@team, parent_ids: [], top: true, effective_on: "2026-12-05")
+      end
+      assert_equal "These units sat where this structure wouldn't allow after 2026-12-05, so date it 2026-12-10 or later: " \
+                   "Payments (Team under Tribe until 2026-12-10)", error.message
+      assert_nothing_raised { @system.set_kind_parents(@team, parent_ids: [], top: true, effective_on: "2026-12-10") }
+    end
   end
 
   should "keep a type a unit once held from being removed from the taxonomy" do
