@@ -201,6 +201,21 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_empty result[:errors]
     end
 
+    should "list nothing for a new unit inside a structure that fails to be written" do
+      mirror(@staff[0] => { division: "d1" })
+      product = unit("work.division/d1")
+      @structure.declare_structure(product.id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
+                                               effective_on: TODAY)
+      handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      def handler.create_unit(*, **) = raise("Unit name is taken")
+
+      result = OrgGraph::StructureCommandHandler.stub(:new, handler) { mirror(@staff[0] => { division: "d1", team: "t1" }) }
+
+      assert_equal [ "Unit name is taken" ], result[:errors].pluck(:error)
+      assert_empty result[:units_in_structures]
+      assert_not HrisSyncIssue.exists?
+    end
+
     should "keep an existing unit's parent when its people move inside a unit's own structure" do
       mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" })
       platform = unit("work.division/d2")

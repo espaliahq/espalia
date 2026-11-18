@@ -148,11 +148,14 @@ class Hris::LevelMirror
 
       if (unit = units[ref])
         rename(unit, name) if level_plan.field.list?
-        reparent(unit, outside_structures(unit.id, unit.name, parent))
+        placed, in_structure = outside_structures(unit.id, unit.name, parent)
+        reparent(unit, placed)
       else
         unit_id = SecureRandom.uuid_v7
-        units[ref] = create(level_plan, unit_id, ref, name, outside_structures(unit_id, name, parent))
+        placed, in_structure = outside_structures(unit_id, name, parent)
+        units[ref] = create(level_plan, unit_id, ref, name, placed)
       end
+      @result[:units_in_structures] << in_structure if in_structure
     rescue => e
       @result[:errors] << { unit: ref, error: e.message }
     end
@@ -188,14 +191,14 @@ class Hris::LevelMirror
     parents.many? ? :split : parents.first
   end
 
-  # @return [String, nil, :split] the reading, or nil in place of a parent
-  #   inside a declared structure, which is listed instead
+  # @return [Array(String, nil, :split), Hash, nil] the reading, or nil in
+  #   place of a parent inside a declared structure, with the issue to list
+  #   once the unit is written
   def outside_structures(unit_id, name, parent)
     structure_unit_id = parent.is_a?(String) && structure_beneath(parent)
-    return parent unless structure_unit_id
+    return [ parent, nil ] unless structure_unit_id
 
-    @result[:units_in_structures] << { unit_id:, name:, parent_id: parent, structure_unit_id: }
-    nil
+    [ nil, { unit_id:, name:, parent_id: parent, structure_unit_id: } ]
   end
 
   def record_structure_issues(plans)
