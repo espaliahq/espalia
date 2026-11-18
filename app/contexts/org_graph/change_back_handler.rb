@@ -145,8 +145,9 @@ class OrgGraph::ChangeBackHandler
     causes = OrgUnitActivity.where(cause_id: entries.map(&:cause_id))
     structure_causes = causes.where(subject: "structure").distinct.pluck(:cause_id)
     move_in_causes = causes.where(event_type: "UnitMoved").where("after ? 'conversion'").distinct.pluck(:cause_id)
+    raise "A unit's own structure can't be changed back yet" if entries.any? { it.subject == "structure" }
+
     entries.each do |entry|
-      raise "A unit's own structure can't be changed back yet" if entry.subject == "structure"
       raise "This came with a change to a unit's own structure, which can't be changed back yet" if structure_causes.include?(entry.cause_id)
       raise MOVED_IN if move_in_causes.include?(entry.cause_id)
       raise "#{entry.event_type.titleize} can't be changed back" unless entry.reversible?
