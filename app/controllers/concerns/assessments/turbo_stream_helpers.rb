@@ -147,7 +147,9 @@ module Assessments::TurboStreamHelpers
       render_to_string(
         Views::Assessments::CapabilityMapModal.for(matrix_data: matrix_data, scoring: primary, context: context,
                                                    whose: whose, part: :content,
-                                                   comparable: ActsAsTenant.current_tenant.comparison_config.enabled),
+                                                   comparable: Assessments::LevelComparison.offered?(
+                                                     tenant: ActsAsTenant.current_tenant, lens: response_lens
+                                                   )),
         layout: false
       )
     )

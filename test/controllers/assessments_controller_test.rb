@@ -734,6 +734,16 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         assert_includes response.body, "data-capability-lane"
       end
 
+      should "offer no comparison on a page read at another level, which the comparison would not match" do
+        get assessment_path(@assignment, as_level: 1)
+        assert_response :success
+        assert_empty Nokogiri::HTML5.fragment(response.body).css("##{Views::Assessments::CapabilityMapModal::ID} [role='tab']")
+
+        get capability_map_assessment_path(@assignment, as_level: 1, tab: "compare")
+        assert_empty Nokogiri::HTML5.fragment(response.body).css("[role='tab']")
+        assert_includes response.body, "data-capability-lane"
+      end
+
       should "show no tabs when the tenant has comparisons off" do
         @tenant.update!(comparison_config: ComparisonConfig.new(enabled: false))
         get capability_map_assessment_path(@assignment, tab: "compare")

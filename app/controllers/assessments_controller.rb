@@ -195,7 +195,7 @@ class AssessmentsController < ApplicationController
     render Views::Assessments::CapabilityMapModal.for(
       matrix_data: @matrix_data, scoring: hero_scoring, context: assessment_context,
       whose: map_whose, part: :frame, zoom: zoom == "all" ? :all : zoom.presence,
-      comparable: comparable?, compared: (compared_panel if params[:tab] == "compare")
+      comparable: comparable?, compared: (compared_panel if comparable? && params[:tab] == "compare")
     ), layout: false
   end
 
@@ -221,7 +221,7 @@ class AssessmentsController < ApplicationController
 
   def map_whose = manager_viewing? ? @assessee&.name || "This person" : nil
 
-  def comparable? = ActsAsTenant.current_tenant.comparison_config.enabled
+  def comparable? = Assessments::LevelComparison.offered?(tenant: ActsAsTenant.current_tenant, lens:)
 
   # The comparison tab at the level asked for, or the person's own when that
   # isn't one on offer.

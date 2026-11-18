@@ -8,6 +8,16 @@
 class Assessments::LevelComparison
   Level = Data.define(:ordinal, :code, :own, :group_size, :available)
 
+  # The comparison reads the record itself, so a page read through another
+  # role or level, or a past cycle, doesn't offer it.
+  #
+  # @param tenant [Tenant]
+  # @param lens [Assessments::Lens, nil] the page's lens; nil reads the record
+  # @return [Boolean]
+  def self.offered?(tenant:, lens:)
+    tenant.comparison_config.enabled && (lens.nil? || (lens.home? && !lens.past?))
+  end
+
   # @param lens [Assessments::Lens] the role and level the page reads
   # @param tenant [Tenant]
   def initialize(lens:, tenant:)
