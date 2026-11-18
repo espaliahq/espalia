@@ -925,9 +925,7 @@ class OrgGraph::StructureAggregate
   # A back-dated change must also fit each day since, by that day's rules: the
   # parent the unit had then, and the sub-units beneath it then.
   def ensure_kind_fitted_since!(unit, level_id, from:)
-    days = [ *@parents.values.flat_map(&:keys), *@unit_kinds.values.flat_map(&:keys), *@kind_timelines.values.flatten(1).map(&:first),
-             *@units.values.filter_map { it.retired_on && (Date.iso8601(it.retired_on) + 1).iso8601 } ]
-    [ from, *days.select { it > from && it <= today } ].uniq.sort.each do |day|
+    [ from, *kind_fit_days(unit.unit_id).select { it > from && it <= today } ].uniq.sort.each do |day|
       rules = rules_on(day)
       raise "#{level_name(level_id)} didn't exist on #{day}, so date the change later" unless rules.kind(level_id)
 
@@ -936,6 +934,17 @@ class OrgGraph::StructureAggregate
 
       raise "On #{day}, #{rules.kind(level_id).name} wouldn't have fit: #{misfits.join(', ')}. Date the change later"
     end
+  end
+
+  # The days the fit can change: the rules', and those on which the unit,
+  # any parent it had, or any unit ever beneath it moved, changed type or
+  # retired.
+  def kind_fit_days(unit_id)
+    children = @parents.select { |_, points| points.value?(unit_id) }.keys
+    related = [ unit_id, *@parents.fetch(unit_id, {}).values.compact, *children ].uniq
+    [ *@kind_timelines.values.flatten(1).map(&:first),
+      *related.flat_map { [ *@parents.fetch(it, {}).keys, *@unit_kinds.fetch(it, {}).keys ] },
+      *children.filter_map { (retired_on = @units[it]&.retired_on) && (Date.iso8601(retired_on) + 1).iso8601 } ]
   end
 
   def kind_misfits_on(unit, level_id, day, rules)
