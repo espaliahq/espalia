@@ -69,8 +69,10 @@ class Views::Assessments::TeamMap < Views::Base
       span(class: "text-sm text-muted", id: "team-compare-label") { "Compare with" }
       render Components::Kit::SegmentedControl.new(aria: { labelledby: "team-compare-label" }) do |control|
         control.segment("#{group_name} at the same levels", short: group_name, selected: comparison[:reason] != "none",
-                                                                         href: team_path(team_compare: nil))
-        control.segment("Nothing", selected: comparison[:reason] == "none", href: team_path(team_compare: "none"))
+                                                                         href: team_path(team_compare: nil),
+                                                                         data: { refresh_focus: "compare-level" })
+        control.segment("Nothing", selected: comparison[:reason] == "none", href: team_path(team_compare: "none"),
+                                   data: { refresh_focus: "compare-none" })
       end
       compare_note
     end
@@ -102,7 +104,8 @@ class Views::Assessments::TeamMap < Views::Base
   def ratings_switch
     render Components::Kit::SegmentedControl.new(label: "Ratings shown") do |control|
       RATINGS_SWITCH.each do |key, label|
-        control.segment(label, selected: @team[:ratings] == key, href: team_path(team_ratings: (key unless key == "manager")))
+        control.segment(label, selected: @team[:ratings] == key, href: team_path(team_ratings: (key unless key == "manager")),
+                               data: { refresh_focus: "ratings-#{key}" })
       end
     end
   end
@@ -112,10 +115,11 @@ class Views::Assessments::TeamMap < Views::Base
     div(class: "-mt-3 mb-6 overflow-x-auto") do
       render Components::Kit::SegmentedControl.new(label: "Level shown") do |control|
         control.segment("All levels #{@team[:levels].sum { |l| l[:people] }}", selected: @team[:level_ordinal].nil?,
-                                                                               href: team_path(team_level: nil), data: { team_level: "all" })
+                                                                               href: team_path(team_level: nil), data: { team_level: "all", refresh_focus: "level-all" })
         @team[:levels].each do |level|
           control.segment("#{level[:code]} #{level[:people]}", selected: level[:ordinal] == @team[:level_ordinal],
-                                                               href: team_path(team_level: level[:ordinal]), data: { team_level: level[:code] })
+                                                               href: team_path(team_level: level[:ordinal]),
+                                                               data: { team_level: level[:code], refresh_focus: "level-#{level[:code]}" })
         end
       end
     end

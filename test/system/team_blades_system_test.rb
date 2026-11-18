@@ -93,6 +93,17 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       within("#team-map") { assert_no_text "Ari Novak" }
     end
 
+    should "keep keyboard focus on the level picked when the map reloads" do
+      visit_team(DESKTOP_SIZE)
+      click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
+      assert_selector "turbo-frame#team-map[complete] a[data-team-level='E3']", visible: true
+
+      execute_script("const link = document.querySelector(\"#team-map a[data-team-level='E3']\"); link.focus(); link.click()")
+      assert_text "Your 1 direct report at E3"
+
+      assert_equal "E3", evaluate_script("document.activeElement.dataset.teamLevel")
+    end
+
     should "stack the map's blades above its lanes on a phone" do
       visit_team(MOBILE_SIZE)
       assert_no_sideways_overflow

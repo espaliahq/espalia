@@ -96,7 +96,8 @@ class Views::Assessments::TeamCard < Views::Base
   # Opens with the card's choices.
   def team_map
     render Components::Kit::Modal.new(id: "team-map-modal", title: "Team capability map", size: :"6xl",
-                                      panel_data: { controller: "frame-error" }) do |modal|
+                                      panel_data: { controller: "frame-error dialog-refresh",
+                                                    dialog_refresh_content_value: "team-map" }) do |modal|
       modal.trigger { "Open team map" }
       modal.body do
         turbo_frame(id: "team-map", src: team_map_assessments_path(team_choices.slice(:team_people, :team_role).compact),
