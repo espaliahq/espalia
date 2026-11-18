@@ -51,7 +51,7 @@ class Views::Assessments::IndexView < Views::Base
       page_header
       assignments_list
       explorations_section
-      report_assignments_section if @report_assignments.any?
+      report_assignments_section if @report_assignments.any? || @team
       skip_level_assignments_section if @skip_level_assignments.any?
     end
   end
@@ -140,8 +140,10 @@ class Views::Assessments::IndexView < Views::Base
         "Review and rate your direct reports\u2019 assessments."
       end
       div(class: "mb-4") { render Views::Assessments::TeamCard.new(team: @team) } if @team
-      div(class: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3") do
-        @report_assignments.each { |a| report_assignment_card(a) }
+      if @report_assignments.any?
+        div(class: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3") do
+          @report_assignments.each { |a| report_assignment_card(a) }
+        end
       end
     end
   end

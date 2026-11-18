@@ -498,10 +498,9 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Skip-Level Assessments"
       assert_includes response.body, @person.name
-      # The direct-report team section only renders when a direct report has
-      # an assignment — the manager in between has none here.
-      assert_select "#team-card", count: 0
-      assert_not_includes response.body, "Team Assessments"
+      # The manager in between has no assignment, so only the team card can reach everyone below.
+      assert_select "#team-card", text: /None of your reports is in an open assessment cycle yet/
+      assert_select "#team-card a", text: "Everyone below you"
     end
 
     should "paginate the skip-level section beyond #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE} assignments" do
