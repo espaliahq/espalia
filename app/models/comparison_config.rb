@@ -15,8 +15,9 @@ class ComparisonConfig
   SNAPSHOT_INTERVALS = [ 1, 3, 6 ].freeze
 
   attribute :enabled, :boolean, default: true
-  # The fewest people a group needs before its scores show, on the comparison
-  # tab and in the capability attainment report.
+  # The fewest people a group needs before its scores show on the comparison
+  # tab, and in the capability attainment report to a viewer who can't open
+  # every assessment in the group.
   attribute :min_group_size, :integer, default: DEFAULT_MIN_GROUP_SIZE
   attribute :snapshot_every_months, :integer, default: SNAPSHOT_INTERVALS.first
 

@@ -71,7 +71,8 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
                                          aria: { describedby: "comparisons_min_group_size_help" }
       p(id: "comparisons_min_group_size_help", class: "text-sm text-muted") do
         "Counts everyone at that level with a settled assessment. A smaller level shows \"fewer than " \
-          "#{@settings[:min_group_size]}\" and no numbers. The capability attainment report hides smaller groups too. " \
+          "#{@settings[:min_group_size]}\" and no numbers. The capability attainment report hides smaller groups only from " \
+          "someone who can't open every assessment in them; everyone who sees that report today can, so it shows them all. " \
           "At least #{ComparisonConfig::LOWEST_MIN_GROUP_SIZE}; default #{ComparisonConfig::DEFAULT_MIN_GROUP_SIZE}."
       end
     end

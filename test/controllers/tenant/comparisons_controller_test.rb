@@ -33,6 +33,12 @@ class Tenant::ComparisonsControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-next-snapshot]", text: last.next_month.strftime("%-d %b %Y")
     end
 
+    should "say the attainment report shows every group to someone who can open each assessment in it" do
+      get tenant_comparisons_path
+
+      assert_select "#comparisons_min_group_size_help", text: /attainment report hides smaller groups only from someone who can't open every assessment in them/
+    end
+
     should "save the settings" do
       patch tenant_comparisons_path, params: { comparisons: { enabled: "0", min_group_size: "8", snapshot_every_months: "3" } }
 
