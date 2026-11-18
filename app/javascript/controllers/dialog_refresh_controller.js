@@ -39,8 +39,21 @@ export default class extends BaseController {
     const render = event.detail.render
     event.detail.render = async (...args) => {
       await render(...args)
-      this.element.querySelector(selector)?.focus({ preventScroll: true })
+      const focused = this.element.querySelector(selector)
+      focused?.focus({ preventScroll: true })
+      if (focused) this.#revealSideways(focused)
     }
+  }
+
+  /** A re-rendered strip starts scrolled to its start, so bring the focused item back into it without moving the dialog. */
+  #revealSideways(element) {
+    const strip = element.parentElement?.closest(".overflow-x-auto")
+    if (!strip) return
+
+    const item = element.getBoundingClientRect()
+    const bounds = strip.getBoundingClientRect()
+    if (item.right > bounds.right) strip.scrollLeft += Math.ceil(item.right - bounds.right)
+    else if (item.left < bounds.left) strip.scrollLeft -= Math.ceil(bounds.left - item.left)
   }
 
   #selectorFor(focused) {

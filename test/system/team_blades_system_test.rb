@@ -128,6 +128,28 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       assert_equal "E3", evaluate_script("document.activeElement.dataset.teamLevel")
     end
 
+    should "keep the level picked by keyboard in sight on a phone when the map reloads" do
+      ActsAsTenant.with_tenant(@tenant) do
+        (4..9).each { |o| FactoryBot.create(:framework_level, role_id: @role.role_id, ordinal: o, title: "E#{o}", code: "E#{o}") }
+      end
+      visit_team(MOBILE_SIZE)
+      open_team_map
+      assert_selector "turbo-frame#team-map[complete] a[data-team-level='E9']", visible: :all
+
+      execute_script("const link = document.querySelector(\"#team-map a[data-team-level='E9']\"); link.focus(); link.click()")
+      assert_selector "#team-map a[data-team-level='E9'][aria-current='page']", visible: :all
+
+      overhang = evaluate_script(<<~JS)
+        (() => {
+          const chip = document.activeElement
+          const strip = chip.closest(".overflow-x-auto")
+          return chip.getBoundingClientRect().right - strip.getBoundingClientRect().right
+        })()
+      JS
+      assert_equal "E9", evaluate_script("document.activeElement.dataset.teamLevel")
+      assert_operator overhang, :<=, 0, "expected the focused level chip inside its strip"
+    end
+
     should "stack the map's blades above its lanes on a phone" do
       visit_team(MOBILE_SIZE)
       assert_no_sideways_overflow
