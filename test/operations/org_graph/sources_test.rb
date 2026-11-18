@@ -61,7 +61,7 @@ class Operations::OrgGraph::SourcesTest < ActiveSupport::TestCase
       assert_equal [ [], %w[Atlas Billing Cobalt], [] ], levels.pluck(:retired_unit_names)
     end
 
-    should "call a level removable only when Espalia holds it, no unit ever held it and another level stays" do
+    should "call a level removable only when Espalia holds it, no unit holds it and another level stays" do
       assert_equal [ false, true, false ], call[:levels].pluck(:removable)
     end
 

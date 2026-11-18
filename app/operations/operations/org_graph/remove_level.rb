@@ -48,8 +48,7 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
 
     plans = ProjectionVersion.unless_rebuilding(TeamPlanning::Projections::Overrides::PROJECTION_NAME,
                                                 ::OrgGraph::Projections::Structure::PROJECTION_NAME) do
-      TeamPlanningOverride.placing_plan_units.where(plan_id: TeamPlanningPlan.live.select(:id))
-                          .where("end_state ->> 'level_id' = ?", level.id).distinct.count(:plan_id)
+      TeamPlanningOverride.live_plans_by_level.fetch(level.id, 0)
     end
     return if plans.zero?
 

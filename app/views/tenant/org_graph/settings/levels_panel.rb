@@ -4,7 +4,7 @@
 # can sit. An admin ticks the types each one can sit under, and whether it can
 # sit at the top. An empty type can be read from an HRIS field, or handed back
 # to Espalia, here; one that holds units changes hands through the handover.
-# An admin adds a type, and removes one no unit has ever been.
+# An admin adds a type, and removes one Sources says can go today.
 class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   include Views::Tenant::OrgGraph::Settings::FormHelpers
 
@@ -157,7 +157,9 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   def remove_form(level)
-    p(class: "text-sm text-default") { "No unit has ever been a #{level[:name]}, so nothing else changes." }
+    p(class: "text-sm text-default") do
+      "No unit is a #{level[:name]} from today on, so nothing else changes. Earlier dates still show it."
+    end
     settings_form(tenant_org_graph_settings_level_path(level[:id]), method: :delete,
                                                                     class: "mt-4 flex justify-end gap-2") do
       render Components::Kit::Button.new(variant: :outline, tone: :neutral, data: { action: "modal#close" }) { "Cancel" }

@@ -236,7 +236,7 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         screenshot("unit_type_saved_#{viewport}")
       end
 
-      should "remove a unit type no unit has ever been, after asking" do
+      should "remove a unit type no unit holds from today, though one held it before, after asking" do
         squad_id = SecureRandom.uuid_v7
         guild_id = SecureRandom.uuid_v7
         ActsAsTenant.with_tenant(@tenant) do
@@ -244,15 +244,19 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
           structure.define_taxonomy([ { level_id: squad_id, name: "Squad" }, { level_id: guild_id, name: "Guild" } ],
                                     effective_on: "2026-01-01")
           structure.create_unit(SecureRandom.uuid_v7, "Payments", level_id: squad_id, effective_on: "2026-01-01")
+          atlas = SecureRandom.uuid_v7
+          structure.create_unit(atlas, "Atlas", level_id: guild_id, effective_on: "2026-01-01")
+          structure.retire_unit(atlas, effective_on: "2026-02-01")
         end
         visit tenant_org_graph_settings_path
 
+        within("#org-graph-level-#{guild_id}") { assert_text "held Atlas" }
         assert_no_selector "#org-graph-level-menu-#{squad_id}"
         click_button_with_js_fallback("org-graph-level-menu-#{guild_id}", expect_selector: "#org-graph-level-remove-#{guild_id}")
         click_button_with_js_fallback("org-graph-level-remove-#{guild_id}",
-                                      expect_text: "No unit has ever been a Guild, so nothing else changes.")
+                                      expect_text: "No unit is a Guild from today on, so nothing else changes. Earlier dates still show it.")
         within("#org-graph-remove-level-#{guild_id}") do
-          assert_text "No unit has ever been a Guild, so nothing else changes."
+          assert_text "No unit is a Guild from today on, so nothing else changes. Earlier dates still show it."
           screenshot("level_remove_asked_#{viewport}")
         end
         click_button_with_js_fallback("org-graph-level-remove-confirm-#{guild_id}", expect_text: "Guild is no longer a unit type.")

@@ -31,4 +31,11 @@ class TeamPlanningOverride < ApplicationRecord
   scope :placing_plan_units, lambda {
     where(kind: TeamPlanning::Events::UnitSet.name).where.not(subject_id: OrgUnit.select("id::text"))
   }
+
+  # @return [Hash{String => Integer}] per unit type, how many live plans place
+  #   a unit of their own at it
+  def self.live_plans_by_level
+    placing_plan_units.where(plan_id: TeamPlanningPlan.live.select(:id))
+                      .group(Arel.sql("end_state ->> 'level_id'")).distinct.count(:plan_id)
+  end
 end

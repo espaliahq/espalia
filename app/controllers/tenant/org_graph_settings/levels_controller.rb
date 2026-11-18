@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Adds a unit type, or removes one no unit has ever been, from the settings
+# Adds a unit type, or removes one no unit holds from today, from the settings
 # screen's unit types panel.
 class Tenant::OrgGraphSettings::LevelsController < ApplicationController
   include OrgGraphSettingsRedirect
