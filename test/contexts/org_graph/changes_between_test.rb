@@ -40,6 +40,11 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
 
   def as_of(date) = as_tenant { OrgGraph::AsOf.new(context: @context, date: Date.iso8601(date)).call }
 
+  def add_crews
+    @crews = SecureRandom.uuid_v7
+    @structure.add_level(@crews, "Crew", parent_ids: [ @departments ], top: false, effective_on: "2026-01-01")
+  end
+
   def kinds(result) = result.changes.map(&:kind)
 
   def one(result, kind) = result.changes.select { it.kind == kind }.sole
@@ -109,6 +114,21 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
     assert_equal [ @payments, @grace.id, Date.new(2026, 3, 4) ], one(result, :owner_removed).to_h.values_at(:unit_id, :person_id, :effective_on)
   end
 
+  should "list a unit's change of type with the type before and after, and none for its creation" do
+    travel_to Time.zone.parse("2026-04-01 09:00")
+    as_tenant do
+      add_crews
+      @structure.change_unit_kind(@platform, @crews, effective_on: "2026-03-03")
+    end
+    result = changes("2026-03-01", "2026-03-31")
+
+    assert_equal %i[unit_kind_changed], kinds(result)
+    assert_equal [ @platform, { "level_id" => @squads }, { "level_id" => @crews }, Date.new(2026, 3, 3) ],
+                 one(result, :unit_kind_changed).to_h.values_at(:unit_id, :before, :after, :effective_on)
+    assert_not_includes kinds(changes("2025-12-31", "2026-01-31")), :unit_kind_changed
+    assert_equal @crews, as_of("2026-03-31").units.find { it.id == @platform }.level_id
+  end
+
   should "leave out what took effect on the window's first day or after its last" do
     reorganise
 
@@ -126,6 +146,10 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
       @handler.change_level(@linus.id, "L2", **ESPALIA, effective_on: "2026-02-15")
       @handler.set_membership(@linus.id, @engineering, **ESPALIA, effective_on: "2026-02-10", allocation: 0.25)
       @structure.add_unit_owner(@engineering, @linus.id, effective_on: "2026-02-12")
+      travel_to(Time.zone.parse("2026-04-01 09:00")) do
+        add_crews
+        @structure.change_unit_kind(@platform, @crews, effective_on: "2026-03-14")
+      end
     end
 
     from, to = as_of("2026-02-28"), as_of("2026-03-31")
@@ -298,7 +322,7 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
         placements.delete([ change.person_id, change.from_unit_id ])
         placements[[ change.person_id, change.unit_id ]] = change.after
       when :unit_created then units[change.unit_id] = change.after.slice("name", "parent_id", "level_id")
-      when :unit_renamed, :unit_moved then units[change.unit_id] = units[change.unit_id].merge(change.after)
+      when :unit_renamed, :unit_moved, :unit_kind_changed then units[change.unit_id] = units[change.unit_id].merge(change.after)
       when :unit_retired then units.delete(change.unit_id)
       when :owner_added then owners << [ change.unit_id, change.person_id ]
       when :owner_removed then owners.delete([ change.unit_id, change.person_id ])

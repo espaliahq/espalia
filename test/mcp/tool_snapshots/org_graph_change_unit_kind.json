@@ -1,0 +1,33 @@
+{
+  "name": "org_graph_change_unit_kind",
+  "description": "Change the unit type of a unit Espalia holds, from effective_on (today by default). The new type must be one Espalia supplies, must be able to sit under the unit's parent (or at the top), and every live sub-unit must be able to sit under it, on every day from effective_on, a move dated ahead included. effective_on can't be after today or before the unit's last change of type. Only a tenant admin or an Org Graph editor can change a unit's type.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "unit_id": {
+        "type": "string"
+      },
+      "level_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "unit_id",
+      "level_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

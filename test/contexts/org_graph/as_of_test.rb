@@ -152,6 +152,24 @@ class OrgGraph::AsOfTest < ActiveSupport::TestCase
     assert_equal "hibob", as_of("2026-04-01").kinds.first.provider
   end
 
+  should "keep a declared structure's kinds apart from the top structure's" do
+    group = SecureRandom.uuid_v7
+    declaring = SecureRandom.uuid_v7
+    as_tenant do
+      Rails.configuration.event_store.publish(
+        OrgGraph::Events::TaxonomyDefined.new(data: { levels: [ { level_id: group, name: "Group", parent_level_ids: [], top: true } ],
+                                                      previous_levels: [], effective_on: "2026-02-01", structure_unit_id: declaring },
+                                              metadata: { tenant_id: @tenant.id }),
+        stream_name: EventStreamNaming.org_structure_stream
+      )
+    end
+
+    assert_empty as_of("2026-01-15").structures
+    snapshot = as_of("2026-02-15")
+    assert_equal [ @departments, @squads ], snapshot.kinds.map(&:id)
+    assert_equal({ declaring => [ [ group, "Group", true ] ] }, snapshot.structures.transform_values { |kinds| kinds.map { [ it.id, it.name, it.top ] } })
+  end
+
   should "refuse someone outside the tenant" do
     @context = AuthorizationContext.new(user: create(:user), tenant_user: nil, person: nil)
 

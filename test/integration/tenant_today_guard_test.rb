@@ -19,17 +19,13 @@ class TenantTodayGuardTest < ActiveSupport::TestCase
     app/contexts/org_graph/forgetting.rb
     app/contexts/org_graph/people_cutover.rb
     app/contexts/org_graph/person_aggregate.rb
-    app/controllers/concerns/org_graph_drawer.rb
-    app/controllers/concerns/org_unit_drawer.rb
     app/controllers/tenant/org_people_controller.rb
-    app/controllers/tenant/org_units_controller.rb
     app/integrations/hris/hibob/adapter.rb
     app/models/org_graph_config.rb
     app/models/pay_band.rb
     app/models/tenant.rb
     app/operations/operations/org_graph/confirm_fact.rb
     app/operations/operations/org_graph/set_fact_provider.rb
-    app/operations/operations/org_graph/unit_write.rb
     app/queries/org_graph/date_comparison.rb
     app/queries/org_graph/person_profile.rb
     app/queries/team_planning/attention.rb

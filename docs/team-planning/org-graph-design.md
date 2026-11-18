@@ -109,7 +109,7 @@ Dates for the status events and the start date:
 | Event | Records |
 |---|---|
 | `TaxonomyDefined` | The tenant's names for its levels. Redefining it is a change like any other. |
-| `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. Retiring a unit ends each membership in it on that date, unless a succession moves its members to the unit that carries on. |
+| `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitKindChanged`, `UnitRetired` | A unit's life. Retiring a unit ends each membership in it on that date, unless a succession moves its members to the unit that carries on. |
 | `UnitSucceeded` | That one or more units carry on from one or more others: a split, a merge, a replacement. |
 | `UnitOwnerAdded`, `UnitOwnerRemoved` | Who may edit the unit. |
 | `LevelProviderSet`, `FactProviderSet` | Who supplies a taxonomy level, or a kind of person fact. See [Providers and provenance](#providers-and-provenance-r5). |
@@ -181,6 +181,15 @@ lists the people with no membership of a live unit, for the "in no team" tray.
   covers, so a back-dated move can't loop on a day between other moves. A unit with live sub-units can't be
   retired, and a succession retires the deepest units first. A back-dated move is
   checked against today's rules, not those in force on its date.
+- **A unit's type can change in place** ([#401](https://github.com/espaliahq/espalia/issues/401)).
+  `change_unit_kind` (MCP: `org_graph_change_unit_kind`, and the unit drawer's type
+  select) writes `UnitKindChanged` with the new and old type. Only a tenant admin or an Org
+  Graph editor may, and only for an Espalia unit and an Espalia type. The new type must sit
+  under the parent's, or at the top, and every live sub-unit must sit under it; one
+  refusal names every sub-unit in the way. It may be dated back no further than the unit's
+  last change of type, nor past today, and it checks the fit on every day from its date,
+  so a parent the unit had before a later move, or a sub-unit since moved away, still
+  counts. The drawer offers only the types that fit today.
 - **A kind written before kinds stated their rules keeps the rule it had.** No event
   changes. `OrgGraph::Taxonomy` reads an older `TaxonomyDefined` level as: it may sit
   under every level above it in that event's list, and at the top. A level an HRIS
@@ -189,7 +198,9 @@ lists the people with no membership of a live unit, for the "in no team" tray.
   aggregate, the projections and the history all read rules through this class.
   `bin/rails org_graph:taxonomy:check` names any live unit sitting where its kind may
   not, and fails on one; it runs per tenant before kinds can state their rules
-  ([#391](https://github.com/espaliahq/espalia/issues/391)).
+  ([#391](https://github.com/espaliahq/espalia/issues/391)). It judges each unit by the
+  structure in force where it sits, and reports how many structures the tenant has
+  ([#494](https://github.com/espaliahq/espalia/issues/494)).
 - **An admin states a kind's rules.** `set_kind_parents` (MCP:
   `org_graph_set_kind_parents`) replaces an Espalia kind's list of parent kinds and its
   top switch, and `add_level` can state both up front. A kind that lists itself lets its
@@ -238,6 +249,10 @@ reader can list a unit's predecessors and successors. The history that reads "wa
 `org_taxonomy_levels` holds each kind's stated `parent_level_ids` and `top`, both null for
 a kind that never stated rules. Readers build an `OrgGraph::Taxonomy` from the rows with
 `OrgTaxonomyLevel.taxonomy`, so the legacy rule is derived in one place, never stored.
+Each row's `structure_unit_id` names the unit whose own structure it belongs to, and is
+null for the top structure; `OrgTaxonomyLevel.top_structure` reads the top one. The
+structure in force at a unit is that of the nearest unit above it that declares one, else
+the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)).
 
 ### The shape of the organisation has a history too
 
@@ -313,7 +328,8 @@ cause per run, so a run reads as one entry in each unit it touched.
 **Changing it back writes the inverse.** `OrgGraph::ChangeBackHandler` undoes an entry
 with a new event that carries `changed_back_id`, the event it reverses. Nothing is
 deleted: the feed keeps both, and marks the original with the change that undid it. Ending
-a membership puts it back on its earlier terms, a rename takes back the old name, and a
+a membership puts it back on its earlier terms, a rename takes back the old name, a change
+of type takes back the old type, through the same right and fit checks, and a
 move goes back where it came from. The inverse takes effect when the original did, so the
 fact reads as if the change never happened, unless the caller names a date. It goes through the ordinary handlers under the same actor, so it is refused
 wherever the change itself would be. It is refused, too:
@@ -499,7 +515,7 @@ Graph could no longer say what it knew before. From it:
   `org_graph_changes_between` reports retirements and successions over MCP.
 - `OrgGraph::ChangesBetween` lists what changed between two days as typed changes: joined
   and left; a person's fact changed; a membership started, ended or changed; a move from
-  one unit to another; a unit created, renamed, moved, retired or succeeded; an owner added
+  one unit to another; a unit created, renamed, moved, given a new type, retired or succeeded; an owner added
   or removed. Each carries the day it first holds, when it was learned, its provider and its
   event, so a headcount walk or "compare with a date" can group and count them. A joining
   carries every fact, membership and unit ownership the person holds on their first day, as most are recorded while they
@@ -514,7 +530,7 @@ Graph could no longer say what it knew before. From it:
   it turns that change into another kind or into no change at all. MCP clients read it
   through `org_graph_changes_between`.
 - The Units view's "Compare with a date" (5.7) reads through `ChangesBetween`, in either
-  mode. `OrgGraph::DateComparison` marks units new, renamed, moved or succeeded in today's
+  mode. `OrgGraph::DateComparison` marks units new, renamed, moved, given a new type or succeeded in today's
   tree, lists who joined, left or moved on each unit's card, counts each kind and lists the
   units retired in the window. The window lives in the URL, so a comparison can be shared.
   Every link, form and redirect on the Units view and its drawers carries it

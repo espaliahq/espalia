@@ -6,10 +6,10 @@ class TeamPlanning::Events::UnitChangesTest < ActiveSupport::TestCase
   UNIT = TeamPlanning::Baseline::Unit
   LEVEL, PARENT, OTHER = Array.new(3) { SecureRandom.uuid_v7 }
 
-  def map(units: [], retired: [])
+  def map(units: [], retired: [], org_unit_levels: {})
     TeamPlanning::Baseline::Map.new(base_on: Date.new(2027, 1, 1), known_on: Date.new(2027, 1, 1), units:,
                                     retired_units: retired, successions: [], people: [], unassigned_ids: [], positions: [], names: {},
-                                    rules: nil)
+                                    rules: nil, org_unit_levels:)
   end
 
   def unit(id, name = "Payments") = UNIT.new(id:, name:, parent_id: PARENT, level_id: LEVEL, owner_ids: [ OTHER ])
@@ -36,6 +36,25 @@ class TeamPlanning::Events::UnitChangesTest < ActiveSupport::TestCase
                                                                                    parent_id: nil, level_id: LEVEL)
       assert_equal [ [ "Billing", nil, [ OTHER ] ] ], renamed.units.map { [ it.name, it.parent_id, it.owner_ids ] }
       assert_empty renamed.retired_units
+    end
+
+    should "take the Org Graph's type for a unit it holds, live or retired, and keep the plan's own for a unit it created" do
+      held, retired, created = Array.new(3) { SecureRandom.uuid_v7 }
+      retyped = map(units: [ unit(held) ], org_unit_levels: { held => OTHER, retired => OTHER })
+      [ held, retired ].each do |id|
+        set = TeamPlanning::Events::UnitSet.apply_to(retyped, subject_id: id, name: "Billing", parent_id: nil, level_id: LEVEL)
+        assert_equal OTHER, set.units.find { it.id == id }.level_id
+      end
+      set = TeamPlanning::Events::UnitSet.apply_to(retyped, subject_id: created, name: "Risk", parent_id: nil, level_id: LEVEL)
+      assert_equal LEVEL, set.units.find { it.id == created }.level_id
+    end
+
+    should "show a unit the Org Graph holds whatever type a plan's change carries, and compare the type of one only the plan holds" do
+      state = { name: "Billing", parent_id: PARENT, level_id: LEVEL }
+      assert TeamPlanning::Events::UnitSet.shows?(state.merge(level_id: OTHER), state, map:)
+      assert_not TeamPlanning::Events::UnitSet.shows?(state.merge(name: "Ledger", level_id: OTHER), state, map:)
+      assert_not TeamPlanning::Events::UnitSet.shows?(nil, state, map:)
+      assert TeamPlanning::Events::UnitSet.shows?(nil, nil, map:)
     end
 
     should "read a live unit back as the end state that set it, and nothing for a retired one" do

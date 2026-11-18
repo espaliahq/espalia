@@ -29,7 +29,7 @@ class OrgGraph::ChangesBetween
   KINDS = %i[
     joined left fact_changed
     membership_started membership_ended membership_changed moved
-    unit_created unit_renamed unit_moved unit_retired unit_succeeded
+    unit_created unit_renamed unit_moved unit_kind_changed unit_retired unit_succeeded
     owner_added owner_removed
   ].freeze
 
@@ -293,6 +293,7 @@ class OrgGraph::ChangesBetween
     case step.fact
     when "name" then build(:unit_renamed, step, **unit)
     when "parent" then build(:unit_moved, step, **unit)
+    when "level" then build(:unit_kind_changed, step, **unit) if step.before
     when "status" then build(:unit_retired, step, **unit) if step.after&.fetch("status", nil) == "retired"
     when "owner" then build(step.after ? :owner_added : :owner_removed, step, **unit, person_id: step.key, before: nil, after: nil)
     end

@@ -14,7 +14,7 @@ module Operations::OrgGraph::TaxonomyWrite
   private
 
   # @return [Array<OrgTaxonomyLevel>] top first
-  def current_levels = OrgTaxonomyLevel.top_first.to_a
+  def current_levels = OrgTaxonomyLevel.top_structure.to_a
 
   # @return [Array<Hash>] `{ level_id, name, provider, parent_ids, top }`, top first
   def levels_payload
@@ -23,13 +23,5 @@ module Operations::OrgGraph::TaxonomyWrite
     levels.map do |level|
       { level_id: level.id, name: level.name, provider: level.provider, **rules[level.id] }
     end
-  end
-
-  # The commands refuse a taxonomy they can't keep with a message the caller
-  # can act on, so it reaches them as a bad parameter.
-  def refusing_as_parameter_errors
-    yield
-  rescue ArgumentError, RuntimeError => e
-    raise Operations::Base::ParameterError, e.message
   end
 end

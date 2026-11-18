@@ -93,7 +93,7 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
       as_tenant { @handler.define_taxonomy(levels(%w[Team Department Squad]), effective_on: @today) }
 
-      assert_equal %w[Team Department Squad], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
+      assert_equal %w[Team Department Squad], as_tenant { OrgTaxonomyLevel.top_structure.pluck(:name) }
     end
 
     should "refuse duplicate or blank level names" do
@@ -114,7 +114,7 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
         @handler.add_level(chapter, "Chapter", effective_on: @today)
       end
 
-      assert_equal %w[Department Team Squad Guild Chapter], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
+      assert_equal %w[Department Team Squad Guild Chapter], as_tenant { OrgTaxonomyLevel.top_structure.pluck(:name) }
       assert_raises(ArgumentError) { as_tenant { @handler.add_level(guild, "Tribe", effective_on: @today) } }
     end
   end
@@ -127,7 +127,7 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
         @handler.remove_level(guild, effective_on: @today, defined_by_id: @actor)
       end
 
-      assert_equal %w[Department Team Squad], as_tenant { OrgTaxonomyLevel.top_first.pluck(:name) }
+      assert_equal %w[Department Team Squad], as_tenant { OrgTaxonomyLevel.top_structure.pluck(:name) }
       assert_equal @actor, structure_events.last.data[:defined_by_id]
       assert_raises(ArgumentError) { as_tenant { @handler.remove_level(guild, effective_on: @today) } }
     end
@@ -940,7 +940,7 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
   private
 
-  def level_ids_top_first = as_tenant { OrgTaxonomyLevel.top_first.pluck(:id) }
+  def level_ids_top_first = as_tenant { OrgTaxonomyLevel.top_structure.pluck(:id) }
 
   def as_tenant(&block)
     ActsAsTenant.with_tenant(@tenant, &block)

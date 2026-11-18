@@ -353,7 +353,8 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
                    [ gone, "Doesn't fit this structure: its unit type no longer exists" ],
                    [ orphan, "Doesn't fit this structure: its unit type no longer exists" ] ].sort, items.map { [ it.subject_id, it.reason ] }
     assert_same placed, items.find { it.subject_id == LIVE }.change, "a parent's later change never breaks its child's fit"
-    assert_equal [ LIVE ], items.find { it.subject_id == LIVE }.unit_ids
+    assert_equal [ ROOT, LIVE ], items.find { it.subject_id == LIVE }.unit_ids, "a misfit beneath its parent names the parent's unit"
+    assert_equal [ top ], items.find { it.subject_id == top }.unit_ids
     assert_empty TeamPlanning::Attention.new(map(units:), {}).call.select { it.check == :misfits }, "no taxonomy checks no fit"
   end
 

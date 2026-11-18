@@ -35,6 +35,19 @@ class Views::Tenant::OrgGraph::ActivitySidebarTest < ActiveSupport::TestCase
     assert_equal "2026-01-05", rows.first.at_css("time")["datetime"]
   end
 
+  should "say a unit's type changed, from what to what, and offer to change it back" do
+    pods = SecureRandom.uuid_v7
+    as_tenant do
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      structure.add_level(pods, "Pod", parent_ids: [ @org[:team] ], top: false, effective_on: "2026-01-01")
+      structure.change_unit_kind(@org[:payments], pods, effective_on: Date.current)
+    end
+    row = render_sidebar(@org[:payments]).at_css("ol > li")
+
+    assert_equal "Changed its type from Squad to Pod", row.at_css("p").text
+    assert_equal "Change it back", row.at_css("form button").text
+  end
+
   should "offer change it back where it would work, and give the reason where it wouldn't" do
     rows = render_sidebar(@org[:platform]).css("ol > li")
 

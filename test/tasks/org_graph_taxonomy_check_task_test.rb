@@ -28,7 +28,7 @@ class OrgGraphTaxonomyCheckTaskTest < ActiveSupport::TestCase
   end
 
   should "pass a structure every unit of which sits where its kind may" do
-    assert_match "[#{@tenant.id}] 0 misplaced units, 0 changes to the kinds dated out of order", run_task
+    assert_match "[#{@tenant.id}] 1 structure, 0 misplaced units, 0 changes to the kinds dated out of order", run_task
   end
 
   should "fail on a unit of an HRIS level beneath anything but the HRIS level directly above it" do
@@ -63,5 +63,21 @@ class OrgGraphTaxonomyCheckTaskTest < ActiveSupport::TestCase
 
     assert_match "0 misplaced units, 1 change to the kinds dated out of order", run_task
     assert_match(/TaxonomyDefined .+ is dated 2025-12-01, before 2026-01-01/, as_tenant { OrgGraph::TaxonomyCheck.new.out_of_order }.sole)
+  end
+
+  should "judge units beneath a declared structure by it, and date its changes apart from the top structure's" do
+    group = SecureRandom.uuid_v7
+    # Nothing writes a declared structure yet, so publish one.
+    Rails.configuration.event_store.publish(
+      OrgGraph::Events::TaxonomyDefined.new(data: { levels: [ { level_id: group, name: "Group", parent_level_ids: [], top: true } ],
+                                                    previous_levels: [], effective_on: "2025-12-01", structure_unit_id: @ops },
+                                            metadata: { tenant_id: @tenant.id }),
+      stream_name: EventStreamNaming.org_structure_stream(tenant: @tenant)
+    )
+
+    error = assert_raises(SystemExit) { run_task }
+    assert_not error.success?
+    assert_equal [ 2, [ "Payments (Team) sits at the top of Ops's structure, where its kind may not" ], [] ],
+                 as_tenant { OrgGraph::TaxonomyCheck.new.then { [ it.structures, it.misplaced, it.out_of_order ] } }
   end
 end

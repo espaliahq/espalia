@@ -35,10 +35,10 @@
 class TeamPlanning::DriftScope
   PERSON_KINDS = %i[joined left fact_changed].freeze
   MEMBERSHIP_KINDS = %i[membership_started membership_ended membership_changed moved].freeze
-  UNIT_KINDS = %i[unit_created unit_renamed unit_moved unit_retired owner_added owner_removed].freeze
+  UNIT_KINDS = %i[unit_created unit_renamed unit_moved unit_kind_changed unit_retired owner_added owner_removed].freeze
   ENTERING = %i[membership_started moved].freeze
   ADVANCING = %i[joined membership_started membership_ended moved unit_created unit_moved].freeze
-  NOTED = %i[fact_changed unit_renamed].freeze
+  NOTED = %i[fact_changed unit_renamed unit_kind_changed].freeze
   PENDING = (ADVANCING + NOTED).to_set.freeze
   RANK = { unit_created: 0, unit_moved: 0, unit_succeeded: 0, joined: 1,
            membership_started: 2, membership_ended: 2, membership_changed: 2, moved: 2 }.freeze
@@ -138,7 +138,7 @@ class TeamPlanning::DriftScope
   # A known fact or name about a subject outside the plan that day stays unseen;
   # one about a subject it covers is known.
   def note(change)
-    subject_id, inside = change.kind == :unit_renamed ? [ change.unit_id, covered_unit?(change.unit_id) ] : [ change.person_id, covered?(change.person_id) ]
+    subject_id, inside = UNIT_KINDS.include?(change.kind) ? [ change.unit_id, covered_unit?(change.unit_id) ] : [ change.person_id, covered?(change.person_id) ]
     key = marker(change, subject_id)
     return @unseen << key unless inside
 
@@ -265,7 +265,7 @@ class TeamPlanning::DriftScope
     return shown(change, change.unit_id) if change.kind == :unit_created
 
     case change.kind
-    when :unit_renamed
+    when :unit_renamed, :unit_kind_changed
       seen?(change, change.unit_id) ? Cut.new(change: change.with(before: nil), outside: [ "before" ]) : Cut.new(change:, outside: [])
     when :unit_moved
       fields = %w[before after].select { (id = change.public_send(it)&.dig("parent_id")) && !covered_unit?(id) }

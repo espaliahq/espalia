@@ -149,6 +149,13 @@ class OrgGraph::StructureCommandHandler
     with_structure(plan) { |structure| structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
   end
 
+  # @see OrgGraph::StructureAggregate#change_unit_kind
+  def change_unit_kind(unit_id, level_id, **options)
+    plan, options = OrgGraph::PlanReference.extract(options)
+    authorize_unit_kind!
+    with_structure(plan) { |structure| structure.change_unit_kind(unit_id, level_id, **attributed(options, :kind_changed_by_id)) }
+  end
+
   # Runs in one transaction with {OrgGraph::SyncHandlers::RetiredUnitMemberships},
   # since RES commits the retirement before its subscribers run.
   #

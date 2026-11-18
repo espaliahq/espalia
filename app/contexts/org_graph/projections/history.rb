@@ -56,7 +56,7 @@ class OrgGraph::Projections::History
       OrgGraph::Events::PersonReturned, OrgGraph::Events::StartDateChanged,
       OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipMoved,
       OrgGraph::Events::UnitCreated, OrgGraph::Events::UnitRenamed, OrgGraph::Events::UnitMoved,
-      OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded,
+      OrgGraph::Events::UnitKindChanged, OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded,
       OrgGraph::Events::UnitOwnerAdded, OrgGraph::Events::UnitOwnerRemoved,
       OrgGraph::Events::TaxonomyDefined, OrgGraph::Events::LevelProviderSet
     ]
@@ -103,6 +103,7 @@ class OrgGraph::Projections::History
     when OrgGraph::Events::UnitCreated then unit_created
     when OrgGraph::Events::UnitRenamed then unit_fact("name", effective_on, @data.slice(:name))
     when OrgGraph::Events::UnitMoved then unit_fact("parent", effective_on, @data.slice(:parent_id))
+    when OrgGraph::Events::UnitKindChanged then unit_fact("level", effective_on, @data.slice(:level_id))
     when OrgGraph::Events::UnitRetired then unit_retired
     when OrgGraph::Events::UnitSucceeded then succession
     when OrgGraph::Events::UnitOwnerAdded then owner(effective_on, { owner: true })
@@ -218,12 +219,15 @@ class OrgGraph::Projections::History
 
   # ── Kinds of unit ──
 
+  # A kind of the top structure carries no structure_unit_id, so the values
+  # projected before structures existed stay as they were.
   def taxonomy_defined
     levels = @data[:levels].map { |level| level.to_h.symbolize_keys }
+    structure = @data[:structure_unit_id] ? { "structure_unit_id" => @data[:structure_unit_id] } : {}
     levels.each_with_index do |level, position|
       kind(level[:level_id]) do |value|
         { "name" => level[:name], "position" => position, "provider" => value&.fetch("provider") || OrgGraph::Taxonomy::ESPALIA,
-          **level.slice(:parent_level_ids, :top).stringify_keys }
+          **level.slice(:parent_level_ids, :top).stringify_keys, **structure }
       end
     end
     removed = @data[:previous_levels].map { |level| level.to_h.symbolize_keys[:level_id] } - levels.pluck(:level_id)

@@ -76,7 +76,7 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
   COUNTED = {
     "Joined" => :joined, "Left" => :left, "Moved" => :moved,
     "New units" => :unit_created, "Renamed" => :unit_renamed, "Units moved" => :unit_moved,
-    "Retired" => :unit_retired, "Succeeded" => :unit_succeeded
+    "Types changed" => :unit_kind_changed, "Retired" => :unit_retired, "Succeeded" => :unit_succeeded
   }.freeze
 
   # @return [Array<Array(String, Integer)>] each kind of change the Org Graph
@@ -129,6 +129,7 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
       case change.kind
       when :unit_renamed then [ change.unit_id, withdrawn("was #{change.before&.fetch("name", nil)}", change) ] if change.before
       when :unit_moved then [ change.unit_id, withdrawn(moved_from(change), change) ]
+      when :unit_kind_changed then [ change.unit_id, withdrawn("type was #{kind_name(change.before&.fetch("level_id", nil))}", change) ]
       end
     end + successions(changes)
   end
@@ -223,6 +224,8 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
   end
 
   def unit_name(id) = units.fetch(id, "an unknown unit")
+
+  def kind_name(level_id) = (@kind_names ||= OrgTaxonomyLevel.pluck(:id, :name).to_h).fetch(level_id, "one since removed")
 
   def units
     @units ||= begin

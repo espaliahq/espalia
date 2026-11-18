@@ -122,6 +122,35 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
     assert_not as_tenant { OrgUnitOwner.exists?(unit_id: @payments) }
   end
 
+  should "undo a change of type, under the same fit checks" do
+    as_tenant { @structure.change_unit_kind(@payments, @departments, effective_on: "2026-02-01") }
+    changed = latest(@payments)
+
+    change_back(changed)
+    assert_equal @squads, as_tenant { OrgUnit.find(@payments).level_id }
+    assert_equal changed.event_id, latest(@payments).changes_back_id
+
+    checkout = SecureRandom.uuid_v7
+    as_tenant do
+      @structure.change_unit_kind(@payments, @departments, effective_on: "2026-02-01")
+      @structure.create_unit(checkout, "Checkout", level_id: @squads, parent_id: @payments, effective_on: "2026-02-01")
+    end
+    error = assert_raises(RuntimeError) { change_back(as_tenant { OrgUnitActivity.for_unit(@payments).find_by(event_type: "UnitKindChanged", changed_back_by_id: nil, changes_back_id: nil) }) }
+    assert_equal "Payments can't change to Squad, as these wouldn't fit: Checkout (Squad) under Payments", error.message
+  end
+
+  should "refuse to change a type back for someone who has since lost the right to change it" do
+    user = create(:user)
+    tenant_user = as_tenant { create(:tenant_user, tenant: @tenant, user:, person: @lead, org_graph_editor: true) }
+    editor = AuthorizationContext.new(user:, tenant_user:, person: @lead)
+    as_tenant { OrgGraph::StructureCommandHandler.new(actor: editor).change_unit_kind(@payments, @departments, effective_on: "2026-02-01") }
+    as_tenant { tenant_user.update!(org_graph_editor: false) }
+
+    error = assert_raises(OrgGraph::Authorization::Refused) { change_back(latest(@payments), actor: editor) }
+    assert_equal "Only a tenant admin or an Org Graph editor can change a unit's type", error.message
+    assert_equal @departments, as_tenant { OrgUnit.find(@payments).level_id }
+  end
+
   should "refuse a creation, a change already changed back, and one a later change overtook" do
     as_tenant { @handler.set_membership(@ada.id, @payments, **ESPALIA) }
     created = as_tenant { OrgUnitActivity.for_unit(@payments).find_by(event_type: "UnitCreated") }

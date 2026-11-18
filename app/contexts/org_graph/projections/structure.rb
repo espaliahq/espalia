@@ -25,6 +25,7 @@ class OrgGraph::Projections::Structure
       OrgGraph::Events::UnitCreated,
       OrgGraph::Events::UnitRenamed,
       OrgGraph::Events::UnitMoved,
+      OrgGraph::Events::UnitKindChanged,
       OrgGraph::Events::UnitRetired,
       OrgGraph::Events::UnitSucceeded,
       OrgGraph::Events::UnitHandedOver,
@@ -61,6 +62,7 @@ class OrgGraph::Projections::Structure
     when OrgGraph::Events::UnitCreated then handle_unit_created(event.data)
     when OrgGraph::Events::UnitRenamed then update_unit(event.data, name: event.data[:name], name_effective_on: event.data[:effective_on])
     when OrgGraph::Events::UnitMoved then handle_unit_moved(event.data)
+    when OrgGraph::Events::UnitKindChanged then update_unit(event.data, level_id: event.data[:level_id])
     when OrgGraph::Events::UnitRetired then update_unit(event.data, retired_on: event.data[:effective_on])
     when OrgGraph::Events::UnitSucceeded then handle_unit_succeeded(event.data)
     when OrgGraph::Events::UnitHandedOver then update_unit(event.data, provider: event.data[:provider], external_ref: event.data[:external_ref])
@@ -71,17 +73,20 @@ class OrgGraph::Projections::Structure
     end
   end
 
-  # Positions are cleared first so a reorder can't trip the unique index.
+  # Positions are cleared first so a reorder can't trip the unique index. The
+  # event names one structure, so the other structures' levels stay as they are.
   def handle_taxonomy_defined(data)
     levels = data[:levels].map { |level| level.to_h.symbolize_keys }
-    existing = OrgTaxonomyLevel.where(tenant_id: ActsAsTenant.current_tenant.id)
+    structure_unit_id = data[:structure_unit_id]
+    existing = OrgTaxonomyLevel.where(tenant_id: ActsAsTenant.current_tenant.id, structure_unit_id:)
     existing.where.not(id: levels.pluck(:level_id)).delete_all
     existing.update_all("position = -position - 1")
 
     levels.each.with_index do |level, position|
       row = OrgTaxonomyLevel.find_or_initialize_by(id: level[:level_id])
       unchanged = row.persisted? && row.name == level[:name] && row.position == -position - 1
-      row.assign_attributes(name: level[:name], position:, parent_level_ids: level[:parent_level_ids], top: level[:top])
+      row.assign_attributes(name: level[:name], position:, parent_level_ids: level[:parent_level_ids], top: level[:top],
+                            structure_unit_id:)
       row.effective_on = data[:effective_on] unless unchanged
       row.save!
     end

@@ -168,6 +168,7 @@ Pundit's `authorize` passes none.
 | Add, rename or remove a unit type, or say where it can sit (`edit_taxonomy?`) | A tenant admin. Every unit has a type, so the structure's shape is a bigger call than a unit edit |
 | Providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
 | Rename, retire or own a unit, or add a unit beneath it (`edit_unit?`, `create_unit?(parent)`) | The above, or an active owner of that unit or any unit above it |
+| Change a unit's type (`change_unit_kind?`), or change that back | A tenant admin or an Org Graph editor. An owner may move a unit but not change its type, since its type decides what may sit above and below it |
 | Move a unit (`move_unit?(unit, new_parent)`) | Rights over the unit and over its new parent; a move to the root needs `edit_structure?` |
 | Record a succession (`record_succession?(units)`) | Rights over every unit it names |
 | Set, end or confirm a membership (`edit_membership?(member, unit)`) | Anyone in the member's manager chain, or whoever holds rights over the unit |

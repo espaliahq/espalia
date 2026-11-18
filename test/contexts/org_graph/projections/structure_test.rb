@@ -27,7 +27,7 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
 
   context "the taxonomy" do
     should "list the levels top first" do
-      as_tenant { assert_equal %w[Department Team], OrgTaxonomyLevel.top_first.pluck(:name) }
+      as_tenant { assert_equal %w[Department Team], OrgTaxonomyLevel.top_structure.pluck(:name) }
     end
 
     should "follow a redefinition, keeping a renamed level's id" do
@@ -36,7 +36,7 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         @handler.define_taxonomy([ *taxonomy("Division", "Team"), { level_id: squad_level, name: "Squad" } ],
                                  effective_on: "2026-03-01")
 
-        assert_equal %w[Division Team Squad], OrgTaxonomyLevel.top_first.pluck(:name)
+        assert_equal %w[Division Team Squad], OrgTaxonomyLevel.top_structure.pluck(:name)
         assert_equal "Division", OrgTaxonomyLevel.find(@department_level).name
         assert_equal Date.new(2026, 3, 1), OrgTaxonomyLevel.find(@department_level).effective_on
         assert_equal Date.new(2026, 1, 1), OrgTaxonomyLevel.find(@team_level).effective_on
@@ -50,6 +50,36 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         assert_equal [ nil, nil ], OrgTaxonomyLevel.find(@department_level).values_at(:parent_level_ids, :top)
         assert_equal [ [ [], true ], [ [ @department_level, @team_level ], true ] ],
                      OrgTaxonomyLevel.taxonomy.kinds.map { [ it.parent_ids, it.top ] }
+      end
+    end
+  end
+
+  context "a structure a unit declares" do
+    setup do
+      @group_level = SecureRandom.uuid_v7
+      @stream_level = SecureRandom.uuid_v7
+      as_tenant do
+        publish_taxonomy(structure_unit_id: @engineering, levels: [ { level_id: @group_level, name: "Group", top: true },
+                                                                    { level_id: @stream_level, name: "Stream" } ])
+      end
+    end
+
+    should "hold its levels under the declaring unit, numbered within it, and leave the top structure alone" do
+      as_tenant do
+        assert_equal %w[Department Team], OrgTaxonomyLevel.top_structure.pluck(:name)
+        assert_equal [ [ "Group", 0 ], [ "Stream", 1 ] ], OrgTaxonomyLevel.in_structure(@engineering).pluck(:name, :position)
+        assert_equal [ @department_level, @team_level ], OrgTaxonomyLevel.taxonomy.kinds.map(&:id)
+      end
+    end
+
+    should "leave its levels alone when the top structure is redefined, and the reverse" do
+      as_tenant do
+        publish_taxonomy(structure_unit_id: nil, levels: taxonomy("Division", "Team").reverse)
+        assert_equal %w[Group Stream], OrgTaxonomyLevel.in_structure(@engineering).pluck(:name)
+
+        publish_taxonomy(structure_unit_id: @engineering, levels: [ { level_id: @stream_level, name: "Stream", top: true } ])
+        assert_equal %w[Stream], OrgTaxonomyLevel.in_structure(@engineering).pluck(:name)
+        assert_equal %w[Team Division], OrgTaxonomyLevel.top_structure.pluck(:name)
       end
     end
   end
@@ -219,6 +249,16 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
       end
     end
 
+    should "give a unit its new type" do
+      studios = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.add_level(studios, "Studio", parent_ids: [], top: true, effective_on: "2026-01-01")
+        travel_to(Date.new(2026, 4, 1)) { @handler.change_unit_kind(@product, studios, effective_on: "2026-03-01") }
+
+        assert_equal studios, OrgUnit.find(@product).level_id
+      end
+    end
+
     should "keep a retired unit with the date it ended" do
       as_tenant do
         @handler.retire_unit(@payments, effective_on: "2026-06-30")
@@ -324,6 +364,15 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
 
   def as_tenant(&block)
     ActsAsTenant.with_tenant(@tenant, &block)
+  end
+
+  # Nothing writes a declared structure until step 5's second pull request, so
+  # the event goes straight into the stream.
+  def publish_taxonomy(structure_unit_id:, levels:)
+    data = { levels:, previous_levels: [], effective_on: "2026-02-01", structure_unit_id: }.compact
+    event = OrgGraph::Events::TaxonomyDefined.new(data:)
+    store = Rails.configuration.event_store
+    store.with_metadata(tenant_id: @tenant.id) { store.publish(event, stream_name: EventStreamNaming.org_structure_stream) }
   end
 
   def taxonomy(top, lower = nil)

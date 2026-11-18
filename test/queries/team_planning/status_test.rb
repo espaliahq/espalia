@@ -238,6 +238,38 @@ class TeamPlanning::StatusTest < ActiveSupport::TestCase
     assert_equal :conflicting, statuses(status)[[ @payments, "unit" ]]
   end
 
+  should "read a unit the plan renames done once the Org Graph renames it, whatever type the Org Graph has given it since" do
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    tribe = SecureRandom.uuid_v7
+    on(Time.utc(2026, 2, 1, 9)) { structure.add_level(tribe, "Tribe", parent_ids: [], top: true, effective_on: "2026-01-01") }
+    plan(TeamPlanning::Events::UnitSet, @payments, name: "Payments Core", parent_id: nil, level_id: @squads)
+
+    on(Time.utc(2026, 3, 10, 9)) { structure.change_unit_kind(@payments, tribe, effective_on: "2026-03-10") }
+    assert_equal :pending, statuses(status)[[ @payments, "unit" ]], "a type the plan never set is no conflict"
+
+    on(Time.utc(2026, 3, 12, 9)) { structure.rename_unit(@payments, "Payments Core", effective_on: "2026-03-12") }
+    assert_equal :done, statuses(status)[[ @payments, "unit" ]]
+  end
+
+  should "resolve a unit the Org Graph holds to its type at the base, even a retired one the plan restores, and keep a plan's own unit's type" do
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    tribe, risk = Array.new(2) { SecureRandom.uuid_v7 }
+    on(Time.utc(2026, 2, 10, 9)) do
+      structure.add_level(tribe, "Tribe", parent_ids: [], top: true, effective_on: "2026-01-01")
+      structure.change_unit_kind(@platform, tribe, effective_on: "2026-02-10")
+      structure.change_unit_kind(@payments, tribe, effective_on: "2026-02-10")
+      structure.retire_unit(@platform, effective_on: "2026-02-10")
+    end
+    plan(TeamPlanning::Events::UnitSet, @platform, name: "Platform", parent_id: nil, level_id: @squads)
+    plan(TeamPlanning::Events::UnitSet, @payments, name: "Payments Core", parent_id: nil, level_id: @squads)
+    plan(TeamPlanning::Events::UnitSet, risk, name: "Risk", parent_id: nil, level_id: @squads)
+
+    resolved = as_tenant do
+      TeamPlanning::Resolution.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id: @q1).structure
+    end
+    assert_equal({ @platform => tribe, @payments => tribe, risk => @squads }, resolved.units.to_h { [ it.id, it.level_id ] })
+  end
+
   should "read a unit the plan restores pending while the Org Graph has retired it, as the step before plans" do
     plan(TeamPlanning::Events::UnitRetired, @payments, name: "Payments", parent_id: nil, level_id: @squads)
     q2 = as_tenant { fork("Q2", parent_id: @q1, relation: "then", ends_on: "2026-09-30") }

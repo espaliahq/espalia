@@ -21,7 +21,7 @@ class Tenant::OrgUnitsController < ApplicationController
         overview:,
         rights: OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview),
         confirmations:,
-        effective_on: params[:on].presence || Date.current.iso8601,
+        effective_on: params[:on].presence || Tenant.today.iso8601,
         alert: flash[:drawer_alert]
       ),
       **comparison_slots(unit_id: @unit.id)
@@ -43,12 +43,16 @@ class Tenant::OrgUnitsController < ApplicationController
 
   # PATCH /tenant/org_graph/units/:id
   #
-  # One form renames the unit and another moves it, so a request carries a
-  # name or a parent_id.
+  # One form renames the unit, one changes its type and another moves it, so
+  # a request carries a name, a level_id or a parent_id.
   def update
     authorize :org_graph, :show_units?
-    attrs = params.expect(org_unit: [ :name, :parent_id ])
-    if attrs.key?(:name)
+    attrs = params.expect(org_unit: [ :name, :level_id, :parent_id ])
+    if attrs.key?(:level_id)
+      write(notice: "Type changed.") do
+        Operations::OrgGraph::ChangeUnitKind.call(context: pundit_user, params: with_date(unit_id: @unit.id, level_id: attrs[:level_id]))
+      end
+    elsif attrs.key?(:name)
       write(notice: "Renamed.") do
         Operations::OrgGraph::RenameUnit.call(context: pundit_user, params: with_date(unit_id: @unit.id, name: attrs[:name]))
       end

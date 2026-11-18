@@ -128,11 +128,11 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
       end
 
       assert_equal "Only a tenant admin can change the taxonomy's levels", error.message
-      assert_equal %w[Department Team], OrgTaxonomyLevel.top_first.pluck(:name)
+      assert_equal %w[Department Team], OrgTaxonomyLevel.top_structure.pluck(:name)
 
       structure(context_for(@lead, role: :admin)).define_taxonomy(@levels.reverse + [ { level_id: SecureRandom.uuid_v7, name: "Squad" } ],
                                                                   effective_on: "2026-02-01")
-      assert_equal %w[Department Team Squad], OrgTaxonomyLevel.top_first.pluck(:name)
+      assert_equal %w[Department Team Squad], OrgTaxonomyLevel.top_structure.pluck(:name)
     end
 
     should "leave removing a level to a tenant admin" do
@@ -145,7 +145,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
 
       assert_equal "Only a tenant admin can change the taxonomy's levels", error.message
       structure(context_for(@lead, role: :admin)).remove_level(squad, effective_on: "2026-02-01")
-      assert_equal %w[Department Team], OrgTaxonomyLevel.top_first.pluck(:name)
+      assert_equal %w[Department Team], OrgTaxonomyLevel.top_structure.pluck(:name)
     end
   end
 

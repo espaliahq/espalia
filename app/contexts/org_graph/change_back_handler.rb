@@ -85,6 +85,7 @@ class OrgGraph::ChangeBackHandler
       from, to = entry.after ? [ entry.unit_id, entry.other_unit_id ] : [ entry.other_unit_id, entry.unit_id ]
       authorize_move_membership!(entry.person_id, from, to)
     when "UnitMoved" then authorize_move_unit!(entry.unit_id, entry.before["parent_id"])
+    when "UnitKindChanged" then authorize_unit_kind!
     else authorize_unit!(entry.unit_id)
     end
   end
@@ -199,6 +200,10 @@ class OrgGraph::ChangeBackHandler
 
   def undo_unit_moved(entry, options)
     @structure.move_unit(entry.unit_id, entry.before["parent_id"], **options)
+  end
+
+  def undo_unit_kind_changed(entry, options)
+    @structure.change_unit_kind(entry.unit_id, entry.before["level_id"], **options)
   end
 
   def undo_unit_owner_added(entry, options)

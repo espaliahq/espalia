@@ -14,7 +14,7 @@ class OrgUnitActivity < ApplicationRecord
   # The changes "change it back" can undo. Creating, retiring and succeeding
   # units reorganise the structure, so they aren't among them.
   REVERSIBLE = %w[
-    MembershipSet MembershipEnded MembershipMoved UnitRenamed UnitMoved UnitOwnerAdded UnitOwnerRemoved
+    MembershipSet MembershipEnded MembershipMoved UnitRenamed UnitMoved UnitKindChanged UnitOwnerAdded UnitOwnerRemoved
   ].freeze
 
   acts_as_tenant :tenant

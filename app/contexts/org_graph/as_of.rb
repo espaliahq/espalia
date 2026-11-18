@@ -36,9 +36,12 @@ class OrgGraph::AsOf
   # @!attribute retired_units [Array<Unit>] the units retired by that day, as they last stood, by name
   # @!attribute successions [Array<Succession>] the successions recorded by that day, by id
   # @!attribute left_ids [Array<String>] the people who had left by that day, by id
-  # @!attribute kinds [Array<OrgGraph::Taxonomy::Kind>] the kinds of unit and
-  #   where each could sit, top first
-  Snapshot = Data.define(:date, :known_on, :people, :units, :memberships, :retired_units, :successions, :left_ids, :kinds)
+  # @!attribute kinds [Array<OrgGraph::Taxonomy::Kind>] the top structure's
+  #   kinds of unit and where each could sit, top first
+  # @!attribute structures [Hash{String => Array<OrgGraph::Taxonomy::Kind>}]
+  #   each structure a unit declared, keyed by that unit's id, its kinds top first
+  Snapshot = Data.define(:date, :known_on, :people, :units, :memberships, :retired_units, :successions, :left_ids, :kinds,
+                         :structures)
 
   # One person's facts that day, and who supplied each, keyed by fact
   # ("title", "site", "employment", …).
@@ -78,7 +81,7 @@ class OrgGraph::AsOf
     Snapshot.new(date: @date, known_on: @known_on, people:, units: live, memberships:, retired_units: units.fetch("retired", []),
                  successions: successions_from(rows.fetch(OrgGraph::Projections::History::SUCCESSION, [])),
                  left_ids: left_from(rows.fetch(OrgGraph::Projections::History::PERSON, [])),
-                 kinds: kinds_from(rows.fetch(OrgGraph::Projections::History::LEVEL, [])))
+                 **kinds_by_structure(rows.fetch(OrgGraph::Projections::History::LEVEL, [])))
   end
 
   Row = Data.define(:subject_type, :subject_id, :fact, :key, :value, :provider)
@@ -135,8 +138,13 @@ class OrgGraph::AsOf
     end.sort_by(&:id)
   end
 
+  def kinds_by_structure(rows)
+    structures = rows.select(&:value).group_by { it.value["structure_unit_id"] }.transform_values { kinds_from(it) }
+    { kinds: structures.delete(nil) || [], structures: structures.sort.to_h }
+  end
+
   def kinds_from(rows)
-    rows = rows.select(&:value).sort_by { it.value["position"] }
+    rows = rows.sort_by { it.value["position"] }
     levels = rows.map { { level_id: it.subject_id, **it.value.symbolize_keys.slice(:name, :parent_level_ids, :top) } }
     OrgGraph::Taxonomy.new(levels, providers: rows.to_h { [ it.subject_id, it.value["provider"] ] }).kinds
   end
