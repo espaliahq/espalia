@@ -77,18 +77,16 @@ module OrgGraph::Authorization
   end
 
   # The refusal names no unit, so a caller learns nothing about the structure.
+  # The unit is nil while a Structure rebuild empties org_units, and the check
+  # runs before the rebuild guard, so the policy must answer without it.
   #
   # @param structure_unit_id [String, nil] the structure moved into, nil for the top one
   def authorize_move_into!(structure_unit_id)
     refusal = "Only a tenant admin can move a unit into a unit's own structure"
     raise Refused, refusal if system?
-
     return authorize!(:edit_taxonomy?) { refusal } unless structure_unit_id
 
-    unit = unit_for(structure_unit_id)
-    raise Refused, refusal unless unit
-
-    authorize!(:edit_structure_of?, unit) { refusal }
+    authorize!(:edit_structure_of?, unit_for(structure_unit_id)) { refusal }
   end
 
   def authorize_succession!(unit_ids)

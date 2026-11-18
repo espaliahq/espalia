@@ -251,11 +251,9 @@ class OrgGraph::StructureCommandHandler
   private
 
   def move_into_structure(unit_id, parent_id, plan, options)
-    unless_kinds_rebuilding do
-      with_structure(plan, grouped: true) do |structure|
-        authorize_move_into!(structure.structure_joined_beneath(parent_id))
-        structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id))
-      end
+    with_structure(plan, grouped: true) do |structure|
+      authorize_move_into!(structure.structure_joined_beneath(parent_id))
+      unless_kinds_rebuilding { structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
     end
   end
 

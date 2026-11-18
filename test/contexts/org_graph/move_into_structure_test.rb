@@ -175,9 +175,14 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
   end
 
-  should "refuse a move into a structure while the kinds are rebuilt" do
+  should "refuse a move into a structure while the kinds are rebuilt, telling only a caller who may make it" do
     [ OrgGraph::Projections::History, OrgGraph::Projections::Structure ].each do |projection|
-      while_rebuilding(@tenant, projection) { assert_raises(ProjectionVersion::Rebuilding) { move_in } }
+      while_rebuilding(@tenant, projection) do
+        assert_raises(ProjectionVersion::Rebuilding) { move_in }
+        assert_raises(OrgGraph::Authorization::Refused) do
+          as_tenant { @system.move_unit(@ledger, @payments, effective_on: @today + 1, conversion: { @squad => @group, @pod => @stream }) }
+        end
+      end
     end
     assert_nil structure.structure_in_force(@ledger)
   end
