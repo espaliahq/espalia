@@ -42,6 +42,12 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     assert_empty result.medians
   end
 
+  should "read the groups of the tenant it was given, whatever tenant is current" do
+    ActsAsTenant.current_tenant = create(:tenant)
+
+    assert compare({ 2 => 1, 3 => 3 }).shown?
+  end
+
   should "say when there is no snapshot yet" do
     @snapshot.destroy!
 

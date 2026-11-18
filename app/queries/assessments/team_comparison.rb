@@ -52,7 +52,9 @@ class Assessments::TeamComparison
   end
 
   def groups
-    @groups ||= snapshot.groups.where(role_id: @role_id, level_ordinal: @level_counts.keys).index_by(&:level_ordinal)
+    @groups ||= ActsAsTenant.with_tenant(@tenant) do
+      snapshot.groups.where(role_id: @role_id, level_ordinal: @level_counts.keys).index_by(&:level_ordinal)
+    end
   end
 
   # A capability some level's snapshot predates is weighted over the levels that have it.
