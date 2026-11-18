@@ -399,8 +399,13 @@ Viewers, archived plans and frozen plans get no grips.
 unit (the plan mints the id), renames one or moves one, and a later `UnitSet` brings a
 retired unit back. `UnitRetired` shares its facet, `unit`, so whichever of the two comes
 later wins. Since winning drops any earlier `UnitSet`, a retirement carries the unit as it
-stood, so a unit the plan created, or renamed, retires as the plan had it. A unit's level never changes, as in the Org Graph: a unit at a new level is a new
-unit with a succession.
+stood, so a unit the plan created, or renamed, retires as the plan had it. A plan never
+changes the type of a unit the Org Graph holds: only the Org Graph does
+([#401](https://github.com/espaliahq/espalia/issues/401)). So resolution gives such a unit,
+live or retired, the type the Org Graph held for it at the base (`Map#org_unit_levels`),
+whatever `level_id` its `UnitSet` carries, and status compares its name and parent alone. A
+unit the plan created keeps its own type. A plan that wants a unit at a new type creates a
+new unit with a succession.
 
 `UnitSuccessionSet` is its own subject, with the facet `succession`. It names which units
 carry on from which: one predecessor and several successors is a split, several and one is a
@@ -522,8 +527,10 @@ position in a retired unit is the position's item, not each occupant's.
 
 It also marks a unit that doesn't fit the Org Graph's structure today
 ([#390](https://github.com/espaliahq/espalia/issues/390)): its unit type is gone, or it can no
-longer sit under its parent's type, or at the top. Its change is the unit's own, since a type
-never changes and a parent's change can't break the fit. A scoped plan's roots sit under units
+longer sit under its parent's type, or at the top. Its change is the unit's own, since only
+the Org Graph changes a type and a parent's plan change can't break the fit. When the misfit
+is beneath a parent on the plan's map, the item names the parent's unit too, as the Org Graph
+may have changed the parent's type. A scoped plan's roots sit under units
 the plan doesn't cover, so they are judged only once the plan puts them under a unit on its map,
 and the reason never names the unit above them. `team_planning_attention`
 reads it, and the changes tab (4.4) and the checks tab (4.7) will too.
@@ -1424,7 +1431,9 @@ The change that takes a person or unit out keeps the plan's side and nulls the
 destination: the reader learns they left the plan's units, not where they went. The
 change that brings them in nulls where they came from. A covered person now reporting
 to someone the plan can't name reads the same way, and so does the earlier value of a
-fact or name last set while its subject was outside, before the window or in it.
+fact, name or type last set while its subject was outside, before the window or in it. A
+change of type moves no one, so it is judged like a rename: it shows only for a unit the
+plan covers, never for the unit above a scope root.
 A change that took effect before the base, learned since, always drops its earlier
 value, since coverage is judged only from the base on; a plan covering the whole
 organisation keeps it. A unit is named only if the plan covers it today, since a unit's
