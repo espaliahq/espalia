@@ -37,7 +37,7 @@ module Views::Assessments::Concerns::TeamControls
   def role_menu
     div(data: { team_roles: true }) do
       render Components::Kit::Dropdown.new do |dropdown|
-        dropdown.trigger(label: "Role shown", button: { variant: :outline, size: :sm }) do
+        dropdown.trigger(label: "Role shown: #{@team.dig(:role, :name)}", button: { variant: :outline, size: :sm }) do
           plain @team.dig(:role, :name)
           icon("chevron-down", class: "ml-1 size-4")
         end

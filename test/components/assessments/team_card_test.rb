@@ -85,6 +85,8 @@ class Views::Assessments::TeamCardTest < ActiveSupport::TestCase
     menu = card.at_css("[data-team-roles]")
 
     assert_includes menu.at_css("[aria-haspopup]").text, "Software Engineer"
+    assert_equal "Role shown: Software Engineer", menu.at_css("[aria-haspopup]")["aria-label"],
+                 "expected the trigger's name to carry the role it shows"
     assert_equal [ "Software Engineer · 7", "Product Designer · 3" ], menu.css("[role='menuitem']").map { |i| i.text.squish }
     assert_includes menu.css("[role='menuitem']").last["href"], "team_role=role-d"
     assert_nil render_card.at_css("[data-team-roles]")
