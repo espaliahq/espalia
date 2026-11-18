@@ -97,8 +97,11 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       lane_left = evaluate_script("document.querySelector('#team-map [data-team-lane]').getBoundingClientRect().left")
       assert_operator blades_right, :<=, lane_left, "expected the blades beside the lanes"
 
+      player_coach = "#team-map [data-team-lane='#{@capabilities.first.stable_id}']"
+      assert_selector player_coach, text: "2 short"
+      assert_selector "turbo-frame#team-map[complete]", visible: :all
       click_link_with_js_fallback("E3 1", expect_text: "Your 1 direct report at E3")
-      within("#team-map") { assert_no_text "Ari Novak" }
+      assert_selector player_coach, text: /Team 100%.*0 short/
     end
 
     should "keep keyboard focus on the level picked when the map reloads" do
