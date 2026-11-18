@@ -58,6 +58,7 @@ So the writers that plan from those tables refuse while the projection they read
 | The HRIS level mirror, handing a level over or back | `org_graph/members` or `org_graph/structure` |
 | An HRIS sync's Org Graph writes (people, leavings, the mirror) | `org_graph/structure` |
 | Any change to the unit types: adding, renaming or removing one, saying where it can sit, or changing its provider | `org_graph/history` or `org_graph/structure` |
+| Giving a unit its own structure, withdrawing it, changing either back, or moving a unit into one | `org_graph/history` or `org_graph/structure` |
 | Feeding Person Development from the Org Graph: each reconcile, the sweep, the cut-over | `person_development/current_assessment`, `assessment_cycles/current_state` or `frameworks/published_state` |
 
 So:
