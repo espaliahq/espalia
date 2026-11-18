@@ -9,6 +9,10 @@
 # check a plan makes reads today's taxonomy: a declaration after the plan's
 # base is drift, and the plan is judged against it.
 #
+# For the same reason an Org Graph unit holds its type as it stands today,
+# which a declaration may have converted since the base; a unit the plan
+# created holds the one it was given.
+#
 # Above a scoped plan's roots the walk reads the Org Graph's live parents,
 # units the plan doesn't cover. Nothing from that walk leaves this class but
 # a type and {ABOVE}: a caller never learns which unit declared it.
@@ -25,15 +29,19 @@ class TeamPlanning::PlannedStructures
   # @return [TeamPlanning::PlannedStructures]
   def self.load(map)
     rows = OrgTaxonomyLevel.order(:position).to_a.group_by(&:structure_unit_id)
-    new(map, taxonomies: rows.transform_values { OrgTaxonomyLevel.taxonomy(it) }, live_parents: OrgUnit.pluck(:id, :parent_id).to_h)
+    live = OrgUnit.pluck(:id, :parent_id, :level_id)
+    new(map, taxonomies: rows.transform_values { OrgTaxonomyLevel.taxonomy(it) },
+             live_parents: live.to_h { |id, parent_id, _| [ id, parent_id ] }, live_levels: live.to_h { |id, _, level_id| [ id, level_id ] })
   end
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param taxonomies [Hash{String, nil => OrgGraph::Taxonomy}] each structure, by declaring unit id; nil for the top
   # @param live_parents [Hash{String => String, nil}] every Org Graph unit's live parent
-  def initialize(map, taxonomies:, live_parents: {})
+  # @param live_levels [Hash{String => String}] every Org Graph unit's live type
+  def initialize(map, taxonomies:, live_parents: {}, live_levels: {})
     @taxonomies = taxonomies
     @live_parents = live_parents
+    @live_levels = live_levels
     @planned = (map.units + map.retired_units).index_by(&:id)
   end
 
@@ -48,6 +56,10 @@ class TeamPlanning::PlannedStructures
       above = parent_of(above)
     end
   end
+
+  # @param unit [TeamPlanning::Baseline::Unit] a unit on the map
+  # @return [String] its type: the live one for an Org Graph unit
+  def level_of(unit) = @live_levels.fetch(unit.id) { unit.level_id }
 
   # @param parent_id [String, nil] nil for the top
   # @return [String, nil] the structure a unit placed beneath the parent sits in

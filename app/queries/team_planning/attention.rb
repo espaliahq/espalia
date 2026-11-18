@@ -238,7 +238,7 @@ class TeamPlanning::Attention
       parent = unit.parent_id && by_id[unit.parent_id]
       next unless (why = misfit(unit, parent, judged: !((unit.parent_id || @roots.include?(unit.id)) && !parent)))
 
-      beneath = parent && @structures.at(unit.id).kind(unit.level_id)
+      beneath = parent && @structures.at(unit.id).kind(@structures.level_of(unit))
       item(unit.id, UNIT, "#{I18n.t('org_graph.misfit')}: #{why}", units: beneath ? [ parent.id ] : [])
     end
   end
@@ -249,10 +249,11 @@ class TeamPlanning::Attention
     return unless unit.level_id
 
     taxonomy = @structures.at(unit.id)
-    return missing_type(unit.level_id) unless (kind = taxonomy.kind(unit.level_id))
+    level_id = @structures.level_of(unit)
+    return missing_type(level_id) unless (kind = taxonomy.kind(level_id))
     return unless judged
     return ("#{kind.name} can't sit at the top" unless kind.top?) if parent.nil? || @structures.declares?(parent.id)
-    return unless (parent_kind = taxonomy.kind(parent.level_id))
+    return unless (parent_kind = taxonomy.kind(@structures.level_of(parent)))
 
     "#{kind.name} can't sit under #{parent_kind.name}" unless taxonomy.allows?(kind.id, beneath: parent_kind.id)
   end
