@@ -18,6 +18,17 @@ export default class extends BaseController {
 
   #hovered = null
   #focused = null
+  #keepComparing = (event) => this.#refetchComparison(event)
+
+  connect() {
+    super.connect()
+    document.addEventListener("turbo:before-stream-render", this.#keepComparing)
+  }
+
+  disconnect() {
+    document.removeEventListener("turbo:before-stream-render", this.#keepComparing)
+    super.disconnect()
+  }
 
   zoom({ params: { zoom } }) {
     this.#reload({ zoom })
@@ -43,7 +54,27 @@ export default class extends BaseController {
 
   #reload(changes) {
     const frame = this.#keep(changes)
-    if (frame) frame.src = frame.dataset.reloadSrc
+    if (frame) this.#load(frame)
+  }
+
+  /**
+   * A rating streams in the capabilities view, which would replace an open comparison. While the
+   * comparison shows, reload it instead, so it keeps its level and picks up the new score.
+   */
+  #refetchComparison(event) {
+    const frame = this.element.querySelector("turbo-frame[data-reload-src]")
+    if (!frame || event.target.getAttribute("target") !== frame.id) return
+    if (!this.viewTargets.some((view) => view.dataset.tab === "compare")) return
+
+    event.detail.render = () => this.#load(frame)
+  }
+
+  /** Turbo fetches only when `src` changes, so the same source again needs `reload()`. */
+  #load(frame) {
+    const src = new URL(frame.dataset.reloadSrc, window.location.origin).href
+    const current = frame.getAttribute("src")
+    if (current && new URL(current, window.location.origin).href === src) frame.reload()
+    else frame.src = src
   }
 
   /**

@@ -206,6 +206,18 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
         assert_selector "#{MAP} [data-comparison-lane='3'] [data-comparison-scores]", text: "PM1s 100%"
       end
     end
+
+    should "stay on the comparison, with the new score, when the person's own rating lands" do
+      open_map
+      wait_for_stimulus "capability-map"
+      click_selector_with_js_fallback("#{MAP} [role='tab']:not([aria-selected='true'])", expect_selector: "#{MAP} [data-comparison-lane]")
+      assert_selector "#{MAP} [data-comparison-lane='2'] [data-comparison-scores]", text: "You 67%"
+
+      rate_behind_map("Prioritisation", "consistent")
+
+      assert_selector "#{MAP} [data-comparison-lane='2'] [data-comparison-scores]", text: "You 100%"
+      assert_selector "#{MAP} [role='tab'][aria-selected='true']", text: "Compared with your level"
+    end
   end
 
   should "update an open map, keeping it open and its lane focused, when someone else's rating arrives" do
