@@ -242,6 +242,19 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
     end
   end
 
+  context "after a publish renumbers a participant's level" do
+    should "place them at the level's new ordinal, where their own assessment places them" do
+      fx = build_published_two_level_framework(tenant: @tenant)
+      person = create(:person, tenant: @tenant, name: "Renumbered")
+      cycle_id = enrol_at_renumbered_level(person, fx, tenant: @tenant)
+
+      renumber_level_and_publish(fx, tenant: @tenant)
+
+      cohort = Reporting::CycleCohort.new(cycle: AssessmentCycle.find_by!(cycle_id: cycle_id)).call
+      assert_equal [ 3 ], cohort.participants.map(&:level_ordinal)
+    end
+  end
+
   private
 
   def result

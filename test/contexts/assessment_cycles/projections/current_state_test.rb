@@ -349,6 +349,24 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "a framework publish that renumbers a level" do
+    should "move every enrolment at that level, in open and closed cycles, to its new ordinal" do
+      fx = build_published_two_level_framework(tenant: @tenant)
+      person = create(:person, tenant: @tenant)
+      closed_id = enrol_at_renumbered_level(person, fx, tenant: @tenant)
+      ActsAsTenant.with_tenant(@tenant) { AssessmentCycles::CommandHandler.new.close_cycle(closed_id) }
+      open_id = enrol_at_renumbered_level(person, fx, tenant: @tenant)
+
+      renumber_level_and_publish(fx, tenant: @tenant)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal [ 3, 3 ], [ closed_id, open_id ].map { |cycle_id|
+          AssessmentCycleEnrollment.find_by!(cycle_id: cycle_id, person_id: person.id).level_ordinal
+        }
+      end
+    end
+  end
+
   private
 
   def emit(event_class, **data)

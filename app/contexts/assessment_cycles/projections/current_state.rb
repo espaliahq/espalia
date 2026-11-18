@@ -37,7 +37,11 @@ class AssessmentCycles::Projections::CurrentState
   #     close-vs-unenroll is distinguishable in the stream (CycleClosed vs
   #     PersonUnenrolled), so participants of previously-closed cycles come
   #     back as concluded members of their cohort.
-  CODE_VERSION = 3
+  #
+  # 4 — a framework publish re-reads every enrolment's `level_ordinal` from
+  #     its level, so a level renumbered by that publish no longer leaves the
+  #     stored ordinal pointing at another level.
+  CODE_VERSION = 4
 
   # All event classes this projection handles.
   #
@@ -52,7 +56,8 @@ class AssessmentCycles::Projections::CurrentState
       AssessmentCycles::Events::ParticipantRoleLevelChanged,
       AssessmentCycles::Events::PersonUnenrolled,
       AssessmentCycles::Events::CycleClosed,
-      AssessmentCycles::Events::FrameworkVersionRolled
+      AssessmentCycles::Events::FrameworkVersionRolled,
+      Frameworks::Events::FrameworkVersionPublished
     ]
   end
 
@@ -92,6 +97,7 @@ class AssessmentCycles::Projections::CurrentState
     when AssessmentCycles::Events::PersonUnenrolled then handle_person_unenrolled(event)
     when AssessmentCycles::Events::CycleClosed then handle_cycle_closed(event)
     when AssessmentCycles::Events::FrameworkVersionRolled then handle_framework_version_rolled(event)
+    when Frameworks::Events::FrameworkVersionPublished then handle_framework_version_published(event)
     end
   end
 
@@ -120,6 +126,18 @@ class AssessmentCycles::Projections::CurrentState
     return unless cycle
 
     cycle.update!(latest_framework_version: event.data[:new_version])
+  end
+
+  # A level renumbered in a draft takes its new ordinal only at publish, so
+  # re-read the ordinal of every enrolment in the framework's cycles, open or
+  # closed, as a rebuild would. Runs after PublishedState, which subscribes
+  # first and has rebuilt the levels by now.
+  def handle_framework_version_published(event)
+    current_ordinal = FrameworkState::Level.where("level_id = assessment_cycle_enrollments.level_id").select(:ordinal)
+
+    AssessmentCycleEnrollment
+      .where(cycle_id: AssessmentCycle.where(framework_id: event.data[:framework_id]).select(:cycle_id))
+      .update_all("level_ordinal = (#{current_ordinal.to_sql})")
   end
 
   def handle_cycle_renamed(event)
