@@ -49,6 +49,7 @@ class Operations::OrgGraph::DeclareStructure < Operations::Base
   # @return [Hash] `{ unit_id, name, copied_from, conversion, effective_on, levels }`, conversion
   #   as level_id => level_id, levels top first
   def perform
+    ensure_levels_well_formed!
     ids = level_ids
     conversion = conversion_ids(ids)
     refusing_as_parameter_errors do
@@ -63,6 +64,18 @@ class Operations::OrgGraph::DeclareStructure < Operations::Base
 
   def structure_unit
     @structure_unit ||= live_unit!(:unit_id)
+  end
+
+  def ensure_levels_well_formed!
+    params[:levels].each do |level|
+      raise Operations::Base::ParameterError, "Each unit type must be an object" unless level.is_a?(Hash)
+
+      unknown = level.keys.map(&:to_s) - LEVELS_SCHEMA.dig(:items, :properties).keys.map(&:to_s)
+      raise Operations::Base::ParameterError, "A unit type can't take #{unknown.first.inspect}" if unknown.any?
+
+      parents = level.stringify_keys["parent_names"]
+      raise Operations::Base::ParameterError, "parent_names must be a list of type names" unless parents.nil? || parents.is_a?(Array)
+    end
   end
 
   # @return [Hash{String => String}] each type's name, as given, => a new id

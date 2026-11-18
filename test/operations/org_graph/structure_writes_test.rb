@@ -58,6 +58,16 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       assert_equal @org[:squad], level_of(:payments)
     end
 
+    should "refuse a malformed unit type as a parameter error, naming an unknown key" do
+      { [ "Stream" ] => "Each unit type must be an object",
+        [ { name: "Stream", parent_names: "Lane" } ] => "parent_names must be a list of type names",
+        [ { name: "Stream", parent_name: [ "Lane" ] } ] => "A unit type can't take \"parent_name\"" }.each do |levels, message|
+        error = assert_raises(Operations::Base::ParameterError) { declare(levels:) }
+        assert_equal message, error.message
+      end
+      assert_equal @org[:squad], level_of(:payments)
+    end
+
     should "leave a unit's structure to a tenant admin" do
       error = assert_raises(Pundit::NotAuthorizedError) { declare(as: @editor) }
 
