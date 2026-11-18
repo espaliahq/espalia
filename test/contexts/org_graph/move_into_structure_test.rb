@@ -207,7 +207,7 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
       cause_id = OrgUnitActivity.find_by!(unit_id: @ledger, event_type: "UnitMoved").cause_id
       entries = OrgUnitActivity.where(cause_id:).to_a
       assert_equal [ [ @ledger, "UnitKindChanged" ], [ @ledger, "UnitMoved" ], [ @till, "UnitKindChanged" ] ].sort,
-                   entries.map { [ it.unit_id, it.event_type ] }.uniq.sort
+                   entries.map { [ it.unit_id, it.event_type ] }.sort
       change_back = OrgGraph::ChangeBackHandler.new(actor: SYSTEM)
       entries.each do |entry|
         error = assert_raises(RuntimeError) { change_back.change_back(entry) }
