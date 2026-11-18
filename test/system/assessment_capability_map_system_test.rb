@@ -207,6 +207,48 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       end
     end
 
+    should "name the person on every lane when their manager compares them" do
+      manager_user = FactoryBot.create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = FactoryBot.create(:person, tenant: @tenant, email: manager_user.email, name: "Morgan Manager")
+        FactoryBot.create(:tenant_user, tenant: @tenant, user: manager_user, person: manager)
+        @person.update!(manager:)
+        CAPABILITIES.each do |name, (_, frequency)|
+          next unless frequency
+
+          PersonDevelopment::CommandHandler.new.rate_as_manager(
+            @person.id, @assignment.framework_id, @stable_ids.fetch(name),
+            level_ordinal: 20, frequency:, cycle_id: @cycle_id, rated_by_id: manager.id
+          )
+        end
+      end
+      Capybara.reset_sessions!
+      sign_in_as(manager_user)
+
+      open_map
+      wait_for_stimulus "capability-map"
+      click_selector_with_js_fallback("#{MAP} [role='tab']:not([aria-selected='true'])", expect_selector: "#{MAP} [data-comparison-lane]")
+
+      assert_selector "#{MAP} [data-comparison-lane='3'] [data-comparison-scores]", text: "Robin Product 100% · PM2s 50%"
+      assert_no_selector "#{MAP} [data-comparison-scores]", text: /\AYou /
+    end
+
+    should "offer no comparison on a page read at another level" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @stable_ids.each_value do |stable_id|
+          PersonDevelopment::CommandHandler.new.rate_self(@person.id, @assignment.framework_id, stable_id,
+                                                          level_ordinal: 10, frequency: "consistent", cycle_id: @cycle_id)
+        end
+      end
+      visit assessment_path(@assignment, as_level: 10)
+      assert_selector TRIGGER
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "modal"
+      click_selector_with_js_fallback(TRIGGER, expect_selector: "#{MAP} [data-capability-lane]")
+
+      assert_no_selector "#{MAP} [role='tab']"
+    end
+
     should "move between the tabs with the arrow keys" do
       open_map
       wait_for_stimulus "capability-map"
