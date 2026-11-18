@@ -324,11 +324,12 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       read = Operations::Assessments::LevelComparison.method(:call)
       first, computed, release = Queue.new, Queue.new, Queue.new
       first << true
+      held_too_long = false
       held = lambda do |**args|
         result = read.call(**args)
         if first.pop(timeout: 0)
           computed << true
-          release.pop(timeout: 15)
+          held_too_long = release.pop(timeout: 15).nil?
         end
         result
       end
@@ -341,6 +342,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
         release << true
 
         assert_selector "#{MAP} [data-comparison-lane='2'] [data-comparison-scores]", text: "You 100%"
+        assert_not held_too_long, "the first comparison answered before the rating landed, so the race never ran"
       ensure
         release << true
       end
