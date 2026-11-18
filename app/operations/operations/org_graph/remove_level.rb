@@ -40,12 +40,15 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
 
   # Plans live outside the Org Graph, so its aggregate can't see them; this
   # operation is the only way a level is removed. Plan names stay with their
-  # members, so the refusal counts the plans rather than naming them.
+  # members, so the refusal counts the plans rather than naming them. Only
+  # units a plan created count: an Org Graph unit's type is checked above, as
+  # "no unit holds it".
   def ensure_no_live_plan_holds!(level)
     return unless level
 
-    plans = ProjectionVersion.unless_rebuilding(TeamPlanning::Projections::Overrides::PROJECTION_NAME) do
-      TeamPlanningOverride.where(plan_id: TeamPlanningPlan.live.select(:id), kind: TeamPlanning::Events::UnitSet.name)
+    plans = ProjectionVersion.unless_rebuilding(TeamPlanning::Projections::Overrides::PROJECTION_NAME,
+                                                ::OrgGraph::Projections::Structure::PROJECTION_NAME) do
+      TeamPlanningOverride.placing_plan_units.where(plan_id: TeamPlanningPlan.live.select(:id))
                           .where("end_state ->> 'level_id' = ?", level.id).distinct.count(:plan_id)
     end
     return if plans.zero?

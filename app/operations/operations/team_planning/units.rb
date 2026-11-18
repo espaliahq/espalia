@@ -20,11 +20,16 @@ class Operations::TeamPlanning::Units < Operations::Base
     plan = plan!
     scenario_id = scenario_for
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure }
-    { plan_id: plan.id, scenario_id:, units: map.units.map { unit_row(it) }, retired_units: map.retired_units.map { unit_row(it) },
+    on_map = map.scope_ids && map.known_unit_ids
+    { plan_id: plan.id, scenario_id:, units: map.units.map { unit_row(it, on_map) }, retired_units: map.retired_units.map { unit_row(it, on_map) },
       successions: map.successions.map { { succession_id: it.id, predecessor_ids: it.predecessor_ids, successor_ids: it.successor_ids } } }
   end
 
   private
 
-  def unit_row(unit) = { unit_id: unit.id, name: unit.name, parent_id: unit.parent_id, level_id: unit.level_id }
+  # A scope root's parent sits outside the plan, so a scoped plan shows it at the top, as the scenario map does.
+  def unit_row(unit, on_map)
+    parent_id = unit.parent_id unless on_map && !on_map.include?(unit.parent_id)
+    { unit_id: unit.id, name: unit.name, parent_id:, level_id: unit.level_id }
+  end
 end

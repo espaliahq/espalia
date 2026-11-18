@@ -345,7 +345,8 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
               unit(orphan = SecureRandom.uuid_v7, RETIRED).with(level_id: SecureRandom.uuid_v7) ]
     placed = change(TeamPlanning::Events::UnitSet, LIVE, name: "Unit", parent_id: ROOT, level_id: team)
     renamed = change(TeamPlanning::Events::UnitSet, ROOT, name: "Renamed", parent_id: nil, level_id: LEVEL)
-    items = TeamPlanning::Attention.new(map(units:), { [ LIVE, "unit" ] => placed, [ ROOT, "unit" ] => renamed }, taxonomy:)
+    structures = TeamPlanning::PlannedStructures.new(map(units:), taxonomies: { nil => taxonomy })
+    items = TeamPlanning::Attention.new(map(units:), { [ LIVE, "unit" ] => placed, [ ROOT, "unit" ] => renamed }, structures:)
                                    .call.select { it.check == :misfits }
 
     assert_equal [ [ LIVE, "Doesn't fit this structure: Team can't sit under Department" ],
@@ -356,6 +357,47 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal [ ROOT, LIVE ], items.find { it.subject_id == LIVE }.unit_ids, "a misfit beneath its parent names the parent's unit"
     assert_equal [ top ], items.find { it.subject_id == top }.unit_ids
     assert_empty TeamPlanning::Attention.new(map(units:), {}).call.select { it.check == :misfits }, "no taxonomy checks no fit"
+  end
+
+  context "with a unit that declares its own structure" do
+    setup do
+      @group, @team, @squad = Array.new(3) { SecureRandom.uuid_v7 }
+      @top = OrgGraph::Taxonomy.new([ { level_id: LEVEL, name: "Department", parent_level_ids: [], top: true },
+                                      { level_id: @team, name: "Team", parent_level_ids: [ LEVEL ], top: false } ])
+      @declared = OrgGraph::Taxonomy.new([ { level_id: @group, name: "Group", parent_level_ids: [], top: true },
+                                           { level_id: @squad, name: "Squad", parent_level_ids: [ @group ], top: false } ])
+    end
+
+    should "judge the units beneath it against its structure, a child of it at that structure's top" do
+      group, squad = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      units = [ unit(ROOT, nil), unit(group, ROOT).with(level_id: @group), unit(squad, group).with(level_id: @squad),
+                unit(SecureRandom.uuid_v7, ROOT).with(level_id: @squad) ]
+
+      assert_equal [ "Doesn't fit this structure: Squad can't sit at the top" ], misfits(units, ROOT => @declared)
+    end
+
+    should "mark a unit beneath it that still holds a type of the structure above" do
+      stale = SecureRandom.uuid_v7
+      units = [ unit(ROOT, nil), unit(stale, ROOT).with(level_id: @team) ]
+
+      assert_equal [ "Doesn't fit this structure: its type belongs to another structure" ], misfits(units, ROOT => @declared)
+    end
+
+    should "read the structure in force above a scoped plan's root from the Org Graph, and name no unit there" do
+      outside, root = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      units = [ unit(root, outside).with(level_id: @group), unit(SecureRandom.uuid_v7, root).with(level_id: @squad) ]
+      scoped = map(units:, retired_units: [], scope_ids: [ root ])
+      structures = TeamPlanning::PlannedStructures.new(scoped, taxonomies: { nil => @top, outside => @declared },
+                                                               live_parents: { outside => ROOT, ROOT => nil })
+
+      assert_empty TeamPlanning::Attention.new(scoped, {}, structures:).call.select { it.check == :misfits }
+      assert_equal outside, structures.structure_at(root)
+    end
+  end
+
+  def misfits(units, declared)
+    structures = TeamPlanning::PlannedStructures.new(map(units:), taxonomies: { nil => @top, **declared })
+    TeamPlanning::Attention.new(map(units:), {}, structures:).call.select { it.check == :misfits }.map(&:reason)
   end
 
   should "mark a scoped plan's root once the plan puts it under a unit the scenario retires, but not under the unit above the scope" do

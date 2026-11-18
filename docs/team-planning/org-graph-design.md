@@ -268,6 +268,10 @@ back is refused. Withdrawing the structure converts its units back into the stru
 above, though each stays where it sits. A conversion on a move that crosses no structure
 is refused.
 
+A plan judges its units against today's structures, and an Org Graph unit by the type it
+holds today: [team-planning-design.md](team-planning-design.md) says how a plan creates,
+retypes and moves units around one.
+
 ### The shape of the organisation has a history too
 
 A reorganisation changes the units themselves: what exists, what each is called, where
@@ -808,8 +812,8 @@ screen and MCP share one implementation.
   ([#148](https://github.com/espaliahq/espalia/issues/148)). Such a row has no Remove, and
   names the retired units it held. The Org Graph itself is less strict
   ([#494](https://github.com/espaliahq/espalia/issues/494)): a type goes, dated, once no unit,
-  live or retired, holds it on that date or after, so a tenant-wide type can retire after its
-  units move into a unit's own structure. Earlier days keep it, and reading as of one shows it
+  live or retired, holds it on that date or after, and no live plan places a unit it created
+  at it, so a tenant-wide type can retire after its units move into a unit's own structure. Earlier days keep it, and reading as of one shows it
   by name. A removal dated before the last day a unit held it is refused, naming that day. The
   panel follows in a later change. Remove sits in the row's kebab menu and asks first. A type an HRIS provides is handed back first, and the last
   type stays.

@@ -535,6 +535,43 @@ the plan doesn't cover, so they are judged only once the plan puts them under a 
 and the reason never names the unit above them. `team_planning_attention`
 reads it, and the changes tab (4.4) and the checks tab (4.7) will too.
 
+A unit with a structure of its own ([#494](https://github.com/espaliahq/espalia/issues/494))
+changes which types fit beneath it. A plan judges every unit against today's structures,
+as it judges types, so a declaration after the base is drift, and the plan is checked
+against it. A unit sits in the structure in force at its planned parent, and beneath the
+declaring unit, at that structure's top. An Org Graph unit holds the type it holds today,
+which a declaration may have converted since the base; a unit the plan created holds the
+type it was given. One that holds a type of another structure reads "Doesn't fit this
+structure: its type belongs to another structure", without naming the structure or the type
+it should take.
+
+- **Creating and retyping.** `team_planning_set_unit` offers the types of the structure the
+  unit would sit in, and names a type of another structure as such. A unit the plan created
+  may take another type of its structure. An Org Graph unit's type never changes in a plan.
+- **Crossing a boundary.** A move into another structure converts types, which only the Org
+  Graph does, so a plan refuses it. The one exception is a unit the plan created with nothing
+  beneath it, which may cross by taking a type of the structure it lands in, in the same call.
+- **A scoped plan.** Finding the structure in force above a scope root walks Org Graph units
+  the plan doesn't cover. Nothing from that walk reaches a payload, a refusal or a log line
+  but a type's name: a refusal says "the structure this unit would sit in", never which unit
+  declared it.
+  `test/integration/scoped_plan_structure_audit_test.rb` walks every read that takes a
+  plan_id, open and with a step closed, and fails if any shows a unit above the plan or
+  another branch's structure, or if a new read needs a value it has none for.
+- **Removing a type.** A type goes once no unit holds it and no live plan places a unit it
+  created at that type. A plan whose Org Graph units held the type before a conversion
+  doesn't block it: those units follow the Org Graph. Restoring an archived plan, and undoing
+  or redoing a change, refuse only a unit the plan created at a type since removed.
+- **While the Org Graph rebuilds.** All three checks tell a plan's own units from the Org
+  Graph's by whether `org_units` holds the id, which a Structure rebuild empties. So each
+  refuses mid-rebuild with "The Org Graph is being rebuilt; try again in a minute", and
+  `team_planning_undo_step` offers nothing. They refuse more, never count less.
+- **An archived plan** reads as before once a structure its units sat in is withdrawn, or a
+  type they held is removed: its misfits report a missing type, and nothing fails.
+
+Until a later change groups them, a declaration shows in drift as one line per unit it
+converts.
+
 It also checks each person (4.6):
 
 - **Allocation.** Someone with no place at all is placed nowhere. A total above 100% is

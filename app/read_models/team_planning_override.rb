@@ -21,4 +21,14 @@ class TeamPlanningOverride < ApplicationRecord
   # Optional, so a projection never fails on a row it doesn't own.
   belongs_to :plan, class_name: "TeamPlanningPlan", optional: true
   belongs_to :set_by, class_name: "Person", optional: true
+
+  # The unit changes whose stored level_id is the unit's type: those on units
+  # the plan created. An Org Graph unit's type is its live one, which a change
+  # carries only as it stood when set, so a later conversion leaves it stale.
+  # The Structure projection writes org_units, so read this outside its
+  # rebuild ({ProjectionVersion.unless_rebuilding}): mid-rebuild every unit
+  # would read as the plan's.
+  scope :placing_plan_units, lambda {
+    where(kind: TeamPlanning::Events::UnitSet.name).where.not(subject_id: OrgUnit.select("id::text"))
+  }
 end
