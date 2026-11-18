@@ -324,6 +324,16 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-card [data-team-gap]", text: "Critical Thinking · 2 of 3 short"
     end
 
+    should "widen the team card to everyone below the manager" do
+      rate_as_manager(@person, @cap, "consistent")
+      ActsAsTenant.with_tenant(@tenant) { rate_as_manager(add_report("Report one").tap { |r| r.update!(manager: @person) }, @cap, "none") }
+      sign_in @manager_user
+      get assessments_path(team_people: "below")
+
+      assert_select "#team-card", text: /2 people below you/
+      assert_select "#team-card a[aria-current='page']", text: "Everyone below you"
+    end
+
     should "show a blank slate on the team card until two reports have a score" do
       rate_as_manager(@person, @cap, "consistent")
       add_report("Report one")

@@ -22,7 +22,13 @@ class Views::Assessments::TeamCardTest < ActiveSupport::TestCase
   end
 
   def render_card(data = payload)
-    Nokogiri::HTML5.fragment(Views::Assessments::TeamCard.new(team: data).call)
+    Nokogiri::HTML5.fragment(view_context.render(Views::Assessments::TeamCard.new(team: data)))
+  end
+
+  def view_context
+    @view_context ||= ApplicationController.new.tap do |controller|
+      controller.request = ActionDispatch::TestRequest.create
+    end.view_context
   end
 
   should "name the team, its role and the ratings it reads" do
@@ -47,6 +53,19 @@ class Views::Assessments::TeamCardTest < ActiveSupport::TestCase
     assert card.at_css("[data-blade='2']").key?("data-blade-short")
     assert card.at_css("[data-blade-beyond='1']"), "a blade past met sticks out beyond the dashed circle"
     assert card.at_css("[data-team-blades] [data-blades-met]")
+  end
+
+  should "switch between direct reports and everyone below, only for a manager of managers" do
+    switch = render_card(payload(indirect_reports: true)).at_css("[aria-label='Who is in the team']")
+
+    assert_equal [ [ "Direct reports", "page" ], [ "Everyone below you", nil ] ],
+                 switch.css("a").map { |a| [ a.text, a["aria-current"] ] }
+    assert_includes switch.css("a").last["href"], "team_people=below"
+    assert_nil render_card.at_css("[aria-label='Who is in the team']")
+  end
+
+  should "keep the switch on the blank slate, so widening can give enough people" do
+    assert render_card(payload(scored: 0, indirect_reports: true)).at_css("[aria-label='Who is in the team']")
   end
 
   should "never name anyone on the team" do

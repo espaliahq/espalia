@@ -24,6 +24,7 @@ class Views::Assessments::TeamCard < Views::Base
             h3(class: "text-lg font-semibold text-default") { "Your team’s shape" }
             shaped? ? summary : blank_slate
           end
+          controls
         end
       end
     end
@@ -74,6 +75,25 @@ class Views::Assessments::TeamCard < Views::Base
   def meta
     one, many = PEOPLE.fetch(@team[:people])
     [ "#{@team[:in_view]} #{@team[:in_view] == 1 ? one : many}", @team.dig(:role, :name), RATINGS.fetch(@team[:ratings]) ].compact.join(" · ")
+  end
+
+  def controls
+    return unless @team[:indirect_reports]
+
+    div(class: "flex shrink-0 flex-col items-start gap-3 sm:items-end") { people_switch }
+  end
+
+  def people_switch
+    render Components::Kit::SegmentedControl.new(label: "Who is in the team") do |control|
+      control.segment("Direct reports", selected: @team[:people] == "direct", href: team_path(team_people: nil))
+      control.segment("Everyone below you", selected: @team[:people] == "below", href: team_path(team_people: "below"))
+    end
+  end
+
+  # The page with the team card's choices, `overrides` replacing them.
+  def team_path(**overrides)
+    assessments_path({ team_people: (@team[:people] if @team[:people] != "direct") }.merge(overrides).compact,
+                     anchor: "team-card")
   end
 
   def blank_slate
