@@ -252,7 +252,9 @@ a kind that never stated rules. Readers build an `OrgGraph::Taxonomy` from the r
 Each row's `structure_unit_id` names the unit whose own structure it belongs to, and is
 null for the top structure; `OrgTaxonomyLevel.top_structure` reads the top one. The
 structure in force at a unit is that of the nearest unit above it that declares one, else
-the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)).
+the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)). A unit that
+retires gives up its structure in the same change. An admin can't date the retirement before
+the structure last changed; an HRIS, which is never refused, withdraws it on that day instead.
 
 ### The shape of the organisation has a history too
 
