@@ -33,9 +33,7 @@ class Views::Assessments::ComparisonBlades < Views::Assessments::CapabilityBlade
     radius = radius_for(@shape.assessed_index - 1 + median)
     return if radius.zero?
 
-    from = xy(radius, start(i))
-    to = xy(radius, start(i + 1))
-    s.path(d: "M#{from.join(' ')} A#{radius} #{radius} 0 0 1 #{to.join(' ')}", fill: "none", stroke_width: 1.1,
+    s.path(d: "M#{xy(radius, start(i)).join(' ')} #{arcs(radius, i, i + 1)}", fill: "none", stroke_width: 1.1,
            class: "stroke-(--gos-accent-strong)", data: { blade_median: point.number })
   end
 end

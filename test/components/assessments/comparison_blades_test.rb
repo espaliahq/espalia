@@ -36,6 +36,14 @@ class Views::Assessments::ComparisonBladesTest < ActiveSupport::TestCase
     assert_equal [ 22.0, 26.0, 11.0 ], (1..3).map { |n| line_radius(picture, n) }
   end
 
+  should "draw the line all the way round when there is only one capability" do
+    picture = Views::Assessments::ComparisonBlades.new(shape: shape({ "Delivery" => 1.0 }), medians: { "cap-Delivery" => 1.0 },
+                                                       label: "1 of 1 at or above").call
+    ends = Nokogiri::HTML5.fragment(picture).at_css("[data-blade-median='1']")["d"].scan(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)(?= A| *\z)/)
+
+    assert_operator ends.uniq.size, :>, 1, "an arc that ends where it starts draws nothing"
+  end
+
   should "draw no line where the group has no median" do
     picture = render_blades({ "cap-Delivery" => 1.0 })
 
