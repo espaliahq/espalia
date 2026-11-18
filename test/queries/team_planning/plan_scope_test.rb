@@ -443,6 +443,28 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
     [ @sales, "Revenue Ops", "Field Ops" ].each { assert_not_includes changes.to_json, it }
   end
 
+  should "show a change of type only for a unit the plan covers, never for the unit above its scope root" do
+    division, squad = Array.new(2) { SecureRandom.uuid_v7 }
+    as_tenant do
+      structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+      structure.add_level(division, "Division", parent_ids: [], top: true, effective_on: "2025-01-01")
+      structure.add_level(squad, "Squad", parent_ids: [ @departments, division ], top: false, effective_on: "2025-01-01")
+    end
+    set_scope(@plan_id, [ @payments ])
+    changes = drift_after do |_, structure|
+      structure.change_unit_kind(@payments, squad, **on(10))
+      structure.change_unit_kind(@engineering, division, **on(12))
+      structure.change_unit_kind(@sales, division, **on(14))
+    end
+
+    retyped = changes.select { it[:kind] == "unit_kind_changed" }
+    assert_equal [ [ @payments, @teams, squad, [] ] ], retyped.map { [ it[:unit_id], it.dig(:before, "level_id"), it.dig(:after, "level_id"), it[:outside] ] }
+    [ @engineering, @sales, division ].each { assert_not_includes changes.to_json, it }
+
+    whole = call(Operations::TeamPlanning::Drift, plan_id: @whole_id)[:changes].select { it[:kind] == "unit_kind_changed" }
+    assert_equal [ @payments, @engineering, @sales ], whole.map { it[:unit_id] }, "the control proves drift would carry them"
+  end
+
   should "not name a unit that has left the plan, whose name now may have been set outside it" do
     travel_to Time.utc(2026, 2, 1, 9)
     as_tenant do

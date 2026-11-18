@@ -190,6 +190,17 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
     assert_equal({ risk => "Risk" }, attention[:names])
   end
 
+  should "mark a unit the plan placed once the Org Graph changes its parent's type so it no longer fits" do
+    risk = write(Operations::TeamPlanning::SetUnit, @q2, name: "Risk", parent_id: @growth, level_id: @team)[:unit_id]
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                      .change_unit_kind(@growth, @team, effective_on: "2026-02-01")
+    end
+
+    assert_equal [ [ risk, "unit", "Doesn't fit this structure: Team can't sit under Team" ] ], items
+    assert_equal({ kind: "UnitSet", scenario_id: @q2 }, change_of(risk).except(:event_id))
+  end
+
   should "judge a scoped plan's root only under a unit the plan covers, and never name the unit above it" do
     write(Operations::TeamPlanning::SetUnit, @q2, unit_id: @payments, top_level: true)
     ActsAsTenant.with_tenant(@tenant) do

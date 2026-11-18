@@ -43,12 +43,13 @@ class TeamPlanning::Baseline
   # @!attribute held_cost_centres [Set<String>, nil] the cost centres a scoped plan's lines may name, fixed by its baseline; nil holds every line
   # @!attribute outside_lines [Array<BudgetLine>] the lines naming a cost centre the plan doesn't hold. Never shown, named or counted
   # @!attribute step [Range<Date>, nil] the days the scenario's figures run over, which resolution fills in; nil starts every seat
+  # @!attribute org_unit_levels [Hash{String => String}] unit id => type, for every unit the Org Graph held, live or retired, in scope or not. Never shown
   Map = Data.define(:base_on, :known_on, :units, :retired_units, :successions, :people, :unassigned_ids, :positions, :names,
                     :rules, :unresolved, :step_ids, :departed, :left_ids, :budget_lines, :orphaned_lines, :fundings, :scope_ids, :outside,
-                    :cut_positions, :cut_unit_ids, :held_cost_centres, :outside_lines, :step) do
+                    :cut_positions, :cut_unit_ids, :held_cost_centres, :outside_lines, :step, :org_unit_levels) do
     def initialize(retired_units: [], successions: [], unresolved: [], step_ids: [], departed: [], left_ids: [], budget_lines: [],
                    orphaned_lines: {}, fundings: {}, scope_ids: nil, outside: [], cut_positions: [], cut_unit_ids: Set.new,
-                   held_cost_centres: nil, outside_lines: [], step: nil, **) = super
+                   held_cost_centres: nil, outside_lines: [], step: nil, org_unit_levels: {}, **) = super
 
     # Takes off the map anyone a departure in an earlier step took, puts
     # each position's people in its unit, and anyone left in no live unit in
@@ -583,6 +584,7 @@ class TeamPlanning::Baseline
     scope_ids = (@plan.scope_unit_ids.presence if scoped)
     map = Map.new(base_on: snapshot.date, known_on: snapshot.known_on, units:, people: scope_ids ? [] : people, outside: scope_ids ? people : [],
                   scope_ids:, unassigned_ids: [], positions: [], names: {}, step_ids: [ @plan.id ], budget_lines: approved_budget,
+                  org_unit_levels: (snapshot.units + snapshot.retired_units).to_h { [ it.id, it.level_id ] },
                   rules: Rules.new(plan_id: @plan.id, defaults: inputs.rule_defaults, by_subject: {})).settled
     map = map.holding_lines(held_on(date, known_on, map, units)) if scope_ids
     return map unless history
