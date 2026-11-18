@@ -12,7 +12,11 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
               "it on average), with how many were scored and how many are short. gaps lists capabilities where " \
               "more than half are short. people is direct (direct reports, the default) or below (everyone " \
               "below the caller); ratings is manager (the default), self or aligned. Only people whose score has " \
-              "unlocked count. Nothing names anyone on the team."
+              "unlocked count. compare is level (the default) or none: with level, each capability's " \
+              "group_median is everyone on the role at the team's levels, team included, from the level " \
+              "comparison's monthly snapshot of agreed ratings, weighted by how many of the team are at each " \
+              "level; comparison says when it was taken, or why there is no line (off, no_snapshot, or too_few " \
+              "with the short_levels under min_group_size). Nothing names anyone on the team."
   category :read
   approval :none
 
@@ -20,6 +24,7 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
   parameter :ratings, String, allowed: PERSPECTIVES.keys
   parameter :role_id, String
   parameter :level_ordinal, Integer
+  parameter :compare, String, allowed: %w[level none]
 
   # @raise [Pundit::NotAuthorizedError] unless the caller is a person
   def policy_check
@@ -33,7 +38,7 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
     { people:, indirect_reports: indirect_reports?, ratings:, role: result.role && { id: result.role.role_id, name: result.role.name },
       roles: result.roles.map { |r| { id: r.role_id, name: r.name, people: r.people } },
       level_ordinal: result.level_ordinal, levels: result.levels.map(&:to_h),
-      in_view: result.people, scored: result.scored, met: result.met,
+      in_view: result.people, scored: result.scored, met: result.met, comparison: comparison_payload,
       capabilities: result.capabilities.map { |c| capability(c) },
       gaps: result.gaps.map { |c| { stable_id: c.stable_id, name: c.name, short: c.short, scored: c.scored } } }
   end
@@ -41,6 +46,30 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
   private
 
   def people = params[:people] || "direct"
+
+  # Nil when compared with nothing, or when the team has no role in view.
+  def comparison
+    return @comparison if defined?(@comparison)
+
+    @comparison = if params[:compare] != "none" && result.role
+      Assessments::TeamComparison.new(tenant: ActsAsTenant.current_tenant, role_id: result.role.role_id,
+                                      level_counts: level_counts).call
+    end
+  end
+
+  def level_counts
+    levels = result.levels.select { |level| result.level_ordinal.nil? || level.ordinal == result.level_ordinal }
+    levels.to_h { |level| [ level.ordinal, level.people ] }
+  end
+
+  def comparison_payload
+    return { shown: false, reason: "none" } unless comparison
+
+    codes = result.levels.to_h { |level| [ level.ordinal, level.code ] }
+    { shown: comparison.shown?, reason: comparison.reason&.to_s, taken_on: comparison.taken_on&.iso8601,
+      min_group_size: comparison.min_group_size, group_size: comparison.group_size,
+      short_levels: comparison.short_ordinals.map { |ordinal| codes[ordinal] } }
+  end
 
   def ratings = params[:ratings] || "manager"
 
@@ -58,6 +87,9 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
   def capability(capability)
     { stable_id: capability.stable_id, name: capability.name, category_id: capability.category_id,
       category_name: capability.category_name, hue: capability.hue,
-      score: capability.score && (capability.score * 100).round, scored: capability.scored, short: capability.short }
+      score: percent(capability.score), scored: capability.scored, short: capability.short,
+      group_median: percent(comparison&.medians&.[](capability.stable_id)) }
   end
+
+  def percent(score) = score && (score * 100).round
 end

@@ -12,7 +12,8 @@ module Views::Assessments::Concerns::TeamControls
   # @return [Hash] the payload's choices, as the query string carries them
   def team_choices
     { team_people: (@team[:people] if @team[:people] != "direct"), team_role: (@team.dig(:role, :id) if roles?),
-      team_level: @team[:level_ordinal], team_ratings: (@team[:ratings] if @team[:ratings] != "manager") }
+      team_level: @team[:level_ordinal], team_ratings: (@team[:ratings] if @team[:ratings] != "manager"),
+      team_compare: ("none" if @team.dig(:comparison, :reason) == "none") }
   end
 
   def roles? = @team[:roles].size > 1

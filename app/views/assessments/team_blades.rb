@@ -16,10 +16,13 @@ class Views::Assessments::TeamBlades < Views::Assessments::CapabilityBlades
   # @param capabilities [Array<Hash>] `Operations::Assessments::TeamCapabilities`'s capabilities
   # @param label [String] the picture's accessible name
   # @param size [String] the svg's sizing classes
-  def initialize(capabilities:, label:, size: "w-24")
+  # @param medians [Boolean] draw a line across each blade at its `group_median`
+  def initialize(capabilities:, label:, size: "w-24", medians: false)
     super(shape: shape_for(capabilities))
+    @capabilities = capabilities
     @label = label
     @size = size
+    @medians = medians
   end
 
   def view_template
@@ -30,10 +33,22 @@ class Views::Assessments::TeamBlades < Views::Assessments::CapabilityBlades
       points.each_with_index { |point, i| blade(s, point, i) if point.reached }
       s.circle(r: MET_RADIUS, fill: "none", stroke_width: 0.9, stroke_dasharray: "2 2",
                class: "stroke-(--gos-content-default)", data: { blades_met: true })
+      @capabilities.each_with_index { |capability, i| median_line(s, capability, i) } if @medians
     end
   end
 
   private
+
+  # The comparison tab's line, at the group's score on the same scale.
+  def median_line(s, capability, i)
+    return unless capability[:group_median]
+
+    radius = radius_for(capability[:group_median] / 100.0)
+    return if radius.zero?
+
+    s.path(d: "M#{xy(radius, start(i)).join(' ')} #{arcs(radius, i, i + 1)}", fill: "none", stroke_width: 1.1,
+           class: "stroke-(--gos-accent-strong)", data: { blade_median: i + 1 })
+  end
 
   def shape_for(capabilities)
     points = capabilities.each_with_index.map do |capability, i|

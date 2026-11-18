@@ -62,6 +62,40 @@ class Operations::Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
     assert_not call[:indirect_reports]
   end
 
+  context "compared with everyone on the role at the team's levels" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        snapshot = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1))
+        snapshot.groups.create!(tenant: @tenant, framework_id: @fx.framework_id, role_id: @fx.engineer.role_id,
+                                level_ordinal: 2, group_size: 6, capability_medians: { @fx.shared.stable_id => 0.9 },
+                                category_medians: {})
+      end
+    end
+
+    should "give each capability the group's median, with the snapshot and group size" do
+      result = call
+
+      assert_equal({ shown: true, reason: nil, taken_on: "2026-11-01", min_group_size: 5, group_size: 6, short_levels: [] },
+                   result[:comparison])
+      assert_equal 90, row(result, @fx.shared)[:group_median]
+      assert_nil row(result, @fx.e_only)[:group_median]
+    end
+
+    should "draw nothing when asked to compare with nothing" do
+      result = call(compare: "none")
+
+      assert_equal [ false, "none" ], result[:comparison].values_at(:shown, :reason)
+      assert_nil row(result, @fx.shared)[:group_median]
+    end
+
+    should "say which levels in view are too small to compare with" do
+      @tenant.comparison_config.min_group_size = 7
+      @tenant.save!
+
+      assert_equal [ false, "too_few", [ "E2" ] ], call[:comparison].values_at(:shown, :reason, :short_levels)
+    end
+  end
+
   should "refuse a caller with no person" do
     context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
 

@@ -54,6 +54,41 @@ class Views::Assessments::TeamMap < Views::Base
       ratings_switch
     end
     level_chips if @team[:levels].any?
+    compare_control unless comparison[:reason] == "off" || @team[:role].nil?
+  end
+
+  def comparison = @team[:comparison]
+
+  def compared? = comparison[:shown]
+
+  def group_name = "#{@team.dig(:role, :name).to_s.pluralize}"
+
+  # Compared with nothing reads `reason: "none"`; anything else is the line or why there is none.
+  def compare_control
+    div(class: "-mt-3 mb-6 flex flex-wrap items-center gap-3") do
+      span(class: "text-sm text-muted", id: "team-compare-label") { "Compare with" }
+      render Components::Kit::SegmentedControl.new(aria: { labelledby: "team-compare-label" }) do |control|
+        control.segment("#{group_name} at the same levels", selected: comparison[:reason] != "none", href: team_path(team_compare: nil))
+        control.segment("Nothing", selected: comparison[:reason] == "none", href: team_path(team_compare: "none"))
+      end
+      compare_note
+    end
+  end
+
+  def compare_note
+    note = case comparison[:reason]
+    when nil then "#{comparison[:group_size]} #{group_name} at #{compared_codes.to_sentence}, as of " \
+                  "#{Date.iso8601(comparison[:taken_on]).strftime(LevelComparisonSnapshot::DATE_FORMAT)}."
+    when "no_snapshot" then "No group scores yet: the first snapshot is taken within the hour comparisons are turned on."
+    when "too_few" then "Fewer than #{comparison[:min_group_size]} #{group_name} at #{comparison[:short_levels].to_sentence} " \
+                        "have a settled assessment, so a line could point at one person."
+    end
+    span(class: "text-xs text-muted", data: { team_compare_note: true }) { note } if note
+  end
+
+  def compared_codes
+    @team[:levels].select { |l| l[:people].positive? && (@team[:level_ordinal].nil? || l[:ordinal] == @team[:level_ordinal]) }
+      .map { |l| l[:code] }
   end
 
   def ratings_switch
@@ -83,7 +118,7 @@ class Views::Assessments::TeamMap < Views::Base
       div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
         render Views::Assessments::TeamBlades.new(
           capabilities:, size: "mx-auto w-full max-w-sm",
-          label: "#{@team[:met]} of #{capabilities.size} capabilities met as a team"
+          label: "#{@team[:met]} of #{capabilities.size} capabilities met as a team", medians: compared?
         )
       end
       div { lanes }
@@ -106,6 +141,7 @@ class Views::Assessments::TeamMap < Views::Base
         if capability[:score]
           plain "Team "
           strong(class: "text-default") { "#{capability[:score]}%" }
+          plain " · Group #{capability[:group_median]}%" if compared? && capability[:group_median]
           plain " · "
           span(class: ("font-semibold text-warning" if capability[:short].positive?)) { "#{capability[:short]} short" }
         else
@@ -124,7 +160,11 @@ class Views::Assessments::TeamMap < Views::Base
       short = capability[:score] < 100
       span(class: "absolute left-0 top-[5px] h-1.5 rounded-full #{Views::Assessments::CapabilityMapModal::FILL.fetch(capability[:hue])}" \
                   "#{' opacity-60' if short}",
-           style: "width: #{(capability[:score].clamp(0, TRACK_TOP) / TRACK_TOP * 100).round(2)}%")
+           style: "width: #{along(capability[:score])}")
+      median = capability[:group_median] if compared?
+      span(class: "absolute inset-y-0 -ml-px w-0.5 rounded-full bg-(--gos-accent-strong)", style: "left: #{along(median)}") if median
     end
   end
+
+  def along(percent) = "#{(percent.clamp(0, TRACK_TOP) / TRACK_TOP * 100).round(2)}%"
 end
