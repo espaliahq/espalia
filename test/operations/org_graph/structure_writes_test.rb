@@ -244,6 +244,31 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
         assert_equal @org[:team], level_of(:platform)
       end
+
+      should "refuse a malformed conversion before the operation runs, so MCP saves no approval for it" do
+        build = lambda do |conversion|
+          ActsAsTenant.with_tenant(@tenant) do
+            context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+            Operations::OrgGraph::MoveUnit.new(context:, params: { unit_id: @org[:platform], parent_id: @org[:checkout], conversion: })
+          end
+        end
+
+        error = assert_raises(Operations::Base::ParameterError) { build.call({ @org[:team] => true }) }
+        assert_equal "conversion maps level ids to level ids, got #{@org[:team].inspect} => true", error.message
+        assert_raises(Operations::Base::ParameterError) { build.call({ "Team" => @stream }) }
+        assert_equal @org[:team], level_of(:platform)
+      end
+
+      should "refuse two spellings of one type that map to different types, and accept one in capitals" do
+        error = assert_raises(Operations::Base::ParameterError) do
+          move_in(conversion: { @org[:team].upcase => @stream, @org[:team] => @lane })
+        end
+        assert_equal "conversion gives #{@org[:team]} two different types", error.message
+        assert_equal @org[:team], level_of(:platform)
+
+        assert_equal({ @org[:team] => @stream }, move_in(conversion: { @org[:team].upcase => @stream.upcase })[:conversion])
+        assert_equal @stream, level_of(:platform)
+      end
     end
   end
 end

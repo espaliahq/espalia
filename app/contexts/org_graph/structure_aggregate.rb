@@ -979,7 +979,12 @@ class OrgGraph::StructureAggregate
   # move into, and keeps only the types they hold. The block gives the parent
   # whose type a unit answers to, nil for one at the top of the structure.
   def converted!(governed, conversion, into:, label:)
-    conversion = conversion.to_h.to_h { |from, to| [ require_id(from, "Converted level id"), require_id(to, "Converted level id") ] }
+    pairs = conversion.to_h.map { |from, to| [ require_id(from, "Converted level id"), require_id(to, "Converted level id") ] }
+    if (clash = pairs.group_by(&:first).find { |_, given| given.map(&:last).uniq.size > 1 })
+      raise ArgumentError, "The conversion says two things #{any_kind_name(clash.first)} units become"
+    end
+
+    conversion = pairs.to_h
     unknown = conversion.values.uniq.reject { into.kind(it) }
     raise ArgumentError, "The conversion names a unit type #{label} doesn't hold" if unknown.any?
 

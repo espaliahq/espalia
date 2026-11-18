@@ -90,6 +90,12 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_nil structure.structure_in_force(@ledger)
   end
 
+  should "refuse two spellings of one type that map to different types" do
+    error = assert_raises(ArgumentError) { move_in(conversion: { @squad.upcase => @group, @squad => @stream, @pod => @stream }) }
+    assert_equal "The conversion says two things Squad units become", error.message
+    assert_nil structure.structure_in_force(@ledger)
+  end
+
   should "fit a moved unit to the type its new parent holds, whatever the conversion maps that type to" do
     cards = create_unit("Cards", @group, parent_id: @payments, on: @today + 1)
     wallet = create_unit("Wallet", @stream, parent_id: cards, on: @today + 1)
