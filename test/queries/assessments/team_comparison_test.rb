@@ -49,6 +49,13 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     assert_empty compare({ 2 => 1, 3 => 3 }).medians
   end
 
+  should "keep a weighted median just short of met below met" do
+    group(5, 6, { "cap-c" => 0.5 })
+    group(6, 6, { "cap-c" => 1.0 })
+
+    assert_operator compare({ 5 => 1, 6 => 10_000 }).medians["cap-c"], :<, 1.0
+  end
+
   should "say which levels have too few people, and draw nothing" do
     result = compare({ 2 => 1, 4 => 1 })
 

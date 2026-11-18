@@ -73,7 +73,7 @@ class Assessments::TeamComparison
       groups[level].capability_medians_shown(config.min_group_size).map { |stable_id, median| [ stable_id, median, count ] }
     end
     pairs.group_by(&:first).transform_values do |rows|
-      (rows.sum { |_, median, count| median * count } / rows.sum(&:last).to_f).round(4)
+      rows.sum { |_, median, count| median * count } / rows.sum(&:last).to_f
     end
   end
 end
