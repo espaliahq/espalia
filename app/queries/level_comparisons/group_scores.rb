@@ -15,8 +15,9 @@ class LevelComparisons::GroupScores
   end
 
   # @return [Array<Hash>] one per role and level: framework_id, role_id,
-  #   level_ordinal, group_size, capability_medians (stable_id => score) and
-  #   category_medians (category_id => score)
+  #   level_ordinal, group_size, capability_medians (stable_id => score),
+  #   category_medians (category_id => score), and capability_counts and
+  #   category_counts: how many people each median rests on
   def call
     ActsAsTenant.with_tenant(@tenant) do
       settled.group_by(&:framework_id).flat_map { |framework_id, rows| groups_in(framework_id, rows) }
@@ -46,9 +47,13 @@ class LevelComparisons::GroupScores
       next if scopes.fetch(role_id).empty?
 
       scorings = members.map { |row| context.scoring(row, ratings.fetch([ row.cycle_id, row.person_id ], [])) }
+      capabilities = scores_by_id(scorings) { |scoring| capability_scores(scoring, scopes.fetch(role_id)) }
+      categories = scores_by_id(scorings) { |scoring| category_scores(scoring, context.category_ids(role_id)) }
       { framework_id:, role_id:, level_ordinal: level, group_size: members.size,
-        capability_medians: medians(scorings) { |scoring| capability_scores(scoring, scopes.fetch(role_id)) },
-        category_medians: medians(scorings) { |scoring| category_scores(scoring, context.category_ids(role_id)) } }
+        capability_medians: capabilities.transform_values { |scores| median(scores) },
+        capability_counts: capabilities.transform_values(&:size),
+        category_medians: categories.transform_values { |scores| median(scores) },
+        category_counts: categories.transform_values(&:size) }
     end
   end
 
@@ -74,9 +79,10 @@ class LevelComparisons::GroupScores
     end
   end
 
-  def medians(scorings)
+  # @return [Hash{String => Array<Float>}] each id's scores, one per person scorable on it
+  def scores_by_id(scorings)
     scorings.flat_map { |scoring| yield(scoring) }.group_by(&:first)
-      .transform_values { |pairs| median(pairs.map(&:last)) }
+      .transform_values { |pairs| pairs.map(&:last) }
   end
 
   def median(scores)

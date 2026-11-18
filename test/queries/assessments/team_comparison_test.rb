@@ -10,16 +10,16 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = @tenant
     @role_id = SecureRandom.uuid_v7
     @snapshot = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1))
-    group(2, 6, "cap-a" => 1.0, "cap-b" => 0.5)
-    group(3, 5, "cap-a" => 0.4)
-    group(4, 2, "cap-a" => 2.0)
+    group(2, 6, { "cap-a" => 1.0, "cap-b" => 0.5 })
+    group(3, 5, { "cap-a" => 0.4 })
+    group(4, 2, { "cap-a" => 2.0 })
   end
 
   teardown { ActsAsTenant.current_tenant = nil }
 
-  def group(level, size, medians)
+  def group(level, size, medians, counts: medians.transform_values { size })
     @snapshot.groups.create!(tenant: @tenant, framework_id: SecureRandom.uuid_v7, role_id: @role_id, level_ordinal: level,
-                             group_size: size, capability_medians: medians, category_medians: {})
+                             group_size: size, capability_medians: medians, capability_counts: counts, category_medians: {})
   end
 
   def compare(level_counts) = Assessments::TeamComparison.new(tenant: @tenant, role_id: @role_id, level_counts:).call
@@ -31,6 +31,22 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     assert_in_delta 0.55, result.medians["cap-a"], 0.001
     assert_in_delta 0.5, result.medians["cap-b"], 0.001
     assert_equal [ 11, Date.new(2026, 11, 1) ], [ result.group_size, result.taken_on ]
+  end
+
+  should "withhold a level's median on a capability fewer than the minimum were scored on" do
+    @snapshot.groups.find_by!(level_ordinal: 2).update!(capability_counts: { "cap-a" => 6, "cap-b" => 4 })
+
+    result = compare({ 2 => 1, 3 => 3 })
+
+    assert result.shown?
+    assert_nil result.medians["cap-b"]
+    assert_in_delta 0.55, result.medians["cap-a"], 0.001
+  end
+
+  should "withhold every median of a snapshot taken before counts were kept" do
+    @snapshot.groups.each { |g| g.update!(capability_counts: {}) }
+
+    assert_empty compare({ 2 => 1, 3 => 3 }).medians
   end
 
   should "say which levels have too few people, and draw nothing" do
@@ -62,7 +78,8 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     newer = lambda do
       LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 12, 1)).tap do |snapshot|
         snapshot.groups.create!(tenant: @tenant, framework_id: SecureRandom.uuid_v7, role_id: @role_id, level_ordinal: 5,
-                                group_size: 6, capability_medians: { "cap-a" => 1.0 }, category_medians: {})
+                                group_size: 6, capability_medians: { "cap-a" => 1.0 }, capability_counts: { "cap-a" => 6 },
+                                category_medians: {})
       end
     end
     result = LevelComparisonSnapshot.stub(:latest, newer) { compare({ 5 => 1 }) }

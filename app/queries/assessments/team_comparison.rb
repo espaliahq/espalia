@@ -5,7 +5,8 @@
 # Each level's median counts as often as the team has people at it, so the
 # line matches the team's level mix. It uses the level comparison's group,
 # agreed ratings, minimum and snapshot, and shows only when every level in
-# view meets that minimum, so no line can point at one person.
+# view meets that minimum, each median only from as many people, so no line
+# can point at one person.
 class Assessments::TeamComparison
   # `reason` is nil when shown, else :off, :no_snapshot or :too_few;
   # `medians` are stable_id => score, 1.0 the level met.
@@ -66,10 +67,10 @@ class Assessments::TeamComparison
     end
   end
 
-  # A capability some level's snapshot predates is weighted over the levels that have it.
+  # A capability some level withholds, or its snapshot predates, is weighted over the levels that have it.
   def weighted_medians
     pairs = @level_counts.flat_map do |level, count|
-      groups[level].capability_medians.map { |stable_id, median| [ stable_id, median, count ] }
+      groups[level].capability_medians_shown(config.min_group_size).map { |stable_id, median| [ stable_id, median, count ] }
     end
     pairs.group_by(&:first).transform_values do |rows|
       (rows.sum { |_, median, count| median * count } / rows.sum(&:last).to_f).round(4)

@@ -87,7 +87,8 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
         { 2 => 6, 3 => 5 }.each do |level, size|
           @snapshot.groups.create!(tenant: @tenant, framework_id: @fx.framework_id, role_id: @fx.engineer.role_id,
                                    level_ordinal: level, group_size: size, category_medians: {},
-                                   capability_medians: { @fx.shared.stable_id => level == 2 ? 0.9 : 0.6 })
+                                   capability_medians: { @fx.shared.stable_id => level == 2 ? 0.9 : 0.6 },
+                                   capability_counts: { @fx.shared.stable_id => size, @fx.e_only.stable_id => size })
         end
       end
       sign_in @user
@@ -110,6 +111,17 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
       get team_map_assessments_path
 
       assert_select "#team-map [data-team-lane='#{@fx.e_only.stable_id}']", text: /Team not rated · Group 80%/
+    end
+
+    should "say the group has no score in a lane fewer than the minimum were scored on" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @snapshot.groups.find_by!(level_ordinal: 3).update!(capability_counts: { @fx.shared.stable_id => 4 })
+        @snapshot.groups.find_by!(level_ordinal: 2).update!(capability_counts: { @fx.shared.stable_id => 4 })
+      end
+      get team_map_assessments_path
+
+      assert_select "#team-map [data-blade-median]", count: 0
+      assert_select "#team-map [data-team-lane='#{@fx.shared.stable_id}']", text: /Team 44% · Group no score · 2 short/
     end
 
     should "keep the choices it can read when another is one it can't, comparing as by default" do

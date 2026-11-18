@@ -771,7 +771,9 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
             @snapshot.groups.create!(tenant: @tenant, framework_id: @assignment.framework_id, role_id: @role.role_id,
                                      level_ordinal: level, group_size: size,
                                      capability_medians: { @cap.stable_id => median },
-                                     category_medians: { @cap.category_id => median })
+                                     capability_counts: { @cap.stable_id => size },
+                                     category_medians: { @cap.category_id => median },
+                                     category_counts: { @cap.category_id => size })
           end
         end
         rate(@cap, "consistent")

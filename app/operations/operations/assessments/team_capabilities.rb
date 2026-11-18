@@ -17,7 +17,8 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
               "capability's group_median is everyone on the role at the team's levels, team included, from the " \
               "level comparison's latest snapshot of agreed ratings (taken every 1, 3 or 6 months, as the tenant " \
               "chooses), weighted by how many of the team are at each level; comparison.taken_on says when it " \
-              "was taken. Without a line, comparison.reason says why: none (compare is none, or no one in view " \
+              "was taken. group_median is nil for a capability no level in view has at least min_group_size people " \
+              "scored on. Without a line, comparison.reason says why: none (compare is none, or no one in view " \
               "has a role, so there is nothing to compare), off (the tenant has comparisons turned off), " \
               "no_snapshot, or too_few with the short_levels under min_group_size. Nothing names anyone on the team."
   category :read

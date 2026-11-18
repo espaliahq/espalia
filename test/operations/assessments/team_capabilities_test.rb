@@ -81,7 +81,7 @@ class Operations::Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
         snapshot = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1))
         snapshot.groups.create!(tenant: @tenant, framework_id: @fx.framework_id, role_id: @fx.engineer.role_id,
                                 level_ordinal: 2, group_size: 6, capability_medians: { @fx.shared.stable_id => 0.9 },
-                                category_medians: {})
+                                capability_counts: { @fx.shared.stable_id => 6 }, category_medians: {})
       end
     end
 

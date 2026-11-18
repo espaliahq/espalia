@@ -157,9 +157,9 @@ class Views::Assessments::TeamMap < Views::Base
           plain "Team "
           strong(class: "text-default") { "#{capability[:score]}%" }
         else
-          plain median ? "Team not rated" : "Not rated"
+          plain compared? ? "Team not rated" : "Not rated"
         end
-        plain " · Group #{median}%" if median
+        plain " · Group #{median ? "#{median}%" : 'no score'}" if compared?
         if capability[:score]
           plain " · "
           span(class: ("font-semibold text-warning" if capability[:short].positive?)) { "#{capability[:short]} short" }

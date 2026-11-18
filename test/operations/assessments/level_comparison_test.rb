@@ -17,7 +17,9 @@ class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
         @snapshot.groups.create!(tenant: @tenant, framework_id: @fx.framework_id, role_id: @fx.engineer.role_id,
                                  level_ordinal: level, group_size: size,
                                  capability_medians: { @fx.shared.stable_id => 0.5, @fx.e_only.stable_id => 1.0 },
-                                 category_medians: { @fx.shared.category_id => 0.75 })
+                                 capability_counts: { @fx.shared.stable_id => size, @fx.e_only.stable_id => size },
+                                 category_medians: { @fx.shared.category_id => 0.75 },
+                                 category_counts: { @fx.shared.category_id => size })
       end
     end
     @assignment, = enrol_in_role_lens_framework(@person, @fx, tenant: @tenant, level_ordinal: 2)
@@ -97,6 +99,32 @@ class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
     added = call[:capabilities].find { |c| c[:stable_id] == @fx.e_only.stable_id }
 
     assert_equal [ 100, nil ], added&.values_at(:your_score, :group_median)
+  end
+
+  should "send no median that fewer than the minimum were scored on" do
+    ActsAsTenant.with_tenant(@tenant) do
+      @snapshot.groups.find_by!(level_ordinal: 2).update!(
+        capability_counts: { @fx.shared.stable_id => 5, @fx.e_only.stable_id => 1 },
+        category_counts: { @fx.shared.category_id => 4 }
+      )
+    end
+
+    result = call
+    medians = result[:capabilities].to_h { |c| [ c[:stable_id], c[:group_median] ] }
+
+    assert_equal({ @fx.shared.stable_id => 50, @fx.e_only.stable_id => nil }, medians)
+    assert_equal [ nil ], result[:categories].map { |c| c[:group_median] }
+  end
+
+  should "send no medians from a snapshot taken before counts were kept" do
+    ActsAsTenant.with_tenant(@tenant) do
+      @snapshot.groups.find_by!(level_ordinal: 2).update!(capability_counts: {}, category_counts: {})
+    end
+
+    result = call
+
+    assert result[:capabilities].all? { |c| c[:group_median].nil? }
+    assert result[:categories].all? { |c| c[:group_median].nil? }
   end
 
   should "send no group scores for a level under the minimum" do
