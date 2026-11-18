@@ -26,7 +26,7 @@ class Views::Tenant::OrgGraph::DeclareStructureStep < Views::Tenant::OrgGraph::S
 
   def body
     p(class: "text-sm text-default") do
-      "The units beneath #{@unit.name} will use unit types of its own, and change to them in the same change. " \
+      "The units beneath #{@unit.name} will use unit types that belong to #{@unit.name}, and change to them in one change. " \
         "#{@unit.name} keeps its type."
     end
     source_choice
