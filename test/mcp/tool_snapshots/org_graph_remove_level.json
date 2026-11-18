@@ -13,6 +13,13 @@
         "type": "string",
         "minLength": 1,
         "pattern": "\\S"
+      },
+      "structure_unit_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid",
+        "description": "a unit with a structure of its own, to change its unit types; the top structure by default"
       }
     },
     "required": [

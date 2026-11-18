@@ -12,6 +12,7 @@ class Operations::OrgGraph::SetKindParents < Operations::Base
               "parent other than itself, or the top. Refused, naming them, while live units would no longer " \
               "fit, and for a date after today or before the types last changed. A type an HRIS provides " \
               "can sit only at the top, or under one type above it that an HRIS provides. " \
+              "structure_unit_id names a unit with a structure of its own, whose types these are. " \
               "Refused unless the caller is a tenant admin."
   approval :in_app
 
@@ -19,6 +20,8 @@ class Operations::OrgGraph::SetKindParents < Operations::Base
   parameter :parent_ids, Array, required: true,
             schema: { type: "array", items: { type: "string" }, description: "level_ids this type can sit under" }
   parameter :top, :boolean, required: true
+  parameter :structure_unit_id, String, allow_blank: false,
+            schema: { format: "uuid", description: "a unit with a structure of its own, to change its unit types; the top structure by default" }
 
   # @return [Hash] `{ level_id, name, parent_ids, top, effective_on, levels }`, levels top first
   def perform
@@ -26,9 +29,9 @@ class Operations::OrgGraph::SetKindParents < Operations::Base
     level = current_levels.find { |candidate| candidate.id == level_id }
     parent_ids = Array(params[:parent_ids]).map { |id| id.to_s.downcase }
     refusing_as_parameter_errors do
-      structure_handler.set_kind_parents(level_id, parent_ids:, top: params[:top], effective_on:)
+      structure_handler.set_kind_parents(level_id, parent_ids:, top: params[:top], effective_on:, **in_structure)
     end
-    { level_id:, name: level&.name, parent_ids: current_levels.map(&:id) & parent_ids, top: params[:top], effective_on:,
+    { level_id:, name: level&.name, **in_structure, parent_ids: current_levels.map(&:id) & parent_ids, top: params[:top], effective_on:,
       levels: levels_payload }
   end
 end

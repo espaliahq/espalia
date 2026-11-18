@@ -13,6 +13,8 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
   approval :in_app
 
   parameter :level_id, String, required: true, allow_blank: false
+  parameter :structure_unit_id, String, allow_blank: false,
+            schema: { format: "uuid", description: "a unit with a structure of its own, to change its unit types; the top structure by default" }
 
   # @return [Hash] `{ level_id, name, effective_on, levels }`, levels top first
   def perform
@@ -26,9 +28,9 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
     ActiveRecord::Base.transaction do
       ::OrgGraph::Repository.new.lock_structure # a plan places units under it too, so the count holds
       ensure_no_live_plan_holds!(level)
-      refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:) }
+      refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:, **in_structure) }
     end
-    { level_id: params[:level_id].to_s.downcase, name: level&.name, effective_on:, levels: levels_payload }
+    { level_id: params[:level_id].to_s.downcase, name: level&.name, **in_structure, effective_on:, levels: levels_payload }
   end
 
   private
