@@ -574,7 +574,7 @@ class OrgGraph::StructureAggregate
     effective_on = iso_date(effective_on)
     unit = retirable_unit!(unit_id, provider, on: effective_on)
 
-    retire(unit, effective_on:, retired_by_id:)
+    retire(unit, effective_on:, retired_by_id:, provider:)
   end
 
   # States that the successors carry on from the predecessors: a split, a
@@ -629,7 +629,7 @@ class OrgGraph::StructureAggregate
       }))
     end
     retiring.each do |unit|
-      retire(unit, effective_on:, retired_by_id: stated_by_id, succession_id:, successor_ids: succession[:successor_ids])
+      retire(unit, effective_on:, retired_by_id: stated_by_id, provider:, succession_id:, successor_ids: succession[:successor_ids])
     end
   end
 
@@ -1126,9 +1126,18 @@ class OrgGraph::StructureAggregate
     })
   end
 
-  def retire(unit, effective_on:, retired_by_id:, **succession)
+  # The HRIS is never refused, so a retirement it dates before the structure's
+  # last change withdraws the structure on that change's day instead.
+  def retire(unit, effective_on:, retired_by_id:, provider:, **succession)
     if @structures.key?(unit.unit_id)
-      apply(withdrawal(unit, conversion: {}, effective_on:, withdrawn_by_id: retired_by_id))
+      last = @structure_changed_on[unit.unit_id]
+      withdrawn_on = effective_on
+      if last && effective_on < last
+        raise "#{unit.name}'s structure last changed on #{last}, so date its retirement then or later" if provider == ESPALIA
+
+        withdrawn_on = last
+      end
+      apply(withdrawal(unit, conversion: {}, effective_on: withdrawn_on, withdrawn_by_id: retired_by_id))
     end
     apply(retirement(unit, effective_on:, retired_by_id:, **succession))
   end

@@ -198,6 +198,24 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
       assert_equal [ { @basket => %w[Lane] }, {} ], [ @retire_on - 1, @retire_on ].map { structures_as_of(it) }
     end
 
+    should "refuse an admin's retirement dated before the structure last changed" do
+      declare(unit: @basket, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {}, on: @today + 3)
+
+      error = assert_raises(RuntimeError) { as_tenant { @handler.retire_unit(@basket, effective_on: @today + 1) } }
+      assert_equal "Basket's structure last changed on #{(@today + 3).iso8601}, so date its retirement then or later", error.message
+      assert_equal [ "Lane" ], structures_as_of(@today + 3)[@basket]
+    end
+
+    should "withdraw it on its last change when the HRIS dates the retirement earlier" do
+      ledger = create_unit("Ledger", @tribe)
+      as_tenant { @handler.hand_over_level(@tribe, "hibob", field: "work.tribe", matches: { @payments => "t-1", ledger => "t-2" }, effective_on: @today) }
+      declare(unit: ledger, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {}, on: @today + 3)
+      as_tenant { @handler.retire_unit(ledger, provider: "hibob", effective_on: @today + 1) }
+
+      assert structure.unit(ledger).retired
+      assert_equal [ [], (@today + 3).iso8601 ], [ last_definition[:levels], last_definition[:effective_on].to_s ]
+    end
+
     should "withdraw it when the HRIS retires a unit it provides, never refusing the sync" do
       as_tenant { @handler.hand_over_level(@tribe, "hibob", field: "work.tribe", matches: { @payments => "t-1" }, effective_on: @today) }
       declare
