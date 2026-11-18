@@ -146,14 +146,17 @@ class Views::Assessments::TeamMap < Views::Base
       span(class: "line-clamp-2 min-w-0") { capability[:name] }
       track(capability)
       span(class: "text-right text-xs text-muted tabular-nums whitespace-nowrap max-sm:col-span-full max-sm:text-left") do
+        median = group_median(capability)
         if capability[:score]
           plain "Team "
           strong(class: "text-default") { "#{capability[:score]}%" }
-          plain " · Group #{capability[:group_median]}%" if compared? && capability[:group_median]
+        else
+          plain median ? "Team not rated" : "Not rated"
+        end
+        plain " · Group #{median}%" if median
+        if capability[:score]
           plain " · "
           span(class: ("font-semibold text-warning" if capability[:short].positive?)) { "#{capability[:short]} short" }
-        else
-          plain "Not rated"
         end
       end
     end
@@ -163,16 +166,17 @@ class Views::Assessments::TeamMap < Views::Base
     span(class: "relative hidden h-4 sm:block", aria: { hidden: "true" }) do
       span(class: "absolute inset-x-0 top-[5px] h-1.5 rounded-full bg-neutral-subtle")
       span(class: "absolute inset-y-0 left-1/2 border-l border-dashed border-(--gos-content-muted)")
-      next unless capability[:score]
-
-      short = capability[:score] < 100
-      span(class: "absolute left-0 top-[5px] h-1.5 rounded-full #{Views::Assessments::CapabilityMapModal::FILL.fetch(capability[:hue])}" \
-                  "#{' opacity-60' if short}",
-           style: "width: #{along(capability[:score])}")
-      median = capability[:group_median] if compared?
+      if capability[:score]
+        span(class: "absolute left-0 top-[5px] h-1.5 rounded-full #{Views::Assessments::CapabilityMapModal::FILL.fetch(capability[:hue])}" \
+                    "#{' opacity-60' if capability[:score] < 100}",
+             style: "width: #{along(capability[:score])}")
+      end
+      median = group_median(capability)
       span(class: "absolute inset-y-0 -ml-px w-0.5 rounded-full bg-(--gos-accent-strong)", style: "left: #{along(median)}") if median
     end
   end
+
+  def group_median(capability) = (capability[:group_median] if compared?)
 
   def along(percent) = "#{(percent.clamp(0, TRACK_TOP) / TRACK_TOP * 100).round(2)}%"
 end

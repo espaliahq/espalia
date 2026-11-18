@@ -75,6 +75,16 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-map", text: /11 Software Engineers at E2 and E3, as of 1 Nov 2026/
     end
 
+    should "name the group's score in a lane the team hasn't rated" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @snapshot.groups.each { |g| g.update!(capability_medians: g.capability_medians.merge(@fx.e_only.stable_id => 0.8)) }
+        AssessmentLevelRating.where(capability_stable_id: @fx.e_only.stable_id).delete_all
+      end
+      get team_map_assessments_path
+
+      assert_select "#team-map [data-team-lane='#{@fx.e_only.stable_id}']", text: /Team not rated · Group 80%/
+    end
+
     should "remove the line when compared with nothing" do
       get team_map_assessments_path(team_compare: "none")
 
