@@ -20,7 +20,7 @@ class OrgGraph::Projections::UnitActivity
   CODE_VERSION = 3
 
   ACTOR_KEYS = %i[created_by_id renamed_by_id moved_by_id retired_by_id stated_by_id added_by_id removed_by_id
-                  set_by_id ended_by_id handed_over_by_id kind_changed_by_id defined_by_id withdrawn_by_id].freeze
+                  set_by_id ended_by_id handed_over_by_id kind_changed_by_id defined_by_id].freeze
   private_constant :ACTOR_KEYS
 
   # @return [Array<Class>]
