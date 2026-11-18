@@ -125,6 +125,15 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "2026-11-01", drawer.at_css("input#org-unit-effective-on")["value"]
     end
 
+    should "keep UTC's date for the next change when the tenant is already a day ahead" do
+      @tenant.update!(time_zone: "Australia/Sydney")
+      travel_to Time.utc(2026, 11, 18, 20) do
+        patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { name: "Core" }, effective_on: "2026-11-18" }
+
+        assert_redirected_to edit_tenant_org_unit_path(@org[:platform], on: "2026-11-18")
+      end
+    end
+
     should "move a unit to the root when no parent is chosen" do
       patch tenant_org_unit_path(@org[:payments]), params: { org_unit: { parent_id: "" } }
 

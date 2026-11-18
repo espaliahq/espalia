@@ -33,7 +33,7 @@ module OrgGraphDrawer
   def effective_on = params[:effective_on].presence
 
   # The `on` a drawer path carries: none for today.
-  def drawer_on = (effective_on unless effective_on == Date.current.iso8601)
+  def drawer_on = (effective_on unless effective_on == Tenant.today.iso8601)
 
   def with_date(params) = effective_on ? params.merge(effective_on:) : params
 

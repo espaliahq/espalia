@@ -19,7 +19,6 @@ class TenantTodayGuardTest < ActiveSupport::TestCase
     app/contexts/org_graph/forgetting.rb
     app/contexts/org_graph/people_cutover.rb
     app/contexts/org_graph/person_aggregate.rb
-    app/controllers/concerns/org_graph_drawer.rb
     app/controllers/tenant/org_people_controller.rb
     app/integrations/hris/hibob/adapter.rb
     app/models/org_graph_config.rb
