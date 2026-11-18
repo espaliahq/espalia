@@ -17,7 +17,7 @@ class OrgGraph::ChangeBackHandler
 
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
   MOVED_IN = "A move into a unit's own structure can't be changed back until units can move out of one. " \
-             "Withdrawing that structure undoes it, and converts every unit in it back into the structure above"
+             "Withdrawing that structure converts every unit in it back into the structure above, where they stay"
 
   # @param actor [AuthorizationContext, Object] as for {OrgGraph::CommandHandler}
   # @param repository [OrgGraph::Repository]

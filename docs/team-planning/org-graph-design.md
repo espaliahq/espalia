@@ -264,8 +264,9 @@ dated after today, before the structure last changed, or before any change to th
 moves. A subtree holding a unit with a structure of its own can't move in yet, nor can a
 unit leave a structure. That waits for step 7 of
 [#390](https://github.com/espaliahq/espalia/issues/390), so the move is one-way: change it
-back is refused, and withdrawing the structure is what undoes it. A conversion on a move
-that crosses no structure is refused.
+back is refused. Withdrawing the structure converts its units back into the structure
+above, though each stays where it sits. A conversion on a move that crosses no structure
+is refused.
 
 ### The shape of the organisation has a history too
 
