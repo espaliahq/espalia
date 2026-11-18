@@ -119,6 +119,10 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
       assert_match "into another structure", refusal(unit_id: @fraud, top_level: true, level_id: @department)
     end
 
+    should "say a declaring unit can't move beneath its own units, not that it crosses a structure" do
+      assert_equal "A unit can't move beneath itself or a unit below it", refusal(unit_id: @engineering, parent_id: @payments)
+    end
+
     should "never take an Org Graph unit, even with a new type" do
       assert_equal "A unit's level can't change: create a unit at the new level instead",
                    refusal(unit_id: @platform, top_level: true, level_id: @department)
