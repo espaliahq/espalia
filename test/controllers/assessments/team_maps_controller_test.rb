@@ -115,6 +115,18 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to new_user_session_path
   end
 
+  should "refuse an account with no linked person inside the frame, drawing no lanes" do
+    stranger = create(:user, password: "password123")
+    create(:tenant_user, tenant: @tenant, user: stranger)
+    Person.stub(:create_or_find_by!, ->(*) { raise ActiveRecord::RecordInvalid }) do
+      sign_in stranger
+      get team_map_assessments_path, headers: { "Turbo-Frame" => "team-map" }
+    end
+
+    assert_select "turbo-frame#team-map", text: /You don't have access to this section/
+    assert_select "[data-team-lane]", count: 0
+  end
+
   private
 
   def count_queries(&)
