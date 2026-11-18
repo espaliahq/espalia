@@ -56,6 +56,7 @@ class Assessments::TeamCapabilities
 
   # @return [Result]
   def call
+    @level_ordinal = nil if role && ladder.none? { |level| level.ordinal == @level_ordinal }
     on_role = role ? enrollments.select { |enrollment| enrollment.role_id == role.role_id } : []
     in_view = @level_ordinal ? on_role.select { |enrollment| enrollment.level_ordinal == @level_ordinal } : on_role
     scorings = in_view.filter_map { |enrollment| scoring_for(enrollment) }
@@ -127,7 +128,8 @@ class Assessments::TeamCapabilities
   def unlocked?(mine, level)
     total = scope.at_level(level).cells.size
     rated = mine.count { |rating| rating.level_ordinal == level && rating[@rated].present? }
-    total.positive? && rated >= Views::Assessments::HeroSummary.unlock_target_for(total)
+    total.positive? &&
+      rated >= Views::Assessments::HeroSummary.unlock_target_for(total, awaiting_agreement: @perspective == :aligned_only)
   end
 
   def capabilities(scorings)
@@ -164,7 +166,11 @@ class Assessments::TeamCapabilities
 
   def category_names = @category_names ||= categories.to_h { |c| [ c.category_id, c.name ] }
 
-  def framework = @framework ||= FrameworkState::Framework.find_by(framework_id:)
+  def framework
+    return @framework if defined?(@framework)
+
+    @framework = FrameworkState::Framework.find_by(framework_id:)
+  end
 
   def ratings
     @ratings ||= begin

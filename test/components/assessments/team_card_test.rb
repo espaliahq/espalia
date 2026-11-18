@@ -87,6 +87,13 @@ class Views::Assessments::TeamCardTest < ActiveSupport::TestCase
     assert_nil render_card(payload(scored: 1)).at_css("turbo-frame#team-map")
   end
 
+  should "say nobody is in an open cycle yet, rather than counting nothing" do
+    card = render_card(payload(in_view: 0, scored: 0, role: nil, roles: []))
+
+    assert_includes card.text.squish, "None of your reports is in an open assessment cycle yet."
+    assert_not_includes card.text, "0 of 0"
+  end
+
   should "never name anyone on the team" do
     assert_no_match(/Ada|Bo /, render_card.text)
   end

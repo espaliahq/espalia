@@ -15,9 +15,14 @@ module Assessments::TeamCapabilitiesParams
     Operations::Assessments::TeamCapabilities.call(context: pundit_user, params: fixed)
   end
 
+  def team_level
+    level = params[:team_level]
+    Integer(level, exception: false) if level.is_a?(String)
+  end
+
   def team_choices
     { people: params[:team_people].presence, role_id: params[:team_role].presence,
-      level_ordinal: params[:team_level].presence&.to_i, ratings: params[:team_ratings].presence,
+      level_ordinal: team_level, ratings: params[:team_ratings].presence,
       compare: params[:team_compare].presence }.compact
   end
 end

@@ -61,7 +61,7 @@ class Views::Assessments::TeamMap < Views::Base
 
   def compared? = comparison[:shown]
 
-  def group_name = "#{@team.dig(:role, :name).to_s.pluralize}"
+  def group_name = @team.dig(:role, :name).to_s.pluralize
 
   # Compared with nothing reads `reason: "none"`; anything else is the line or why there is none.
   def compare_control
@@ -80,10 +80,17 @@ class Views::Assessments::TeamMap < Views::Base
     when nil then "#{comparison[:group_size]} #{group_name} at #{compared_codes.to_sentence}, as of " \
                   "#{Date.iso8601(comparison[:taken_on]).strftime(LevelComparisonSnapshot::DATE_FORMAT)}."
     when "no_snapshot" then "No group scores yet: the first snapshot is taken within the hour comparisons are turned on."
-    when "too_few" then "Fewer than #{comparison[:min_group_size]} #{group_name} at #{comparison[:short_levels].to_sentence} " \
-                        "have a settled assessment, so a line could point at one person."
+    when "too_few" then too_few_note
     end
     span(class: "text-xs text-muted", data: { team_compare_note: true }) { note } if note
+  end
+
+  # Nil at a level nobody in view is at, where there is nothing to compare.
+  def too_few_note
+    return if comparison[:short_levels].empty?
+
+    "Fewer than #{comparison[:min_group_size]} #{group_name} at #{comparison[:short_levels].to_sentence} " \
+      "have a settled assessment, so a line could point at one person."
   end
 
   def compared_codes

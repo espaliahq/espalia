@@ -75,6 +75,12 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-map a[aria-current='page']", text: "Nothing"
     end
 
+    should "say nothing about the line at a level nobody in view is at" do
+      get team_map_assessments_path(team_level: 1)
+
+      assert_select "#team-map [data-team-compare-note]", count: 0
+    end
+
     should "say why there is no line when a level in view is under the minimum" do
       ActsAsTenant.with_tenant(@tenant) { @snapshot.groups.find_by!(level_ordinal: 3).update!(group_size: 2) }
       get team_map_assessments_path
@@ -84,6 +90,25 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  should "read every level for a level it can't read" do
+    sign_in @user
+    get team_map_assessments_path(team_level: [ "3" ])
+
+    assert_response :success
+    assert_select "#team-map", text: /Your 3 direct reports, manager ratings/
+  end
+
+  should "draw the map in the same number of queries, however large the team" do
+    sign_in @user
+    three = count_queries { get team_map_assessments_path }
+    add_report("Eli Moss", 2, "consistent")
+    add_report("Fen Hart", 3, "none")
+    five = count_queries { get team_map_assessments_path }
+
+    assert_select "#team-map", text: /Your 5 direct reports/
+    assert_equal three, five
+  end
+
   should "send someone signed out to sign in" do
     get team_map_assessments_path
 
@@ -91,6 +116,13 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def count_queries(&)
+    count = 0
+    counter = ->(*, payload) { count += 1 unless payload[:name] == "SCHEMA" }
+    ActiveRecord::Base.uncached { ActiveSupport::Notifications.subscribed(counter, "sql.active_record", &) }
+    count
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }

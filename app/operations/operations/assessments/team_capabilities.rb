@@ -91,5 +91,10 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
       group_median: percent(comparison&.medians&.[](capability.stable_id)) }
   end
 
-  def percent(score) = score && (score * 100).round
+  # A score short of met never reads as 100, so the number agrees with the dashed circle.
+  def percent(score)
+    return unless score
+
+    score < 1.0 ? [ (score * 100).round, 99 ].min : (score * 100).round
+  end
 end

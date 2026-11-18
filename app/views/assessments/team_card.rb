@@ -105,6 +105,8 @@ class Views::Assessments::TeamCard < Views::Base
   end
 
   def blank_slate
+    return p(class: "mt-1 text-sm text-muted") { "None of your reports is in an open assessment cycle yet." } if @team[:in_view].zero?
+
     p(class: "mt-1 text-sm text-muted") do
       plain "Shows once at least two of your reports have a score. "
       strong(class: "text-default tabular-nums") { "#{@team[:scored]} of #{@team[:in_view]}" }

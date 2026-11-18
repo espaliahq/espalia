@@ -45,6 +45,19 @@ class Operations::Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
     assert_equal [ { stable_id: @fx.shared.stable_id, name: "Critical Thinking", short: 2, scored: 3 } ], result[:gaps]
   end
 
+  should "never round a team score that is short of met up to 100" do
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentLevelRating.where(person_id: @bo.id, capability_stable_id: @fx.shared.stable_id)
+        .update_all(manager_rated_frequency: "consistent")
+    end
+    team = Operations::Assessments::TeamCapabilities.new(context: @context, params: {})
+    team.define_singleton_method(:result) do
+      @result ||= super().then { |r| r.with(capabilities: r.capabilities.map { |c| c.with(score: 0.996) }) }
+    end
+
+    assert_equal 99, ActsAsTenant.with_tenant(@tenant) { team.call }[:capabilities].first[:score]
+  end
+
   should "read the self-ratings when asked" do
     assert_equal 0, call(ratings: "self")[:scored]
   end

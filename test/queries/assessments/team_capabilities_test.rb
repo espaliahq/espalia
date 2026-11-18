@@ -112,6 +112,14 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
     assert_equal [ @critical.stable_id, @player_coach.stable_id ], result.capabilities.map(&:stable_id)
   end
 
+  should "count someone on agreed ratings only once every cell at their level is agreed, as their hero does" do
+    rate(@ada, @critical, 2, "consistent", side: :aligned_frequency)
+    rate(@bo, @critical, 3, "consistent", side: :aligned_frequency)
+    rate(@bo, @player_coach, 3, "consistent", side: :aligned_frequency)
+
+    assert_equal 1, result(perspective: :aligned_only).scored
+  end
+
   should "leave a capability nobody rated out of its mean rather than scoring it 0" do
     rate(@ada, @critical, 2, "consistent")
     rate(@bo, @critical, 3, "consistent")
@@ -139,6 +147,13 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
 
     narrowed = result(person_ids: [ eve.id ], level_ordinal: 3)
     assert_equal [ 1, 1 ], [ narrowed.people, narrowed.scored ]
+  end
+
+  should "read every level for a level that isn't on the role's ladder" do
+    narrowed = result(level_ordinal: 9)
+
+    assert_nil narrowed.level_ordinal
+    assert_equal 3, narrowed.people
   end
 
   should "leave out people who aren't in an open cycle" do
