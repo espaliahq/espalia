@@ -124,4 +124,56 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
                    refusal(unit_id: @platform, top_level: true, level_id: @department)
     end
   end
+
+  # The worked example: a live plan renames one of Engineering's squads, which
+  # then become Groups. The tenant-wide Squad holds no unit any more.
+  context "once a live plan's Org Graph units convert" do
+    setup do
+      set_unit(unit_id: @payments, name: "Payments and Billing")
+      declare
+    end
+
+    should "let the old type go" do
+      call(Operations::OrgGraph::RemoveLevel, level_id: @squad)
+
+      assert_not ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.exists?(id: @squad) }
+    end
+
+    should "let the plan come back once the old type has gone, and undo and redo after" do
+      call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+      call(Operations::OrgGraph::RemoveLevel, level_id: @squad)
+      call(Operations::TeamPlanning::RestorePlan, plan_id: @plan_id)
+      call(Operations::TeamPlanning::UndoChange, plan_id: @plan_id, scenario_id: @plan_id)
+      call(Operations::TeamPlanning::RedoChange, plan_id: @plan_id, scenario_id: @plan_id)
+
+      assert_equal [ "Payments and Billing", @group ],
+                   call(Operations::TeamPlanning::Units, plan_id: @plan_id)[:units].find { it[:unit_id] == @payments }.values_at(:name, :level_id)
+    end
+
+    should "keep the old type while the Org Graph's units are being rebuilt" do
+      structure = OrgGraph::Projections::Structure::PROJECTION_NAME
+      rebuilding = lambda do |*names, &block|
+        raise ProjectionVersion::Rebuilding if names.include?(structure)
+
+        block.call
+      end
+      error = ProjectionVersion.stub(:unless_rebuilding, rebuilding) do
+        assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @squad) }
+      end
+
+      assert_equal "The Org Graph is being rebuilt; try again in a minute.", error.message
+    end
+  end
+
+  context "a live plan's unit of a type removed since" do
+    setup do
+      @risk = set_unit(name: "Risk", parent_id: @engineering, level_id: @squad)[:unit_id]
+      declare
+    end
+
+    should "still hold the type" do
+      assert_match "1 live plan places units of this type",
+                   assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @squad) }.message
+    end
+  end
 end

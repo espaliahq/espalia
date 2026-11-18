@@ -27,9 +27,11 @@ class Operations::TeamPlanning::RestorePlan < Operations::Base
   # Removing a unit type waits only for live plans, so an archived plan can
   # still place units of a type that has gone since.
   def ensure_unit_types_remain!(plan_id)
-    gone = TeamPlanningOverride.where(plan_id:, kind: ::TeamPlanning::Events::UnitSet.name)
-                               .where("end_state ->> 'level_id' NOT IN (?)", OrgTaxonomyLevel.select("id::text"))
-                               .count
+    gone = ProjectionVersion.unless_rebuilding(::OrgGraph::Projections::Structure::PROJECTION_NAME) do
+      TeamPlanningOverride.placing_plan_units.where(plan_id:)
+                          .where("end_state ->> 'level_id' NOT IN (?)", OrgTaxonomyLevel.select("id::text"))
+                          .count
+    end
     return if gone.zero?
 
     raise Operations::Base::ParameterError,

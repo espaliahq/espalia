@@ -19,9 +19,16 @@ module Operations::TeamPlanning::UnitTypeRemains
           "This change places a unit of a type that has been removed, so it can't be brought back"
   end
 
+  # An Org Graph unit keeps its live type whatever the change stored, so
+  # only a unit the plan created can come back as a type that has gone.
+  #
   # @param change [RubyEventStore::Event, nil] the change brought back
   # @return [Boolean] whether it places a unit of a type that has gone
   def unit_type_removed?(change)
-    change.is_a?(::TeamPlanning::Events::UnitSet) && !OrgTaxonomyLevel.exists?(id: change.data[:level_id])
+    return false unless change.is_a?(::TeamPlanning::Events::UnitSet)
+
+    ProjectionVersion.unless_rebuilding(::OrgGraph::Projections::Structure::PROJECTION_NAME) do
+      !OrgUnit.exists?(id: change.data[:subject_id]) && !OrgTaxonomyLevel.exists?(id: change.data[:level_id])
+    end
   end
 end

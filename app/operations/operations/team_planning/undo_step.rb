@@ -86,7 +86,7 @@ class Operations::TeamPlanning::UndoStep < Operations::Base
 
     subject_id = entry.data[:subject_id]
     { event_id:, action: action_of(entry), subject_id:, subject: name_of(subject_id, hidden), facet: aggregate.facet_of(scenario_id, event_id), scenario_id: }
-  rescue Operations::Base::ParameterError
+  rescue Operations::Base::ParameterError, ProjectionVersion::Rebuilding
     nil
   end
 
