@@ -82,6 +82,17 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
     assert_operator overhang, :<=, 0, "expected the role trigger and its chevron inside #{scope}"
   end
 
+  # Where the card's blades sit against its summary: :beside on a wide screen, :above on a phone.
+  def card_blades_against_summary
+    evaluate_script(<<~JS)
+      (() => {
+        const blades = document.querySelector("#team-card [data-team-blades]").getBoundingClientRect()
+        const summary = document.querySelector("#team-card h3").getBoundingClientRect()
+        return blades.right <= summary.left ? "beside" : (blades.bottom <= summary.top ? "above" : "overlapping")
+      })()
+    JS
+  end
+
   def open_team_map
     wait_for_stimulus "modal", scope: "#team-card"
     click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
@@ -106,6 +117,7 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
 
       assert_selector "#team-card [data-team-blades][aria-label='1 of 2 capabilities met as a team']", visible: true
       assert_selector "#team-card [data-team-gap]", text: "Player coach · 2 of 3 short"
+      assert_equal "beside", card_blades_against_summary
       open_team_map
       assert_selector "#team-map [data-team-lane]", count: 2, visible: true
       blades_right = evaluate_script("document.querySelector('#team-map [data-team-blades]').getBoundingClientRect().right")
@@ -165,9 +177,11 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       assert_operator overhang, :<=, 0, "expected the focused level chip inside its strip"
     end
 
-    should "stack the map's blades above its lanes on a phone" do
+    should "stack the card's and the map's blades above their text on a phone" do
       visit_team(MOBILE_SIZE)
       assert_no_sideways_overflow
+      assert_selector "#team-card [data-team-blades]", visible: true
+      assert_equal "above", card_blades_against_summary
 
       open_team_map
       assert_selector "#team-map [data-team-lane]", count: 2, visible: true
