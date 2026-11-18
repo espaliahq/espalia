@@ -19,7 +19,12 @@ class OrgGraphPolicy::UnitRights
   def rename? = @unit.held_by_espalia? && @policy.edit_unit?(@unit)
 
   # @return [Boolean]
-  def move? = rename? && (parent_choices.any? || root_choice?)
+  def move? = rename? && (parent_choices.any? || root_choice? || conversion_parent_choices.any?)
+
+  # Give the unit a structure of its own, or withdraw it (#494).
+  #
+  # @return [Boolean]
+  def structure? = @policy.edit_structure_of?(@unit)
 
   # @return [Boolean]
   def change_type? = @unit.held_by_espalia? && @policy.change_unit_kind? && type_choices.size > 1
@@ -63,6 +68,28 @@ class OrgGraphPolicy::UnitRights
       subtree = [ @unit, *@overview.descendants_of(@unit) ]
       @overview.in_tree_order.select do |unit|
         may_sit_under?(unit) && subtree.exclude?(unit) && @policy.create_unit?(unit)
+      end
+    end
+  end
+
+  # Where the unit may move into another unit's own structure, changing its
+  # type and those beneath it on the way (#494): from the top structure only,
+  # since a move out of a declared one waits for #390. Each needs the right
+  # to change the structure it joins.
+  #
+  # @return [Array<OrgUnit>] in tree order
+  def conversion_parent_choices
+    @conversion_parent_choices ||= begin
+      subtree = [ @unit, *@overview.descendants_of(@unit) ]
+      if !rename? || @overview.structure_unit_of(@unit) ||
+         subtree.any? { !it.held_by_espalia? || @overview.declares_structure?(it) }
+        []
+      else
+        @overview.in_tree_order.select do |unit|
+          into = @overview.structure_beneath(unit)
+          into && subtree.exclude?(unit) && @policy.create_unit?(unit) &&
+            @policy.edit_structure_of?(@overview.unit(into))
+        end
       end
     end
   end

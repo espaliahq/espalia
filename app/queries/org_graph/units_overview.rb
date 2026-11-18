@@ -118,6 +118,17 @@ class OrgGraph::UnitsOverview
   # @return [Boolean] whether its own structure governs the units beneath it
   def declares_structure?(unit) = structures.key?(unit.id)
 
+  # @param id [String]
+  # @return [OrgUnit, nil] the live unit
+  def unit(id) = @units[id]
+
+  # @param unit [OrgUnit]
+  # @return [Array<OrgUnit>] the units a structure it declares governs: every
+  #   live unit beneath it, down to and including any that declares its own
+  def governed_by(unit)
+    children_of(unit).flat_map { |child| [ child, *(declares_structure?(child) ? [] : governed_by(child)) ] }
+  end
+
   # @param unit [OrgUnit]
   # @return [Integer] distinct people in the unit and every unit beneath it
   def headcount(unit) = people_within(unit).size

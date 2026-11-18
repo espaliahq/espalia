@@ -62,4 +62,27 @@ class OrgGraphPolicy::UnitRightsTest < ActiveSupport::TestCase
     assert_empty rights.parent_choices
     assert rights.root_choice?
   end
+
+  context "with a unit's own structure (#494)" do
+    setup do
+      group = SecureRandom.uuid_v7
+      as_tenant do
+        admin = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          @org[:checkout], levels: [ { level_id: group, name: "Group", parent_level_ids: [ group ], top: true } ],
+                           conversion: { @org[:squad] => group }, effective_on: Date.current
+        )
+      end
+    end
+
+    should "offer a unit in the top structure the units inside it, as a move that converts" do
+      assert_equal %w[Checkout Payments], rights_for(@org[:platform]).conversion_parent_choices.map(&:name)
+      assert rights_for(@org[:platform]).move?
+    end
+
+    should "offer no such move out of it, nor to a unit that declares one itself" do
+      assert_empty rights_for(@org[:payments]).conversion_parent_choices
+      assert_empty rights_for(@org[:checkout]).conversion_parent_choices
+    end
+  end
 end
