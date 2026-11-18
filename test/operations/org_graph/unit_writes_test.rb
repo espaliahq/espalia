@@ -148,7 +148,7 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
       assert_raises(Operations::Base::ParameterError) do
         call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: "pod")
       end
-      error = assert_raises(RuntimeError) do
+      error = assert_raises(Operations::Base::ParameterError) do
         call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: SecureRandom.uuid_v7)
       end
       assert_equal "That unit type doesn't exist", error.message
