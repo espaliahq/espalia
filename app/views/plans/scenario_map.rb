@@ -160,7 +160,8 @@ class Views::Plans::ScenarioMap < Views::Base
   def baseline?(scenario_id) = scenario_id == @map[:plan_id]
 
   def as_of_line
-    "The Org Graph on #{date(@map[:base_on])}, as known on #{date(@map[:known_on])}" \
+    known = @map[:known_on] ? "as known on #{date(@map[:known_on])}" : "as it reads today"
+    "The Org Graph on #{date(@map[:base_on])}, #{known}" \
       "#{', with this scenario\'s changes' unless baseline?(@map[:scenario_id])}. #{editing_hint}"
   end
 

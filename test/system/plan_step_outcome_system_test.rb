@@ -4,7 +4,8 @@ require "application_system_test_case"
 
 # A closed step's plan beside what happened, from its row and from the
 # timeline ([#466](https://github.com/espaliahq/espalia/issues/466)): a table
-# on a wide screen, a card per unit on a phone.
+# on a wide screen, a card per unit on a phone. The step after it stands on
+# the Org Graph as it reads today ([#502](https://github.com/espaliahq/espalia/issues/502)).
 class PlanStepOutcomeSystemTest < ApplicationSystemTestCase
   ESPALIA = { provider: "espalia" }.freeze
 
@@ -31,6 +32,8 @@ class PlanStepOutcomeSystemTest < ApplicationSystemTestCase
         call(Operations::TeamPlanning::AddPlanMember, plan_id: @plan_id, person_id: @viewer.person_id, role: "viewer")
         @q1 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1",
                                                            ends_on: (Date.current + 89).iso8601)[:scenario_id]
+        @q2 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2",
+                                                           ends_on: (Date.current + 180).iso8601)[:scenario_id]
       end
       org.leave(@brook.id, **ESPALIA, effective_on: (Date.current - 10).iso8601)
       call(Operations::TeamPlanning::CloseStep, plan_id: @plan_id, scenario_id: @q1)
@@ -60,6 +63,15 @@ class PlanStepOutcomeSystemTest < ApplicationSystemTestCase
             assert_selector "[data-step-outcome=planned_not_here] dd", text: "Brook Example"
           end
         end
+        assert_no_sideways_overflow
+      end
+
+      should "show the map of the step after it, standing on the Org Graph as it reads today" do
+        sign_in_as(@viewer.user)
+        visit map_plan_path(@plan_id, scenario: @q2)
+
+        assert_text "as it reads today, with this scenario's changes"
+        within("[data-map-unit='#{@payments}']") { assert_text "Ada Example" }
         assert_no_sideways_overflow
       end
 
