@@ -260,6 +260,16 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       assert_selector "#{MAP} [role='tab']:focus", text: "Capabilities"
     end
 
+    should "reach the tab panel with Tab from the selected tab" do
+      open_map
+      wait_for_stimulus "capability-map"
+
+      # A dispatched Tab performs no traversal, and the browser's own traversal is what's under test.
+      find("#{MAP} [role='tab'][aria-selected='true']").send_keys(:tab) # rubocop:disable SystemTests/FlakeProneClick
+
+      assert_selector "#{MAP} [role='tabpanel']:focus"
+    end
+
     should "stay on the comparison, with the new score, when the person's own rating lands" do
       open_map
       wait_for_stimulus "capability-map"
