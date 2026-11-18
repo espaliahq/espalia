@@ -86,6 +86,18 @@ class OrgGraph::DateComparisonTest < ActiveSupport::TestCase
     assert_equal({ from: "2026-10-01", to: "2026-11-01", by: "effective" }, compare("2026-10-01", "2026-11-01").params)
   end
 
+  should "mark a unit whose type changed in the window with the type it was" do
+    pods = SecureRandom.uuid_v7
+    as_tenant do
+      @structure.add_level(pods, "Pod", parent_ids: [ @org[:team] ], top: false, effective_on: "2026-01-01")
+      @structure.change_unit_kind(@org[:payments], pods, effective_on: "2026-09-20")
+    end
+    travel_to TODAY
+
+    assert_equal [ "was a Squad" ], compare("2026-09-01").unit_marks(unit(:payments))
+    assert_empty compare("2026-10-01").unit_marks(unit(:payments))
+  end
+
   should "list who joined, left and moved through each unit, by the date each took effect" do
     reorganise
     travel_to TODAY

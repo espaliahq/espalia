@@ -93,6 +93,7 @@ class OrgGraph::ActivityFeed
     when "UnitCreated" then "Created the unit"
     when "UnitRenamed" then "Renamed it from #{entry.before['name']} to #{entry.after['name']}"
     when "UnitMoved" then "Moved the unit #{parent_phrase(entry.after['parent_id'])}"
+    when "UnitKindChanged" then "Changed its type from #{kind_name(entry.before['level_id'])} to #{kind_name(entry.after['level_id'])}"
     when "UnitOwnerAdded" then "Made #{person} an owner"
     when "UnitOwnerRemoved" then "Removed #{person} as an owner"
     when "UnitRetired" then "Retired the unit"
@@ -104,6 +105,8 @@ class OrgGraph::ActivityFeed
     other = entry.other_unit&.name || "another unit"
     entry.after ? "Moved #{person} in from #{other}" : "Moved #{person} out to #{other}"
   end
+
+  def kind_name(level_id) = OrgTaxonomyLevel.find_by(id: level_id)&.name || "a type since removed"
 
   def parent_phrase(parent_id)
     parent = parent_id && OrgUnit.find_by(id: parent_id)

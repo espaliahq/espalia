@@ -49,6 +49,16 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
     assert_equal @lead.id, created.actor_id
   end
 
+  should "record a change of type with the type before and after, and who changed it" do
+    as_tenant { @structure.change_unit_kind(@payments, @departments, effective_on: "2026-01-20", kind_changed_by_id: @lead.id) }
+
+    changed = feed(@payments).first
+    assert_equal [ "UnitKindChanged", "level", @lead.id, Date.new(2026, 1, 20) ],
+                 [ changed.event_type, changed.subject, changed.actor_id, changed.effective_on ]
+    assert_equal [ { "level_id" => @squads }, { "level_id" => @departments } ], [ changed.before, changed.after ]
+    assert changed.reversible?
+  end
+
   should "carry a membership's earlier terms into its next change and its end" do
     as_tenant do
       @handler.set_membership(@ada.id, @payments, **ESPALIA, allocation: 1.0)

@@ -219,6 +219,16 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
       end
     end
 
+    should "give a unit its new type" do
+      studios = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.add_level(studios, "Studio", parent_ids: [], top: true, effective_on: "2026-01-01")
+        travel_to(Date.new(2026, 4, 1)) { @handler.change_unit_kind(@product, studios, effective_on: "2026-03-01") }
+
+        assert_equal studios, OrgUnit.find(@product).level_id
+      end
+    end
+
     should "keep a retired unit with the date it ended" do
       as_tenant do
         @handler.retire_unit(@payments, effective_on: "2026-06-30")

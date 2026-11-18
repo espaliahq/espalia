@@ -284,6 +284,17 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
         timeline(succession, "succession")
     end
 
+    should "change a unit's type from the date it changed" do
+      crews = SecureRandom.uuid_v7
+      as_tenant do
+        @structure.add_level(crews, "Crew", parent_ids: [ @departments ], top: false, effective_on: "2026-01-01")
+        @structure.change_unit_kind(@payments, crews, effective_on: "2026-01-20")
+      end
+
+      assert_equal [ [ "2026-01-01", "2026-01-20", { "level_id" => @squads } ],
+                     [ "2026-01-20", nil, { "level_id" => crews } ] ], timeline(@payments, "level")
+    end
+
     should "move a unit beneath another parent from the date it moved" do
       squad = SecureRandom.uuid_v7
       as_tenant do

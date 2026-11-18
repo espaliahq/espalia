@@ -25,6 +25,7 @@ class OrgGraph::Projections::Structure
       OrgGraph::Events::UnitCreated,
       OrgGraph::Events::UnitRenamed,
       OrgGraph::Events::UnitMoved,
+      OrgGraph::Events::UnitKindChanged,
       OrgGraph::Events::UnitRetired,
       OrgGraph::Events::UnitSucceeded,
       OrgGraph::Events::UnitHandedOver,
@@ -61,6 +62,7 @@ class OrgGraph::Projections::Structure
     when OrgGraph::Events::UnitCreated then handle_unit_created(event.data)
     when OrgGraph::Events::UnitRenamed then update_unit(event.data, name: event.data[:name], name_effective_on: event.data[:effective_on])
     when OrgGraph::Events::UnitMoved then handle_unit_moved(event.data)
+    when OrgGraph::Events::UnitKindChanged then update_unit(event.data, level_id: event.data[:level_id])
     when OrgGraph::Events::UnitRetired then update_unit(event.data, retired_on: event.data[:effective_on])
     when OrgGraph::Events::UnitSucceeded then handle_unit_succeeded(event.data)
     when OrgGraph::Events::UnitHandedOver then update_unit(event.data, provider: event.data[:provider], external_ref: event.data[:external_ref])

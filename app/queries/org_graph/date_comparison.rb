@@ -129,6 +129,7 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
       case change.kind
       when :unit_renamed then [ change.unit_id, withdrawn("was #{change.before&.fetch("name", nil)}", change) ] if change.before
       when :unit_moved then [ change.unit_id, withdrawn(moved_from(change), change) ]
+      when :unit_kind_changed then [ change.unit_id, withdrawn("was a #{kind_name(change.before&.fetch("level_id", nil))}", change) ]
       end
     end + successions(changes)
   end
@@ -223,6 +224,8 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
   end
 
   def unit_name(id) = units.fetch(id, "an unknown unit")
+
+  def kind_name(level_id) = OrgTaxonomyLevel.find_by(id: level_id)&.name || "type since removed"
 
   def units
     @units ||= begin
