@@ -60,7 +60,7 @@ class OrgGraph::Projections::UnitActivity
       [ [ data[:unit_id], { subject: "name", before: { name: data[:previous_name] }, after: data.slice(:name) } ] ]
     when OrgGraph::Events::UnitMoved
       [ [ data[:unit_id], { subject: "parent", before: { parent_id: data[:previous_parent_id] },
-                            after: data.slice(:parent_id) } ] ]
+                            after: data.slice(:parent_id, :conversion) } ] ]
     when OrgGraph::Events::UnitKindChanged
       [ [ data[:unit_id], { subject: "level", before: { level_id: data[:previous_level_id] }, after: data.slice(:level_id) } ] ]
     when OrgGraph::Events::UnitRetired

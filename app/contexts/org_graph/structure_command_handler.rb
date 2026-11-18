@@ -160,11 +160,20 @@ class OrgGraph::StructureCommandHandler
     with_structure(plan) { |structure| structure.rename_unit(unit_id, name, **attributed(options, :renamed_by_id)) }
   end
 
+  # A move with a conversion also needs the right to change the structure it
+  # moves into, checked under the structure's lock before anything about the
+  # move is. Its type changes share the move's cause even outside a request,
+  # so change back sees them as one change.
+  #
   # @see OrgGraph::StructureAggregate#move_unit
   def move_unit(unit_id, parent_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_move_unit!(unit_id, parent_id)
-    with_structure(plan) { |structure| structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
+    cause_id = @cause_id || (shared_cause unless options[:conversion].nil?)
+    @repository.with_structure(plan:, cause_id:) do |structure|
+      authorize_move_into!(structure.structure_joined_beneath(parent_id)) unless options[:conversion].nil?
+      structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id))
+    end
   end
 
   # @see OrgGraph::StructureAggregate#change_unit_kind
@@ -297,4 +306,6 @@ class OrgGraph::StructureCommandHandler
   def with_structure(plan, &block)
     @repository.with_structure(plan:, cause_id: @cause_id, &block)
   end
+
+  def shared_cause = Rails.configuration.event_store.metadata[:correlation_id] || SecureRandom.uuid_v7
 end

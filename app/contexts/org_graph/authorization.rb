@@ -76,6 +76,17 @@ module OrgGraph::Authorization
     end
   end
 
+  # The refusal names no unit, so a caller learns nothing about the structure.
+  #
+  # @param structure_unit_id [String, nil] the structure moved into, nil for the top one
+  def authorize_move_into!(structure_unit_id)
+    refusal = "Only a tenant admin can move a unit into a unit's own structure"
+    raise Refused, refusal if system?
+
+    unit = structure_unit_id && unit_for(structure_unit_id)
+    unit ? authorize!(:edit_structure_of?, unit) { refusal } : authorize!(:edit_taxonomy?) { refusal }
+  end
+
   def authorize_succession!(unit_ids)
     return if system?
 

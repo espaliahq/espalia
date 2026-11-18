@@ -1,0 +1,195 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
+  SYSTEM = OrgGraph::Authorization::SYSTEM
+
+  setup do
+    @tenant = create(:tenant)
+    @system = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    @admin = OrgGraph::StructureCommandHandler.new(actor: admin_context)
+    @today = Date.new(2026, 11, 1)
+    travel_to Time.zone.parse("2026-11-10 09:00")
+    @tribe, @squad, @pod, @region, @group, @stream = Array.new(6) { SecureRandom.uuid_v7 }
+    as_tenant do
+      @system.define_taxonomy([ { level_id: @region, name: "Region" }, { level_id: @tribe, name: "Tribe" }, { level_id: @squad, name: "Squad" },
+                                { level_id: @pod, name: "Pod" } ],
+                              effective_on: @today)
+    end
+    @payments = create_unit("Payments", @tribe)
+    @core = create_unit("Core", @tribe)
+    @ledger = create_unit("Ledger", @squad, parent_id: @core)
+    @till = create_unit("Till", @pod, parent_id: @ledger)
+    as_tenant { @admin.declare_structure(@payments, levels: groups_and_streams, conversion: {}, effective_on: @today + 1) }
+  end
+
+  should "move a team into a unit's own structure, converting it and the units beneath it in one change" do
+    as_tenant do
+      @ada = create(:person, tenant: @tenant)
+      @people = OrgGraph::CommandHandler.new(actor: SYSTEM)
+      @people.record_person(@ada.id, provider: "espalia", effective_on: @today.iso8601, employment_status: "employed")
+      @people.set_membership(@ada.id, @till, provider: "espalia", effective_on: @today.iso8601, allocation: 1.0)
+      @system.add_unit_owner(@ledger, @ada.id, effective_on: @today)
+    end
+    history = as_tenant { [ @ledger, @till ].to_h { [ it, OrgUnitActivity.for_unit(it).pluck(:event_id) ] } }
+
+    Rails.configuration.event_store.with_metadata(correlation_id: "request-1") { move_in }
+
+    assert_equal [ @payments, @payments ], [ @ledger, @till ].map { structure.structure_in_force(it) }
+    assert_equal [ @group, @stream ], [ @ledger, @till ].map { structure.unit(it).level_id }
+    assert_equal [ @payments, @ledger ], [ @ledger, @till ].map { structure.unit(it).parent_id }
+    assert_empty structure.misplaced_units
+
+    moved = event_store.read.of_type(OrgGraph::Events::UnitMoved).backward.first
+    assert_equal({ @squad => @group, @pod => @stream }, moved.data[:conversion])
+    kinds = event_store.read.of_type(OrgGraph::Events::UnitKindChanged).to_a
+    assert_equal [ "request-1" ] * 3, [ moved, *kinds ].map { it.metadata[:correlation_id] }
+
+    as_tenant do
+      assert_equal [ @ada.id ], OrgUnit.find(@ledger).owners.map(&:id)
+      assert_equal [ @ada.id ], OrgMembership.where(unit_id: @till).pluck(:person_id)
+      history.each { |unit, ids| assert_equal ids, OrgUnitActivity.for_unit(unit).pluck(:event_id).last(ids.size) }
+    end
+  end
+
+  should "refuse a conversion on a move that crosses no structure" do
+    error = assert_raises(RuntimeError) { as_tenant { @admin.move_unit(@ledger, @core, effective_on: @today, conversion: {}) } }
+    assert_equal "Ledger stays in the top structure, so the move takes no conversion", error.message
+
+    lending = create_unit("Lending", @squad, parent_id: @core)
+    error = assert_raises(RuntimeError) { as_tenant { @admin.move_unit(lending, @ledger, effective_on: @today, conversion: {}) } }
+    assert_equal "Lending stays in the top structure, so the move takes no conversion", error.message
+  end
+
+  should "refuse a move out of a structure" do
+    move_in
+    error = assert_raises(RuntimeError) { as_tenant { @admin.move_unit(@ledger, @core, effective_on: @today + 1, conversion: {}) } }
+    assert_equal "Ledger can't move out of Payments's structure yet", error.message
+  end
+
+  should "refuse a subtree holding a unit with a structure of its own" do
+    lane = SecureRandom.uuid_v7
+    as_tenant do
+      @admin.declare_structure(@ledger, levels: [ { level_id: lane, name: "Lane", parent_level_ids: [], top: true } ],
+                                        conversion: { @pod => lane }, effective_on: @today + 1)
+    end
+    error = assert_raises(RuntimeError) { move_in(unit: @core, conversion: { @tribe => @group }) }
+    assert_equal "Ledger has a structure of its own, so it can't move into Payments's structure yet", error.message
+  end
+
+  should "refuse a unit that wouldn't fit, or a held type the conversion leaves out" do
+    error = assert_raises(RuntimeError) { move_in(conversion: { @squad => @stream, @pod => @stream }) }
+    assert_equal "These units wouldn't fit Payments's structure: Ledger (Stream at the top), Till (Stream under Stream)", error.message
+
+    error = assert_raises(RuntimeError) { move_in(conversion: { @squad => @group }) }
+    assert_equal "Say what Pod units become", error.message
+    assert_nil structure.structure_in_force(@ledger)
+  end
+
+  should "date the move no earlier than the structure's last change or a change beneath, and no later than today" do
+    error = assert_raises(RuntimeError) { move_in(on: @today) }
+    assert_equal "Payments's structure last changed on #{(@today + 1).iso8601}, so date the change then or later", error.message
+
+    create_unit("Basket", @pod, parent_id: @ledger, on: @today + 3)
+    error = assert_raises(RuntimeError) { move_in(on: @today + 2) }
+    assert_equal "Basket changed on #{(@today + 3).iso8601}, so date the move then or later", error.message
+
+    error = assert_raises(RuntimeError) { move_in(on: Date.new(2026, 11, 11)) }
+    assert_equal "A move into a structure can't be dated after today", error.message
+
+    move_in(on: @today + 3)
+    assert_equal @payments, structure.structure_in_force(@ledger)
+  end
+
+  should "allow a move dated the day the structure last changed" do
+    move_in(on: @today + 1)
+    assert_equal @group, structure.unit(@ledger).level_id
+  end
+
+  should "refuse a unit from an HRIS" do
+    hris = SecureRandom.uuid_v7
+    as_tenant do
+      @system.set_level_provider(@region, "hibob", field: "work.region", effective_on: @today)
+      @system.create_unit(hris, "Imported", level_id: @region, effective_on: @today, provider: "hibob", external_ref: "r-1")
+    end
+    error = assert_raises(RuntimeError) { move_in(unit: hris, conversion: { @region => @group }) }
+    assert_equal "hibob supplies this unit; change it there", error.message
+  end
+
+  should "refuse an owner of both units who may not change the structure, before any check of the move" do
+    owner = as_tenant do
+      person = create(:person, tenant: @tenant)
+      OrgGraph::CommandHandler.new(actor: SYSTEM).record_person(person.id, provider: "espalia", effective_on: @today.iso8601,
+                                                                           employment_status: "employed")
+      [ @core, @payments ].each { @system.add_unit_owner(it, person.id, effective_on: @today) }
+      tenant_user = create(:tenant_user, tenant: @tenant, role: :member, person:)
+      OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: tenant_user.user, tenant_user:, person:))
+    end
+
+    error = assert_raises(OrgGraph::Authorization::Refused) do
+      as_tenant { owner.move_unit(@ledger, @payments, effective_on: @today + 1, conversion: { @squad => @stream }) }
+    end
+    assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+    assert_nil structure.structure_in_force(@ledger)
+    error = assert_raises(RuntimeError) { as_tenant { owner.move_unit(@ledger, @payments, effective_on: @today + 1) } }
+    assert_equal "Ledger can't move out of the top structure into Payments's structure", error.message
+
+    error = assert_raises(OrgGraph::Authorization::Refused) { as_tenant { @system.move_unit(@ledger, @payments, effective_on: @today + 1, conversion: {}) } }
+    assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+  end
+
+  should "share one cause outside a request, and refuse to change any part of it back" do
+    move_in
+    as_tenant do
+      entries = [ @ledger, @till ].map { OrgUnitActivity.for_unit(it).first }
+      assert_equal 1, entries.map(&:cause_id).uniq.size
+      change_back = OrgGraph::ChangeBackHandler.new(actor: SYSTEM)
+      entries.each do |entry|
+        error = assert_raises(RuntimeError) { change_back.change_back(entry) }
+        assert_equal OrgGraph::ChangeBackHandler::MOVED_IN, error.message
+      end
+      assert_equal OrgGraph::ChangeBackHandler::MOVED_IN, change_back.group_refusal(entries.first.cause_id)
+    end
+  end
+
+  should "replay a move written before moves took a conversion as it always read" do
+    lending = create_unit("Lending", @tribe)
+    as_tenant { @system.move_unit(@ledger, lending, effective_on: @today + 1) }
+    moved = event_store.read.of_type(OrgGraph::Events::UnitMoved).backward.first
+    assert_not moved.data.key?(:conversion)
+    assert_nil structure.structure_in_force(@ledger)
+    assert_equal @squad, structure.unit(@ledger).level_id
+    as_tenant { assert_equal({ "parent_id" => moved.data[:parent_id] }, OrgUnitActivity.for_unit(@ledger).first.after) }
+  end
+
+  private
+
+  def move_in(unit: @ledger, parent_id: @payments, conversion: { @squad => @group, @pod => @stream }, on: @today + 1)
+    as_tenant { @admin.move_unit(unit, parent_id, effective_on: on, conversion:) }
+  end
+
+  def groups_and_streams
+    [ { level_id: @group, name: "Group", parent_level_ids: [], top: true },
+      { level_id: @stream, name: "Stream", parent_level_ids: [ @group ], top: false } ]
+  end
+
+  def admin_context
+    as_tenant do
+      tenant_user = create(:tenant_user, tenant: @tenant, role: :admin)
+      AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: nil)
+    end
+  end
+
+  def event_store = Rails.configuration.event_store
+
+  def structure = as_tenant { OrgGraph::Repository.new.load_structure }
+
+  def create_unit(name, level_id, parent_id: nil, on: @today)
+    unit_id = SecureRandom.uuid_v7
+    as_tenant { @system.create_unit(unit_id, name, level_id:, parent_id:, effective_on: on) }
+    unit_id
+  end
+
+  def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
+end

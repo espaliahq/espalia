@@ -436,13 +436,17 @@ class OrgGraph::StructureAggregate
   #   beneath, and not the unit or one below it; nil to move it to the top
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
+  # @param conversion [Hash{String => String}, nil] for a move from the top
+  #   structure into a unit's own: each type held in the moved subtree, to the
+  #   type of that structure it takes. See {#move_into_structure}
   # @param moved_by_id [String, nil]
   # @param changed_back_id [String, nil] the event this changes back
-  def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil, changed_back_id: nil)
+  def move_unit(unit_id, parent_id, effective_on:, conversion: nil, provider: ESPALIA, moved_by_id: nil, changed_back_id: nil)
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     parent_id = require_id(parent_id, "Parent id") if parent_id
     effective_on = dated_after_creation(unit, effective_on)
+    return move_into_structure(unit, parent_id, conversion, effective_on:, moved_by_id:) unless conversion.nil?
     return if parent_id == parent_on(unit_id, effective_on)
 
     raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
@@ -778,6 +782,11 @@ class OrgGraph::StructureAggregate
     above
   end
 
+  # @param parent_id [String, nil]
+  # @return [String, nil] the declaring unit of the structure a unit placed
+  #   beneath the parent joins; nil for the top structure
+  def structure_joined_beneath(parent_id) = structure_beneath(parent_id&.to_s&.downcase)
+
   # @param unit_id [String]
   # @return [OrgGraph::Taxonomy] the types of the structure in force at a unit
   def taxonomy_for(unit_id) = structure_taxonomy(structure_in_force(unit_id), taxonomy)
@@ -1048,6 +1057,70 @@ class OrgGraph::StructureAggregate
     return if from == to
 
     raise "#{unit.name} can't move out of #{structure_label(from)} into #{structure_label(to)}"
+  end
+
+  # Moves a unit from the top structure into a unit's own structure, and
+  # changes it and every unit beneath it to the type the conversion names, in
+  # the same change. Each keeps its id, owners, members and history.
+  #
+  # A move out of a declared structure, or between two, waits for step 7 of
+  # [#390](https://github.com/espaliahq/espalia/issues/390), and so does
+  # changing this one back.
+  #
+  # @raise [ArgumentError, RuntimeError] naming what doesn't fit
+  def move_into_structure(unit, parent_id, conversion, effective_on:, moved_by_id:)
+    into = structure_beneath(parent_id)
+    from = structure_in_force(unit.unit_id)
+    raise "#{unit.name} stays in #{structure_label(from)}, so the move takes no conversion" if into == from
+    raise "#{unit.name} can't move out of #{structure_label(from)} yet" if from
+    raise "A unit can't move beneath itself or a unit below it" if loops?(unit.unit_id, parent_id, from: effective_on)
+
+    moved = [ unit, *governed_by(unit.unit_id) ]
+    ensure_movable_into!(moved, into)
+    on = moved_into_dated!(moved, parent_id, into, effective_on)
+    seated = parent_id == into ? nil : parent_id
+    conversion = converted!(moved, conversion, into: kinds_at(into), label: structure_label(into)) do |above_id|
+      above_id == unit.parent_id ? seated : above_id
+    end
+
+    apply(OrgGraph::Events::UnitMoved.new(data: {
+      unit_id: unit.unit_id, parent_id:, previous_parent_id: unit.parent_id, provider: unit.provider,
+      effective_on: on, moved_by_id:, conversion:
+    }))
+    apply_conversion(moved, conversion, on, moved_by_id)
+  end
+
+  def ensure_movable_into!(moved, into)
+    return unless (declaring = moved.find { @structures.key?(it.unit_id) })
+
+    raise "#{declaring.name} has a structure of its own, so it can't move into #{structure_label(into)} yet"
+  end
+
+  # A declared structure keeps no dated rules (#498), and its units entered it
+  # when their types changed, so the move can't predate either. Nor can it
+  # predate a change to any unit it moves.
+  def moved_into_dated!(moved, parent_id, into, effective_on)
+    on = iso_date(effective_on)
+    raise "A move into a structure can't be dated after today" if on > today
+
+    parent = @units[parent_id]
+    raise "Parent unit not found" unless parent
+    raise "Parent unit is retired" if parent.retired
+    raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
+
+    ensure_within_structure!(into, on)
+    entered = parent_id == into ? [] : [ *@parents.fetch(parent_id, {}).keys, *@unit_kinds.fetch(parent_id, {}).keys ]
+    raise "#{parent.name} last changed on #{entered.max}, so date the move then or later" if entered.any? { it > on }
+
+    ids = moved.map(&:unit_id)
+    changes = moved.flat_map do |child|
+      [ child.created_on, *@parents.fetch(child.unit_id, {}).keys, *@unit_kinds.fetch(child.unit_id, {}).keys ].map { [ it, child ] }
+    end
+    changes += placements_ended_after(on).select { ids.include?(it.parent_id) }.map { [ it.until_on, it.unit ] }
+    day, changed = changes.select { |changed_on, _| changed_on > on }.max_by { |changed_on, child| [ changed_on, child.name ] }
+    raise "#{changed.name} changed on #{day}, so date the move then or later" if changed
+
+    on
   end
 
   def ensure_one_structure!(unit_ids)

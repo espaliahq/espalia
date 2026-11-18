@@ -16,6 +16,8 @@ class OrgGraph::ChangeBackHandler
   include OrgGraph::Authorization
 
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
+  MOVED_IN = "A move into a unit's own structure can't be changed back until units can move out of one. " \
+             "Withdrawing that structure undoes it, and converts every unit in it back into the structure above"
 
   # @param actor [AuthorizationContext, Object] as for {OrgGraph::CommandHandler}
   # @param repository [OrgGraph::Repository]
@@ -140,10 +142,13 @@ class OrgGraph::ChangeBackHandler
       raise "Part of this change has already been changed back; change the rest back one entry at a time"
     end
 
-    structure_causes = OrgUnitActivity.where(cause_id: entries.map(&:cause_id), subject: "structure").distinct.pluck(:cause_id)
+    causes = OrgUnitActivity.where(cause_id: entries.map(&:cause_id))
+    structure_causes = causes.where(subject: "structure").distinct.pluck(:cause_id)
+    move_in_causes = causes.where(event_type: "UnitMoved").where("after ? 'conversion'").distinct.pluck(:cause_id)
     entries.each do |entry|
       raise "A unit's own structure can't be changed back yet" if entry.subject == "structure"
       raise "This came with a change to a unit's own structure, which can't be changed back yet" if structure_causes.include?(entry.cause_id)
+      raise MOVED_IN if move_in_causes.include?(entry.cause_id)
       raise "#{entry.event_type.titleize} can't be changed back" unless entry.reversible?
       raise "This change has already been changed back" if entry.changed_back?
       raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA
