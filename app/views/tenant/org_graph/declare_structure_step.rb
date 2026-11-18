@@ -26,13 +26,14 @@ class Views::Tenant::OrgGraph::DeclareStructureStep < Views::Tenant::OrgGraph::S
 
   def body
     p(class: "text-sm text-default") do
-      "The units beneath #{@unit.name} will use unit types that belong to #{@unit.name}, and change to them in one change. " \
-        "#{@unit.name} keeps its type."
+      "The units beneath #{@unit.name} will use #{@unit.name}'s own unit types, and all change to them together. " \
+        "#{@unit.name} keeps its own type."
     end
     source_choice
     step_form(tenant_org_unit_structure_declaration_path(@unit), class: "space-y-4", data: { turbo: "false" }) do
       input(type: "hidden", name: "start", value: @fresh ? "fresh" : "copy")
       @fresh ? fresh_fields : copy_fields
+      change_count(governed) if governed.any?
       date_field
       submit(title)
     end
@@ -51,7 +52,7 @@ class Views::Tenant::OrgGraph::DeclareStructureStep < Views::Tenant::OrgGraph::S
 
   def copy_fields
     p(id: "org-unit-structure-copy", class: "text-sm text-muted") do
-      "It starts with #{structure_name(source_id)}'s types, and where each can sit: #{source_kinds.map(&:name).to_sentence}."
+      "It starts with the types in #{structure_name(source_id)}, and where each can sit: #{source_kinds.map(&:name).to_sentence}."
     end
     return no_units if governed.empty?
 

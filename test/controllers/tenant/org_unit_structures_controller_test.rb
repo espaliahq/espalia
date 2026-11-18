@@ -43,7 +43,9 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
 
   should "give a unit a copy of the structure in force, each type beneath it taking its copy" do
     get new_tenant_org_unit_structure_declaration_path(@org[:checkout])
+    assert_includes drawer.at_css("#org-unit-structure-copy").text, "It starts with the types in the top structure"
     assert_includes drawer.at_css("#org-unit-structure-copy").text, "Department, Team, and Squad"
+    assert_match(/\A\d+ units? changes? type\.\z/, drawer.at_css("#org-unit-structure-count").text)
     assert_equal "Squad", drawer.at_css("select[name='conversion[#{@org[:squad]}]'] option[selected]").text
 
     post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
@@ -106,13 +108,14 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to new_tenant_org_unit_structure_move_path(@org[:platform], parent_id: @org[:checkout])
 
     get new_tenant_org_unit_structure_move_path(@org[:platform], parent_id: @org[:checkout])
-    assert_includes drawer.at_css("#org-unit-move-one-way").text, "one way for now"
+    assert_includes drawer.at_css("#org-unit-move-one-way[role='status']").text, "one way for now"
     assert drawer.at_css("select[name='conversion[#{@org[:team]}]']")
 
     post tenant_org_unit_structure_move_path(@org[:platform]),
          params: { parent_id: @org[:checkout], conversion: { @org[:team] => group.id } }
 
     assert_redirected_to edit_tenant_org_unit_path(@org[:platform])
+    assert_equal "Moved Platform into Checkout's structure. Its type is now Group.", flash[:notice]
     assert_equal @org[:checkout], overview.unit(@org[:platform]).parent_id
     assert_equal "Group", type_of(:platform)
   end

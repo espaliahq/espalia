@@ -64,7 +64,8 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
         assert_no_sideways_overflow
         screenshot("move_step_#{viewport}")
 
-        click_button_with_js_fallback "Move Platform", expect_text: "Moved."
+        click_button_with_js_fallback "Move Platform", expect_text: "Moved Platform into Checkout's structure. Its type is now Group."
+        screenshot("moved_#{viewport}")
         assert_equal @org[:checkout], overview.unit(@org[:platform]).parent_id
         assert_equal "Group", type_of(:platform)
       end

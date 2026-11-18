@@ -332,9 +332,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     end
   end
 
-  def structure_name(structure_unit_id)
-    structure_unit_id ? "#{@overview.unit(structure_unit_id).name}'s structure" : "the top structure"
-  end
+  def structure_name(structure_unit_id) = Views::Tenant::OrgGraph::StructureStep.structure_name(@overview, structure_unit_id)
 
   def structure_links
     div(class: "flex flex-wrap gap-2") do

@@ -27,7 +27,7 @@ class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::Stru
       "Moving #{@unit.name} under #{@parent.name} puts #{moved.one? ? 'it' : "it and the #{moved.size - 1} #{'unit'.pluralize(moved.size - 1)} beneath it"} " \
         "in #{structure_name(into_id)}, so #{moved.one? ? 'it changes' : 'each changes'} type."
     end
-    p(id: "org-unit-move-one-way", class: "text-sm text-muted") { "This is one way for now: a unit can't move back out of a unit's own structure yet." }
+    warning("org-unit-move-one-way", "This is one way for now: a unit can't move back out of a unit's own structure yet.")
     step_form(tenant_org_unit_structure_move_path(@unit), class: "space-y-4") do
       input(type: "hidden", name: "parent_id", value: @parent.id)
       conversion_fieldset(moved, "Each type becomes") do |type, id|

@@ -4,6 +4,15 @@
 # of its own, withdrawing it, and moving a unit into one. Each changes the
 # type of every unit it covers, so each asks what each type becomes.
 class Views::Tenant::OrgGraph::StructureStep < Views::Tenant::OrgGraph::UnitStep
+  # @param overview [OrgGraph::UnitsOverview]
+  # @param structure_unit_id [String, nil] nil for the top structure
+  # @return [String] "the top structure", or "Payments's structure"
+  def self.structure_name(overview, structure_unit_id)
+    return I18n.t("org_graph.structure_name.top") unless structure_unit_id
+
+    I18n.t("org_graph.structure_name.unit", unit: overview.unit(structure_unit_id).name)
+  end
+
   private
 
   # A structure sits over sub-units, and an HRIS may supply the unit that
@@ -14,8 +23,15 @@ class Views::Tenant::OrgGraph::StructureStep < Views::Tenant::OrgGraph::UnitStep
     not_allowed_because unless allowed?
   end
 
-  def structure_name(structure_unit_id)
-    structure_unit_id ? "#{@overview.unit(structure_unit_id).name}'s structure" : "the top structure"
+  def structure_name(structure_unit_id) = self.class.structure_name(@overview, structure_unit_id)
+
+  def warning(id, text) = render(Components::Kit::Alert.new(tone: :warning, id:)) { text }
+
+  # How many units change type in all, said just before the button.
+  def change_count(units)
+    p(id: "org-unit-structure-count", class: "text-sm font-medium text-default") do
+      units.one? ? "1 unit changes type." : "#{units.size} units change type."
+    end
   end
 
   # @param units [Array<OrgUnit>] the units whose types change

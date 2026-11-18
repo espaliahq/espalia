@@ -18,7 +18,7 @@ class Views::Tenant::OrgGraph::WithdrawStructureStep < Views::Tenant::OrgGraph::
   def body
     governed = @overview.governed_by(@unit)
     p(class: "text-sm text-default") do
-      "The units beneath #{@unit.name} will use #{structure_name(above_id)} again, and change type in the same change. " \
+      "The units beneath #{@unit.name} will use #{structure_name(above_id)} again, and all change type together. " \
         "Its own types stay in history."
     end
     step_form(tenant_org_unit_structure_withdrawal_path(@unit), class: "space-y-4") do
@@ -26,6 +26,7 @@ class Views::Tenant::OrgGraph::WithdrawStructureStep < Views::Tenant::OrgGraph::
         conversion_fieldset(governed, "Each type beneath #{@unit.name} becomes") do |type, id|
           type_select("conversion[#{type.id}]", id, above_kinds, selected: same_name(type, above_kinds))
         end
+        change_count(governed)
       else
         p(class: "text-sm text-default") { "No unit sits beneath #{@unit.name}, so none changes type." }
       end
