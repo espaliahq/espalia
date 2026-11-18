@@ -857,18 +857,20 @@ class OrgGraph::StructureAggregate
           "#{held.map { describe_held(it, prospective) }.join(', ')}"
   end
 
-  # The placements that ended, by a move or a retirement, after a day. Each
-  # ends on the first day it no longer held: a move's date, or the day after a
-  # retirement, since a unit is still live on the day it retires.
+  # The placements that ended, by a move, a retirement or a change of type,
+  # after a day. Each ends on the first day it no longer held: a move's or a
+  # type change's date, or the day after a retirement, since a unit is still
+  # live on the day it retires. A placement still held is today's, which
+  # ensure_units_still_fit! checks on its own.
   def placements_ended_after(day)
     @units.values.flat_map do |unit|
       points = @parents.fetch(unit.unit_id, {}).sort
       ends = points.drop(1).map(&:first) + [ unit.retired_on && (Date.iso8601(unit.retired_on) + 1).iso8601 ]
       points.zip(ends).flat_map do |(from, parent_id), until_on|
-        next [] unless until_on && until_on > day && until_on > from
+        next [] if until_on && (until_on <= day || until_on <= from)
 
         held_kinds(unit.unit_id, parent_id, from:, until_on:).filter_map do |start, finish|
-          next unless finish > day
+          next unless finish && finish > day
 
           Placement.new(unit:, parent_id:, until_on: finish, level_id: kind_on(unit.unit_id, start),
                         parent_level_id: parent_id && kind_on(parent_id, start))
@@ -878,9 +880,9 @@ class OrgGraph::StructureAggregate
   end
 
   # A placement split where the unit or its parent changed type, each span as
-  # `[from, until_on]`.
+  # `[from, until_on]`, the last open-ended when the placement is.
   def held_kinds(unit_id, parent_id, from:, until_on:)
-    starts = [ from, *kind_change_days(unit_id, parent_id).select { it > from && it < until_on } ].uniq.sort
+    starts = [ from, *kind_change_days(unit_id, parent_id).select { it > from && (until_on.nil? || it < until_on) } ].uniq.sort
     starts.zip(starts.drop(1) + [ until_on ])
   end
 

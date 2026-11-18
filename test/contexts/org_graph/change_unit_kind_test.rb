@@ -158,6 +158,17 @@ class OrgGraph::ChangeUnitKindTest < ActiveSupport::TestCase
                    "Payments (Team under Tribe until 2026-12-10)", error.message
       assert_nothing_raised { @system.set_kind_parents(@team, parent_ids: [], top: true, effective_on: "2026-12-10") }
     end
+
+    should "judge a back-dated change of rules by the type a unit held before it changed type without moving" do
+      @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10")
+
+      error = assert_raises(RuntimeError) do
+        @system.set_kind_parents(@team, parent_ids: [], top: true, effective_on: "2026-12-05")
+      end
+      assert_equal "These units sat where this structure wouldn't allow after 2026-12-05, so date it 2026-12-10 or later: " \
+                   "Payments (Team under Tribe until 2026-12-10)", error.message
+      assert_nothing_raised { @system.set_kind_parents(@team, parent_ids: [], top: true, effective_on: "2026-12-10") }
+    end
   end
 
   should "keep a type a unit once held from being removed from the taxonomy" do
