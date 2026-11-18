@@ -356,6 +356,23 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-card [data-team-blades]", count: 0
     end
 
+    should "leave out the team card for a rating delegate with no direct reports" do
+      delegate_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        delegate = create(:person, tenant: @tenant, email: delegate_user.email, name: "Delegate")
+        create(:tenant_user, tenant: @tenant, user: delegate_user, person: delegate)
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @person.id,
+                                               framework_id: @assignment.framework_id, delegate_person_id: delegate.id,
+                                               granted_by_id: @manager.id)
+      end
+
+      sign_in delegate_user
+      get assessments_path
+
+      assert_includes response.body, "Team Assessments"
+      assert_select "#team-card", count: 0
+    end
+
     should "draw every card's blades in the same number of queries, however many cards" do
       rate_as_manager(@person, @cap, "consistent")
       sign_in @manager_user

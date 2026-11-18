@@ -56,7 +56,7 @@ class AssessmentsController < ApplicationController
       card_statuses: @card_statuses,
       card_shapes: card_shapes,
       explorations: @explorations,
-      team: (team_capabilities(compare: "none") if @report_assignments.any?),
+      team: (team_capabilities(compare: "none") if @report_assignments.any? && current_person.direct_reports.exists?),
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
