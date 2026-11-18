@@ -17,14 +17,14 @@ class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
 
       Operations::OrgGraph::SetKindParents.call(
         context: pundit_user,
-        params: { level_id: params[:level_id].to_s, parent_ids: Array(params[:parent_ids]).map(&:to_s), top: params[:top] == "1" }
+        params: { level_id: params[:level_id].to_s, parent_ids: Array(params[:parent_ids]).map(&:to_s), top: params[:top] == "1", **in_structure }
       )
     end
     return back_with_alert(changed_meanwhile) unless result
 
-    back_with_notice "Saved where #{result[:name]} can sit."
+    back_with_notice "Saved where #{result[:name]} can sit.", anchor:
   rescue Operations::Base::ParameterError => e
-    back_with_refusal "#{type_name}'s place did not change", e
+    back_with_refusal "#{type_name}'s place did not change", e, anchor:
   end
 
   private
@@ -32,7 +32,7 @@ class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
   def changed_since_drawn?
     return false unless params.key?(:was_top)
 
-    now = OrgTaxonomyLevel.rules_by_id[params[:level_id].to_s.downcase]
+    now = OrgTaxonomyLevel.rules_by_id(OrgTaxonomyLevel.in_structure(params[:structure_unit_id].presence).to_a)[params[:level_id].to_s.downcase]
     now && [ now[:parent_ids].sort, now[:top] ] != [ Array(params[:was_parent_ids]).map(&:to_s).sort, params[:was_top] == "1" ]
   end
 
@@ -42,8 +42,12 @@ class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
   end
 
   def back_with_alert(alert)
-    redirect_to tenant_org_graph_settings_path, alert:, status: :see_other
+    redirect_to tenant_org_graph_settings_path(anchor:), alert:, status: :see_other
   end
+
+  def in_structure = params[:structure_unit_id].present? ? { structure_unit_id: params[:structure_unit_id].to_s } : {}
+
+  def anchor = params[:structure_unit_id].presence && Views::Tenant::OrgGraph::Settings::LevelsPanel.anchor(params[:structure_unit_id])
 
   def type_name = OrgTaxonomyLevel.find_by(id: params[:level_id].to_s.downcase)&.name || "The unit type"
 end

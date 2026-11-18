@@ -7,8 +7,8 @@ module OrgGraphSettingsRedirect
 
   private
 
-  def back_with_notice(notice)
-    redirect_to tenant_org_graph_settings_path, notice:, status: :see_other
+  def back_with_notice(notice, anchor: nil)
+    redirect_to tenant_org_graph_settings_path(anchor:), notice:, status: :see_other
   end
 
   # Drops the parameter name an Operation's refusal starts with, which reads
@@ -16,7 +16,7 @@ module OrgGraphSettingsRedirect
   #
   # @param lead [String] what couldn't be done, e.g. "The editor could not be added"
   # @param error [Operations::Base::ParameterError]
-  def back_with_refusal(lead, error)
-    redirect_to tenant_org_graph_settings_path, alert: "#{lead}: #{error.message.sub(/\A\w+: /, '')}", status: :see_other
+  def back_with_refusal(lead, error, anchor: nil)
+    redirect_to tenant_org_graph_settings_path(anchor:), alert: "#{lead}: #{error.message.sub(/\A\w+: /, '')}", status: :see_other
   end
 end

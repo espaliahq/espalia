@@ -236,6 +236,36 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         screenshot("unit_type_saved_#{viewport}")
       end
 
+      should "give a unit's own structure a panel of its own, and land back on it after a change" do
+        squad_id = SecureRandom.uuid_v7
+        pod_id = SecureRandom.uuid_v7
+        payments = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          structure.define_taxonomy([ { level_id: squad_id, name: "Squad" } ], effective_on: "2026-01-01")
+          structure.create_unit(payments, "Payments", level_id: squad_id, effective_on: "2026-01-01")
+          tenant_user = TenantUser.find_by!(user: @admin_user)
+          OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: @admin_user, tenant_user:, person: tenant_user.person))
+                                           .declare_structure(payments, levels: [ { level_id: pod_id, name: "Pod", top: true } ],
+                                                                        conversion: {}, effective_on: Date.current)
+        end
+        visit tenant_org_graph_settings_path
+
+        within("#org-graph-levels-#{payments}") do
+          assert_selector "h2", text: "Unit types beneath Payments"
+          assert_text "Can sit directly under Payments"
+        end
+        js_fill_in "org-graph-new-level-#{payments}", with: "Guild"
+        click_button_with_js_fallback("org-graph-new-level-#{payments}-add", expect_text: "Guild is a unit type now.")
+        within("#org-graph-levels-#{payments}") { assert_text "Guild" }
+        within("#org-graph-levels") { assert_no_text "Guild" }
+        assert_equal "#org-graph-levels-#{payments}", page.evaluate_script("window.location.hash")
+        assert_equal %w[Squad], level_names
+        assert_no_stolen_taps
+        assert_no_sideways_overflow
+        screenshot("own_structure_panel_#{viewport}")
+      end
+
       should "remove a unit type no unit holds from today, though one held it before, after asking" do
         squad_id = SecureRandom.uuid_v7
         guild_id = SecureRandom.uuid_v7
