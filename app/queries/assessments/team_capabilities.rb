@@ -57,7 +57,7 @@ class Assessments::TeamCapabilities
   # @return [Result]
   def call
     fell_back = @role_id && role&.role_id != @role_id
-    @level_ordinal = nil if role && (fell_back || ladder.none? { |level| level.ordinal == @level_ordinal })
+    @level_ordinal = nil if role.nil? || fell_back || ladder.none? { |level| level.ordinal == @level_ordinal }
     on_role = role ? enrollments.select { |enrollment| enrollment.role_id == role.role_id } : []
     in_view = @level_ordinal ? on_role.select { |enrollment| enrollment.level_ordinal == @level_ordinal } : on_role
     scored_on_role = on_role.filter_map { |enrollment| scoring_for(enrollment) }

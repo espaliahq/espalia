@@ -180,6 +180,13 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
     assert_equal 3, fallback.people
   end
 
+  should "read no level when nobody in the team has a role" do
+    empty = result(person_ids: [], role_id: @engineer.role_id, level_ordinal: 3)
+
+    assert_nil empty.role
+    assert_nil empty.level_ordinal
+  end
+
   should "read every level for a level that isn't on the role's ladder" do
     narrowed = result(level_ordinal: 9)
 
