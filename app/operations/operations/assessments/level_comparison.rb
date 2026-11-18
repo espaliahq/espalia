@@ -8,8 +8,10 @@ class Operations::Assessments::LevelComparison < Operations::Base
               "side: the person's live score on each capability and category beside the group's middle " \
               "(median) score, both as percentages of the compared level (100 is meeting it). Group scores come " \
               "from agreed ratings in a monthly snapshot (taken_on), and show only when the level has at least " \
-              "min_group_size people; levels lists each one's size, or nil when too small. Nothing names anyone " \
-              "in the group. Returns { enabled: false } when the tenant has comparisons off."
+              "min_group_size people; levels lists each one's size, or nil when too small. scale says what the " \
+              "percentages mean at the compared level; a score with scored: false is nil, with its " \
+              "unscored_reason. Nothing names anyone in the group. Returns { enabled: false } when the tenant " \
+              "has comparisons off."
   category :read
   approval :none
 
@@ -30,7 +32,7 @@ class Operations::Assessments::LevelComparison < Operations::Base
       raise(ParameterError, "level_ordinal must be #{comparison.levels.map(&:code).to_sentence(last_word_connector: ' or ')}")
     group = comparison.group_at(level.ordinal)
     { enabled: true, taken_on: comparison.taken_on&.iso8601, min_group_size: comparison.min_group_size,
-      role: { id: home_lens.role.role_id, name: home_lens.role.name },
+      scale: summary(level).overall[:scale], role: { id: home_lens.role.role_id, name: home_lens.role.name },
       level: { ordinal: level.ordinal, code: level.code, group_size: level.group_size },
       levels: comparison.levels.map(&:to_h), suggested_ordinal: comparison.suggested_ordinal,
       categories: group ? categories(group, level) : [], capabilities: group ? capabilities(group, level) : [] }
@@ -70,7 +72,7 @@ class Operations::Assessments::LevelComparison < Operations::Base
       next unless median
 
       { id: category[:id], name: category[:name], scored: category[:scored], your_score: category[:score],
-        group_median: percent(median) }
+        unscored_reason: category[:unscored_reason], group_median: percent(median) }
     end
   end
 
@@ -82,7 +84,8 @@ class Operations::Assessments::LevelComparison < Operations::Base
 
       mine = scores.capability(binding.capability.stable_id)
       { stable_id: binding.capability.stable_id, name: binding.capability.name, category_id: binding.capability.category_id,
-        scored: mine&.fetch(:scored) || false, your_score: mine&.fetch(:score), group_median: percent(median) }
+        scored: mine&.fetch(:scored) || false, your_score: mine&.fetch(:score),
+        unscored_reason: mine&.fetch(:unscored_reason), group_median: percent(median) }
     end
   end
 

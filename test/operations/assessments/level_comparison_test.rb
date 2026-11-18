@@ -48,6 +48,18 @@ class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
     assert call[:capabilities].all? { |c| c.key?(:your_score) && c.key?(:scored) }
   end
 
+  should "say what the numbers mean at the level compared with, and why a score is missing" do
+    result = call({ level_ordinal: 1 })
+
+    assert_equal [ "percent_of_assessed_level_expectations", "E1", "E2" ],
+                 result[:scale].values_at(:unit, :assessed_level, :next_level)
+    shared = result[:capabilities].find { |c| c[:stable_id] == @fx.shared.stable_id }
+    assert_equal [ false, nil, "not_rated_at_assessed_level" ], shared.values_at(:scored, :your_score, :unscored_reason)
+    category = result[:categories].first
+    assert_equal [ false, nil ], category.values_at(:scored, :your_score)
+    assert category[:unscored_reason], "expected the category to say why it has no score"
+  end
+
   # A level below their own counts as rated only where they rated it, as on a lens.
   should "read the person's scores at the level compared with" do
     ActsAsTenant.with_tenant(@tenant) do
