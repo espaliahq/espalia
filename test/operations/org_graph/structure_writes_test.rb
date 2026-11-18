@@ -185,5 +185,19 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal [ @admin.person.name ] * 2, [ withdrawal, declaration ].map { it.parts.find { |part| part.entry.subject == "structure" }.by }
       end
     end
+
+    should "refuse to change back a type the withdrawal converted, as the request shares one cause" do
+      AuditMetadata.with(acting_via: :web, correlation_id: SecureRandom.uuid_v7) do
+        call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        conversion = OrgUnitActivity.where(unit_id: @org[:payments], event_type: "UnitKindChanged").order(:created_at).last
+
+        assert_equal "This came with a change to a unit's own structure, which can't be changed back yet",
+                     OrgGraph::ChangeBackHandler.new(actor: context).refusal(conversion)
+      end
+    end
   end
 end
