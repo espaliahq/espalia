@@ -219,12 +219,15 @@ class OrgGraph::Projections::History
 
   # ── Kinds of unit ──
 
+  # A kind of the top structure carries no structure_unit_id, so the values
+  # projected before structures existed stay as they were.
   def taxonomy_defined
     levels = @data[:levels].map { |level| level.to_h.symbolize_keys }
+    structure = @data[:structure_unit_id] ? { "structure_unit_id" => @data[:structure_unit_id] } : {}
     levels.each_with_index do |level, position|
       kind(level[:level_id]) do |value|
         { "name" => level[:name], "position" => position, "provider" => value&.fetch("provider") || OrgGraph::Taxonomy::ESPALIA,
-          **level.slice(:parent_level_ids, :top).stringify_keys }
+          **level.slice(:parent_level_ids, :top).stringify_keys, **structure }
       end
     end
     removed = @data[:previous_levels].map { |level| level.to_h.symbolize_keys[:level_id] } - levels.pluck(:level_id)

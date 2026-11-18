@@ -361,6 +361,22 @@ class OrgGraph::Projections::HistoryTest < ActiveSupport::TestCase
                                              "parent_level_ids" => [ @departments, @squads ], "top" => false } ] ],
         timeline(@squads, "kind")
     end
+    should "name the declaring unit on a kind of its structure, and leave the top structure's kinds alone" do
+      group = SecureRandom.uuid_v7
+      declaring = SecureRandom.uuid_v7
+      as_tenant do
+        Rails.configuration.event_store.publish(
+          OrgGraph::Events::TaxonomyDefined.new(data: { levels: [ { level_id: group, name: "Group", parent_level_ids: [], top: true } ],
+                                                        previous_levels: [], effective_on: "2026-02-01", structure_unit_id: declaring },
+                                                metadata: { tenant_id: @tenant.id }),
+          stream_name: EventStreamNaming.org_structure_stream
+        )
+      end
+
+      assert_equal [ [ "2026-02-01", nil, { "name" => "Group", "position" => 0, "provider" => "espalia", "parent_level_ids" => [],
+                                             "top" => true, "structure_unit_id" => declaring } ] ], timeline(group, "kind")
+      assert_equal [ [ "2026-01-01", nil, { "name" => "Squad", "position" => 1, "provider" => "espalia" } ] ], timeline(@squads, "kind")
+    end
   end
 
   context "rebuild contract" do
