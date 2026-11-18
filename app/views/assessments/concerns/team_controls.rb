@@ -35,11 +35,12 @@ module Views::Assessments::Concerns::TeamControls
 
   # One role at a time, since capabilities differ between roles.
   def role_menu
-    div(data: { team_roles: true }) do
+    div(class: "min-w-0 max-w-full *:max-w-full", data: { team_roles: true }) do
       render Components::Kit::Dropdown.new do |dropdown|
-        dropdown.trigger(label: "Role shown: #{@team.dig(:role, :name)}", button: { variant: :outline, size: :sm }) do
-          plain @team.dig(:role, :name)
-          icon("chevron-down", class: "ml-1 size-4")
+        dropdown.trigger(label: "Role shown: #{@team.dig(:role, :name)}",
+                         button: { variant: :outline, size: :sm, class: "max-w-full shrink!" }) do
+          span(class: "min-w-0 truncate") { @team.dig(:role, :name) }
+          icon("chevron-down", class: "ml-1 size-4 shrink-0")
         end
         dropdown.menu(label: "Role shown") do
           @team[:roles].each do |role|

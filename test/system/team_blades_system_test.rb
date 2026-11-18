@@ -67,6 +67,21 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
     assert_operator overhang, :<=, 0, "expected the Compare with control inside the dialog"
   end
 
+  # The role trigger and its chevron sit inside whatever clips them: the dialog, or the page.
+  def assert_role_trigger_fits(scope)
+    overhang = evaluate_script(<<~JS)
+      (() => {
+        const trigger = document.querySelector("#{scope} [data-team-roles] [aria-haspopup]")
+        const chevron = trigger.querySelector("svg").getBoundingClientRect()
+        let clip = trigger.parentElement
+        while (clip && clip !== document.body && getComputedStyle(clip).overflowX === "visible") clip = clip.parentElement
+        const edge = Math.min(clip.getBoundingClientRect().right, document.documentElement.clientWidth)
+        return Math.max(trigger.getBoundingClientRect().right, chevron.right) - edge
+      })()
+    JS
+    assert_operator overhang, :<=, 0, "expected the role trigger and its chevron inside #{scope}"
+  end
+
   def open_team_map
     wait_for_stimulus "modal", scope: "#team-card"
     click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
@@ -169,6 +184,26 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       open_team_map
       assert_selector "#team-map [data-team-lane]", count: 2, visible: true
       assert_compare_control_fits
+    end
+    should "fit a long role's menu trigger on a phone, on the card and in the map" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @role.update!(name: "Principal Machine Learning Infrastructure Engineer")
+        family = FrameworkState::RoleFamily.find_by!(framework_id: @framework_id)
+        designer = FactoryBot.create(:framework_role, role_family_id: family.role_family_id, name: "Designer", code: "D", track: "ic")
+        level = FactoryBot.create(:framework_level, role_id: designer.role_id, ordinal: 1, title: "D1", code: "D1")
+        report = FactoryBot.create(:person, tenant: @tenant, name: "Cy Olsen", manager: @manager)
+        PersonDevelopment::CommandHandler.new.assign_to_framework(report.id, @framework_id, designer.role_id, level.level_id)
+        AssessmentCycles::CommandHandler.new.enroll(@cycle_id, report.id) unless
+          AssessmentCycleEnrollment.exists?(cycle_id: @cycle_id, person_id: report.id)
+      end
+      visit_team(MOBILE_SIZE)
+
+      assert_selector "#team-card [data-team-roles] [aria-haspopup]", text: "Principal Machine", visible: true
+      assert_role_trigger_fits("#team-card")
+      assert_no_sideways_overflow
+      open_team_map
+      assert_selector "turbo-frame#team-map[complete] [data-team-roles] [aria-haspopup]", visible: true
+      assert_role_trigger_fits("#team-map")
     end
   end
 
