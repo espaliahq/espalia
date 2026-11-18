@@ -10,8 +10,8 @@ class Operations::Assessments::LevelComparison < Operations::Base
               "from agreed ratings in a monthly snapshot (taken_on), and show only when the level has at least " \
               "min_group_size people; levels lists each one's size, or nil when too small. scale says what the " \
               "percentages mean at the compared level; a score with scored: false is nil, with its " \
-              "unscored_reason. Nothing names anyone in the group. Returns { enabled: false } when the tenant " \
-              "has comparisons off."
+              "unscored_reason. group_median is nil for a capability or category the snapshot predates. " \
+              "Nothing names anyone in the group. Returns { enabled: false } when the tenant has comparisons off."
   category :read
   approval :none
 
@@ -67,27 +67,22 @@ class Operations::Assessments::LevelComparison < Operations::Base
   end
 
   def categories(group, level)
-    summary(level).overall[:categories].filter_map do |category|
-      median = group.category_medians[category[:id]]
-      next unless median
-
+    summary(level).overall[:categories].map do |category|
       { id: category[:id], name: category[:name], scored: category[:scored], your_score: category[:score],
-        unscored_reason: category[:unscored_reason], group_median: percent(median) }
+        unscored_reason: category[:unscored_reason], group_median: percent(group.category_medians[category[:id]]) }
     end
   end
 
   def capabilities(group, level)
     scores = summary(level)
-    home_lens.scope.bindings.filter_map do |binding|
-      median = group.capability_medians[binding.capability.stable_id]
-      next unless median
-
-      mine = scores.capability(binding.capability.stable_id)
-      { stable_id: binding.capability.stable_id, name: binding.capability.name, category_id: binding.capability.category_id,
+    home_lens.scope.bindings.map do |binding|
+      stable_id = binding.capability.stable_id
+      mine = scores.capability(stable_id)
+      { stable_id:, name: binding.capability.name, category_id: binding.capability.category_id,
         scored: mine&.fetch(:scored) || false, your_score: mine&.fetch(:score),
-        unscored_reason: mine&.fetch(:unscored_reason), group_median: percent(median) }
+        unscored_reason: mine&.fetch(:unscored_reason), group_median: percent(group.capability_medians[stable_id]) }
     end
   end
 
-  def percent(score) = (score * 100).round
+  def percent(score) = score && (score * 100).round
 end

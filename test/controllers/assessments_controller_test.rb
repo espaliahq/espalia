@@ -719,6 +719,14 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         assert map.at_css("svg [data-blade-median='1']"), "expected the group's line across the blade"
       end
 
+      should "keep the person's score, with no group line, on a capability the snapshot predates" do
+        @snapshot.groups.find_by!(level_ordinal: 2).update!(capability_medians: {}, category_medians: {})
+        map = compare
+
+        assert_equal "You 100% · E2s no score", map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish
+        assert_empty map.css("[data-blade-median]")
+      end
+
       should "switch to a level either side, read on that level's scale" do
         map = compare(compare_level: 1)
 

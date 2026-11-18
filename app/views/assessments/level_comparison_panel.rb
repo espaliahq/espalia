@@ -97,10 +97,10 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
   end
 
   # On the blades' scale, 1.0 the level met.
-  def medians = @capabilities.transform_values { |c| c[:group_median] / 100.0 }
+  def medians = @capabilities.filter_map { |id, c| [ id, c[:group_median] / 100.0 ] if c[:group_median] }.to_h
 
   def picture_label
-    at_or_above = @capabilities.values.count { |c| c[:your_score] && c[:your_score] >= c[:group_median] }
+    at_or_above = @capabilities.values.count { |c| c[:your_score] && c[:group_median] && c[:your_score] >= c[:group_median] }
     "#{at_or_above} of #{@shape.points.size} capabilities at or above the #{plural}' median"
   end
 
@@ -174,8 +174,10 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
         span(class: "absolute left-0 top-[5px] h-1.5 rounded-full #{SWATCH.fetch(hue)}",
              style: "width: #{along(capability[:your_score])}")
       end
-      span(class: "absolute top-0 h-4 w-1 -ml-0.5 bg-(--gos-accent-strong)",
-           style: "left: #{along(capability[:group_median])}")
+      if capability[:group_median]
+        span(class: "absolute top-0 h-4 w-1 -ml-0.5 bg-(--gos-accent-strong)",
+             style: "left: #{along(capability[:group_median])}")
+      end
     end
   end
 

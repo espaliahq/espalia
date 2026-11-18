@@ -77,6 +77,19 @@ class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
     assert_equal 200, shared.(at_e1)[:your_score], "E1 met and E2 in full, on E1's scale"
   end
 
+  should "keep the person's score on a capability the snapshot has no median for" do
+    ActsAsTenant.with_tenant(@tenant) do
+      @snapshot.groups.find_by!(level_ordinal: 2).update!(capability_medians: { @fx.shared.stable_id => 0.5 })
+      cycle_id = AssessmentCycleEnrollment.find_by!(person_id: @person.id).cycle_id
+      PersonDevelopment::CommandHandler.new.rate_self(@person.id, @fx.framework_id, @fx.e_only.stable_id,
+                                                      level_ordinal: 2, frequency: "consistent", cycle_id:)
+    end
+
+    added = call[:capabilities].find { |c| c[:stable_id] == @fx.e_only.stable_id }
+
+    assert_equal [ 100, nil ], added&.values_at(:your_score, :group_median)
+  end
+
   should "send no group scores for a level under the minimum" do
     result = call({ level_ordinal: 3 })
 
