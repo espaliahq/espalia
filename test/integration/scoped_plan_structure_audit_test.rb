@@ -128,6 +128,18 @@ class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
                  "the plan still reads Payments as its base held it"
   end
 
+  should "refuse a parent outside the plan alike, whatever structure it declares or sits in" do
+    refusals = [ @engineering, @sales, @emea ].flat_map do |parent_id|
+      [ { name: "Ops", parent_id:, level_id: @pod }, { name: "Ops", parent_id:, level_id: @territory },
+        { name: "Ops", parent_id:, level_id: @squad }, { unit_id: @unit_id, parent_id: },
+        { unit_id: @unit_id, parent_id:, level_id: @territory }, { unit_id: @unit_id, parent_id:, level_id: @pod } ].map do |params|
+        assert_raises(Operations::Base::ParameterError) { call(Operations::TeamPlanning::SetUnit, plan_id: @plan_id, **params) }.message
+      end
+    end
+
+    assert_equal [ "The parent must be a live unit in this scenario" ], refusals.uniq
+  end
+
   context "an archived plan with a unit of a declared type" do
     setup { call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id) }
 

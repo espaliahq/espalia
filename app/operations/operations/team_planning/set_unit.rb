@@ -67,22 +67,29 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
     moved = current && parent_id != current.parent_id
     return unless current.nil? || returning || moved || retyped
 
+    parent = parent_on_map!(map, current, parent_id)
     structures = ::TeamPlanning::PlannedStructures.load(map)
     check_boundary!(map, structures, current, parent_id, retyped) if current
     taxonomy = structures.beneath(parent_id)
     kind = taxonomy.kind(current && !retyped ? structures.level_of(current) : level_id)
     refuse!(not_a_type(structures, level_id)) if (current.nil? || retyped) && !kind
-    return check_top!(kind) unless parent_id
+    return check_top!(kind) if parent.nil? || structures.declares?(parent_id)
+
+    parent_kind = taxonomy.kind(structures.level_of(parent))
+    refuse!("Level is no longer in the taxonomy, so the unit can't be placed") unless kind && parent_kind
+    refuse!("#{kind.name} can't sit under #{parent_kind.name}") unless taxonomy.allows?(kind.id, beneath: parent_kind.id)
+  end
+
+  # Checked before any structure is read with it, so a parent the plan
+  # doesn't cover gets the same refusal whatever structure it sits in.
+  def parent_on_map!(map, current, parent_id)
+    return unless parent_id
 
     parent = map.units.find { it.id == parent_id } || refuse!("The parent must be a live unit in this scenario")
     if current && ([ current.id ] + descendant_ids(map, current.id)).include?(parent_id)
       refuse!("A unit can't move beneath itself or a unit below it")
     end
-    return check_top!(kind) if structures.declares?(parent_id)
-
-    parent_kind = taxonomy.kind(structures.level_of(parent))
-    refuse!("Level is no longer in the taxonomy, so the unit can't be placed") unless kind && parent_kind
-    refuse!("#{kind.name} can't sit under #{parent_kind.name}") unless taxonomy.allows?(kind.id, beneath: parent_kind.id)
+    parent
   end
 
   # Crossing into another structure converts types, which only the Org Graph
