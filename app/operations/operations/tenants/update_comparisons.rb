@@ -14,7 +14,9 @@ class Operations::Tenants::UpdateComparisons < Operations::Base
   approval :in_app
 
   parameter :enabled, :boolean
-  parameter :min_group_size, Integer
+  parameter :min_group_size, Integer, schema: {
+    type: "integer", minimum: ComparisonConfig::LOWEST_MIN_GROUP_SIZE, maximum: ComparisonConfig::HIGHEST_MIN_GROUP_SIZE
+  }
   parameter :snapshot_every_months, Integer, allowed: ComparisonConfig::SNAPSHOT_INTERVALS
   requires_any_of :enabled, :min_group_size, :snapshot_every_months
 

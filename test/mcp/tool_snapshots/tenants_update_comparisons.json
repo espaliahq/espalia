@@ -8,7 +8,9 @@
         "type": "boolean"
       },
       "min_group_size": {
-        "type": "integer"
+        "type": "integer",
+        "minimum": 4,
+        "maximum": 100
       },
       "snapshot_every_months": {
         "type": "integer",
