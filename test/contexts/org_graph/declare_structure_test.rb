@@ -9,6 +9,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
     @handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    @admin = OrgGraph::StructureCommandHandler.new(actor: admin_context)
     @today = Date.new(2026, 11, 1)
     @tribe, @squad, @pod, @group, @stream = Array.new(5) { SecureRandom.uuid_v7 }
     as_tenant do
@@ -86,7 +87,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(other) do
       @handler.define_taxonomy([ { level_id: tribe, name: "Tribe" } ], effective_on: @today)
       @handler.create_unit(lending, "Lending", level_id: tribe, effective_on: @today)
-      @handler.declare_structure(lending, levels: [ { level_id: lane, name: "Lane" } ], conversion: {}, effective_on: @today)
+      @admin.declare_structure(lending, levels: [ { level_id: lane, name: "Lane" } ], conversion: {}, effective_on: @today)
     end
 
     error = assert_raises(ArgumentError) { declare(copied_from: lending) }
@@ -99,21 +100,21 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
 
   should "withdraw a structure, converting the units beneath it back into the structure above" do
     declare
-    as_tenant { @handler.withdraw_structure(@payments, conversion: { @group => @squad, @stream => @pod }, effective_on: @today) }
+    as_tenant { @admin.withdraw_structure(@payments, conversion: { @group => @squad, @stream => @pod }, effective_on: @today) }
 
     assert_empty structure.declared_structures
     assert_equal [ @squad, @pod ], [ @checkout, @basket ].map { structure.unit(it).level_id }
     assert_empty structure.misplaced_units
     assert_equal %w[Group Stream], last_definition[:previous_levels].map { it[:name] }
 
-    error = assert_raises(RuntimeError) { as_tenant { @handler.withdraw_structure(@payments, conversion: {}, effective_on: @today) } }
+    error = assert_raises(RuntimeError) { as_tenant { @admin.withdraw_structure(@payments, conversion: {}, effective_on: @today) } }
     assert_equal "Payments has no structure of its own", error.message
   end
 
   should "refuse a withdrawal into a type the rules above don't allow there" do
     declare
     error = assert_raises(RuntimeError) do
-      as_tenant { @handler.withdraw_structure(@payments, conversion: { @group => @tribe, @stream => @pod }, effective_on: @today) }
+      as_tenant { @admin.withdraw_structure(@payments, conversion: { @group => @tribe, @stream => @pod }, effective_on: @today) }
     end
     assert_equal "These units wouldn't fit the top structure: Checkout (Tribe under Tribe)", error.message
   end
@@ -125,11 +126,11 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     conversion = { @group => @squad, @stream => lane }
 
     error = assert_raises(RuntimeError) do
-      as_tenant { @handler.withdraw_structure(@payments, conversion:, effective_on: @today + 2) }
+      as_tenant { @admin.withdraw_structure(@payments, conversion:, effective_on: @today + 2) }
     end
     assert_equal "Lane begins on #{(@today + 5).iso8601}, so date this then or later", error.message
 
-    as_tenant { @handler.withdraw_structure(@payments, conversion:, effective_on: @today + 5) }
+    as_tenant { @admin.withdraw_structure(@payments, conversion:, effective_on: @today + 5) }
     assert_equal lane, structure.unit(@basket).level_id
   end
 
@@ -198,30 +199,30 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     should "add a type, set its rules and remove it again, each as a change to that structure" do
       lane = SecureRandom.uuid_v7
       as_tenant do
-        @handler.add_level(lane, "Lane", structure_unit_id: @payments, effective_on: @today)
-        @handler.set_kind_parents(lane, parent_ids: [ @stream ], top: false, structure_unit_id: @payments, effective_on: @today)
+        @admin.add_level(lane, "Lane", structure_unit_id: @payments, effective_on: @today)
+        @admin.set_kind_parents(lane, parent_ids: [ @stream ], top: false, structure_unit_id: @payments, effective_on: @today)
       end
       assert_equal [ [ @stream ], false ], structure.declared_structures[@payments].kind(lane).then { [ it.parent_ids, it.top ] }
       assert_equal %w[Tribe Squad Pod], structure.taxonomy.kinds.map(&:name)
 
-      as_tenant { @handler.remove_level(lane, structure_unit_id: @payments, effective_on: @today) }
+      as_tenant { @admin.remove_level(lane, structure_unit_id: @payments, effective_on: @today) }
       assert_equal %w[Group Stream], structure.declared_structures[@payments].kinds.map(&:name)
       assert_equal %w[Group Stream Lane], last_definition[:previous_levels].map { it[:name] }
     end
 
     should "refuse rules a unit it governs wouldn't fit, a type a unit has held, and the structure's last type" do
       error = assert_raises(RuntimeError) do
-        as_tenant { @handler.set_kind_parents(@stream, parent_ids: [], top: true, structure_unit_id: @payments, effective_on: @today) }
+        as_tenant { @admin.set_kind_parents(@stream, parent_ids: [], top: true, structure_unit_id: @payments, effective_on: @today) }
       end
       assert_equal "These units wouldn't fit Payments's structure: Basket (Stream under Group)", error.message
 
-      error = assert_raises(RuntimeError) { as_tenant { @handler.remove_level(@stream, structure_unit_id: @payments, effective_on: @today) } }
+      error = assert_raises(RuntimeError) { as_tenant { @admin.remove_level(@stream, structure_unit_id: @payments, effective_on: @today) } }
       assert_match "Basket", error.message
 
       lone = create_unit("Lending", @tribe)
       declare(unit: lone, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {})
       lane = structure.declared_structures[lone].kinds.sole.id
-      error = assert_raises(ArgumentError) { as_tenant { @handler.remove_level(lane, structure_unit_id: lone, effective_on: @today) } }
+      error = assert_raises(ArgumentError) { as_tenant { @admin.remove_level(lane, structure_unit_id: lone, effective_on: @today) } }
       assert_equal "A structure needs at least one unit type; withdraw it instead", error.message
     end
 
@@ -236,7 +237,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
 
     should "refuse a top structure type id named for a declared structure" do
       error = assert_raises(ArgumentError) do
-        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [], top: true, structure_unit_id: @payments, effective_on: @today) }
+        as_tenant { @admin.set_kind_parents(@squad, parent_ids: [], top: true, structure_unit_id: @payments, effective_on: @today) }
       end
       assert_equal "That unit type doesn't exist", error.message
     end
@@ -252,9 +253,9 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
         "Payments's type named for Lending" => [ @stream, lending ],
         "Lending's type named for Payments" => [ lane, @payments ] }.each do |label, (level_id, named)|
         commands = {
-          add_level: -> { @handler.add_level(level_id, "Copy", parent_ids: [], top: true, structure_unit_id: named, effective_on: @today) },
-          set_kind_parents: -> { @handler.set_kind_parents(level_id, parent_ids: [], top: true, structure_unit_id: named, effective_on: @today) },
-          remove_level: -> { @handler.remove_level(level_id, structure_unit_id: named, effective_on: @today) }
+          add_level: -> { @admin.add_level(level_id, "Copy", parent_ids: [], top: true, structure_unit_id: named, effective_on: @today) },
+          set_kind_parents: -> { @admin.set_kind_parents(level_id, parent_ids: [], top: true, structure_unit_id: named, effective_on: @today) },
+          remove_level: -> { @admin.remove_level(level_id, structure_unit_id: named, effective_on: @today) }
         }
         commands.each do |command, run|
           error = assert_raises(ArgumentError, "#{command}: #{label}") { as_tenant { run.call } }
@@ -267,6 +268,27 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     end
   end
 
+  should "refuse the system any change to a unit's own structure, and let it change the top structure" do
+    declare
+    lane = SecureRandom.uuid_v7
+    before = event_store.read.stream(as_tenant { EventStreamNaming.org_structure_stream }).count
+
+    {
+      declare_structure: -> { @handler.declare_structure(@basket, levels: [ { level_id: lane, name: "Lane" } ], conversion: {}, effective_on: @today) },
+      withdraw_structure: -> { @handler.withdraw_structure(@payments, conversion: { @group => @squad, @stream => @pod }, effective_on: @today) },
+      add_level: -> { @handler.add_level(lane, "Lane", parent_ids: [ @stream ], structure_unit_id: @payments, effective_on: @today) },
+      set_kind_parents: -> { @handler.set_kind_parents(@stream, parent_ids: [], top: true, structure_unit_id: @payments, effective_on: @today) },
+      remove_level: -> { @handler.remove_level(@stream, structure_unit_id: @payments, effective_on: @today) }
+    }.each do |command, call|
+      error = assert_raises(OrgGraph::Authorization::Refused, command.to_s) { as_tenant(&call) }
+      assert_equal "Only a tenant admin can change a unit's structure", error.message
+    end
+    assert_equal before, event_store.read.stream(as_tenant { EventStreamNaming.org_structure_stream }).count
+
+    as_tenant { @handler.add_level(lane, "Lane", parent_ids: [ @tribe ], effective_on: @today) }
+    assert_equal %w[Tribe Squad Pod Lane], structure.taxonomy.kinds.map(&:name)
+  end
+
   context "retiring a unit with a structure of its own" do
     setup do
       @lane = SecureRandom.uuid_v7
@@ -276,7 +298,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     should "withdraw the structure in the same change when an admin retires the unit" do
       declare(unit: @basket, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {})
       event_store.with_metadata(correlation_id: "request-1") do
-        as_tenant { @handler.retire_unit(@basket, effective_on: @retire_on) }
+        as_tenant { @admin.retire_unit(@basket, effective_on: @retire_on) }
       end
 
       assert structure.unit(@basket).retired
@@ -312,7 +334,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     should "refuse an admin's retirement dated before the structure last changed" do
       declare(unit: @basket, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {}, on: @today + 3)
 
-      error = assert_raises(RuntimeError) { as_tenant { @handler.retire_unit(@basket, effective_on: @today + 1) } }
+      error = assert_raises(RuntimeError) { as_tenant { @admin.retire_unit(@basket, effective_on: @today + 1) } }
       assert_equal "Basket's structure last changed on #{(@today + 3).iso8601}, so date its retirement then or later", error.message
       assert_equal [ "Lane" ], structures_as_of(@today + 3)[@basket]
     end
@@ -343,6 +365,13 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
 
   private
 
+  def admin_context
+    as_tenant do
+      tenant_user = create(:tenant_user, tenant: @tenant, role: :admin)
+      AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: nil)
+    end
+  end
+
   def last_event = event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).backward.first
 
   def structures_as_of(day) = snapshot_on(day).structures.transform_values { it.map(&:name) }
@@ -361,7 +390,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
   end
 
   def declare(unit: @payments, levels: groups_and_streams, conversion: { @squad => @group, @pod => @stream }, on: @today, **options)
-    as_tenant { @handler.declare_structure(unit, levels:, conversion:, effective_on: on, **options) }
+    as_tenant { @admin.declare_structure(unit, levels:, conversion:, effective_on: on, **options) }
   end
 
   def last_definition = event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).backward.first.data

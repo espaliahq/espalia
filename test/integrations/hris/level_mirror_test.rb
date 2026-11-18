@@ -189,8 +189,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
     should "never seat a new unit inside a unit's own structure, listing it with the structure instead" do
       mirror(@staff[0] => { division: "d1" })
       product = unit("work.division/d1")
-      @structure.declare_structure(product.id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
-                                               effective_on: TODAY)
+      declare_lane(product.id)
 
       result = mirror(@staff[0] => { division: "d1", team: "t1" })
 
@@ -204,8 +203,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
     should "list nothing for a new unit inside a structure that fails to be written" do
       mirror(@staff[0] => { division: "d1" })
       product = unit("work.division/d1")
-      @structure.declare_structure(product.id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
-                                               effective_on: TODAY)
+      declare_lane(product.id)
       handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       def handler.create_unit(*, **) = raise("Unit name is taken")
 
@@ -219,8 +217,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
     should "keep an existing unit's parent when its people move inside a unit's own structure" do
       mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" })
       platform = unit("work.division/d2")
-      @structure.declare_structure(platform.id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
-                                                effective_on: TODAY)
+      declare_lane(platform.id)
 
       results = Array.new(2) { mirror(@staff[0] => { division: "d2", team: "t1" }, @staff[1] => { division: "d2" }) }
 
@@ -232,8 +229,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
     should "keep a unit left out of a structure as a sync issue until the HRIS moves it back" do
       mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" })
       platform = unit("work.division/d2")
-      @structure.declare_structure(platform.id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
-                                                effective_on: TODAY)
+      declare_lane(platform.id)
       readings = { @staff[0] => { division: "d2", team: "t1" }, @staff[1] => { division: "d2" } }
 
       mirror(readings)
@@ -409,6 +405,13 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
   end
 
   private
+
+  def declare_lane(unit_id)
+    admin = create(:tenant_user, tenant: @tenant, role: :admin)
+    OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: admin.user, tenant_user: admin, person: nil))
+                                     .declare_structure(unit_id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
+                                                                 effective_on: TODAY)
+  end
 
   def mirror(readings) = mirror_with(readings)
 
