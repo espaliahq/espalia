@@ -350,24 +350,68 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
   end
 
   context "a framework publish that renumbers a level" do
+    setup do
+      @fx = build_published_two_level_framework(tenant: @tenant)
+      @person = create(:person, tenant: @tenant)
+      @closed_id = enrol_at_e2(@person, @fx)
+      ActsAsTenant.with_tenant(@tenant) { AssessmentCycles::CommandHandler.new.close_cycle(@closed_id) }
+      @open_id = enrol_at_e2(@person, @fx)
+      renumber_e2_in_draft(@fx)
+    end
+
+    should "leave every enrolment on the old ordinal while the renumber is only a draft" do
+      assert_equal [ 2, 2 ], stored_ordinals
+    end
+
     should "move every enrolment at that level, in open and closed cycles, to its new ordinal" do
-      fx = build_published_two_level_framework(tenant: @tenant)
-      person = create(:person, tenant: @tenant)
-      closed_id = enrol_at_renumbered_level(person, fx, tenant: @tenant)
-      ActsAsTenant.with_tenant(@tenant) { AssessmentCycles::CommandHandler.new.close_cycle(closed_id) }
-      open_id = enrol_at_renumbered_level(person, fx, tenant: @tenant)
+      publish_draft(@fx)
 
-      renumber_level_and_publish(fx, tenant: @tenant)
+      assert_equal [ 3, 3 ], stored_ordinals
+    end
 
-      ActsAsTenant.with_tenant(@tenant) do
-        assert_equal [ 3, 3 ], [ closed_id, open_id ].map { |cycle_id|
-          AssessmentCycleEnrollment.find_by!(cycle_id: cycle_id, person_id: person.id).level_ordinal
-        }
+    should "leave enrolments in another framework's cycles alone" do
+      other = ActsAsTenant.with_tenant(@tenant) do
+        cycle = create(:assessment_cycle, tenant: @tenant, framework_id: SecureRandom.uuid_v7, status: "closed")
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle, level_id: @fx.level_id, level_ordinal: 7)
       end
+
+      publish_draft(@fx)
+
+      assert_equal 7, other.reload.level_ordinal
+    end
+
+    should "match what a rebuild of this projection writes" do
+      publish_draft(@fx)
+      live = snapshot_read_models(AssessmentCycles::Projections::CurrentState, @tenant)
+
+      AssessmentCycles::Projections::CurrentState.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: AssessmentCycles::Projections::CurrentState, tenant: @tenant)
+
+      assert_equal live, snapshot_read_models(AssessmentCycles::Projections::CurrentState, @tenant)
+    end
+
+    # A full rebuild replays the levels too, so each enrolment starts at the
+    # ordinal of its day and only the publish moves it.
+    should "match what a rebuild of every projection writes" do
+      publish_draft(@fx)
+      live = snapshot_read_models(AssessmentCycles::Projections::CurrentState, @tenant)
+
+      Projections::GlobalReplayer.replay_all(tenant: @tenant)
+
+      assert_equal live, snapshot_read_models(AssessmentCycles::Projections::CurrentState, @tenant)
+      assert_equal [ 3, 3 ], stored_ordinals
     end
   end
 
   private
+
+  def stored_ordinals
+    ActsAsTenant.with_tenant(@tenant) do
+      [ @closed_id, @open_id ].map do |cycle_id|
+        AssessmentCycleEnrollment.find_by!(cycle_id: cycle_id, person_id: @person.id).level_ordinal
+      end
+    end
+  end
 
   def emit(event_class, **data)
     event = event_class.new(
