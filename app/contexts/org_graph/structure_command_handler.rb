@@ -42,6 +42,24 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
+  # @see OrgGraph::StructureAggregate#declare_structure
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
+  def declare_structure(unit_id, **options)
+    authorize_taxonomy!
+    unless_kinds_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
+    end
+  end
+
+  # @see OrgGraph::StructureAggregate#withdraw_structure
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
+  def withdraw_structure(unit_id, **options)
+    authorize_taxonomy!
+    unless_kinds_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
+    end
+  end
+
   # @see OrgGraph::StructureAggregate#add_level
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def add_level(level_id, name, **options)

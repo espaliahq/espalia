@@ -51,6 +51,8 @@ class OrgGraph::StructureAggregate
     @kind_timelines = {}
     @structures = {}
     @structure_since = {}
+    @structure_levels = {}
+    @structure_changed_on = {}
   end
 
   # Defines or redefines the tenant's taxonomy, top level first.
@@ -473,6 +475,67 @@ class OrgGraph::StructureAggregate
     }))
   end
 
+  # Gives a unit a structure of its own: unit types that govern the units
+  # beneath it, down to any unit that declares one in turn. Each unit it
+  # governs changes to the type the conversion names, in the same change,
+  # keeping its id, owners, members and history.
+  #
+  # @param unit_id [String] a live unit with no structure of its own; an HRIS
+  #   may provide it, though none of the units beneath it
+  # @param levels [Array<Hash>] top first, each `{ level_id:, name:, parent_level_ids:, top: }`,
+  #   with `copied_from_level_id:` naming the type of `copied_from` it copies
+  # @param conversion [Hash{String => String}] the type each unit beneath
+  #   holds now, to the new type it takes; every type held beneath needs one
+  # @param copied_from [String, nil] "top", or the unit whose structure it
+  #   copies; nil for a fresh one
+  # @param effective_on [Date, String] no later than today, and no earlier than
+  #   the structure's last change or any change beneath it
+  # @param defined_by_id [String, nil]
+  # @raise [ArgumentError, RuntimeError] naming what doesn't fit
+  def declare_structure(unit_id, levels:, conversion:, effective_on:, copied_from: nil, defined_by_id: nil)
+    unit = live_unit!(unit_id)
+    raise "#{unit.name} already has its own structure" if @structures.key?(unit.unit_id)
+
+    copied_from = copy_source(copied_from)
+    levels = declared_levels(levels, copied_from)
+    governed = governed_by(unit.unit_id)
+    if (mirrored = governed.find { it.provider != ESPALIA })
+      raise "#{mirrored.name} comes from #{HrisConfig.provider_label(mirrored.provider)}, so #{unit.name} can't have a structure of its own over it"
+    end
+
+    effective_on = structure_dated!(unit, governed, effective_on)
+    conversion = converted!(governed, conversion, into: OrgGraph::Taxonomy.new(levels), label: "#{unit.name}'s structure") do |parent_id|
+      parent_id == unit.unit_id ? nil : parent_id
+    end
+    apply(OrgGraph::Events::TaxonomyDefined.new(data: {
+      levels:, previous_levels: [], structure_unit_id: unit.unit_id, copied_from:, conversion:,
+      effective_on:, defined_by_id:
+    }))
+    apply_conversion(governed, conversion, effective_on, defined_by_id)
+  end
+
+  # Withdraws a unit's own structure, so the structure above governs the units
+  # beneath it again. Each changes to the type the conversion names, in the
+  # same change.
+  #
+  # @param unit_id [String] a live unit with a structure of its own
+  # @param conversion [Hash{String => String}] each type held beneath, to a type
+  #   of the structure above that Espalia manages
+  # @param effective_on [Date, String] as for {#declare_structure}
+  # @param withdrawn_by_id [String, nil]
+  # @raise [ArgumentError, RuntimeError] naming what doesn't fit
+  def withdraw_structure(unit_id, conversion:, effective_on:, withdrawn_by_id: nil)
+    unit = live_unit!(unit_id)
+    raise "#{unit.name} has no structure of its own" unless @structures.key?(unit.unit_id)
+
+    governed = governed_by(unit.unit_id)
+    effective_on = structure_dated!(unit, governed, effective_on)
+    above = structure_in_force(unit.unit_id)
+    conversion = converted!(governed, conversion, into: kinds_at(above), label: structure_label(above), &:itself)
+    apply(withdrawal(unit, conversion:, effective_on:, withdrawn_by_id:))
+    apply_conversion(governed, conversion, effective_on, withdrawn_by_id)
+  end
+
   # Retires a unit. Its live sub-units must be moved or retired first.
   #
   # @param unit_id [String]
@@ -745,12 +808,138 @@ class OrgGraph::StructureAggregate
 
   # Withdrawing a structure defines it with no types.
   def define_declared_structure(unit_id, levels, effective_on)
+    @structure_changed_on[unit_id] = effective_on.to_s if effective_on
     if levels.empty?
-      @structures.delete(unit_id)
-      @structure_since.delete(unit_id)
+      [ @structures, @structure_since, @structure_levels ].each { it.delete(unit_id) }
     else
       @structure_since[unit_id] ||= effective_on.to_s
+      @structure_levels[unit_id] = levels
       @structures[unit_id] = OrgGraph::Taxonomy.new(levels.map { it.slice(:level_id, :name, :parent_level_ids, :top) })
+    end
+  end
+
+  def withdrawal(unit, conversion:, effective_on:, withdrawn_by_id:)
+    OrgGraph::Events::TaxonomyDefined.new(data: {
+      levels: [], previous_levels: @structure_levels.fetch(unit.unit_id), structure_unit_id: unit.unit_id, conversion:,
+      effective_on:, defined_by_id: withdrawn_by_id
+    })
+  end
+
+  # The live units a structure at a unit governs: those beneath it, down to
+  # and including any that declares a structure of its own.
+  def governed_by(unit_id)
+    children = live_units.group_by(&:parent_id)
+    governed = []
+    pending = [ unit_id ]
+    while (id = pending.shift)
+      children.fetch(id, []).each do |child|
+        governed << child
+        pending << child.unit_id unless @structures.key?(child.unit_id)
+      end
+    end
+    governed
+  end
+
+  def copy_source(copied_from)
+    return if copied_from.blank?
+    return "top" if copied_from.to_s == "top"
+
+    source = require_id(copied_from, "The structure copied from")
+    raise ArgumentError, "No unit has that structure to copy" unless @structures.key?(source)
+
+    source
+  end
+
+  # A declared structure's types state their rules, and each type a copy
+  # names comes from the structure it copies.
+  def declared_levels(levels, copied_from)
+    levels = Array(levels).map do |level|
+      level = level.to_h.symbolize_keys
+      { level_id: require_id(level[:level_id], "Level id"), name: require_name(level[:name]),
+        parent_level_ids: Array(level[:parent_level_ids]).map { require_id(it, "Parent level id") }.uniq,
+        top: level.fetch(:top, true), copied_from_level_id: level[:copied_from_level_id].presence&.then { require_id(it, "Copied level id") } }
+    end
+    raise ArgumentError, "A structure needs at least one unit type" if levels.empty?
+
+    ids = level_ids(levels)
+    raise ArgumentError, "Each unit type needs its own id" unless ids.uniq.size == ids.size
+    raise ArgumentError, "Level id is taken" if ids.any? { kind_home(it) }
+    raise ArgumentError, "Two unit types can't share a name" unless levels.map { it[:name].downcase }.uniq.size == levels.size
+
+    source = copied_from && (copied_from == "top" ? taxonomy : @structures.fetch(copied_from))
+    levels.map do |level|
+      unknown = level[:parent_level_ids] - ids
+      raise ArgumentError, "#{level[:name]} lists a unit type this structure doesn't hold" if unknown.any?
+      raise ArgumentError, "Top must be true or false" unless [ true, false ].include?(level[:top])
+      if !level[:top] && (level[:parent_level_ids] - [ level[:level_id] ]).empty?
+        raise ArgumentError, "A unit type needs somewhere to sit: under another type, or at the top"
+      end
+      if level[:copied_from_level_id] && !source&.kind(level[:copied_from_level_id])
+        raise ArgumentError, "#{level[:name]} copies a unit type the structure copied from doesn't hold"
+      end
+
+      level.merge(parent_level_ids: ids & level[:parent_level_ids]).compact
+    end.tap { ensure_every_kind_can_sit!(it) }
+  end
+
+  # A structure changes on a day no later than today, and no earlier than its
+  # own last change or the last change to any unit it governs: a unit's
+  # arrival, move or change of type, or the end of one that sat beneath.
+  def structure_dated!(unit, governed, effective_on)
+    on = iso_date(effective_on)
+    raise "A structure can't change after today. Date it today or earlier" if on > today
+    if (last = @structure_changed_on[unit.unit_id]) && on < last
+      raise "#{unit.name}'s structure last changed on #{last}, so date this then or later"
+    end
+
+    beneath = [ unit.unit_id, *governed.map(&:unit_id) ]
+    changes = governed.flat_map do |child|
+      [ child.created_on, *@parents.fetch(child.unit_id, {}).keys, *@unit_kinds.fetch(child.unit_id, {}).keys ].map { [ it, child ] }
+    end
+    changes += placements_ended_after(on).select { beneath.include?(it.parent_id) }.map { [ it.until_on, it.unit ] }
+    day, changed = changes.select { |changed_on, _| changed_on > on }.max_by { |changed_on, child| [ changed_on, child.name ] }
+    raise "#{changed.name} changed on #{day}, so date this then or later" if changed
+
+    on
+  end
+
+  # Checks a conversion against the units it covers and the structure they
+  # move into, and keeps only the types they hold. The block gives the parent
+  # whose type a unit answers to, nil for one at the top of the structure.
+  def converted!(governed, conversion, into:, label:)
+    conversion = conversion.to_h.to_h { |from, to| [ require_id(from, "Converted level id"), require_id(to, "Converted level id") ] }
+    unknown = conversion.values.uniq.reject { into.kind(it) }
+    raise ArgumentError, "The conversion names a unit type #{label} doesn't hold" if unknown.any?
+
+    if (mirrored = conversion.values.uniq.find { level_provider(it) != ESPALIA })
+      raise "#{any_kind_name(mirrored)} comes from #{HrisConfig.provider_label(level_provider(mirrored))}, so no unit here can change to it"
+    end
+
+    missing = governed.map(&:level_id).uniq - conversion.keys
+    raise "Say what #{missing.map { any_kind_name(it) }.sort.to_sentence} units become" if missing.any?
+
+    misfits = governed.filter_map do |child|
+      kind = conversion.fetch(child.level_id)
+      parent_id = yield(child.parent_id)
+      parent_kind = parent_id && conversion.fetch(@units[parent_id].level_id, @units[parent_id].level_id)
+      next if parent_kind ? into.allows?(kind, beneath: parent_kind) : into.may_be_top?(kind)
+
+      where = parent_kind ? "under #{into.kind(parent_kind)&.name || any_kind_name(parent_kind)}" : "at the top"
+      "#{child.name} (#{into.kind(kind).name} #{where})"
+    end
+    raise "These units wouldn't fit #{label}: #{misfits.sort.join(', ')}" if misfits.any?
+
+    conversion.slice(*governed.map(&:level_id).uniq)
+  end
+
+  def apply_conversion(governed, conversion, effective_on, changed_by_id)
+    governed.each do |child|
+      next if conversion[child.level_id] == child.level_id
+
+      apply(OrgGraph::Events::UnitKindChanged.new(data: {
+        unit_id: child.unit_id, level_id: conversion.fetch(child.level_id), previous_level_id: child.level_id,
+        provider: child.provider, effective_on:, kind_changed_by_id: changed_by_id
+      }))
     end
   end
 
