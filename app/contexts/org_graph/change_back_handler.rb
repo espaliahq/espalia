@@ -141,6 +141,7 @@ class OrgGraph::ChangeBackHandler
     end
 
     entries.each do |entry|
+      raise "A unit's own structure can't be changed back yet" if entry.subject == "structure"
       raise "#{entry.event_type.titleize} can't be changed back" unless entry.reversible?
       raise "This change has already been changed back" if entry.changed_back?
       raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA

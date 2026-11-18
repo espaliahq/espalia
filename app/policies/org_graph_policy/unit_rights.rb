@@ -24,21 +24,23 @@ class OrgGraphPolicy::UnitRights
   # @return [Boolean]
   def change_type? = @unit.held_by_espalia? && @policy.change_unit_kind? && type_choices.size > 1
 
-  # The types the unit may take today: its own, and each type Espalia supplies
-  # that may sit where the unit sits and that every live sub-unit may sit
-  # under. The command also checks the days from the chosen date.
+  # The types the unit may take today, from the structure in force where it
+  # sits: its own, and each type Espalia supplies that may sit there and that
+  # every live sub-unit may sit under. A unit that declares a structure seats
+  # its sub-units at that structure's top, so they constrain nothing. The
+  # command also checks the days from the chosen date.
   #
   # @return [Array<OrgGraph::Taxonomy::Kind>] top first
   def type_choices
     @type_choices ||= begin
-      taxonomy = @overview.taxonomy
-      parent = @unit.parent
-      child_kinds = @overview.children_of(@unit).map(&:level_id).uniq
+      taxonomy = @overview.taxonomy(@unit)
+      parent_kind = @overview.seated_parent_kind(@unit.parent)
+      child_kinds = @overview.declares_structure?(@unit) ? [] : @overview.children_of(@unit).map(&:level_id).uniq
       taxonomy.kinds.select do |kind|
         next true if kind.id == @unit.level_id
 
         kind.provider == OrgGraph::Taxonomy::ESPALIA &&
-          (parent ? taxonomy.allows?(kind.id, beneath: parent.level_id) : kind.top?) &&
+          (parent_kind ? taxonomy.allows?(kind.id, beneath: parent_kind) : kind.top?) &&
           child_kinds.all? { taxonomy.allows?(it, beneath: kind.id) }
       end
     end
@@ -51,7 +53,9 @@ class OrgGraphPolicy::UnitRights
   def add_members? = @policy.edit_unit?(@unit)
 
   # Where the unit may move: any live unit of a kind its own kind may sit
-  # under, outside its own subtree, that the viewer may put a unit under.
+  # under, outside its own subtree and within the structure in force where
+  # it sits, that the viewer may put a unit under. Moving into another
+  # structure converts the unit, which this drawer doesn't offer.
   #
   # @return [Array<OrgUnit>] in tree order
   def parent_choices
@@ -64,7 +68,9 @@ class OrgGraphPolicy::UnitRights
   end
 
   # @return [Boolean] whether the unit may sit at the root
-  def root_choice? = @overview.taxonomy.may_be_top?(@unit.level_id) && @policy.create_unit?(nil)
+  def root_choice?
+    @overview.structure_unit_of(@unit).nil? && @overview.taxonomy.may_be_top?(@unit.level_id) && @policy.create_unit?(nil)
+  end
 
   # @param membership [OrgMembership]
   # @return [Boolean] whether the viewer may move or remove it
@@ -109,5 +115,11 @@ class OrgGraphPolicy::UnitRights
 
   private
 
-  def may_sit_under?(unit) = @overview.taxonomy.allows?(@unit.level_id, beneath: unit.level_id)
+  def may_sit_under?(unit)
+    return false unless @overview.structure_beneath(unit) == @overview.structure_unit_of(@unit)
+
+    parent_kind = @overview.seated_parent_kind(unit)
+    taxonomy = @overview.taxonomy(@unit)
+    parent_kind ? taxonomy.allows?(@unit.level_id, beneath: parent_kind) : taxonomy.may_be_top?(@unit.level_id)
+  end
 end

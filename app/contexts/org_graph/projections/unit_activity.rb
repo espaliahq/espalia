@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # Synchronous projection of each unit's activity: the changes to the unit
-# itself and to its memberships, from the structure and person streams.
+# itself and to its memberships, from the structure and person streams. A
+# unit's own structure (#494), declared, edited or withdrawn, is an entry in
+# the declaring unit; the top structure belongs to no unit and has none.
 #
 # Writes `org_unit_activities`, and nothing else writes it. Rows are only ever
 # added, except that an entry someone changes back is marked with the change
@@ -18,7 +20,7 @@ class OrgGraph::Projections::UnitActivity
   CODE_VERSION = 3
 
   ACTOR_KEYS = %i[created_by_id renamed_by_id moved_by_id retired_by_id stated_by_id added_by_id removed_by_id
-                  set_by_id ended_by_id handed_over_by_id kind_changed_by_id].freeze
+                  set_by_id ended_by_id handed_over_by_id kind_changed_by_id defined_by_id withdrawn_by_id].freeze
   private_constant :ACTOR_KEYS
 
   # @return [Array<Class>]
@@ -27,7 +29,8 @@ class OrgGraph::Projections::UnitActivity
       OrgGraph::Events::UnitCreated, OrgGraph::Events::UnitRenamed, OrgGraph::Events::UnitMoved,
       OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded, OrgGraph::Events::UnitOwnerAdded,
       OrgGraph::Events::UnitOwnerRemoved, OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded,
-      OrgGraph::Events::MembershipMoved, OrgGraph::Events::UnitHandedOver, OrgGraph::Events::UnitKindChanged
+      OrgGraph::Events::MembershipMoved, OrgGraph::Events::UnitHandedOver, OrgGraph::Events::UnitKindChanged,
+      OrgGraph::Events::TaxonomyDefined
     ]
   end
 
@@ -62,6 +65,7 @@ class OrgGraph::Projections::UnitActivity
       [ [ data[:unit_id], { subject: "level", before: { level_id: data[:previous_level_id] }, after: data.slice(:level_id) } ] ]
     when OrgGraph::Events::UnitRetired
       [ [ data[:unit_id], { after: data.slice(:succession_id, :successor_ids) } ] ]
+    when OrgGraph::Events::TaxonomyDefined then structure_entries(data)
     when OrgGraph::Events::UnitSucceeded then succession_entries(data)
     when OrgGraph::Events::UnitHandedOver
       [ [ data[:unit_id], { subject: "provider", before: source(data, :previous_provider, :previous_field, :previous_external_ref),
@@ -79,6 +83,15 @@ class OrgGraph::Projections::UnitActivity
         [ data[:unit_id], membership(data, data[:unit_id], position, after: terms(data), other_unit_id: data[:from_unit_id]) ] ]
     end
   end
+
+  def structure_entries(data)
+    return [] unless data[:structure_unit_id]
+
+    [ [ data[:structure_unit_id], { subject: "structure", before: type_names(data[:previous_levels]),
+                                    after: type_names(data[:levels]) } ] ]
+  end
+
+  def type_names(levels) = levels.present? ? { types: levels.pluck(:name) } : nil
 
   def succession_entries(data)
     after = data.slice(:predecessor_ids, :successor_ids)

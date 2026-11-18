@@ -104,4 +104,61 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       assert_equal "Say what Stream units become", error.message
     end
   end
+
+  context "reading a declared structure" do
+    setup { @stream, @lane = declare[:levels].pluck(:level_id) }
+
+    should "give each unit the structure in force above it in the Units read" do
+      result = call(Operations::OrgGraph::Units)
+
+      units = result[:units].index_by { it[:id] }
+      assert_equal [ nil, @org[:checkout] ], units.values_at(@org[:checkout], @org[:payments]).pluck(:structure_unit_id)
+      assert_equal [ [ @org[:checkout], %w[Stream Lane] ] ], result[:structures].map { [ it[:unit_id], it[:levels].pluck(:name) ] }
+      assert_equal %w[Department Team Squad], result[:levels].pluck(:name)
+    end
+
+    should "list a structure's types with their units and whether each can go, in Sources" do
+      structure = call(Operations::OrgGraph::Sources, as: @editor)[:structures].sole
+
+      assert_equal [ @org[:checkout], "Checkout" ], structure.values_at(:unit_id, :name)
+      assert_equal [ [ "Stream", 1, false ], [ "Lane", 0, true ] ], structure[:levels].map { it.values_at(:name, :live_units, :removable) }
+    end
+
+    should "read the structure in force on a date, even narrowed to a unit beneath it" do
+      day = ActsAsTenant.with_tenant(@tenant) { Tenant.today.iso8601 }
+      [ {}, { unit_id: @org[:payments] } ].each do |narrowed|
+        result = call(Operations::OrgGraph::AsOf, date: day, **narrowed)
+        assert_equal [ [ @org[:checkout], %w[Stream Lane] ] ], result[:structures].map { [ it[:unit_id], it[:kinds].pluck(:name) ] }
+      end
+      assert_empty call(Operations::OrgGraph::AsOf, date: day, unit_id: @org[:platform])[:structures]
+    end
+
+    should "offer a unit only the types and places of the structure in force where it sits" do
+      ActsAsTenant.with_tenant(@tenant) do
+        context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        overview = OrgGraph::UnitsOverview.new
+        payments = OrgUnit.find(@org[:payments])
+        rights = OrgGraphPolicy::UnitRights.new(OrgGraphPolicy.new(context, :org_graph), payments, overview)
+
+        assert_equal [ [ "Stream" ], [ "Checkout" ], false ], [ rights.type_choices.map(&:name), rights.parent_choices.map(&:name), rights.root_choice? ]
+        assert_equal "Stream", overview.level_of(payments).name
+      end
+    end
+
+    should "show the declaration and the withdrawal in the unit's activity, and refuse to change either back" do
+      call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
+
+      ActsAsTenant.with_tenant(@tenant) do
+        context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        items = OrgGraph::ActivityFeed.new(unit: OrgUnit.find(@org[:checkout]), actor: context).items
+        withdrawal, declaration = items.first(2)
+
+        assert_equal [ "Withdrew its structure of Stream and Lane", "Gave it a structure of its own: Stream and Lane" ],
+                     [ withdrawal, declaration ].map { it.parts.find { |part| part.entry.subject == "structure" }.description }
+        assert_equal [ "withdrew its structure", "gave it a structure of its own" ], [ withdrawal, declaration ].map { it.group.summary.split(" and ").last }
+        assert_equal [ "A unit's own structure can't be changed back yet" ] * 2, [ withdrawal, declaration ].map(&:refusal)
+        assert_equal [ @admin.person.name ] * 2, [ withdrawal, declaration ].map { it.parts.find { |part| part.entry.subject == "structure" }.by }
+      end
+    end
+  end
 end

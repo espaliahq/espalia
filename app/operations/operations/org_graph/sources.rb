@@ -9,7 +9,8 @@ class Operations::OrgGraph::Sources < Operations::Base
               "with its provider and the fields an HRIS reads it from, each structure level (top first) " \
               "with its provider, field, how many live units it holds and how many retired units it held " \
               "(by distinct name, the first three of each named), the type ids it can sit under (parent_ids), " \
-              "whether it can sit at the top and whether it can be removed, and the staleness threshold with how " \
+              "whether it can sit at the top and whether it can be removed, the same for each unit that has a " \
+              "structure of its own (structures, by unit_id and name), and the staleness threshold with how " \
               "many facts Espalia holds are stale, by fact. Admins and Org Graph editors only."
   category :read
   approval :none
@@ -28,7 +29,8 @@ class Operations::OrgGraph::Sources < Operations::Base
     {
       hris: hris_payload(tenant),
       facts: facts_payload,
-      levels: levels_payload,
+      levels: levels_payload(OrgTaxonomyLevel.top_structure.to_a),
+      structures: structures_payload,
       freshness: { staleness_days: tenant.org_graph_config.staleness_days, stale: stale.values.sum, stale_by_fact: stale }
     }
   end
@@ -50,10 +52,18 @@ class Operations::OrgGraph::Sources < Operations::Base
     end
   end
 
-  def levels_payload
-    live = names_by_level(OrgUnit.live)
-    retired = names_by_level(OrgUnit.where.not(retired_on: nil))
-    levels = OrgTaxonomyLevel.top_structure.to_a
+  def structures_payload
+    declared = OrgTaxonomyLevel.where.not(structure_unit_id: nil).order(:position).group_by(&:structure_unit_id)
+    names = OrgUnit.where(id: declared.keys).pluck(:id, :name).to_h
+    declared.sort_by { |unit_id, _| names[unit_id].to_s }.map do |unit_id, levels|
+      { unit_id:, name: names[unit_id], levels: levels_payload(levels) }
+    end
+  end
+
+  # @param levels [Array<OrgTaxonomyLevel>] one structure's, top first
+  def levels_payload(levels)
+    live = live_names
+    retired = retired_names
     rules = OrgTaxonomyLevel.rules_by_id(levels)
     levels.map do |level|
       live_count, live_names = live.fetch(level.id, [ 0, [] ])
@@ -65,8 +75,12 @@ class Operations::OrgGraph::Sources < Operations::Base
     end
   end
 
+  def live_names = @live_names ||= names_by_level(OrgUnit.live)
+
+  def retired_names = @retired_names ||= names_by_level(OrgUnit.where.not(retired_on: nil))
+
   # The aggregate refuses the rest: a level that ever held a unit stays to
-  # explain the unit's history, and a taxonomy keeps at least one level.
+  # explain the unit's history, and a structure keeps at least one level.
   def removable?(level, units_ever, level_count)
     level.provider == ::OrgGraph::StructureAggregate::ESPALIA && units_ever.zero? && level_count > 1
   end
