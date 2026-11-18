@@ -23,17 +23,24 @@ class Operations::Tenants::UpdateComparisons < Operations::Base
     authorize ActsAsTenant.current_tenant, :update_comparisons?, policy_class: TenantPolicy
   end
 
+  # Turning comparisons on takes the first snapshot, unless one was already
+  # taken this month: switching off and on again is no way to take one on demand.
+  #
   # @return [Hash] the settings as they now stand
   # @raise [ParameterError] when a setting is out of range
   def perform
     tenant = ActsAsTenant.current_tenant
+    turned_on = false
     tenant.with_lock do
       config = tenant.comparison_config.dup
+      was_on = config.enabled
       config.assign_attributes(params.slice(:enabled, :min_group_size, :snapshot_every_months).compact)
       raise ParameterError, config.errors.full_messages.to_sentence unless config.valid?
 
       tenant.update!(comparison_config: config)
+      turned_on = config.enabled && !was_on
     end
+    LevelComparisons::TakeDueSnapshotsJob.perform_later(tenant) if turned_on
     Operations::Tenants::Comparisons.payload(tenant)
   end
 end

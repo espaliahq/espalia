@@ -26,4 +26,16 @@ class ComparisonConfig
     message: "must be a whole number, at least #{LOWEST_MIN_GROUP_SIZE} and at most #{HIGHEST_MIN_GROUP_SIZE}"
   }
   validates :snapshot_every_months, inclusion: { in: SNAPSHOT_INTERVALS, message: "must be 1, 3 or 6" }
+
+  # The 1st of the month the next snapshot is due on, counted from the month
+  # of the last one, so a change of interval applies from the next 1st.
+  #
+  # @param last_taken_on [Date, nil]
+  # @param today [Date] the tenant's today
+  # @return [Date] today when none has been taken yet
+  def next_snapshot_on(last_taken_on, today:)
+    return today unless last_taken_on
+
+    last_taken_on.beginning_of_month >> snapshot_every_months
+  end
 end

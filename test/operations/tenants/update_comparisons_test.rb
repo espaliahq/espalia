@@ -4,6 +4,8 @@ require "test_helper"
 
 # The tenant admin's settings for comparing a person with their level.
 class Operations::Tenants::UpdateComparisonsTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @tenant = create(:tenant)
     @user = create(:user)
@@ -45,6 +47,23 @@ class Operations::Tenants::UpdateComparisonsTest < ActiveSupport::TestCase
   should "refuse a snapshot interval other than 1, 3 or 6 months" do
     assert_raises(Operations::Base::ParameterError) { call({ snapshot_every_months: 2 }) }
     assert_equal 1, @tenant.reload.comparison_config.snapshot_every_months
+  end
+
+  should "take the first snapshot when comparisons are turned on" do
+    @tenant.update!(comparison_config: ComparisonConfig.new(enabled: false))
+
+    travel_to Time.utc(2026, 11, 18, 9) do
+      assert_enqueued_with(job: LevelComparisons::TakeDueSnapshotsJob, args: [ @tenant ]) { call({ enabled: true }) }
+      assert_no_enqueued_jobs(only: LevelComparisons::TakeDueSnapshotsJob) { call({ min_group_size: 6 }) }
+    end
+  end
+
+  should "say when the last snapshot was taken and when the next is due" do
+    ActsAsTenant.with_tenant(@tenant) { LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1)) }
+
+    result = travel_to(Time.utc(2026, 11, 18, 9)) { call({ snapshot_every_months: 3 }) }
+
+    assert_equal [ "2026-11-01", "2027-02-01" ], result.values_at(:last_snapshot_on, :next_snapshot_on)
   end
 
   should "refuse a member" do

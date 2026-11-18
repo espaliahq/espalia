@@ -28,3 +28,6 @@ production:
   org_graph_forget_due_leavers:
     class: OrgGraph::ForgetDueLeaversJob
     schedule: at 2:17am every day
+  level_comparison_snapshots:
+    class: LevelComparisons::TakeDueSnapshotsJob
+    schedule: every hour at minute 5
