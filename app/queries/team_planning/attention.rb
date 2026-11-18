@@ -6,6 +6,10 @@
 # retired, a position someone closed. Those changes still resolve; this
 # read marks them, each with a reason and the change it belongs to.
 #
+# It marks a unit whose type can no longer sit under its parent's, or at the
+# top, once the Org Graph narrows where a type may sit: "Doesn't fit this
+# structure" ([#390](https://github.com/espaliahq/espalia/issues/390)).
+#
 # It also checks each person: allocation, someone still placed after the
 # Org Graph has them leave, and their manager (4.6), and each seat whose
 # reports cost more to manage than it delivers (7.5), each open seat whose
@@ -45,7 +49,7 @@ class TeamPlanning::Attention
   # @!attribute names [Hash{String => String}] subject id => name
   Report = Data.define(:items, :names)
 
-  CHECKS = %i[placements positions late_hires units unresolved uncovered successions capacity_overrides allocations leavers managers overloaded
+  CHECKS = %i[placements positions late_hires units misfits unresolved uncovered successions capacity_overrides allocations leavers managers overloaded
               unclassified budget_lines fundings unfunded ambiguous_funding unplaced cost_centre_mismatches budget_variance unused_budget_lines].freeze
   ASSIGNMENT = TeamPlanning::Events::AssignmentSet.facet
   POSITION = TeamPlanning::Events::PositionSet.facet
@@ -83,7 +87,8 @@ class TeamPlanning::Attention
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
     budget = TeamPlanning::Budget.new(context:, plan:, scenario_id:, repository:, aggregate:, shared:).call if scenario_id != plan.id && map.budget_lines.any?
     items = new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
-                              unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats, budget:).call
+                              unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats, budget:,
+                              taxonomy: OrgTaxonomyLevel.taxonomy).call
     Report.new(items:, names: items.empty? ? {} : names_of(resolution.named(map), items))
   end
 
@@ -139,8 +144,10 @@ class TeamPlanning::Attention
   # @param priced [Array<TeamPlanning::Capacity::Seat>] from {TeamPlanning::Capacity::Report#seats}
   # @param budget [TeamPlanning::Budget::Report, nil] the scenario's budget, read as the viewer; nil for the
   #   root, which has no period, and for a scenario with no budget lines, which has no budget to check
-  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [], budget: nil, today: Date.current)
+  # @param taxonomy [OrgGraph::Taxonomy, nil] the unit types and where each may sit; nil checks no fit
+  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [], budget: nil, taxonomy: nil, today: Date.current)
     @map = map
+    @taxonomy = taxonomy
     @today = today
     @budget = budget
     @position_units = closed_units.merge(map.positions.to_h { [ it.id, it.unit_id ] })
@@ -152,6 +159,7 @@ class TeamPlanning::Attention
     @live = map.units.to_set(&:id)
     @retired = map.retired_units.to_set(&:id)
     @outside = map.outside_ids
+    @roots = map.scope_ids.to_a.to_set
     @cut = map.cut_positions.to_set(&:id)
   end
 
@@ -198,15 +206,47 @@ class TeamPlanning::Attention
     end
   end
 
-  # A unit the plan covers sits under one it doesn't, so its parent is never gone.
+  # A root of a scoped plan sits under a unit the plan doesn't cover, so that
+  # parent is never gone. Once the plan puts the root under a unit the
+  # scenario retires, its parent is one the plan covers, and gone like any.
   def units
-    roots = @map.scope_ids.to_a.to_set
     parted = @map.units.filter_map do |unit|
-      next if unit.parent_id.nil? || @live.include?(unit.parent_id) || roots.include?(unit.id)
+      next if unit.parent_id.nil? || @live.include?(unit.parent_id) || (@roots.include?(unit.id) && !@retired.include?(unit.parent_id))
 
       item(unit.id, UNIT, "Its parent is #{gone(unit.parent_id)}", broken_by: [ [ unit.parent_id, UNIT ] ])
     end
-    parted + (roots - @live - @retired).map { item(it, UNIT, "The plan covers it, but the organisation no longer has it") }
+    parted + (@roots - @live - @retired).map { item(it, UNIT, "The plan covers it, but the organisation no longer has it") }
+  end
+
+  # A unit type's rules can narrow after the plan placed a unit, so the plan
+  # marks the unit instead of refusing what it already holds. It reads the
+  # resolved map, which a scoped plan has cut to its units. A root of that
+  # scope sits under a unit the plan doesn't cover, whatever the cut map shows
+  # as its parent, so it is judged only once the plan puts it under a unit on
+  # the map: never at the top, and never against a unit the plan can't name.
+  # A parent gone from the scenario is the units check's. A type that is gone
+  # needs no parent to judge. A unit's type never changes, so only the unit's
+  # own change can break its fit, never its parent's.
+  def misfits
+    return [] unless @taxonomy
+
+    by_id = @map.units.index_by(&:id)
+    @map.units.filter_map do |unit|
+      parent = unit.parent_id && by_id[unit.parent_id]
+      next unless (why = misfit(unit, parent, judged: !((unit.parent_id || @roots.include?(unit.id)) && !parent)))
+
+      item(unit.id, UNIT, "#{I18n.t('org_graph.misfit')}: #{why}")
+    end
+  end
+
+  def misfit(unit, parent, judged:)
+    return unless unit.level_id
+    return "its unit type no longer exists" unless (kind = @taxonomy.kind(unit.level_id))
+    return unless judged
+    return ("#{kind.name} can't sit at the top" unless kind.top?) unless parent
+    return unless (parent_kind = @taxonomy.kind(parent.level_id))
+
+    "#{kind.name} can't sit under #{parent_kind.name}" unless @taxonomy.allows?(kind.id, beneath: parent_kind.id)
   end
 
   def unresolved
