@@ -8,8 +8,8 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
   POSITION = "01a1da48-c64a-7529-af90-0f97e41cdaa1"
   ADA = "01a1da48-c64a-7529-af90-0f97e41cdaa2"
 
-  def render_map(people: [], positions: [], units: [ unit(PAYMENTS, "Payments") ])
-    map = { plan_id: PLAN, scenario_id: PLAN, base_on: "2026-11-15", known_on: "2026-11-14", units:, people:,
+  def render_map(people: [], positions: [], units: [ unit(PAYMENTS, "Payments") ], known_on: "2026-11-14")
+    map = { plan_id: PLAN, scenario_id: PLAN, base_on: "2026-11-15", known_on:, units:, people:,
             unassigned_ids: [], positions:, unresolved: [], names: { ADA => "Ada Quill" } }
     scenarios = [ { scenario_id: PLAN, parent_id: nil, name: "Pay review" } ]
     Nokogiri::HTML5.fragment(render_view(Views::Plans::ScenarioMap.new(map:, scenarios:)))
@@ -28,6 +28,11 @@ class Views::Plans::ScenarioMapTest < ActiveSupport::TestCase
   def position(open_fte, unit_id: PAYMENTS) = { position_id: POSITION, unit_id:, basis: "new", role_name: "Software Engineer", level_name: nil, open_fte: }
 
   def card(html, name) = html.css("[data-map-unit]").find { it.at_css("h3").text == name }
+
+  should "say a map stands on the Org Graph as it reads today when it has no known_on" do
+    assert_match "as it reads today", render_map(known_on: nil).text
+    assert_match "as known on", render_map.text
+  end
 
   context "a unit card" do
     should "count a person with two places in the unit once" do

@@ -20,7 +20,7 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
               "those who left in an earlier step, with their backfill. unresolved lists people the plan places who aren't on the " \
               "map, with why: 'joined after the base date' (team_planning_rebase_plan brings them in) or " \
               "'has left'. `names` maps every person id to a name; a forgotten person reads as " \
-              "\"#{Person::FORMER_MEMBER}\". Refused, as an unknown plan, unless the caller is a member."
+              "\"#{Person::FORMER_MEMBER}\". known_on is null when the Org Graph is read as it stands now. Refused, as an unknown plan, unless the caller is a member."
   category :read
   approval :none
 

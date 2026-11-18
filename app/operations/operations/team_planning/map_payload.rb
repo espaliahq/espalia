@@ -36,7 +36,7 @@ module Operations::TeamPlanning::MapPayload
   # @param plan [TeamPlanningPlan] whose see-pay right decides whether pay shows
   # @return [Hash] `{ base_on, known_on, units, people, unassigned_ids, positions, unresolved, departed, names }`
   def map_payload(map, plan:)
-    { base_on: map.base_on.iso8601, known_on: map.known_on.iso8601,
+    { base_on: map.base_on.iso8601, known_on: map.known_on&.iso8601,
       units: units_payload(map),
       people: people_payload(map, pay: PlanPolicy.new(context, plan).see_pay?),
       unassigned_ids: map.unassigned_ids,
