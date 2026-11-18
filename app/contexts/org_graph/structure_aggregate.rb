@@ -922,17 +922,20 @@ class OrgGraph::StructureAggregate
           "#{stranded.sort_by(&:name).map { "#{it.name} (#{rules.kind(it.level_id).name})" }.join(', ')}"
   end
 
-  # A back-dated change must also fit each day since, by that day's rules: the
-  # parent the unit had then, and the sub-units beneath it then.
+  # A change must fit each day from its date, by that day's rules: the parent
+  # the unit had then, and the sub-units beneath it then. Days after today
+  # count too, since a move can be dated ahead.
   def ensure_kind_fitted_since!(unit, level_id, from:)
-    [ from, *kind_fit_days(unit.unit_id).select { it > from && it <= today } ].uniq.sort.each do |day|
+    [ from, *kind_fit_days(unit.unit_id).select { it > from } ].uniq.sort.each do |day|
       rules = rules_on(day)
       raise "#{level_name(level_id)} didn't exist on #{day}, so date the change later" unless rules.kind(level_id)
 
       misfits = kind_misfits_on(unit, level_id, day, rules)
       next if misfits.empty?
 
-      raise "On #{day}, #{rules.kind(level_id).name} wouldn't have fit: #{misfits.join(', ')}. Date the change later"
+      kind = rules.kind(level_id).name
+      raise "On #{day}, #{kind} wouldn't fit: #{misfits.join(', ')}" if day > today
+      raise "On #{day}, #{kind} wouldn't have fit: #{misfits.join(', ')}. Date the change later"
     end
   end
 

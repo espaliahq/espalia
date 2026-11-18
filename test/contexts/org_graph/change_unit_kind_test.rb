@@ -110,6 +110,19 @@ class OrgGraph::ChangeUnitKindTest < ActiveSupport::TestCase
       assert_nothing_raised { @system.change_unit_kind(ledger, @crew, effective_on: "2026-12-20") }
     end
 
+    should "refuse a type a unit couldn't take under a parent a move dated ahead gives it for a while" do
+      studio_kind = SecureRandom.uuid_v7
+      @system.add_level(studio_kind, "Studio", parent_ids: [], top: true, effective_on: "2026-12-01")
+      @system.set_kind_parents(@team, parent_ids: [ @tribe, studio_kind ], top: false, effective_on: "2026-12-01")
+      studio = create_unit("Studio One", studio_kind)
+      retail = create_unit("Retail", @tribe)
+      @system.move_unit(@payments, studio, effective_on: "2027-01-10")
+      @system.move_unit(@payments, retail, effective_on: "2027-02-01")
+
+      error = assert_raises(RuntimeError) { @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10") }
+      assert_equal "On 2027-01-10, Crew wouldn't fit: Payments (Crew under Studio)", error.message
+    end
+
     should "judge a back-dated move by the type the unit held on each day it covers" do
       studio_kind = SecureRandom.uuid_v7
       @system.add_level(studio_kind, "Studio", parent_ids: [], top: true, effective_on: "2026-12-01")
