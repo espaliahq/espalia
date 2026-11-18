@@ -16,6 +16,11 @@
 | `app/views/assessments/capability_blades.rb` | The capability blades on each assessment card (see [*Capability radar and map*](scoring.md)) |
 | `app/queries/assessments/card_shapes.rb` | Every assessment card's capability shape, read as its hero reads it, loaded together for the list |
 | `app/views/assessments/capability_map_modal.rb` | The capability map: the radar beside a lane per capability, root-mounted; its content frame is streamed on the viewer's own rating and reloaded from `GET /assessments/:id/capability_map` on someone else's |
+| `app/views/assessments/level_comparison_panel.rb` | The capability map's "Compared with your level" tab: blades, level chips and lanes beside the group's middle scores (see [*Capability radar and map*](scoring.md)) |
+| `app/views/assessments/comparison_blades.rb` | The comparison tab's large blades, with a line across each at the group's middle score |
+| `app/models/assessments/level_comparison.rb` | What a person's comparison can show: their level and one either side, sized and scored only above the tenant's minimum |
+| `app/queries/level_comparisons/group_scores.rb` | Each role and level's middle scores from everyone's latest settled assessment, for a snapshot |
+| `app/models/level_comparison_snapshot.rb` | A snapshot of every group's size and medians; `LevelComparisons::TakeDueSnapshotsJob` takes them |
 | `app/views/assessments/status_pill.rb` | Header status pill — In Progress / N to confirm / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
 | `app/components/shared/to_confirm_chip.rb` | The dashed amber "to confirm" chip — status pill, card name row, list cards, the hero and category links |
 | `app/controllers/assessments/carried_ratings_controller.rb` | A category's carried ratings: the review page (GET) and the bulk confirm (POST → `ConfirmCarriedRatings`) |
