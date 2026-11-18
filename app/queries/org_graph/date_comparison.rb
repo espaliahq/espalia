@@ -76,7 +76,7 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
   COUNTED = {
     "Joined" => :joined, "Left" => :left, "Moved" => :moved,
     "New units" => :unit_created, "Renamed" => :unit_renamed, "Units moved" => :unit_moved,
-    "Retired" => :unit_retired, "Succeeded" => :unit_succeeded
+    "Types changed" => :unit_kind_changed, "Retired" => :unit_retired, "Succeeded" => :unit_succeeded
   }.freeze
 
   # @return [Array<Array(String, Integer)>] each kind of change the Org Graph
