@@ -216,6 +216,32 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       assert_compare_control_fits
     end
 
+    should "key the group's line under the blades and say how the team's score differs, on desktop and phone" do
+      ActsAsTenant.with_tenant(@tenant) do
+        snapshot = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1))
+        [ 2, 3 ].each do |level|
+          snapshot.groups.create!(tenant: @tenant, framework_id: @framework_id, role_id: @role.role_id, level_ordinal: level,
+                                  group_size: 6, category_medians: {},
+                                  capability_medians: @capabilities.to_h { |c| [ c.stable_id, 0.8 ] },
+                                  capability_counts: @capabilities.to_h { |c| [ c.stable_id, 6 ] })
+        end
+      end
+
+      [ DESKTOP_SIZE, MOBILE_SIZE ].each do |size|
+        visit_team(size)
+        open_team_map
+        assert_selector "#team-map [data-blade-median]", count: 2, visible: :all
+        assert_selector "#team-map [data-team-legend]", text: /Software Engineers \(median\).*Met/m, visible: true
+        blades_bottom = evaluate_script("document.querySelector('#team-map [data-team-blades]').getBoundingClientRect().bottom")
+        legend_top = evaluate_script("document.querySelector('#team-map [data-team-legend]').getBoundingClientRect().top")
+        assert_operator blades_bottom, :<=, legend_top, "expected the legend under the blades at #{size.first}px"
+        assert_selector "#team-map [data-team-scores-note]", text: /Team is the average.*Group is the median agreed score/m,
+                                                            visible: true
+        assert_no_sideways_overflow
+        Capybara.reset_sessions!
+      end
+    end
+
     should "fit the Compare with control on a phone however long the role's name" do
       ActsAsTenant.with_tenant(@tenant) { @role.update!(name: "Principal Machine Learning Infrastructure Engineer") }
       visit_team(MOBILE_SIZE)

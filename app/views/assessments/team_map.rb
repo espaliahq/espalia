@@ -58,6 +58,7 @@ class Views::Assessments::TeamMap < Views::Base
     p(class: "text-sm text-muted -mt-1 mb-4") do
       plain "Your #{people_count}#{" at #{level_code}" if level_code}, #{RATINGS.fetch(@team[:ratings])}. "
       plain "Each blade is the team’s score against their own levels; the dashed circle is met."
+      plain " The line across each blade is the #{group_name}’ median." if compared?
     end
   end
 
@@ -145,10 +146,37 @@ class Views::Assessments::TeamMap < Views::Base
           capabilities:, size: "mx-auto w-full max-w-sm",
           label: "#{@team[:met]} of #{capabilities.size} capabilities met as a team", medians: compared?
         )
+        legend if compared?
       end
-      div { lanes }
+      div do
+        lanes
+        scores_note if compared?
+      end
     end
     p(class: "mt-6 text-xs text-muted") { "Names stay on the report cards; this map only combines them." }
+  end
+
+  def legend
+    div(class: "mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted", aria: { hidden: "true" },
+        data: { team_legend: true }) do
+      span(class: "flex items-center gap-1.5") do
+        span(class: "inline-block h-1 w-3 bg-(--gos-accent-strong)")
+        plain "#{group_name} (median)"
+      end
+      span(class: "flex items-center gap-1.5") do
+        span(class: "inline-block size-2.5 rounded-full border border-dashed border-(--gos-content-muted)")
+        plain "Met"
+      end
+    end
+  end
+
+  # Team follows the ratings switch; the group is always agreed ratings, so say both.
+  def scores_note
+    p(class: "mt-4 px-2 text-xs text-muted", data: { team_scores_note: true }) do
+      "Team is the average of your reports’ #{RATINGS.fetch(@team[:ratings])}, each scored against their own level. " \
+        "Group is the median agreed score of #{group_name} at the same levels, weighted by how many of your reports " \
+        "are at each. Only medians show, and nobody in the group is named."
+    end
   end
 
   def lanes

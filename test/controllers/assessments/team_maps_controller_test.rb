@@ -110,6 +110,15 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-map", text: /11 Software Engineers at E2 and E3, as of 1 Nov 2026/
     end
 
+    should "say what the line is and how the team's score differs from the group's" do
+      get team_map_assessments_path
+
+      assert_select "#team-map", text: /The line across each blade is the Software Engineers’ median/
+      assert_select "#team-map [data-team-legend]", text: /Software Engineers \(median\).*Met/m
+      assert_select "#team-map [data-team-scores-note]",
+                    text: /Team is the average of your reports’ manager ratings.*Group is the median agreed score/m
+    end
+
     should "name the group's score in a lane the team hasn't rated" do
       ActsAsTenant.with_tenant(@tenant) do
         @snapshot.groups.each { |g| g.update!(capability_medians: g.capability_medians.merge(@fx.e_only.stable_id => 0.8)) }
@@ -143,6 +152,8 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
       get team_map_assessments_path(team_compare: "none")
 
       assert_select "#team-map [data-blade-median]", count: 0
+      assert_select "#team-map [data-team-legend], #team-map [data-team-scores-note]", count: 0
+      assert_select "#team-map", text: /line across each blade/, count: 0
       assert_select "#team-map a[aria-current='page']", text: "Nothing"
     end
 
