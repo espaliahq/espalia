@@ -6,7 +6,6 @@
 # unit may not retype it, as a type decides what may sit above and below it.
 class Operations::OrgGraph::ChangeUnitKind < Operations::Base
   include Operations::OrgGraph::UnitWrite
-  prepend Operations::OrgGraph::PlanWrite
 
   description "Change the unit type of a unit Espalia holds, from effective_on (today by default). The new type " \
               "must be one Espalia supplies, must be able to sit under the unit's parent (or at the top), and " \
@@ -23,7 +22,7 @@ class Operations::OrgGraph::ChangeUnitKind < Operations::Base
     unit = live_unit!(:unit_id)
     level_id = uuid!(:level_id).downcase
 
-    structure_handler.change_unit_kind(unit.id, level_id, effective_on: effective_on, **plan)
+    structure_handler.change_unit_kind(unit.id, level_id, effective_on: effective_on)
     { unit_id: unit.id, level_id:, previous_level_id: unit.level_id, effective_on: effective_on }
   end
 end
