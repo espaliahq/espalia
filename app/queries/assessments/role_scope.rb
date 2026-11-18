@@ -72,6 +72,9 @@ class Assessments::RoleScope
       .where(role_id: role_ids)
       .merge(FrameworkState::Capability.active)
       .where(framework_capability_categories: { framework_id: framework_id })
+      .order("framework_capability_categories.ordinal", "framework_capability_categories.created_at",
+             "framework_capability_categories.id", "framework_capabilities.ordinal",
+             "framework_capabilities.created_at", "framework_capabilities.id")
       .includes(:capability)
       .to_a
     cells = FrameworkState::BehaviouralExpectation.stable_cells(bindings.map(&:capability_id).uniq)

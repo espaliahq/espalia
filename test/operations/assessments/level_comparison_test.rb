@@ -77,6 +77,15 @@ class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
     assert_equal 200, shared.(at_e1)[:your_score], "E1 met and E2 in full, on E1's scale"
   end
 
+  should "list the capabilities in the framework's order" do
+    ActsAsTenant.with_tenant(@tenant) do
+      FrameworkState::Capability.where(capability_id: @fx.shared.capability_id).update_all(ordinal: 2)
+      FrameworkState::Capability.where(capability_id: @fx.e_only.capability_id).update_all(ordinal: 1)
+    end
+
+    assert_equal [ "Systems Design", "Critical Thinking" ], call[:capabilities].map { |c| c[:name] }
+  end
+
   should "keep the person's score on a capability the snapshot has no median for" do
     ActsAsTenant.with_tenant(@tenant) do
       @snapshot.groups.find_by!(level_ordinal: 2).update!(capability_medians: { @fx.shared.stable_id => 0.5 })
