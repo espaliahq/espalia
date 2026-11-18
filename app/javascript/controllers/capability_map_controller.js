@@ -39,6 +39,17 @@ export default class extends BaseController {
     this.#reload({ tab, compare_level: compareLevel ?? null })
   }
 
+  /** Moves focus along the tab list; Enter or Space then opens the focused tab. */
+  moveTab(event) {
+    const tabs = [ ...this.element.querySelectorAll("[role='tab']") ]
+    const at = tabs.indexOf(event.currentTarget)
+    const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: tabs.length - 1 }[event.key]
+    if (to === undefined) return
+
+    event.preventDefault()
+    tabs[(to + tabs.length) % tabs.length].focus()
+  }
+
   viewTargetConnected(view) {
     const { zoom, tab, compareLevel } = view.dataset
     this.#keep({ zoom: zoom ?? null, tab: tab ?? null, compare_level: compareLevel ?? null })

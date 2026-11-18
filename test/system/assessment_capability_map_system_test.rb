@@ -207,6 +207,17 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       end
     end
 
+    should "move between the tabs with the arrow keys" do
+      open_map
+      wait_for_stimulus "capability-map"
+      page.execute_script("document.querySelector(\"#{MAP} [role='tab'][aria-selected='true']\").focus()")
+
+      press_arrow("ArrowRight")
+      assert_selector "#{MAP} [role='tab']:focus", text: "Compared with your level"
+      press_arrow("ArrowLeft")
+      assert_selector "#{MAP} [role='tab']:focus", text: "Capabilities"
+    end
+
     should "stay on the comparison, with the new score, when the person's own rating lands" do
       open_map
       wait_for_stimulus "capability-map"
@@ -380,6 +391,13 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       })()
     JS
     assert stacked, "expected the blades above the lanes"
+  end
+
+  # Dispatches the key from the focused tab, where a real keypress lands.
+  def press_arrow(key)
+    page.execute_script(<<~JS)
+      document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "#{key}", bubbles: true, cancelable: true }))
+    JS
   end
 
   def open_map

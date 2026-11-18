@@ -15,6 +15,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
 
   ID = "capability-map-modal"
   CONTENT_ID = "capability-map-content"
+  PANEL_ID = "capability-map-panel"
 
   FILL = {
     1 => "bg-(--gos-category-1-strong)", 2 => "bg-(--gos-category-2-strong)",
@@ -92,7 +93,13 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   end
 
   def content
-    tabs if @comparable
+    return views unless @comparable
+
+    tabs
+    div(id: PANEL_ID, role: "tabpanel", aria: { labelledby: tab_id(@compared ? "compare" : "capabilities") }) { views }
+  end
+
+  def views
     return div(data: { capability_map_target: "view", tab: "compare", compare_level: @compared.level_ordinal }) { render @compared } if @compared
 
     p(class: "text-sm text-muted -mt-1 mb-4") do
@@ -108,8 +115,8 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     end
   end
 
-  # Each tab reloads the content frame on the other; there are only two, so
-  # each takes a Tab stop rather than arrow-key focus.
+  # Each tab reloads the content frame on the other. The arrow keys move
+  # between them and Enter or Space opens one, as a tab list's should.
   def tabs
     div(class: "-mt-2 mb-4 flex gap-1 border-b border-default", role: "tablist", aria: { label: "Capability map views" }) do
       tab("Capabilities", key: "capabilities", selected: @compared.nil?)
@@ -118,11 +125,15 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   end
 
   def tab(label, key:, selected:)
-    button(type: "button", role: "tab", aria: { selected: selected.to_s },
+    button(type: "button", role: "tab", id: tab_id(key), tabindex: selected ? 0 : -1,
+           aria: { selected: selected.to_s, controls: PANEL_ID },
            class: "-mb-px border-b-2 px-3 py-2 text-sm font-medium #{selected ? 'border-strong text-default' : 'border-transparent text-muted hover:text-default'} " \
                   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-           data: { action: "capability-map#show", capability_map_tab_param: key, refresh_focus: "tab-#{key}" }) { label }
+           data: { action: "capability-map#show keydown->capability-map#moveTab", capability_map_tab_param: key,
+                   refresh_focus: "tab-#{key}" }) { label }
   end
+
+  def tab_id(key) = "capability-map-tab-#{key}"
 
   def how_to_read
     return "The radar's rim is #{@shape.codes.first} met." if @shape.codes.one?

@@ -696,6 +696,17 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
                      tabs.map { |t| [ t.text.strip, t["aria-selected"] ] }
       end
 
+      should "tie each tab to the panel it shows, with only the selected tab in the Tab order" do
+        map = compare
+        tabs = map.css("[role='tab']")
+        panel = map.at_css("[role='tabpanel']")
+
+        assert_equal [ [ "-1", "false" ], [ "0", "true" ] ], tabs.map { |t| [ t["tabindex"], t["aria-selected"] ] }
+        assert_equal [ panel["id"] ], tabs.map { |t| t["aria-controls"] }.uniq
+        assert_equal tabs.last["id"], panel["aria-labelledby"]
+        assert panel.at_css("[data-comparison-lane]"), "expected the comparison inside its panel"
+      end
+
       should "show the person's blades beside the group's middle score at their level, and when it was taken" do
         map = compare
 
