@@ -729,6 +729,11 @@ Someone can state the succession. The screen says which kind each field is.
 A unit whose people sit under different units above keeps its parent and is listed in
 the sync's result as split, for someone to resolve. Espalia never picks a majority.
 
+A parent read inside a unit's own structure ([#494](https://github.com/espaliahq/espalia/issues/494))
+is never written, since the HRIS's types belong to the top structure. A new unit starts with
+no parent and an existing one keeps its own. Each is kept as a sync issue, shown to admins on
+the HRIS page and in the unit's drawer, until a sync no longer reads it there.
+
 #### Handing a level over, and back (6.8)
 
 `Hris::LevelHandover` compares a level Espalia holds with the field it would come from,
