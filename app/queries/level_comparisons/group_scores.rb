@@ -25,12 +25,13 @@ class LevelComparisons::GroupScores
 
   private
 
+  # The latest cycle each person has a completed alignment in, by when the cycle opened.
   def settled
-    AssessmentCycleRoleAlignment
-      .where(home: true, status: "aligned")
-      .where(person_id: Person.active.remembered.select(:id))
-      .group_by { |row| [ row.person_id, row.framework_id ] }
-      .map { |_, rows| rows.max_by(&:aligned_at) }
+    rows = AssessmentCycleRoleAlignment.where(home: true, status: "aligned")
+      .where(person_id: Person.active.remembered.select(:id)).to_a
+    opened = AssessmentCycle.where(cycle_id: rows.map(&:cycle_id).uniq).pluck(:cycle_id, :opened_at).to_h
+    rows.group_by { |row| [ row.person_id, row.framework_id ] }
+      .map { |_, mine| mine.max_by { |row| [ opened.fetch(row.cycle_id, Time.at(0)), row.aligned_at ] } }
   end
 
   def groups_in(framework_id, rows)

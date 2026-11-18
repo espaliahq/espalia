@@ -34,7 +34,7 @@ class LevelComparisonSnapshotTest < ActiveSupport::TestCase
 
   def take = LevelComparisonSnapshot.take!(tenant: @tenant, on: Date.new(2026, 12, 1))
 
-  def engineers_at_e2(snapshot) = snapshot.group_for(role_id: @fx.engineer.role_id, level_ordinal: 2)
+  def engineers_at_e2(snapshot) = snapshot.groups.find_by(role_id: @fx.engineer.role_id, level_ordinal: 2)
 
   should "keep each capability's middle score across the role's people at the level" do
     3.times { settled(agreed: { @fx.shared => "consistent", @fx.e_only => "none" }) }
@@ -70,7 +70,8 @@ class LevelComparisonSnapshotTest < ActiveSupport::TestCase
   should "score a person on their latest completed alignment, not an earlier one" do
     person = settled(agreed: { @fx.shared => "consistent" })
     AssessmentCycleRoleAlignment.find_by!(person_id: person.id).update!(aligned_at: 1.day.ago)
-    earlier = create(:assessment_cycle, tenant: @tenant, framework_id: @fx.framework_id, status: "closed")
+    earlier = create(:assessment_cycle, tenant: @tenant, framework_id: @fx.framework_id, status: "closed",
+                                        opened_at: 1.year.ago)
     settled(person:, cycle: earlier, agreed: { @fx.shared => "none" })
     AssessmentCycleRoleAlignment.find_by!(person_id: person.id, cycle_id: earlier.cycle_id).update!(aligned_at: 1.year.ago)
 
@@ -78,6 +79,31 @@ class LevelComparisonSnapshotTest < ActiveSupport::TestCase
 
     assert_equal 1, group.group_size
     assert_equal 1.0, group.capability_medians[@fx.shared.stable_id]
+  end
+
+  should "take the middle of an even group as the mean of its two middle scores" do
+    settled(agreed: { @fx.shared => "consistent" })
+    settled(agreed: { @fx.shared => "none" })
+
+    assert_equal 0.5, engineers_at_e2(take).capability_medians[@fx.shared.stable_id]
+  end
+
+  should "score a person on their most recent cycle, even when an older one's alignment completed later" do
+    person = settled(agreed: { @fx.shared => "consistent" })
+    @cycle.update!(opened_at: 1.month.ago)
+    AssessmentCycleRoleAlignment.find_by!(person_id: person.id).update!(aligned_at: 1.week.ago)
+    older = create(:assessment_cycle, tenant: @tenant, framework_id: @fx.framework_id, status: "closed", opened_at: 1.year.ago)
+    settled(person:, cycle: older, agreed: { @fx.shared => "none" })
+    AssessmentCycleRoleAlignment.find_by!(person_id: person.id, cycle_id: older.cycle_id).update!(aligned_at: 1.day.ago)
+
+    assert_equal 1.0, engineers_at_e2(take).capability_medians[@fx.shared.stable_id]
+  end
+
+  should "leave out people who have been forgotten" do
+    2.times { settled(agreed: { @fx.shared => "consistent" }) }
+    settled(agreed: { @fx.shared => "none" }).update_columns(forgotten_at: Time.current, name: "Former member", email: nil)
+
+    assert_equal 2, engineers_at_e2(take).group_size
   end
 
   should "leave out people who have left" do

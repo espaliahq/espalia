@@ -11,8 +11,7 @@ class LevelComparisons::TakeDueSnapshotsJob < ApplicationJob
   # @param tenant [Tenant, nil] just this tenant, as when comparisons are turned on; every tenant when nil
   # @return [void]
   def perform(tenant = nil)
-    tenants = tenant ? [ tenant ] : Tenant.where("(comparison_config->>'enabled') IS DISTINCT FROM 'false'")
-    tenants.each { |t| take_if_due(t) }
+    tenant ? take_if_due(tenant) : Tenant.find_each { |t| take_if_due(t) }
   end
 
   private

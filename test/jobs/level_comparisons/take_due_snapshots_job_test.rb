@@ -58,6 +58,14 @@ class LevelComparisons::TakeDueSnapshotsJobTest < ActiveJob::TestCase
     assert_equal [ Date.new(2026, 11, 1) ], snapshot_days(utc)
   end
 
+  should "take none for a tenant turned back on in a month that already has one" do
+    tenant = snapshotted(on: Date.new(2026, 11, 1))
+
+    travel_to(Time.utc(2026, 11, 18, 9)) { LevelComparisons::TakeDueSnapshotsJob.perform_now(tenant) }
+
+    assert_equal [ Date.new(2026, 11, 1) ], snapshot_days(tenant)
+  end
+
   should "take none while comparisons are off" do
     tenant = snapshotted(on: nil, enabled: false)
 
