@@ -41,10 +41,12 @@ role/level (ADR-19) from a single bulk `AssessmentLevelRating` query.
 
 **Privacy — small-cohort suppression.** The invariant: never show an
 aggregate derived from data the viewer cannot open at the individual level.
-When suppression applies, any cell under `MIN_COHORT` (4) people keeps its
-coverage counts but hides buckets/percentages; family cells add a differencing
-guard (suppressed when the remainder behind visible role cells is a
-reconstructable 1..3 people). **Currently every attainment viewer is
+When suppression applies, any cell under the tenant's smallest group
+(`ComparisonConfig#min_group_size`: default 5, never below 4, set under Tenant
+admin → Comparisons and shared with the level comparison) keeps its coverage
+counts but hides buckets/percentages; family cells add a differencing guard
+(suppressed when the remainder behind visible role cells is a reconstructable
+1..floor−1 people). **Currently every attainment viewer is
 unsuppressed** (`AssessmentCyclePolicy#attainment_unsuppressed?`): since
 `AssessmentPolicy#show?` grants the full live manager chain individual view
 access, a manager's aggregate scope (`Person#all_reports`, the same live chart

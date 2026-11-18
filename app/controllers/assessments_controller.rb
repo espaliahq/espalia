@@ -194,8 +194,8 @@ class AssessmentsController < ApplicationController
     zoom = params[:zoom].to_s
     render Views::Assessments::CapabilityMapModal.for(
       matrix_data: @matrix_data, scoring: hero_scoring, context: assessment_context,
-      whose: manager_viewing? ? @assessee&.name || "This person" : nil, part: :frame,
-      zoom: zoom == "all" ? :all : zoom.presence
+      whose: map_whose, part: :frame, zoom: zoom == "all" ? :all : zoom.presence,
+      comparable: comparable?, compared: (compared_panel if comparable? && params[:tab] == "compare")
     ), layout: false
   end
 
@@ -218,6 +218,41 @@ class AssessmentsController < ApplicationController
   end
 
   private
+
+  def map_whose = manager_viewing? ? @assessee&.name || "This person" : nil
+
+  def comparable? = Assessments::LevelComparison.offered?(tenant: ActsAsTenant.current_tenant, lens:)
+
+  # The comparison tab at the level asked for, or the person's own when that
+  # isn't one on offer.
+  #
+  # @return [Views::Assessments::LevelComparisonPanel, nil] nil when comparisons are off
+  def compared_panel
+    comparison = level_comparison(params[:compare_level].presence) || level_comparison(nil)
+    return unless comparison&.dig(:enabled)
+
+    at = Assessments::Lens.resolve(assignment: @assignment, as_level: comparison.dig(:level, :ordinal))
+    context = Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user, lens: at)
+    Views::Assessments::LevelComparisonPanel.new(
+      comparison:, context:, whose: map_whose, shape: (compared_shape(at, context) if comparison.dig(:level, :group_size))
+    )
+  end
+
+  def level_comparison(level_ordinal)
+    Operations::Assessments::LevelComparison.call(
+      context: pundit_user, params: { assignment_id: @assignment.id, level_ordinal: level_ordinal&.to_i }.compact
+    )
+  rescue Operations::Base::ParameterError
+    nil
+  end
+
+  # The person's blades on the compared level's scale, so both shapes share it.
+  def compared_shape(at, context)
+    data = Assessments::MatrixDataBuilder.for_lens(lens: at, context:, viewer_person_id: current_person&.id)
+    scoring = { self: :self_scoring, manager: :manager_scoring, alignment: :aligned_scoring }[context]
+    Assessments::CapabilityShape.new(categories: data[:categories], scoring: data[scoring] || data[:scoring],
+                                     merged_levels: data[:merged_levels], person_level: data[:person_level], context:)
+  end
 
   def activity_pane_open?
     toggle = Views::Assessments::Activity::PaneToggle

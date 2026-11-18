@@ -15,6 +15,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
 
   ID = "capability-map-modal"
   CONTENT_ID = "capability-map-content"
+  PANEL_ID = "capability-map-panel"
 
   FILL = {
     1 => "bg-(--gos-category-1-strong)", 2 => "bg-(--gos-category-2-strong)",
@@ -34,30 +35,43 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   # @param part [Symbol] see {#initialize}
   # @param src [String, nil] where the content frame reloads from
   # @param zoom [String, Symbol, nil] see `Assessments::CapabilityShape#initialize`
+  # @param comparable [Boolean] whether the tenant lets people compare with their level, which adds the tabs
+  # @param compared [Views::Assessments::LevelComparisonPanel, nil] the comparison tab's contents, shown in place
+  #   of the capabilities when given
   # @return [Views::Assessments::CapabilityMapModal]
-  def self.for(matrix_data:, scoring:, context:, whose: nil, part: :modal, src: nil, zoom: nil)
+  def self.for(matrix_data:, scoring:, context:, whose: nil, part: :modal, src: nil, zoom: nil, comparable: false,
+               compared: nil)
     code = matrix_data[:merged_levels].find { |l| l[:ordinal] == matrix_data[:person_level] }&.dig(:level_code)
     new(
       shape: Assessments::CapabilityShape.new(
         categories: matrix_data[:categories], scoring: scoring, merged_levels: matrix_data[:merged_levels],
         person_level: matrix_data[:person_level], context: context, zoom: zoom
       ),
-      subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you", part: part, src: src
+      subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you", part: part, src: src,
+      possessive: whose ? "their" : "your",
+      comparable: comparable || compared.present?, compared: compared
     )
   end
 
   # @param shape [Assessments::CapabilityShape]
   # @param subject [String] who and where, "Alex at E3"
   # @param assessed_as [String] the assessed ring's label, "you" or "assessed"
+  # @param possessive [String] whose level the comparison tab names, "your" or "their"
   # @param part [Symbol] :modal for the page, :content for a stream into
   #   `CONTENT_ID`, :frame for that frame on its own
   # @param src [String, nil] where the content frame reloads from
-  def initialize(shape:, subject:, assessed_as: "you", part: :modal, src: nil)
+  # @param comparable [Boolean] see {.for}
+  # @param compared [Views::Assessments::LevelComparisonPanel, nil] see {.for}
+  def initialize(shape:, subject:, assessed_as: "you", possessive: "your", part: :modal, src: nil, comparable: false,
+                 compared: nil)
     @shape = shape
     @subject = subject
     @assessed_as = assessed_as
+    @possessive = possessive
     @part = part
     @src = src
+    @comparable = comparable
+    @compared = compared
   end
 
   def view_template
@@ -83,11 +97,21 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   end
 
   def content
+    return views unless @comparable
+
+    tabs
+    div(id: PANEL_ID, role: "tabpanel", tabindex: 0, aria: { labelledby: tab_id(@compared ? "compare" : "capabilities") },
+        class: "rounded-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus") { views }
+  end
+
+  def views
+    return div(data: { capability_map_target: "view", tab: "compare", compare_level: @compared.level_ordinal }) { render @compared } if @compared
+
     p(class: "text-sm text-muted -mt-1 mb-4") do
       "#{@subject}. #{how_to_read} Open a capability from its spoke or its lane."
     end
     div(class: "grid gap-6 lg:grid-cols-[minmax(20rem,29rem)_minmax(0,1fr)] lg:items-start",
-        data: { capability_map_target: "view", zoom: @shape.zoom || "all" }) do
+        data: { capability_map_target: "view", tab: "capabilities", zoom: @shape.zoom || "all" }) do
       div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
         render Views::Assessments::CapabilityRadar.new(shape: @shape, size: :detailed, assessed_as: @assessed_as)
         zoom_out_toggle if @shape.zoomable?
@@ -95,6 +119,26 @@ class Views::Assessments::CapabilityMapModal < Views::Base
       div { lanes }
     end
   end
+
+  # Each tab reloads the content frame on the other. The arrow keys move
+  # between them and Enter or Space opens one, as a tab list's should.
+  def tabs
+    div(class: "-mt-2 mb-4 flex gap-1 border-b border-default", role: "tablist", aria: { label: "Capability map views" }) do
+      tab("Capabilities", key: "capabilities", selected: @compared.nil?)
+      tab("Compared with #{@possessive} level", key: "compare", selected: @compared.present?)
+    end
+  end
+
+  def tab(label, key:, selected:)
+    button(type: "button", role: "tab", id: tab_id(key), tabindex: selected ? 0 : -1,
+           aria: { selected: selected.to_s, controls: PANEL_ID },
+           class: "-mb-px border-b-2 px-3 py-2 text-sm font-medium #{selected ? 'border-strong text-default' : 'border-transparent text-muted hover:text-default'} " \
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+           data: { action: "capability-map#show keydown->capability-map#moveTab", capability_map_tab_param: key,
+                   refresh_focus: "tab-#{key}" }) { label }
+  end
+
+  def tab_id(key) = "capability-map-tab-#{key}"
 
   def how_to_read
     return "The radar's rim is #{@shape.codes.first} met." if @shape.codes.one?

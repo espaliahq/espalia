@@ -146,7 +146,10 @@ module Assessments::TurboStreamHelpers
       Views::Assessments::CapabilityMapModal::CONTENT_ID,
       render_to_string(
         Views::Assessments::CapabilityMapModal.for(matrix_data: matrix_data, scoring: primary, context: context,
-                                                   whose: whose, part: :content),
+                                                   whose: whose, part: :content,
+                                                   comparable: Assessments::LevelComparison.offered?(
+                                                     tenant: ActsAsTenant.current_tenant, lens: response_lens
+                                                   )),
         layout: false
       )
     )

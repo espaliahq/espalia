@@ -1,0 +1,50 @@
+{
+  "name": "tenants_update_comparisons",
+  "description": "Set how people in the active tenant compare their capabilities with others on their role at a level: enabled turns the comparison on or off; min_group_size is the fewest people a level needs before its scores show (at least 4, default 5) on the comparison, and in the capability attainment report to a viewer who can't open every assessment in the group (today every viewer of that report can); snapshot_every_months is how often the group scores are taken, on the 1st of the month (1, 3 or 6, default 1). Only the settings given change. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "min_group_size": {
+        "type": "integer",
+        "minimum": 4,
+        "maximum": 100
+      },
+      "snapshot_every_months": {
+        "type": "integer",
+        "enum": [
+          1,
+          3,
+          6
+        ]
+      }
+    },
+    "required": [],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "enabled"
+        ]
+      },
+      {
+        "required": [
+          "min_group_size"
+        ]
+      },
+      {
+        "required": [
+          "snapshot_every_months"
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

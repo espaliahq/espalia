@@ -106,7 +106,8 @@ class Views::Assessments::ManagerShowView < Views::Base
       )
       render Views::Assessments::CapabilityMapModal.for(
         matrix_data: @matrix_data, scoring: primary_scoring, context: @context, whose: @assessee.name,
-        src: capability_map_assessment_path(@assignment, lens_params)
+        src: capability_map_assessment_path(@assignment, lens_params),
+        comparable: @current_tenant.present? && Assessments::LevelComparison.offered?(tenant: @current_tenant, lens: @matrix_data[:lens])
       )
       render_lens_role_modal(assessee_name: @assessee.name)
       render_exploration_modals(assessee_name: @assessee.name)

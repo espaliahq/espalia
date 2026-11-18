@@ -1,0 +1,16 @@
+{
+  "name": "tenants_comparisons",
+  "description": "Read how people in the active tenant compare their capabilities with others on their role at a level: whether it is on, the smallest group that shows, how often the group scores are taken, when the snapshot comparisons show was taken and when the next is due. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

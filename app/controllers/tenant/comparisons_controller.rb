@@ -1,0 +1,48 @@
+# frozen_string_literal: true
+
+# Whether people can compare their assessment with their level, the smallest
+# group that shows, and how often the group scores are taken. Tenant admins only.
+class Tenant::ComparisonsController < ApplicationController
+  # GET /tenant/comparisons
+  def show
+    authorize ActsAsTenant.current_tenant, :update_comparisons?, policy_class: TenantPolicy
+    render_page
+  end
+
+  # PATCH /tenant/comparisons
+  def update
+    authorize ActsAsTenant.current_tenant, :update_comparisons?, policy_class: TenantPolicy
+    result = Operations::Tenants::UpdateComparisons.call(context: pundit_user, params: comparison_params)
+    redirect_to tenant_comparisons_path, notice: "Comparisons are #{result[:enabled] ? 'on' : 'off'}. Saved.",
+                                         status: :see_other
+  rescue Operations::Base::ParameterError => e
+    flash.now[:alert] = "The comparison settings could not be saved: #{e.message.delete_suffix('.')}."
+    render_page(submitted: submitted.to_h.symbolize_keys, status: :unprocessable_content)
+  end
+
+  private
+
+  def submitted = params.expect(comparisons: [ :enabled, :min_group_size, :snapshot_every_months ])
+
+  def comparison_params
+    raw = submitted
+    { enabled: (ActiveModel::Type::Boolean.new.cast(raw[:enabled]) if raw.key?(:enabled)),
+      min_group_size: whole_number(raw[:min_group_size], "Smallest group"),
+      snapshot_every_months: whole_number(raw[:snapshot_every_months], "Snapshot interval") }.compact
+  end
+
+  # @raise [Operations::Base::ParameterError] for anything but a whole number, rather than rounding it
+  def whole_number(value, name)
+    return if value.blank?
+
+    Integer(value, 10, exception: false) || raise(Operations::Base::ParameterError, "#{name} must be a whole number")
+  end
+
+  def render_page(submitted: {}, status: :ok)
+    tenant = ActsAsTenant.current_tenant
+    render Views::Tenant::Comparisons::ShowView.new(
+      settings: Operations::Tenants::Comparisons.payload(tenant), submitted:, user: current_user, current_tenant: tenant,
+      tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a }
+    ), status:
+  end
+end

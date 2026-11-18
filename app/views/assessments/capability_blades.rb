@@ -94,11 +94,12 @@ class Views::Assessments::CapabilityBlades < Views::Base
   # Degrees clockwise from twelve o'clock to where slot `i` starts.
   def start(i) = -90.0 + (i * 360.0 / points.size)
 
+  def wedge(radius, from, to) = "M0 0 L#{xy(radius, start(from)).join(' ')} #{arcs(radius, from, to)} Z"
+
   # Slots `from` up to `to`, arced half a slot at a time so no arc passes
   # 180 degrees, even a lone capability's full circle.
-  def wedge(radius, from, to)
-    arcs = (from * 2...to * 2).map { |half| "A#{radius} #{radius} 0 0 1 #{xy(radius, start((half + 1) / 2.0)).join(' ')}" }
-    "M0 0 L#{xy(radius, start(from)).join(' ')} #{arcs.join(' ')} Z"
+  def arcs(radius, from, to)
+    (from * 2...to * 2).map { |half| "A#{radius} #{radius} 0 0 1 #{xy(radius, start((half + 1) / 2.0)).join(' ')}" }.join(" ")
   end
 
   def xy(radius, degrees)

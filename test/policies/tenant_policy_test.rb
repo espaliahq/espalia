@@ -18,6 +18,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_theme?
       assert_not policy.update_scoring_vocabulary?
       assert_not policy.update_time_zone?
+      assert_not policy.update_comparisons?
       assert_not policy.update_retention_period?
       assert_not policy.manage_org_graph_editors?
       assert_not policy.forget_person?
@@ -42,6 +43,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_theme?
       assert_not policy.update_scoring_vocabulary?
       assert_not policy.update_time_zone?
+      assert_not policy.update_comparisons?
       assert_not policy.update_retention_period?
       assert_not policy.manage_org_graph_editors?
       assert_not policy.forget_person?
@@ -86,6 +88,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.update_theme?
       assert policy.update_scoring_vocabulary?
       assert policy.update_time_zone?
+      assert policy.update_comparisons?
       assert policy.update_retention_period?
       assert policy.manage_org_graph_editors?
       assert policy.forget_person?
@@ -117,6 +120,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.update_theme?
       assert policy.update_scoring_vocabulary?
       assert policy.update_time_zone?
+      assert policy.update_comparisons?
       assert policy.update_retention_period?
       assert policy.manage_org_graph_editors?
       assert policy.forget_person?
