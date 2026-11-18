@@ -109,6 +109,9 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_equal Person::FORMER_MEMBER, baseline[:names].fetch(@quinn.id)
     changes = Operations::OrgGraph::ChangesBetween.call(context: lead_context, params: params_for("org_graph_changes_between"))
     assert_includes changes[:changes].map { it[:person_id] }, @quinn.id, "org_graph_changes_between reads an empty Org Graph here"
+    team = Operations::Assessments::TeamCapabilities.call(context: lead_context, params: params_for("assessments_team_capabilities"))
+    assert_equal [ 1, 100 ], [ team[:scored], team[:capabilities].find { it[:stable_id] == @fx.shared.stable_id }&.dig(:score) ],
+                 "assessments_team_capabilities leaves out a forgotten person's self-rating"
     rates = Operations::Tenants::ExchangeRates.call(context: lead_context, params: {})
     assert_equal Person::FORMER_MEMBER, rates[:reference_currency][:updated_by], "tenants_exchange_rates names the reference currency's editor"
   end

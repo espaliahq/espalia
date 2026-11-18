@@ -33,14 +33,35 @@ export default class extends BaseController {
     const target = event.type === "turbo:before-frame-render" ? event.target.id : event.target.getAttribute("target")
     if (!this.contentValue || target !== this.contentValue) return
 
-    const selector = this.#selectorFor(document.activeElement)
-    if (!selector) return
-
+    // Turbo renders a frame a repaint after this event, so focus is read when the replacement actually runs.
     const render = event.detail.render
     event.detail.render = async (...args) => {
+      const before = document.activeElement
+      const selector = this.#selectorFor(before)
       await render(...args)
-      this.element.querySelector(selector)?.focus({ preventScroll: true })
+      if (!selector || before.isConnected || !this.#focusDropped()) return
+
+      const focused = this.element.querySelector(selector)
+      focused?.focus({ preventScroll: true })
+      if (focused) this.#revealSideways(focused)
     }
+  }
+
+  /** True when the replacement took focus with it and nothing else has claimed it since. */
+  #focusDropped() {
+    const active = document.activeElement
+    return !active || active === document.body || !active.isConnected
+  }
+
+  /** A re-rendered strip starts scrolled to its start, so bring the focused item back into it without moving the dialog. */
+  #revealSideways(element) {
+    const strip = element.parentElement?.closest(".overflow-x-auto")
+    if (!strip) return
+
+    const item = element.getBoundingClientRect()
+    const bounds = strip.getBoundingClientRect()
+    if (item.right > bounds.right) strip.scrollLeft += Math.ceil(item.right - bounds.right)
+    else if (item.left < bounds.left) strip.scrollLeft -= Math.ceil(bounds.left - item.left)
   }
 
   #selectorFor(focused) {

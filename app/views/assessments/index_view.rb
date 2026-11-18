@@ -24,10 +24,11 @@ class Views::Assessments::IndexView < Views::Base
   #   keyed by assignment id
   # @param explorations [Hash{String => Array<Assessments::OpenExplorations::Entry>}] open declared
   #   explorations keyed by assignment id
+  # @param team [Hash, nil] `Operations::Assessments::TeamCapabilities`'s payload; nil for no team card
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(assignments:, report_assignments: [], skip_level_assignments: [], skip_level_pagy: nil, report_people: {}, open_cycles: {}, card_statuses: {}, card_shapes: {}, explorations: {}, user: nil, current_tenant: nil, tenants: [])
+  def initialize(assignments:, report_assignments: [], skip_level_assignments: [], skip_level_pagy: nil, report_people: {}, open_cycles: {}, card_statuses: {}, card_shapes: {}, explorations: {}, team: nil, user: nil, current_tenant: nil, tenants: [])
     @assignments = assignments
     @report_assignments = report_assignments
     @skip_level_assignments = skip_level_assignments
@@ -37,6 +38,7 @@ class Views::Assessments::IndexView < Views::Base
     @card_statuses = card_statuses
     @card_shapes = card_shapes
     @explorations = explorations
+    @team = team
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -49,7 +51,7 @@ class Views::Assessments::IndexView < Views::Base
       page_header
       assignments_list
       explorations_section
-      report_assignments_section if @report_assignments.any?
+      report_assignments_section if @report_assignments.any? || @team
       skip_level_assignments_section if @skip_level_assignments.any?
     end
   end
@@ -137,8 +139,11 @@ class Views::Assessments::IndexView < Views::Base
       p(class: "text-sm text-muted mb-4") do
         "Review and rate your direct reports\u2019 assessments."
       end
-      div(class: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3") do
-        @report_assignments.each { |a| report_assignment_card(a) }
+      div(class: "mb-4") { render Views::Assessments::TeamCard.new(team: @team) } if @team
+      if @report_assignments.any?
+        div(class: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3") do
+          @report_assignments.each { |a| report_assignment_card(a) }
+        end
       end
     end
   end

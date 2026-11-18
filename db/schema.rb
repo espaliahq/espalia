@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_18_045448) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_174112) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -713,6 +713,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_045448) do
     t.jsonb "category_medians", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "capability_counts", default: {}, null: false
+    t.jsonb "category_counts", default: {}, null: false
     t.index ["snapshot_id", "role_id", "level_ordinal"], name: "idx_on_snapshot_id_role_id_level_ordinal_9db6c1f62a", unique: true
   end
 

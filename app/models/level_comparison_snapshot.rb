@@ -27,4 +27,8 @@ class LevelComparisonSnapshot < ApplicationRecord
 
   # @return [LevelComparisonSnapshot, nil] the snapshot comparisons show now
   def self.latest = order(taken_on: :desc).first
+
+  # @return [Boolean] false for one taken before contributor counts were kept,
+  #   whose medians are all withheld until it is retaken
+  def counted? = groups.none? { |group| group.capability_counts.empty? && group.capability_medians.any? }
 end

@@ -154,7 +154,10 @@ export default class extends BaseController {
   retry() {
     if (!this.hasFrameTarget || !this.requestedUrl) return
     this.retried = true
+    const heldFocus = this.hasErrorTarget && this.errorTarget.contains(document.activeElement)
     this.#showFrame()
+    // Hiding the error takes the focused Retry with it; a focusable host (a modal's panel) keeps focus in the dialog.
+    if (heldFocus && this.element.hasAttribute("tabindex")) this.element.focus({ preventScroll: true })
 
     const frame = this.frameTarget
     // Changing `src` is the whole retry — no `loading` flip needed. Turbo's

@@ -208,7 +208,7 @@ Version lifecycle:
 
 ## Projections
 
-**Published Framework State** — Primary read model. Routes events by shape classification: **shape-changing** events are skipped while `draft_in_progress` is true and replayed on `FrameworkVersionPublished`; **editorial** events apply immediately regardless of draft state. On publish, `destroy_framework_children` wipes child read models and `handle()` replays every event from the stream — this is the single replay path. What assessors, managers, and reporting see.
+**Published Framework State** — Primary read model. Routes events by shape classification: **shape-changing** events are skipped while `draft_in_progress` is true and replayed on `FrameworkVersionPublished`; **editorial** events apply immediately regardless of draft state. On publish, `destroy_framework_children` wipes child read models and `handle()` replays every event from the stream up to that publish — this is the single replay path. Stopping at the publish keeps a projection rebuild from applying a draft opened after it. What assessors, managers, and reporting see.
 
 **Draft / Editor View** — Replays ALL events to head. Includes pending structural changes and pending suggested edits inline. What framework editors see during draft phase.
 

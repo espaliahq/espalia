@@ -53,6 +53,17 @@ class LevelComparisonSnapshotTest < ActiveSupport::TestCase
     assert_equal({ @fx.shared.category_id => 1.0 }, engineers_at_e2(take).category_medians)
   end
 
+  # An unrated capability scores 0 on a settled assessment, so it still counts its person.
+  should "count the people each capability and category median rests on" do
+    3.times { settled(agreed: { @fx.shared => "consistent", @fx.e_only => "none" }) }
+    2.times { settled(agreed: { @fx.shared => "consistent" }) }
+
+    group = engineers_at_e2(take)
+
+    assert_equal({ @fx.shared.stable_id => 5, @fx.e_only.stable_id => 5 }, group.capability_counts)
+    assert_equal({ @fx.shared.category_id => 5 }, group.category_counts)
+  end
+
   should "count only settled assessments, each person's latest" do
     3.times { settled(agreed: { @fx.shared => "consistent" }) }
     settled(agreed: { @fx.shared => "consistent" }, status: "aligning")

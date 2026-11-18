@@ -313,6 +313,96 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
                     count: 1
     end
 
+    should "head Team Assessments with the team's blades once two reports have a score" do
+      rate_as_manager(@person, @cap, "consistent")
+      2.times { |i| rate_as_manager(add_report("Report #{i}"), @cap, "none") }
+      sign_in @manager_user
+      get assessments_path
+
+      assert_select "#team-card", text: /3 direct reports · Software Engineer · manager ratings/
+      assert_select "#team-card [data-team-blades][aria-label='0 of 1 capabilities met as a team']", count: 1
+      assert_select "#team-card [data-team-gap]", text: "Critical Thinking · 2 of 3 short"
+    end
+
+    should "keep the page out of the browser's cache, since it shows the team's scores" do
+      sign_in @manager_user
+      get assessments_path
+
+      assert_equal "no-store", response.headers["Cache-Control"]
+    end
+
+    should "offer a retry when the team map fails to load" do
+      2.times { |i| rate_as_manager(add_report("Report #{i}"), @cap, "consistent") }
+      sign_in @manager_user
+      get assessments_path
+
+      assert_select "#team-map-modal [data-controller~='frame-error']" do
+        assert_select "turbo-frame#team-map[data-frame-error-target='frame']", count: 1
+        assert_select "#team-map-error[hidden]", count: 1
+      end
+    end
+
+    should "read only the people and role the card offers, so its map opens on the same team" do
+      2.times { |i| rate_as_manager(add_report("Report #{i}"), @cap, "consistent") }
+      sign_in @manager_user
+      get assessments_path(team_level: 9, team_ratings: "self")
+
+      assert_select "#team-card", text: /3 direct reports · Software Engineer · manager ratings/
+      assert_select "#team-card [data-team-blades]", count: 1
+      assert_select "turbo-frame#team-map[src]" do |frame|
+        assert_no_match(/team_level|team_ratings|team_compare/, frame.first["src"])
+      end
+    end
+
+    should "widen the team card to everyone below the manager" do
+      rate_as_manager(@person, @cap, "consistent")
+      ActsAsTenant.with_tenant(@tenant) { rate_as_manager(add_report("Report one").tap { |r| r.update!(manager: @person) }, @cap, "none") }
+      sign_in @manager_user
+      get assessments_path(team_people: "below")
+
+      assert_select "#team-card", text: /2 people below you/
+      assert_select "#team-card a[aria-current='page']", text: "Everyone below you"
+    end
+
+    should "show the team on the role picked from the role menu" do
+      staff, staff_level = add_staff_role
+      rate_as_manager(@person, @cap, "consistent")
+      rate_as_manager(add_report("Staff one", role: staff, level: staff_level), @cap, "none")
+      sign_in @manager_user
+      get assessments_path(team_role: staff.role_id)
+
+      assert_select "#team-card [data-team-roles] [aria-haspopup]", text: /Staff Engineer/
+      assert_select "#team-card", text: /1 of 1 has one so far/
+    end
+
+    should "show a blank slate on the team card until two reports have a score" do
+      rate_as_manager(@person, @cap, "consistent")
+      add_report("Report one")
+      sign_in @manager_user
+      get assessments_path
+
+      assert_select "#team-card [data-team-blank]", count: 1
+      assert_select "#team-card", text: /1 of 2 has one so far/
+      assert_select "#team-card [data-team-blades]", count: 0
+    end
+
+    should "leave out the team card for a rating delegate with no direct reports" do
+      delegate_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        delegate = create(:person, tenant: @tenant, email: delegate_user.email, name: "Delegate")
+        create(:tenant_user, tenant: @tenant, user: delegate_user, person: delegate)
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @person.id,
+                                               framework_id: @assignment.framework_id, delegate_person_id: delegate.id,
+                                               granted_by_id: @manager.id)
+      end
+
+      sign_in delegate_user
+      get assessments_path
+
+      assert_includes response.body, "Team Assessments"
+      assert_select "#team-card", count: 0
+    end
+
     should "draw every card's blades in the same number of queries, however many cards" do
       rate_as_manager(@person, @cap, "consistent")
       sign_in @manager_user
@@ -420,9 +510,9 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Skip-Level Assessments"
       assert_includes response.body, @person.name
-      # The direct-report team section only renders when a direct report has
-      # an assignment — the manager in between has none here.
-      assert_not_includes response.body, "Team Assessments"
+      # The manager in between has no assignment, so only the team card can reach everyone below.
+      assert_select "#team-card", text: /None of your reports is in an open assessment cycle yet/
+      assert_select "#team-card a", text: "Everyone below you"
     end
 
     should "paginate the skip-level section beyond #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE} assignments" do
@@ -681,7 +771,9 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
             @snapshot.groups.create!(tenant: @tenant, framework_id: @assignment.framework_id, role_id: @role.role_id,
                                      level_ordinal: level, group_size: size,
                                      capability_medians: { @cap.stable_id => median },
-                                     category_medians: { @cap.category_id => median })
+                                     capability_counts: { @cap.stable_id => size },
+                                     category_medians: { @cap.category_id => median },
+                                     category_counts: { @cap.category_id => size })
           end
         end
         rate(@cap, "consistent")

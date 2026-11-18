@@ -285,6 +285,7 @@ Rails.application.routes.draw do
 
   # Declared before `resources :assessments` so the path isn't read as an id.
   get "assessments/how-it-works", to: "assessment_guides#show", as: :assessment_guide
+  get "assessments/team-map", to: "assessments/team_maps#show", as: :team_map_assessments
 
   resources :assessments, only: [ :index, :show ] do
     member do
