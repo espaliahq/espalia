@@ -1105,7 +1105,11 @@ class OrgGraph::StructureAggregate
     apply_conversion(moved, conversion, on, moved_by_id)
   end
 
+  # A unit an HRIS supplies keeps the HRIS's type, so only Espalia's convert.
   def ensure_movable_into!(moved, into)
+    if (supplied = moved.find { it.provider != ESPALIA })
+      raise "#{supplied.provider} supplies #{supplied.name}, so it can't move into #{structure_label(into)}"
+    end
     return unless (declaring = moved.find { @structures.key?(it.unit_id) })
 
     raise "#{declaring.name} has a structure of its own, so it can't move into #{structure_label(into)} yet"

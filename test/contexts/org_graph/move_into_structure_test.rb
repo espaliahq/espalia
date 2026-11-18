@@ -136,6 +136,12 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     end
     error = assert_raises(RuntimeError) { move_in(unit: hris, conversion: { @region => @group }) }
     assert_equal "hibob supplies this unit; change it there", error.message
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @admin.move_unit(hris, @payments, effective_on: @today + 1, provider: "hibob", conversion: { @region => @group }) }
+    end
+    assert_equal "hibob supplies Imported, so it can't move into Payments's structure", error.message
+    assert_equal @region, structure.unit(hris).level_id
   end
 
   should "refuse an owner of both units who may not change the structure, before any check of the move" do
