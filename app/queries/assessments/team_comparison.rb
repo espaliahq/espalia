@@ -48,12 +48,15 @@ class Assessments::TeamComparison
   def snapshot
     return @snapshot if defined?(@snapshot)
 
-    @snapshot = ActsAsTenant.with_tenant(@tenant) { LevelComparisonSnapshot.latest }
+    @snapshot = groups.values.first&.snapshot || ActsAsTenant.with_tenant(@tenant) { LevelComparisonSnapshot.latest }
   end
 
+  # Read with the latest snapshot in one statement, so a snapshot replaced meanwhile can't leave them behind.
   def groups
     @groups ||= ActsAsTenant.with_tenant(@tenant) do
-      snapshot.groups.where(role_id: @role_id, level_ordinal: @level_counts.keys).index_by(&:level_ordinal)
+      latest = LevelComparisonSnapshot.order(taken_on: :desc).limit(1).select(:id)
+      LevelComparisonGroup.eager_load(:snapshot)
+        .where(snapshot_id: latest, role_id: @role_id, level_ordinal: @level_counts.keys).index_by(&:level_ordinal)
     end
   end
 

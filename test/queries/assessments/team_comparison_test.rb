@@ -48,6 +48,16 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     assert compare({ 2 => 1, 3 => 3 }).shown?
   end
 
+  should "read the day's snapshot with its groups when it is replaced between reads" do
+    stale = @snapshot
+    @snapshot = LevelComparisonSnapshot.new(tenant: @tenant, taken_on: stale.taken_on)
+    stale.groups.each { |g| @snapshot.groups.build(g.attributes.except("id", "snapshot_id", "created_at", "updated_at")) }
+    stale.destroy!
+    @snapshot.save!
+
+    LevelComparisonSnapshot.stub(:latest, stale) { assert compare({ 2 => 1, 3 => 3 }).shown? }
+  end
+
   should "say when there is no snapshot yet" do
     @snapshot.destroy!
 
