@@ -24,14 +24,16 @@ class OrgGraph::UnitsOverview
   # @param selected_unit_id [String, nil] the unit to open; the first root
   #   unit when nil or not a live unit
   def initialize(selected_unit_id: nil)
-    @levels = OrgTaxonomyLevel.top_structure.to_a
-    @structures = OrgTaxonomyLevel.where.not(structure_unit_id: nil).order(:position).group_by(&:structure_unit_id)
-    @units = OrgUnit.live.to_a.index_by(&:id)
+    one_snapshot do
+      @levels = OrgTaxonomyLevel.top_structure.to_a
+      @structures = OrgTaxonomyLevel.where.not(structure_unit_id: nil).order(:position).group_by(&:structure_unit_id)
+      @units = OrgUnit.live.to_a.index_by(&:id)
+      @memberships = OrgMembership.where(unit_id: @units.keys).joins(:person).merge(Person.active)
+                                  .includes(:person).to_a.group_by(&:unit_id)
+                                  .transform_values { |list| list.sort_by { |membership| membership.person.name } }
+    end
     @children = @units.values.group_by { |unit| @units.key?(unit.parent_id) ? unit.parent_id : nil }
                       .transform_values { |units| units.sort_by(&:name) }
-    @memberships = OrgMembership.where(unit_id: @units.keys).joins(:person).merge(Person.active)
-                                .includes(:person).to_a.group_by(&:unit_id)
-                                .transform_values { |list| list.sort_by { |membership| membership.person.name } }
     @selected_unit_id = selected_unit_id
   end
 
@@ -148,6 +150,15 @@ class OrgGraph::UnitsOverview
   end
 
   private
+
+  # A declaration changes types and units in one commit, so reading them in
+  # separate snapshots could pair a unit with types it no longer has. A
+  # transaction already open has its own isolation, which can't change.
+  def one_snapshot(&)
+    return yield if ActiveRecord::Base.connection.transaction_open?
+
+    ActiveRecord::Base.transaction(isolation: :repeatable_read, &)
+  end
 
   def levels_by_id = @levels_by_id ||= all_levels.index_by(&:id)
 
