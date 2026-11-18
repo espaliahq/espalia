@@ -25,12 +25,11 @@ class Views::Assessments::TeamMap < Views::Base
       lead
       controls
       if @team[:role].nil? || @team[:scored_on_role] < Views::Assessments::TeamCard::MIN_SCORED
-        render Components::Kit::EmptyState.new(title: "Shows once at least two of your reports have a score",
-                                               size: :panel)
+        blank("Shows once at least two of your reports have a score")
       elsif @team[:level_ordinal] && @team[:in_view].zero?
         render Components::Kit::EmptyState.new(title: "No reports match this level", size: :panel)
       elsif @team[:scored].zero?
-        render Components::Kit::EmptyState.new(title: "Nobody in view has a score yet", size: :panel)
+        blank("Nobody in view has a score yet")
       else
         map
       end
@@ -38,6 +37,16 @@ class Views::Assessments::TeamMap < Views::Base
   end
 
   private
+
+  # Agreed ratings need half agreed, though a completed alignment's own score shows with fewer.
+  def blank(title)
+    render Components::Kit::EmptyState.new(title:, size: :panel) do
+      if @team[:ratings] == "aligned"
+        "With agreed ratings, a report counts once at least half the capabilities at their level are agreed, " \
+          "even where their completed alignment already shows a score."
+      end
+    end
+  end
 
   def team_path(**overrides) = team_map_assessments_path(team_choices.merge(overrides).compact)
 

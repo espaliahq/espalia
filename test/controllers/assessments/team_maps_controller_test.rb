@@ -80,6 +80,13 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#team-map a[aria-current='page']", text: "Self"
   end
 
+  should "say when agreed ratings count a report, which can be later than their assessment shows a score" do
+    sign_in @user
+    get team_map_assessments_path(team_ratings: "aligned")
+
+    assert_select "#team-map", text: /at least half the capabilities at their level are agreed, even where their completed alignment already shows a score/
+  end
+
   context "compared with everyone on the role at the team's levels" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
