@@ -15,7 +15,7 @@ class Operations::OrgGraph::AsOf < Operations::Base
   description "Read the Org Graph as it stood on one date: the live units with their parent, " \
               "level, owners and direct member count, the top structure's unit types with the type ids each " \
               "could sit under (parent_ids) and whether it could sit at the top, the same for each unit " \
-              "that had a structure of its own (structures, by unit_id), and the number of employed people. A future " \
+              "that had a structure of its own (structures, by unit_id and its name that day), and the number of employed people. A future " \
               "date includes changes already recorded for it, such as a hire who starts then or a " \
               "scheduled move. known_on reads what the Org Graph knew at the end of that earlier " \
               "date in the tenant's time zone, leaving out corrections learned " \
@@ -67,12 +67,17 @@ class Operations::OrgGraph::AsOf < Operations::Base
       known_on: snapshot.known_on&.iso8601,
       people_count: people.size,
       kinds: kind_rows(snapshot.kinds),
-      structures: structures_in_force(snapshot, units).map { |unit_id, kinds| { unit_id:, kinds: kind_rows(kinds) } },
+      structures: structures_payload(snapshot, units),
       units: units.map { it.to_h.merge(member_count: member_counts.fetch(it.id, 0)) }
     }
     return result unless params[:mode] == "full"
 
     result.merge(people: people.map(&:to_h), memberships: memberships.map(&:to_h))
+  end
+
+  def structures_payload(snapshot, units)
+    names = snapshot.units.to_h { [ it.id, it.name ] }
+    structures_in_force(snapshot, units).map { |unit_id, kinds| { unit_id:, name: names[unit_id], kinds: kind_rows(kinds) } }
   end
 
   def kind_rows(kinds) = kinds.map { { id: it.id, name: it.name, provider: it.provider, **it.rules } }

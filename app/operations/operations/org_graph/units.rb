@@ -10,7 +10,7 @@ class Operations::OrgGraph::Units < Operations::Base
               "members, and structure_unit_id, the unit whose own structure its type comes from (null for " \
               "the top structure). Also returns the top structure's unit types, top first, each with the " \
               "type ids it can sit under (parent_ids) and whether it can sit at the top; the same for each " \
-              "unit with a structure of its own (structures); and the ids of active people in no live " \
+              "unit with a structure of its own (structures, by unit_id and name); and the ids of active people in no live " \
               "unit. Admins only while the Org Graph is unfinished."
   category :read
   approval :none
@@ -23,10 +23,11 @@ class Operations::OrgGraph::Units < Operations::Base
   def perform
     overview = ::OrgGraph::UnitsOverview.new
     unplaced = overview.unplaced.map(&:id)
+    names = overview.in_tree_order.to_h { [ it.id, it.name ] }
 
     {
       levels: level_rows(overview.levels),
-      structures: overview.structures.map { |unit_id, levels| { unit_id:, levels: level_rows(levels) } },
+      structures: overview.structures.map { |unit_id, levels| { unit_id:, name: names[unit_id], levels: level_rows(levels) } },
       units: overview.in_tree_order.map { |unit| unit_payload(overview, unit) },
       in_no_unit: { count: unplaced.size, person_ids: unplaced }
     }

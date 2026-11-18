@@ -156,7 +156,8 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
 
       units = result[:units].index_by { it[:id] }
       assert_equal [ nil, @org[:checkout] ], units.values_at(@org[:checkout], @org[:payments]).pluck(:structure_unit_id)
-      assert_equal [ [ @org[:checkout], %w[Stream Lane] ] ], result[:structures].map { [ it[:unit_id], it[:levels].pluck(:name) ] }
+      assert_equal [ [ @org[:checkout], "Checkout", %w[Stream Lane] ] ],
+                   result[:structures].map { [ it[:unit_id], it[:name], it[:levels].pluck(:name) ] }
       assert_equal %w[Department Team Squad], result[:levels].pluck(:name)
     end
 
@@ -172,7 +173,8 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       day = ActsAsTenant.with_tenant(@tenant) { Tenant.today.iso8601 }
       [ {}, { unit_id: @org[:payments] } ].each do |narrowed|
         result = call(Operations::OrgGraph::AsOf, date: day, **narrowed)
-        assert_equal [ [ @org[:checkout], %w[Stream Lane] ] ], result[:structures].map { [ it[:unit_id], it[:kinds].pluck(:name) ] }
+        assert_equal [ [ @org[:checkout], "Checkout", %w[Stream Lane] ] ],
+                     result[:structures].map { [ it[:unit_id], it[:name], it[:kinds].pluck(:name) ] }
       end
       assert_empty call(Operations::OrgGraph::AsOf, date: day, unit_id: @org[:platform])[:structures]
     end
