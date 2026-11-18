@@ -24,10 +24,11 @@
 #
 # The invariant: never show an aggregate derived from data the viewer cannot
 # open at the individual level. With `suppress_small_groups: true`, any cell
-# whose denominator is under {MIN_COHORT} keeps its coverage counts but nils
-# the buckets/percentages. Family cells apply a secondary guard: when the
-# people hidden behind suppressed role cells number 1..MIN_COHORT-1, the
-# family cell is suppressed too — otherwise subtracting the visible role cells
+# whose denominator is under the tenant's smallest group
+# (`ComparisonConfig#min_group_size`, shared with the level comparison) keeps
+# its coverage counts but nils the buckets/percentages. Family cells apply a
+# secondary guard: when the people hidden behind suppressed role cells number
+# 1..floor-1, the family cell is suppressed too — otherwise subtracting the visible role cells
 # from the family cell would reconstruct the small cohort.
 #
 # Since AssessmentPolicy#show? grants the full live manager chain individual
@@ -36,8 +37,6 @@
 # machinery is retained for future audiences whose individual-level visibility
 # does not cover their aggregate scope (e.g. org-wide member transparency).
 class Reporting::CapabilityAttainment
-  MIN_COHORT = 4
-
   # One (group × capability) cell. Buckets are nil when suppressed; the
   # coverage counts (`n_assessed` / `n_in_group`) always survive.
   Cell = Data.define(:below, :at, :above, :n_assessed, :n_in_group, :suppressed) do
@@ -75,7 +74,7 @@ class Reporting::CapabilityAttainment
   #   (a manager's subtree); nil = the whole cycle
   # @param perspective [Symbol] which rating perspective to score
   #   (see PersonDevelopment::Scoring::PERSPECTIVES)
-  # @param suppress_small_groups [Boolean] apply the MIN_COHORT floor —
+  # @param suppress_small_groups [Boolean] hide groups under the tenant's smallest group —
   #   true for subtree-scoped viewers, false for full-access admins/HR
   def initialize(cycle:, scope_person_ids: nil, perspective: :effective, suppress_small_groups: false)
     unless PersonDevelopment::Scoring::PERSPECTIVES.include?(perspective)
@@ -107,11 +106,13 @@ class Reporting::CapabilityAttainment
       capabilities: capability_rows,
       roles: role_groups,
       families: family_groups,
-      suppression_floor: @suppress ? MIN_COHORT : nil
+      suppression_floor: @suppress ? floor : nil
     )
   end
 
   private
+
+  def floor = @floor ||= @cycle.tenant.comparison_config.min_group_size
 
   # Enrollments without a snapshot role/level cannot be scored against a
   # capability bar — they are excluded from the aggregation entirely.
@@ -265,7 +266,7 @@ class Reporting::CapabilityAttainment
   end
 
   def suppress_cell(cell)
-    return cell unless @suppress && cell.n_in_group < MIN_COHORT
+    return cell unless @suppress && cell.n_in_group < floor
 
     blank_cell(cell)
   end
@@ -280,7 +281,7 @@ class Reporting::CapabilityAttainment
   end
 
   # Secondary suppression: a family cell whose visible role cells account for
-  # all but 1..MIN_COHORT-1 of its members would let a viewer reconstruct the
+  # all but 1..floor-1 of its members would let a viewer reconstruct the
   # suppressed remainder by subtraction — suppress the family cell too.
   def guard_differencing(family_cells, role_cell_maps)
     return family_cells unless @suppress
@@ -291,7 +292,7 @@ class Reporting::CapabilityAttainment
         role_cell && !role_cell.suppressed ? role_cell.n_in_group : 0
       end
       hidden = cell.n_in_group - visible
-      [ key, hidden.between?(1, MIN_COHORT - 1) ? blank_cell(cell) : cell ]
+      [ key, hidden.between?(1, floor - 1) ? blank_cell(cell) : cell ]
     end
   end
 
@@ -340,7 +341,7 @@ class Reporting::CapabilityAttainment
     Result.new(
       cycle: @cycle, perspective: @perspective, total_people: 0,
       categories: [], capabilities: [], roles: [], families: [],
-      suppression_floor: @suppress ? MIN_COHORT : nil
+      suppression_floor: @suppress ? floor : nil
     )
   end
 end

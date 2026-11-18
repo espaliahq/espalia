@@ -203,6 +203,27 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
   end
 
   context "small-cohort suppression" do
+    # The floor these were written against; the first two set their own.
+    setup { @tenant.update!(comparison_config: ComparisonConfig.new(min_group_size: 4)) }
+
+    should "hide a group smaller than the tenant's minimum, 5 until an admin sets it" do
+      @tenant.update!(comparison_config: ComparisonConfig.new)
+      4.times { |i| enroll(create(:person, tenant: @tenant, name: "Eng #{i}"), @engineer) }
+
+      res = result(suppress: true)
+      assert_equal 5, res.suppression_floor
+      assert res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
+    end
+
+    should "follow the minimum an admin sets" do
+      5.times { |i| enroll(create(:person, tenant: @tenant, name: "Eng #{i}"), @engineer) }
+      @tenant.update!(comparison_config: ComparisonConfig.new(min_group_size: 6))
+
+      res = result(suppress: true)
+      assert_equal 6, res.suppression_floor
+      assert res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
+    end
+
     should "suppress buckets but keep coverage counts under the floor" do
       2.times { |i| enroll(create(:person, tenant: @tenant, name: "Eng #{i}"), @engineer) }
 

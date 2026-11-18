@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_16_200129) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_005609) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1275,6 +1275,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_200129) do
     t.datetime "person_development_fed_at"
     t.datetime "pay_bands_changed_at"
     t.string "time_zone", default: "UTC", null: false
+    t.jsonb "comparison_config", default: {}, null: false
     t.index ["custom_domain"], name: "index_tenants_on_custom_domain", unique: true
     t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"
     t.index ["previous_inbound_key_id"], name: "index_tenants_on_previous_inbound_key_id", where: "(previous_inbound_key_id IS NOT NULL)"

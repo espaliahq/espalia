@@ -44,6 +44,10 @@ class Tenant < ApplicationRecord
   # The Org Graph's settings, such as when a fact Espalia holds goes stale.
   attribute :org_graph_config, OrgGraphConfig.to_type, default: -> { OrgGraphConfig.new }
 
+  # Comparing a person with their level: on or off, the smallest group, and
+  # how often the group scores are taken.
+  attribute :comparison_config, ComparisonConfig.to_type, default: -> { ComparisonConfig.new }
+
   # Slack bot credentials for this workspace, set when a tenant admin installs
   # the Espalia Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
   serialize :slack_credentials, coder: JSON
@@ -193,6 +197,7 @@ class Tenant < ApplicationRecord
   validates :ai_config, store_model: true
   validates :feedback_exchange_config, store_model: true
   validates :org_graph_config, store_model: true
+  validates :comparison_config, store_model: true
   validate :time_zone_is_known, if: :time_zone_changed?
   before_validation :sync_feedback_exchange_key_ids, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_inbound_secret_is_ours, if: :feedback_exchange_credentials_changed?
