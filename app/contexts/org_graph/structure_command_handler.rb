@@ -47,7 +47,7 @@ class OrgGraph::StructureCommandHandler
   def declare_structure(unit_id, **options)
     authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
+      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
     end
   end
 
@@ -56,7 +56,7 @@ class OrgGraph::StructureCommandHandler
   def withdraw_structure(unit_id, **options)
     authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
+      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
     end
   end
 
@@ -162,15 +162,13 @@ class OrgGraph::StructureCommandHandler
 
   # A move with a conversion also needs the right to change the structure it
   # moves into, checked under the structure's lock before anything about the
-  # move is. Its type changes share the move's cause even outside a request,
-  # so change back sees them as one change.
+  # move is.
   #
   # @see OrgGraph::StructureAggregate#move_unit
   def move_unit(unit_id, parent_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_move_unit!(unit_id, parent_id)
-    cause_id = @cause_id || (shared_cause unless options[:conversion].nil?)
-    @repository.with_structure(plan:, cause_id:) do |structure|
+    with_structure(plan, grouped: !options[:conversion].nil?) do |structure|
       authorize_move_into!(structure.structure_joined_beneath(parent_id)) unless options[:conversion].nil?
       structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id))
     end
@@ -303,9 +301,11 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
-  def with_structure(plan, &block)
-    @repository.with_structure(plan:, cause_id: @cause_id, &block)
+  # A change that converts units is `grouped`: it shares one cause with their
+  # type changes even outside a request, so change back sees one change.
+  def with_structure(plan, grouped: false, &block)
+    cause_id = @cause_id
+    cause_id ||= Rails.configuration.event_store.metadata[:correlation_id] || SecureRandom.uuid_v7 if grouped
+    @repository.with_structure(plan:, cause_id:, &block)
   end
-
-  def shared_cause = Rails.configuration.event_store.metadata[:correlation_id] || SecureRandom.uuid_v7
 end

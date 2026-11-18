@@ -433,6 +433,22 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     end
   end
 
+  should "share one cause with its conversion outside a request, so change back can't undo one type change alone" do
+    declare
+    as_tenant { @admin.withdraw_structure(@payments, conversion: { @group => @squad, @stream => @pod }, effective_on: @today) }
+
+    as_tenant do
+      change_back = OrgGraph::ChangeBackHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      OrgUnitActivity.where(event_type: "UnitKindChanged").group_by(&:cause_id).each_value do |kinds|
+        structure_entry = OrgUnitActivity.find_by!(cause_id: kinds.first.cause_id, subject: "structure")
+        assert_equal @payments, structure_entry.unit_id
+        error = assert_raises(RuntimeError) { change_back.change_back(kinds.first) }
+        assert_equal "This came with a change to a unit's own structure, which can't be changed back yet", error.message
+      end
+      assert_equal 2, OrgUnitActivity.where(subject: "structure").distinct.count(:cause_id)
+    end
+  end
+
   private
 
   def admin_context
