@@ -44,12 +44,19 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     error = assert_raises(ArgumentError) { declare(levels: [ { level_id: @tribe, name: "Group" } ]) }
     assert_equal "Level id is taken", error.message
 
-    error = assert_raises(RuntimeError) { declare(on: @today - 1) }
-    assert_equal "Checkout changed on #{@today.iso8601}, so date this then or later", error.message
+    create_unit("Till", @pod, parent_id: @checkout, on: @today + 2)
+    error = assert_raises(RuntimeError) { declare(on: @today + 1) }
+    assert_equal "Till changed on #{(@today + 2).iso8601}, so date this then or later", error.message
 
-    declare
+    declare(on: @today + 2)
     error = assert_raises(RuntimeError) { declare(levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ]) }
     assert_equal "Payments already has its own structure", error.message
+  end
+
+  should "refuse a date before the declaring unit was created" do
+    ledger = create_unit("Ledger", @tribe, on: @today + 3)
+    error = assert_raises(RuntimeError) { declare(unit: ledger, levels: [ { level_id: @group, name: "Group" } ], conversion: {}, on: @today + 1) }
+    assert_equal "Ledger was created on #{(@today + 3).iso8601}, so date this then or later", error.message
   end
 
   should "copy a type from the structure it copies, and refuse one that structure doesn't hold" do

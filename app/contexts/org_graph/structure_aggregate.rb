@@ -934,6 +934,7 @@ class OrgGraph::StructureAggregate
   def structure_dated!(unit, governed, effective_on)
     on = iso_date(effective_on)
     raise "A structure can't change after today. Date it today or earlier" if on > today
+    raise "#{unit.name} was created on #{unit.created_on}, so date this then or later" if on < unit.created_on
     if (last = @structure_changed_on[unit.unit_id]) && on < last
       raise "#{unit.name}'s structure last changed on #{last}, so date this then or later"
     end
