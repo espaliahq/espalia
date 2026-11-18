@@ -256,6 +256,17 @@ the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)). A u
 retires gives up its structure in the same change. An admin can't date the retirement before
 the structure last changed; an HRIS, which is never refused, withdraws it on that day instead.
 
+A unit in the top structure moves into a unit's own structure with a conversion: a type of
+that structure for each type it and the units beneath it hold. The move writes one
+`UnitMoved` carrying the conversion, then a `UnitKindChanged` for each unit it converts,
+under one cause. Each unit keeps its id, owners, members and history. The move can't be
+dated after today, before the structure last changed, or before any change to the units it
+moves. A subtree holding a unit with a structure of its own can't move in yet, nor can a
+unit leave a structure. That waits for step 7 of
+[#390](https://github.com/espaliahq/espalia/issues/390), so the move is one-way: change it
+back is refused, and withdrawing the structure is what undoes it. A conversion on a move
+that crosses no structure is refused.
+
 ### The shape of the organisation has a history too
 
 A reorganisation changes the units themselves: what exists, what each is called, where
