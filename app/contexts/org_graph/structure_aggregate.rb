@@ -38,6 +38,10 @@ class OrgGraph::StructureAggregate
     end
   end
 
+  # The errors a command raises to refuse; any other is a bug. Matched by
+  # class, not ancestry, since FrozenError and Date::Error descend from these.
+  REFUSALS = [ RuntimeError, ArgumentError, UnitUnavailable ].freeze
+
   ESPALIA = "espalia"
   PROVIDERS = OrgGraph::PersonAggregate::PROVIDERS
   UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
@@ -847,7 +851,8 @@ class OrgGraph::StructureAggregate
   end
 
   # Why {#remove_level} would refuse a type today, found by running it on a
-  # copy, so a screen offering Remove can't drift from the command.
+  # copy, so a screen offering Remove can't drift from the command. Anything
+  # but a refusal is a bug, reported rather than read as one.
   #
   # @param level_id [String]
   # @param structure_unit_id [String, nil] the unit whose own structure holds the type
@@ -857,9 +862,11 @@ class OrgGraph::StructureAggregate
     copy.instance_variable_set(:@unpublished_events, []) # AggregateRoot leaves it out of a dump, as a snapshot would
     copy.remove_level(level_id, effective_on: today, structure_unit_id:)
     nil
-  rescue ArgumentError, RuntimeError => e
+  rescue StandardError => e
+    Rails.error.report(e, handled: true) unless REFUSALS.include?(e.class)
     e.message
   end
+
   private
 
   def structure_taxonomy(structure_unit_id, top) = structure_unit_id ? @structures.fetch(structure_unit_id) : top

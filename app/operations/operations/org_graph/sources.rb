@@ -9,7 +9,7 @@ class Operations::OrgGraph::Sources < Operations::Base
               "with its provider and the fields an HRIS reads it from, each structure level (top first) " \
               "with its provider, field, how many live units it holds and how many retired units it held " \
               "(by distinct name, the first three of each named), the type ids it can sit under (parent_ids), " \
-              "whether it can sit at the top and whether it can be removed today (as remove_level would accept it), the same for each unit that has a " \
+              "whether it can sit at the top and whether the caller can remove it today (as remove_level would accept it), the same for each unit that has a " \
               "structure of its own (structures, by unit_id and name), and the staleness threshold with how " \
               "many facts Espalia holds are stale, by fact. Admins and Org Graph editors only."
   category :read
@@ -81,11 +81,22 @@ class Operations::OrgGraph::Sources < Operations::Base
   def retired_units_by_level = @retired_units_by_level ||= names_by_level(OrgUnit.where.not(retired_on: nil))
 
   # The panel offers Remove exactly when RemoveLevel would take it today: the
-  # aggregate's own checks, then the live plans it can't see.
+  # aggregate's own checks, then the live plans it can't see. Loading the
+  # structure replays its whole stream (~0.6s at 3,000 events), so only a
+  # caller who may remove the type pays for it.
   def removable?(level, structure_unit_id)
-    return false unless level.provider == ::OrgGraph::StructureAggregate::ESPALIA && live_plans_by_level
+    return false unless level.provider == ::OrgGraph::StructureAggregate::ESPALIA
+    return false unless may_remove_from?(structure_unit_id) && live_plans_by_level
 
     live_plans_by_level.fetch(level.id, 0).zero? && structure.removal_refusal(level.id, structure_unit_id:).nil?
+  end
+
+  def may_remove_from?(structure_unit_id)
+    @may_remove_from ||= Hash.new do |allowed, unit_id|
+      policy = Pundit.policy!(context, :org_graph)
+      allowed[unit_id] = unit_id ? policy.edit_structure_of?(OrgUnit.find_by(id: unit_id)) : policy.edit_taxonomy?
+    end
+    @may_remove_from[structure_unit_id]
   end
 
   def structure = @structure ||= ::OrgGraph::Repository.new.load_structure

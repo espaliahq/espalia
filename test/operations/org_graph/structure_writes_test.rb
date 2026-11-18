@@ -161,10 +161,11 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
     end
 
     should "list a structure's types with their units and whether each can go, in Sources" do
-      structure = call(Operations::OrgGraph::Sources, as: @editor)[:structures].sole
+      structure = call(Operations::OrgGraph::Sources)[:structures].sole
 
       assert_equal [ @org[:checkout], "Checkout" ], structure.values_at(:unit_id, :name)
       assert_equal [ [ "Stream", 1, false ], [ "Lane", 0, true ] ], structure[:levels].map { it.values_at(:name, :live_units, :removable) }
+      assert_equal [ false, false ], call(Operations::OrgGraph::Sources, as: @editor)[:structures].sole[:levels].pluck(:removable)
     end
 
     should "read the structure in force on a date, even narrowed to a unit beneath it" do

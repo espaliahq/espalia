@@ -97,6 +97,17 @@ class Operations::OrgGraph::RemovalParityTest < ActiveSupport::TestCase
     assert_parity("Guild" => false)
   end
 
+  should "offer an editor nothing to remove, without replaying the structure" do
+    editor = as_tenant { create(:tenant_user, tenant: @tenant, role: :member, org_graph_editor: true) }
+    context = AuthorizationContext.new(user: editor.user, tenant_user: editor, person: nil)
+    sources = OrgGraph::Repository.stub(:new, -> { flunk "loaded the structure for an editor" }) do
+      as_tenant { Operations::OrgGraph::Sources.call(context:, params: {}) }
+    end
+
+    assert sources[:levels].any?
+    assert sources[:levels].none? { it[:removable] }
+  end
+
   should "judge a unit's own structure by its own units" do
     levels = call(Operations::OrgGraph::DeclareStructure, unit_id: @org[:payments],
                                                           levels: [ { name: "Lane" }, { name: "Stream" } ])[:levels]
