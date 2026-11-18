@@ -38,7 +38,10 @@ class Views::Assessments::ComparisonBlades < Views::Assessments::CapabilityBlade
 
     from = xy(radius, start(i + LINE_INSET))
     to = xy(radius, start(i + 1 - LINE_INSET))
-    s.path(d: "M#{from.join(' ')} A#{radius} #{radius} 0 0 1 #{to.join(' ')}", fill: "none", stroke_width: 0.9,
-           stroke_linecap: "round", class: "stroke-(--gos-content-default)", data: { blade_median: point.number })
+    arc = "M#{from.join(' ')} A#{radius} #{radius} 0 0 1 #{to.join(' ')}"
+    # An outline in the modal's surface lifts the line off a blade of any category colour.
+    s.path(d: arc, fill: "none", stroke_width: 2.2, stroke_linecap: "round", class: "stroke-(--gos-surface-overlay)")
+    s.path(d: arc, fill: "none", stroke_width: 1.1, stroke_linecap: "round", class: "stroke-(--gos-accent-strong)",
+           data: { blade_median: point.number })
   end
 end

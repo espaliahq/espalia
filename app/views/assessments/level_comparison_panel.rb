@@ -101,7 +101,7 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
   def legend
     div(class: "flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted", aria: { hidden: "true" }) do
       span(class: "flex items-center gap-1.5") do
-        span(class: "inline-block h-0.5 w-3 rounded-full bg-(--gos-content-default)")
+        span(class: "inline-block h-1 w-3 rounded-full bg-(--gos-accent-strong)")
         plain "#{plural} (middle score)"
       end
       span(class: "flex items-center gap-1.5") do
@@ -164,7 +164,8 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
         span(class: "absolute left-0 top-[5px] h-1.5 rounded-full #{SWATCH.fetch(hue)}",
              style: "width: #{along(capability[:your_score])}")
       end
-      span(class: "absolute top-0 h-4 w-0.5 -ml-px rounded-full bg-(--gos-content-default)",
+      span(class: "absolute top-0 h-4 w-1 -ml-0.5 rounded-full bg-(--gos-accent-strong) " \
+                  "ring-2 ring-(--gos-surface-overlay)",
            style: "left: #{along(capability[:group_median])}")
     end
   end
