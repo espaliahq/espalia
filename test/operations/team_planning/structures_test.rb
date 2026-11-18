@@ -2,7 +2,8 @@
 
 require "test_helper"
 
-# A plan beneath a unit that declares its own structure (#494): the types it
+# A plan beneath a unit that declares its own structure
+# ([#494](https://github.com/espaliahq/espalia/issues/494)): the types it
 # offers, where they sit, and what no longer fits.
 class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
   SYSTEM = OrgGraph::Authorization::SYSTEM

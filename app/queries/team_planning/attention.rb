@@ -10,7 +10,8 @@
 # top, once the Org Graph narrows where a type may sit: "Doesn't fit this
 # structure" ([#390](https://github.com/espaliahq/espalia/issues/390)). Each
 # unit is judged against the structure in force at it through the plan's
-# tree, so a unit whose type belongs to another structure misfits too (#494).
+# tree, so a unit whose type belongs to another structure misfits too
+# ([#494](https://github.com/espaliahq/espalia/issues/494)).
 #
 # It also checks each person: allocation, someone still placed after the
 # Org Graph has them leave, and their manager (4.6), and each seat whose

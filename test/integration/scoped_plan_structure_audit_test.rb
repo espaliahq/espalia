@@ -4,15 +4,16 @@ require "test_helper"
 
 # A plan scoped beneath a unit with its own structure reads that structure's
 # types, and nothing of the unit that declared it or of another branch's
-# structure (#494). Every read that takes a plan_id is walked, so a new one
-# joins with no edit; one that needs a parameter this file has no value for
-# fails until it gets one. The plan is walked open and again once its step
+# structure ([#494](https://github.com/espaliahq/espalia/issues/494)). Every
+# read that takes a plan_id is walked, so a new one joins with no edit; one
+# that needs a parameter this file has no value for fails until it gets one. The plan is walked open and again once its step
 # closes, and every read must reach a payload in one of the two.
 class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
   SYSTEM = OrgGraph::Authorization::SYSTEM
   KNOWN = %i[plan_id scenario_id unit_id ends_on rule].freeze
   # The scope picker lists every live unit an editor may cover, by design
-  # (#338), so only its types are held to the plan's scope.
+  # ([#338](https://github.com/espaliahq/espalia/issues/338)), so only its
+  # types are held to the plan's scope.
   WHOLE_ORGANISATION = %w[team_planning_coverable_units].freeze
 
   setup do

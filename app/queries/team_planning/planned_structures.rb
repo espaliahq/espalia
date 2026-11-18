@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# The structure in force at each unit of a resolved scenario (#494). A unit
+# The structure in force at each unit of a resolved scenario
+# ([#494](https://github.com/espaliahq/espalia/issues/494)). A unit
 # that declares its own structure governs the units beneath it, so a unit's
 # types and rules come from the nearest declaring unit above it, along the
 # scenario's planned parents. A unit the plan created never declares one.
@@ -46,13 +47,8 @@ class TeamPlanning::PlannedStructures
   # @param unit_id [String] a unit on the map
   # @return [String, nil] the declaring unit whose structure is in force at it; nil for the top structure
   def structure_at(unit_id)
-    seen = Set[unit_id]
-    above = parent_of(unit_id)
-    while above && seen.add?(above)
-      return above if declares?(above)
-
-      above = parent_of(above)
-    end
+    @at ||= {}
+    @at.fetch(unit_id) { @at[unit_id] = nearest_declaring_above(unit_id) }
   end
 
   # @param unit [TeamPlanning::Baseline::Unit] a unit on the map
@@ -90,6 +86,16 @@ class TeamPlanning::PlannedStructures
   def visible_type?(level_id) = visible.any? { taxonomy_of(it).kind(level_id) }
 
   private
+
+  def nearest_declaring_above(unit_id)
+    seen = Set[unit_id]
+    above = parent_of(unit_id)
+    while above && seen.add?(above)
+      return above if declares?(above)
+
+      above = parent_of(above)
+    end
+  end
 
   # A unit on the map sits where the scenario puts it; above the map, where
   # the Org Graph has it today.
