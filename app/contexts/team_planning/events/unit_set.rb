@@ -4,6 +4,10 @@
 # creates, or an Org Graph unit renamed or moved. It shares its facet with
 # {UnitRetired}, so a later UnitSet brings a retired unit back.
 #
+# Only the Org Graph changes the type of a unit it holds, so the plan follows
+# it: the `level_id` such a unit's UnitSet carries is not a planned value. A
+# unit the plan created keeps its own.
+#
 # @!attribute [r] data
 #   @return [Hash] the fields every {Change} holds, plus:
 #   @option data [String] :name
@@ -44,7 +48,8 @@ class TeamPlanning::Events::UnitSet < TeamPlanning::Events::Change
   def self.apply_to(map, data)
     id = data[:subject_id]
     known = (map.units + map.retired_units).find { it.id == id }
-    unit = TeamPlanning::Baseline::Unit.new(id:, name: data[:name], parent_id: data[:parent_id], level_id: data[:level_id],
+    level_id = map.org_unit_levels.fetch(id, data[:level_id])
+    unit = TeamPlanning::Baseline::Unit.new(id:, name: data[:name], parent_id: data[:parent_id], level_id:,
                                             owner_ids: known&.owner_ids || [])
     map.with(units: (map.units.reject { it.id == id } + [ unit ]).sort_by { [ it.name, it.id ] },
              retired_units: map.retired_units.reject { it.id == id })
@@ -55,6 +60,19 @@ class TeamPlanning::Events::UnitSet < TeamPlanning::Events::Change
   # @return [Hash, nil] the unit as it stands, nil unless it is live
   def self.read_from(map, subject_id:, facet: self.facet)
     map.units.find { it.id == subject_id }&.to_h&.slice(:name, :parent_id, :level_id)
+  end
+
+  # A plan creates a unit only under an id the Org Graph never held, so a unit
+  # the Org Graph reads is one whose type the plan doesn't set.
+  #
+  # @param read [Hash, nil]
+  # @param planned [Hash, nil]
+  # @param map [TeamPlanning::Baseline::Map]
+  # @return [Boolean]
+  def self.shows?(read, planned, map:)
+    return same_end_state?(read, planned) unless read && planned
+
+    same_end_state?(read.as_json.except("level_id"), planned.as_json.except("level_id"))
   end
 
   # @param change [OrgGraph::ChangesBetween::Change]

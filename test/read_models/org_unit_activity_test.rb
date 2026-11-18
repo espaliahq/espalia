@@ -58,6 +58,16 @@ class OrgUnitActivityTest < ActiveSupport::TestCase
       assert_equal "moved 2 people in", feed(@platform).first.summary
     end
 
+    should "say a unit changed its type" do
+      crews = SecureRandom.uuid_v7
+      as_tenant do
+        structure.add_level(crews, "Crew", parent_ids: [], top: true, effective_on: "2026-01-01")
+        structure.change_unit_kind(@payments, crews, effective_on: Date.current)
+      end
+
+      assert_equal "changed its type", feed(@payments).first.summary
+    end
+
     should "count people rather than changes, so one person's two changes read as one" do
       as_tenant do
         terms = people(cause_id: "request-1")

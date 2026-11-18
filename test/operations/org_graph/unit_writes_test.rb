@@ -99,6 +99,62 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
     end
   end
 
+  context "ChangeUnitKind" do
+    setup do
+      @pods = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .add_level(@pods, "Pod", parent_ids: [ @org[:team] ], top: false, effective_on: "2026-01-01")
+      end
+    end
+
+    should "change a unit's type, saying what it was" do
+      result = call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: @pods, effective_on: "2026-11-01")
+
+      assert_equal({ unit_id: @org[:payments], level_id: @pods, previous_level_id: @org[:squad], effective_on: "2026-11-01" }, result)
+      assert_equal @pods, unit(:payments).level_id
+      assert_equal @admin.person.id, Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitKindChanged).last.data[:kind_changed_by_id]
+    end
+
+    should "date a change with no date on the tenant's today, behind UTC's" do
+      @tenant.update!(time_zone: "America/Los_Angeles")
+      travel_to Time.utc(2026, 11, 18, 5) do
+        result = call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: @pods)
+
+        assert_equal "2026-11-17", result[:effective_on]
+      end
+    end
+
+    should "return the date it wrote when the tenant's day turns over mid-call" do
+      days = %w[2026-11-17 2026-11-18].map { Date.iso8601(it) }
+      result = Tenant.stub(:today, -> { days.shift || Date.new(2026, 11, 18) }) do
+        call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: @pods)
+      end
+
+      written = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitKindChanged).last.data[:effective_on]
+      assert_equal written, result[:effective_on]
+    end
+
+    should "refuse an owner of the unit's parent, who may still move it" do
+      error = assert_raises(OrgGraph::Authorization::Refused) do
+        call(Operations::OrgGraph::ChangeUnitKind, as: @owner, unit_id: @org[:payments], level_id: @pods)
+      end
+
+      assert_equal "Only a tenant admin or an Org Graph editor can change a unit's type", error.message
+      assert_equal @org[:squad], unit(:payments).level_id
+    end
+
+    should "refuse a type id that isn't a UUID, and a type the taxonomy doesn't hold" do
+      assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: "pod")
+      end
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: SecureRandom.uuid_v7)
+      end
+      assert_equal "That unit type doesn't exist", error.message
+    end
+  end
+
   context "owners" do
     should "add and remove an owner" do
       call(Operations::OrgGraph::AddUnitOwner, unit_id: @org[:platform], person_id: @org[:ada].id)

@@ -73,6 +73,12 @@ class OrgGraphPolicy < ApplicationPolicy
     edit_unit?(unit) && create_unit?(new_parent)
   end
 
+  # A unit's type decides what may sit beneath it, which is the organisation's
+  # structure, so an owner who may move a unit may not retype it.
+  #
+  # @return [Boolean]
+  def change_unit_kind? = edit_structure?
+
   # @param units [Enumerable<OrgUnit>] every predecessor and successor
   # @return [Boolean]
   def record_succession?(units)

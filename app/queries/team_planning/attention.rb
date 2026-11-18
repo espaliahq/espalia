@@ -225,8 +225,9 @@ class TeamPlanning::Attention
   # as its parent, so it is judged only once the plan puts it under a unit on
   # the map: never at the top, and never against a unit the plan can't name.
   # A parent gone from the scenario is the units check's. A type that is gone
-  # needs no parent to judge. A unit's type never changes, so only the unit's
-  # own change can break its fit, never its parent's.
+  # needs no parent to judge. The Org Graph can change a parent's type, so a
+  # unit that no longer fits beneath its parent names the parent's unit too,
+  # while the change stays the unit's own: a parent's plan change never breaks it.
   def misfits
     return [] unless @taxonomy
 
@@ -235,7 +236,8 @@ class TeamPlanning::Attention
       parent = unit.parent_id && by_id[unit.parent_id]
       next unless (why = misfit(unit, parent, judged: !((unit.parent_id || @roots.include?(unit.id)) && !parent)))
 
-      item(unit.id, UNIT, "#{I18n.t('org_graph.misfit')}: #{why}")
+      beneath = parent && @taxonomy.kind(unit.level_id)
+      item(unit.id, UNIT, "#{I18n.t('org_graph.misfit')}: #{why}", units: beneath ? [ parent.id ] : [])
     end
   end
 

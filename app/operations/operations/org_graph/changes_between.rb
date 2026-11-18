@@ -14,7 +14,7 @@ class Operations::OrgGraph::ChangesBetween < Operations::Base
   description "What changed in the Org Graph between two dates: joiners (with every fact and " \
               "membership and the units they own on their first day), leavers, person " \
               "fact changes (title, level, manager, cost centre, site, employment), memberships " \
-              "started, ended or changed, moves between units, and units created, renamed, moved, " \
+              "started, ended or changed, moves between units, and units created, renamed, moved, retyped, " \
               "retired, succeeded or re-owned. by \"effective\" (the default) lists what took " \
               "effect after from, up to and including to; known_on reads what the Org Graph knew " \
               "at the end of that date in the tenant's time zone. by \"learned\" lists " \

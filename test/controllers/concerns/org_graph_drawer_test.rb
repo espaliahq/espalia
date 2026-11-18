@@ -18,6 +18,9 @@ class OrgGraphDrawerTest < ActiveSupport::TestCase
     def drawer_path = "/drawer?on=#{drawer_on}"
   end
 
+  setup { ActsAsTenant.current_tenant = create(:tenant) }
+  teardown { ActsAsTenant.current_tenant = nil }
+
   def host(params = {}) = Host.new(params)
 
   context "#write" do
@@ -49,7 +52,7 @@ class OrgGraphDrawerTest < ActiveSupport::TestCase
     end
 
     should "leave today out of the drawer path, and nothing chosen out of both" do
-      assert_equal "/drawer?on=", host(effective_on: Date.current.iso8601).send(:drawer_path)
+      assert_equal "/drawer?on=", host(effective_on: Tenant.today.iso8601).send(:drawer_path)
       assert_equal({ unit_id: "u" }, host.send(:with_date, unit_id: "u"))
     end
   end

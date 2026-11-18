@@ -56,7 +56,7 @@ class OrgGraph::Projections::History
       OrgGraph::Events::PersonReturned, OrgGraph::Events::StartDateChanged,
       OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipMoved,
       OrgGraph::Events::UnitCreated, OrgGraph::Events::UnitRenamed, OrgGraph::Events::UnitMoved,
-      OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded,
+      OrgGraph::Events::UnitKindChanged, OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded,
       OrgGraph::Events::UnitOwnerAdded, OrgGraph::Events::UnitOwnerRemoved,
       OrgGraph::Events::TaxonomyDefined, OrgGraph::Events::LevelProviderSet
     ]
@@ -103,6 +103,7 @@ class OrgGraph::Projections::History
     when OrgGraph::Events::UnitCreated then unit_created
     when OrgGraph::Events::UnitRenamed then unit_fact("name", effective_on, @data.slice(:name))
     when OrgGraph::Events::UnitMoved then unit_fact("parent", effective_on, @data.slice(:parent_id))
+    when OrgGraph::Events::UnitKindChanged then unit_fact("level", effective_on, @data.slice(:level_id))
     when OrgGraph::Events::UnitRetired then unit_retired
     when OrgGraph::Events::UnitSucceeded then succession
     when OrgGraph::Events::UnitOwnerAdded then owner(effective_on, { owner: true })

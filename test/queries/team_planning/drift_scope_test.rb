@@ -29,6 +29,10 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
 
   def cuts(*changes, parents: {}) = TeamPlanning::DriftScope.new(@base, [ @base ], parents:).call(changes)
 
+  def retyped(unit_id, on, before: "team", after: "squad")
+    change(:unit_kind_changed, on, person_id: nil, unit_id:, before: { "level_id" => before }, after: { "level_id" => after })
+  end
+
   def move_in = change(:moved, 15, unit_id: @engineering, from_unit_id: @sales)
 
   should "cut a manager the plan can't name even when the earlier one was set outside" do
@@ -170,5 +174,34 @@ class TeamPlanning::DriftScopeTest < ActiveSupport::TestCase
     cut = cuts(title.with(effective_on: Date.new(2025, 12, 10))).sole
 
     assert_equal [ nil, { "title" => "Sales Engineer" }, [ "before" ] ], [ cut.change.before, cut.change.after, cut.outside ]
+  end
+
+  context "a change of unit type" do
+    setup do
+      @base = @base.with(units: [ Unit.new(@engineering, nil), Unit.new("field", @engineering) ])
+    end
+
+    should "show one for a unit the plan covers, before and after" do
+      cut = cuts(retyped("field", 20)).sole
+
+      assert_equal [ { "level_id" => "team" }, { "level_id" => "squad" }, [] ], [ cut.change.before, cut.change.after, cut.outside ]
+    end
+
+    should "drop one for a unit outside the plan, and for the unit above a scope root, payload and all" do
+      @base = @base.with(scope_ids: [ "field" ], units: [ Unit.new("field", @engineering) ])
+
+      assert_empty cuts(retyped(@sales, 20), retyped(@engineering, 21), parents: { "field" => @engineering })
+    end
+
+    should "keep unseen a type known to change while the unit was outside, once it comes back" do
+      out = change(:unit_moved, 10, person_id: nil, unit_id: "field", before: { "parent_id" => @engineering }, after: { "parent_id" => @sales })
+      back = change(:unit_moved, 20, person_id: nil, unit_id: "field", before: { "parent_id" => @sales }, after: { "parent_id" => @engineering })
+      known = retyped("field", 15, before: "team", after: "pod")
+      again = retyped("field", 25, before: "pod", after: "squad")
+
+      cut = TeamPlanning::DriftScope.new(@base, [ @base ]).call([ out, back, again ], known: [ known ]).last
+
+      assert_equal [ again.event_id, nil, [ "before" ] ], [ cut.change.event_id, cut.change.before, cut.outside ]
+    end
   end
 end

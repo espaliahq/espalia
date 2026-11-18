@@ -125,11 +125,48 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "2026-11-01", drawer.at_css("input#org-unit-effective-on")["value"]
     end
 
+    should "keep UTC's date for the next change when the tenant is already a day ahead" do
+      @tenant.update!(time_zone: "Australia/Sydney")
+      travel_to Time.utc(2026, 11, 18, 20) do
+        patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { name: "Core" }, effective_on: "2026-11-18" }
+
+        assert_redirected_to edit_tenant_org_unit_path(@org[:platform], on: "2026-11-18")
+      end
+    end
+
     should "move a unit to the root when no parent is chosen" do
       patch tenant_org_unit_path(@org[:payments]), params: { org_unit: { parent_id: "" } }
 
       assert_redirected_to edit_tenant_org_unit_path(@org[:payments])
       assert_nil unit(:payments).parent_id
+    end
+
+    context "changing a unit's type" do
+      should "offer only the types that fit where the unit sits and above its sub-units" do
+        get edit_tenant_org_unit_path(@org[:platform])
+        assert_equal %w[Team Squad], drawer.css("select#org-unit-type option").map(&:text)
+
+        get edit_tenant_org_unit_path(@org[:checkout])
+        assert_nil drawer.at_css("select#org-unit-type")
+        assert_includes drawer.text, "Unit type"
+      end
+
+      should "change it from the chosen date" do
+        patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { level_id: @org[:squad] }, effective_on: "2026-02-01" }
+
+        assert_redirected_to edit_tenant_org_unit_path(@org[:platform], on: "2026-02-01")
+        assert_equal "Type changed.", flash[:notice]
+        assert_equal @org[:squad], unit(:platform).level_id
+      end
+
+      should "bring a refusal back to the drawer and change nothing" do
+        patch tenant_org_unit_path(@org[:checkout]), params: { org_unit: { level_id: @org[:squad] } }
+
+        follow_redirect!
+        assert_equal "Checkout can't change to Squad, as these wouldn't fit: Payments (Squad) under Checkout",
+                     drawer.at_css("#org-unit-alert").text.strip
+        assert_equal @org[:team], unit(:checkout).level_id
+      end
     end
 
     should "bring a guard's refusal back to the drawer and change nothing" do
@@ -234,6 +271,13 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Platform", unit(:platform).name
       assert_empty unit(:platform).own_owners
       assert membership(:ada, :platform)
+    end
+
+    should "not change a unit's type" do
+      patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { level_id: @org[:squad] } }
+
+      assert_redirected_to root_path
+      assert_equal @org[:team], unit(:platform).level_id
     end
 
     should "not search people" do

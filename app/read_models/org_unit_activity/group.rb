@@ -101,6 +101,7 @@ class OrgUnitActivity::Group
       ("created the unit" if types["UnitCreated"]),
       renamed_phrase,
       ("moved the unit" if types["UnitMoved"]),
+      ("changed its type" if types["UnitKindChanged"]),
       owners_phrase("added", types["UnitOwnerAdded"]),
       owners_phrase("removed", types["UnitOwnerRemoved"]),
       ("retired the unit" if types["UnitRetired"])

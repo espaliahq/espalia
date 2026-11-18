@@ -43,6 +43,10 @@ module OrgGraph::Authorization
     authorize!(:edit_unit?, unit) { "#{only_owners_of(unit)} can change #{unit_name(unit)}" }
   end
 
+  def authorize_unit_kind!
+    authorize!(:change_unit_kind?) { "Only a tenant admin or an Org Graph editor can change a unit's type" }
+  end
+
   def authorize_new_unit!(parent_id)
     return if system?
 

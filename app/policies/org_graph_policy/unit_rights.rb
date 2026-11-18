@@ -22,6 +22,29 @@ class OrgGraphPolicy::UnitRights
   def move? = rename? && (parent_choices.any? || root_choice?)
 
   # @return [Boolean]
+  def change_type? = @unit.held_by_espalia? && @policy.change_unit_kind? && type_choices.size > 1
+
+  # The types the unit may take today: its own, and each type Espalia supplies
+  # that may sit where the unit sits and that every live sub-unit may sit
+  # under. The command also checks the days from the chosen date.
+  #
+  # @return [Array<OrgGraph::Taxonomy::Kind>] top first
+  def type_choices
+    @type_choices ||= begin
+      taxonomy = @overview.taxonomy
+      parent = @unit.parent
+      child_kinds = @overview.children_of(@unit).map(&:level_id).uniq
+      taxonomy.kinds.select do |kind|
+        next true if kind.id == @unit.level_id
+
+        kind.provider == OrgGraph::Taxonomy::ESPALIA &&
+          (parent ? taxonomy.allows?(kind.id, beneath: parent.level_id) : kind.top?) &&
+          child_kinds.all? { taxonomy.allows?(it, beneath: kind.id) }
+      end
+    end
+  end
+
+  # @return [Boolean]
   def owners? = @policy.edit_unit?(@unit)
 
   # @return [Boolean]

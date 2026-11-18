@@ -18,7 +18,7 @@ class OrgGraph::Projections::UnitActivity
   CODE_VERSION = 3
 
   ACTOR_KEYS = %i[created_by_id renamed_by_id moved_by_id retired_by_id stated_by_id added_by_id removed_by_id
-                  set_by_id ended_by_id handed_over_by_id].freeze
+                  set_by_id ended_by_id handed_over_by_id kind_changed_by_id].freeze
   private_constant :ACTOR_KEYS
 
   # @return [Array<Class>]
@@ -27,7 +27,7 @@ class OrgGraph::Projections::UnitActivity
       OrgGraph::Events::UnitCreated, OrgGraph::Events::UnitRenamed, OrgGraph::Events::UnitMoved,
       OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded, OrgGraph::Events::UnitOwnerAdded,
       OrgGraph::Events::UnitOwnerRemoved, OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded,
-      OrgGraph::Events::MembershipMoved, OrgGraph::Events::UnitHandedOver
+      OrgGraph::Events::MembershipMoved, OrgGraph::Events::UnitHandedOver, OrgGraph::Events::UnitKindChanged
     ]
   end
 
@@ -58,6 +58,8 @@ class OrgGraph::Projections::UnitActivity
     when OrgGraph::Events::UnitMoved
       [ [ data[:unit_id], { subject: "parent", before: { parent_id: data[:previous_parent_id] },
                             after: data.slice(:parent_id) } ] ]
+    when OrgGraph::Events::UnitKindChanged
+      [ [ data[:unit_id], { subject: "level", before: { level_id: data[:previous_level_id] }, after: data.slice(:level_id) } ] ]
     when OrgGraph::Events::UnitRetired
       [ [ data[:unit_id], { after: data.slice(:succession_id, :successor_ids) } ] ]
     when OrgGraph::Events::UnitSucceeded then succession_entries(data)

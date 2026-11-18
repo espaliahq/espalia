@@ -71,7 +71,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
       h3(id: "org-unit-details", class: "text-sm font-semibold text-default") { "Details" }
       held_note unless @unit.held_by_espalia?
       @rights.rename? ? rename_form : fact("Name", @unit.name)
-      fact("Level", @overview.level_of(@unit)&.name || "None")
+      @rights.change_type? ? type_form : fact(words("unit_type"), @overview.level_of(@unit)&.name || "None")
       @rights.move? ? move_form : fact("Parent", parent_name)
     end
   end
@@ -118,6 +118,20 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
       end
     end
   end
+
+  def type_form
+    drawer_form(tenant_org_unit_path(@unit), method: "patch", class: "space-y-1") do
+      label(for: "org-unit-type", class: "block text-xs text-muted") { words("unit_type") }
+      div(class: "flex gap-2") do
+        select(id: "org-unit-type", name: "org_unit[level_id]", class: "#{Components::Kit::Field::SELECT} flex-1 min-w-0") do
+          @rights.type_choices.each { |kind| option(value: kind.id, selected: kind.id == @unit.level_id) { kind.name } }
+        end
+        submit(words("change_type"))
+      end
+    end
+  end
+
+  def words(key) = I18n.t("org_graph.#{key}")
 
   def current_place_offered?
     @unit.parent_id.nil? ? @rights.root_choice? : @rights.parent_choices.any? { |unit| unit.id == @unit.parent_id }

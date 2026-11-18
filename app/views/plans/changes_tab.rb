@@ -390,6 +390,7 @@ class Views::Plans::ChangesTab < Views::Base
       renamed = change.dig(:after, "name") || unit
       outside?(change, "before") ? "Renamed #{renamed}" : "#{change.dig(:before, 'name') || unit} was renamed #{renamed}"
     when "unit_moved" then outside?(change, "after") ? "#{unit} left the units this plan covers" : "#{unit} moved"
+    when "unit_kind_changed" then "#{unit}'s type changed"
     when "unit_retired" then "#{unit} was retired"
     when "unit_succeeded" then "A succession was recorded"
     when "owner_added" then "#{outside?(change, 'person_id') ? OUTSIDE : person} became an owner of #{unit}"
