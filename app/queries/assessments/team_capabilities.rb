@@ -116,7 +116,7 @@ class Assessments::TeamCapabilities
   # The person's scoring, or nil until their score unlocks as their hero's does.
   def scoring_for(enrollment)
     mine = ratings.fetch([ enrollment.cycle_id, enrollment.person_id ], [])
-    return unless unlocked?(mine, enrollment.level_ordinal)
+    return unless unlocked?(mine, enrollment)
 
     PersonDevelopment::Scoring.new(
       level_ratings: mine, bindings: scope.bindings, categories:, person_level: enrollment.level_ordinal,
@@ -125,11 +125,28 @@ class Assessments::TeamCapabilities
     ).then { |scoring| [ scoring, mine, enrollment.level_ordinal ] }
   end
 
-  def unlocked?(mine, level)
+  def unlocked?(mine, enrollment)
+    level = enrollment.level_ordinal
     total = scope.at_level(level).cells.size
     rated = mine.count { |rating| rating.level_ordinal == level && rating[@rated].present? }
     total.positive? &&
-      rated >= Views::Assessments::HeroSummary.unlock_target_for(total, awaiting_agreement: @perspective == :aligned_only)
+      rated >= Views::Assessments::HeroSummary.unlock_target_for(total, awaiting_agreement: awaiting_agreement?(enrollment))
+  end
+
+  # As the person's own read: agreed ratings wait for every cell only while
+  # an alignment at their level is under way.
+  def awaiting_agreement?(enrollment)
+    @perspective == :aligned_only &&
+      aligning.include?([ enrollment.cycle_id, enrollment.person_id, enrollment.level_ordinal ])
+  end
+
+  def aligning
+    @aligning ||= begin
+      people = enrollments.select { |enrollment| enrollment.role_id == role.role_id }
+      AssessmentCycleRoleAlignment.where(status: "aligning", role_id: role.role_id,
+                                         cycle_id: people.map(&:cycle_id).uniq, person_id: people.map(&:person_id))
+        .pluck(:cycle_id, :person_id, :level_ordinal).to_set
+    end
   end
 
   def capabilities(scorings)

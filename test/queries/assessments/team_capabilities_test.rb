@@ -113,11 +113,23 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
   end
 
   should "count someone on agreed ratings only once every cell at their level is agreed, as their hero does" do
+    align(@ada, 2)
+    align(@bo, 3)
     rate(@ada, @critical, 2, "consistent", side: :aligned_frequency)
     rate(@bo, @critical, 3, "consistent", side: :aligned_frequency)
     rate(@bo, @player_coach, 3, "consistent", side: :aligned_frequency)
 
     assert_equal 1, result(perspective: :aligned_only).scored
+  end
+
+  should "keep counting a completed alignment on agreed ratings when a cell joins after it" do
+    align(@ada, 2, status: "aligned")
+    align(@bo, 3, status: "aligned")
+    rate(@ada, @critical, 2, "consistent", side: :aligned_frequency)
+    rate(@bo, @critical, 3, "consistent", side: :aligned_frequency)
+    rate(@bo, @player_coach, 3, "consistent", side: :aligned_frequency)
+
+    assert_equal 2, result(perspective: :aligned_only).scored
   end
 
   should "leave a capability nobody rated out of its mean rather than scoring it 0" do
@@ -184,6 +196,12 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
     create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: person.id,
                                          role_id: role.role_id, level_ordinal: ordinal, status: "enrolled")
     person
+  end
+
+  def align(person, ordinal, status: "aligning")
+    AssessmentCycleRoleAlignment.create!(tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: person.id,
+                                         framework_id: @framework_id, role_id: @engineer.role_id, home: true,
+                                         level_ordinal: ordinal, status:, alignment_started_at: Time.current)
   end
 
   def rate(person, capability, ordinal, frequency, side: :manager_rated_frequency)
