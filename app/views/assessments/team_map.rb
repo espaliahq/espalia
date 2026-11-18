@@ -11,7 +11,7 @@ class Views::Assessments::TeamMap < Views::Base
 
   ID = "team-map"
   RATINGS_SWITCH = { "manager" => "Manager", "self" => "Self", "aligned" => "Aligned" }.freeze
-  # A lane's track runs to twice met, so met sits halfway.
+  # A lane's track runs to at least twice met, so met sits halfway.
   TRACK_TOP = 200.0
   LANE = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:grid-cols-[13rem_minmax(0,1fr)_auto]"
 
@@ -195,5 +195,13 @@ class Views::Assessments::TeamMap < Views::Base
 
   def group_median(capability) = (capability[:group_median] if compared?)
 
-  def along(percent) = "#{(percent.clamp(0, TRACK_TOP) / TRACK_TOP * 100).round(2)}%"
+  # Met sits halfway; past it the track runs to the highest value drawn, at least 200%, as the blades do.
+  def along(percent)
+    share = percent <= 100 ? percent.clamp(0, 100) / 200.0 : 0.5 + ((percent - 100) / (track_top - 100.0) / 2)
+    "#{(share * 100).round(2)}%"
+  end
+
+  def track_top
+    @track_top ||= [ TRACK_TOP, *capabilities.flat_map { |c| [ c[:score], group_median(c) ] }.compact ].max
+  end
 end
