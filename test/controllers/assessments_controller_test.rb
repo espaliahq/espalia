@@ -324,6 +324,17 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-card [data-team-gap]", text: "Critical Thinking · 2 of 3 short"
     end
 
+    should "offer a retry when the team map fails to load" do
+      2.times { |i| rate_as_manager(add_report("Report #{i}"), @cap, "consistent") }
+      sign_in @manager_user
+      get assessments_path
+
+      assert_select "#team-map-modal [data-controller~='frame-error']" do
+        assert_select "turbo-frame#team-map[data-frame-error-target='frame']", count: 1
+        assert_select "#team-map-error[hidden]", count: 1
+      end
+    end
+
     should "widen the team card to everyone below the manager" do
       rate_as_manager(@person, @cap, "consistent")
       ActsAsTenant.with_tenant(@tenant) { rate_as_manager(add_report("Report one").tap { |r| r.update!(manager: @person) }, @cap, "none") }

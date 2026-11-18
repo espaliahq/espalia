@@ -95,11 +95,15 @@ class Views::Assessments::TeamCard < Views::Base
 
   # Opens with the card's choices.
   def team_map
-    render Components::Kit::Modal.new(id: "team-map-modal", title: "Team capability map", size: :"6xl") do |modal|
+    render Components::Kit::Modal.new(id: "team-map-modal", title: "Team capability map", size: :"6xl",
+                                      panel_data: { controller: "frame-error" }) do |modal|
       modal.trigger { "Open team map" }
       modal.body do
         turbo_frame(id: "team-map", src: team_map_assessments_path(team_choices.slice(:team_people, :team_role).compact),
-                    loading: "lazy") { p(class: "text-sm text-muted") { "Loading the team map…" } }
+                    loading: "lazy", data: { frame_error_target: "frame" }) do
+          p(class: "text-sm text-muted") { "Loading the team map…" }
+        end
+        render Components::Shared::FrameLoadError.new(id: "team-map-error", subject: "the team map", closeable: true)
       end
     end
   end
