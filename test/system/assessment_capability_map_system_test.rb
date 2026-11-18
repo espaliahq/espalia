@@ -231,6 +231,22 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
 
       assert_selector "#{MAP} [data-comparison-lane='3'] [data-comparison-scores]", text: "Robin Product 100% · PM2s 50%"
       assert_no_selector "#{MAP} [data-comparison-scores]", text: /\AYou /
+      assert_selector "#{MAP} [role='tab'][aria-selected='true']", text: "Compared with their level"
+      assert_selector "#{MAP} [data-comparison-level='PM2']", text: "PM2 (theirs)"
+      clipped = page.evaluate_script(<<~JS)
+        [...document.querySelectorAll("#{MAP} [data-comparison-scores]")].filter(e => e.scrollWidth > e.clientWidth).length
+      JS
+      assert_equal 0, clipped, "expected every lane's scores to fit beside the person's name"
+
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      assert_selector "#{MAP} [data-comparison-lane='3']", text: "Stakeholders"
+      squeezed = page.evaluate_script(<<~JS)
+        [...document.querySelectorAll("#{MAP} [data-comparison-lane]")].filter(lane => {
+          const name = lane.firstElementChild.getBoundingClientRect()
+          return name.width < lane.getBoundingClientRect().width / 2
+        }).length
+      JS
+      assert_equal 0, squeezed, "expected each capability's name to keep the lane's width on a phone, its scores below"
     end
 
     should "offer no comparison on a page read at another level" do

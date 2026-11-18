@@ -48,6 +48,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
         person_level: matrix_data[:person_level], context: context, zoom: zoom
       ),
       subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you", part: part, src: src,
+      possessive: whose ? "their" : "your",
       comparable: comparable || compared.present?, compared: compared
     )
   end
@@ -55,15 +56,18 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   # @param shape [Assessments::CapabilityShape]
   # @param subject [String] who and where, "Alex at E3"
   # @param assessed_as [String] the assessed ring's label, "you" or "assessed"
+  # @param possessive [String] whose level the comparison tab names, "your" or "their"
   # @param part [Symbol] :modal for the page, :content for a stream into
   #   `CONTENT_ID`, :frame for that frame on its own
   # @param src [String, nil] where the content frame reloads from
   # @param comparable [Boolean] see {.for}
   # @param compared [Views::Assessments::LevelComparisonPanel, nil] see {.for}
-  def initialize(shape:, subject:, assessed_as: "you", part: :modal, src: nil, comparable: false, compared: nil)
+  def initialize(shape:, subject:, assessed_as: "you", possessive: "your", part: :modal, src: nil, comparable: false,
+                 compared: nil)
     @shape = shape
     @subject = subject
     @assessed_as = assessed_as
+    @possessive = possessive
     @part = part
     @src = src
     @comparable = comparable
@@ -121,7 +125,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   def tabs
     div(class: "-mt-2 mb-4 flex gap-1 border-b border-default", role: "tablist", aria: { label: "Capability map views" }) do
       tab("Capabilities", key: "capabilities", selected: @compared.nil?)
-      tab("Compared with your level", key: "compare", selected: @compared.present?)
+      tab("Compared with #{@possessive} level", key: "compare", selected: @compared.present?)
     end
   end
 

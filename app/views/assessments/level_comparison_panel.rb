@@ -9,7 +9,13 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
   # The lanes' track runs to two levels' worth, so met sits halfway.
   TRACK_TOP = 200.0
   PERSPECTIVES = { self: "self-ratings", manager: "manager ratings", alignment: "agreed ratings" }.freeze
-  LANE_COLUMNS = "grid grid-cols-[minmax(0,1fr)_9rem] gap-x-3 sm:grid-cols-[13rem_minmax(0,1fr)_9rem]"
+  # Every lane shares one grid, so the scores column fits the longest label and the tracks still line up.
+  # Below sm, a name in the scores would squeeze the capability's, so they go under it instead.
+  LANES = {
+    beside: "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 sm:grid-cols-[13rem_minmax(0,1fr)_auto]",
+    below: "grid grid-cols-1 gap-x-3 sm:grid-cols-[13rem_minmax(0,1fr)_auto]"
+  }.freeze
+  LANE = "col-span-full grid grid-cols-subgrid"
 
   # @param comparison [Hash] `Operations::Assessments::LevelComparison`'s payload, comparisons on
   # @param shape [Assessments::CapabilityShape, nil] the person's, read at the
@@ -116,7 +122,7 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
       @comparison[:levels].each do |l|
         detail = l[:available] ? "#{l[:group_size]} people" : "fewer than #{min}"
         render Components::Kit::Chip.new(
-          "#{l[:code]}#{' (yours)' if l[:own]} · #{detail}",
+          "#{l[:code]}#{" (#{@whose ? 'theirs' : 'yours'})" if l[:own]} · #{detail}",
           pressed: l[:ordinal] == level[:ordinal], disabled: !l[:available], size: :sm,
           data: { comparison_level: l[:code], action: "capability-map#show", capability_map_tab_param: "compare",
                   capability_map_compare_level_param: l[:ordinal], refresh_focus: "compare-#{l[:code]}" }
@@ -126,27 +132,31 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
   end
 
   def lanes
-    @shape.groups.each do |group|
-      category = @categories[group.category_id]
-      div(class: "#{LANE_COLUMNS} items-center px-2 pt-4 pb-1") do
-        span(class: "sm:col-span-2") { render Components::Kit::Tag.new(group.name.to_s, category: group.hue) }
-        span(class: "text-right text-sm font-bold text-muted tabular-nums whitespace-nowrap") do
-          both(category&.dig(:your_score), category&.dig(:group_median))
-        end
+    div(class: LANES.fetch(@whose ? :below : :beside)) { @shape.groups.each { |group| category_lanes(group) } }
+  end
+
+  def category_lanes(group)
+    category = @categories[group.category_id]
+    div(class: "#{LANE} items-center px-2 pt-4 pb-1") do
+      span(class: "sm:col-span-2") { render Components::Kit::Tag.new(group.name.to_s, category: group.hue) }
+      span(class: "#{scores_align} text-sm font-bold text-muted tabular-nums whitespace-nowrap") do
+        both(category&.dig(:your_score), category&.dig(:group_median))
       end
-      group.points.each { |point| lane(point, @capabilities[point.stable_id]) }
     end
+    group.points.each { |point| lane(point, @capabilities[point.stable_id]) }
   end
 
   def lane(point, capability)
-    div(class: "#{LANE_COLUMNS} items-center px-2 py-1.5 text-sm text-default", data: { comparison_lane: point.number }) do
+    div(class: "#{LANE} items-center px-2 py-1.5 text-sm text-default", data: { comparison_lane: point.number }) do
       span(class: "line-clamp-2") { point.name }
       track(point.hue, capability)
-      span(class: "text-right text-xs text-muted tabular-nums whitespace-nowrap", data: { comparison_scores: true }) do
+      span(class: "#{scores_align} text-xs text-muted tabular-nums whitespace-nowrap", data: { comparison_scores: true }) do
         both(capability&.dig(:your_score), capability&.dig(:group_median))
       end
     end
   end
+
+  def scores_align = @whose ? "sm:text-right" : "text-right"
 
   def both(yours, theirs)
     plain "#{@whose || 'You'} "
