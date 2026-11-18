@@ -207,6 +207,25 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       end
     end
 
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "keep the person's score on a capability the snapshot predates, with no group line, on #{label}" do
+        ActsAsTenant.with_tenant(@tenant) do
+          group = LevelComparisonGroup.find_by!(role_id: @role_id, level_ordinal: 20)
+          group.update!(capability_medians: group.capability_medians.except(@stable_ids.fetch("Stakeholders")))
+        end
+        page.driver.browser.manage.window.resize_to(*size)
+        open_map
+        wait_for_stimulus "capability-map"
+        click_selector_with_js_fallback("#{MAP} [role='tab']:not([aria-selected='true'])", expect_selector: "#{MAP} [data-comparison-lane]")
+
+        within(MAP) do
+          assert_selector "[data-comparison-lane='3'] [data-comparison-scores]", text: "You 100% · PM2s no score"
+          assert_selector "svg [data-blade-median]", count: 3, visible: :all
+        end
+        assert_no_sideways_overflow
+      end
+    end
+
     should "name the person on every lane when their manager compares them" do
       manager_user = FactoryBot.create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do
