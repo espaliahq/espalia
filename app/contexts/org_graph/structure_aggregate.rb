@@ -536,7 +536,9 @@ class OrgGraph::StructureAggregate
     apply_conversion(governed, conversion, effective_on, withdrawn_by_id)
   end
 
-  # Retires a unit. Its live sub-units must be moved or retired first.
+  # Retires a unit. Its live sub-units must be moved or retired first. A unit
+  # with a structure of its own gives it up in the same change, whoever
+  # supplies the retirement, so changing the retirement back can restore both.
   #
   # @param unit_id [String]
   # @param effective_on [Date, String]
@@ -546,7 +548,7 @@ class OrgGraph::StructureAggregate
     effective_on = iso_date(effective_on)
     unit = retirable_unit!(unit_id, provider, on: effective_on)
 
-    apply(retirement(unit, effective_on:, retired_by_id:))
+    retire(unit, effective_on:, retired_by_id:)
   end
 
   # States that the successors carry on from the predecessors: a split, a
@@ -601,8 +603,7 @@ class OrgGraph::StructureAggregate
       }))
     end
     retiring.each do |unit|
-      apply(retirement(unit, effective_on:, retired_by_id: stated_by_id,
-                             succession_id:, successor_ids: succession[:successor_ids]))
+      retire(unit, effective_on:, retired_by_id: stated_by_id, succession_id:, successor_ids: succession[:successor_ids])
     end
   end
 
@@ -1078,6 +1079,13 @@ class OrgGraph::StructureAggregate
       unit_id: unit.unit_id, provider:, previous_provider: unit.provider, field:, previous_field:, external_ref:,
       previous_external_ref: unit.external_ref, effective_on: [ effective_on, unit.changed_on ].max, handed_over_by_id:
     })
+  end
+
+  def retire(unit, effective_on:, retired_by_id:, **succession)
+    if @structures.key?(unit.unit_id)
+      apply(withdrawal(unit, conversion: {}, effective_on:, withdrawn_by_id: retired_by_id))
+    end
+    apply(retirement(unit, effective_on:, retired_by_id:, **succession))
   end
 
   def retirement(unit, effective_on:, retired_by_id:, succession_id: nil, successor_ids: nil)

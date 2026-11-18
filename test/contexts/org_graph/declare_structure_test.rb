@@ -85,7 +85,51 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal "These units wouldn't fit the top structure: Checkout (Tribe under Tribe)", error.message
   end
 
+  context "retiring a unit with a structure of its own" do
+    setup do
+      @lane = SecureRandom.uuid_v7
+      @retire_on = @today + 5
+    end
+
+    should "withdraw the structure in the same change when an admin retires the unit" do
+      declare(unit: @basket, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {})
+      event_store.with_metadata(correlation_id: "request-1") do
+        as_tenant { @handler.retire_unit(@basket, effective_on: @retire_on) }
+      end
+
+      assert structure.unit(@basket).retired
+      assert_empty structure.declared_structures
+      assert_equal [ [], [ "Lane" ], "request-1" ],
+                   last_definition.then { [ it[:levels], it[:previous_levels].map { |level| level[:name] }, last_event.metadata[:correlation_id] ] }
+      assert_equal "request-1", event_store.read.of_type(OrgGraph::Events::UnitRetired).backward.first.metadata[:correlation_id]
+      assert_equal [ { @basket => %w[Lane] }, {} ], [ @retire_on - 1, @retire_on ].map { structures_as_of(it) }
+    end
+
+    should "withdraw it when the HRIS retires a unit it provides, never refusing the sync" do
+      as_tenant { @handler.hand_over_level(@tribe, "hibob", field: "work.tribe", matches: { @payments => "t-1" }, effective_on: @today) }
+      declare
+      as_tenant do
+        [ @basket, @checkout ].each { @handler.retire_unit(it, effective_on: @retire_on) }
+        @handler.retire_unit(@payments, provider: "hibob", effective_on: @retire_on)
+      end
+
+      assert structure.unit(@payments).retired
+      assert_empty structure.declared_structures
+      assert_equal [ { @payments => %w[Group Stream] }, {} ], [ @retire_on - 1, @retire_on ].map { structures_as_of(it) }
+    end
+  end
+
   private
+
+  def last_event = event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).backward.first
+
+  def structures_as_of(day)
+    as_tenant do
+      user = create(:user)
+      context = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, user:, tenant: @tenant), person: nil)
+      OrgGraph::AsOf.new(context:, date: day).call.structures.transform_values { it.map(&:name) }
+    end
+  end
 
   def groups_and_streams
     [ { level_id: @group, name: "Group", parent_level_ids: [], top: true },
