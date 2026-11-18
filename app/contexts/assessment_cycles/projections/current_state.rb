@@ -38,9 +38,7 @@ class AssessmentCycles::Projections::CurrentState
   #     PersonUnenrolled), so participants of previously-closed cycles come
   #     back as concluded members of their cohort.
   #
-  # 4 — a framework publish re-reads every enrolment's `level_ordinal` from
-  #     its level, so a level renumbered by that publish no longer leaves the
-  #     stored ordinal pointing at another level.
+  # 4 — a framework publish re-reads every enrolment's `level_ordinal`.
   CODE_VERSION = 4
 
   # All event classes this projection handles.
@@ -133,11 +131,14 @@ class AssessmentCycles::Projections::CurrentState
   # closed, as a rebuild would. Runs after PublishedState, which subscribes
   # first and has rebuilt the levels by now.
   def handle_framework_version_published(event)
-    current_ordinal = FrameworkState::Level.where("level_id = assessment_cycle_enrollments.level_id").select(:ordinal)
+    levels = FrameworkState::Level.arel_table
+    ordinal_of_own_level = FrameworkState::Level
+      .where(levels[:level_id].eq(AssessmentCycleEnrollment.arel_table[:level_id]))
+      .select(:ordinal)
 
     AssessmentCycleEnrollment
       .where(cycle_id: AssessmentCycle.where(framework_id: event.data[:framework_id]).select(:cycle_id))
-      .update_all("level_ordinal = (#{current_ordinal.to_sql})")
+      .update_all(level_ordinal: Arel.sql("(#{ordinal_of_own_level.to_sql})"))
   end
 
   def handle_cycle_renamed(event)
