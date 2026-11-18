@@ -8,7 +8,9 @@
 #
 # It marks a unit whose type can no longer sit under its parent's, or at the
 # top, once the Org Graph narrows where a type may sit: "Doesn't fit this
-# structure" ([#390](https://github.com/espaliahq/espalia/issues/390)).
+# structure" ([#390](https://github.com/espaliahq/espalia/issues/390)). Each
+# unit is judged against the structure in force at it through the plan's
+# tree, so a unit whose type belongs to another structure misfits too (#494).
 #
 # It also checks each person: allocation, someone still placed after the
 # Org Graph has them leave, and their manager (4.6), and each seat whose
@@ -88,7 +90,7 @@ class TeamPlanning::Attention
     budget = TeamPlanning::Budget.new(context:, plan:, scenario_id:, repository:, aggregate:, shared:).call if scenario_id != plan.id && map.budget_lines.any?
     items = new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
                               unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats, budget:,
-                              taxonomy: OrgTaxonomyLevel.taxonomy).call
+                              structures: TeamPlanning::PlannedStructures.load(map)).call
     Report.new(items:, names: items.empty? ? {} : names_of(resolution.named(map), items))
   end
 
@@ -144,10 +146,10 @@ class TeamPlanning::Attention
   # @param priced [Array<TeamPlanning::Capacity::Seat>] from {TeamPlanning::Capacity::Report#seats}
   # @param budget [TeamPlanning::Budget::Report, nil] the scenario's budget, read as the viewer; nil for the
   #   root, which has no period, and for a scenario with no budget lines, which has no budget to check
-  # @param taxonomy [OrgGraph::Taxonomy, nil] the unit types and where each may sit; nil checks no fit
-  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [], budget: nil, taxonomy: nil, today: Date.current)
+  # @param structures [TeamPlanning::PlannedStructures, nil] the unit types in force at each unit, and where each may sit; nil checks no fit
+  def initialize(map, changes, left_ids: [], closed_units: {}, unclassified: [], priced: [], budget: nil, structures: nil, today: Date.current)
     @map = map
-    @taxonomy = taxonomy
+    @structures = structures
     @today = today
     @budget = budget
     @position_units = closed_units.merge(map.positions.to_h { [ it.id, it.unit_id ] })
@@ -229,26 +231,38 @@ class TeamPlanning::Attention
   # unit that no longer fits beneath its parent names the parent's unit too,
   # while the change stays the unit's own: a parent's plan change never breaks it.
   def misfits
-    return [] unless @taxonomy
+    return [] unless @structures
 
     by_id = @map.units.index_by(&:id)
     @map.units.filter_map do |unit|
       parent = unit.parent_id && by_id[unit.parent_id]
       next unless (why = misfit(unit, parent, judged: !((unit.parent_id || @roots.include?(unit.id)) && !parent)))
 
-      beneath = parent && @taxonomy.kind(unit.level_id)
+      beneath = parent && @structures.at(unit.id).kind(unit.level_id)
       item(unit.id, UNIT, "#{I18n.t('org_graph.misfit')}: #{why}", units: beneath ? [ parent.id ] : [])
     end
   end
 
+  # A unit beneath a declaring parent sits at the top of the parent's
+  # structure, so it is judged as a top unit there.
   def misfit(unit, parent, judged:)
     return unless unit.level_id
-    return "its unit type no longer exists" unless (kind = @taxonomy.kind(unit.level_id))
-    return unless judged
-    return ("#{kind.name} can't sit at the top" unless kind.top?) unless parent
-    return unless (parent_kind = @taxonomy.kind(parent.level_id))
 
-    "#{kind.name} can't sit under #{parent_kind.name}" unless @taxonomy.allows?(kind.id, beneath: parent_kind.id)
+    taxonomy = @structures.at(unit.id)
+    return missing_type(unit.level_id) unless (kind = taxonomy.kind(unit.level_id))
+    return unless judged
+    return ("#{kind.name} can't sit at the top" unless kind.top?) if parent.nil? || @structures.declares?(parent.id)
+    return unless (parent_kind = taxonomy.kind(parent.level_id))
+
+    "#{kind.name} can't sit under #{parent_kind.name}" unless taxonomy.allows?(kind.id, beneath: parent_kind.id)
+  end
+
+  # A type the plan can see in another structure is named; one it can't, or
+  # one gone from every structure, reads as gone.
+  def missing_type(level_id)
+    return "its unit type no longer exists" unless @structures.visible_type?(level_id)
+
+    "its type belongs to another structure"
   end
 
   def unresolved
