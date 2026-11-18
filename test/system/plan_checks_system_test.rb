@@ -101,6 +101,17 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_includes all("nav[aria-label='Checks'] a").map { it.text.squish }, "Unit types 1"
       assert_no_sideways_overflow
     end
+
+    should "mark a unit of the plan's that holds a type of another structure" do
+      unit_of_another_structure
+      sign_in_as(@planner.user)
+      visit checks_plan_path(@plan_id, scenario: @q1)
+      assert_text "Checks on Q1 hires"
+
+      assert_selector "#checks-misfits [data-check-item]",
+                      text: /Risk · Unit.*Doesn't fit this structure: its type belongs to another structure.*From a change in Q1 hires/m
+      assert_no_sideways_overflow
+    end
   end
 
   context "on a phone" do
@@ -148,6 +159,16 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_text "Checks on Q1 hires"
 
       assert_selector "#checks-misfits [data-check-item]", text: /Doesn't fit this structure: Squad can't sit under Team/
+      assert_no_sideways_overflow
+    end
+
+    should "read a unit of another structure's type without scrolling sideways" do
+      unit_of_another_structure
+      sign_in_as(@planner.user)
+      visit checks_plan_path(@plan_id, scenario: @q1)
+      assert_text "Checks on Q1 hires"
+
+      assert_selector "#checks-misfits [data-check-item]", text: /Doesn't fit this structure: its type belongs to another structure/
       assert_no_sideways_overflow
     end
   end
@@ -204,6 +225,14 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
     end
     call(Operations::TeamPlanning::SetUnit, @planner, plan_id: @plan_id, scenario_id: @q1, name: "Risk", parent_id: @payments, level_id: squad)
     ActsAsTenant.with_tenant(@tenant) { structure.set_kind_parents(squad, parent_ids: [], top: true, effective_on: Date.current.iso8601) }
+  end
+
+  # The plan puts a Team under Payments, which then takes a structure of its own.
+  def unit_of_another_structure
+    structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    ActsAsTenant.with_tenant(@tenant) { structure.set_kind_parents(@team, parent_ids: [ @team ], top: true, effective_on: Date.current.iso8601) }
+    call(Operations::TeamPlanning::SetUnit, @planner, plan_id: @plan_id, scenario_id: @q1, name: "Risk", parent_id: @payments, level_id: @team)
+    call(Operations::OrgGraph::DeclareStructure, account(role: :admin), unit_id: @payments, levels: [ { name: "Pod" } ], conversion: {})
   end
 
   def disagreeing_entry
