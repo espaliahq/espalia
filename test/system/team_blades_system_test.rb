@@ -93,6 +93,9 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       assert_selector "#team-card [data-team-gap]", text: "Player coach · 2 of 3 short"
       open_team_map
       assert_selector "#team-map [data-team-lane]", count: 2, visible: true
+      blades_right = evaluate_script("document.querySelector('#team-map [data-team-blades]').getBoundingClientRect().right")
+      lane_left = evaluate_script("document.querySelector('#team-map [data-team-lane]').getBoundingClientRect().left")
+      assert_operator blades_right, :<=, lane_left, "expected the blades beside the lanes"
 
       click_link_with_js_fallback("E3 1", expect_text: "Your 1 direct report at E3")
       within("#team-map") { assert_no_text "Ari Novak" }
