@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# A snapshot of each role and level's middle scores, taken from everyone's
+# A snapshot of each role and level's median scores, taken from everyone's
 # latest settled assessment: the alignment their manager completed for their
 # home role.
 class LevelComparisonSnapshotTest < ActiveSupport::TestCase
@@ -36,7 +36,7 @@ class LevelComparisonSnapshotTest < ActiveSupport::TestCase
 
   def engineers_at_e2(snapshot) = snapshot.groups.find_by(role_id: @fx.engineer.role_id, level_ordinal: 2)
 
-  should "keep each capability's middle score across the role's people at the level" do
+  should "keep each capability's median across the role's people at the level" do
     3.times { settled(agreed: { @fx.shared => "consistent", @fx.e_only => "none" }) }
     2.times { settled(agreed: { @fx.shared => "none", @fx.e_only => "consistent" }) }
 
@@ -47,7 +47,7 @@ class LevelComparisonSnapshotTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 12, 1), group.snapshot.taken_on
   end
 
-  should "keep each category's middle score" do
+  should "keep each category's median" do
     5.times { settled(agreed: { @fx.shared => "consistent", @fx.e_only => "consistent" }) }
 
     assert_equal({ @fx.shared.category_id => 1.0 }, engineers_at_e2(take).category_medians)
@@ -81,7 +81,7 @@ class LevelComparisonSnapshotTest < ActiveSupport::TestCase
     assert_equal 1.0, group.capability_medians[@fx.shared.stable_id]
   end
 
-  should "take the middle of an even group as the mean of its two middle scores" do
+  should "take the median of an even group as the mean of its two middle scores" do
     settled(agreed: { @fx.shared => "consistent" })
     settled(agreed: { @fx.shared => "none" })
 

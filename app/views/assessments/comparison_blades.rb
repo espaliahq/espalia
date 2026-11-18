@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 # The comparison tab's blades: the card's blades drawn large, with a line
-# across each blade at the group's middle score, on the same scale.
+# across each blade at the group's median, on the same scale.
 class Views::Assessments::ComparisonBlades < Views::Assessments::CapabilityBlades
   # @param shape [Assessments::CapabilityShape] the person's, read at the compared level
-  # @param medians [Hash{String => Float}] stable_id => the group's middle score, 1.0 the level met
+  # @param medians [Hash{String => Float}] stable_id => the group's median, 1.0 the level met
   # @param label [String] the picture's accessible name
   def initialize(shape:, medians:, label:)
     super(shape:)

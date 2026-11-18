@@ -187,7 +187,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     end
 
     [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
-      should "compare the person's blades with their level's middle scores, and a level below, on #{label}" do
+      should "compare the person's blades with their level's medians, and a level below, on #{label}" do
         page.driver.browser.manage.window.resize_to(*size)
         open_map
         wait_for_stimulus "capability-map"

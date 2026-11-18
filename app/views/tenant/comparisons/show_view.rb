@@ -87,9 +87,9 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
       card.body do
         h3(class: "text-sm font-semibold text-default mb-2") { "How snapshots work" }
         ul(class: "list-disc space-y-1 pl-5 text-sm text-muted") do
-          li { "On the 1st of the month (every month, or every third or sixth), Espalia records each group's middle scores. Comparisons show that snapshot until the next one." }
+          li { "On the 1st of the month (every month, or every third or sixth), Espalia records each group's median scores. Comparisons show that snapshot until the next one." }
           li { "A group counts each person's latest settled assessment: the agreed ratings from the last alignment their manager completed." }
-          li { "Alignments completed in between, and people who join or leave, show up at the next snapshot, so a change in a group's middle score can't be traced to one person." }
+          li { "Alignments completed in between, and people who join or leave, show up at the next snapshot, so a change in a group's median can't be traced to one person." }
           li { "There's no \"refresh now\": a refresh straight after one alignment would point at that person." }
           li { "The first snapshot is taken when comparisons are turned on. A change to how often takes effect from the next 1st of the month." }
         end

@@ -708,11 +708,13 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         assert panel.at_css("[data-comparison-lane]"), "expected the comparison inside its panel"
       end
 
-      should "show the person's blades beside the group's middle score at their level, and when it was taken" do
+      should "show the person's blades beside the group's median at their level, and when it was taken" do
         map = compare
 
         assert_equal "Compared with your level", map.at_css("[role='tab'][aria-selected='true']").text.strip
         assert_includes map.text, "as of 1 Nov 2026"
+        assert_includes map.text, "the median agreed score of the"
+        assert_includes map.text, "E2s (median)"
         assert_equal "You 100% · E2s 50%", map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish
         assert map.at_css("svg [data-blade-median='1']"), "expected the group's line across the blade"
       end

@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# A person's scores beside the middle scores of everyone on their role at a
+# A person's scores beside the median scores of everyone on their role at a
 # level. The capability map's comparison tab renders this payload, so the web
 # and an agent read one set of numbers.
 class Operations::Assessments::LevelComparison < Operations::Base
   description "Compare a person's capabilities with everyone on their role at their level, or one level either " \
-              "side: the person's live score on each capability and category beside the group's middle " \
-              "(median) score, both as percentages of the compared level (100 is meeting it). Group scores come " \
+              "side: the person's live score on each capability and category beside the group's median " \
+              "score, both as percentages of the compared level (100 is meeting it). Group scores come " \
               "from agreed ratings in a monthly snapshot (taken_on), and show only when the level has at least " \
               "min_group_size people; levels lists each one's size, or nil when too small. scale says what the " \
               "percentages mean at the compared level; a score with scored: false is nil, with its " \

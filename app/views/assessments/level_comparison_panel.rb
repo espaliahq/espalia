@@ -2,7 +2,7 @@
 
 # The capability map's "Compared with your level" tab, drawn from
 # `Operations::Assessments::LevelComparison`'s payload: the person's blades
-# with a line across each at the group's middle score, level chips, and a
+# with a line across each at the group's median, level chips, and a
 # lane per capability giving both scores in words.
 class Views::Assessments::LevelComparisonPanel < Views::Base
   SWATCH = Views::Assessments::CapabilityMapModal::FILL
@@ -54,7 +54,7 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
 
   def no_snapshot
     render Components::Kit::EmptyState.new(title: "No group scores yet", size: :panel) do
-      "The first snapshot of each level's middle scores is taken within the hour comparisons are turned on."
+      "The first snapshot of each level's medians is taken within the hour comparisons are turned on."
     end
   end
 
@@ -70,9 +70,9 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
   def compared
     p(class: "text-sm text-muted -mt-1 mb-4") do
       plain "#{@whose ? "#{@whose}'s" : 'Your'} #{PERSPECTIVES.fetch(@context, 'ratings')}, scored at #{code}, " \
-            "against the middle agreed score of the #{level[:group_size]} #{role_names} at #{code}, "
+            "against the median agreed score of the #{level[:group_size]} #{role_names} at #{code}, "
       strong(class: "text-default") { "as of #{Date.iso8601(@comparison[:taken_on]).strftime(LevelComparisonSnapshot::DATE_FORMAT)}" }
-      plain ". The dashed circle is #{code} met; the line across each blade is the #{plural}."
+      plain ". The dashed circle is #{code} met; the line across each blade is the #{plural}' median."
     end
     div(class: "grid gap-6 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-start") do
       div(class: "flex flex-col items-center gap-4 lg:sticky lg:top-0") do
@@ -83,7 +83,7 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
       div do
         lanes
         p(class: "mt-4 px-2 text-xs text-muted") do
-          "Only middle scores show. Nobody in the comparison is named, and a level with fewer than #{min} people " \
+          "Only medians show. Nobody in the comparison is named, and a level with fewer than #{min} people " \
             "has no comparison."
         end
       end
@@ -95,14 +95,14 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
 
   def picture_label
     at_or_above = @capabilities.values.count { |c| c[:your_score] && c[:your_score] >= c[:group_median] }
-    "#{at_or_above} of #{@shape.points.size} capabilities at or above the #{plural}' middle score"
+    "#{at_or_above} of #{@shape.points.size} capabilities at or above the #{plural}' median"
   end
 
   def legend
     div(class: "flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted", aria: { hidden: "true" }) do
       span(class: "flex items-center gap-1.5") do
         span(class: "inline-block h-1 w-3 bg-(--gos-accent-strong)")
-        plain "#{plural} (middle score)"
+        plain "#{plural} (median)"
       end
       span(class: "flex items-center gap-1.5") do
         span(class: "inline-block size-2.5 rounded-full border border-dashed border-(--gos-content-muted)")

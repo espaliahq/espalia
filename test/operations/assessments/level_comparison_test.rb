@@ -3,7 +3,7 @@
 require "test_helper"
 
 # The comparison tab's numbers for an agent: the person's scores beside the
-# group's middle scores, under the same minimum and snapshot as the web.
+# group's medians, under the same minimum and snapshot as the web.
 class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
@@ -39,7 +39,7 @@ class Operations::Assessments::LevelComparisonTest < ActiveSupport::TestCase
                  result[:levels].map { |l| l.values_at(:code, :group_size, :available) }
   end
 
-  should "give each capability's group middle score beside the person's, as a percentage" do
+  should "give each capability's group median beside the person's, as a percentage" do
     rows = call[:capabilities].to_h { |c| [ c[:stable_id], c.slice(:name, :group_median) ] }
 
     assert_equal({ name: "Critical Thinking", group_median: 50 }, rows[@fx.shared.stable_id])

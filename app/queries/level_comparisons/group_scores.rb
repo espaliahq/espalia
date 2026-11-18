@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Every role and level's middle scores, from each person's latest settled
+# Every role and level's median scores, from each person's latest settled
 # assessment: the most recent alignment their manager completed for their
 # home role. A reopened alignment falls back to the one before it. People
 # who have left, or been forgotten, are not counted.

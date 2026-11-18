@@ -3,7 +3,7 @@
 # What a person's comparison with their level can show, from the tenant's
 # latest snapshot: their level and one either side on the role the page
 # reads, each sized once its group meets the tenant's minimum, and the
-# group's middle scores only then. A smaller group shows no number at all,
+# group's medians only then. A smaller group shows no number at all,
 # not even its size, so no comparison can point at one person.
 class Assessments::LevelComparison
   Level = Data.define(:ordinal, :code, :own, :group_size, :available)

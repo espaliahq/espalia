@@ -4,7 +4,7 @@ require "test_helper"
 
 # What a person's comparison with their level can show: their level and one
 # either side, each with its group's size once it meets the tenant's minimum,
-# and the group's middle scores only then.
+# and the group's medians only then.
 class Assessments::LevelComparisonTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
@@ -52,7 +52,7 @@ class Assessments::LevelComparisonTest < ActiveSupport::TestCase
     assert_equal 2, comparison.own_ordinal
   end
 
-  should "give a group's middle scores only when it meets the minimum" do
+  should "give a group's medians only when it meets the minimum" do
     group(1, 7, { @fx.shared.stable_id => 0.75 })
     group(2, 4)
 

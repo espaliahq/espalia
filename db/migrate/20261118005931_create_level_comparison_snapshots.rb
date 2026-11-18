@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The group scores a level comparison shows: each snapshot, and each group's
-# size and middle scores in it. Only medians and counts, never a person.
+# size and median scores in it. Only medians and counts, never a person.
 class CreateLevelComparisonSnapshots < ActiveRecord::Migration[8.1]
   def change
     create_table :level_comparison_snapshots, id: :uuid, default: nil do |t|

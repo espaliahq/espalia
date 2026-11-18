@@ -3,7 +3,7 @@
 require "test_helper"
 
 # The comparison tab's blades: the person's, with a line across each blade at
-# the group's middle score on the same scale as the blade.
+# the group's median on the same scale as the blade.
 class Views::Assessments::ComparisonBladesTest < ActiveSupport::TestCase
   CAP = Struct.new(:stable_id, :name, keyword_init: true)
   CATEGORY = Struct.new(:category_id, :name, keyword_init: true)
@@ -30,13 +30,13 @@ class Views::Assessments::ComparisonBladesTest < ActiveSupport::TestCase
 
   def line_radius(picture, number) = picture.at_css("[data-blade-median='#{number}']")["d"].scan(/A(\d+(?:\.\d+)?)/).first.first.to_f
 
-  should "draw the group's line at its middle score: the dashed edge when met, past it when ahead, inside when short" do
+  should "draw the group's line at its median: the dashed edge when met, past it when ahead, inside when short" do
     picture = render_blades({ "cap-Delivery" => 1.0, "cap-Quality" => 1.5, "cap-Testing" => 0.5 })
 
     assert_equal [ 22.0, 26.0, 11.0 ], (1..3).map { |n| line_radius(picture, n) }
   end
 
-  should "draw no line where the group has no middle score" do
+  should "draw no line where the group has no median" do
     picture = render_blades({ "cap-Delivery" => 1.0 })
 
     assert_equal %w[1], picture.css("[data-blade-median]").map { |line| line["data-blade-median"] }

@@ -2,7 +2,7 @@
 
 # The group scores a level comparison shows, as they stood on one day. Taken
 # on the 1st of the month, so a change to one person's rating reaches the
-# group's middle score only with everyone else's changes since the last one.
+# group's median only with everyone else's changes since the last one.
 class LevelComparisonSnapshot < ApplicationRecord
   # How a snapshot's day reads on screen: "1 Nov 2026".
   DATE_FORMAT = "%-d %b %Y"
