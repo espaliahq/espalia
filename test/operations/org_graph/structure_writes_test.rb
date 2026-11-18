@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 # Declaring and withdrawing a unit's own structure, and changing its types,
 # through the operations MCP and the web share (#494).
 class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
   include OrgGraphFixture
+  include RebuildLock
 
   setup do
     @tenant = create(:tenant)
@@ -243,6 +245,25 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         error = assert_raises(OrgGraph::Authorization::Refused) { move_in(as: @editor) }
         assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
         assert_equal @org[:team], level_of(:platform)
+      end
+
+      should "ask the caller to retry while the units are rebuilt, and name a unit that isn't there" do
+        while_rebuilding(@tenant, OrgGraph::Projections::Structure) do
+          error = assert_raises(Operations::Base::ParameterError) { move_in }
+          assert_equal ProjectionVersion::Rebuilding.new.message, error.message
+        end
+        replay(@tenant, OrgGraph::Projections::Structure)
+        assert_equal @org[:team], level_of(:platform)
+
+        missing = SecureRandom.uuid_v7
+        error = assert_raises(Operations::Base::ParameterError) do
+          call(Operations::OrgGraph::MoveUnit, unit_id: missing, parent_id: @org[:checkout], conversion: { @org[:team] => @stream })
+        end
+        assert_equal "unit_id names no unit in the Org Graph", error.message
+        error = assert_raises(Operations::Base::ParameterError) do
+          call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], parent_id: missing, conversion: { @org[:team] => @stream })
+        end
+        assert_equal "parent_id names no unit in the Org Graph", error.message
       end
 
       should "refuse a malformed conversion before the operation runs, so MCP saves no approval for it" do

@@ -36,15 +36,30 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
 
   # @return [Hash] `{ unit_id, parent_id, effective_on }`, and the conversion when given, as level_id => level_id
   def perform
+    return move_into_structure unless conversion_option.empty?
+
     unit = live_unit!(:unit_id)
     parent = params[:parent_id] && live_unit!(:parent_id)
-
-    move = -> { structure_handler.move_unit(unit.id, parent&.id, effective_on:, **conversion_option, **plan) }
-    conversion_option.empty? ? move.call : refusing_as_parameter_errors(&move)
-    { unit_id: unit.id, parent_id: parent&.id, effective_on: effective_on, **conversion_option }
+    structure_handler.move_unit(unit.id, parent&.id, effective_on:, **plan)
+    { unit_id: unit.id, parent_id: parent&.id, effective_on: effective_on }
   end
 
   private
+
+  # A Structure rebuild empties org_units, so the units are read only once the
+  # command has passed its rebuild check and refused, to name a missing one.
+  def move_into_structure
+    unit_id = uuid!(:unit_id).downcase
+    parent_id = params[:parent_id] && uuid!(:parent_id).downcase
+    refusing_as_parameter_errors do
+      structure_handler.move_unit(unit_id, parent_id, effective_on:, **conversion_option, **plan)
+    rescue RuntimeError
+      live_unit!(:unit_id)
+      parent_id && live_unit!(:parent_id)
+      raise
+    end
+    { unit_id:, parent_id:, effective_on:, **conversion_option }
+  end
 
   def ensure_conversion_well_formed!
     return if params[:conversion].nil?
