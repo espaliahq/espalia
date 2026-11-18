@@ -92,11 +92,20 @@ class OrgGraph::StructureAggregate
   # @param top [Boolean]
   # @param effective_on [Date, String] no earlier than the kinds' last change
   # @param defined_by_id [String, nil] person_id of the actor
+  # @param structure_unit_id [String, nil] the unit whose own structure holds
+  #   the kind; nil for the top structure
   # @raise [ArgumentError] if a kind is unknown, or the kind could sit nowhere
   # @raise [RuntimeError] if the date is too early, a live unit would no longer
   #   fit, or an HRIS provides the kind and the rules break the HRIS rule
-  def set_kind_parents(level_id, parent_ids:, top:, effective_on:, defined_by_id: nil)
+  def set_kind_parents(level_id, parent_ids:, top:, effective_on:, defined_by_id: nil, structure_unit_id: nil)
     level_id = require_id(level_id, "Level id")
+    if structure_unit_id
+      return redefine_structure(structure_unit_id, effective_on:, defined_by_id:) do |levels|
+        raise ArgumentError, "That unit type doesn't exist" unless levels.any? { it[:level_id] == level_id }
+
+        levels.map { it[:level_id] == level_id ? it.merge(parent_level_ids: Array(parent_ids), top:) : it }
+      end
+    end
     raise ArgumentError, "That unit type doesn't exist" unless level_index(level_id)
 
     write_taxonomy(@levels, rules: { level_id => kind_rules(level_id, parent_ids, top) }, effective_on:, defined_by_id:)
@@ -117,11 +126,19 @@ class OrgGraph::StructureAggregate
   #   `parent_ids:`; by default only when it lists no parents
   # @param effective_on [Date, String]
   # @param defined_by_id [String, nil] person_id of the actor
+  # @param structure_unit_id [String, nil] the unit whose own structure gains
+  #   the kind; nil for the top structure
   # @raise [ArgumentError] if the id is taken, the name blank or taken, or a
   #   parent kind unknown
-  def add_level(level_id, name, effective_on:, parent_ids: nil, top: nil, defined_by_id: nil)
+  def add_level(level_id, name, effective_on:, parent_ids: nil, top: nil, defined_by_id: nil, structure_unit_id: nil)
     level_id = require_id(level_id, "Level id")
     raise ArgumentError, "Level id is taken" if kind_home(level_id)
+    if structure_unit_id
+      return redefine_structure(structure_unit_id, effective_on:, defined_by_id:) do |levels|
+        parents = parent_ids.nil? ? level_ids(levels) : Array(parent_ids)
+        [ *levels, { level_id:, name:, parent_level_ids: parents, top: top.nil? ? parent_ids.nil? || parents.empty? : top } ]
+      end
+    end
 
     rules = {}
     unless parent_ids.nil? && top.nil?
@@ -139,10 +156,20 @@ class OrgGraph::StructureAggregate
   # @param level_id [String] a level in the current taxonomy
   # @param effective_on [Date, String]
   # @param defined_by_id [String, nil] person_id of the actor
+  # @param structure_unit_id [String, nil] the unit whose own structure holds
+  #   the level; nil for the top structure
   # @raise [ArgumentError] if the level isn't in the taxonomy or is the last one
   # @raise [RuntimeError] if an HRIS provides the level or a unit has held it
-  def remove_level(level_id, effective_on:, defined_by_id: nil)
+  def remove_level(level_id, effective_on:, defined_by_id: nil, structure_unit_id: nil)
     level_id = require_id(level_id, "Level id")
+    if structure_unit_id
+      return redefine_structure(structure_unit_id, effective_on:, defined_by_id:) do |levels|
+        raise ArgumentError, "That unit type doesn't exist" unless levels.any? { it[:level_id] == level_id }
+        raise ArgumentError, "A structure needs at least one unit type; withdraw it instead" if levels.one?
+
+        levels.reject { it[:level_id] == level_id }.map { it.merge(parent_level_ids: it[:parent_level_ids] - [ level_id ]) }
+      end
+    end
     level = @levels.find { |candidate| candidate[:level_id] == level_id }
     raise ArgumentError, "That unit type doesn't exist" unless level
     unless level_provider(level_id) == ESPALIA
@@ -826,6 +853,27 @@ class OrgGraph::StructureAggregate
     })
   end
 
+  # Rewrites a declared structure's types from the block's edit of them,
+  # refused while a type a unit has held would go, or a unit it governs
+  # would no longer fit.
+  def redefine_structure(unit_id, effective_on:, defined_by_id:)
+    unit = live_unit!(require_id(unit_id, "Unit id"))
+    old = @structure_levels[unit.unit_id] or raise "#{unit.name} has no structure of its own"
+    levels = declared_levels(yield(old), nil, home: unit.unit_id)
+    return if levels == old
+
+    governed = governed_by(unit.unit_id)
+    on = structure_dated!(unit, governed, effective_on)
+    old.reject { level_ids(levels).include?(it[:level_id]) }.each { ensure_never_held!(it) }
+    held = governed.map(&:level_id).uniq
+    converted!(governed, held.zip(held).to_h, into: OrgGraph::Taxonomy.new(levels), label: "#{unit.name}'s structure") do |parent_id|
+      parent_id == unit.unit_id ? nil : parent_id
+    end
+    apply(OrgGraph::Events::TaxonomyDefined.new(data: {
+      levels:, previous_levels: old, structure_unit_id: unit.unit_id, effective_on: on, defined_by_id:
+    }))
+  end
+
   # The live units a structure at a unit governs: those beneath it, down to
   # and including any that declares a structure of its own.
   def governed_by(unit_id)
@@ -853,7 +901,7 @@ class OrgGraph::StructureAggregate
 
   # A declared structure's types state their rules, and each type a copy
   # names comes from the structure it copies.
-  def declared_levels(levels, copied_from)
+  def declared_levels(levels, copied_from, home: nil)
     levels = Array(levels).map do |level|
       level = level.to_h.symbolize_keys
       { level_id: require_id(level[:level_id], "Level id"), name: require_name(level[:name]),
@@ -864,7 +912,7 @@ class OrgGraph::StructureAggregate
 
     ids = level_ids(levels)
     raise ArgumentError, "Each unit type needs its own id" unless ids.uniq.size == ids.size
-    raise ArgumentError, "Level id is taken" if ids.any? { kind_home(it) }
+    raise ArgumentError, "Level id is taken" if ids.any? { (found = kind_home(it)) && found != home }
     raise ArgumentError, "Two unit types can't share a name" unless levels.map { it[:name].downcase }.uniq.size == levels.size
 
     source = copied_from && (copied_from == "top" ? taxonomy : @structures.fetch(copied_from))
@@ -875,7 +923,7 @@ class OrgGraph::StructureAggregate
       if !level[:top] && (level[:parent_level_ids] - [ level[:level_id] ]).empty?
         raise ArgumentError, "A unit type needs somewhere to sit: under another type, or at the top"
       end
-      if level[:copied_from_level_id] && !source&.kind(level[:copied_from_level_id])
+      if level[:copied_from_level_id] && !home && !source&.kind(level[:copied_from_level_id])
         raise ArgumentError, "#{level[:name]} copies a unit type the structure copied from doesn't hold"
       end
 

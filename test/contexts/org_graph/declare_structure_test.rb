@@ -85,6 +85,47 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal "These units wouldn't fit the top structure: Checkout (Tribe under Tribe)", error.message
   end
 
+  context "editing a declared structure's types" do
+    setup { declare }
+
+    should "add a type, set its rules and remove it again, each as a change to that structure" do
+      lane = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.add_level(lane, "Lane", structure_unit_id: @payments, effective_on: @today)
+        @handler.set_kind_parents(lane, parent_ids: [ @stream ], top: false, structure_unit_id: @payments, effective_on: @today)
+      end
+      assert_equal [ [ @stream ], false ], structure.declared_structures[@payments].kind(lane).then { [ it.parent_ids, it.top ] }
+      assert_equal %w[Tribe Squad Pod], structure.taxonomy.kinds.map(&:name)
+
+      as_tenant { @handler.remove_level(lane, structure_unit_id: @payments, effective_on: @today) }
+      assert_equal %w[Group Stream], structure.declared_structures[@payments].kinds.map(&:name)
+      assert_equal %w[Group Stream Lane], last_definition[:previous_levels].map { it[:name] }
+    end
+
+    should "refuse rules a unit it governs wouldn't fit, a type a unit has held, and the structure's last type" do
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.set_kind_parents(@stream, parent_ids: [], top: true, structure_unit_id: @payments, effective_on: @today) }
+      end
+      assert_equal "These units wouldn't fit Payments's structure: Basket (Stream under Group)", error.message
+
+      error = assert_raises(RuntimeError) { as_tenant { @handler.remove_level(@stream, structure_unit_id: @payments, effective_on: @today) } }
+      assert_match "Basket", error.message
+
+      lone = create_unit("Lending", @tribe)
+      declare(unit: lone, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {})
+      lane = structure.declared_structures[lone].kinds.sole.id
+      error = assert_raises(ArgumentError) { as_tenant { @handler.remove_level(lane, structure_unit_id: lone, effective_on: @today) } }
+      assert_equal "A structure needs at least one unit type; withdraw it instead", error.message
+    end
+
+    should "refuse a top structure type id named for a declared structure" do
+      error = assert_raises(ArgumentError) do
+        as_tenant { @handler.set_kind_parents(@squad, parent_ids: [], top: true, structure_unit_id: @payments, effective_on: @today) }
+      end
+      assert_equal "That unit type doesn't exist", error.message
+    end
+  end
+
   context "retiring a unit with a structure of its own" do
     setup do
       @lane = SecureRandom.uuid_v7
