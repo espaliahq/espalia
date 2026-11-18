@@ -106,7 +106,7 @@ class OrgGraph::ActivityFeed
     entry.after ? "Moved #{person} in from #{other}" : "Moved #{person} out to #{other}"
   end
 
-  def kind_name(level_id) = OrgTaxonomyLevel.find_by(id: level_id)&.name || "a type since removed"
+  def kind_name(level_id) = (@kind_names ||= OrgTaxonomyLevel.pluck(:id, :name).to_h).fetch(level_id, "a type since removed")
 
   def parent_phrase(parent_id)
     parent = parent_id && OrgUnit.find_by(id: parent_id)

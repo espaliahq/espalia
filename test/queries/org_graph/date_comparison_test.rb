@@ -94,7 +94,7 @@ class OrgGraph::DateComparisonTest < ActiveSupport::TestCase
     end
     travel_to TODAY
 
-    assert_equal [ "was a Squad" ], compare("2026-09-01").unit_marks(unit(:payments))
+    assert_equal [ "type was Squad" ], compare("2026-09-01").unit_marks(unit(:payments))
     assert_empty compare("2026-10-01").unit_marks(unit(:payments))
   end
 
