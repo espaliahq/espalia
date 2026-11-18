@@ -168,10 +168,9 @@ class OrgGraph::StructureCommandHandler
   def move_unit(unit_id, parent_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_move_unit!(unit_id, parent_id)
-    with_structure(plan, grouped: !options[:conversion].nil?) do |structure|
-      authorize_move_into!(structure.structure_joined_beneath(parent_id)) unless options[:conversion].nil?
-      structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id))
-    end
+    return move_into_structure(unit_id, parent_id, plan, options) unless options[:conversion].nil?
+
+    with_structure(plan) { |structure| structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
   end
 
   # @see OrgGraph::StructureAggregate#change_unit_kind
@@ -255,6 +254,15 @@ class OrgGraph::StructureCommandHandler
   # change that reached both the live subscriber and a replay would leave the
   # replay's older provider standing. The structure holds each kind's rules,
   # and places units by them, so a change mid-rebuild could be overtaken too.
+  def move_into_structure(unit_id, parent_id, plan, options)
+    unless_kinds_rebuilding do
+      with_structure(plan, grouped: true) do |structure|
+        authorize_move_into!(structure.structure_joined_beneath(parent_id))
+        structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id))
+      end
+    end
+  end
+
   def unless_kinds_rebuilding(&)
     ProjectionVersion.unless_rebuilding(OrgGraph::Projections::History::PROJECTION_NAME,
                                         OrgGraph::Projections::Structure::PROJECTION_NAME, &)

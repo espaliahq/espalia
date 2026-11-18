@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
+  include RebuildLock
+
   SYSTEM = OrgGraph::Authorization::SYSTEM
 
   setup do
@@ -164,6 +167,13 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
 
     error = assert_raises(OrgGraph::Authorization::Refused) { as_tenant { @system.move_unit(@ledger, @payments, effective_on: @today + 1, conversion: {}) } }
     assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+  end
+
+  should "refuse a move into a structure while the kinds are rebuilt" do
+    [ OrgGraph::Projections::History, OrgGraph::Projections::Structure ].each do |projection|
+      while_rebuilding(@tenant, projection) { assert_raises(ProjectionVersion::Rebuilding) { move_in } }
+    end
+    assert_nil structure.structure_in_force(@ledger)
   end
 
   should "share one cause outside a request, and refuse to change any part of it back" do
