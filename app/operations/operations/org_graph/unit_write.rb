@@ -33,6 +33,14 @@ module Operations::OrgGraph::UnitWrite
     raise Operations::Base::ParameterError, "effective_on must be a date like 2026-11-13, got #{params[:effective_on].inspect}"
   end
 
+  # The commands refuse a change they can't keep with a message the caller
+  # can act on, so it reaches them as a bad parameter.
+  def refusing_as_parameter_errors
+    yield
+  rescue ArgumentError, RuntimeError => e
+    raise Operations::Base::ParameterError, e.message
+  end
+
   # @param name [Symbol] the parameter that names the unit
   # @return [OrgUnit] a live unit
   # @raise [Operations::Base::ParameterError]
