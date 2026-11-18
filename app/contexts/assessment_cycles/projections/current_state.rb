@@ -136,9 +136,12 @@ class AssessmentCycles::Projections::CurrentState
       .where(levels[:level_id].eq(AssessmentCycleEnrollment.arel_table[:level_id]))
       .select(:ordinal)
 
+    ordinal_sql = Arel.sql("(#{ordinal_of_own_level.to_sql})")
+
     AssessmentCycleEnrollment
       .where(cycle_id: AssessmentCycle.where(framework_id: event.data[:framework_id]).select(:cycle_id))
-      .update_all(level_ordinal: Arel.sql("(#{ordinal_of_own_level.to_sql})"))
+      .where(AssessmentCycleEnrollment.arel_table[:level_ordinal].is_distinct_from(ordinal_sql))
+      .update_all(level_ordinal: ordinal_sql, updated_at: Time.current)
   end
 
   def handle_cycle_renamed(event)
