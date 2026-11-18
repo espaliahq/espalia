@@ -324,6 +324,13 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-card [data-team-gap]", text: "Critical Thinking · 2 of 3 short"
     end
 
+    should "keep the page out of the browser's cache, since it shows the team's scores" do
+      sign_in @manager_user
+      get assessments_path
+
+      assert_equal "no-store", response.headers["Cache-Control"]
+    end
+
     should "offer a retry when the team map fails to load" do
       2.times { |i| rate_as_manager(add_report("Report #{i}"), @cap, "consistent") }
       sign_in @manager_user

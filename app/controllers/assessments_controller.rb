@@ -22,6 +22,7 @@ class AssessmentsController < ApplicationController
   # GET /assessments
   def index
     authorize PersonFrameworkAssignment, :index?
+    response.headers["Cache-Control"] = "no-store"
     @page_title = "My Assessments"
     @own_assignments = PersonFrameworkAssignment.for_person(current_person.id)
       .includes(:framework, :role, :level)

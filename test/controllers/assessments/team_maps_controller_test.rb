@@ -29,6 +29,13 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
     assert_no_match(/Ada Lark|Bo Finch|Cy Wren/, response.body)
   end
 
+  should "keep the map out of the browser's cache" do
+    sign_in @user
+    get team_map_assessments_path
+
+    assert_equal "no-store", response.headers["Cache-Control"]
+  end
+
   should "filter to one level with chips that count the people at each" do
     sign_in @user
     get team_map_assessments_path(team_level: 3)

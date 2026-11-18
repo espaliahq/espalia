@@ -7,6 +7,7 @@ class Assessments::TeamMapsController < ApplicationController
   # GET /assessments/team-map
   def show
     authorize PersonFrameworkAssignment, :index?
+    response.headers["Cache-Control"] = "no-store"
     render Views::Assessments::TeamMap.new(team: team_capabilities)
   end
 end
