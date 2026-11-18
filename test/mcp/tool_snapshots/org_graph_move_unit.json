@@ -40,6 +40,7 @@
       },
       "conversion": {
         "type": "object",
+        "minProperties": 1,
         "additionalProperties": {
           "type": "string",
           "format": "uuid"
@@ -57,6 +58,9 @@
       ],
       "cause_id": [
         "plan_id"
+      ],
+      "conversion": [
+        "parent_id"
       ]
     }
   },

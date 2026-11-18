@@ -355,6 +355,15 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         error = assert_raises(Operations::Base::ParameterError) { build.call({ @org[:team] => true }) }
         assert_equal "conversion maps level ids to level ids, got #{@org[:team].inspect} => true", error.message
         assert_raises(Operations::Base::ParameterError) { build.call({ "Team" => @stream }) }
+        error = assert_raises(Operations::Base::ParameterError) { build.call({}) }
+        assert_equal "conversion can't be blank", error.message
+        error = assert_raises(Operations::Base::ParameterError) do
+          ActsAsTenant.with_tenant(@tenant) do
+            context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+            Operations::OrgGraph::MoveUnit.new(context:, params: { unit_id: @org[:platform], conversion: { @org[:team] => @stream } })
+          end
+        end
+        assert_equal "A move with a conversion needs parent_id: a unit at the top stays in the top structure", error.message
         assert_equal @org[:team], level_of(:platform)
       end
 

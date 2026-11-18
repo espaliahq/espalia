@@ -22,7 +22,9 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
 
   parameter :unit_id, String, required: true
   parameter :parent_id, String, allow_blank: false
-  parameter :conversion, Hash, schema: CONVERSION_SCHEMA
+  parameter :conversion, Hash, schema: CONVERSION_SCHEMA, allow_blank: false
+  dependent_required :conversion, requires: :parent_id,
+                                  message: "A move with a conversion needs parent_id: a unit at the top stays in the top structure"
 
   # Checks the conversion here, so MCP saves no approval for one that can't run.
   #
