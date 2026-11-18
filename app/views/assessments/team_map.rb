@@ -68,7 +68,7 @@ class Views::Assessments::TeamMap < Views::Base
     div(class: "-mt-3 mb-6 flex flex-wrap items-center gap-3") do
       span(class: "text-sm text-muted", id: "team-compare-label") { "Compare with" }
       render Components::Kit::SegmentedControl.new(aria: { labelledby: "team-compare-label" }) do |control|
-        control.segment("#{group_name} at the same levels", short: group_name, selected: comparison[:reason] != "none",
+        control.segment("#{group_name} at the same levels", short: "Same levels", selected: comparison[:reason] != "none",
                                                                          href: team_path(team_compare: nil),
                                                                          data: { refresh_focus: "compare-level" })
         control.segment("Nothing", selected: comparison[:reason] == "none", href: team_path(team_compare: "none"),

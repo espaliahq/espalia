@@ -115,6 +115,15 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       assert_operator blades_bottom, :<=, lane_top, "expected the blades above the lanes"
       assert_compare_control_fits
     end
+
+    should "fit the Compare with control on a phone however long the role's name" do
+      ActsAsTenant.with_tenant(@tenant) { @role.update!(name: "Principal Machine Learning Infrastructure Engineer") }
+      visit_team(MOBILE_SIZE)
+
+      click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
+      assert_selector "#team-map [data-team-lane]", count: 2, visible: true
+      assert_compare_control_fits
+    end
   end
 
   should "show a blank slate until two reports have a score, with no team map" do
