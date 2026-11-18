@@ -66,6 +66,14 @@ class Operations::Tenants::UpdateComparisonsTest < ActiveSupport::TestCase
     assert_equal [ "2026-11-01", "2027-02-01" ], result.values_at(:last_snapshot_on, :next_snapshot_on)
   end
 
+  should "say the next is due today when a shorter interval leaves one overdue" do
+    ActsAsTenant.with_tenant(@tenant) { LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 10, 1)) }
+
+    result = travel_to(Time.utc(2026, 11, 18, 9)) { call({ snapshot_every_months: 1 }) }
+
+    assert_equal "2026-11-18", result[:next_snapshot_on]
+  end
+
   should "refuse a member" do
     member = create(:user)
     member_tu = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: member, role: :member) }

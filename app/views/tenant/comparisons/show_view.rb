@@ -91,7 +91,7 @@ class Views::Tenant::Comparisons::ShowView < Views::Base
           li { "A group counts each person's latest settled assessment: the agreed ratings from the last alignment their manager completed." }
           li { "Alignments completed in between, and people who join or leave, show up at the next snapshot, so a change in a group's median can't be traced to one person." }
           li { "There's no \"refresh now\": a refresh straight after one alignment would point at that person." }
-          li { "The first snapshot is taken when comparisons are turned on. A change to how often takes effect from the next 1st of the month." }
+          li { "The first snapshot is taken when comparisons are turned on. A change to how often counts from the last snapshot, so a shorter interval can make one due straight away." }
         end
         p(class: "mt-3 text-sm text-default") do
           strong { "Last snapshot: " }

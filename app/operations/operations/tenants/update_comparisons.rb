@@ -25,8 +25,9 @@ class Operations::Tenants::UpdateComparisons < Operations::Base
     authorize ActsAsTenant.current_tenant, :update_comparisons?, policy_class: TenantPolicy
   end
 
-  # Turning comparisons on takes the first snapshot, unless one was already
-  # taken this month: switching off and on again is no way to take one on demand.
+  # Turning comparisons on takes a snapshot only when one is due, as the hourly
+  # job would: the first, or one the interval says is overdue. At most one a
+  # month, so switching off and on again is no way to take one on demand.
   #
   # @return [Hash] the settings as they now stand
   # @raise [ParameterError] when a setting is out of range
