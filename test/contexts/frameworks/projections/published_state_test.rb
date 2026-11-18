@@ -848,6 +848,27 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
   end
 
   context "rebuild contract" do
+    should "rebuild the published version without a draft opened after it" do
+      family_id, role_id = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      within_tenant do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Test Framework")
+        handler.add_role_family(@framework_id, family_id, "Engineering")
+        handler.add_role(@framework_id, role_id, family_id, "Engineer", "E", "ic")
+        handler.add_level(@framework_id, SecureRandom.uuid_v7, role_id, 1, "Engineer 1", "E1", is_entry: true)
+        handler.publish_version(@framework_id, "user-1")
+        handler.start_draft(@framework_id, 2, "user-1")
+        handler.add_level(@framework_id, SecureRandom.uuid_v7, role_id, 2, "Engineer 2", "E2")
+      end
+      live = snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
+
+      Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: Frameworks::Projections::PublishedState, tenant: @tenant)
+
+      assert_equal live, snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
+      within_tenant { assert_equal %w[E1], FrameworkState::Level.where(role_id: role_id).pluck(:code) }
+    end
+
     should "reset! + replay produces identical read-model state" do
       rfid = SecureRandom.uuid_v7
       rid  = SecureRandom.uuid_v7

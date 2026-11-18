@@ -36,7 +36,9 @@ class Frameworks::Projections::PublishedState
   # 3 — SuggestionAmended on a create-kind suggestion now folds the amended
   #     value into proposed_attributes' content field (the ghost/preview
   #     display source), matching the aggregate's approval-time folding.
-  CODE_VERSION = 3
+  # 4 — a replayed publish rebuilds only up to itself, so a draft opened
+  #     after the last publish no longer leaks into the published version.
+  CODE_VERSION = 4
 
   # All event classes this projection handles.
   #
@@ -264,6 +266,9 @@ class Frameworks::Projections::PublishedState
     stream = EventStreamNaming.framework_stream(framework_id)
     event_store = Rails.configuration.event_store
     event_store.read.stream(stream).each do |event|
+      # A replay reaches this publish with later events already in the
+      # stream; a draft opened after it must not leak into this version.
+      break if event.event_id == publish_event.event_id
       next if skip_during_rebuild?(event)
 
       handle(event)
