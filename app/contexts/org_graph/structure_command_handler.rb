@@ -250,10 +250,6 @@ class OrgGraph::StructureCommandHandler
 
   private
 
-  # The history records a provider change only when it changes the kind, so a
-  # change that reached both the live subscriber and a replay would leave the
-  # replay's older provider standing. The structure holds each kind's rules,
-  # and places units by them, so a change mid-rebuild could be overtaken too.
   def move_into_structure(unit_id, parent_id, plan, options)
     unless_kinds_rebuilding do
       with_structure(plan, grouped: true) do |structure|
@@ -263,6 +259,10 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
+  # The history records a provider change only when it changes the kind, so a
+  # change that reached both the live subscriber and a replay would leave the
+  # replay's older provider standing. The structure holds each kind's rules,
+  # and places units by them, so a change mid-rebuild could be overtaken too.
   def unless_kinds_rebuilding(&)
     ProjectionVersion.unless_rebuilding(OrgGraph::Projections::History::PROJECTION_NAME,
                                         OrgGraph::Projections::Structure::PROJECTION_NAME, &)
