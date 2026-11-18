@@ -20,6 +20,9 @@ class TenantPolicy < ApplicationPolicy
   # @return [Boolean] whether the viewer can set the time zone that decides the tenant's today
   def update_time_zone? = tenant_admin?
 
+  # @return [Boolean] whether the viewer can turn level comparisons on or off and set how they work
+  def update_comparisons? = tenant_admin?
+
   # An admin's alone, and not an Org Graph editor's: how long a leaver's
   # identifiers are kept is the organisation's data-protection decision,
   # not a change to its structure.

@@ -652,6 +652,13 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The capability map's comparison tab, at the level asked for.
+  def compare(**params)
+    get capability_map_assessment_path(@assignment, tab: "compare", **params)
+    assert_response :success
+    Nokogiri::HTML5.fragment(response.body)
+  end
+
   context "GET /assessments/:id/capability_map" do
     should "render just the map's contents, as the frame the page reloads, read through the viewer's ratings" do
       rate(@cap, "consistent")
@@ -664,6 +671,124 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes frame.text, "You at E2"
       assert_includes frame.at_css("[data-capability-lane='1']").text, "E2 met"
       assert_not_includes response.body, %(id="#{Views::Assessments::CapabilityMapModal::ID}"), "no overlay around it"
+    end
+
+    context "compared with the person's level" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          @snapshot = LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 11, 1))
+          [ [ 1, 6, 1.0 ], [ 2, 7, 0.5 ] ].each do |level, size, median|
+            @snapshot.groups.create!(tenant: @tenant, framework_id: @assignment.framework_id, role_id: @role.role_id,
+                                     level_ordinal: level, group_size: size,
+                                     capability_medians: { @cap.stable_id => median },
+                                     category_medians: { @cap.category_id => median })
+          end
+        end
+        rate(@cap, "consistent")
+        sign_in @user
+      end
+
+      should "offer two tabs, opening on the capabilities, with the comparison one click away" do
+        get capability_map_assessment_path(@assignment)
+        tabs = Nokogiri::HTML5.fragment(response.body).css("[role='tab']")
+
+        assert_equal [ [ "Capabilities", "true" ], [ "Compared with your level", "false" ] ],
+                     tabs.map { |t| [ t.text.strip, t["aria-selected"] ] }
+      end
+
+      should "tie each tab to the panel it shows, with only the selected tab in the Tab order" do
+        map = compare
+        tabs = map.css("[role='tab']")
+        panel = map.at_css("[role='tabpanel']")
+
+        assert_equal [ [ "-1", "false" ], [ "0", "true" ] ], tabs.map { |t| [ t["tabindex"], t["aria-selected"] ] }
+        assert_equal [ panel["id"] ], tabs.map { |t| t["aria-controls"] }.uniq
+        assert_equal tabs.last["id"], panel["aria-labelledby"]
+        assert_equal "0", panel["tabindex"], "expected the panel to take focus, as it opens on text"
+        assert panel.at_css("[data-comparison-lane]"), "expected the comparison inside its panel"
+      end
+
+      should "show the person's blades beside the group's median at their level, and when it was taken" do
+        map = compare
+
+        assert_equal "Compared with your level", map.at_css("[role='tab'][aria-selected='true']").text.strip
+        assert_includes map.text, "as of 1 Nov 2026"
+        assert_includes map.text, "the median agreed score of the"
+        assert_includes map.text, "E2s (median)"
+        assert_equal "You 100% · E2s 50%", map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish
+        assert map.at_css("svg [data-blade-median='1']"), "expected the group's line across the blade"
+      end
+
+      should "keep the person's score, with no group line, on a capability the snapshot predates" do
+        @snapshot.groups.find_by!(level_ordinal: 2).update!(capability_medians: {}, category_medians: {})
+        map = compare
+
+        assert_equal "You 100% · E2s no score", map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish
+        assert_empty map.css("[data-blade-median]")
+      end
+
+      should "switch to a level either side, read on that level's scale" do
+        map = compare(compare_level: 1)
+
+        assert_equal "You not rated · E1s 100%", map.at_css("[data-comparison-lane='1'] [data-comparison-scores]").text.squish,
+                     "expected the person's score read at E1, where they haven't rated"
+        assert_equal [ [ "E1", "true" ], [ "E2", "false" ] ],
+                     map.css("[data-comparison-level]").map { |c| [ c["data-comparison-level"], c["aria-pressed"] ] }.first(2)
+      end
+
+      should "send no group scores for a level under the minimum, and say how many it needs" do
+        @snapshot.groups.find_by!(level_ordinal: 2).update!(group_size: 3)
+        map = compare
+
+        assert_includes map.text, "Not enough E2s to compare with"
+        assert_includes map.text, "Try E1."
+        assert_empty map.css("[data-blade-median]")
+        assert_empty map.css("[data-comparison-scores]")
+        assert_includes map.css("[data-comparison-level]").map(&:text).join(" "), "fewer than 5"
+      end
+
+      should "fall back to the capabilities when the comparison can't be read" do
+        Operations::Assessments::LevelComparison.stub(:call, ->(**) { raise Operations::Base::ParameterError, "gone" }) do
+          get capability_map_assessment_path(@assignment, tab: "compare")
+        end
+
+        assert_response :success
+        assert_includes response.body, "data-capability-lane"
+      end
+
+      should "name the person, not the viewer, on every lane their manager reads" do
+        manager_user = create(:user, password: "password123")
+        ActsAsTenant.with_tenant(@tenant) do
+          manager = create(:person, tenant: @tenant, email: manager_user.email, name: "Manager")
+          create(:tenant_user, tenant: @tenant, user: manager_user, person: manager)
+          @person.update!(manager:)
+        end
+        delete destroy_user_session_path
+        sign_in manager_user
+
+        lanes = compare.css("[data-comparison-scores]").map { |lane| lane.text.squish }
+
+        assert lanes.any?
+        assert lanes.all? { |text| text.start_with?("Test User ") }, "expected every lane to name the person: #{lanes}"
+      end
+
+      should "offer no comparison on a page read at another level, which the comparison would not match" do
+        get assessment_path(@assignment, as_level: 1)
+        assert_response :success
+        assert_empty Nokogiri::HTML5.fragment(response.body).css("##{Views::Assessments::CapabilityMapModal::ID} [role='tab']")
+
+        get capability_map_assessment_path(@assignment, as_level: 1, tab: "compare")
+        assert_empty Nokogiri::HTML5.fragment(response.body).css("[role='tab']")
+        assert_includes response.body, "data-capability-lane"
+      end
+
+      should "show no tabs when the tenant has comparisons off" do
+        @tenant.update!(comparison_config: ComparisonConfig.new(enabled: false))
+        get capability_map_assessment_path(@assignment, tab: "compare")
+
+        assert_empty Nokogiri::HTML5.fragment(response.body).css("[role='tab']")
+        assert_includes response.body, "data-capability-lane"
+      end
     end
 
     should "zoom to the level asked for, or out to the whole ladder, and to the assessed level otherwise" do
