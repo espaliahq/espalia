@@ -26,8 +26,10 @@ module Views::Assessments::Concerns::TeamControls
 
   def people_switch
     render Components::Kit::SegmentedControl.new(label: "Who is in the team") do |control|
-      control.segment("Direct reports", selected: @team[:people] == "direct", href: team_path(team_people: nil))
-      control.segment("Everyone below you", selected: @team[:people] == "below", href: team_path(team_people: "below"))
+      control.segment("Direct reports", selected: @team[:people] == "direct", href: team_path(team_people: nil),
+                                        data: { refresh_focus: "people-direct" })
+      control.segment("Everyone below you", selected: @team[:people] == "below", href: team_path(team_people: "below"),
+                                            data: { refresh_focus: "people-below" })
     end
   end
 

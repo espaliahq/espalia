@@ -27,6 +27,12 @@ class Views::Assessments::TeamMapTest < ActiveSupport::TestCase
     assert_not_includes below["href"], "team_compare"
   end
 
+  should "give each population link a key, so focus returns to it after the map reloads" do
+    keys = render_map.css("[aria-label='Who is in the team'] a").map { |a| a["data-refresh-focus"] }
+
+    assert_equal %w[people-direct people-below], keys
+  end
+
   should "carry a comparison turned off into its links" do
     below = render_map(payload(compare: "none")).at_css("[aria-label='Who is in the team'] a:last-child")
 
