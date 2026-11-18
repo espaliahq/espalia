@@ -67,6 +67,11 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
     assert_operator overhang, :<=, 0, "expected the Compare with control inside the dialog"
   end
 
+  def open_team_map
+    wait_for_stimulus "modal", scope: "#team-card"
+    click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
+  end
+
   def visit_team(size)
     page.driver.browser.manage.window.resize_to(*size)
     sign_in_as(@user)
@@ -86,7 +91,7 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
 
       assert_selector "#team-card [data-team-blades][aria-label='1 of 2 capabilities met as a team']", visible: true
       assert_selector "#team-card [data-team-gap]", text: "Player coach · 2 of 3 short"
-      click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
+      open_team_map
       assert_selector "#team-map [data-team-lane]", count: 2, visible: true
 
       click_link_with_js_fallback("E3 1", expect_text: "Your 1 direct report at E3")
@@ -95,7 +100,7 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
 
     should "keep keyboard focus on the level picked when the map reloads" do
       visit_team(DESKTOP_SIZE)
-      click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
+      open_team_map
       assert_selector "turbo-frame#team-map[complete] a[data-team-level='E3']", visible: true
 
       execute_script("const link = document.querySelector(\"#team-map a[data-team-level='E3']\"); link.focus(); link.click()")
@@ -108,7 +113,7 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       visit_team(MOBILE_SIZE)
       assert_no_sideways_overflow
 
-      click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
+      open_team_map
       assert_selector "#team-map [data-team-lane]", count: 2, visible: true
       blades_bottom = evaluate_script("document.querySelector('#team-map [data-team-blades]').getBoundingClientRect().bottom")
       lane_top = evaluate_script("document.querySelector('#team-map [data-team-lane]').getBoundingClientRect().top")
@@ -120,7 +125,7 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       ActsAsTenant.with_tenant(@tenant) { @role.update!(name: "Principal Machine Learning Infrastructure Engineer") }
       visit_team(MOBILE_SIZE)
 
-      click_button_with_js_fallback("Open team map", expect_text: "Your 3 direct reports, manager ratings")
+      open_team_map
       assert_selector "#team-map [data-team-lane]", count: 2, visible: true
       assert_compare_control_fits
     end
