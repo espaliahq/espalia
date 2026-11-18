@@ -1,6 +1,6 @@
 {
   "name": "org_graph_remove_level",
-  "description": "Remove a level from the Org Graph's taxonomy, from effective_on (today by default). Only a level no unit has ever held, retired units included, can go; the refusal names the units. A level an HRIS provides is handed back to Espalia first. A level a live plan places a unit at stays until the plan changes or is archived. Refused unless the caller is a tenant admin.",
+  "description": "Remove a level from the Org Graph's taxonomy, from effective_on (today by default). A level goes once no unit, retired units included, holds it on that date or after; reading an earlier date still shows it. The refusal names the units that hold it, or the last day one did. A level an HRIS provides is handed back to Espalia first. A level a live plan places a unit at stays until the plan changes or is archived. Refused unless the caller is a tenant admin.",
   "inputSchema": {
     "type": "object",
     "properties": {

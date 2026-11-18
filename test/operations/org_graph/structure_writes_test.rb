@@ -66,6 +66,31 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
     end
   end
 
+  should "move a tenant-wide type into one unit's structure, then retire it tenant-wide (the worked example)" do
+    today = ActsAsTenant.with_tenant(@tenant) { Tenant.today }
+    added_on, declared_on = (today - 10).iso8601, today - 5
+    stream = call(Operations::OrgGraph::AddLevel, name: "Stream", parent_ids: [ @org[:team] ], top: false, effective_on: added_on)[:level_id]
+    call(Operations::OrgGraph::SetKindParents, level_id: @org[:squad], parent_ids: [ @org[:team], stream ], top: false, effective_on: added_on)
+    call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: stream, effective_on: added_on)
+    declare(levels: [ { name: "Stream", copied_from_level_id: stream } ], conversion: { stream => "Stream" },
+            copied_from: "top", effective_on: declared_on.iso8601)
+
+    error = assert_raises(Operations::Base::ParameterError) do
+      call(Operations::OrgGraph::RemoveLevel, level_id: stream, effective_on: (declared_on - 1).iso8601)
+    end
+    assert_equal "Payments was a Stream until #{(declared_on - 1).iso8601}, so date its removal after then", error.message
+    call(Operations::OrgGraph::RemoveLevel, level_id: stream, effective_on: declared_on.iso8601)
+
+    before, after = [ declared_on - 1, declared_on ].map { call(Operations::OrgGraph::AsOf, date: it.iso8601) }
+    assert_equal [ %w[Department Team Squad Stream], [] ], [ before[:kinds].pluck(:name), before[:structures] ]
+    assert_equal [ %w[Department Team Squad], [ [ @org[:checkout], %w[Stream] ] ] ],
+                 [ after[:kinds].pluck(:name), after[:structures].map { [ it[:unit_id], it[:kinds].pluck(:name) ] } ]
+    copy = after[:structures].sole[:kinds].sole[:id]
+    assert_equal [ stream, copy ], [ before, after ].map { |read| read[:units].find { it[:id] == @org[:payments] }[:level_id] }
+    assert_equal [ copy, %w[Department Team Squad] ],
+                 [ level_of(:payments), ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.pluck(:name) } ]
+  end
+
   context "with a structure declared" do
     setup { @stream, @lane = declare[:levels].pluck(:level_id) }
 

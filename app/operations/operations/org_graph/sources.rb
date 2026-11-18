@@ -79,8 +79,10 @@ class Operations::OrgGraph::Sources < Operations::Base
 
   def retired_names = @retired_names ||= names_by_level(OrgUnit.where.not(retired_on: nil))
 
-  # The aggregate refuses the rest: a level that ever held a unit stays to
-  # explain the unit's history, and a structure keeps at least one level.
+  # Stricter than the aggregate, which lets a level go the day after its last
+  # unit left it: the panel's Remove still says no unit was ever one, so a
+  # level any unit held waits for the page to say otherwise
+  # ([#494](https://github.com/espaliahq/espalia/issues/494), PR D).
   def removable?(level, units_ever, level_count)
     level.provider == ::OrgGraph::StructureAggregate::ESPALIA && units_ever.zero? && level_count > 1
   end

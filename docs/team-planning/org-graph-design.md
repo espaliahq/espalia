@@ -786,9 +786,13 @@ screen and MCP share one implementation.
   A type an HRIS supplies sits at the top, or under one type above it that the HRIS supplies. A save
   that would leave live units where they no longer fit is refused, naming them; move them first.
   An admin removes a type Espalia holds that no unit has ever held, retired units included
-  ([#148](https://github.com/espaliahq/espalia/issues/148)). A unit keeps its type for life,
-  so a type that held one stays to explain the unit's history. Such a row has no Remove, and
-  names the retired units it held. Remove sits in the row's kebab menu and asks first. A type an HRIS provides is handed back first, and the last
+  ([#148](https://github.com/espaliahq/espalia/issues/148)). Such a row has no Remove, and
+  names the retired units it held. The Org Graph itself is less strict
+  ([#494](https://github.com/espaliahq/espalia/issues/494)): a type goes, dated, once no unit,
+  live or retired, holds it on that date or after, so a tenant-wide type can retire after its
+  units move into a unit's own structure. Earlier days keep it, and reading as of one shows it
+  by name. A removal dated before the last day a unit held it is refused, naming that day. The
+  panel follows in a later change. Remove sits in the row's kebab menu and asks first. A type an HRIS provides is handed back first, and the last
   type stays.
 - **Handing a level over.** A level with units is compared with a field. Each unit gets
   one call: match a value, succeed into another unit, or retire. The calls start from the
