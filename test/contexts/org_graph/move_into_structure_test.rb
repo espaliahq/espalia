@@ -56,6 +56,20 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     end
   end
 
+  should "date a move no earlier than the day an HRIS handed its units back" do
+    as_tenant do
+      matches = { @region => {}, @tribe => { @payments => "t-1", @core => "t-2" }, @squad => { @ledger => "s-1" }, @pod => { @till => "p-1" } }
+      matches.each { |level, units| @admin.hand_over_level(level, "hibob", field: "work.#{level}", matches: units, effective_on: @today + 2) }
+      matches.keys.reverse_each { @admin.hand_back_level(it, effective_on: @today + 4) }
+    end
+
+    error = assert_raises(RuntimeError) { move_in(on: @today + 3) }
+    assert_equal "Till changed on #{@today + 4}, so date the move then or later", error.message
+
+    move_in(on: @today + 4)
+    assert_equal @stream, structure.unit(@till).level_id
+  end
+
   should "refuse a conversion on a move that crosses no structure" do
     error = assert_raises(RuntimeError) { as_tenant { @admin.move_unit(@ledger, @core, effective_on: @today, conversion: {}) } }
     assert_equal "Ledger stays in the top structure, so the move takes no conversion", error.message

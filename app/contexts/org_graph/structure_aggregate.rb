@@ -1137,6 +1137,9 @@ class OrgGraph::StructureAggregate
     raise "#{parent.name} last changed on #{entered.max}, so date the move then or later" if entered.any? { it > on }
 
     day, changed = last_change_after(on, moved)
+    if (later = moved.select { it.changed_on > (day || on) }.max_by { [ it.changed_on, it.name ] })
+      day, changed = later.changed_on, later
+    end
     raise "#{changed.name} changed on #{day}, so date the move then or later" if changed
 
     on
