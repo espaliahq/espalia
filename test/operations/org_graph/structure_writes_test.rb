@@ -239,17 +239,17 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       end
 
       should "learn the move and its type changes at one moment, so no cutoff shows it half made" do
-        known = lambda do |at|
+        known = lambda do |at, on|
           ActsAsTenant.with_tenant(@tenant) do
             %w[parent level].map do |fact|
-              OrgFactPeriod.known_at(at).in_effect_on(Tenant.today)
+              OrgFactPeriod.known_at(at).in_effect_on(on)
                            .find_by(subject_type: OrgGraph::Projections::History::UNIT, subject_id: @org[:platform], fact:)
                            &.value&.values&.first
             end
           end
         end
         was = ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).then { [ it.parent_id, it.level_id ] } }
-        move_in
+        on = move_in[:effective_on]
 
         events = Rails.configuration.event_store.read.of_type([ OrgGraph::Events::UnitMoved, OrgGraph::Events::UnitKindChanged ]).to_a
         moved = events.reverse.find { it.is_a?(OrgGraph::Events::UnitMoved) }
@@ -258,8 +258,8 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal [ moved.timestamp ], change.map(&:timestamp).uniq
         learned = ActsAsTenant.with_tenant(@tenant) { OrgFactPeriod.where(event_id: change.map(&:event_id)).distinct.pluck(:learned_at) }
         assert_equal [ moved.timestamp ], learned
-        assert_equal was, known.call(moved.timestamp - 0.000001)
-        assert_equal [ @org[:checkout], @stream ], known.call(moved.timestamp)
+        assert_equal was, known.call(moved.timestamp - 0.000001, on)
+        assert_equal [ @org[:checkout], @stream ], known.call(moved.timestamp, on)
       end
 
       should "refuse a misfit as a parameter error, and leave the move to a tenant admin" do
