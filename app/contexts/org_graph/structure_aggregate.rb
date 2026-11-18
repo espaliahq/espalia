@@ -679,6 +679,8 @@ class OrgGraph::StructureAggregate
   # @param unit_id [String]
   # @return [String, nil] the declaring unit's id; nil for the top structure
   def structure_in_force(unit_id)
+    return if @structures.empty?
+
     above = @units[unit_id]&.parent_id
     above = @units[above]&.parent_id until above.nil? || @structures.key?(above)
     above
@@ -686,10 +688,7 @@ class OrgGraph::StructureAggregate
 
   # @param unit_id [String]
   # @return [OrgGraph::Taxonomy] the types of the structure in force at a unit
-  def taxonomy_for(unit_id)
-    structure_unit_id = structure_in_force(unit_id)
-    structure_unit_id ? @structures.fetch(structure_unit_id) : taxonomy
-  end
+  def taxonomy_for(unit_id) = structure_taxonomy(structure_in_force(unit_id), taxonomy)
 
   # @return [Hash{String => OrgGraph::Taxonomy}] each declared structure, by its declaring unit's id
   def declared_structures = @structures.dup
@@ -703,7 +702,7 @@ class OrgGraph::StructureAggregate
   def misplaced_units(rules = taxonomy)
     live_units.reject do |unit|
       structure_unit_id = structure_in_force(unit.unit_id)
-      kinds = structure_unit_id ? @structures.fetch(structure_unit_id) : rules
+      kinds = structure_taxonomy(structure_unit_id, rules)
       parent = unit.parent_id && @units[unit.parent_id]
       if parent && parent.unit_id != structure_unit_id
         kinds.allows?(unit.level_id, beneath: parent.level_id)
@@ -727,6 +726,8 @@ class OrgGraph::StructureAggregate
     changed_on && Date.iso8601(changed_on.to_s)
   end
   private
+
+  def structure_taxonomy(structure_unit_id, top) = structure_unit_id ? @structures.fetch(structure_unit_id) : top
 
   def define_top_structure(levels, event)
     @taxonomy = nil
