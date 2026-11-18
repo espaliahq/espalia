@@ -21,8 +21,9 @@ class Operations::OrgGraph::ChangeUnitKind < Operations::Base
   def perform
     unit = live_unit!(:unit_id)
     level_id = uuid!(:level_id).downcase
+    on = effective_on
 
-    structure_handler.change_unit_kind(unit.id, level_id, effective_on: effective_on)
-    { unit_id: unit.id, level_id:, previous_level_id: unit.level_id, effective_on: effective_on }
+    structure_handler.change_unit_kind(unit.id, level_id, effective_on: on)
+    { unit_id: unit.id, level_id:, previous_level_id: unit.level_id, effective_on: on }
   end
 end

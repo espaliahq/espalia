@@ -125,6 +125,16 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
       end
     end
 
+    should "return the date it wrote when the tenant's day turns over mid-call" do
+      days = %w[2026-11-17 2026-11-18].map { Date.iso8601(it) }
+      result = Tenant.stub(:today, -> { days.shift || Date.new(2026, 11, 18) }) do
+        call(Operations::OrgGraph::ChangeUnitKind, unit_id: @org[:payments], level_id: @pods)
+      end
+
+      written = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitKindChanged).last.data[:effective_on]
+      assert_equal written, result[:effective_on]
+    end
+
     should "refuse an owner of the unit's parent, who may still move it" do
       error = assert_raises(OrgGraph::Authorization::Refused) do
         call(Operations::OrgGraph::ChangeUnitKind, as: @owner, unit_id: @org[:payments], level_id: @pods)
