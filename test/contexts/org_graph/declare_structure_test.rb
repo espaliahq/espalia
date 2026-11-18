@@ -198,6 +198,31 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
       end
       assert_equal "That unit type doesn't exist", error.message
     end
+
+    should "refuse each type command a type id from a structure other than the one it names" do
+      lending = create_unit("Lending", @tribe)
+      lane = SecureRandom.uuid_v7
+      declare(unit: lending, levels: [ { level_id: lane, name: "Lane" } ], conversion: {})
+      before = [ structure.taxonomy, *structure.declared_structures.values_at(@payments, lending) ].map { it.kinds.map(&:to_h) }
+
+      { "the top structure's type named for Payments" => [ @squad, @payments ],
+        "Payments's type named for the top structure" => [ @stream, nil ],
+        "Payments's type named for Lending" => [ @stream, lending ],
+        "Lending's type named for Payments" => [ lane, @payments ] }.each do |label, (level_id, named)|
+        commands = {
+          add_level: -> { @handler.add_level(level_id, "Copy", parent_ids: [], top: true, structure_unit_id: named, effective_on: @today) },
+          set_kind_parents: -> { @handler.set_kind_parents(level_id, parent_ids: [], top: true, structure_unit_id: named, effective_on: @today) },
+          remove_level: -> { @handler.remove_level(level_id, structure_unit_id: named, effective_on: @today) }
+        }
+        commands.each do |command, run|
+          error = assert_raises(ArgumentError, "#{command}: #{label}") { as_tenant { run.call } }
+          expected = command == :add_level ? "Level id is taken" : "That unit type doesn't exist"
+          assert_equal expected, error.message, "#{command}: #{label}"
+        end
+      end
+
+      assert_equal before, [ structure.taxonomy, *structure.declared_structures.values_at(@payments, lending) ].map { it.kinds.map(&:to_h) }
+    end
   end
 
   context "retiring a unit with a structure of its own" do
