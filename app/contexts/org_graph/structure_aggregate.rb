@@ -41,7 +41,6 @@ class OrgGraph::StructureAggregate
     @units = {}
     @parents = {}
     @unit_kinds = {}
-    @held_kinds = {}
     @level_providers = {}
     @level_fields = {}
     @fact_providers = {}
@@ -57,9 +56,9 @@ class OrgGraph::StructureAggregate
 
   # Defines or redefines the tenant's taxonomy, top level first.
   #
-  # A level keeps its id through a rename. A level any unit has held, retired
-  # ones included, can't be dropped, so a unit's history keeps its level. The
-  # levels live units hold must keep their order, or a unit would sit above
+  # A level keeps its id through a rename. A level can be dropped only once no
+  # unit, retired ones included, holds it on the date or after; a reading of an
+  # earlier date still finds it in the dated taxonomy. The levels live units hold must keep their order, or a unit would sit above
   # its own parent.
   #
   # A new level can name its provider, so a level can be added above one an
@@ -73,8 +72,8 @@ class OrgGraph::StructureAggregate
   #   earlier than the kinds' last change
   # @param defined_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the levels are empty, blank or duplicated
-  # @raise [RuntimeError] if a level any unit has held is dropped, naming the
-  #   units, a level in use is reordered, or a live unit would be left where
+  # @raise [RuntimeError] if a dropped level is held on or after the date,
+  #   naming the units or the last day one held it, a level in use is reordered, or a live unit would be left where
   #   its kind may not sit
   def define_taxonomy(levels, effective_on:, defined_by_id: nil)
     write_taxonomy(levels, effective_on:, defined_by_id:)
@@ -149,9 +148,8 @@ class OrgGraph::StructureAggregate
     write_taxonomy(levels, rules:, effective_on:, defined_by_id:)
   end
 
-  # Removes a level Espalia holds that no unit has ever held. A unit keeps its
-  # level for life, so the units this stream holds, retired ones included, are
-  # every unit a level has held.
+  # Removes a level Espalia holds, dated on or after the day after the last
+  # day any unit held it, retired units included.
   #
   # @param level_id [String] a level in the current taxonomy
   # @param effective_on [Date, String]
@@ -159,7 +157,8 @@ class OrgGraph::StructureAggregate
   # @param structure_unit_id [String, nil] the unit whose own structure holds
   #   the level; nil for the top structure
   # @raise [ArgumentError] if the level isn't in the taxonomy or is the last one
-  # @raise [RuntimeError] if an HRIS provides the level or a unit has held it
+  # @raise [RuntimeError] if an HRIS provides the level or a unit holds it on
+  #   or after the date
   def remove_level(level_id, effective_on:, defined_by_id: nil, structure_unit_id: nil)
     level_id = require_id(level_id, "Level id")
     if structure_unit_id
@@ -707,14 +706,12 @@ class OrgGraph::StructureAggregate
     )
     @parents[data[:unit_id]] = { data[:effective_on] => data[:parent_id] }
     @unit_kinds[data[:unit_id]] = { data[:effective_on] => data[:level_id] }
-    @held_kinds[data[:unit_id]] = Set[data[:level_id]]
     touch(data[:parent_id], data[:effective_on])
   end
 
   on OrgGraph::Events::UnitKindChanged do |event|
     unit = @units.fetch(event.data[:unit_id])
     @unit_kinds[unit.unit_id][event.data[:effective_on]] = event.data[:level_id]
-    @held_kinds[unit.unit_id] << event.data[:level_id]
     unit.level_id = @unit_kinds[unit.unit_id].max_by(&:first).last
     touch(unit.unit_id, event.data[:effective_on])
   end
@@ -854,7 +851,7 @@ class OrgGraph::StructureAggregate
   end
 
   # Rewrites a declared structure's types from the block's edit of them,
-  # refused while a type a unit has held would go, or a unit it governs
+  # refused while a type that goes is held on or after the date, or a unit it governs
   # would no longer fit.
   def redefine_structure(unit_id, effective_on:, defined_by_id:)
     unit = live_unit!(require_id(unit_id, "Unit id"))
@@ -864,7 +861,7 @@ class OrgGraph::StructureAggregate
 
     governed = governed_by(unit.unit_id)
     on = structure_dated!(unit, governed, effective_on)
-    old.reject { level_ids(levels).include?(it[:level_id]) }.each { ensure_never_held!(it) }
+    old.reject { level_ids(levels).include?(it[:level_id]) }.each { ensure_no_longer_held!(it, on) }
     held = governed.map(&:level_id).uniq
     converted!(governed, held.zip(held).to_h, into: OrgGraph::Taxonomy.new(levels), label: "#{unit.name}'s structure") do |parent_id|
       parent_id == unit.unit_id ? nil : parent_id
@@ -1059,7 +1056,7 @@ class OrgGraph::StructureAggregate
     ensure_every_kind_can_sit!(levels)
 
     ensure_not_before_last_change!(effective_on)
-    @levels.reject { |level| level_ids(levels).include?(level[:level_id]) }.each { ensure_never_held!(it) }
+    @levels.reject { |level| level_ids(levels).include?(level[:level_id]) }.each { ensure_no_longer_held!(it, effective_on) }
 
     in_use = live_units.map(&:level_id).uniq
 
@@ -1161,14 +1158,26 @@ class OrgGraph::StructureAggregate
     seen
   end
 
-  def ensure_never_held!(level)
-    held = @units.values.select { |unit| @held_kinds.fetch(unit.unit_id, Set.new).include?(level[:level_id]) }.sort_by(&:name)
-    return if held.empty?
+  # A type can go once no unit holds it on the removal date or after. Days
+  # before keep it, so history still reads it by its dated taxonomy.
+  def ensure_no_longer_held!(level, effective_on)
+    on = iso_date(effective_on)
+    spans = @units.values.flat_map { |unit| held_spans(unit, level[:level_id]).map { [ unit, it ] } }
+    holding = spans.select { |_, last_day| last_day.nil? }.map(&:first).uniq.sort_by(&:name)
+    raise "#{level[:name]} can't be removed, as it holds #{holding.map(&:name).to_sentence}" if holding.any?
 
-    live, retired = held.partition { !it.retired && it.level_id == level[:level_id] }
-    reasons = [ ("holds #{live.map(&:name).to_sentence}" if live.any?),
-                ("held #{retired.map(&:name).to_sentence}" if retired.any?) ].compact
-    raise "#{level[:name]} can't be removed, as it #{reasons.join(' and ')}"
+    unit, last_day = spans.max_by(&:last)
+    return if unit.nil? || last_day < on
+
+    raise "#{unit.name} was a #{level[:name]} until #{last_day}, so date its removal after then"
+  end
+
+  # The last day of each span a unit held a kind, nil for one it still holds.
+  # A retired unit is still live on the day it retires.
+  def held_spans(unit, level_id)
+    points = @unit_kinds.fetch(unit.unit_id, {}).sort
+    ends = points.drop(1).map { (Date.iso8601(it.first) - 1).iso8601 } + [ unit.retired_on ]
+    points.zip(ends).select { |(_, kind), _| kind == level_id }.map(&:last)
   end
 
   def ensure_levels_in_use_keep_order!(levels, in_use)

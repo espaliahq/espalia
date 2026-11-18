@@ -62,14 +62,15 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_equal "Squad can't be removed, as it holds Checkout", error.message
     end
 
-    should "refuse to drop a level a retired unit held" do
+    should "drop a level a retired unit held only from the day after it retired" do
       create_unit(@squad, "Checkout", level: "Squad")
       as_tenant { @handler.retire_unit(@squad, effective_on: @today) }
 
       error = assert_raises(RuntimeError) do
         as_tenant { @handler.define_taxonomy(levels(%w[Department Team]), effective_on: @today) }
       end
-      assert_equal "Squad can't be removed, as it held Checkout", error.message
+      assert_equal "Checkout was a Squad until #{@today.iso8601}, so date its removal after then", error.message
+      assert_nothing_raised { as_tenant { @handler.define_taxonomy(levels(%w[Department Team]), effective_on: @today + 1) } }
     end
 
     should "refuse a level id that isn't a UUID" do

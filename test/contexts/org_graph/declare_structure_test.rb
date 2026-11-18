@@ -102,6 +102,41 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal "These units wouldn't fit the top structure: Checkout (Tribe under Tribe)", error.message
   end
 
+  should "move a tenant-wide type into one unit's structure, then retire it tenant-wide (the worked example)" do
+    declared_on = @today + 3
+    group = SecureRandom.uuid_v7
+    as_tenant do
+      @handler.add_level(group, "Group", effective_on: @today)
+      @handler.set_kind_parents(group, parent_ids: [ @tribe ], top: false, effective_on: @today)
+      @handler.set_kind_parents(@squad, parent_ids: [ @tribe, group ], top: false, effective_on: @today)
+    end
+    core = create_unit("Core", group, parent_id: @payments)
+    as_tenant { @handler.move_unit(@checkout, core, effective_on: @today) }
+    cards = create_unit("Cards", @squad, parent_id: @payments)
+    loans = create_unit("Loans", @squad, parent_id: create_unit("Lending", @tribe))
+
+    copies = { group => SecureRandom.uuid_v7, @squad => SecureRandom.uuid_v7, @pod => SecureRandom.uuid_v7 }
+    declare(on: declared_on, copied_from: "top", conversion: copies, levels: [
+      { level_id: copies[group], name: "Group", parent_level_ids: [], top: true, copied_from_level_id: group },
+      { level_id: copies[@squad], name: "Squad", parent_level_ids: [ copies[group] ], top: true, copied_from_level_id: @squad },
+      { level_id: copies[@pod], name: "Pod", parent_level_ids: [ copies[@squad] ], top: false, copied_from_level_id: @pod }
+    ])
+    error = assert_raises(RuntimeError) { as_tenant { @handler.remove_level(group, effective_on: declared_on - 1) } }
+    assert_equal "Core was a Group until #{(declared_on - 1).iso8601}, so date its removal after then", error.message
+    as_tenant { @handler.remove_level(group, effective_on: declared_on) }
+
+    assert_equal copies.values_at(group, @squad, @squad, @pod), [ core, @checkout, cards, @basket ].map { structure.unit(it).level_id }
+    assert_equal [ @tribe, @squad ], [ @payments, loans ].map { structure.unit(it).level_id }
+    assert_equal %w[Tribe Squad Pod], structure.taxonomy.kinds.map(&:name)
+    assert_empty structure.misplaced_units
+
+    before, after = [ declared_on - 1, declared_on ].map { snapshot_on(it) }
+    assert_equal [ %w[Tribe Squad Pod Group], {} ], [ before.kinds.map(&:name), before.structures ]
+    assert_equal [ %w[Tribe Squad Pod], { @payments => %w[Group Squad Pod] } ],
+                 [ after.kinds.map(&:name), after.structures.transform_values { it.map(&:name) } ]
+    assert_equal [ group, copies[group] ], [ before, after ].map { |snapshot| snapshot.units.find { it.id == core }.level_id }
+  end
+
   context "editing a declared structure's types" do
     setup { declare }
 
@@ -181,11 +216,13 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
 
   def last_event = event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).backward.first
 
-  def structures_as_of(day)
+  def structures_as_of(day) = snapshot_on(day).structures.transform_values { it.map(&:name) }
+
+  def snapshot_on(day)
     as_tenant do
       user = create(:user)
       context = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, user:, tenant: @tenant), person: nil)
-      OrgGraph::AsOf.new(context:, date: day).call.structures.transform_values { it.map(&:name) }
+      OrgGraph::AsOf.new(context:, date: day).call
     end
   end
 

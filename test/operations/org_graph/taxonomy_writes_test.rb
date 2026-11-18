@@ -287,7 +287,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_includes level_names, "Team"
     end
 
-    should "keep a level whose only unit is retired, naming it" do
+    should "keep a level whose only unit retired today, naming the day" do
       ActsAsTenant.with_tenant(@tenant) do
         OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
                                          .retire_unit(@org[:payments], effective_on: Date.current)
@@ -295,7 +295,7 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
 
       error = assert_raises(Operations::Base::ParameterError) { call(Operations::OrgGraph::RemoveLevel, level_id: @squad) }
 
-      assert_equal "Squad can't be removed, as it held Payments", error.message
+      assert_equal "Payments was a Squad until #{Date.current.iso8601}, so date its removal after then", error.message
       assert_includes level_names, "Squad"
     end
 
