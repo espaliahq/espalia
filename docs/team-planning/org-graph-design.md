@@ -198,7 +198,9 @@ lists the people with no membership of a live unit, for the "in no team" tray.
   aggregate, the projections and the history all read rules through this class.
   `bin/rails org_graph:taxonomy:check` names any live unit sitting where its kind may
   not, and fails on one; it runs per tenant before kinds can state their rules
-  ([#391](https://github.com/espaliahq/espalia/issues/391)).
+  ([#391](https://github.com/espaliahq/espalia/issues/391)). It judges each unit by the
+  structure in force where it sits, and reports how many structures the tenant has
+  ([#494](https://github.com/espaliahq/espalia/issues/494)).
 - **An admin states a kind's rules.** `set_kind_parents` (MCP:
   `org_graph_set_kind_parents`) replaces an Espalia kind's list of parent kinds and its
   top switch, and `add_level` can state both up front. A kind that lists itself lets its
@@ -247,6 +249,10 @@ reader can list a unit's predecessors and successors. The history that reads "wa
 `org_taxonomy_levels` holds each kind's stated `parent_level_ids` and `top`, both null for
 a kind that never stated rules. Readers build an `OrgGraph::Taxonomy` from the rows with
 `OrgTaxonomyLevel.taxonomy`, so the legacy rule is derived in one place, never stored.
+Each row's `structure_unit_id` names the unit whose own structure it belongs to, and is
+null for the top structure; `OrgTaxonomyLevel.top_structure` reads the top one. The
+structure in force at a unit is that of the nearest unit above it that declares one, else
+the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)).
 
 ### The shape of the organisation has a history too
 
