@@ -14,7 +14,7 @@ module Operations::OrgGraph::TaxonomyWrite
   private
 
   # @return [Array<OrgTaxonomyLevel>] top first
-  def current_levels = OrgTaxonomyLevel.top_first.to_a
+  def current_levels = OrgTaxonomyLevel.top_structure.to_a
 
   # @return [Array<Hash>] `{ level_id, name, provider, parent_ids, top }`, top first
   def levels_payload

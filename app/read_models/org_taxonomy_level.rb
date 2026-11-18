@@ -8,6 +8,8 @@
 # Espalia until LevelProviderSet names another, with the HRIS field
 # (provider_field) each person's unit at the level is read from. A level that
 # states where its units may sit holds the rules in parent_level_ids and top.
+# A unit that declares its own structure (#494) owns the levels whose
+# structure_unit_id names it; the top structure's levels name none.
 #
 class OrgTaxonomyLevel < ApplicationRecord
   acts_as_tenant :tenant
@@ -15,13 +17,14 @@ class OrgTaxonomyLevel < ApplicationRecord
   belongs_to :tenant
   has_many :units, class_name: "OrgUnit", foreign_key: :level_id, inverse_of: :level, dependent: nil
 
-  scope :top_first, -> { order(:position) }
+  scope :in_structure, ->(unit_id) { where(structure_unit_id: unit_id).order(:position) }
+  scope :top_structure, -> { in_structure(nil) }
 
   # Where each kind of unit may sit, read the way the aggregate reads it.
   #
   # @param rows [Array<OrgTaxonomyLevel>] the levels, top first, when already loaded
   # @return [OrgGraph::Taxonomy]
-  def self.taxonomy(rows = top_first.to_a)
+  def self.taxonomy(rows = top_structure.to_a)
     levels = rows.map do |level|
       rules = level.parent_level_ids.nil? ? {} : { parent_level_ids: level.parent_level_ids, top: level.top }
       { level_id: level.id, name: level.name, **rules }
@@ -33,7 +36,7 @@ class OrgTaxonomyLevel < ApplicationRecord
   #
   # @param rows [Array<OrgTaxonomyLevel>] the levels, top first, when already loaded
   # @return [Hash{String => Hash}] level id => `{ parent_ids:, top: }`
-  def self.rules_by_id(rows = top_first.to_a)
+  def self.rules_by_id(rows = top_structure.to_a)
     taxonomy = taxonomy(rows)
     rows.to_h { [ it.id, taxonomy.kind(it.id).rules ] }
   end

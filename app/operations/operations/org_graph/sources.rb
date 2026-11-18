@@ -53,7 +53,7 @@ class Operations::OrgGraph::Sources < Operations::Base
   def levels_payload
     live = names_by_level(OrgUnit.live)
     retired = names_by_level(OrgUnit.where.not(retired_on: nil))
-    levels = OrgTaxonomyLevel.top_first.to_a
+    levels = OrgTaxonomyLevel.top_structure.to_a
     rules = OrgTaxonomyLevel.rules_by_id(levels)
     levels.map do |level|
       live_count, live_names = live.fetch(level.id, [ 0, [] ])

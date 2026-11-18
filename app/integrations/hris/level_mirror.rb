@@ -34,7 +34,7 @@ class Hris::LevelMirror
   # @param provider [String]
   # @return [Array<OrgTaxonomyLevel>] the levels the provider supplies from a field, top first
   def self.levels(provider)
-    OrgTaxonomyLevel.top_first.where(provider: provider).where.not(provider_field: nil).to_a
+    OrgTaxonomyLevel.top_structure.where(provider: provider).where.not(provider_field: nil).to_a
   end
 
   # Drops the first readings of the levels' parents, for a sync that could not
