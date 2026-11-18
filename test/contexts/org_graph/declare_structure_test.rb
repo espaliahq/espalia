@@ -134,6 +134,25 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal lane, structure.unit(@basket).level_id
   end
 
+  should "refuse a withdrawal dated before the declaring unit last changed type, and allow it from that day" do
+    declare
+    realm = SecureRandom.uuid_v7
+    as_tenant do
+      @handler.add_level(realm, "Realm", parent_ids: [], top: true, effective_on: @today)
+      @handler.set_kind_parents(@squad, parent_ids: [ realm ], top: false, effective_on: @today)
+      @handler.change_unit_kind(@payments, realm, effective_on: @today + 4)
+    end
+    conversion = { @group => @squad, @stream => @pod }
+
+    error = assert_raises(RuntimeError) do
+      as_tenant { @admin.withdraw_structure(@payments, conversion:, effective_on: @today + 2) }
+    end
+    assert_equal "Payments changed on #{(@today + 4).iso8601}, so date this then or later", error.message
+
+    as_tenant { @admin.withdraw_structure(@payments, conversion:, effective_on: @today + 4) }
+    assert_equal @squad, structure.unit(@checkout).level_id
+  end
+
   context "dating a change inside a declared structure" do
     setup do
       @lane = SecureRandom.uuid_v7

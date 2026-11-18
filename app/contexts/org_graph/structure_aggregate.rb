@@ -930,8 +930,9 @@ class OrgGraph::StructureAggregate
   end
 
   # A structure changes on a day no later than today, and no earlier than its
-  # own last change or the last change to any unit it governs: a unit's
-  # arrival, move or change of type, or the end of one that sat beneath.
+  # own last change, the declaring unit's last change of type, or the last
+  # change to any unit it governs: a unit's arrival, move or change of type,
+  # or the end of one that sat beneath.
   def structure_dated!(unit, governed, effective_on)
     on = iso_date(effective_on)
     raise "A structure can't change after today. Date it today or earlier" if on > today
@@ -944,6 +945,7 @@ class OrgGraph::StructureAggregate
     changes = governed.flat_map do |child|
       [ child.created_on, *@parents.fetch(child.unit_id, {}).keys, *@unit_kinds.fetch(child.unit_id, {}).keys ].map { [ it, child ] }
     end
+    changes += @unit_kinds.fetch(unit.unit_id, {}).keys.map { [ it, unit ] }
     changes += placements_ended_after(on).select { beneath.include?(it.parent_id) }.map { [ it.until_on, it.unit ] }
     day, changed = changes.select { |changed_on, _| changed_on > on }.max_by { |changed_on, child| [ changed_on, child.name ] }
     raise "#{changed.name} changed on #{day}, so date this then or later" if changed
