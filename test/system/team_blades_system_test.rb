@@ -138,10 +138,17 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
 
       click_button_with_js_fallback("Open team map", expect_text: "Couldn't load the team map")
       assert_no_selector "#team-map [data-team-lane]"
-      execute_script("[...document.querySelectorAll('#team-map-error button')].find((b) => b.textContent.trim() === 'Retry').click()")
+      execute_script(<<~JS)
+        const retry = [...document.querySelectorAll('#team-map-error button')].find((b) => b.textContent.trim() === 'Retry')
+        retry.focus()
+        retry.click()
+      JS
 
       assert_selector "#team-map [data-team-lane]", count: 2, visible: true
       assert_no_selector "#team-map-error", visible: true
+      assert evaluate_script("!!document.activeElement.closest('#team-map-modal')"),
+             "expected focus to stay inside the dialog after Retry"
+      assert_not_equal "BODY", evaluate_script("document.activeElement.tagName")
     end
 
     should "keep keyboard focus on the level picked when the map reloads" do
