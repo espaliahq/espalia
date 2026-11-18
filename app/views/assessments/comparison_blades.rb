@@ -5,6 +5,7 @@
 class Views::Assessments::ComparisonBlades < Views::Assessments::CapabilityBlades
   # The share of a slot the group's line leaves clear at each end.
   LINE_INSET = 0.12
+  LINE_WIDTH = 1.1
 
   # @param shape [Assessments::CapabilityShape] the person's, read at the compared level
   # @param medians [Hash{String => Float}] stable_id => the group's middle score, 1.0 the level met
@@ -36,12 +37,16 @@ class Views::Assessments::ComparisonBlades < Views::Assessments::CapabilityBlade
     radius = radius_for(@shape.assessed_index - 1 + median)
     return if radius.zero?
 
+    # An edge in the modal's surface, on the outer side only, lifts the line off a blade of any category colour.
+    s.path(d: arc(radius + LINE_WIDTH / 2, i), fill: "none", stroke_width: LINE_WIDTH, stroke_linecap: "butt",
+           class: "stroke-(--gos-surface-overlay)")
+    s.path(d: arc(radius, i), fill: "none", stroke_width: LINE_WIDTH, stroke_linecap: "round",
+           class: "stroke-(--gos-accent-strong)", data: { blade_median: point.number })
+  end
+
+  def arc(radius, i)
     from = xy(radius, start(i + LINE_INSET))
     to = xy(radius, start(i + 1 - LINE_INSET))
-    arc = "M#{from.join(' ')} A#{radius} #{radius} 0 0 1 #{to.join(' ')}"
-    # An outline in the modal's surface lifts the line off a blade of any category colour.
-    s.path(d: arc, fill: "none", stroke_width: 2.2, stroke_linecap: "round", class: "stroke-(--gos-surface-overlay)")
-    s.path(d: arc, fill: "none", stroke_width: 1.1, stroke_linecap: "round", class: "stroke-(--gos-accent-strong)",
-           data: { blade_median: point.number })
+    "M#{from.join(' ')} A#{radius} #{radius} 0 0 1 #{to.join(' ')}"
   end
 end
