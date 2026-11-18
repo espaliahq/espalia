@@ -1,0 +1,130 @@
+# frozen_string_literal: true
+
+# The team capability map, drawn from `Operations::Assessments::TeamCapabilities`'s
+# payload: the team's blades large, beside a lane per capability giving the
+# team's score and how many are short. Its controls are links inside its own
+# frame, so each choice reloads the map alone.
+class Views::Assessments::TeamMap < Views::Base
+  include Views::Assessments::Concerns::TeamControls
+
+  register_element :turbo_frame
+
+  ID = "team-map"
+  RATINGS_SWITCH = { "manager" => "Manager", "self" => "Self", "aligned" => "Aligned" }.freeze
+  # A lane's track runs to twice met, so met sits halfway.
+  TRACK_TOP = 200.0
+  LANE = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:grid-cols-[13rem_minmax(0,1fr)_auto]"
+
+  # @param team [Hash] `Operations::Assessments::TeamCapabilities`'s payload
+  def initialize(team:)
+    @team = team
+  end
+
+  def view_template
+    turbo_frame(id: ID) do
+      lead
+      controls
+      if @team[:role].nil? || @team[:scored].zero?
+        render Components::Kit::EmptyState.new(title: "Nobody in view has a score yet", size: :panel)
+      else
+        map
+      end
+    end
+  end
+
+  private
+
+  def team_path(**overrides) = team_map_assessments_path(team_choices.merge(overrides).compact)
+
+  def capabilities = @team[:capabilities]
+
+  def level_code = @team[:levels].find { |l| l[:ordinal] == @team[:level_ordinal] }&.dig(:code)
+
+  def lead
+    p(class: "text-sm text-muted -mt-1 mb-4") do
+      plain "Your #{people_count}#{" at #{level_code}" if level_code}, #{RATINGS.fetch(@team[:ratings])}. "
+      plain "Each blade is the team’s score against their own levels; the dashed circle is met."
+    end
+  end
+
+  def controls
+    div(class: "mb-6 flex flex-wrap items-center gap-3") do
+      people_switch if @team[:indirect_reports]
+      role_menu if roles?
+      ratings_switch
+    end
+    level_chips if @team[:levels].any?
+  end
+
+  def ratings_switch
+    render Components::Kit::SegmentedControl.new(label: "Ratings shown") do |control|
+      RATINGS_SWITCH.each do |key, label|
+        control.segment(label, selected: @team[:ratings] == key, href: team_path(team_ratings: (key unless key == "manager")))
+      end
+    end
+  end
+
+  # Every level on the role's ladder, each with how many on the role are at it.
+  def level_chips
+    div(class: "-mt-3 mb-6 overflow-x-auto") do
+      render Components::Kit::SegmentedControl.new(label: "Level shown") do |control|
+        control.segment("All levels #{@team[:levels].sum { |l| l[:people] }}", selected: @team[:level_ordinal].nil?,
+                                                                               href: team_path(team_level: nil), data: { team_level: "all" })
+        @team[:levels].each do |level|
+          control.segment("#{level[:code]} #{level[:people]}", selected: level[:ordinal] == @team[:level_ordinal],
+                                                               href: team_path(team_level: level[:ordinal]), data: { team_level: level[:code] })
+        end
+      end
+    end
+  end
+
+  def map
+    div(class: "grid gap-6 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-start") do
+      div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
+        render Views::Assessments::TeamBlades.new(
+          capabilities:, size: "mx-auto w-full max-w-sm",
+          label: "#{@team[:met]} of #{capabilities.size} capabilities met as a team"
+        )
+      end
+      div { lanes }
+    end
+    p(class: "mt-6 text-xs text-muted") { "Names stay on the report cards; this map only combines them." }
+  end
+
+  def lanes
+    capabilities.chunk_while { |a, b| a[:category_id] == b[:category_id] }.each do |group|
+      div(class: "px-2 pt-4 pb-1") { render Components::Kit::Tag.new(group.first[:category_name].to_s, category: group.first[:hue]) }
+      group.each { |capability| lane(capability) }
+    end
+  end
+
+  def lane(capability)
+    div(class: "#{LANE} rounded-md px-2 py-1.5 text-sm text-default", data: { team_lane: capability[:stable_id] }) do
+      span(class: "line-clamp-2 min-w-0") { capability[:name] }
+      track(capability)
+      span(class: "text-right text-xs text-muted tabular-nums whitespace-nowrap max-sm:col-span-full max-sm:text-left") do
+        if capability[:score]
+          plain "Team "
+          strong(class: "text-default") { "#{capability[:score]}%" }
+          plain " · "
+          span(class: ("font-semibold text-warning" if capability[:short].positive?)) { "#{capability[:short]} short" }
+        else
+          plain "Not rated"
+        end
+      end
+    end
+  end
+
+  def track(capability)
+    span(class: "relative hidden h-4 sm:block", aria: { hidden: "true" }) do
+      span(class: "absolute inset-x-0 top-[5px] h-1.5 rounded-full bg-neutral-subtle")
+      span(class: "absolute inset-y-0 left-1/2 border-l border-dashed border-(--gos-content-muted)")
+      next unless capability[:score]
+
+      short = capability[:score] < 100
+      span(class: "absolute left-0 top-[5px] h-1.5 rounded-full #{Views::Assessments::CapabilityMapModal::FILL.fetch(capability[:hue])}" \
+                  "#{' opacity-60' if short}",
+           style: "width: #{(capability[:score].clamp(0, TRACK_TOP) / TRACK_TOP * 100).round(2)}%")
+    end
+  end
+end

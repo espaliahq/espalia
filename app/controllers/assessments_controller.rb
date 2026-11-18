@@ -10,6 +10,7 @@
 #
 class AssessmentsController < ApplicationController
   include Assessments::CapabilityCardRendering
+  include Assessments::TeamCapabilitiesParams
 
   # Skip-level subtrees can be large for senior managers — the section is
   # paginated rather than rendering an unbounded card grid.
@@ -219,13 +220,6 @@ class AssessmentsController < ApplicationController
   end
 
   private
-
-  # The team card's payload, read through the operation agents use.
-  def team_capabilities
-    Operations::Assessments::TeamCapabilities.call(context: pundit_user, params: { people: params[:team_people], role_id: params[:team_role] }.compact)
-  rescue Operations::Base::ParameterError
-    Operations::Assessments::TeamCapabilities.call(context: pundit_user)
-  end
 
   def map_whose = manager_viewing? ? @assessee&.name || "This person" : nil
 

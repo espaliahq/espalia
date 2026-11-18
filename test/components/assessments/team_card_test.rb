@@ -79,6 +79,14 @@ class Views::Assessments::TeamCardTest < ActiveSupport::TestCase
     assert_nil render_card.at_css("[data-team-roles]")
   end
 
+  should "open the team map with the card's choices, but not from the blank slate" do
+    card = render_card(payload(people: "below", indirect_reports: true))
+
+    assert_equal "Open team map", card.at_css("[data-action='modal#open']").text.squish
+    assert_includes card.at_css("turbo-frame#team-map")["src"], "team_people=below"
+    assert_nil render_card(payload(scored: 1)).at_css("turbo-frame#team-map")
+  end
+
   should "never name anyone on the team" do
     assert_no_match(/Ada|Bo /, render_card.text)
   end

@@ -5,10 +5,12 @@
 # how many capabilities it meets and its common gaps. Until two people in
 # view have a score it is a blank slate, so a manager still learns it exists.
 class Views::Assessments::TeamCard < Views::Base
+  include Views::Assessments::Concerns::TeamControls
+
+  register_element :turbo_frame
+
   # People in view with a score before the team has a shape.
   MIN_SCORED = 2
-  PEOPLE = { "direct" => %w[direct\ report direct\ reports], "below" => %w[person\ below\ you people\ below\ you] }.freeze
-  RATINGS = { "manager" => "manager ratings", "self" => "self-ratings", "aligned" => "agreed ratings" }.freeze
 
   # @param team [Hash] `Operations::Assessments::TeamCapabilities`'s payload
   def initialize(team:)
@@ -73,52 +75,33 @@ class Views::Assessments::TeamCard < Views::Base
 
   # "10 direct reports · Software Engineer · manager ratings"
   def meta
-    one, many = PEOPLE.fetch(@team[:people])
-    [ "#{@team[:in_view]} #{@team[:in_view] == 1 ? one : many}", @team.dig(:role, :name), RATINGS.fetch(@team[:ratings]) ].compact.join(" · ")
+    [ people_count, @team.dig(:role, :name), RATINGS.fetch(@team[:ratings]) ].compact.join(" · ")
   end
 
   def controls
-    return unless @team[:indirect_reports] || roles?
+    return unless @team[:indirect_reports] || roles? || shaped?
 
     div(class: "flex shrink-0 flex-col items-start gap-3 sm:items-end") do
       people_switch if @team[:indirect_reports]
       role_menu if roles?
+      team_map if shaped?
     end
   end
 
-  def roles? = @team[:roles].size > 1
+  # The card's own choices: people and role.
+  def team_path(**overrides)
+    assessments_path(team_choices.slice(:team_people, :team_role).merge(overrides).compact, anchor: "team-card")
+  end
 
-  # One role at a time, since capabilities differ between roles.
-  def role_menu
-    div(data: { team_roles: true }) do
-      render Components::Kit::Dropdown.new do |dropdown|
-        dropdown.trigger(label: "Role shown", button: { variant: :outline, size: :sm }) do
-          plain @team.dig(:role, :name)
-          icon("chevron-down", class: "ml-1 size-4")
-        end
-        dropdown.menu(label: "Role shown") do
-          @team[:roles].each do |role|
-            dropdown.item(href: team_path(team_role: role[:id]), aria: { current: ("true" if role[:id] == @team.dig(:role, :id)) }) do
-              "#{role[:name]} · #{role[:people]}"
-            end
-          end
-        end
+  # Opens with the card's choices.
+  def team_map
+    render Components::Kit::Modal.new(id: "team-map-modal", title: "Team capability map", size: :"6xl") do |modal|
+      modal.trigger { "Open team map" }
+      modal.body do
+        turbo_frame(id: "team-map", src: team_map_assessments_path(team_choices.slice(:team_people, :team_role).compact),
+                    loading: "lazy") { p(class: "text-sm text-muted") { "Loading the team map…" } }
       end
     end
-  end
-
-  def people_switch
-    render Components::Kit::SegmentedControl.new(label: "Who is in the team") do |control|
-      control.segment("Direct reports", selected: @team[:people] == "direct", href: team_path(team_people: nil))
-      control.segment("Everyone below you", selected: @team[:people] == "below", href: team_path(team_people: "below"))
-    end
-  end
-
-  # The page with the team card's choices, `overrides` replacing them.
-  def team_path(**overrides)
-    assessments_path({ team_people: (@team[:people] if @team[:people] != "direct"),
-                       team_role: (@team.dig(:role, :id) if roles?) }.merge(overrides).compact,
-                     anchor: "team-card")
   end
 
   def blank_slate
