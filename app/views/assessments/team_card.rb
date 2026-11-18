@@ -48,7 +48,7 @@ class Views::Assessments::TeamCard < Views::Base
   def blank_disc
     svg(viewBox: "-30 -30 60 60", class: "block aspect-square w-24 shrink-0 sm:w-28", aria: { hidden: "true" },
         data: { team_blank: true }) do |s|
-      s.circle(r: 30, class: "fill-(--gos-surface-empty)")
+      s.circle(r: 30, class: "fill-(--gos-neutral-muted)")
       s.circle(r: 22, fill: "none", stroke_width: 0.9, stroke_dasharray: "2 2", class: "stroke-(--gos-content-muted)")
     end
   end
