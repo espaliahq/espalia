@@ -13,7 +13,7 @@ module Views::Assessments::Concerns::TeamControls
   def team_choices
     { team_people: (@team[:people] if @team[:people] != "direct"), team_role: @team.dig(:role, :id),
       team_level: @team[:level_ordinal], team_ratings: (@team[:ratings] if @team[:ratings] != "manager"),
-      team_compare: ("none" if @team.dig(:comparison, :reason) == "none") }
+      team_compare: ("none" if @team[:compare] == "none") }
   end
 
   def roles? = @team[:roles].size > 1

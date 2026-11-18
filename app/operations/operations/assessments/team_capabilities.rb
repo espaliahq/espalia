@@ -37,7 +37,7 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
 
   # @return [Hash]
   def perform
-    { people:, indirect_reports: indirect_reports?, ratings:, role: result.role && { id: result.role.role_id, name: result.role.name },
+    { people:, indirect_reports: indirect_reports?, ratings:, compare:, role: result.role && { id: result.role.role_id, name: result.role.name },
       roles: result.roles.map { |r| { id: r.role_id, name: r.name, people: r.people } },
       level_ordinal: result.level_ordinal, levels: result.levels.map(&:to_h),
       in_view: result.people, scored: result.scored, scored_on_role: result.scored_on_role, met: result.met, comparison: comparison_payload,
@@ -53,7 +53,7 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
   def comparison
     return @comparison if defined?(@comparison)
 
-    @comparison = if params[:compare] != "none" && result.role
+    @comparison = if compare == "level" && result.role
       Assessments::TeamComparison.new(tenant: ActsAsTenant.current_tenant, role_id: result.role.role_id,
                                       level_counts: level_counts).call
     end
@@ -74,6 +74,8 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
   end
 
   def ratings = params[:ratings] || "manager"
+
+  def compare = params[:compare] || "level"
 
   def result
     @result ||= Assessments::TeamCapabilities.new(

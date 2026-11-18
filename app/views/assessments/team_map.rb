@@ -66,15 +66,14 @@ class Views::Assessments::TeamMap < Views::Base
 
   def group_name = @team.dig(:role, :name).to_s.pluralize
 
-  # Compared with nothing reads `reason: "none"`; anything else is the line or why there is none.
   def compare_control
     div(class: "-mt-3 mb-6 flex flex-wrap items-center gap-3") do
       span(class: "text-sm text-muted", id: "team-compare-label") { "Compare with" }
       render Components::Kit::SegmentedControl.new(aria: { labelledby: "team-compare-label" }) do |control|
-        control.segment("#{group_name} at the same levels", short: "Same levels", selected: comparison[:reason] != "none",
+        control.segment("#{group_name} at the same levels", short: "Same levels", selected: @team[:compare] == "level",
                                                                          href: team_path(team_compare: nil),
                                                                          data: { refresh_focus: "compare-level" })
-        control.segment("Nothing", selected: comparison[:reason] == "none", href: team_path(team_compare: "none"),
+        control.segment("Nothing", selected: @team[:compare] == "none", href: team_path(team_compare: "none"),
                                    data: { refresh_focus: "compare-none" })
       end
       compare_note

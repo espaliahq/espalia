@@ -99,6 +99,7 @@ class Operations::Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
 
       assert_equal [ false, "none" ], result[:comparison].values_at(:shown, :reason)
       assert_nil row(result, @fx.shared)[:group_median]
+      assert_equal %w[none level], [ result[:compare], call[:compare] ]
     end
 
     should "say which levels in view are too small to compare with" do
