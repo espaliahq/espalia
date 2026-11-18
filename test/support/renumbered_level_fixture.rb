@@ -39,13 +39,13 @@ module RenumberedLevelFixture
     end
   end
 
-  # Moves E2 to ordinal 3 in a new draft, which takes effect only once published.
-  def renumber_e2_in_draft(fx)
+  # Moves E2 to a new ordinal in a new draft, which takes effect only once published.
+  def renumber_e2_in_draft(fx, to: 3)
     ActsAsTenant.with_tenant(fx.tenant) do
       version = FrameworkState::Framework.find_by!(framework_id: fx.framework_id).current_published_version
       frameworks = Frameworks::CommandHandler.new
       frameworks.start_draft(fx.framework_id, version + 1, "tester")
-      frameworks.change_level_ordinal(fx.framework_id, fx.level_id, 3, reason: "Room for a level between")
+      frameworks.change_level_ordinal(fx.framework_id, fx.level_id, to, reason: "Room for a level between")
     end
   end
 

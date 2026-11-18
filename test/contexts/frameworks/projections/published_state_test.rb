@@ -848,6 +848,18 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
   end
 
   context "rebuild contract" do
+    should "rebuild the published version without a draft opened after it" do
+      fx = build_published_two_level_framework(tenant: @tenant)
+      renumber_e2_in_draft(fx)
+      live = snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
+
+      Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: Frameworks::Projections::PublishedState, tenant: @tenant)
+
+      assert_equal live, snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
+      within_tenant { assert_equal 2, FrameworkState::Level.find_by!(level_id: fx.level_id).ordinal }
+    end
+
     should "reset! + replay produces identical read-model state" do
       rfid = SecureRandom.uuid_v7
       rid  = SecureRandom.uuid_v7

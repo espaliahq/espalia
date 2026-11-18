@@ -401,6 +401,15 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
       assert_equal live, snapshot_read_models(AssessmentCycles::Projections::CurrentState, @tenant)
       assert_equal [ 3, 3 ], stored_ordinals
     end
+
+    should "keep the published ordinal through a full rebuild while a later renumber is still a draft" do
+      publish_draft(@fx)
+      renumber_e2_in_draft(@fx, to: 4)
+
+      Projections::GlobalReplayer.replay_all(tenant: @tenant)
+
+      assert_equal [ 3, 3 ], stored_ordinals
+    end
   end
 
   private

@@ -264,6 +264,9 @@ class Frameworks::Projections::PublishedState
     stream = EventStreamNaming.framework_stream(framework_id)
     event_store = Rails.configuration.event_store
     event_store.read.stream(stream).each do |event|
+      # A replay reaches this publish with later events already in the
+      # stream; a draft opened after it must not leak into this version.
+      break if event.event_id == publish_event.event_id
       next if skip_during_rebuild?(event)
 
       handle(event)
