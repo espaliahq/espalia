@@ -19,6 +19,15 @@
 | `app/views/assessments/level_comparison_panel.rb` | The capability map's "Compared with your level" tab: blades, level chips and lanes beside the group's medians (see [*Capability radar and map*](scoring.md)) |
 | `app/views/assessments/comparison_blades.rb` | The comparison tab's large blades, with a line across each at the group's median |
 | `app/models/assessments/level_comparison.rb` | What a person's comparison can show: their level and one either side, sized and scored only above the tenant's minimum |
+| `app/queries/assessments/team_capabilities.rb` | A manager's team as one set of capabilities: each capability's mean score against each person's own level, short counts, gaps, roles and levels |
+| `app/queries/assessments/team_comparison.rb` | The team map's line: the level comparison snapshot's medians at the team's levels, weighted by its level mix |
+| `app/operations/operations/assessments/team_capabilities.rb` | `assessments_team_capabilities`, the payload the team card and team map render |
+| `app/views/assessments/team_card.rb` | The team card at the head of Team Assessments, or its blank slate (see [*Capability radar and map*](scoring.md)) |
+| `app/views/assessments/team_map.rb` | The team capability map in the team card's dialog: large team blades, a lane per capability, and its controls |
+| `app/views/assessments/team_blades.rb` | The team's blades, on the card blades' geometry, with the comparison line on the map |
+| `app/views/assessments/concerns/team_controls.rb` | The people switch and role menu the team card and map share |
+| `app/controllers/assessments/team_maps_controller.rb` | `GET /assessments/team-map`, the team map's frame |
+| `app/controllers/concerns/assessments/team_capabilities_params.rb` | Reads the team card's and map's `team_*` query params into the team operation |
 | `app/queries/level_comparisons/group_scores.rb` | Each role and level's median scores from everyone's latest settled assessment, for a snapshot |
 | `app/models/level_comparison_snapshot.rb` | A snapshot of every group's size and medians; `LevelComparisons::TakeDueSnapshotsJob` takes them |
 | `app/views/assessments/status_pill.rb` | Header status pill — In Progress / N to confirm / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
