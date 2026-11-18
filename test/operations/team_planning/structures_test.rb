@@ -46,6 +46,13 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
     @group, @pod = levels.pluck(:level_id)
   end
 
+  should "change a plan's unit only to a type its own units can still sit under" do
+    ops = set_unit(name: "Ops", top_level: true, level_id: @department)[:unit_id]
+    set_unit(name: "Desk", parent_id: ops, level_id: @squad)
+
+    assert_equal "Squad can't sit under Squad", refusal(unit_id: ops, level_id: @squad)
+  end
+
   context "beneath a unit with its own structure" do
     setup { declare }
 

@@ -73,6 +73,7 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
     taxonomy = structures.beneath(parent_id)
     kind = taxonomy.kind(current && !retyped ? structures.level_of(current) : level_id)
     refuse!(not_a_type(structures, level_id)) if (current.nil? || retyped) && !kind
+    check_children!(map, structures, taxonomy, current, kind) if retyped
     return check_top!(kind) if parent.nil? || structures.declares?(parent_id)
 
     parent_kind = taxonomy.kind(structures.level_of(parent))
@@ -90,6 +91,16 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
       refuse!("A unit can't move beneath itself or a unit below it")
     end
     parent
+  end
+
+  # A unit the plan created never declares a structure, so its units sit in
+  # the one it does and must still fit beneath its new type.
+  def check_children!(map, structures, taxonomy, current, kind)
+    map.units.select { it.parent_id == current.id }.each do |child|
+      next unless (child_kind = taxonomy.kind(structures.level_of(child)))
+
+      refuse!("#{child_kind.name} can't sit under #{kind.name}") unless taxonomy.allows?(child_kind.id, beneath: kind.id)
+    end
   end
 
   # Crossing into another structure converts types, which only the Org Graph
