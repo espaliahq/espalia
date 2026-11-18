@@ -177,6 +177,15 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
       assert_equal "A structure needs at least one unit type; withdraw it instead", error.message
     end
 
+    should "keep the tenant-wide structure from taking a type id a declared structure holds" do
+      tenant_wide = [ { level_id: @tribe, name: "Tribe" }, { level_id: @squad, name: "Squad" }, { level_id: @pod, name: "Pod" } ]
+      error = assert_raises(ArgumentError) do
+        as_tenant { @handler.define_taxonomy([ *tenant_wide, { level_id: @group, name: "Group" } ], effective_on: @today) }
+      end
+      assert_equal "Level id is taken", error.message
+      assert_equal %w[Tribe Squad Pod], structure.taxonomy.kinds.map(&:name)
+    end
+
     should "refuse a top structure type id named for a declared structure" do
       error = assert_raises(ArgumentError) do
         as_tenant { @handler.set_kind_parents(@squad, parent_ids: [], top: true, structure_unit_id: @payments, effective_on: @today) }

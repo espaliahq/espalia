@@ -1053,6 +1053,7 @@ class OrgGraph::StructureAggregate
     new_providers = new_level_providers(levels)
     levels = tidy_parents(with_stated_rules(normalise_levels(levels), rules))
     return if levels == tidy_parents(with_stated_rules(@levels))
+    raise ArgumentError, "Level id is taken" if level_ids(levels).any? { kind_home(it).is_a?(String) }
 
     ensure_every_kind_can_sit!(levels)
 
