@@ -4,6 +4,7 @@ require "test_helper"
 
 class Tenant::IntegrationsControllerTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
+  include OrgGraphFixture
 
   setup do
     @tenant = create(:tenant, :with_hibob_config)
@@ -95,6 +96,32 @@ class Tenant::IntegrationsControllerTest < ActionDispatch::IntegrationTest
           assert_select "button[aria-label='Remove mapping for Software Engineer']"
         end
       end
+    end
+
+    context "GET /integrations/hris with a unit the sync left out of a structure" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          @org = build_org_graph(@tenant)
+          create(:hris_sync_issue, tenant: @tenant, unit_id: @org[:payments], parent_id: @org[:checkout],
+                                   structure_unit_id: @org[:engineering])
+        end
+      end
+
+      should "list the unit with its HRIS parent and the structure it would enter" do
+        get tenant_integration_path("hris")
+
+        assert_select "#sync-issues tr[data-sync-issue='#{@org[:payments]}']" do
+          assert_select "td", text: "Payments"
+          assert_select "td", text: "Checkout"
+          assert_select "td", text: "Engineering"
+        end
+      end
+    end
+
+    should "show no sync issues card while there are none" do
+      get tenant_integration_path("hris")
+
+      assert_select "#sync-issues", count: 0
     end
 
     context "GET /integrations/unknown" do

@@ -1,20 +1,36 @@
 # frozen_string_literal: true
 
 # What the taxonomy's write tools share beyond {UnitWrite}, which each
-# includes first: the admin-only check, the levels as they stand, and the
-# payload both return.
+# includes first: who may change the structure they write, the unit types as
+# they stand, and the payload each returns.
+#
+# A write names its structure: the top one by default, or a unit's own
+# ([#494](https://github.com/espaliahq/espalia/issues/494)) when
+# {#structure_unit} returns that unit.
 module Operations::OrgGraph::TaxonomyWrite
   # Overrides UnitWrite's tenant-wide check, so include this after it.
   #
-  # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin
+  # @raise [Pundit::NotAuthorizedError] unless the caller may change the structure
   def policy_check
-    authorize :org_graph, :edit_taxonomy?
+    return authorize(:org_graph, :edit_taxonomy?) unless structure_unit
+
+    authorize :org_graph, :show?
+    return if Pundit.policy!(context, :org_graph).edit_structure_of?(structure_unit)
+
+    raise Pundit::NotAuthorizedError, "Only a tenant admin can change #{structure_unit.name}'s structure"
   end
 
   private
 
+  # @return [OrgUnit, nil] the unit whose own structure this writes, nil for the top structure
+  def structure_unit
+    return @structure_unit if defined?(@structure_unit)
+
+    @structure_unit = params[:structure_unit_id] && live_unit!(:structure_unit_id)
+  end
+
   # @return [Array<OrgTaxonomyLevel>] top first
-  def current_levels = OrgTaxonomyLevel.top_structure.to_a
+  def current_levels = OrgTaxonomyLevel.in_structure(structure_unit&.id).to_a
 
   # @return [Array<Hash>] `{ level_id, name, provider, parent_ids, top }`, top first
   def levels_payload
@@ -24,4 +40,7 @@ module Operations::OrgGraph::TaxonomyWrite
       { level_id: level.id, name: level.name, provider: level.provider, **rules[level.id] }
     end
   end
+
+  # @return [Hash] `{ structure_unit_id: }` for a unit's own structure, else empty
+  def in_structure = structure_unit ? { structure_unit_id: structure_unit.id } : {}
 end

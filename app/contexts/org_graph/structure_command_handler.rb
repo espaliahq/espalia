@@ -42,10 +42,28 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
+  # @see OrgGraph::StructureAggregate#declare_structure
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
+  def declare_structure(unit_id, **options)
+    authorize_structure_of!(unit_id)
+    unless_kinds_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
+    end
+  end
+
+  # @see OrgGraph::StructureAggregate#withdraw_structure
+  # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
+  def withdraw_structure(unit_id, **options)
+    authorize_structure_of!(unit_id)
+    unless_kinds_rebuilding do
+      with_structure(OrgGraph::PlanReference.new) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
+    end
+  end
+
   # @see OrgGraph::StructureAggregate#add_level
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def add_level(level_id, name, **options)
-    authorize_taxonomy!
+    authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.add_level(level_id, name, **attributed(options, :defined_by_id)) }
     end
@@ -54,7 +72,7 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#set_kind_parents
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def set_kind_parents(level_id, **options)
-    authorize_taxonomy!
+    authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
       with_structure(OrgGraph::PlanReference.new) { |structure| structure.set_kind_parents(level_id, **attributed(options, :defined_by_id)) }
     end
@@ -64,7 +82,7 @@ class OrgGraph::StructureCommandHandler
   # @raise [ProjectionVersion::Rebuilding] while the history or the structure is rebuilt
   def remove_level(level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
-    authorize_taxonomy!
+    authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
       with_structure(plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
     end
@@ -164,7 +182,9 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     ActiveRecord::Base.transaction do
       authorize_unit!(unit_id)
-      with_structure(plan) { |structure| structure.retire_unit(unit_id, **attributed(options, :retired_by_id)) }
+      with_structure(plan) do |structure|
+        unless_kinds_rebuilding_for(structure, [ unit_id ]) { structure.retire_unit(unit_id, **attributed(options, :retired_by_id)) }
+      end
     end
   end
 
@@ -175,7 +195,10 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     ActiveRecord::Base.transaction do
       authorize_succession!([ options[:predecessor_ids], options[:successor_ids] ])
-      with_structure(plan) { |structure| structure.record_succession(succession_id, **attributed(options, :stated_by_id)) }
+      with_structure(plan) do |structure|
+        retiring = options[:retire_predecessors] ? Array(options[:predecessor_ids]) : []
+        unless_kinds_rebuilding_for(structure, retiring) { structure.record_succession(succession_id, **attributed(options, :stated_by_id)) }
+      end
     end
   end
 
@@ -197,7 +220,8 @@ class OrgGraph::StructureCommandHandler
   #   {OrgGraph::StructureAggregate#record_succession}
   # @raise [ArgumentError] if a placement names a unit outside the successors,
   #   or a person who isn't a member of exactly one predecessor
-  # @raise [ProjectionVersion::Rebuilding] while the member list is rebuilt
+  # @raise [ProjectionVersion::Rebuilding] while the member list is rebuilt,
+  #   or the kinds are when a predecessor declares a structure
   def apply_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:, placements: {}, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     options = attributed(options, :stated_by_id)
@@ -209,8 +233,10 @@ class OrgGraph::StructureCommandHandler
         moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids), applied:)
         place(moves, effective_on, plan, moved_by_id: options[:stated_by_id])
         with_structure(plan) do |structure|
-          structure.record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:,
-                                                     **options, retire_predecessors: true)
+          unless_kinds_rebuilding_for(structure, Array(predecessor_ids)) do
+            structure.record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:,
+                                                       **options, retire_predecessors: true)
+          end
         end
       end
     end
@@ -225,6 +251,15 @@ class OrgGraph::StructureCommandHandler
   def unless_kinds_rebuilding(&)
     ProjectionVersion.unless_rebuilding(OrgGraph::Projections::History::PROJECTION_NAME,
                                         OrgGraph::Projections::Structure::PROJECTION_NAME, &)
+  end
+
+  # Only a retirement that withdraws a structure changes the kinds. Guarding
+  # every retirement would refuse the HRIS mirror's during a History rebuild,
+  # which records each refusal as a sync error. The aggregate decides, since a
+  # Structure rebuild empties the read model.
+  def unless_kinds_rebuilding_for(structure, retiring_ids, &)
+    declared = structure.declared_structures
+    retiring_ids.any? { declared.key?(it.to_s.downcase) } ? unless_kinds_rebuilding(&) : yield
   end
 
   # Checks every placement before any is written. Once the succession is

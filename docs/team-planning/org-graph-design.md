@@ -252,7 +252,9 @@ a kind that never stated rules. Readers build an `OrgGraph::Taxonomy` from the r
 Each row's `structure_unit_id` names the unit whose own structure it belongs to, and is
 null for the top structure; `OrgTaxonomyLevel.top_structure` reads the top one. The
 structure in force at a unit is that of the nearest unit above it that declares one, else
-the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)).
+the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)). A unit that
+retires gives up its structure in the same change. An admin can't date the retirement before
+the structure last changed; an HRIS, which is never refused, withdraws it on that day instead.
 
 ### The shape of the organisation has a history too
 
@@ -729,6 +731,11 @@ Someone can state the succession. The screen says which kind each field is.
 A unit whose people sit under different units above keeps its parent and is listed in
 the sync's result as split, for someone to resolve. Espalia never picks a majority.
 
+A parent read inside a unit's own structure ([#494](https://github.com/espaliahq/espalia/issues/494))
+is never written, since the HRIS's types belong to the top structure. A new unit starts with
+no parent and an existing one keeps its own. Each is kept as a sync issue, shown to admins on
+the HRIS page and in the unit's drawer, until a sync no longer reads it there.
+
 #### Handing a level over, and back (6.8)
 
 `Hris::LevelHandover` compares a level Espalia holds with the field it would come from,
@@ -786,9 +793,13 @@ screen and MCP share one implementation.
   A type an HRIS supplies sits at the top, or under one type above it that the HRIS supplies. A save
   that would leave live units where they no longer fit is refused, naming them; move them first.
   An admin removes a type Espalia holds that no unit has ever held, retired units included
-  ([#148](https://github.com/espaliahq/espalia/issues/148)). A unit keeps its type for life,
-  so a type that held one stays to explain the unit's history. Such a row has no Remove, and
-  names the retired units it held. Remove sits in the row's kebab menu and asks first. A type an HRIS provides is handed back first, and the last
+  ([#148](https://github.com/espaliahq/espalia/issues/148)). Such a row has no Remove, and
+  names the retired units it held. The Org Graph itself is less strict
+  ([#494](https://github.com/espaliahq/espalia/issues/494)): a type goes, dated, once no unit,
+  live or retired, holds it on that date or after, so a tenant-wide type can retire after its
+  units move into a unit's own structure. Earlier days keep it, and reading as of one shows it
+  by name. A removal dated before the last day a unit held it is refused, naming that day. The
+  panel follows in a later change. Remove sits in the row's kebab menu and asks first. A type an HRIS provides is handed back first, and the last
   type stays.
 - **Handing a level over.** A level with units is compared with a field. Each unit gets
   one call: match a value, succeed into another unit, or retire. The calls start from the

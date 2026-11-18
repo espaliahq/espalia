@@ -1,18 +1,23 @@
 # frozen_string_literal: true
 
-# Removes a level from the tenant's taxonomy that no unit has ever held.
+# Removes a level from the tenant's taxonomy once no unit holds it, dated on
+# or after the day after the last day one did. Earlier days keep it, so
+# history still reads it by name.
 class Operations::OrgGraph::RemoveLevel < Operations::Base
   include Operations::OrgGraph::UnitWrite
   include Operations::OrgGraph::TaxonomyWrite
 
-  description "Remove a level from the Org Graph's taxonomy, from effective_on (today by default). Only a " \
-              "level no unit has ever held, retired units included, can go; the refusal names the units. " \
+  description "Remove a level from the Org Graph's taxonomy, from effective_on (today by default). A level " \
+              "goes once no unit, retired units included, holds it on that date or after; reading an earlier " \
+              "date still shows it. The refusal names the units that hold it, or the last day one did. " \
               "A level an HRIS provides is handed back to Espalia first. A level a live plan places a unit " \
               "at stays until the plan changes or is archived. Refused unless the caller is a tenant admin."
   category :destructive
   approval :in_app
 
   parameter :level_id, String, required: true, allow_blank: false
+  parameter :structure_unit_id, String, allow_blank: false,
+            schema: { format: "uuid", description: "a unit with a structure of its own, to change its unit types; the top structure by default" }
 
   # @return [Hash] `{ level_id, name, effective_on, levels }`, levels top first
   def perform
@@ -26,9 +31,9 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
     ActiveRecord::Base.transaction do
       ::OrgGraph::Repository.new.lock_structure # a plan places units under it too, so the count holds
       ensure_no_live_plan_holds!(level)
-      refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:) }
+      refusing_as_parameter_errors { structure_handler.remove_level(params[:level_id], effective_on:, **in_structure) }
     end
-    { level_id: params[:level_id].to_s.downcase, name: level&.name, effective_on:, levels: levels_payload }
+    { level_id: params[:level_id].to_s.downcase, name: level&.name, **in_structure, effective_on:, levels: levels_payload }
   end
 
   private

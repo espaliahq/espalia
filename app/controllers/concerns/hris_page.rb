@@ -30,6 +30,7 @@ module HrisPage
       person_rows: resolution.rows,
       role_mapping_rows: build_role_mapping_rows(saved),
       unmapped_titles: unmapped_titles(resolution),
+      sync_issues: HrisSyncIssue.rows,
       mapping_options: mapping_options(resolution, saved),
       can_edit_mappings: policy(:integrations).update_role_mappings?,
       can_edit_connection: policy(:integrations).update_hris_connection?,

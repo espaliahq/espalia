@@ -104,8 +104,17 @@ class OrgUnitActivity::Group
       ("changed its type" if types["UnitKindChanged"]),
       owners_phrase("added", types["UnitOwnerAdded"]),
       owners_phrase("removed", types["UnitOwnerRemoved"]),
+      structure_phrase,
       ("retired the unit" if types["UnitRetired"])
     ].compact
+  end
+
+  def structure_phrase
+    change = parts.find { |part| part.event_type == "TaxonomyDefined" } or return
+    return "gave it a structure of its own" unless change.before
+    return "withdrew its structure" unless change.after
+
+    "changed its structure's unit types"
   end
 
   def renamed_phrase

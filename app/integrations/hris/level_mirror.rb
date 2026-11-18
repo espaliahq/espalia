@@ -21,6 +21,11 @@
 #   :split_units. A parent changes only when two syncs in a row read the same
 #   one ({HrisUnitParentProposal}). A new unit takes the parent read when it
 #   is created.
+# - **Structures.** A parent read inside a unit's own structure (#494) is
+#   never written there, since the HRIS's types belong to the top structure.
+#   A new unit is created with no parent, an existing one keeps its own, and
+#   both are listed in the result's :units_in_structures with the structure,
+#   and kept as {HrisSyncIssue}s until a sync no longer reads it.
 #
 # Retirements and ended memberships each have their own brake, as
 # {Hris::BaseAdapter::ABSENCE_BRAKE} has for people: over it, none of that
@@ -99,9 +104,12 @@ class Hris::LevelMirror
     plans = @levels.filter_map { |level| plan(level, taxonomy) }
     @plans = plans.index_by { it.level.id }
     @proposals = HrisUnitParentProposal.where(unit_id: OrgUnit.where(level_id: @levels.map(&:id))).index_by(&:unit_id)
+    @parent_ids = OrgUnit.live.pluck(:id, :parent_id).to_h
+    @declaring_ids = OrgTaxonomyLevel.where.not(structure_unit_id: nil).distinct.pluck(:structure_unit_id).to_set
     @read_parents = Set.new
     plans.each { |level_plan| mirror_units(level_plan) }
     forget_unread_parents
+    record_structure_issues(plans)
     retiring = retiring_units(plans)
     retiring = [] unless write_memberships(plans, retiring)
     retire_units(plans, retiring)
@@ -140,10 +148,14 @@ class Hris::LevelMirror
 
       if (unit = units[ref])
         rename(unit, name) if level_plan.field.list?
-        reparent(unit, parent)
+        placed, in_structure = outside_structures(unit.id, unit.name, parent)
+        reparent(unit, placed)
       else
-        units[ref] = create(level_plan, ref, name, parent)
+        unit_id = SecureRandom.uuid_v7
+        placed, in_structure = outside_structures(unit_id, name, parent)
+        units[ref] = create(level_plan, unit_id, ref, name, placed)
       end
+      @result[:units_in_structures] << in_structure if in_structure
     rescue => e
       @result[:errors] << { unit: ref, error: e.message }
     end
@@ -179,14 +191,34 @@ class Hris::LevelMirror
     parents.many? ? :split : parents.first
   end
 
-  def create(level_plan, ref, name, parent)
-    unit_id = SecureRandom.uuid_v7
+  # @return [Array(String, nil, :split), Hash, nil] the reading, or nil in
+  #   place of a parent inside a declared structure, with the issue to list
+  #   once the unit is written
+  def outside_structures(unit_id, name, parent)
+    structure_unit_id = parent.is_a?(String) && structure_beneath(parent)
+    return [ parent, nil ] unless structure_unit_id
+
+    [ nil, { unit_id:, name:, parent_id: parent, structure_unit_id: } ]
+  end
+
+  def record_structure_issues(plans)
+    HrisSyncIssue.replace_in_structure(provider: @provider, unit_ids: OrgUnit.where(level_id: plans.map { it.level.id }).ids,
+                                       reported: @result[:units_in_structures], today: @today)
+  end
+
+  def structure_beneath(unit_id)
+    unit_id = @parent_ids[unit_id] until unit_id.nil? || @declaring_ids.include?(unit_id)
+    unit_id
+  end
+
+  def create(level_plan, unit_id, ref, name, parent)
     if parent == :split
       parent = nil
       @result[:split_units] << { unit_id:, name: }
     end
     structure.create_unit(unit_id, name, level_id: level_plan.level.id, parent_id: parent, provider: @provider,
                           external_ref: ref, effective_on: @today)
+    @parent_ids[unit_id] = parent
     counted
     OrgUnit.find(unit_id)
   end
@@ -210,6 +242,7 @@ class Hris::LevelMirror
       proposal&.destroy!
     elsif proposal&.parent_id == parent
       structure.move_unit(unit.id, parent, provider: @provider, effective_on: @today)
+      @parent_ids[unit.id] = parent
       proposal.destroy!
       counted
     else

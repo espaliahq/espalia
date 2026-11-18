@@ -252,6 +252,15 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_not HrisUnitParentProposal.exists?(unit_id: @payments)
     end
 
+    should "clear the in-structure sync issues of the level's units, retired ones too, and no others" do
+      elsewhere = SecureRandom.uuid_v7
+      [ @payments, @search, @legacy, elsewhere ].each { create(:hris_sync_issue, unit_id: it) }
+
+      handover.hand_back!(fingerprint: handover.compare_handback.fingerprint, actor: @actor)
+
+      assert_equal [ elsewhere ], HrisSyncIssue.pluck(:unit_id)
+    end
+
     should "refuse while the members are rebuilt" do
       fingerprint = handover.compare_handback.fingerprint
       before = Rails.configuration.event_store.read.backward.limit(1).first.event_id

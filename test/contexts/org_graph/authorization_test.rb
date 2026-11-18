@@ -149,6 +149,35 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     end
   end
 
+  context "a unit's own structure" do
+    setup do
+      @group = SecureRandom.uuid_v7
+      @declaration = { levels: [ { level_id: @group, name: "Group" } ], conversion: { @team => @group }, effective_on: "2026-02-01" }
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01")
+    end
+
+    should "be left to a tenant admin, even over an Org Graph editor or the unit's owner" do
+      [ context_for(@other), context_for(@lead, org_graph_editor: true) ].each do |actor|
+        error = assert_raises(OrgGraph::Authorization::Refused) { structure(actor).declare_structure(@engineering_id, **@declaration) }
+        assert_equal "Only a tenant admin can change Engineering's structure", error.message
+      end
+
+      admin = structure(context_for(@lead, role: :admin))
+      admin.declare_structure(@engineering_id, **@declaration)
+      error = assert_raises(OrgGraph::Authorization::Refused) do
+        structure(context_for(@other)).add_level(SecureRandom.uuid_v7, "Lane", structure_unit_id: @engineering_id, effective_on: "2026-02-01")
+      end
+      assert_equal "Only a tenant admin can change Engineering's structure", error.message
+
+      error = assert_raises(OrgGraph::Authorization::Refused) do
+        structure(context_for(@other)).withdraw_structure(@engineering_id, conversion: { @group => @team }, effective_on: "2026-02-01")
+      end
+      assert_equal "Only a tenant admin can change Engineering's structure", error.message
+      admin.withdraw_structure(@engineering_id, conversion: { @group => @team }, effective_on: "2026-02-01")
+      assert_equal @team, OrgUnit.find(@payments_id).level_id
+    end
+  end
+
   context "as an owner of a unit above" do
     setup do
       OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01")

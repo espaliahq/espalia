@@ -22,7 +22,8 @@ class Tenant::OrgUnitsController < ApplicationController
         rights: OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview),
         confirmations:,
         effective_on: params[:on].presence || Tenant.today.iso8601,
-        alert: flash[:drawer_alert]
+        alert: flash[:drawer_alert],
+        sync_issues: policy(:integrations).show? ? HrisSyncIssue.rows(HrisSyncIssue.where(unit_id: @unit.id)) : []
       ),
       **comparison_slots(unit_id: @unit.id)
     )

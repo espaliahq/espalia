@@ -186,6 +186,64 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_nil unit("work.department/t1").parent_id
     end
 
+    should "never seat a new unit inside a unit's own structure, listing it with the structure instead" do
+      mirror(@staff[0] => { division: "d1" })
+      product = unit("work.division/d1")
+      declare_lane(product.id)
+
+      result = mirror(@staff[0] => { division: "d1", team: "t1" })
+
+      payments = unit("work.department/t1")
+      assert_nil payments.parent_id
+      assert_equal [ { unit_id: payments.id, name: "Payments", parent_id: product.id, structure_unit_id: product.id } ],
+                   result[:units_in_structures]
+      assert_empty result[:errors]
+    end
+
+    should "list nothing for a new unit inside a structure that fails to be written" do
+      mirror(@staff[0] => { division: "d1" })
+      product = unit("work.division/d1")
+      declare_lane(product.id)
+      handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      def handler.create_unit(*, **) = raise("Unit name is taken")
+
+      result = OrgGraph::StructureCommandHandler.stub(:new, handler) { mirror(@staff[0] => { division: "d1", team: "t1" }) }
+
+      assert_equal [ "Unit name is taken" ], result[:errors].pluck(:error)
+      assert_empty result[:units_in_structures]
+      assert_not HrisSyncIssue.exists?
+    end
+
+    should "keep an existing unit's parent when its people move inside a unit's own structure" do
+      mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" })
+      platform = unit("work.division/d2")
+      declare_lane(platform.id)
+
+      results = Array.new(2) { mirror(@staff[0] => { division: "d2", team: "t1" }, @staff[1] => { division: "d2" }) }
+
+      assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
+      assert_equal [ [ "Payments", platform.id ] ] * 2, results.map { it[:units_in_structures].map { |row| row.values_at(:name, :structure_unit_id) }.sole }
+      assert_not HrisUnitParentProposal.exists?
+    end
+
+    should "keep a unit left out of a structure as a sync issue until the HRIS moves it back" do
+      mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" })
+      platform = unit("work.division/d2")
+      declare_lane(platform.id)
+      readings = { @staff[0] => { division: "d2", team: "t1" }, @staff[1] => { division: "d2" } }
+
+      mirror(readings)
+      mirror_with(readings, today: TODAY + 1)
+
+      issue = HrisSyncIssue.sole
+      assert_equal [ "in_structure", "hibob", unit("work.department/t1").id, platform.id, platform.id, TODAY, TODAY + 1 ],
+                   issue.values_at(:kind, :provider, :unit_id, :parent_id, :structure_unit_id, :first_seen_on, :last_seen_on)
+
+      mirror_with({ @staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" } }, today: TODAY + 2)
+
+      assert_not HrisSyncIssue.exists?
+    end
+
     should "start over when a sync between two readings reads no parent" do
       mirror(@staff[0] => { division: "d1", team: "t1" })
       mirror(@staff[0] => { division: "d2", team: "t1" })
@@ -348,12 +406,19 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
 
   private
 
+  def declare_lane(unit_id)
+    admin = create(:tenant_user, tenant: @tenant, role: :admin)
+    OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: admin.user, tenant_user: admin, person: nil))
+                                     .declare_structure(unit_id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
+                                                                 effective_on: TODAY)
+  end
+
   def mirror(readings) = mirror_with(readings)
 
   def mirror_with(readings, **options)
-    result = { errors: [], split_units: [], org_graph_events: 0 }
+    result = { errors: [], split_units: [], units_in_structures: [], org_graph_events: 0 }
     Hris::LevelMirror.new(provider: "hibob", catalogue: @catalogue, readings: readings.to_h { |person, held| [ person, reading(held) ] },
-                          result:, today: TODAY, **options).call
+                          result:, **options.reverse_merge(today: TODAY)).call
     result
   end
 

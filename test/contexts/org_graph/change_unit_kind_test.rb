@@ -171,20 +171,27 @@ class OrgGraph::ChangeUnitKindTest < ActiveSupport::TestCase
     end
   end
 
-  should "keep a type a unit once held from being removed from the taxonomy" do
+  should "remove a type a unit once held only from the day after it last held it" do
     @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10")
     @system.change_unit_kind(@payments, @team, effective_on: "2026-12-11")
 
-    error = assert_raises(RuntimeError) { @system.remove_level(@crew, effective_on: "2026-12-20") }
-    assert_equal "Crew can't be removed, as it held Payments", error.message
+    error = assert_raises(RuntimeError) { @system.remove_level(@crew, effective_on: "2026-12-10") }
+    assert_equal "Payments was a Crew until 2026-12-10, so date its removal after then", error.message
+    assert_nothing_raised { @system.remove_level(@crew, effective_on: "2026-12-11") }
   end
 
-  should "keep a type a unit held for less than a day from being removed" do
+  should "keep a type a unit holds today" do
+    @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10")
+
+    error = assert_raises(RuntimeError) { @system.remove_level(@crew, effective_on: "2026-12-20") }
+    assert_equal "Crew can't be removed, as it holds Payments", error.message
+  end
+
+  should "let a type go that a unit held for less than a day" do
     @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10")
     @system.change_unit_kind(@payments, @team, effective_on: "2026-12-10")
 
-    error = assert_raises(RuntimeError) { @system.remove_level(@crew, effective_on: "2026-12-20") }
-    assert_equal "Crew can't be removed, as it held Payments", error.message
+    assert_nothing_raised { @system.remove_level(@crew, effective_on: "2026-12-10") }
   end
 
   context "authorization" do

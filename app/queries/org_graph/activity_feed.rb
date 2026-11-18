@@ -97,8 +97,17 @@ class OrgGraph::ActivityFeed
     when "UnitOwnerAdded" then "Made #{person} an owner"
     when "UnitOwnerRemoved" then "Removed #{person} as an owner"
     when "UnitRetired" then "Retired the unit"
+    when "TaxonomyDefined" then structure_change(entry)
     else OrgUnitActivity::Group.new([ entry ]).summary.upcase_first
     end
+  end
+
+  def structure_change(entry)
+    before, after = [ entry.before, entry.after ].map { it&.fetch("types")&.to_sentence }
+    return "Gave it a structure of its own: #{after}" unless before
+    return "Withdrew its structure of #{before}" unless after
+
+    "Changed its structure's unit types from #{before} to #{after}"
   end
 
   def moved(entry, person)

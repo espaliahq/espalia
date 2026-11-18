@@ -5,7 +5,8 @@
 #
 # Every handler names its actor. A person's {AuthorizationContext} is checked
 # against every command. {SYSTEM} is the system's own work: the HRIS sync, a
-# retirement moving its members, a rake task. It is not checked. A handler
+# retirement moving its members, a rake task. It is not checked, but it can't
+# change a unit's own structure, which only an admin may do. A handler
 # with no actor raises, so a path that forgets one fails instead of skipping
 # the check.
 module OrgGraph::Authorization
@@ -28,6 +29,15 @@ module OrgGraph::Authorization
 
   def authorize_taxonomy!
     authorize!(:edit_taxonomy?) { "Only a tenant admin can change the taxonomy's levels" }
+  end
+
+  # @param unit_id [String, nil] the declaring unit, nil for the top structure
+  def authorize_structure_of!(unit_id)
+    return authorize_taxonomy! unless unit_id
+    raise Refused, "Only a tenant admin can change a unit's structure" if system?
+
+    unit = unit_for(unit_id)
+    authorize!(:edit_structure_of?, unit) { "Only a tenant admin can change #{unit_name(unit)}'s structure" }
   end
 
   def authorize_structure!

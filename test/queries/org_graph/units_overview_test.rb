@@ -16,6 +16,22 @@ class OrgGraph::UnitsOverviewTest < ActiveSupport::TestCase
 
   def unit(key) = OrgUnit.find(@org[key])
 
+  should "read the types, units and members in one snapshot when no transaction is open" do
+    isolations = []
+    snapshot = lambda do |**options, &block|
+      isolations << options[:isolation]
+      block.call
+    end
+    connection = ActiveRecord::Base.connection
+
+    view = connection.stub(:transaction_open?, false) do
+      ActiveRecord::Base.stub(:transaction, snapshot) { ActsAsTenant.with_tenant(@tenant) { OrgGraph::UnitsOverview.new } }
+    end
+
+    assert_equal [ :repeatable_read ], isolations
+    assert_equal 4, ActsAsTenant.with_tenant(@tenant) { view.headcount(unit(:engineering)) }
+  end
+
   should "open the first root unit by default, and an unknown id falls back to it" do
     ActsAsTenant.with_tenant(@tenant) do
       assert_equal @org[:engineering], OrgGraph::UnitsOverview.new.selected.id

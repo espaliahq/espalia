@@ -30,6 +30,40 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
   context "as a tenant admin" do
     setup { sign_in @admin_user }
 
+    context "with a unit the HRIS sync left out of a structure" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          create(:hris_sync_issue, tenant: @tenant, unit_id: @org[:payments], parent_id: @org[:checkout],
+                                   structure_unit_id: @org[:engineering])
+        end
+      end
+
+      should "say why in that unit's drawer, with a link to the HRIS page" do
+        get edit_tenant_org_unit_path(@org[:payments])
+
+        section = drawer.at_css("#org-unit-sync-issues")
+        assert_includes section.text, "under Checkout, inside Engineering's own structure"
+        assert section.at_css("a[href='#{tenant_integration_path('hris', anchor: 'sync-issues')}']")
+      end
+
+      should "say nothing of it in another unit's drawer" do
+        get edit_tenant_org_unit_path(@org[:checkout])
+
+        assert_nil drawer.at_css("#org-unit-sync-issues")
+      end
+
+      should "say nothing of it to a viewer who may open the drawer but not the HRIS page" do
+        IntegrationsPolicy.alias_method :real_show?, :show?
+        IntegrationsPolicy.define_method(:show?) { false }
+        get edit_tenant_org_unit_path(@org[:payments])
+
+        assert_nil drawer.at_css("#org-unit-sync-issues")
+      ensure
+        IntegrationsPolicy.alias_method :show?, :real_show?
+        IntegrationsPolicy.remove_method :real_show?
+      end
+    end
+
     context "with a window picked" do
       setup { @window = { from: "2026-02-01", by: "learned" } }
 

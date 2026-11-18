@@ -54,7 +54,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
 
   def unit_summary
     counts = @overview.descendants_of(@unit).map(&:level_id).tally
-    beneath = @overview.levels.filter_map do |level|
+    beneath = @overview.all_levels.filter_map do |level|
       counts[level.id] && pluralize_level(counts[level.id], level.name)
     end
     [ people(@overview.headcount(@unit)), *beneath ].join(", ")

@@ -1,0 +1,75 @@
+{
+  "name": "org_graph_declare_structure",
+  "description": "Give a unit a structure of its own, from effective_on (today by default): unit types only the units beneath it use, while the unit itself keeps its type. Every unit beneath it changes type in the same change, by conversion, which names a new type for each type held there. copied_from is \"top\" or a unit with a structure of its own, when the types copy that structure's. Refused, naming them, for units that wouldn't fit, a unit an HRIS supplies beneath it, a unit that already has a structure, and a date after today or before a change beneath. org_graph_withdraw_structure undoes it. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "effective_on": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "unit_id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "levels": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "unique within the structure, ignoring case"
+            },
+            "parent_names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "types in this structure it can sit under; name the type itself to let it nest"
+            },
+            "top": {
+              "type": "boolean",
+              "description": "whether it can sit directly under the unit; true by default"
+            },
+            "copied_from_level_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "the type it copies, in the structure copied_from names"
+            }
+          }
+        },
+        "description": "the structure's unit types, top first"
+      },
+      "conversion": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "description": "each level_id a unit beneath holds => the name of the type in this structure it becomes"
+      },
+      "copied_from": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "unit_id",
+      "levels"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}
