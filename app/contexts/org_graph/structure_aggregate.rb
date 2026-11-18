@@ -736,8 +736,13 @@ class OrgGraph::StructureAggregate
     touch(event.data[:unit_id], event.data[:effective_on])
   end
 
+  # A move into a unit's own structure changes that structure too, so nothing
+  # beneath the units it brings can be dated before they arrived.
   on OrgGraph::Events::UnitMoved do |event|
     unit = @units.fetch(event.data[:unit_id])
+    if event.data[:conversion] && (into = structure_beneath(event.data[:parent_id]))
+      @structure_changed_on[into] = [ @structure_changed_on[into], event.data[:effective_on] ].compact.max
+    end
     [ unit.unit_id, unit.parent_id, event.data[:parent_id] ].each { |id| touch(id, event.data[:effective_on]) }
     @parents[unit.unit_id][event.data[:effective_on]] = event.data[:parent_id]
     unit.parent_id = @parents[unit.unit_id].max_by(&:first).last
@@ -950,16 +955,24 @@ class OrgGraph::StructureAggregate
       raise "#{unit.name}'s structure last changed on #{last}, so date this then or later"
     end
 
-    beneath = [ unit.unit_id, *governed.map(&:unit_id) ]
-    changes = governed.flat_map do |child|
-      [ child.created_on, *@parents.fetch(child.unit_id, {}).keys, *@unit_kinds.fetch(child.unit_id, {}).keys ].map { [ it, child ] }
-    end
-    changes += @unit_kinds.fetch(unit.unit_id, {}).keys.map { [ it, unit ] }
-    changes += placements_ended_after(on).select { beneath.include?(it.parent_id) }.map { [ it.until_on, it.unit ] }
-    day, changed = changes.select { |changed_on, _| changed_on > on }.max_by { |changed_on, child| [ changed_on, child.name ] }
+    day, changed = last_change_after(on, governed, retyped: unit)
     raise "#{changed.name} changed on #{day}, so date this then or later" if changed
 
     on
+  end
+
+  # The latest change after `on` to any of `units`: its arrival, a move or a
+  # change of type, or the end of a unit that sat beneath one of them. Of
+  # `retyped`, only a change of type counts.
+  # @return [Array(String, Unit), nil] the day and the unit changed
+  def last_change_after(on, units, retyped: nil)
+    changes = units.flat_map do |child|
+      [ child.created_on, *@parents.fetch(child.unit_id, {}).keys, *@unit_kinds.fetch(child.unit_id, {}).keys ].map { [ it, child ] }
+    end
+    changes += @unit_kinds.fetch(retyped.unit_id, {}).keys.map { [ it, retyped ] } if retyped
+    beneath = [ retyped, *units ].compact.map(&:unit_id)
+    changes += placements_ended_after(on).select { beneath.include?(it.parent_id) }.map { [ it.until_on, it.unit ] }
+    changes.select { |changed_on, _| changed_on > on }.max_by { |changed_on, child| [ changed_on, child.name ] }
   end
 
   # Checks a conversion against the units it covers and the structure they
@@ -1096,7 +1109,7 @@ class OrgGraph::StructureAggregate
     raise "#{declaring.name} has a structure of its own, so it can't move into #{structure_label(into)} yet"
   end
 
-  # A declared structure keeps no dated rules (#498), and its units entered it
+  # A declared structure keeps no dated rules ([#498](https://github.com/espaliahq/espalia/issues/498)), and its units entered it
   # when their types changed, so the move can't predate either. Nor can it
   # predate a change to any unit it moves.
   def moved_into_dated!(moved, parent_id, into, effective_on)
@@ -1112,12 +1125,7 @@ class OrgGraph::StructureAggregate
     entered = parent_id == into ? [] : [ *@parents.fetch(parent_id, {}).keys, *@unit_kinds.fetch(parent_id, {}).keys ]
     raise "#{parent.name} last changed on #{entered.max}, so date the move then or later" if entered.any? { it > on }
 
-    ids = moved.map(&:unit_id)
-    changes = moved.flat_map do |child|
-      [ child.created_on, *@parents.fetch(child.unit_id, {}).keys, *@unit_kinds.fetch(child.unit_id, {}).keys ].map { [ it, child ] }
-    end
-    changes += placements_ended_after(on).select { ids.include?(it.parent_id) }.map { [ it.until_on, it.unit ] }
-    day, changed = changes.select { |changed_on, _| changed_on > on }.max_by { |changed_on, child| [ changed_on, child.name ] }
+    day, changed = last_change_after(on, moved)
     raise "#{changed.name} changed on #{day}, so date the move then or later" if changed
 
     on
@@ -1130,7 +1138,7 @@ class OrgGraph::StructureAggregate
     raise "A merge or split can't cross structures: these units sit in #{structures.map { structure_label(it) }.to_sentence}"
   end
 
-  # A declared structure keeps no dated rules (#498), so a change to a unit
+  # A declared structure keeps no dated rules ([#498](https://github.com/espaliahq/espalia/issues/498)), so a change to a unit
   # in one can't predate the structure's last change.
   def ensure_within_structure!(structure_unit_id, on)
     last = @structure_changed_on[structure_unit_id] || @structure_since[structure_unit_id]

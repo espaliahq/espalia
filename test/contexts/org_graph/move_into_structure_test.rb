@@ -107,6 +107,15 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_equal @group, structure.unit(@ledger).level_id
   end
 
+  should "refuse a change beneath a moved unit dated before it arrived" do
+    move_in(on: @today + 3)
+
+    error = assert_raises(RuntimeError) { create_unit("Basket", @stream, parent_id: @ledger, on: @today + 2) }
+    assert_equal "Payments's structure last changed on #{(@today + 3).iso8601}, so date the change then or later", error.message
+    basket = create_unit("Basket", @stream, parent_id: @ledger, on: @today + 3)
+    assert_equal @payments, structure.structure_in_force(basket)
+  end
+
   should "refuse a unit from an HRIS" do
     hris = SecureRandom.uuid_v7
     as_tenant do
