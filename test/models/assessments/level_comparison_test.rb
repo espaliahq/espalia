@@ -27,6 +27,21 @@ class Assessments::LevelComparisonTest < ActiveSupport::TestCase
     Assessments::LevelComparison.new(lens: Assessments::Lens.resolve(assignment: @assignment, as_level:), tenant: @tenant)
   end
 
+  should "be offered only on the assessment itself, and only while comparisons are on" do
+    offered = ->(**lens) { Assessments::LevelComparison.offered?(tenant: @tenant, lens: Assessments::Lens.resolve(assignment: @assignment, **lens)) }
+
+    assert offered.call, "expected the home role and level in the open cycle"
+    assert_not offered.call(as_level: 1), "expected no comparison at another level"
+    assert_not offered.call(as_role: @fx.pm.role_id), "expected no comparison through another role"
+
+    past_id = AssessmentCycleEnrollment.find_by!(person_id: @person.id).cycle_id
+    close_and_open_next_role_lens_cycle(@person, @fx, past_id, tenant: @tenant)
+    assert_not offered.call(cycle_id: past_id), "expected no comparison on a past cycle"
+
+    @tenant.update!(comparison_config: ComparisonConfig.new(enabled: false))
+    assert_not offered.call, "expected no comparison while comparisons are off"
+  end
+
   should "offer the person's level and one either side, sized once a group meets the minimum" do
     group(1, 7)
     group(2, 3)
