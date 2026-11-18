@@ -182,7 +182,9 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     ActiveRecord::Base.transaction do
       authorize_unit!(unit_id)
-      with_structure(plan) { |structure| structure.retire_unit(unit_id, **attributed(options, :retired_by_id)) }
+      with_structure(plan) do |structure|
+        unless_kinds_rebuilding_for(structure, [ unit_id ]) { structure.retire_unit(unit_id, **attributed(options, :retired_by_id)) }
+      end
     end
   end
 
@@ -193,7 +195,10 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     ActiveRecord::Base.transaction do
       authorize_succession!([ options[:predecessor_ids], options[:successor_ids] ])
-      with_structure(plan) { |structure| structure.record_succession(succession_id, **attributed(options, :stated_by_id)) }
+      with_structure(plan) do |structure|
+        retiring = options[:retire_predecessors] ? Array(options[:predecessor_ids]) : []
+        unless_kinds_rebuilding_for(structure, retiring) { structure.record_succession(succession_id, **attributed(options, :stated_by_id)) }
+      end
     end
   end
 
@@ -243,6 +248,15 @@ class OrgGraph::StructureCommandHandler
   def unless_kinds_rebuilding(&)
     ProjectionVersion.unless_rebuilding(OrgGraph::Projections::History::PROJECTION_NAME,
                                         OrgGraph::Projections::Structure::PROJECTION_NAME, &)
+  end
+
+  # Only a retirement that withdraws a structure changes the kinds. Guarding
+  # every retirement would refuse the HRIS mirror's during a History rebuild,
+  # which records each refusal as a sync error. The aggregate decides, since a
+  # Structure rebuild empties the read model.
+  def unless_kinds_rebuilding_for(structure, retiring_ids, &)
+    declared = structure.declared_structures
+    retiring_ids.any? { declared.key?(it.to_s.downcase) } ? unless_kinds_rebuilding(&) : yield
   end
 
   # Checks every placement before any is written. Once the succession is

@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
 class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
+  include RebuildLock
+
   setup do
     @tenant = create(:tenant)
     @handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
@@ -243,6 +246,28 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
                    last_definition.then { [ it[:levels], it[:previous_levels].map { |level| level[:name] }, last_event.metadata[:correlation_id] ] }
       assert_equal "request-1", event_store.read.of_type(OrgGraph::Events::UnitRetired).backward.first.metadata[:correlation_id]
       assert_equal [ { @basket => %w[Lane] }, {} ], [ @retire_on - 1, @retire_on ].map { structures_as_of(it) }
+    end
+
+    should "refuse a retirement or succession that withdraws a structure while the kinds are rebuilt, and retire any other unit" do
+      declare(unit: @basket, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {})
+      till, ledger = %w[Till Ledger].map { create_unit(it, @pod, parent_id: @checkout) }
+      while_rebuilding(@tenant, OrgGraph::Projections::History) { as_tenant { @handler.retire_unit(ledger, effective_on: @retire_on) } }
+      assert structure.unit(ledger).retired
+
+      before = event_store.read.stream(as_tenant { EventStreamNaming.org_structure_stream }).count
+
+      [ OrgGraph::Projections::History, OrgGraph::Projections::Structure ].each do |projection|
+        while_rebuilding(@tenant, projection) do
+          as_tenant do
+            assert_raises(ProjectionVersion::Rebuilding) { @handler.retire_unit(@basket, effective_on: @retire_on) }
+            assert_raises(ProjectionVersion::Rebuilding) do
+              @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ till ],
+                                                               effective_on: @retire_on, retire_predecessors: true)
+            end
+          end
+        end
+      end
+      assert_equal before, event_store.read.stream(as_tenant { EventStreamNaming.org_structure_stream }).count
     end
 
     should "refuse an admin's retirement dated before the structure last changed" do
