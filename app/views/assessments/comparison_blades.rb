@@ -38,7 +38,7 @@ class Views::Assessments::ComparisonBlades < Views::Assessments::CapabilityBlade
 
     from = xy(radius, start(i + LINE_INSET))
     to = xy(radius, start(i + 1 - LINE_INSET))
-    s.path(d: "M#{from.join(' ')} A#{radius} #{radius} 0 0 1 #{to.join(' ')}", fill: "none", stroke_width: 1.2,
+    s.path(d: "M#{from.join(' ')} A#{radius} #{radius} 0 0 1 #{to.join(' ')}", fill: "none", stroke_width: 0.9,
            stroke_linecap: "round", class: "stroke-(--gos-content-default)", data: { blade_median: point.number })
   end
 end

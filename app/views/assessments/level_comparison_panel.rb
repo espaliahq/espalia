@@ -11,7 +11,7 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
   SWATCH = Views::Assessments::CapabilityMapModal::FILL
   # The lanes' track runs to two levels' worth, so met sits halfway.
   TRACK_TOP = 2.0
-  PERSPECTIVES = { self: "your own ratings", manager: "manager ratings", alignment: "agreed ratings" }.freeze
+  PERSPECTIVES = { self: "self-ratings", manager: "manager ratings", alignment: "agreed ratings" }.freeze
 
   # @param comparison [Assessments::LevelComparison]
   # @param selected [Integer] the ordinal compared with
@@ -68,7 +68,7 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
 
   def compared
     p(class: "text-sm text-muted -mt-1 mb-4") do
-      plain "#{@whose || 'Your'}#{"'s" if @whose} #{PERSPECTIVES.fetch(@context, 'ratings')}, scored at #{code}, against the "
+      plain "#{@whose ? "#{@whose}'s" : 'Your'} #{PERSPECTIVES.fetch(@context, 'ratings')}, scored at #{code}, against the "
       plain "middle agreed score of the #{@group.group_size} #{@role_name.pluralize} at #{code}, "
       strong(class: "text-default") { "as of #{@comparison.taken_on.strftime(DATE_FORMAT)}" }
       plain ". The dashed circle is #{code} met; the line across each blade is the #{plural}."
@@ -130,7 +130,7 @@ class Views::Assessments::LevelComparisonPanel < Views::Base
     @shape.groups.each do |group|
       div(class: "#{LANE_COLUMNS} items-center px-2 pt-4 pb-1") do
         span(class: "sm:col-span-2") { render Components::Kit::Tag.new(group.name.to_s, category: group.hue) }
-        span(class: "text-right text-sm font-bold tabular-nums whitespace-nowrap") do
+        span(class: "text-right text-sm font-bold text-muted tabular-nums whitespace-nowrap") do
           both(group.score, @group.category_medians[group.category_id])
         end
       end
