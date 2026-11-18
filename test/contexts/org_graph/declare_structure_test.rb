@@ -59,6 +59,12 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal "Ledger was created on #{(@today + 3).iso8601}, so date this then or later", error.message
   end
 
+  should "refuse a move beneath a unit's own structure as a loop, not as a change of structure" do
+    declare
+    error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(@payments, @basket, effective_on: @today) } }
+    assert_equal "A unit can't move beneath itself or a unit below it", error.message
+  end
+
   should "copy a type from the structure it copies, and refuse one that structure doesn't hold" do
     declare(copied_from: "top", levels: groups_and_streams.map { it.merge(copied_from_level_id: @squad) })
     assert_equal [ "top", @squad ], [ last_definition[:copied_from], last_definition[:levels].first[:copied_from_level_id] ]

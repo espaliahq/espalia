@@ -445,10 +445,10 @@ class OrgGraph::StructureAggregate
     effective_on = dated_after_creation(unit, effective_on)
     return if parent_id == parent_on(unit_id, effective_on)
 
+    raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
     ensure_same_structure!(unit, parent_id)
     ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on, unit_id:,
                                                               until_on: @parents[unit_id].keys.select { it > effective_on }.min)
-    raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit_id,
