@@ -78,6 +78,20 @@ class Tenant::OrgUnitDrawerSystemTest < ApplicationSystemTestCase
       assert_equal "Platform", ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).name }
     end
 
+    should "offer only the types that fit, and change a unit's type" do
+      sign_in_as(@admin_user)
+      visit edit_tenant_org_unit_path(@org[:platform])
+      wait_for_stimulus "effective-date"
+
+      within("#org-graph-drawer") { assert_equal %w[Team Squad], all("#org-unit-type option").map(&:text) }
+      select "Squad", from: "Unit type"
+      click_button_with_js_fallback "Change type", expect_text: "Type changed."
+      screenshot("type_changed")
+
+      assert_equal "Squad", find("#org-unit-type option[selected]").text
+      assert_equal @org[:squad], ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).level_id }
+    end
+
     should "keep an HRIS unit's name and parent read-only" do
       sign_in_as(@admin_user)
       visit edit_tenant_org_unit_path(@org[:engineering])
@@ -121,6 +135,20 @@ class Tenant::OrgUnitDrawerSystemTest < ApplicationSystemTestCase
       click_selector_with_js_fallback "#org-graph-drawer a[aria-label='Close']",
                                       expect_selector: "body:not(:has(#org-graph-drawer)) #org-graph-unit"
       assert_equal 0, inert_count, "closing the drawer gives the page back"
+    end
+
+    should "change a unit's type without overflowing the drawer" do
+      sign_in_as(@admin_user)
+      visit edit_tenant_org_unit_path(@org[:platform])
+      wait_for_stimulus "effective-date"
+      assert_no_sideways_overflow
+
+      select "Squad", from: "Unit type"
+      click_button_with_js_fallback "Change type", expect_text: "Type changed."
+      screenshot("type_changed_phone")
+
+      assert_equal @org[:squad], ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).level_id }
+      assert_no_sideways_overflow
     end
   end
 end
