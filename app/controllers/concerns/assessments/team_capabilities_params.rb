@@ -5,14 +5,12 @@
 module Assessments::TeamCapabilitiesParams
   private
 
-  # A choice the operation refuses falls back to the defaults rather than failing the page.
+  # A choice the operation would refuse falls back to its default, leaving the others in place.
   #
   # @param fixed [Hash] choices the caller makes regardless of the query string
   # @return [Hash] the operation's payload
   def team_capabilities(**fixed)
     Operations::Assessments::TeamCapabilities.call(context: pundit_user, params: team_choices.merge(fixed))
-  rescue Operations::Base::ParameterError
-    Operations::Assessments::TeamCapabilities.call(context: pundit_user, params: fixed)
   end
 
   def team_level
@@ -21,8 +19,16 @@ module Assessments::TeamCapabilitiesParams
   end
 
   def team_choices
-    { people: params[:team_people].presence, role_id: params[:team_role].presence,
-      level_ordinal: team_level, ratings: params[:team_ratings].presence,
-      compare: params[:team_compare].presence }.compact
+    choices = { people: params[:team_people].presence, role_id: params[:team_role].presence,
+                level_ordinal: team_level, ratings: params[:team_ratings].presence,
+                compare: params[:team_compare].presence }.compact
+    choices.select { |name, value| readable?(name, value) }
+  end
+
+  def readable?(name, value)
+    Operations::Assessments::TeamCapabilities.parameters.fetch(name).validate!(value)
+    true
+  rescue Operations::Base::ParameterError
+    false
   end
 end

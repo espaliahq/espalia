@@ -98,6 +98,14 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#team-map", text: /Your 3 direct reports, manager ratings/
   end
 
+  should "keep the choices it can read when another is one it can't" do
+    sign_in @user
+    get team_map_assessments_path(team_ratings: "self", team_level: 3, team_compare: "everyone")
+
+    assert_select "#team-map", text: /Your 1 direct report at E3, self-ratings/
+    assert_select "#team-map a[data-team-level][aria-current='page']", text: /E3\s*1/
+  end
+
   should "draw the map in the same number of queries, however large the team" do
     sign_in @user
     three = count_queries { get team_map_assessments_path }
