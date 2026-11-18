@@ -112,6 +112,14 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-map [data-team-lane='#{@fx.e_only.stable_id}']", text: /Team not rated · Group 80%/
     end
 
+    should "keep the choices it can read when another is one it can't, comparing as by default" do
+      get team_map_assessments_path(team_ratings: "self", team_level: 3, team_compare: "everyone")
+
+      assert_select "#team-map", text: /Your 1 direct report at E3, self-ratings/
+      assert_select "#team-map a[data-team-level][aria-current='page']", text: /E3\s*1/
+      assert_select "#team-map a[aria-current='page']", text: /Software Engineers at the same levels/
+    end
+
     should "remove the line when compared with nothing" do
       get team_map_assessments_path(team_compare: "none")
 
@@ -140,14 +148,6 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "#team-map", text: /Your 3 direct reports, manager ratings/
-  end
-
-  should "keep the choices it can read when another is one it can't" do
-    sign_in @user
-    get team_map_assessments_path(team_ratings: "self", team_level: 3, team_compare: "everyone")
-
-    assert_select "#team-map", text: /Your 1 direct report at E3, self-ratings/
-    assert_select "#team-map a[data-team-level][aria-current='page']", text: /E3\s*1/
   end
 
   should "draw the map in the same number of queries, however large the team" do
