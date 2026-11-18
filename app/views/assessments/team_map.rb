@@ -27,6 +27,8 @@ class Views::Assessments::TeamMap < Views::Base
       if @team[:role].nil? || @team[:scored_on_role] < Views::Assessments::TeamCard::MIN_SCORED
         render Components::Kit::EmptyState.new(title: "Shows once at least two of your reports have a score",
                                                size: :panel)
+      elsif @team[:level_ordinal] && @team[:in_view].zero?
+        render Components::Kit::EmptyState.new(title: "No reports match this level", size: :panel)
       elsif @team[:scored].zero?
         render Components::Kit::EmptyState.new(title: "Nobody in view has a score yet", size: :panel)
       else

@@ -145,6 +145,13 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-map [data-team-compare-note]", count: 0
     end
 
+    should "say no report matches a level nobody in view is at, rather than that nobody has a score" do
+      get team_map_assessments_path(team_level: 1)
+
+      assert_select "#team-map", text: /No reports match this level/
+      assert_select "#team-map", text: /Nobody in view has a score yet/, count: 0
+    end
+
     should "say why there is no line when a level in view is under the minimum" do
       ActsAsTenant.with_tenant(@tenant) { @snapshot.groups.find_by!(level_ordinal: 3).update!(group_size: 2) }
       get team_map_assessments_path
