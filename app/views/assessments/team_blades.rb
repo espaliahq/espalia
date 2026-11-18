@@ -41,6 +41,17 @@ class Views::Assessments::TeamBlades < Views::Assessments::CapabilityBlades
 
   private
 
+  # Past met, the rim is the highest score drawn, at least 200%, so a score
+  # above 200% still reads apart from one at 200%.
+  def radius_for(position)
+    beyond = ((position - 1) / (top - 1)).clamp(0, 1)
+    (MET_RADIUS * position.clamp(0, 1) + (RADIUS - MET_RADIUS) * beyond).round(2)
+  end
+
+  def top
+    @top ||= [ 2.0, *@capabilities.flat_map { |c| [ c[:score], (c[:group_median] if @medians) ] }.compact.map { |p| p / 100.0 } ].max
+  end
+
   # The comparison tab's line, at the group's score on the same scale.
   def median_line(s, capability, i)
     return unless capability[:group_median]

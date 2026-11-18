@@ -29,4 +29,14 @@ class Views::Assessments::TeamBladesTest < ActiveSupport::TestCase
 
     assert_equal radius(drawn.at_css("[data-blade='1']")), radius(drawn.at_css("[data-blade-median='1']"))
   end
+
+  should "keep a score above 200% past a group score of 200%, on one scale" do
+    drawn = picture([ capability("a", score: 300, group_median: 200), capability("b", score: 100, group_median: 100) ])
+    team = radius(drawn.at_css("[data-blade-beyond='1']"))
+    group = radius(drawn.at_css("[data-blade-median='1']"))
+
+    assert_operator team, :>, group
+    assert_equal Views::Assessments::TeamBlades::RADIUS, team
+    assert_equal Views::Assessments::TeamBlades::MET_RADIUS, radius(drawn.at_css("[data-blade-median='2']"))
+  end
 end
