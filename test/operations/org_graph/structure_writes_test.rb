@@ -266,6 +266,22 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal "parent_id names no unit in the Org Graph", error.message
       end
 
+      should "refuse an unknown or another tenant's unit with the ordinary message, naming no unit" do
+        elsewhere = build_org_graph(create(:tenant))
+        move = ->(as, unit_id, parent_id) { call(Operations::OrgGraph::MoveUnit, as:, unit_id:, parent_id:, conversion: { @org[:team] => @stream }) }
+        [ SecureRandom.uuid_v7, elsewhere[:platform] ].each do |stranger|
+          [ [ stranger, @org[:checkout] ], [ @org[:platform], stranger ] ].each do |unit_id, parent_id|
+            error = assert_raises(OrgGraph::Authorization::Refused) { move.call(@editor, unit_id, parent_id) }
+            assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+
+            error = assert_raises(Operations::Base::ParameterError) { move.call(@admin, unit_id, parent_id) }
+            named = unit_id == stranger ? "unit_id" : "parent_id"
+            assert_equal "#{named} names no unit in the Org Graph", error.message
+          end
+        end
+        assert_equal @org[:team], level_of(:platform)
+      end
+
       should "refuse a malformed conversion before the operation runs, so MCP saves no approval for it" do
         build = lambda do |conversion|
           ActsAsTenant.with_tenant(@tenant) do
