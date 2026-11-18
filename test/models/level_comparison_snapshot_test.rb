@@ -123,10 +123,15 @@ class LevelComparisonSnapshotTest < ActiveSupport::TestCase
     assert_equal [ [ @fx.engineer.role_id, 2, 2 ], [ @fx.engineer.role_id, 3, 1 ], [ @fx.pm.role_id, 2, 1 ] ].sort, groups
   end
 
+  # The medians are keyed by the role's capabilities, so a leaked rating shows only in what is scored.
   should "ignore ratings outside the assessed role" do
     person = settled(agreed: { @fx.shared => "consistent" })
-    create_out_of_scope_rating(person_id: person.id, cycle: @cycle, level_ordinal: 2)
+    leaked = create_out_of_scope_rating(person_id: person.id, cycle: @cycle, level_ordinal: 2)
+    scored = []
+    scoring = PersonDevelopment::Scoring.method(:new)
+    PersonDevelopment::Scoring.stub(:new, ->(**args) { scored.concat(args[:level_ratings]) && scoring.call(**args) }) { take }
 
-    assert_equal [ @fx.shared.stable_id, @fx.e_only.stable_id ].sort, engineers_at_e2(take).capability_medians.keys.sort
+    assert_includes scored.map(&:capability_stable_id), @fx.shared.stable_id
+    assert_not_includes scored.map(&:capability_stable_id), leaked.capability_stable_id
   end
 end
