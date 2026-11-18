@@ -89,6 +89,7 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
       assert_equal({ "E1" => 1, "E2" => 1, "E3" => 1 }, result.levels.to_h { |l| [ l.code, l.people ] })
       assert_equal 1, narrowed.people
       assert_in_delta 0.67, narrowed.capabilities.first.score, 0.01
+      assert_equal [ 1, 3 ], [ narrowed.scored, narrowed.scored_on_role ]
     end
   end
 

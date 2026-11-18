@@ -26,8 +26,8 @@ class Assessments::TeamCapabilities
   end
 
   # `people` are those in view on the role and level; `scored` those of them
-  # with a score.
-  Result = Data.define(:people, :scored, :capabilities, :roles, :role, :levels, :level_ordinal) do
+  # with a score, and `scored_on_role` those with one at any level of the role.
+  Result = Data.define(:people, :scored, :scored_on_role, :capabilities, :roles, :role, :levels, :level_ordinal) do
     # @return [Integer] capabilities the team meets on average
     def met = capabilities.count(&:met?)
 
@@ -60,9 +60,11 @@ class Assessments::TeamCapabilities
     @level_ordinal = nil if role && (fell_back || ladder.none? { |level| level.ordinal == @level_ordinal })
     on_role = role ? enrollments.select { |enrollment| enrollment.role_id == role.role_id } : []
     in_view = @level_ordinal ? on_role.select { |enrollment| enrollment.level_ordinal == @level_ordinal } : on_role
-    scorings = in_view.filter_map { |enrollment| scoring_for(enrollment) }
-    Result.new(people: in_view.size, scored: scorings.size, capabilities: role ? capabilities(scorings) : [], roles:,
-               role:, levels: role ? levels(on_role) : [], level_ordinal: @level_ordinal)
+    scored_on_role = on_role.filter_map { |enrollment| scoring_for(enrollment) }
+    scorings = scored_on_role.select { |_, _, level| @level_ordinal.nil? || level == @level_ordinal }
+    Result.new(people: in_view.size, scored: scorings.size, scored_on_role: scored_on_role.size,
+               capabilities: role ? capabilities(scorings) : [], roles:, role:, levels: role ? levels(on_role) : [],
+               level_ordinal: @level_ordinal)
   end
 
   private

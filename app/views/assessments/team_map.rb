@@ -24,7 +24,10 @@ class Views::Assessments::TeamMap < Views::Base
     turbo_frame(id: ID) do
       lead
       controls
-      if @team[:role].nil? || @team[:scored].zero?
+      if @team[:role].nil? || @team[:scored_on_role] < Views::Assessments::TeamCard::MIN_SCORED
+        render Components::Kit::EmptyState.new(title: "Shows once at least two of your reports have a score",
+                                               size: :panel)
+      elsif @team[:scored].zero?
         render Components::Kit::EmptyState.new(title: "Nobody in view has a score yet", size: :panel)
       else
         map

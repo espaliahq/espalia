@@ -45,6 +45,26 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#team-map [data-team-lane='#{@fx.shared.stable_id}']", text: /Team 33%.*1 short/m
   end
 
+  should "draw no lanes until two reports on the role have a score, as the card shows none" do
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentLevelRating.where(person_id: Person.where(name: [ "Bo Finch", "Cy Wren" ]).select(:id)).delete_all
+    end
+    sign_in @user
+    get team_map_assessments_path
+
+    assert_response :success
+    assert_select "#team-map", text: /Shows once at least two of your reports have a score/
+    assert_select "#team-map [data-team-lane]", count: 0
+    assert_select "#team-map [data-team-blades]", count: 0
+  end
+
+  should "draw one level's lanes when the role has two scores, even with one at that level" do
+    sign_in @user
+    get team_map_assessments_path(team_level: 3)
+
+    assert_select "#team-map [data-team-lane='#{@fx.shared.stable_id}']", text: /Team 33%/
+  end
+
   should "keep the role shown in its links when the team holds only one" do
     sign_in @user
     get team_map_assessments_path

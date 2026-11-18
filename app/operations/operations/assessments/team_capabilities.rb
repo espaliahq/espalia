@@ -12,7 +12,7 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
               "it on average), with how many were scored and how many are short. gaps lists capabilities where " \
               "more than half are short. people is direct (direct reports, the default) or below (everyone " \
               "below the caller); ratings is manager (the default), self or aligned. Only people whose score has " \
-              "unlocked count. compare is level (the default) or none: with level, each capability's " \
+              "unlocked count: scored is those in view, scored_on_role those at any level of the role. compare is level (the default) or none: with level, each capability's " \
               "group_median is everyone on the role at the team's levels, team included, from the level " \
               "comparison's latest snapshot of agreed ratings (taken every 1, 3 or 6 months, as the tenant " \
               "chooses), weighted by how many of the team are at each level; comparison.taken_on says when it " \
@@ -40,7 +40,7 @@ class Operations::Assessments::TeamCapabilities < Operations::Base
     { people:, indirect_reports: indirect_reports?, ratings:, role: result.role && { id: result.role.role_id, name: result.role.name },
       roles: result.roles.map { |r| { id: r.role_id, name: r.name, people: r.people } },
       level_ordinal: result.level_ordinal, levels: result.levels.map(&:to_h),
-      in_view: result.people, scored: result.scored, met: result.met, comparison: comparison_payload,
+      in_view: result.people, scored: result.scored, scored_on_role: result.scored_on_role, met: result.met, comparison: comparison_payload,
       capabilities: result.capabilities.map { |c| capability(c) },
       gaps: result.gaps.map { |c| { stable_id: c.stable_id, name: c.name, short: c.short, scored: c.scored } } }
   end
