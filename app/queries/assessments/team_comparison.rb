@@ -26,12 +26,12 @@ class Assessments::TeamComparison
   # @return [Result]
   def call
     return refused(:off) unless config.enabled
-    return refused(:no_snapshot) unless snapshot
+    return refused(:no_snapshot) unless taken_on
 
     short = @level_counts.keys.select { |level| groups[level].nil? || groups[level].group_size < config.min_group_size }.sort
     return refused(:too_few, short_ordinals: short) if short.any? || @level_counts.empty?
 
-    Result.new(reason: nil, taken_on: snapshot.taken_on, min_group_size: config.min_group_size,
+    Result.new(reason: nil, taken_on:, min_group_size: config.min_group_size,
                group_size: @level_counts.keys.sum { |level| groups[level].group_size }, short_ordinals: [],
                medians: weighted_medians)
   end
@@ -41,22 +41,28 @@ class Assessments::TeamComparison
   def config = @tenant.comparison_config
 
   def refused(reason, short_ordinals: [])
-    Result.new(reason:, taken_on: snapshot&.taken_on, min_group_size: config.min_group_size, group_size: nil,
+    Result.new(reason:, taken_on:, min_group_size: config.min_group_size, group_size: nil,
                short_ordinals:, medians: {})
   end
 
-  def snapshot
-    return @snapshot if defined?(@snapshot)
+  def taken_on = latest[:taken_on]
 
-    @snapshot = groups.values.first&.snapshot || ActsAsTenant.with_tenant(@tenant) { LevelComparisonSnapshot.latest }
-  end
+  def groups = latest[:groups]
 
-  # Read with the latest snapshot in one statement, so a snapshot replaced meanwhile can't leave them behind.
-  def groups
-    @groups ||= ActsAsTenant.with_tenant(@tenant) do
-      latest = LevelComparisonSnapshot.order(taken_on: :desc).limit(1).select(:id)
-      LevelComparisonGroup.eager_load(:snapshot)
-        .where(snapshot_id: latest, role_id: @role_id, level_ordinal: @level_counts.keys).index_by(&:level_ordinal)
+  # The latest snapshot's day beside its groups for the role at the levels in
+  # view, in one statement, so both come from the same snapshot even when none match.
+  def latest
+    @latest ||= ActsAsTenant.with_tenant(@tenant) do
+      newest = LevelComparisonSnapshot.order(taken_on: :desc).limit(1).select(:id, :taken_on)
+      matching = LevelComparisonGroup.sanitize_sql_array(
+        [ "LEFT JOIN level_comparison_groups ON level_comparison_groups.snapshot_id = latest.id " \
+          "AND level_comparison_groups.role_id = ? AND level_comparison_groups.level_ordinal IN (?)",
+          @role_id, @level_counts.keys.presence || [ nil ] ]
+      )
+      rows = LevelComparisonGroup.unscoped.from(newest, :latest).joins(matching)
+        .select("level_comparison_groups.*", "latest.taken_on AS latest_taken_on").to_a
+      { taken_on: rows.first&.latest_taken_on,
+        groups: rows.select(&:id).index_by(&:level_ordinal) }
     end
   end
 

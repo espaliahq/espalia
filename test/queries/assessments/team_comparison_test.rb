@@ -58,6 +58,18 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     LevelComparisonSnapshot.stub(:latest, stale) { assert compare({ 2 => 1, 3 => 3 }).shown? }
   end
 
+  should "take the day and the groups from one snapshot when a newer one lands between reads" do
+    newer = lambda do
+      LevelComparisonSnapshot.create!(tenant: @tenant, taken_on: Date.new(2026, 12, 1)).tap do |snapshot|
+        snapshot.groups.create!(tenant: @tenant, framework_id: SecureRandom.uuid_v7, role_id: @role_id, level_ordinal: 5,
+                                group_size: 6, capability_medians: { "cap-a" => 1.0 }, category_medians: {})
+      end
+    end
+    result = LevelComparisonSnapshot.stub(:latest, newer) { compare({ 5 => 1 }) }
+
+    assert_equal [ :too_few, Date.new(2026, 11, 1) ], [ result.reason, result.taken_on ]
+  end
+
   should "say when there is no snapshot yet" do
     @snapshot.destroy!
 
