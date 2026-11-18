@@ -334,6 +334,17 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "#team-card a[aria-current='page']", text: "Everyone below you"
     end
 
+    should "show the team on the role picked from the role menu" do
+      staff, staff_level = add_staff_role
+      rate_as_manager(@person, @cap, "consistent")
+      rate_as_manager(add_report("Staff one", role: staff, level: staff_level), @cap, "none")
+      sign_in @manager_user
+      get assessments_path(team_role: staff.role_id)
+
+      assert_select "#team-card [data-team-roles] [aria-haspopup]", text: /Staff Engineer/
+      assert_select "#team-card", text: /1 of 1 has one so far/
+    end
+
     should "show a blank slate on the team card until two reports have a score" do
       rate_as_manager(@person, @cap, "consistent")
       add_report("Report one")

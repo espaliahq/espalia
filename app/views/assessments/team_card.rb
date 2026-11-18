@@ -78,9 +78,33 @@ class Views::Assessments::TeamCard < Views::Base
   end
 
   def controls
-    return unless @team[:indirect_reports]
+    return unless @team[:indirect_reports] || roles?
 
-    div(class: "flex shrink-0 flex-col items-start gap-3 sm:items-end") { people_switch }
+    div(class: "flex shrink-0 flex-col items-start gap-3 sm:items-end") do
+      people_switch if @team[:indirect_reports]
+      role_menu if roles?
+    end
+  end
+
+  def roles? = @team[:roles].size > 1
+
+  # One role at a time, since capabilities differ between roles.
+  def role_menu
+    div(data: { team_roles: true }) do
+      render Components::Kit::Dropdown.new do |dropdown|
+        dropdown.trigger(label: "Role shown", button: { variant: :outline, size: :sm }) do
+          plain @team.dig(:role, :name)
+          icon("chevron-down", class: "ml-1 size-4")
+        end
+        dropdown.menu(label: "Role shown") do
+          @team[:roles].each do |role|
+            dropdown.item(href: team_path(team_role: role[:id]), aria: { current: ("true" if role[:id] == @team.dig(:role, :id)) }) do
+              "#{role[:name]} · #{role[:people]}"
+            end
+          end
+        end
+      end
+    end
   end
 
   def people_switch
@@ -92,7 +116,8 @@ class Views::Assessments::TeamCard < Views::Base
 
   # The page with the team card's choices, `overrides` replacing them.
   def team_path(**overrides)
-    assessments_path({ team_people: (@team[:people] if @team[:people] != "direct") }.merge(overrides).compact,
+    assessments_path({ team_people: (@team[:people] if @team[:people] != "direct"),
+                       team_role: (@team.dig(:role, :id) if roles?) }.merge(overrides).compact,
                      anchor: "team-card")
   end
 

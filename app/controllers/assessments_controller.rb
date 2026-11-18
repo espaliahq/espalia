@@ -222,7 +222,7 @@ class AssessmentsController < ApplicationController
 
   # The team card's payload, read through the operation agents use.
   def team_capabilities
-    Operations::Assessments::TeamCapabilities.call(context: pundit_user, params: { people: params[:team_people] }.compact)
+    Operations::Assessments::TeamCapabilities.call(context: pundit_user, params: { people: params[:team_people], role_id: params[:team_role] }.compact)
   rescue Operations::Base::ParameterError
     Operations::Assessments::TeamCapabilities.call(context: pundit_user)
   end

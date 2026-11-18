@@ -68,6 +68,17 @@ class Views::Assessments::TeamCardTest < ActiveSupport::TestCase
     assert render_card(payload(scored: 0, indirect_reports: true)).at_css("[aria-label='Who is in the team']")
   end
 
+  should "offer a role menu when the team holds more than one role, naming the role shown" do
+    roles = [ { id: "role-e", name: "Software Engineer", people: 7 }, { id: "role-d", name: "Product Designer", people: 3 } ]
+    card = render_card(payload(roles:))
+    menu = card.at_css("[data-team-roles]")
+
+    assert_includes menu.at_css("[aria-haspopup]").text, "Software Engineer"
+    assert_equal [ "Software Engineer · 7", "Product Designer · 3" ], menu.css("[role='menuitem']").map { |i| i.text.squish }
+    assert_includes menu.css("[role='menuitem']").last["href"], "team_role=role-d"
+    assert_nil render_card.at_css("[data-team-roles]")
+  end
+
   should "never name anyone on the team" do
     assert_no_match(/Ada|Bo /, render_card.text)
   end
