@@ -129,6 +129,18 @@ class Assessments::TeamCapabilitiesTest < ActiveSupport::TestCase
     assert_equal 1, result(person_ids: team, role_id: @designer.role_id).people
   end
 
+  should "read the assignment's role and level for an enrollment taken before the snapshot" do
+    eve = create(:person, tenant: @tenant, name: "Eve")
+    create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: eve.id, status: "enrolled")
+    level = FrameworkState::Level.find_by!(role_id: @engineer.role_id, ordinal: 3)
+    create(:person_framework_assignment, tenant: @tenant, person_id: eve.id, framework_id: @framework_id,
+                                         role_id: @engineer.role_id, level_id: level.level_id)
+    rate(eve, @critical, 3, "consistent")
+
+    narrowed = result(person_ids: [ eve.id ], level_ordinal: 3)
+    assert_equal [ 1, 1 ], [ narrowed.people, narrowed.scored ]
+  end
+
   should "leave out people who aren't in an open cycle" do
     closed = create(:assessment_cycle, tenant: @tenant, framework_id: @framework_id, status: "closed")
     eve = create(:person, tenant: @tenant, name: "Eve")

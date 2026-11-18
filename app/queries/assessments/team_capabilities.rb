@@ -35,6 +35,10 @@ class Assessments::TeamCapabilities
     def gaps = capabilities.select(&:gap?)
   end
 
+  # Someone on the team, at the role and level their open cycle assesses.
+  Member = Data.define(:person_id, :cycle_id, :framework_id, :role_id, :level_ordinal)
+  private_constant :Member
+
   RATED = { self_only: :self_rated_frequency, manager_only: :manager_rated_frequency,
             aligned_only: :aligned_frequency }.freeze
 
@@ -61,12 +65,30 @@ class Assessments::TeamCapabilities
 
   private
 
-  # Everyone on the team in an open cycle, one row per person and role.
+  # Everyone on the team in an open cycle, one per person and role, at the
+  # role and level their enrollment assesses (ADR-19), or their assignment's
+  # for an enrollment taken before that snapshot.
   def enrollments
-    @enrollments ||= AssessmentCycleEnrollment.active.eager_load(:cycle)
-      .where(person_id: @person_ids, assessment_cycles: { status: "open" })
-      .where.not(role_id: nil).where.not(level_ordinal: nil)
-      .to_a.uniq { |enrollment| [ enrollment.person_id, enrollment.role_id ] }
+    @enrollments ||= begin
+      rows = AssessmentCycleEnrollment.active.eager_load(:cycle)
+        .where(person_id: @person_ids, assessment_cycles: { status: "open" }).to_a
+      assigned = assignments_for(rows.reject { |row| row.role_id && row.level_ordinal })
+      rows.filter_map do |row|
+        role_id, level = row.role_id && row.level_ordinal ? [ row.role_id, row.level_ordinal ] :
+          assigned[[ row.person_id, row.cycle.framework_id ]]
+        next unless role_id && level
+
+        Member.new(person_id: row.person_id, cycle_id: row.cycle_id, framework_id: row.cycle.framework_id,
+                   role_id:, level_ordinal: level)
+      end.uniq { |member| [ member.person_id, member.role_id ] }
+    end
+  end
+
+  def assignments_for(rows)
+    return {} if rows.empty?
+
+    PersonFrameworkAssignment.where(person_id: rows.map(&:person_id)).includes(:level).to_a
+      .to_h { |a| [ [ a.person_id, a.framework_id ], [ a.role_id, a.level&.ordinal ] ] }
   end
 
   def roles
@@ -86,7 +108,7 @@ class Assessments::TeamCapabilities
 
   def ladder = @ladder ||= FrameworkState::Level.where(role_id: role.role_id).order(:ordinal).to_a
 
-  def framework_id = enrollments.find { |enrollment| enrollment.role_id == role.role_id }.cycle.framework_id
+  def framework_id = enrollments.find { |member| member.role_id == role.role_id }.framework_id
 
   def scope = @scope ||= Assessments::RoleScope.for(role_id: role.role_id, framework_id:)
 
