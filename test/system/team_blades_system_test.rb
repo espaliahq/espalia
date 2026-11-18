@@ -155,6 +155,24 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       assert_equal "E3", evaluate_script("document.activeElement.dataset.teamLevel")
     end
 
+    should "leave focus where the user moved it while the map was reloading" do
+      visit_team(DESKTOP_SIZE)
+      open_team_map
+      assert_selector "turbo-frame#team-map[complete] a[data-team-level='E3']", visible: true
+
+      execute_script(<<~JS)
+        document.addEventListener("turbo:before-frame-render", () => {
+          document.querySelector("#team-map-modal [aria-label='Close']").focus()
+        }, { once: true })
+        const link = document.querySelector("#team-map a[data-team-level='E3']")
+        link.focus()
+        link.click()
+      JS
+      assert_text "Your 1 direct report at E3"
+
+      assert_equal "Close", evaluate_script("document.activeElement.getAttribute('aria-label')")
+    end
+
     should "keep the level picked by keyboard in sight on a phone when the map reloads" do
       ActsAsTenant.with_tenant(@tenant) do
         (4..9).each { |o| FactoryBot.create(:framework_level, role_id: @role.role_id, ordinal: o, title: "E#{o}", code: "E#{o}") }
