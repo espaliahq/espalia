@@ -242,6 +242,7 @@ class Hris::LevelMirror
       proposal&.destroy!
     elsif proposal&.parent_id == parent
       structure.move_unit(unit.id, parent, provider: @provider, effective_on: @today)
+      @parent_ids[unit.id] = parent
       proposal.destroy!
       counted
     else
