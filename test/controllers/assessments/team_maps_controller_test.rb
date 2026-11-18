@@ -64,7 +64,7 @@ class Assessments::TeamMapsControllerTest < ActionDispatch::IntegrationTest
 
       assert_select "#team-map [data-team-blades] [data-blade-median]", count: 1
       assert_select "#team-map [data-team-lane='#{@fx.shared.stable_id}']", text: /Team 44%.*Group 80%.*2 short/m
-      assert_select "#team-map a[aria-current='page']", text: "Software Engineers at the same levels"
+      assert_select "#team-map a[aria-current='page']", text: /Software Engineers at the same levels/
       assert_select "#team-map", text: /11 Software Engineers at E2 and E3, as of 1 Nov 2026/
     end
 

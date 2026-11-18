@@ -54,6 +54,19 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # The dialog clips sideways overflow, so a too-wide control is cut off rather than scrolling the page.
+  def assert_compare_control_fits
+    overhang = evaluate_script(<<~JS)
+      (() => {
+        const control = document.querySelector("#team-map [aria-labelledby='team-compare-label']")
+        let clip = control.parentElement
+        while (clip && getComputedStyle(clip).overflowX === "visible") clip = clip.parentElement
+        return control.getBoundingClientRect().right - clip.getBoundingClientRect().right
+      })()
+    JS
+    assert_operator overhang, :<=, 0, "expected the Compare with control inside the dialog"
+  end
+
   def visit_team(size)
     page.driver.browser.manage.window.resize_to(*size)
     sign_in_as(@user)
@@ -89,6 +102,7 @@ class TeamBladesSystemTest < ApplicationSystemTestCase
       blades_bottom = evaluate_script("document.querySelector('#team-map [data-team-blades]').getBoundingClientRect().bottom")
       lane_top = evaluate_script("document.querySelector('#team-map [data-team-lane]').getBoundingClientRect().top")
       assert_operator blades_bottom, :<=, lane_top, "expected the blades above the lanes"
+      assert_compare_control_fits
     end
   end
 
