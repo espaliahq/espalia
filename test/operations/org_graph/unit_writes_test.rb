@@ -97,6 +97,16 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
       assert_match(/can place a unit beneath Platform/, error.message)
       assert_equal @org[:checkout], unit(:payments).parent_id
     end
+
+    should "return the date it wrote when the tenant's day turns over mid-call" do
+      days = %w[2026-11-17 2026-11-18].map { Date.iso8601(it) }
+      result = Tenant.stub(:today, -> { days.shift || Date.new(2026, 11, 18) }) do
+        call(Operations::OrgGraph::MoveUnit, unit_id: @org[:payments], parent_id: @org[:platform])
+      end
+
+      written = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data[:effective_on]
+      assert_equal written, result[:effective_on]
+    end
   end
 
   context "ChangeUnitKind" do

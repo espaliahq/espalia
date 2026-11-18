@@ -282,6 +282,15 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal @org[:team], level_of(:platform)
       end
 
+      should "return the date it wrote when the tenant's day turns over mid-call" do
+        today = ActsAsTenant.with_tenant(@tenant) { Tenant.today }
+        days = [ today, today + 1 ]
+        result = Tenant.stub(:today, -> { days.shift || today + 1 }) { move_in }
+
+        written = Rails.configuration.event_store.read.of_type(OrgGraph::Events::UnitMoved).last.data[:effective_on]
+        assert_equal written, result[:effective_on]
+      end
+
       should "refuse a malformed conversion before the operation runs, so MCP saves no approval for it" do
         build = lambda do |conversion|
           ActsAsTenant.with_tenant(@tenant) do

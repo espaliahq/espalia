@@ -40,8 +40,9 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
 
     unit = live_unit!(:unit_id)
     parent = params[:parent_id] && live_unit!(:parent_id)
-    structure_handler.move_unit(unit.id, parent&.id, effective_on:, **plan)
-    { unit_id: unit.id, parent_id: parent&.id, effective_on: effective_on }
+    on = effective_on
+    structure_handler.move_unit(unit.id, parent&.id, effective_on: on, **plan)
+    { unit_id: unit.id, parent_id: parent&.id, effective_on: on }
   end
 
   private
@@ -51,14 +52,15 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
   def move_into_structure
     unit_id = uuid!(:unit_id).downcase
     parent_id = params[:parent_id] && uuid!(:parent_id).downcase
+    on = effective_on
     refusing_as_parameter_errors do
-      structure_handler.move_unit(unit_id, parent_id, effective_on:, **conversion_option, **plan)
+      structure_handler.move_unit(unit_id, parent_id, effective_on: on, **conversion_option, **plan)
     rescue RuntimeError
       live_unit!(:unit_id)
       parent_id && live_unit!(:parent_id)
       raise
     end
-    { unit_id:, parent_id:, effective_on:, **conversion_option }
+    { unit_id:, parent_id:, effective_on: on, **conversion_option }
   end
 
   def ensure_conversion_well_formed!
