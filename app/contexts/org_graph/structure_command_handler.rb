@@ -308,10 +308,11 @@ class OrgGraph::StructureCommandHandler
   end
 
   # A change that converts units is `grouped`: it shares one cause with their
-  # type changes even outside a request, so change back sees one change.
+  # type changes even outside a request, so change back sees one change, and
+  # one timestamp, so the history never shows it half made.
   def with_structure(plan, grouped: false, &block)
     cause_id = @cause_id
     cause_id ||= Rails.configuration.event_store.metadata[:correlation_id] || SecureRandom.uuid_v7 if grouped
-    @repository.with_structure(plan:, cause_id:, &block)
+    @repository.with_structure(plan:, cause_id:, one_moment: grouped, &block)
   end
 end

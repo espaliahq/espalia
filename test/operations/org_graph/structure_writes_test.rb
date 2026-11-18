@@ -238,6 +238,18 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal members, members_of(:platform)
       end
 
+      should "learn the move and its type changes at one moment, so no cutoff shows it half made" do
+        move_in
+
+        events = Rails.configuration.event_store.read.of_type([ OrgGraph::Events::UnitMoved, OrgGraph::Events::UnitKindChanged ]).to_a
+        moved = events.reverse.find { it.is_a?(OrgGraph::Events::UnitMoved) }
+        change = events.select { it.metadata[:correlation_id] == moved.metadata[:correlation_id] }
+        assert_operator change.size, :>, 1
+        assert_equal [ moved.timestamp ], change.map(&:timestamp).uniq
+        learned = ActsAsTenant.with_tenant(@tenant) { OrgFactPeriod.where(event_id: change.map(&:event_id)).distinct.pluck(:learned_at) }
+        assert_equal [ moved.timestamp ], learned
+      end
+
       should "refuse a misfit as a parameter error, and leave the move to a tenant admin" do
         error = assert_raises(Operations::Base::ParameterError) { move_in(conversion: { @org[:team] => @lane }) }
         assert_equal "These units wouldn't fit Checkout's structure: Platform (Lane at the top)", error.message
