@@ -83,8 +83,12 @@ module OrgGraph::Authorization
     refusal = "Only a tenant admin can move a unit into a unit's own structure"
     raise Refused, refusal if system?
 
-    unit = structure_unit_id && unit_for(structure_unit_id)
-    unit ? authorize!(:edit_structure_of?, unit) { refusal } : authorize!(:edit_taxonomy?) { refusal }
+    return authorize!(:edit_taxonomy?) { refusal } unless structure_unit_id
+
+    unit = unit_for(structure_unit_id)
+    raise Refused, refusal unless unit
+
+    authorize!(:edit_structure_of?, unit) { refusal }
   end
 
   def authorize_succession!(unit_ids)
