@@ -50,6 +50,7 @@ class OrgGraph::StructureAggregate
     @kinds_change_dates = []
     @kind_timelines = {}
     @structures = {}
+    @structure_since = {}
   end
 
   # Defines or redefines the tenant's taxonomy, top level first.
@@ -118,7 +119,7 @@ class OrgGraph::StructureAggregate
   #   parent kind unknown
   def add_level(level_id, name, effective_on:, parent_ids: nil, top: nil, defined_by_id: nil)
     level_id = require_id(level_id, "Level id")
-    raise ArgumentError, "Level id is taken" if level_index(level_id)
+    raise ArgumentError, "Level id is taken" if kind_home(level_id)
 
     rules = {}
     unless parent_ids.nil? && top.nil?
@@ -352,7 +353,7 @@ class OrgGraph::StructureAggregate
     external_ref = external_ref.presence
     raise ArgumentError, "A mirrored unit needs the provider's reference" if provider != ESPALIA && external_ref.nil?
     raise ArgumentError, "A unit Espalia holds has no external reference" if provider == ESPALIA && external_ref
-    raise "Level is not in the taxonomy" unless level_index(level_id)
+    raise "Level is not in the taxonomy" unless kind_home(level_id)
     if external_ref && live_units.any? { |unit| unit.provider == provider && unit.external_ref == external_ref }
       raise "A live unit already mirrors #{provider} #{external_ref}"
     end
@@ -416,6 +417,7 @@ class OrgGraph::StructureAggregate
     effective_on = dated_after_creation(unit, effective_on)
     return if parent_id == parent_on(unit_id, effective_on)
 
+    ensure_same_structure!(unit, parent_id)
     ensure_placeable!(unit.provider, unit.level_id, parent_id, on: effective_on, unit_id:,
                                                               until_on: @parents[unit_id].keys.select { it > effective_on }.min)
     raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit_id, parent_id, from: effective_on)
@@ -448,7 +450,7 @@ class OrgGraph::StructureAggregate
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     level_id = require_id(level_id, "Level id")
-    raise "That unit type doesn't exist" unless level_index(level_id)
+    raise "That unit type doesn't exist" unless kind_home(level_id)
     raise "#{level_provider(level_id)} supplies #{level_name(level_id)} units" unless level_provider(level_id) == unit.provider
     return if level_id == unit.level_id
 
@@ -516,12 +518,13 @@ class OrgGraph::StructureAggregate
       raise "Unit not found" unless (predecessor_ids + successor_ids).all? { |id| @units.key?(id) }
       raise "A unit can't come to precede itself" if preceded_by(predecessor_ids).intersect?(successor_ids)
 
+      ensure_one_structure!(predecessor_ids + successor_ids)
       latest = (predecessor_ids + successor_ids).map { |id| @units[id] }.max_by(&:created_on)
       raise "A succession can't predate #{latest.name}, created on #{latest.created_on}" if effective_on < latest.created_on
     end
 
     retiring = retire_predecessors ? predecessor_ids.map { |id| @units[id] }.reject(&:retired) : []
-    retiring = retiring.sort_by { |unit| [ -ancestor_ids(unit.unit_id).size, -level_index(unit.level_id) ] }
+    retiring = retiring.sort_by { |unit| [ -ancestor_ids(unit.unit_id).size, -kind_position(unit.level_id) ] }
     if (!restated || retiring.any?) && successor_ids.any? { |id| @units[id].retired }
       raise "A successor must be live"
     end
@@ -585,7 +588,7 @@ class OrgGraph::StructureAggregate
   on OrgGraph::Events::TaxonomyDefined do |event|
     levels = event.data[:levels].map { |level| level.to_h.symbolize_keys }
     if (structure_unit_id = event.data[:structure_unit_id])
-      define_declared_structure(structure_unit_id, levels)
+      define_declared_structure(structure_unit_id, levels, event.data[:effective_on])
     else
       define_top_structure(levels, event)
     end
@@ -701,14 +704,9 @@ class OrgGraph::StructureAggregate
   # @return [Array<Unit>] by name
   def misplaced_units(rules = taxonomy)
     live_units.reject do |unit|
-      structure_unit_id = structure_in_force(unit.unit_id)
-      kinds = structure_taxonomy(structure_unit_id, rules)
-      parent = unit.parent_id && @units[unit.parent_id]
-      if parent && parent.unit_id != structure_unit_id
-        kinds.allows?(unit.level_id, beneath: parent.level_id)
-      else
-        kinds.may_be_top?(unit.level_id)
-      end
+      kinds = structure_taxonomy(structure_in_force(unit.unit_id), rules)
+      parent_kind = seated_parent_kind(unit.parent_id)
+      parent_kind ? kinds.allows?(unit.level_id, beneath: parent_kind) : kinds.may_be_top?(unit.level_id)
     end.sort_by(&:name)
   end
 
@@ -746,12 +744,73 @@ class OrgGraph::StructureAggregate
   end
 
   # Withdrawing a structure defines it with no types.
-  def define_declared_structure(unit_id, levels)
+  def define_declared_structure(unit_id, levels, effective_on)
     if levels.empty?
       @structures.delete(unit_id)
+      @structure_since.delete(unit_id)
     else
+      @structure_since[unit_id] ||= effective_on.to_s
       @structures[unit_id] = OrgGraph::Taxonomy.new(levels.map { it.slice(:level_id, :name, :parent_level_ids, :top) })
     end
+  end
+
+  # The structure a unit placed beneath a parent joins: the parent's own when
+  # it declares one, else the one in force at the parent.
+  def structure_beneath(parent_id)
+    return if parent_id.nil? || @structures.empty?
+
+    @structures.key?(parent_id) ? parent_id : structure_in_force(parent_id)
+  end
+
+  # The kind a unit beneath a parent answers to; nil at the top of its
+  # structure, which is where a declaring unit's sub-units sit.
+  def seated_parent_kind(parent_id)
+    parent_id && !@structures.key?(parent_id) ? @units[parent_id]&.level_id : nil
+  end
+
+  def kinds_at(structure_unit_id) = structure_taxonomy(structure_unit_id, taxonomy)
+
+  # :top for a type of the top structure, the declaring unit's id for a
+  # declared one's, and nil for a type no structure holds. Each structure's
+  # types have ids of their own, so a type names its structure.
+  def kind_home(level_id)
+    return :top if level_index(level_id)
+
+    @structures.find { |_, kinds| kinds.kind(level_id) }&.first
+  end
+
+  def kind_position(level_id)
+    home = kind_home(level_id)
+    home == :top ? level_index(level_id) : (@structures[home]&.kinds&.index { it.id == level_id } || 0)
+  end
+
+  def structure_label(structure_unit_id)
+    structure_unit_id ? "#{@units[structure_unit_id].name}'s structure" : "the top structure"
+  end
+
+  # A unit keeps the structure it sits in: moving one across a boundary needs
+  # its types converted, which a move can't do.
+  def ensure_same_structure!(unit, parent_id)
+    from = structure_in_force(unit.unit_id)
+    to = structure_beneath(parent_id)
+    return if from == to
+
+    raise "#{unit.name} can't move out of #{structure_label(from)} into #{structure_label(to)}"
+  end
+
+  def ensure_one_structure!(unit_ids)
+    structures = unit_ids.map { structure_in_force(it) }.uniq
+    return if structures.size == 1
+
+    raise "A merge or split can't cross structures: these units sit in #{structures.map { structure_label(it) }.to_sentence}"
+  end
+
+  # A change to a unit in a declared structure can't predate the structure.
+  def ensure_within_structure!(structure_unit_id, on)
+    since = structure_unit_id && @structure_since[structure_unit_id]
+    return unless since && on < since
+
+    raise "#{structure_label(structure_unit_id).upcase_first} began on #{since}, so date the change then or later"
   end
 
   def write_taxonomy(levels, effective_on:, defined_by_id:, rules: {})
@@ -960,16 +1019,21 @@ class OrgGraph::StructureAggregate
   end
 
   def ensure_kind_fits!(unit, level_id)
-    rules = taxonomy
+    structure_unit_id = structure_in_force(unit.unit_id)
+    rules = kinds_at(structure_unit_id)
+    raise "#{any_kind_name(level_id)} isn't a unit type of #{structure_label(structure_unit_id)}" unless rules.kind(level_id)
+
     kind = rules.kind(level_id).name
     parent = unit.parent_id && @units[unit.parent_id]
+    parent_kind = seated_parent_kind(unit.parent_id)
     misfits = []
-    if parent.nil?
+    if parent_kind.nil?
       misfits << "#{unit.name} at the top" unless rules.may_be_top?(level_id)
-    elsif !rules.allows?(level_id, beneath: parent.level_id)
-      misfits << "#{unit.name} under #{parent.name} (#{rules.kind(parent.level_id).name})"
+    elsif !rules.allows?(level_id, beneath: parent_kind)
+      misfits << "#{unit.name} under #{parent.name} (#{rules.kind(parent_kind).name})"
     end
-    stranded = live_units.select { it.parent_id == unit.unit_id && !rules.allows?(it.level_id, beneath: level_id) }
+    # A declaring unit's sub-units sit at the top of its own structure.
+    stranded = @structures.key?(unit.unit_id) ? [] : live_units.select { it.parent_id == unit.unit_id && !rules.allows?(it.level_id, beneath: level_id) }
     misfits += stranded.sort_by(&:name).map { "#{it.name} (#{rules.kind(it.level_id).name}) under #{unit.name}" }
     return if misfits.empty?
 
@@ -980,6 +1044,10 @@ class OrgGraph::StructureAggregate
   # the unit had then, and the sub-units beneath it then. Days after today
   # count too, since a move can be dated ahead.
   def ensure_kind_fitted_since!(unit, level_id, from:)
+    if (structure_unit_id = structure_in_force(unit.unit_id))
+      return ensure_within_structure!(structure_unit_id, from)
+    end
+
     [ from, *kind_fit_days(unit.unit_id).select { it > from } ].uniq.sort.each do |day|
       rules = rules_on(day)
       raise "#{level_name(level_id)} didn't exist on #{day}, so date the change later" unless rules.kind(level_id)
@@ -1035,20 +1103,27 @@ class OrgGraph::StructureAggregate
   # must also fit the kinds' rules on each day it holds, as the history shows
   # them; one that a later move ends before today answers only to those days.
   def ensure_placeable!(provider, level_id, parent_id, on:, until_on: nil, unit_id: nil)
-    rules = taxonomy
     held_today = until_on.nil? || until_on > today
     parent = parent_id && @units[parent_id]
-    if parent_id.nil?
-      raise "#{rules.kind(level_id).name} can't sit at the top" if held_today && !rules.may_be_top?(level_id)
-    else
+    if parent_id
       raise "Parent unit not found" unless parent
       raise "Parent unit is retired" if parent.retired
       raise "The parent unit was created on #{parent.created_on}" if on < parent.created_on
-      if held_today && !rules.allows?(level_id, beneath: parent.level_id)
-        raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent.level_id).name}"
-      end
-      raise "A mirrored unit can't sit beneath a unit Espalia holds" if provider != ESPALIA && parent.provider == ESPALIA
     end
+    structure_unit_id = structure_beneath(parent_id)
+    rules = kinds_at(structure_unit_id)
+    raise "#{any_kind_name(level_id)} isn't a unit type of #{structure_label(structure_unit_id)}" unless rules.kind(level_id)
+
+    parent_kind = seated_parent_kind(parent_id)
+    if parent_kind.nil?
+      where = structure_unit_id ? "at the top of #{structure_label(structure_unit_id)}" : "at the top"
+      raise "#{rules.kind(level_id).name} can't sit #{where}" if held_today && !rules.may_be_top?(level_id)
+    elsif held_today && !rules.allows?(level_id, beneath: parent_kind)
+      raise "#{rules.kind(level_id).name} can't sit under #{rules.kind(parent_kind).name}"
+    end
+    raise "A mirrored unit can't sit beneath a unit Espalia holds" if parent && provider != ESPALIA && parent.provider == ESPALIA
+    return ensure_within_structure!(structure_unit_id, on) if structure_unit_id
+
     ensure_placeable_while_held!(level_id, parent_id, unit_id:, on:, until_on:)
   end
 
@@ -1231,6 +1306,10 @@ class OrgGraph::StructureAggregate
   end
 
   def level_name(level_id) = @levels.find { |level| level[:level_id] == level_id }&.dig(:name)
+
+  def any_kind_name(level_id)
+    level_name(level_id) || @structures.values.filter_map { it.kind(level_id)&.name }.first || "That unit type"
+  end
 
   # The kinds' history dates each change no earlier than the last, so a
   # change dated before it would be recorded on a day it wasn't made.
