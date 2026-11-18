@@ -214,6 +214,25 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_not HrisUnitParentProposal.exists?
     end
 
+    should "keep a unit left out of a structure as a sync issue until the HRIS moves it back" do
+      mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" })
+      platform = unit("work.division/d2")
+      @structure.declare_structure(platform.id, levels: [ { level_id: SecureRandom.uuid_v7, name: "Lane" } ], conversion: {},
+                                                effective_on: TODAY)
+      readings = { @staff[0] => { division: "d2", team: "t1" }, @staff[1] => { division: "d2" } }
+
+      mirror(readings)
+      mirror_with(readings, today: TODAY + 1)
+
+      issue = HrisSyncIssue.sole
+      assert_equal [ "in_structure", "hibob", unit("work.department/t1").id, platform.id, platform.id, TODAY, TODAY + 1 ],
+                   issue.values_at(:kind, :provider, :unit_id, :parent_id, :structure_unit_id, :first_seen_on, :last_seen_on)
+
+      mirror_with({ @staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2" } }, today: TODAY + 2)
+
+      assert_not HrisSyncIssue.exists?
+    end
+
     should "start over when a sync between two readings reads no parent" do
       mirror(@staff[0] => { division: "d1", team: "t1" })
       mirror(@staff[0] => { division: "d2", team: "t1" })
@@ -381,7 +400,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
   def mirror_with(readings, **options)
     result = { errors: [], split_units: [], units_in_structures: [], org_graph_events: 0 }
     Hris::LevelMirror.new(provider: "hibob", catalogue: @catalogue, readings: readings.to_h { |person, held| [ person, reading(held) ] },
-                          result:, today: TODAY, **options).call
+                          result:, **options.reverse_merge(today: TODAY)).call
     result
   end
 

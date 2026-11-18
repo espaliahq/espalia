@@ -1,0 +1,16 @@
+{
+  "name": "integrations_hris_sync_issues",
+  "description": "List what the HRIS sync read and would not write, oldest first. The one kind so far is in_structure: the HRIS places a unit under a parent inside a unit's own structure, whose types aren't the HRIS's to use, so the sync left the unit where it was. Each issue names the unit, the parent the HRIS gave it and the unit whose structure that is, by id and name, with the days a sync first and last read it. An issue clears once a sync no longer reads it. Admins only.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

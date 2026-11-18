@@ -24,7 +24,8 @@
 # - **Structures.** A parent read inside a unit's own structure (#494) is
 #   never written there, since the HRIS's types belong to the top structure.
 #   A new unit is created with no parent, an existing one keeps its own, and
-#   both are listed in the result's :units_in_structures with the structure.
+#   both are listed in the result's :units_in_structures with the structure,
+#   and kept as {HrisSyncIssue}s until a sync no longer reads it.
 #
 # Retirements and ended memberships each have their own brake, as
 # {Hris::BaseAdapter::ABSENCE_BRAKE} has for people: over it, none of that
@@ -108,6 +109,7 @@ class Hris::LevelMirror
     @read_parents = Set.new
     plans.each { |level_plan| mirror_units(level_plan) }
     forget_unread_parents
+    record_structure_issues(plans)
     retiring = retiring_units(plans)
     retiring = [] unless write_memberships(plans, retiring)
     retire_units(plans, retiring)
@@ -194,6 +196,11 @@ class Hris::LevelMirror
 
     @result[:units_in_structures] << { unit_id:, name:, parent_id: parent, structure_unit_id: }
     nil
+  end
+
+  def record_structure_issues(plans)
+    HrisSyncIssue.replace_in_structure(provider: @provider, unit_ids: OrgUnit.where(level_id: plans.map { it.level.id }).ids,
+                                       reported: @result[:units_in_structures], today: @today)
   end
 
   def structure_beneath(unit_id)

@@ -16,7 +16,10 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members (#142)
   # @param effective_on [String] ISO date the forms send
   # @param alert [String, nil] why the last change was refused
-  def initialize(unit:, overview:, rights:, effective_on:, alert: nil, confirmations: nil)
+  # @param sync_issues [Array<HrisSyncIssue::Row>] what the HRIS sync couldn't do to the
+  #   unit, given only to a viewer who may see the HRIS page
+  def initialize(unit:, overview:, rights:, effective_on:, alert: nil, confirmations: nil, sync_issues: [])
+    @sync_issues = sync_issues
     @confirmations = confirmations
     @unit = unit
     @overview = overview
@@ -35,6 +38,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
         if @alert
           render Components::Kit::Alert.new(tone: :danger, role: "alert", id: "org-unit-alert") { @alert }
         end
+        sync_issues
         date_field
         details
         owners
@@ -73,6 +77,22 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
       @rights.rename? ? rename_form : fact("Name", @unit.name)
       @rights.change_type? ? type_form : fact(words("unit_type"), @overview.level_of(@unit)&.name || "None")
       @rights.move? ? move_form : fact("Parent", parent_name)
+    end
+  end
+
+  def sync_issues
+    return if @sync_issues.empty?
+
+    section(id: "org-unit-sync-issues", aria: { labelledby: "org-unit-sync-issues-heading" }, class: "space-y-2") do
+      h3(id: "org-unit-sync-issues-heading", class: "text-sm font-semibold text-default") { "Sync issue" }
+      @sync_issues.each do |row|
+        p(class: "text-sm text-muted") do
+          plain "The HRIS places this unit under #{row.parent&.name || 'a unit no longer held'}, inside " \
+                "#{row.structure_unit&.name || 'a unit'}'s own structure. The sync has left it where it is " \
+                "since #{row.issue.first_seen_on.strftime('%-d %b %Y')}."
+        end
+      end
+      a(href: tenant_integration_path("hris", anchor: "sync-issues"), class: "text-sm text-link underline") { "See every sync issue" }
     end
   end
 

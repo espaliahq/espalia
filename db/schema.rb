@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_18_024901) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_045448) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -674,6 +674,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_024901) do
     t.index ["parent_id"], name: "idx_fw_suggestion_comments_parent", where: "(parent_id IS NOT NULL)"
     t.index ["suggestion_id", "status"], name: "idx_fw_suggestion_comments_thread"
     t.index ["tenant_id"], name: "index_framework_suggestion_comments_on_tenant_id"
+  end
+
+  create_table "hris_sync_issues", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "provider", null: false
+    t.string "kind", null: false
+    t.uuid "unit_id", null: false
+    t.uuid "parent_id"
+    t.uuid "structure_unit_id"
+    t.date "first_seen_on", null: false
+    t.date "last_seen_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "kind", "unit_id"], name: "index_hris_sync_issues_on_tenant_id_and_kind_and_unit_id", unique: true
+    t.index ["tenant_id"], name: "index_hris_sync_issues_on_tenant_id"
   end
 
   create_table "hris_unit_parent_proposals", id: :uuid, default: nil, force: :cascade do |t|
@@ -1354,6 +1369,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_024901) do
   add_foreign_key "framework_suggestion_comments", "people", column: "deleted_by_id", on_delete: :nullify
   add_foreign_key "framework_suggestion_comments", "people", column: "edited_by_id", on_delete: :nullify
   add_foreign_key "framework_suggestion_comments", "tenants"
+  add_foreign_key "hris_sync_issues", "tenants"
   add_foreign_key "hris_unit_parent_proposals", "tenants"
   add_foreign_key "manager_assessment_delegations", "tenants"
   add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"

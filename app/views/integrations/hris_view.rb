@@ -38,6 +38,7 @@ class Views::Integrations::HrisView < Views::Base
   # @param mapping_options [Hash] roles, level ordinals by role code, HRIS
   #   titles, and whether a level column is configured — see
   #   {Views::Integrations::HrisMappingModal}
+  # @param sync_issues [Array<HrisSyncIssue::Row>]
   # @param can_edit_mappings [Boolean]
   # @param hris_connected [Boolean] whether the level field picker can read the HRIS
   # @param user [User, nil]
@@ -45,7 +46,7 @@ class Views::Integrations::HrisView < Views::Base
   # @param tenants [Array<Tenant>]
   def initialize(hris_config:, hris_secrets_stored:, person_rows:, role_mapping_rows:,
                  form_config: nil, can_edit_connection: false, errors: [],
-                 unmapped_titles: [], mapping_options: {}, can_edit_mappings: false,
+                 unmapped_titles: [], sync_issues: [], mapping_options: {}, can_edit_mappings: false,
                  hris_connected: false, user: nil, current_tenant: nil, tenants: [])
     @hris_config = hris_config
     @hris_secrets_stored = hris_secrets_stored
@@ -55,6 +56,7 @@ class Views::Integrations::HrisView < Views::Base
     @person_rows = person_rows
     @role_mapping_rows = role_mapping_rows
     @unmapped_titles = unmapped_titles
+    @sync_issues = sync_issues
     @mapping_options = mapping_options
     @can_edit_mappings = can_edit_mappings
     @hris_connected = hris_connected
@@ -73,6 +75,7 @@ class Views::Integrations::HrisView < Views::Base
         page_header
         configuration_section
         connection_settings_section if @can_edit_connection
+        sync_issues_section
         unmapped_titles_section
         role_mappings_section
         people_section
@@ -232,6 +235,51 @@ class Views::Integrations::HrisView < Views::Base
   def field_prefix = "hris_connection"
 
   # ── Unmapped titles ──
+
+  def sync_issues_section
+    return if @sync_issues.empty?
+
+    div(id: "sync-issues") do
+      render Components::Kit::SectionHeading.new(
+        "Sync issues",
+        subtitle: "Units the HRIS places inside a unit's own structure. That structure's types aren't the " \
+                  "HRIS's to use, so the sync leaves each unit where it was until the HRIS moves it back."
+      )
+
+      render Components::Kit::Card.new(variant: :flush) do |card|
+        card.body do
+          div(class: "overflow-x-auto") do
+            table(class: "min-w-full text-sm") do
+              thead(class: "bg-subtle") do
+                tr do
+                  th_cell("Unit")
+                  th_cell("HRIS parent")
+                  th_cell("Structure of")
+                  th_cell("First seen", hide_below_sm: true)
+                  th_cell("Last seen")
+                end
+              end
+              tbody(class: "divide-y divide-default") do
+                @sync_issues.each { |row| sync_issue_row(row) }
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  def sync_issue_row(row)
+    tr(data: { sync_issue: row.issue.unit_id }) do
+      td_cell { span(class: "font-medium") { unit_name(row.unit) } }
+      td_cell { unit_name(row.parent) }
+      td_cell { unit_name(row.structure_unit) }
+      td_cell(hide_below_sm: true) { row.issue.first_seen_on.strftime("%-d %b %Y") }
+      td_cell { row.issue.last_seen_on.strftime("%-d %b %Y") }
+    end
+  end
+
+  def unit_name(unit) = unit ? unit.name : "A unit no longer held"
 
   def unmapped_titles_section
     return if @unmapped_titles.empty?
