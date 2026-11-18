@@ -64,6 +64,23 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal "Lane copies a unit type the structure copied from doesn't hold", error.message
   end
 
+  should "read another tenant's structure or type ids as unknown" do
+    other = create(:tenant)
+    lending, lane, tribe = Array.new(3) { SecureRandom.uuid_v7 }
+    ActsAsTenant.with_tenant(other) do
+      @handler.define_taxonomy([ { level_id: tribe, name: "Tribe" } ], effective_on: @today)
+      @handler.create_unit(lending, "Lending", level_id: tribe, effective_on: @today)
+      @handler.declare_structure(lending, levels: [ { level_id: lane, name: "Lane" } ], conversion: {}, effective_on: @today)
+    end
+
+    error = assert_raises(ArgumentError) { declare(copied_from: lending) }
+    assert_equal "No unit has that structure to copy", error.message
+
+    error = assert_raises(ArgumentError) { declare(conversion: { @squad => lane, @pod => @stream }) }
+    assert_equal "The conversion names a unit type Payments's structure doesn't hold", error.message
+    assert_empty structure.declared_structures
+  end
+
   should "withdraw a structure, converting the units beneath it back into the structure above" do
     declare
     as_tenant { @handler.withdraw_structure(@payments, conversion: { @group => @squad, @stream => @pod }, effective_on: @today) }
