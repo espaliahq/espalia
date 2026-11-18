@@ -42,10 +42,11 @@ class OrgGraph::ChangeUnitKindTest < ActiveSupport::TestCase
 
   should "refuse a type that can't sit under the unit's parent, or at the top" do
     error = assert_raises(RuntimeError) { @system.change_unit_kind(@payments, @squad, effective_on: "2026-12-10") }
-    assert_equal "Squad can't sit under Tribe", error.message
+    assert_equal "Payments can't change to Squad, as these wouldn't fit: Payments under Commerce (Tribe)", error.message
 
     error = assert_raises(RuntimeError) { @system.change_unit_kind(@commerce, @team, effective_on: "2026-12-10") }
-    assert_equal "Team can't sit at the top", error.message
+    assert_equal "Commerce can't change to Team, as these wouldn't fit: Commerce at the top, Payments (Team) under Commerce",
+                 error.message
   end
 
   should "refuse a type its sub-units can't sit under, naming them all" do
@@ -53,7 +54,16 @@ class OrgGraph::ChangeUnitKindTest < ActiveSupport::TestCase
     create_unit("Basket", @squad, parent_id: @payments)
 
     error = assert_raises(RuntimeError) { @system.change_unit_kind(@payments, @crew, effective_on: "2026-12-10") }
-    assert_equal "These units wouldn't fit under Crew, so move them first: Basket (Squad), Checkout (Squad)", error.message
+    assert_equal "Payments can't change to Crew, as these wouldn't fit: Basket (Squad) under Payments, Checkout (Squad) under Payments",
+                 error.message
+  end
+
+  should "name the parent and every sub-unit in one refusal when both wouldn't fit" do
+    create_unit("Checkout", @squad, parent_id: @payments)
+
+    error = assert_raises(RuntimeError) { @system.change_unit_kind(@payments, @squad, effective_on: "2026-12-10") }
+    assert_equal "Payments can't change to Squad, as these wouldn't fit: Payments under Commerce (Tribe), Checkout (Squad) under Payments",
+                 error.message
   end
 
   should "leave a unit an HRIS supplies to the HRIS, and an HRIS type to its units" do

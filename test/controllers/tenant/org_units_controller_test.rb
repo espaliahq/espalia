@@ -154,7 +154,7 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
         patch tenant_org_unit_path(@org[:checkout]), params: { org_unit: { level_id: @org[:squad] } }
 
         follow_redirect!
-        assert_equal "These units wouldn't fit under Squad, so move them first: Payments (Squad)",
+        assert_equal "Checkout can't change to Squad, as these wouldn't fit: Payments (Squad) under Checkout",
                      drawer.at_css("#org-unit-alert").text.strip
         assert_equal @org[:team], unit(:checkout).level_id
       end

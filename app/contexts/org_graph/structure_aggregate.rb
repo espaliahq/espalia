@@ -910,16 +910,19 @@ class OrgGraph::StructureAggregate
 
   def ensure_kind_fits!(unit, level_id)
     rules = taxonomy
+    kind = rules.kind(level_id).name
     parent = unit.parent_id && @units[unit.parent_id]
-    unless parent ? rules.allows?(level_id, beneath: parent.level_id) : rules.may_be_top?(level_id)
-      raise "#{rules.kind(level_id).name} can't sit #{parent ? "under #{rules.kind(parent.level_id).name}" : 'at the top'}"
+    misfits = []
+    if parent.nil?
+      misfits << "#{unit.name} at the top" unless rules.may_be_top?(level_id)
+    elsif !rules.allows?(level_id, beneath: parent.level_id)
+      misfits << "#{unit.name} under #{parent.name} (#{rules.kind(parent.level_id).name})"
     end
-
     stranded = live_units.select { it.parent_id == unit.unit_id && !rules.allows?(it.level_id, beneath: level_id) }
-    return if stranded.empty?
+    misfits += stranded.sort_by(&:name).map { "#{it.name} (#{rules.kind(it.level_id).name}) under #{unit.name}" }
+    return if misfits.empty?
 
-    raise "These units wouldn't fit under #{rules.kind(level_id).name}, so move them first: " \
-          "#{stranded.sort_by(&:name).map { "#{it.name} (#{rules.kind(it.level_id).name})" }.join(', ')}"
+    raise "#{unit.name} can't change to #{kind}, as these wouldn't fit: #{misfits.join(', ')}"
   end
 
   # A change must fit each day from its date, by that day's rules: the parent

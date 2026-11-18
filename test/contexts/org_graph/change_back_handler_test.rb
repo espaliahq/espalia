@@ -136,7 +136,7 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
       @structure.create_unit(checkout, "Checkout", level_id: @squads, parent_id: @payments, effective_on: "2026-02-01")
     end
     error = assert_raises(RuntimeError) { change_back(as_tenant { OrgUnitActivity.for_unit(@payments).find_by(event_type: "UnitKindChanged", changed_back_by_id: nil, changes_back_id: nil) }) }
-    assert_equal "These units wouldn't fit under Squad, so move them first: Checkout (Squad)", error.message
+    assert_equal "Payments can't change to Squad, as these wouldn't fit: Checkout (Squad) under Payments", error.message
   end
 
   should "refuse to change a type back for someone who has since lost the right to change it" do
