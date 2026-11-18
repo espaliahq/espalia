@@ -12,6 +12,8 @@ class Views::Assessments::TeamBlades < Views::Assessments::CapabilityBlades
   end
   Point = Data.define(:number, :stable_id, :hue, :reached)
   Group = Data.define(:name, :hue, :points)
+  # A group score of 0 still draws, just off the centre, so it can't read as no comparison.
+  ZERO_MEDIAN_RADIUS = 1.5
 
   # @param capabilities [Array<Hash>] `Operations::Assessments::TeamCapabilities`'s capabilities
   # @param label [String] the picture's accessible name
@@ -43,9 +45,7 @@ class Views::Assessments::TeamBlades < Views::Assessments::CapabilityBlades
   def median_line(s, capability, i)
     return unless capability[:group_median]
 
-    radius = radius_for(capability[:group_median] / 100.0)
-    return if radius.zero?
-
+    radius = [ radius_for(capability[:group_median] / 100.0), ZERO_MEDIAN_RADIUS ].max
     s.path(d: "M#{xy(radius, start(i)).join(' ')} #{arcs(radius, i, i + 1)}", fill: "none", stroke_width: 1.1,
            class: "stroke-(--gos-accent-strong)", data: { blade_median: i + 1 })
   end
