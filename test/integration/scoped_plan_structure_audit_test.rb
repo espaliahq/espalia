@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../support/rebuild_lock"
 
 # A plan scoped beneath a unit with its own structure reads that structure's
 # types, and nothing of the unit that declared it or of another branch's
@@ -9,6 +10,8 @@ require "test_helper"
 # that needs a parameter this file has no value for fails until it gets one. The plan is walked open and again once its step
 # closes, and every read must reach a payload in one of the two.
 class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
+  include RebuildLock
+
   SYSTEM = OrgGraph::Authorization::SYSTEM
   KNOWN = %i[plan_id scenario_id unit_id ends_on rule].freeze
   # The scope picker lists every live unit an editor may cover, by design
@@ -128,6 +131,19 @@ class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
     units = call(Operations::TeamPlanning::Units, plan_id: @plan_id)[:units].find { it[:unit_id] == @payments }
     mapped = call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id: @scenario_id)[:units].find { it[:id] == @payments }
     assert_equal [ @group, @group ], [ units[:level_id], mapped[:level_id] ], "the plan reads Payments as a Group, as its checks do"
+  end
+
+  should "say the units and scenario map didn't check unit types while the structure is rebuilt, and read the plan's own" do
+    read = lambda do
+      units = call(Operations::TeamPlanning::Units, plan_id: @plan_id)
+      mapped = call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id: @scenario_id)
+      [ units, mapped ].map { |payload| [ payload[:unchecked], (payload[:units].find { [ it[:unit_id], it[:id] ].include?(@payments) } || {})[:level_id] ] }
+    end
+    assert_equal [ [ [], @group ] ] * 2, read.call
+
+    while_rebuilding(@tenant, OrgGraph::Projections::Structure) do
+      assert_equal [ [ %w[unit_types], @squad ] ] * 2, read.call, "Payments reads as the Squad the plan's base held, and says so"
+    end
   end
 
   should "refuse a parent outside the plan alike, whatever structure it declares or sits in" do

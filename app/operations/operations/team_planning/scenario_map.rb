@@ -12,6 +12,8 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
   description "Get one scenario of a Team Planning plan the caller is in, resolved: the baseline with the " \
               "changes of every scenario it follows and its own. Units carry their parent, level and owners; an Org Graph " \
               "unit's level_id is its type today, which a structure declared since the base may have changed, as the plan's checks read it. " \
+              "While the Org Graph's structure is being rebuilt, `unchecked` lists \"unit_types\" and each level_id is the one the plan holds, " \
+              "which can be its type on the base date; otherwise `unchecked` is empty. " \
               "People carry their facts and each place they hold (a unit, or a position with its unit), with " \
               "allocation and role, plus allocation_total: over 1 when over-allocated, null when unknown " \
               "because the HRIS gave no allocation. unassigned_ids are the people in no live unit. Positions " \
@@ -28,19 +30,21 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, required: true, schema: { description: "The scenario, or the plan's id for the baseline." }
 
-  # @return [Hash] `{ plan_id, scenario_id, base_on, known_on, units, people, unassigned_ids, positions, unresolved, departed, names }`
+  # @return [Hash] `{ plan_id, scenario_id, base_on, known_on, units, people, unassigned_ids, positions, unresolved, departed, names, unchecked }`
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id)
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).call }
-    { plan_id: plan.id, scenario_id:, **map_payload(map, plan:) }
+    @structures = ::TeamPlanning::PlannedStructures.unless_rebuilding(map)
+    { plan_id: plan.id, scenario_id:, **map_payload(map, plan:), unchecked: @structures ? [] : Operations::TeamPlanning::Units::UNCHECKED }
   end
 
   private
 
   def units_payload(map)
-    structures = ::TeamPlanning::PlannedStructures.load(map)
+    return super unless @structures
+
     units = map.units.index_by(&:id)
-    super.map { |row| row.merge(level_id: structures.level_of(units.fetch(row[:id]))) }
+    super.map { |row| row.merge(level_id: @structures.level_of(units.fetch(row[:id]))) }
   end
 end

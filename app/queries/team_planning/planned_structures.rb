@@ -34,6 +34,17 @@ class TeamPlanning::PlannedStructures
              live_parents: live.to_h { |id, parent_id, _| [ id, parent_id ] }, live_levels: live.to_h { |id, _, level_id| [ id, level_id ] })
   end
 
+  # Mid-rebuild the structure projection holds part of the Org Graph's types,
+  # so a read that judges or shows them says it didn't.
+  #
+  # @param map [TeamPlanning::Baseline::Map]
+  # @return [TeamPlanning::PlannedStructures, nil] nil while the structure projection is being rebuilt
+  def self.unless_rebuilding(map)
+    ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Structure::PROJECTION_NAME) { load(map) }
+  rescue ProjectionVersion::Rebuilding
+    nil
+  end
+
   # @param map [TeamPlanning::Baseline::Map]
   # @param taxonomies [Hash{String, nil => OrgGraph::Taxonomy}] each structure, by declaring unit id; nil for the top
   # @param copies [Hash{String, nil => Hash{String => String}}] each structure's copied types, source type id => its copy's id

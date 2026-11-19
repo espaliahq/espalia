@@ -67,7 +67,7 @@ So:
 - a write during a rebuild refuses at once. A person sees "The Org Graph is being rebuilt; try again in a minute." over the web or MCP.
 - an HRIS sync during a rebuild still updates people's rows, offboards and assigns, and counts what it held back apart from the errors: `levels_skipped_while_rebuilding` for a mirror refused by a members rebuild, `people_skipped_while_rebuilding` for the people it wrote nothing for during a structure rebuild. On a tenant that is not fed, it offboards anyone HiBob reported as gone and assigns them nothing, though a cut-over tenant's row still reads active. The next sync writes them. A fed tenant's Pass 3b offboards only Espalia-held people, so a leaver HiBob holds keeps their assignment until the next sync writes `PersonLeft` and the feed offboards them.
 - a fed tenant's reconcile during one of those three rebuilds is refused. The handler counts it under `errors`. The sweep skips everyone and counts them under `skipped_while_rebuilding`, and the next sync's sweep catches it up. The Person Development cut-over refuses to start.
-- a plan's unit type check skips during a structure rebuild, and says so. `team_planning_attention` lists `misfits` under `unchecked`, and the Checks tab reads "Unit types not checked: the Org Graph is being rebuilt. Try again in a minute." in place of "Everything fits".
+- a plan's unit type check skips during a structure rebuild, and says so. `team_planning_attention` lists `misfits` under `unchecked`, and the Checks tab reads "Unit types not checked: the Org Graph is being rebuilt. Try again in a minute." in place of "Everything fits". `team_planning_units` and `team_planning_scenario_map` list `unit_types` under `unchecked` and give each unit the type the plan holds, which can be its type on the base date ([#515](https://github.com/espaliahq/espalia/issues/515)).
 - a rebuild that starts during a write waits for it to finish. A structure rebuild waits for a running HRIS sync, HiBob fetch included.
 
 **The guard covers only rebuilds that start after it ships.** A rebuild that runs in the same deploy as the guard, through `REBUILD_ON_DEPLOY`, runs while the old release still serves traffic, and the old release takes no lock. Rebuild `org_graph/members` or `org_graph/structure` in a quiet window until one deploy carrying the guard has gone out.
@@ -110,7 +110,6 @@ Writers that neither refuse nor skip, and why that is safe:
 While it runs:
 
 - a plan's Checks tab judges unit types from a half-built list, and doesn't say so: the previous release serves it, and has no "not checked" line. A later rebuild of this projection, served by this release, reads "Unit types not checked" instead.
-- `team_planning_units` and `team_planning_scenario_map` can show a converted unit with the type it held on the plan's base date.
 - Settings and the unit drawer can show no unit types until it ends.
 - `org_graph_sources` can misname a type's provider.
 
