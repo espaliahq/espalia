@@ -25,4 +25,16 @@ class OrgGraph::RemovalRefusalTest < ActiveSupport::TestCase
       assert_equal "Guild is still held", RefusingRemoval.new.removal_refusal(SecureRandom.uuid_v7)
     end
   end
+
+  should "find a type that can go without removing it or leaving an event to publish" do
+    structure = OrgGraph::StructureAggregate.new
+    team, squad = Array.new(2) { SecureRandom.uuid_v7 }
+    structure.define_taxonomy([ { level_id: team, name: "Team" }, { level_id: squad, name: "Squad" } ], effective_on: Date.yesterday)
+    pending = structure.unpublished_events.to_a.size
+
+    assert_nil structure.removal_refusal(squad)
+    assert_equal [ team, squad ], structure.taxonomy.kinds.map(&:id)
+    assert_equal pending, structure.unpublished_events.to_a.size
+    assert_not structure.instance_variable_defined?(:@dry_run)
+  end
 end

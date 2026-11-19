@@ -912,21 +912,30 @@ class OrgGraph::StructureAggregate
     changed_on && Date.iso8601(changed_on.to_s)
   end
 
-  # Why {#remove_level} would refuse a type today, found by running it on a
-  # copy, so a screen offering Remove can't drift from the command. Anything
-  # but a refusal is a bug, reported rather than read as one.
+  # Why {#remove_level} would refuse a type today, found by running it up to
+  # the event it would apply, so a screen offering Remove can't drift from the
+  # command. It checks everything before its one apply. Anything but a refusal
+  # is a bug, reported rather than read as one.
   #
   # @param level_id [String]
   # @param structure_unit_id [String, nil] the unit whose own structure holds the type
   # @return [String, nil] the refusal; nil when the type can go today
   def removal_refusal(level_id, structure_unit_id: nil)
-    copy = Marshal.load(Marshal.dump(self))
-    copy.instance_variable_set(:@unpublished_events, []) # AggregateRoot leaves it out of a dump, as a snapshot would
-    copy.remove_level(level_id, effective_on: today, structure_unit_id:)
+    @dry_run = true
+    catch(:dry_run) { remove_level(level_id, effective_on: today, structure_unit_id:) }
     nil
   rescue StandardError => e
     Rails.error.report(e, handled: true) unless REFUSALS.include?(e.class)
     e.message
+  ensure
+    remove_instance_variable(:@dry_run)
+  end
+
+  # Stops a dry run at the event it would apply, before anything changes.
+  def apply(*)
+    throw :dry_run if @dry_run
+
+    super
   end
 
   private
