@@ -79,20 +79,35 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_equal "Lending stays in the organisation's structure, so the move takes no conversion", error.message
   end
 
-  should "refuse a move out of a structure" do
-    move_in
-    error = assert_raises(RuntimeError) { as_tenant { @admin.move_unit(@ledger, @core, effective_on: @today + 1, conversion: {}) } }
-    assert_equal "Ledger can't move out of Payments's structure yet", error.message
-  end
-
-  should "refuse a subtree holding a unit with a structure of its own" do
+  should "carry a unit with a structure of its own along, converting it and leaving its own units alone" do
     lane = SecureRandom.uuid_v7
     as_tenant do
       @admin.declare_structure(@ledger, levels: [ { level_id: lane, name: "Lane", parent_level_ids: [], top: true } ],
                                         conversion: { @pod => lane }, effective_on: @today + 1)
     end
-    error = assert_raises(RuntimeError) { move_in(unit: @core, conversion: { @tribe => @group }) }
-    assert_equal "Ledger has a structure of its own, so it can't move into Payments's structure yet", error.message
+    lending = create_unit("Lending", @squad, parent_id: @core, on: @today + 1)
+
+    move_in(unit: @core, conversion: { @tribe => @group, @squad => @stream }, on: @today + 1)
+
+    assert_equal [ @group, @stream, @stream, lane ], [ @core, @ledger, lending, @till ].map { structure.unit(it).level_id }
+    assert_equal [ @payments, @payments, @payments, @ledger ], [ @core, @ledger, lending, @till ].map { structure.structure_in_force(it) }
+    assert_equal [ lane ], structure.declared_structures.fetch(@ledger).kinds.map(&:id)
+    assert_empty structure.misplaced_units
+  end
+
+  should "move a unit with a structure of its own on its own, converting only its type" do
+    lane = SecureRandom.uuid_v7
+    as_tenant do
+      @admin.declare_structure(@ledger, levels: [ { level_id: lane, name: "Lane", parent_level_ids: [], top: true } ],
+                                        conversion: { @pod => lane }, effective_on: @today + 1)
+    end
+
+    move_in(conversion: { @squad => @group }, on: @today + 1)
+
+    assert_equal [ @group, lane ], [ @ledger, @till ].map { structure.unit(it).level_id }
+    assert_equal [ @payments, @ledger ], [ @ledger, @till ].map { structure.structure_in_force(it) }
+    moved = event_store.read.of_type(OrgGraph::Events::UnitMoved).backward.first
+    assert_equal({ @squad => @group }, moved.data[:conversion])
   end
 
   should "refuse a unit that wouldn't fit, or a held type the conversion leaves out" do
@@ -131,7 +146,7 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_equal "Basket changed on #{(@today + 3).iso8601}, so date the move then or later", error.message
 
     error = assert_raises(RuntimeError) { move_in(on: Date.new(2026, 11, 11)) }
-    assert_equal "A move into a structure can't be dated after today", error.message
+    assert_equal "A move into another structure can't be dated after today", error.message
 
     move_in(on: @today + 3)
     assert_equal @payments, structure.structure_in_force(@ledger)
@@ -180,13 +195,13 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     error = assert_raises(OrgGraph::Authorization::Refused) do
       as_tenant { owner.move_unit(@ledger, @payments, effective_on: @today + 1, conversion: { @squad => @stream }) }
     end
-    assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+    assert_equal "Only a tenant admin can move a unit between structures", error.message
     assert_nil structure.structure_in_force(@ledger)
     error = assert_raises(RuntimeError) { as_tenant { owner.move_unit(@ledger, @payments, effective_on: @today + 1) } }
-    assert_equal "Ledger can't move out of the organisation's structure into Payments's structure", error.message
+    assert_equal "Moving Ledger out of the organisation's structure into Payments's structure changes its type, so say what each type it moves becomes", error.message
 
     error = assert_raises(OrgGraph::Authorization::Refused) { as_tenant { @system.move_unit(@ledger, @payments, effective_on: @today + 1, conversion: {}) } }
-    assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+    assert_equal "Only a tenant admin can move a unit between structures", error.message
   end
 
   should "refuse a move into a structure while the kinds are rebuilt, telling only a caller who may make it" do

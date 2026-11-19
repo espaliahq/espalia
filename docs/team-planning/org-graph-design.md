@@ -280,17 +280,23 @@ of their own (`LevelsPanel`, anchored on the unit). The drawer's parent list off
 another structure under "Into another structure, changing types", only to an admin who may
 edit that structure, and the step it leads to asks what each type becomes.
 
-A unit in the organisation's structure moves into a unit's own structure with a conversion: a type of
-that structure for each type it and the units beneath it hold. The move writes one
-`UnitMoved` carrying the conversion, then a `UnitKindChanged` for each unit it converts,
-under one cause. Each unit keeps its id, owners, members and history. The move can't be
-dated after today, before the structure last changed, or before any change to the units it
-moves. A subtree holding a unit with a structure of its own can't move in yet, nor can a
-unit leave a structure. That waits for step 7 of
-[#390](https://github.com/espaliahq/espalia/issues/390), so the move is one-way: change it
-back is refused. Withdrawing the structure converts its units back into the structure
-above, though each stays where it sits. A conversion on a move that crosses no structure
-is refused.
+A unit moves into another structure with a conversion: into a unit's own structure, out of
+one into the organisation's, or from one unit's structure into another's. The conversion
+gives a type of the structure it joins for each type it and the units beneath it hold. The
+move writes one `UnitMoved` carrying the conversion, then a `UnitKindChanged` for each unit
+it converts, under one cause. Each unit keeps its id, owners, members and history. A unit
+with a structure of its own takes a type like any other, and its structure goes with it,
+nested in the one it joins; the units beneath it keep their types. A unit an HRIS supplies
+keeps the HRIS's type, so a move that would convert it is refused either way.
+
+The move can't be dated after today, before the last change to the structure it leaves or
+the one it joins, or before any change to the units it moves. A move into the organisation's
+structure must also fit its dated rules on the move's date and on every later change, and
+the refusal names the day that doesn't fit. The move needs the right to change both
+structures, and the refusal names neither. A conversion on a move that crosses no structure
+is refused, and a move that crosses one without a conversion is asked for one. Changing a
+move across structures back is refused; withdrawing the structure converts its units
+back into the structure above, though each stays where it sits.
 
 A plan judges its units against today's structures, and an Org Graph unit by the type it
 holds today: [team-planning-design.md](team-planning-design.md) says how a plan creates,

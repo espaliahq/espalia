@@ -316,7 +316,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal "These units wouldn't fit Checkout's structure: Platform (Lane at the top)", error.message
 
         error = assert_raises(OrgGraph::Authorization::Refused) { move_in(as: @editor) }
-        assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+        assert_equal "Only a tenant admin can move a unit between structures", error.message
         assert_equal @org[:team], level_of(:platform)
       end
 
@@ -361,7 +361,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
                                                  effective_on: tomorrow, conversion: { @org[:team] => @stream })
           end
         end
-        assert_equal "A move into a structure can't be dated after today", error.message
+        assert_equal "A move into another structure can't be dated after today", error.message
         replay(@tenant, OrgGraph::Projections::Structure)
       end
 
@@ -386,7 +386,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         [ SecureRandom.uuid_v7, elsewhere[:platform] ].each do |stranger|
           [ [ stranger, @org[:checkout] ], [ @org[:platform], stranger ] ].each do |unit_id, parent_id|
             error = assert_raises(OrgGraph::Authorization::Refused) { move.call(@editor, unit_id, parent_id) }
-            assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
+            assert_equal "Only a tenant admin can move a unit between structures", error.message
 
             error = assert_raises(Operations::Base::ParameterError) { move.call(@admin, unit_id, parent_id) }
             named = unit_id == stranger ? "unit_id" : "parent_id"
@@ -418,13 +418,26 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_raises(Operations::Base::ParameterError) { build.call({ "Team" => @stream }) }
         error = assert_raises(Operations::Base::ParameterError) { build.call({}) }
         assert_equal "conversion can't be blank", error.message
+        assert_equal @org[:team], level_of(:platform)
+      end
+
+      should "move a team back out under a parent, or to the top with no parent_id, converting it" do
+        move_in
+        result = call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], parent_id: @org[:engineering],
+                                                      conversion: { @stream => @org[:team] })
+        assert_equal({ @stream => @org[:team] }, result[:conversion])
+        assert_equal [ @org[:team], @org[:engineering] ], ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).then { [ it.level_id, it.parent_id ] } }
+
+        move_in
+        call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], conversion: { @stream => @org[:team] })
+        assert_equal [ @org[:team], nil ], ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).then { [ it.level_id, it.parent_id ] } }
+      end
+
+      should "refuse a conversion on a move to the top of the organisation's structure from inside it" do
         error = assert_raises(Operations::Base::ParameterError) do
-          ActsAsTenant.with_tenant(@tenant) do
-            context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
-            Operations::OrgGraph::MoveUnit.new(context:, params: { unit_id: @org[:platform], conversion: { @org[:team] => @stream } })
-          end
+          call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], conversion: { @org[:team] => @org[:team] })
         end
-        assert_equal "A move with a conversion needs parent_id: a unit at the top stays in the organisation's structure", error.message
+        assert_equal "Platform stays in the organisation's structure, so the move takes no conversion", error.message
         assert_equal @org[:team], level_of(:platform)
       end
 

@@ -121,7 +121,7 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to new_tenant_org_unit_structure_move_path(@org[:platform], parent_id: @org[:checkout])
 
     get new_tenant_org_unit_structure_move_path(@org[:platform], parent_id: @org[:checkout])
-    assert_includes drawer.at_css("#org-unit-move-one-way[role='status']").text, "one way for now"
+    assert_not_includes drawer.text, "one way"
     assert drawer.at_css("select[name='conversion[#{@org[:team]}]']")
 
     post tenant_org_unit_structure_move_path(@org[:platform]),

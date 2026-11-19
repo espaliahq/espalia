@@ -179,14 +179,14 @@ class OrgGraph::StructureCommandHandler
   end
 
   # A move with a conversion also needs the right to change the structure it
-  # moves into, checked under the structure's lock before anything about the
-  # move is.
+  # leaves and the one it joins, checked under the structure's lock before
+  # anything about the move is.
   #
   # @see OrgGraph::StructureAggregate#move_unit
   def move_unit(unit_id, parent_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_move_unit!(unit_id, parent_id)
-    return move_into_structure(unit_id, parent_id, plan, options) unless options[:conversion].nil?
+    return move_across_structures(unit_id, parent_id, plan, options) unless options[:conversion].nil?
 
     with_structure(plan) { |structure| structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
   end
@@ -268,9 +268,9 @@ class OrgGraph::StructureCommandHandler
 
   private
 
-  def move_into_structure(unit_id, parent_id, plan, options)
+  def move_across_structures(unit_id, parent_id, plan, options)
     with_structure(plan, grouped: true) do |structure|
-      authorize_move_into!(structure.structure_joined_beneath(parent_id))
+      authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id))
       unless_kinds_rebuilding { structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
     end
   end
