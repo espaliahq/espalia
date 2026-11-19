@@ -250,6 +250,41 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
       assert_equal 2, report.changes.map { it.change.event_id }.uniq.size
     end
 
+    should "read a unit that moved out of the plan as leaving it, and fold nothing" do
+      scoped = SecureRandom.uuid_v7
+      as_tenant { handler.create_plan(scoped, name: "Payments next year", base_on: BASE_ON, unit_ids: [ @payments ]) }
+      on(Time.utc(2026, 3, 5, 9)) { @admin.move_unit(@cards, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
+      report = as_tenant { TeamPlanning::Drift.new(context: context_for(@planner), plan: TeamPlanningPlan.find(scoped), today: Date.new(2026, 4, 1)).call }
+
+      moved = report.changes.sole
+      assert_equal [ :unit_moved, @cards, nil ], [ moved.change.kind, moved.change.unit_id, moved.group ]
+      assert_includes moved.outside, "after"
+    end
+
+    should "fold each write of one cause, though another request wrote between them" do
+      on(Time.utc(2026, 3, 5, 9)) do
+        event_store.with_metadata(correlation_id: "one-cause") { @admin.move_unit(@payments, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
+        @admin.rename_unit(@tab, "Tabs", effective_on: "2026-03-05")
+        event_store.with_metadata(correlation_id: "one-cause") { @admin.move_unit(@ledger, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
+      end
+
+      folds = drift.changes.select { it.change.kind == :moved_between_structures }
+      assert_equal [ [ @ledger, [ @ledger, @tab ].sort ], [ @payments, [ @cards, @payments ].sort ] ].sort,
+                   folds.map { [ it.change.unit_id, it.group.unit_ids.sort ] }.sort
+      assert_empty drift.changes.select { it.change.kind == :unit_kind_changed }
+    end
+
+    should "keep the mover named and hide the side before the base of a move dated before it" do
+      scoped = SecureRandom.uuid_v7
+      as_tenant { handler.create_plan(scoped, name: "Payments next year", base_on: BASE_ON, unit_ids: [ @payments, @platform ]) }
+      on(Time.utc(2026, 3, 5, 9)) { @admin.move_unit(@payments, @platform, effective_on: "2026-02-15", conversion: { @squads => @pod }) }
+
+      moved = as_tenant { TeamPlanning::Drift.new(context: context_for(@planner), plan: TeamPlanningPlan.find(scoped), today: Date.new(2026, 4, 1)).call }.changes.sole
+      assert_equal [ :moved_between_structures, @payments, nil, { "structure_unit_id" => @platform } ],
+                   [ moved.change.kind, moved.change.unit_id, moved.change.before, moved.change.after ]
+      assert_includes moved.outside, "before"
+    end
+
     should "say only that it crossed when the move was written before it named the structures" do
       on(Time.utc(2026, 3, 5, 9)) { @admin.move_unit(@payments, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
       query = as_tenant { TeamPlanning::Drift.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), today: Date.new(2026, 4, 1)) }

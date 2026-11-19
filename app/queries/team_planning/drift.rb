@@ -138,13 +138,16 @@ class TeamPlanning::Drift
   # the first. The event store says which write that is, and no projection
   # rebuild empties it. Each type change stays one through the scope's cut,
   # so only the units the plan covers count, and a structure whose declaring
-  # unit the plan doesn't cover goes unnamed.
+  # unit the plan doesn't cover goes unnamed. A unit that moved out of the
+  # plan reads as leaving it, as any move out does.
   def grouped(drifted, events)
     retyped = drifted.select { it.change.kind == :unit_kind_changed }.filter_map { events[it.change.event_id] }
-    return drifted if retyped.empty?
-
     head_of = heads_of(retyped).transform_values { events[it.event_id] || it }
-    drifted.each { |item| (event = events[item.change.event_id]) && head?(event) && head_of[event.event_id] = event }
+    drifted.each do |item|
+      next unless (event = events[item.change.event_id]) && head?(event) && !left?(item.change)
+
+      head_of[event.event_id] = event
+    end
     return drifted if head_of.empty?
 
     members = drifted.select { head_of.key?(it.change.event_id) }.group_by { head_of[it.change.event_id].event_id }
@@ -157,17 +160,21 @@ class TeamPlanning::Drift
     end
   end
 
-  # Each type change's id => the write it follows. One cause's events sit
-  # together in the structure's stream, so a walk out from any of them reads
-  # them all.
+  # Each type change's id => the write it follows. A walk out from a type
+  # change reads the run of its cause's events around it. Another request can
+  # write between two writes of one cause, so each run is walked.
   def heads_of(retyped)
     stream = EventStreamNaming.org_structure_stream
-    retyped.group_by { cause(it) }.except(nil).each_with_object({}) do |(cause_id, (event, *)), head_of|
+    walked = Set.new
+    retyped.each_with_object({}) do |event, head_of|
+      next if walked.include?(event.event_id) || (cause_id = cause(event)).nil?
+
       same_cause = ->(other) { cause(other) == cause_id }
       before = store.read.stream(stream).backward.from(event.event_id).each.take_while(&same_cause).reverse
       after = store.read.stream(stream).from(event.event_id).each.take_while(&same_cause)
       head = nil
       [ *before, event, *after ].each do |written|
+        walked << written.event_id
         if head?(written) then head = written
         elsif written.is_a?(OrgGraph::Events::UnitKindChanged) then head_of[written.event_id] = head if head && carries?(head, written)
         else head = nil
@@ -201,6 +208,8 @@ class TeamPlanning::Drift
 
   def covered?(unit_id) = @scope.nil? || @scope.covers_unit?(unit_id)
 
+  def left?(change) = change.unit_id.present? && !covered?(change.unit_id)
+
   def structure_item(head, members)
     unit_id = head.data[:structure_unit_id]
     named = covered?(unit_id)
@@ -208,16 +217,21 @@ class TeamPlanning::Drift
                     unit_id: (unit_id if named), outside: named ? [] : [ "unit_id" ])
   end
 
-  # A move written before it named the structures it crossed says only that
-  # it crossed, with neither side.
+  # The mover keeps the scope's cut of its own move, which judged it when it
+  # moved, and so does a move from before the base, which has no before. A
+  # move written before it named the structures it crossed says only that it
+  # crossed, with neither side.
   def move_item(head, members)
     data = head.data
-    named = covered?(data[:unit_id])
+    own = members.find { it.change.event_id == head.event_id }&.change
+    named = own&.unit_id.present?
     sides = data.key?(:structure_joined_id) ? { "before" => data[:structure_left_id], "after" => data[:structure_joined_id] } : {}
+    sides.delete("before") if own && own.before.nil?
     hidden = sides.select { |_side, unit_id| unit_id && !covered?(unit_id) }.keys
     structure = sides.to_h { |side, unit_id| [ side, { "structure_unit_id" => (unit_id unless hidden.include?(side)) } ] }
+    backdated = "before" if own && own.before.nil?
     folded(members, kind: :moved_between_structures, head:, unit_id: (data[:unit_id] if named),
-                    before: structure["before"], after: structure["after"], outside: [ ("unit_id" unless named), *hidden ].compact)
+                    before: structure["before"], after: structure["after"], outside: [ ("unit_id" unless named), *hidden, backdated ].compact)
   end
 
   def folded(members, kind:, head:, unit_id:, outside:, before: nil, after: nil)
