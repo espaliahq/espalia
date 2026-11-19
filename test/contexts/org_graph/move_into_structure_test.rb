@@ -72,11 +72,11 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
 
   should "refuse a conversion on a move that crosses no structure" do
     error = assert_raises(RuntimeError) { as_tenant { @admin.move_unit(@ledger, @core, effective_on: @today, conversion: {}) } }
-    assert_equal "Ledger stays in the top structure, so the move takes no conversion", error.message
+    assert_equal "Ledger stays in the organisation's structure, so the move takes no conversion", error.message
 
     lending = create_unit("Lending", @squad, parent_id: @core)
     error = assert_raises(RuntimeError) { as_tenant { @admin.move_unit(lending, @ledger, effective_on: @today, conversion: {}) } }
-    assert_equal "Lending stays in the top structure, so the move takes no conversion", error.message
+    assert_equal "Lending stays in the organisation's structure, so the move takes no conversion", error.message
   end
 
   should "refuse a move out of a structure" do
@@ -183,7 +183,7 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message
     assert_nil structure.structure_in_force(@ledger)
     error = assert_raises(RuntimeError) { as_tenant { owner.move_unit(@ledger, @payments, effective_on: @today + 1) } }
-    assert_equal "Ledger can't move out of the top structure into Payments's structure", error.message
+    assert_equal "Ledger can't move out of the organisation's structure into Payments's structure", error.message
 
     error = assert_raises(OrgGraph::Authorization::Refused) { as_tenant { @system.move_unit(@ledger, @payments, effective_on: @today + 1, conversion: {}) } }
     assert_equal "Only a tenant admin can move a unit into a unit's own structure", error.message

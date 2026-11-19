@@ -138,7 +138,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     error = assert_raises(RuntimeError) do
       as_tenant { @admin.withdraw_structure(@payments, conversion: { @group => @tribe, @stream => @pod }, effective_on: @today) }
     end
-    assert_equal "These units wouldn't fit the top structure: Checkout (Tribe under Tribe)", error.message
+    assert_equal "These units wouldn't fit the organisation's structure: Checkout (Tribe under Tribe)", error.message
   end
 
   should "refuse a withdrawal into a type the structure above gains only later, and allow it from that day" do

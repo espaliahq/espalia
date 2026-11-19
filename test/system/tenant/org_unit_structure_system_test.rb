@@ -33,7 +33,7 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
 
       should "give a unit new types from its drawer, and land on its panel in Settings" do
         visit edit_tenant_org_unit_path(@org[:checkout])
-        within("#org-unit-structure") { assert_text "Its unit type comes from the top structure." }
+        within("#org-unit-structure") { assert_text "Its unit type comes from the organisation's structure." }
 
         click_link_with_js_fallback "Give it its own structure", expect_selector: "#org-unit-structure-copy"
         click_link_with_js_fallback "New types", expect_selector: "#org-unit-structure-permissive"

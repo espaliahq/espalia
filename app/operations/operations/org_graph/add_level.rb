@@ -18,7 +18,7 @@ class Operations::OrgGraph::AddLevel < Operations::Base
             schema: { type: "array", items: { type: "string" }, description: "level_ids the new level can sit under" }
   parameter :top, :boolean
   parameter :structure_unit_id, String, allow_blank: false,
-            schema: { format: "uuid", description: "a unit with a structure of its own, to change its unit types; the top structure by default" }
+            schema: { format: "uuid", description: "a unit with a structure of its own, to change its unit types; the organisation's structure by default" }
 
   # @return [Hash] `{ level_id, name, effective_on, levels }`, levels top first, plus
   #   structure_unit_id when given

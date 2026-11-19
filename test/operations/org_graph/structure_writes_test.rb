@@ -424,7 +424,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
             Operations::OrgGraph::MoveUnit.new(context:, params: { unit_id: @org[:platform], conversion: { @org[:team] => @stream } })
           end
         end
-        assert_equal "A move with a conversion needs parent_id: a unit at the top stays in the top structure", error.message
+        assert_equal "A move with a conversion needs parent_id: a unit at the top stays in the organisation's structure", error.message
         assert_equal @org[:team], level_of(:platform)
       end
 

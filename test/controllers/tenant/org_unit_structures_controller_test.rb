@@ -37,13 +37,13 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     get edit_tenant_org_unit_path(@org[:checkout])
 
     section = drawer.at_css("#org-unit-structure")
-    assert_includes section.text, "Its unit type comes from the top structure."
+    assert_includes section.text, "Its unit type comes from the organisation's structure."
     assert section.at_css("a[aria-label='Give Checkout its own structure']")
   end
 
   should "give a unit a copy of the structure in force, each type beneath it taking its copy" do
     get new_tenant_org_unit_structure_declaration_path(@org[:checkout])
-    assert_includes drawer.at_css("#org-unit-structure-copy").text, "It starts with the types in the top structure"
+    assert_includes drawer.at_css("#org-unit-structure-copy").text, "It starts with the types in the organisation's structure"
     assert_includes drawer.at_css("#org-unit-structure-copy").text, "Department, Team, and Squad"
     assert_match(/\A\d+ units? changes? type\.\z/, drawer.at_css("#org-unit-structure-count").text)
     assert_equal "Squad", drawer.at_css("select[name='conversion[#{@org[:squad]}]'] option[selected]").text

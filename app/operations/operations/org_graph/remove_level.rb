@@ -17,7 +17,7 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
 
   parameter :level_id, String, required: true, allow_blank: false
   parameter :structure_unit_id, String, allow_blank: false,
-            schema: { format: "uuid", description: "a unit with a structure of its own, to change its unit types; the top structure by default" }
+            schema: { format: "uuid", description: "a unit with a structure of its own, to change its unit types; the organisation's structure by default" }
 
   # @return [Hash] `{ level_id, name, effective_on, levels }`, levels top first
   def perform
