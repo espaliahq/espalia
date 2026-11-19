@@ -63,8 +63,8 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
         select "Checkout", from: "org-unit-parent"
         # Three forms in the drawer say "Move", so submit the parent's own.
         page.execute_script("document.getElementById('org-unit-parent').form.requestSubmit()")
-        assert_selector "#org-unit-move-one-way"
-        assert_text "This is one way for now"
+        assert_selector "select[name='conversion[#{@org[:team]}]']"
+        assert_no_text "one way"
         assert_no_sideways_overflow
         screenshot("move_step_#{viewport}")
 
@@ -89,7 +89,7 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
         visit edit_tenant_org_unit_path(@org[:platform])
         select "Checkout", from: "org-unit-parent"
         page.execute_script("document.getElementById('org-unit-parent').form.requestSubmit()")
-        assert_selector "#org-unit-move-one-way"
+        assert_selector "select[name='conversion[#{@org[:team]}]']"
         select "Squad", from: "conversion[#{@org[:team]}]"
         click_button_with_js_fallback "Move Platform", expect_text: "Moved Platform into Checkout's structure. Its type is now Squad."
 

@@ -25,8 +25,6 @@ class Views::Tenant::OrgGraph::StructureStep < Views::Tenant::OrgGraph::UnitStep
 
   def structure_name(structure_unit_id) = self.class.structure_name(@overview, structure_unit_id)
 
-  def warning(id, text) = render(Components::Kit::Alert.new(tone: :warning, id:)) { text }
-
   # How many units change type in all, said just before the button.
   def change_count(units)
     p(id: "org-unit-structure-count", class: "text-sm font-medium text-default") do
