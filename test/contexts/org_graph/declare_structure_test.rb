@@ -69,6 +69,17 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal "A unit can't move beneath itself or a unit below it", error.message
   end
 
+  should "refuse a structure over a unit an HRIS supplies beneath it" do
+    as_tenant do
+      @handler.hand_over_level(@tribe, "hibob", field: "work.tribe", matches: { @payments => "t-1" }, effective_on: @today)
+      @handler.hand_over_level(@squad, "hibob", field: "work.squad", matches: { @checkout => "s-1" }, effective_on: @today)
+    end
+
+    error = assert_raises(RuntimeError) { declare }
+    assert_equal "Checkout comes from HiBob, so Payments can't have a structure of its own over it", error.message
+    assert_empty structure.declared_structures
+  end
+
   should "take a declaring unit's structure with it when it moves within the structure above" do
     declare(unit: @checkout, conversion: { @pod => @group })
     lending = create_unit("Lending", @tribe)

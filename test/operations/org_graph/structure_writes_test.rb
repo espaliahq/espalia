@@ -54,7 +54,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       assert_equal [ @org[:checkout], @admin.person.id ], event.data.values_at(:structure_unit_id, :defined_by_id)
     end
 
-    should "refuse names it can't place, a duplicate name, and a unit an HRIS supplies beneath it" do
+    should "refuse names it can't place, a duplicate name, and a conversion that leaves a type out" do
       error = assert_raises(Operations::Base::ParameterError) { declare(conversion: { @org[:squad] => "Pod" }) }
       assert_equal "The conversion names a type, \"Pod\", that isn't in the structure", error.message
 
